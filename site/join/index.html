@@ -38,13 +38,27 @@
     border:1px solid var(--line);padding:12px 14px;margin:0;color:var(--navy);
     font-family:'Barlow';text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
   .cardbtn small{display:block;font-weight:500;color:var(--slate);font-size:12.5px;margin-top:2px;}
-  .cardbtn:hover{border-color:var(--turf);}
+  .cardbtn{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;}
+  .cardbtn:hover{border-color:var(--turf);transform:translateY(-2px);
+    box-shadow:0 6px 14px rgba(16,30,51,.12);}
   .cardbtn.rival:hover{border-color:var(--brick);}
+  button{transition:transform .15s ease, background .15s ease;}
+  button:hover:not(:disabled):not(.cardbtn){transform:translateY(-2px);}
+  @media (prefers-reduced-motion: reduce){
+    .cardbtn,button{transition:none !important;transform:none !important;}
+  }
   .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
     font-size:13.5px;color:#7A2C1F;display:none;}
+  .beta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .beta-chips span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid rgba(246,244,238,.35);color:#F2C230;padding:4px 9px;border-radius:2px;}
   .note{margin-top:12px;font-size:12.5px;color:var(--slate);line-height:1.5;}
-  .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px;margin-top:8px;
+  .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px 16px;margin-top:8px;
     font-size:14px;line-height:1.6;display:none;}
+  .done > b{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--turf);}
+  .done ol{margin:8px 0 0 18px;}
+  .done li{margin-top:6px;}
   .hidden{display:none;}
   footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
@@ -53,16 +67,21 @@
 <body>
 <div class="page">
   <header>
-    <div class="brand">Beat Your League</div>
-    <h1>Pick Your Rival</h1>
-    <p>Three taps and your weekly Rival Report knows your league. We only ever ask for
-    your Sleeper <b>username</b> — never a password (Sleeper league data is public).</p>
+    <div class="brand"><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
+    <h1>Reserve Your Founding Spot</h1>
+    <p>Three taps and your weekly Rival Report is pointed at your league. This is a paid
+    product from day one — <b>$29 for the season</b>, first 50 spots — and reserving now
+    locks that price. Checkout opens through Substack before Week 1; no card today, and we
+    only ever ask for your Sleeper <b>username</b> — never a password.</p>
+    <div class="beta-chips">
+      <span>$29 / season · first 50</span><span>Pay at checkout · via Substack</span><span>First report Tue Sep 8</span>
+    </div>
   </header>
 
   <section id="step-user">
     <div class="eyebrow">1 · Your Sleeper username</div>
     <input type="text" id="username" autocomplete="off" spellcheck="false"
-           placeholder="e.g. FantasyKevin" maxlength="32">
+           placeholder="e.g. GridironGuru" maxlength="32">
     <button id="find-user">Find my leagues</button>
     <div class="err" id="err-user"></div>
   </section>
@@ -84,9 +103,22 @@
   <section id="step-email" class="hidden">
     <div class="eyebrow">4 · Where do reports go?</div>
     <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-    <button id="submit">Finish signup</button>
+    <button id="submit">Reserve my spot</button>
     <div class="err" id="err-email"></div>
-    <div class="done" id="done"></div>
+    <div class="done" id="done">
+      <b>Your founding spot is reserved.</b>
+      <ol>
+        <li id="send-step">One last tap: <b>send the pre-filled email that just opened</b> —
+        it carries your league and rival picks, nothing else. No email appeared? Write to
+        us with the word "reserve" and your Sleeper username.</li>
+        <li>Checkout opens through Substack before Week 1 — the link comes to this address,
+        and your reservation holds the <b>$29 founding price</b>. Card details never touch
+        our systems.</li>
+        <li>Once you're paid, your first Rival Report — targeting
+        <b><span id="success-rival"></span></b> — lands <b>Tuesday, Sep 8</b>. Refunds
+        no-questions through Week 2; every call we send you is graded on the public ledger.</li>
+      </ol>
+    </div>
   </section>
 
   <footer>
@@ -252,7 +284,15 @@ $("submit").addEventListener("click", async () => {
     rival_roster_id: state.rival.roster_id,
     added_at: new Date().toISOString().slice(0, 10),
   };
-  const done = $("done");
+  // The success panel is static HTML; only the rival name is injected, and
+  // only ever via textContent.
+  function showSuccess(needsEmailSend) {
+    $("success-rival").textContent = state.rival.label;
+    $("send-step").style.display = needsEmailSend ? "list-item" : "none";
+    const done = $("done");
+    done.style.display = "block";
+    done.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
   if (FORM_ENDPOINT) {
     try {
       const res = await fetch(FORM_ENDPOINT, {
@@ -261,9 +301,7 @@ $("submit").addEventListener("click", async () => {
         body: JSON.stringify(entry),
       });
       if (!res.ok) throw new Error("form backend " + res.status);
-      done.textContent = "You're in. First report lands Tuesday morning — rival: " +
-        state.rival.label + ".";
-      done.style.display = "block";
+      showSuccess(false);
       return;
     } catch (err) {
       // fall through to the email path
@@ -273,10 +311,7 @@ $("submit").addEventListener("click", async () => {
   const href = "mailto:" + CONTACT_EMAIL +
     "?subject=" + encodeURIComponent("Rival Report signup") +
     "&body=" + encodeURIComponent(body);
-  done.textContent = "One last tap: send the pre-filled email that just opened " +
-    "(it contains your picks — nothing else). Your first report lands Tuesday. Rival: " +
-    state.rival.label + ".";
-  done.style.display = "block";
+  showSuccess(true);
   window.location.href = href;
 });
 </script>

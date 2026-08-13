@@ -65,6 +65,13 @@ Weekly loop (hours shown = after automation matures / before):
 
 ## 4. Offer ladder & monetization rules
 
+**Decision (owner, Aug 13 2026): charge from day one — no public free tier.** The site sells
+the founding pass from launch; pre-checkout signups are founding-price *reservations*, never
+free access, and reports go only to paid subscribers from the first issue. (The private
+beta-for-testimonials leagues in §3 Sprint 1 are a personal arrangement, not a public offer —
+cut them too if they conflict with this.) The risk-reversal replacing "free" is the public
+ledger + the Week-2 refund promise.
+
 **At checkout, exactly one decision:** Founding Season Pass **$29** (first 50 — honest capacity limit)
 shown beside **$6.99/mo** (the anchor that makes the pass obvious). Refunds no-questions through Week 2.
 Copy anchors price to the league pot ("your buy-in is $100; the edge is $29"), never to media subscriptions.

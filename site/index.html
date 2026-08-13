@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — the weekly Rival Report</title>
+<meta name="description" content="A weekly report built from your Sleeper league's real data, aimed at one goal: beating your rival. Every call graded in public.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
+    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-tint:#FBF3D9;
+    --brick:#B3402F; --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{background:#E7E4DA;font-family:'Barlow',-apple-system,sans-serif;color:var(--navy);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 16px;}
+  a{color:inherit;}
+
+  /* ---------- hero ---------- */
+  .hero{background:
+      repeating-linear-gradient(-55deg, rgba(246,244,238,.045) 0 2px, transparent 2px 14px),
+      linear-gradient(180deg,var(--navy2),var(--navy));
+    color:var(--paper);padding:52px 0 56px;}
+  .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  .hero h1{font-family:'Barlow Condensed';font-weight:800;font-size:64px;line-height:.95;
+    text-transform:uppercase;margin-top:14px;max-width:700px;}
+  .hero h1 em{font-style:normal;color:var(--flag);}
+  .hero .sub{margin-top:18px;font-size:18px;line-height:1.6;color:#C9D4E2;max-width:620px;}
+  .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px;}
+  .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+    letter-spacing:.12em;text-transform:uppercase;text-decoration:none;padding:14px 26px;}
+  .btn.go{background:var(--turf);color:#fff;}
+  .btn.ghost{border:2px solid rgba(246,244,238,.5);color:var(--paper);}
+  .btn.gold{background:var(--flag);color:var(--navy);}
+  .whyfree{margin-top:16px;font-size:13.5px;line-height:1.6;color:#9FB0C4;max-width:560px;
+    border-left:3px solid var(--flag);padding-left:12px;}
+  .proof-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;}
+  .chip{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid rgba(246,244,238,.35);color:#C9D4E2;padding:4px 9px;border-radius:2px;}
+  .chip b{color:var(--paper);}
+
+  /* field graphic */
+  .fieldwrap{margin-top:34px;max-width:620px;}
+  .field{position:relative;height:52px;border:2px solid var(--paper);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(246,244,238,.35) calc(10% - 1px) 10%),
+      linear-gradient(90deg,#24513A 0 61%, #5C3230 61% 100%);}
+  .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
+  .field .endzone.l{left:0;background:var(--turf);}
+  .field .endzone.r{right:0;background:var(--brick);}
+  .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
+    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
+    border:2px solid var(--paper);}
+  .fieldlabel{display:flex;justify-content:space-between;font-size:11px;font-weight:800;
+    letter-spacing:.1em;text-transform:uppercase;margin-top:6px;color:#C9D4E2;}
+
+  /* ---------- sections ---------- */
+  section{padding:52px 0;}
+  section.alt{background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--slate);display:flex;align-items:center;gap:10px;}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:38px;line-height:1;
+    text-transform:uppercase;margin-top:10px;}
+  .lede{margin-top:12px;font-size:16.5px;line-height:1.65;color:var(--ink2);max-width:640px;}
+
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
+  .fcard{background:var(--card);border:1px solid var(--line);padding:18px;}
+  .fcard h3{font-family:'Barlow Condensed';font-weight:800;font-size:20px;text-transform:uppercase;}
+  .fcard p{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .real{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--slate);border-top:1px dashed var(--line);padding-top:8px;}
+
+  /* mini report visuals — real data, labeled */
+  .mini{margin-top:14px;background:var(--card);border:2px solid var(--navy);}
+  .mrow{display:grid;grid-template-columns:44px 1fr 52px;gap:10px;align-items:center;
+    padding:9px 12px;border-top:1px solid #EDEAE1;font-size:13.5px;}
+  .mrow:first-child{border-top:none;}
+  .mrow .slot{font-family:'Barlow Condensed';font-weight:800;color:var(--slate);}
+  .mrow .p{font-weight:700;}
+  .mrow .p small{display:block;font-weight:500;color:var(--slate);font-size:11px;}
+  .mrow .pts{font-family:'Barlow Condensed';font-weight:800;text-align:right;font-size:16px;}
+  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;padding:12px;}
+  .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:var(--brick);
+    border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
+    justify-content:center;border-radius:50%;}
+  .srow .why{font-size:13.5px;color:var(--ink2);line-height:1.5;}
+  .srow .why b{color:var(--navy);}
+
+  /* calibration table */
+  .caltable{width:100%;border-collapse:collapse;margin-top:16px;background:var(--card);
+    border:2px solid var(--navy);font-variant-numeric:tabular-nums;}
+  .caltable th{background:var(--navy);color:#C9D4E2;font-size:11px;font-weight:800;
+    letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;text-align:right;}
+  .caltable th:first-child{text-align:left;}
+  .caltable td{padding:9px 12px;border-top:1px solid #EDEAE1;font-size:14px;text-align:right;}
+  .caltable td:first-child{text-align:left;font-weight:700;}
+  .caltable .ok{color:var(--turf);font-weight:800;}
+  .stamp{display:inline-block;margin-top:16px;border:2px solid var(--turf);color:var(--turf);
+    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.18em;font-size:13px;
+    text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
+  .step{background:var(--card);border:1px solid var(--line);padding:18px;}
+  .step .n{font-family:'Barlow Condensed';font-weight:800;font-size:34px;color:var(--flag);
+    -webkit-text-stroke:1.5px var(--navy);}
+  .step h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;margin-top:6px;}
+  .step p{margin-top:6px;font-size:13.5px;line-height:1.55;color:var(--ink2);}
+
+  /* pricing */
+  .plans{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-top:26px;max-width:660px;}
+  .plan{background:var(--card);border:2px solid var(--navy);padding:22px;}
+  .plan.founder{border-color:var(--turf);box-shadow:0 2px 18px rgba(30,122,70,.15);}
+  .plan .tag{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);}
+  .plan.founder .tag{color:var(--turf);}
+  .plan .price{font-family:'Barlow Condensed';font-weight:800;font-size:46px;margin-top:6px;}
+  .plan .price small{font-size:16px;color:var(--slate);font-family:'Barlow';font-weight:700;}
+  .plan ul{margin:12px 0 0 18px;font-size:13.5px;line-height:1.7;color:var(--ink2);}
+  .plan .btn{margin-top:16px;font-size:15px;padding:11px 18px;}
+  .honest{margin-top:14px;font-size:12.5px;color:var(--slate);line-height:1.6;max-width:640px;}
+  .soon{margin-top:16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--slate);
+    border:2px dashed var(--line);padding:11px 18px;text-align:center;}
+  .funnel{margin-top:22px;background:var(--card);border-left:5px solid var(--turf);
+    border-top:1px solid var(--line);border-right:1px solid var(--line);
+    border-bottom:1px solid var(--line);padding:16px 18px;max-width:660px;}
+  .funnel > b{font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+    text-transform:uppercase;letter-spacing:.06em;}
+  .funnel ol{margin:10px 0 0 20px;font-size:13.5px;line-height:1.7;color:var(--ink2);}
+
+  /* trust + footer */
+  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
+  .trust div{font-size:13px;line-height:1.55;color:var(--ink2);background:var(--card);
+    border:1px solid var(--line);padding:14px;}
+  .trust b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    text-transform:uppercase;color:var(--navy);margin-bottom:4px;}
+  footer{padding:26px 0 40px;font-size:12px;color:var(--slate);line-height:1.7;}
+
+  /* ---------- motion (restrained, brand-consistent) ---------- */
+  .btn{transition:transform .15s ease, box-shadow .15s ease, background .15s ease;}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(16,30,51,.25);}
+  .btn.go:hover{background:#1A6A3D;}
+  .btn .arrow{display:inline-block;transition:transform .15s ease;}
+  .btn:hover .arrow{transform:translateX(4px);}
+  .fcard,.step,.plan,.trust div{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+  .fcard:hover,.step:hover,.trust div:hover{transform:translateY(-3px);
+    box-shadow:0 8px 20px rgba(16,30,51,.12);border-color:var(--navy);}
+  .plan:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(16,30,51,.16);}
+  .caltable tr{transition:background .12s ease;}
+  .caltable tr:hover td{background:var(--turf-tint);}
+
+  /* signature move: the ball drifts into rival territory */
+  @keyframes drive{
+    0%{left:38%;} 55%{left:64%;} 70%{left:58%;} 100%{left:61%;}
+  }
+  .field .ball{animation:drive 5s ease-in-out 1 both;}
+
+  /* scroll reveal — hidden state only applies when JS is running, so the
+     page is never blank for a no-script visitor */
+  html.js .reveal{opacity:0;transform:translateY(18px);
+    transition:opacity .5s ease, transform .5s ease;}
+  html.js .reveal.in{opacity:1;transform:none;}
+  html.js .reveal:nth-child(2){transition-delay:.08s;}
+  html.js .reveal:nth-child(3){transition-delay:.16s;}
+
+  /* accessibility: motion off means motion OFF */
+  @media (prefers-reduced-motion: reduce){
+    .btn,.fcard,.step,.plan,.trust div,.caltable tr,.reveal{transition:none !important;transform:none !important;}
+    .field .ball{animation:none !important;}
+    .reveal{opacity:1 !important;}
+    html{scroll-behavior:auto;}
+  }
+
+  @media (max-width:680px){
+    .hero h1{font-size:44px;}
+    .grid3,.steps,.trust{grid-template-columns:1fr;}
+    .plans{grid-template-columns:1fr;}
+    h2{font-size:30px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">Beat Your League</div>
+    <h1>Beat your league, <em>not the books.</em></h1>
+    <p class="sub">A weekly Rival Report built from your Sleeper league's real data — your lineup,
+    your opponent's weak spots, the one coin-flip call decided — delivered every Tuesday.
+    Analysis, never picks. And every call we make gets graded in public.</p>
+    <div class="cta-row">
+      <a class="btn go" href="join/index.html">Reserve a founding spot</a>
+      <a class="btn ghost" href="sample-report.html">See a real report</a>
+    </div>
+    <p class="whyfree">No free tier — the report is the product from day one. The risk sits
+    with us anyway: every call we send you also lands on a public ledger, graded, and refunds
+    are no-questions through Week 2.</p>
+    <div class="proof-chips">
+      <span class="chip"><b>2,056</b> calls graded before launch</span>
+      <span class="chip"><b>Wins AND misses</b> published every Monday</span>
+      <span class="chip">No password needed · <b>ever</b></span>
+    </div>
+    <div class="fieldwrap">
+      <div class="field"><div class="endzone l"></div><div class="endzone r"></div><div class="ball"></div></div>
+      <div class="fieldlabel"><span>Your territory</span><span>Their territory</span></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">What you get every Tuesday</div>
+    <h2>One report. One target: your rival.</h2>
+    <p class="lede">Rankings tell everyone the same thing. Your league isn't everyone — it's eleven
+    specific people, one of whom you need to beat this week and one of whom you need to beat
+    forever. The Rival Report is built from your league's own record on Sleeper.</p>
+    <div class="grid3">
+      <div class="fcard reveal">
+        <h3>Your optimal lineup</h3>
+        <p>Every slot set from your league's scoring, with the reasoning attached — and when a
+        call is too close or a status is unknown, it says so instead of faking certainty.</p>
+        <div class="mini">
+          <div class="mrow"><span class="slot">QB</span><span class="p">Ryan Fitzpatrick<small>4 games of form</small></span><span class="pts">23.7</span></div>
+          <div class="mrow"><span class="slot">RB</span><span class="p">Alvin Kamara<small>8 games of form</small></span><span class="pts">19.2</span></div>
+          <div class="mrow"><span class="slot">WR</span><span class="p">Davante Adams<small>8 games of form</small></span><span class="pts">16.3</span></div>
+        </div>
+        <span class="real">Real output · Sleeper's public sample league, 2018</span>
+      </div>
+      <div class="fcard reveal">
+        <h3>Where your rival is fragile</h3>
+        <p>Their lineup, scouted. The report reads their bench, their habits, their blind spots —
+        and tells you which ones matter this week.</p>
+        <div class="mini">
+          <div class="srow"><div class="x">1</div><div class="why"><b>DeAndre Hopkins is sitting on their bench</b> —
+          projecting 17.8, above four of their set starters. They never noticed. You did.</div></div>
+        </div>
+        <span class="real">Real find · sample-league rival, week 10, 2018</span>
+      </div>
+      <div class="fcard reveal">
+        <h3>The receipts</h3>
+        <p>Last week's calls, graded against the real box score every Monday — hits and misses
+        alike, on a public ledger. When your call lands, you get the timestamped receipt for
+        the group chat.</p>
+        <div class="mini">
+          <div class="srow"><div class="x" style="color:var(--turf);border-color:var(--turf)">✓</div>
+          <div class="why"><b>One sample-league manager left 318 points on his bench in a single
+          season.</b> That's the gap this report exists to close.</div></div>
+        </div>
+        <span class="real">Real number · sample league, 2017 season log</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="honesty">
+  <div class="wrap">
+    <div class="eyebrow">Why trust the numbers</div>
+    <h2>We graded ourselves before charging you a dollar.</h2>
+    <p class="lede">Before launch, the engine re-played two full seasons of a real league and graded
+    every one of its own start/sit calls against the actual box scores — 2,056 of them. When it
+    says 62%, it should hit about 62%. Here's how that test came out, bucket by bucket:</p>
+    <table class="caltable">
+      <tr><th>When we said…</th><th>Calls</th><th>We hit</th><th>Verdict</th></tr>
+      <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">calibrated</td></tr>
+      <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">calibrated</td></tr>
+      <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">calibrated</td></tr>
+      <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">calibrated</td></tr>
+      <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">calibrated</td></tr>
+    </table>
+    <p class="honest">The fine print, because we publish it: these are the head-to-heads where both
+    players took the field (availability-verified — the regime the live report publishes in). The
+    full backtest, including the buckets that failed and what we gated because of them, is in the
+    open: numbers we can't defend render as "coming in v0.3", never as a guess.</p>
+    <span class="stamp">Graded on real box scores</span>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Sixty seconds. No password. No app.</h2>
+    <div class="steps">
+      <div class="step reveal"><div class="n">1</div><h3>Type your Sleeper username</h3>
+        <p>That's all we ever ask for. Sleeper league data is public — we never want your
+        password, and we never see a payment card.</p></div>
+      <div class="step reveal"><div class="n">2</div><h3>Tap your league, tap your rival</h3>
+        <p>Your leagues appear; pick one. Then pick the one manager you most need to beat.
+        We find your roster automatically.</p></div>
+      <div class="step reveal"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
+        <p>Lineup set, rival scouted, waiver hype rated, pivot plan for late news — and last
+        week's calls graded, win or lose.</p></div>
+    </div>
+    <div class="cta-row" style="margin-top:26px">
+      <a class="btn go" href="join/index.html">Pick your rival <span class="arrow">→</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="pricing">
+  <div class="wrap">
+    <div class="eyebrow">Pricing</div>
+    <h2>Your buy-in bought you a seat.<br>The season pass buys the edge.</h2>
+    <p class="lede">Whatever your league plays for — the pot, the trophy, or just the right to
+    run the group chat — one flat season price covers every weekly report, refundable
+    no-questions through Week 2.</p>
+    <div class="plans">
+      <div class="plan founder reveal">
+        <div class="tag">Founding Season Pass · first 50 only</div>
+        <div class="price">$29 <small>/ season</small></div>
+        <ul>
+          <li>Every weekly Rival Report, Week 1 through your title game</li>
+          <li>Rival Watch on your named nemesis all season</li>
+          <li>Public receipts ledger — our record, your bragging rights</li>
+          <li>No-questions refund through Week 2</li>
+        </ul>
+        <a class="btn gold" href="join/index.html" data-checkout>Reserve a founding spot</a>
+      </div>
+      <div class="plan reveal">
+        <div class="tag">Or month to month</div>
+        <div class="price">$6.99 <small>/ month</small></div>
+        <ul>
+          <li>Same report, same receipts</li>
+          <li>Cancel any time</li>
+        </ul>
+        <div class="soon" id="monthly-cta">Checkout opens at launch · via Substack</div>
+      </div>
+    </div>
+    <div class="funnel reveal">
+      <b>How buying works, in the open:</b>
+      <ol>
+        <li><b>Today:</b> reserve your spot — pick your league and your rival in sixty
+        seconds. No card yet, only because checkout hasn't opened; the first 50
+        reservations lock the $29 founding price.</li>
+        <li><b>Before Week 1:</b> checkout opens through Substack — you pay there, and card
+        details never touch our systems. Reports go only to paid subscribers, from the
+        first issue on.</li>
+        <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds no-questions through
+        Week 2, and every call we send you is graded on the public ledger.</li>
+      </ol>
+    </div>
+    <!-- When Substack goes live: set SUBSTACK_URL in the script below — the
+         founder button becomes real checkout and the monthly note becomes a
+         link. Keep exactly one decision visible (pass + monthly anchor). -->
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">The fine print, up front</div>
+    <h2>What we will never do</h2>
+    <div class="trust">
+      <div><b>No betting, no picks</b>Calibrated analysis for your fantasy lineup. No spreads,
+      no props, no staking advice. Decisions stay yours — that's the fun part.</div>
+      <div><b>No passwords, no cards</b>We ask for a Sleeper username, an email, and a rival.
+      Payments live with Substack/Stripe. There is no account to breach because there is no account.</div>
+      <div><b>No hiding misses</b>The grading rules were frozen in code before the season.
+      Every call lands on the public ledger Monday morning — including the ones we blow.</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b style="color:var(--navy)">Beat Your League</b> — the weekly edge report built around your
+    rival, not just your roster.<br>
+    Sample visuals above are real engine output from Sleeper's public sample league (2017–2018
+    seasons), labeled where shown. Projections are analysis, not guarantees. Not affiliated with
+    Sleeper. Fantasy decisions are yours to make.
+  </div>
+</footer>
+
+<script>
+"use strict";
+document.documentElement.classList.add("js");
+
+// Paste the Substack subscribe URL here the day the publication goes live.
+// That single edit is the entire payment integration: the founder button
+// becomes real checkout and the monthly note becomes a subscribe link.
+// Substack/Stripe host the checkout; card data never touches this site.
+const SUBSTACK_URL = "";
+if (SUBSTACK_URL) {
+  const founder = document.querySelector("[data-checkout]");
+  if (founder) {
+    founder.href = SUBSTACK_URL;
+    founder.textContent = "Get the season pass — $29";
+  }
+  const monthly = document.getElementById("monthly-cta");
+  if (monthly) {
+    const link = document.createElement("a");
+    link.className = "btn ghost";
+    link.style.borderColor = "var(--navy)";
+    link.style.color = "var(--navy)";
+    link.href = SUBSTACK_URL;
+    link.textContent = "Subscribe monthly";
+    monthly.replaceWith(link);
+  }
+}
+
+const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const targets = document.querySelectorAll(".reveal");
+if (!reduced && "IntersectionObserver" in window) {
+  const io = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) { entry.target.classList.add("in"); io.unobserve(entry.target); }
+    }
+  }, { threshold: 0.15 });
+  targets.forEach((el) => io.observe(el));
+} else {
+  targets.forEach((el) => el.classList.add("in"));
+}
+</script>
+</body>
+</html>

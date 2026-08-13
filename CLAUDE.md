@@ -185,7 +185,16 @@ registry (`run/registry.py`, gitignored data), batch runner (`python -m run.batc
 per league, one report per subscriber, failures contained per-subscriber), and the Rival Watch
 strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Remaining for
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
-and connect the Substack list. Phase 5 (content system) is untouched and next in order. Phase 3 built the availability feed
+and connect the Substack list. Phase 5 (content system) is untouched and next in order.
+
+Public site (`site/`, GH Pages root): landing page (`index.html` — design-system CSS/SVG
+visuals only, no stock imagery; every cited number is real backtest/demo output, labeled with
+its source; pricing per PLAN §4 with checkout deferred to Substack links marked in comments),
+`sample-report.html` (the real 2018 demo report), and `join/` (the picker). The buyer-facing
+copy never mentions the implementation (product summary: the AI is invisible to the buyer).
+Paid from day one (owner decision Aug 13 2026, recorded in PLAN §4): the picker takes
+founding-price reservations, not free signups; reports go only to paid subscribers once
+Substack checkout is live (set SUBSTACK_URL in site/index.html to activate it). Phase 3 built the availability feed
 (weekly injury snapshots + NFL schedule byes), `engine/week_report.py` (single JSON with every
 number gated on its own calibration evidence), and `render/report.py` (template-faithful HTML,
 all data escaped). Phase 4: `make week` / `python -m run.week` runs ingest→report→render→text
