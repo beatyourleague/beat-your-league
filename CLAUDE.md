@@ -189,7 +189,11 @@ and connect the Substack list. Phase 5 (content system) is untouched and next in
 
 Public site (`site/`, GH Pages root): landing page (`index.html` — design-system CSS/SVG
 visuals only, no stock imagery; every cited number is real backtest/demo output, labeled with
-its source; pricing per PLAN §4 with checkout deferred to Substack links marked in comments),
+its source; pricing per PLAN §4 with checkout deferred to Substack links marked in comments;
+art direction is the dark "floating receipts" theme — DFS-grade stadium-night shell, the
+product's own paper reports as the floating visuals, gold plate/pill broadcast accents —
+while join/ and the report itself stay paper-light on purpose: the dark page sells, the
+paper product delivers),
 `sample-report.html` (the real 2018 demo report), and `join/` (the picker). The buyer-facing
 copy never mentions the implementation (product summary: the AI is invisible to the buyer).
 Paid from day one (owner decision Aug 13 2026, recorded in PLAN §4): the picker takes

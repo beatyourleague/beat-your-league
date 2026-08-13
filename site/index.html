@@ -6,191 +6,387 @@
 <title>Beat Your League — the weekly Rival Report</title>
 <meta name="description" content="A weekly report built from your Sleeper league's real data, aimed at one goal: beating your rival. Every call graded in public.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+  /* =====================================================================
+     BEAT YOUR LEAGUE — "FLOATING RECEIPTS" concept
+     Dark gallery lighting. The product's own paper pinned under the lamps.
+     ===================================================================== */
   :root{
     --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
-    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-tint:#FBF3D9;
-    --brick:#B3402F; --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+    --turf:#1E7A46; --turf-glow:#2EA968; --turf-tint:#DFF0E4;
+    --flag:#F2C230; --flag-deep:#D9A81B; --flag-tint:#FBF3D9;
+    --brick:#B3402F; --brick-glow:#E0654F; --brick-tint:#F7E3DE;
+    --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+    --abyss:#05090F; --pitch:#0A1420; --dusk:#8FA3BC; --dusk2:#BCC9DB;
+    --gold-edge:rgba(242,194,48,.20);
   }
   *{margin:0;padding:0;box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
-  body{background:#E7E4DA;font-family:'Barlow',-apple-system,sans-serif;color:var(--navy);
-    -webkit-font-smoothing:antialiased;}
-  .wrap{max-width:920px;margin:0 auto;padding:0 16px;}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:hidden;overflow-x:clip;}
+  body{
+    /* gradient mesh: navy stadium dusk into deep-teal turf shadow into black */
+    background:
+      radial-gradient(1100px 720px at 88% -6%,  rgba(30,122,70,.26), transparent 62%),
+      radial-gradient(950px 640px at -12% 22%,  rgba(24,42,69,.85),  transparent 64%),
+      radial-gradient(1300px 860px at 112% 68%, rgba(13,56,46,.38),  transparent 60%),
+      radial-gradient(760px 540px at 14% 104%,  rgba(179,64,47,.15), transparent 66%),
+      linear-gradient(180deg,#0C1930 0%, var(--pitch) 34%, var(--abyss) 100%);
+    background-color:var(--abyss);
+    font-family:'Barlow',-apple-system,sans-serif;color:var(--paper);
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip;
+  }
+  /* fixed noise + faint yard lines over the mesh, under the content */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 138px, rgba(246,244,238,.035) 138px 140px),
+      repeating-linear-gradient(45deg,  rgba(246,244,238,.013) 0 2px, transparent 2px 11px),
+      repeating-linear-gradient(-45deg, rgba(0,0,0,.16) 0 1px, transparent 1px 7px);
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;position:relative;}
   a{color:inherit;}
+  a:focus-visible,button:focus-visible{outline:3px solid var(--flag);outline-offset:3px;}
+  ::selection{background:var(--flag);color:var(--navy);}
+  img,svg{max-width:100%;}
 
   /* ---------- hero ---------- */
-  .hero{background:
-      repeating-linear-gradient(-55deg, rgba(246,244,238,.045) 0 2px, transparent 2px 14px),
-      linear-gradient(180deg,var(--navy2),var(--navy));
-    color:var(--paper);padding:52px 0 56px;}
-  .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
-    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
-  .hero h1{font-family:'Barlow Condensed';font-weight:800;font-size:64px;line-height:.95;
-    text-transform:uppercase;margin-top:14px;max-width:700px;}
-  .hero h1 em{font-style:normal;color:var(--flag);}
-  .hero .sub{margin-top:18px;font-size:18px;line-height:1.6;color:#C9D4E2;max-width:620px;}
-  .cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px;}
-  .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:18px;
-    letter-spacing:.12em;text-transform:uppercase;text-decoration:none;padding:14px 26px;}
-  .btn.go{background:var(--turf);color:#fff;}
-  .btn.ghost{border:2px solid rgba(246,244,238,.5);color:var(--paper);}
-  .btn.gold{background:var(--flag);color:var(--navy);}
-  .whyfree{margin-top:16px;font-size:13.5px;line-height:1.6;color:#9FB0C4;max-width:560px;
-    border-left:3px solid var(--flag);padding-left:12px;}
-  .proof-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;}
-  .chip{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-    border:1px solid rgba(246,244,238,.35);color:#C9D4E2;padding:4px 9px;border-radius:2px;}
-  .chip b{color:var(--paper);}
+  .hero{position:relative;padding:88px 0 76px;overflow:hidden;}
+  .hero::after{ /* stadium lamp from above */
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(720px 340px at 50% -120px, rgba(246,244,238,.10), transparent 70%);
+  }
+  .herofb{position:absolute;right:-70px;top:16px;width:min(46vw,560px);opacity:.14;
+    transform:rotate(-14deg);pointer-events:none;
+    filter:drop-shadow(0 0 44px rgba(242,194,48,.35));animation:hover-fb 9s ease-in-out infinite alternate;}
+  @keyframes hover-fb{from{transform:rotate(-14deg) translateY(0);}to{transform:rotate(-12deg) translateY(14px);}}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:15px;letter-spacing:.3em;text-transform:uppercase;color:var(--flag);
+    text-shadow:0 0 18px rgba(242,194,48,.35);}
+  .brand svg{width:26px;height:17px;flex:none;}
+  .hero h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:clamp(46px,11.5vw,120px);line-height:.88;letter-spacing:-.01em;
+    text-transform:uppercase;margin-top:20px;max-width:920px;
+    text-shadow:0 2px 0 rgba(0,0,0,.35), 0 20px 50px rgba(0,0,0,.55);}
+  /* grafted from concept C: the second line slams onto a gold broadcast plate */
+  .hero h1 em{display:inline-block;font-style:italic;color:var(--navy);
+    background:linear-gradient(180deg,#FFD75E 0%,var(--flag) 60%,var(--flag-deep) 100%);
+    transform:skewX(-6deg);padding:2px 26px 8px 18px;margin-top:14px;
+    text-shadow:none;box-shadow:0 14px 44px rgba(242,194,48,.30), 0 3px 0 rgba(0,0,0,.35);}
+  .hero h1 em > span{display:inline-block;transform:skewX(6deg);}
+  .topline{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
+  .livepill{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--flag);border:1.5px solid rgba(242,194,48,.55);padding:6px 13px;
+    border-radius:2px;background:rgba(242,194,48,.07);}
+  .livepill i{width:9px;height:9px;border-radius:50%;background:#E5484D;
+    box-shadow:0 0 10px rgba(229,72,77,.9);animation:pillpulse 1.6s ease-in-out infinite;}
+  @keyframes pillpulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .hero .sub{margin-top:24px;font-size:18.5px;line-height:1.65;color:var(--dusk2);max-width:640px;}
+  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px;}
+  .btn{position:relative;display:inline-block;font-family:'Barlow Condensed';font-weight:800;
+    font-size:19px;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;
+    padding:16px 30px;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
+    overflow:hidden;transition:transform .18s ease, filter .18s ease;}
+  .btn::after{ /* engineered sheen sweep */
+    content:"";position:absolute;top:-4px;bottom:-4px;left:-45%;width:34%;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.55),transparent);
+    transform:skewX(-18deg);transition:left .5s cubic-bezier(.2,.7,.3,1);pointer-events:none;}
+  .btn:hover{transform:translateY(-3px);}
+  .btn:hover::after{left:118%;}
+  .btn.go,.btn.gold{background:linear-gradient(180deg,#FFDA5E 0%,var(--flag) 55%,var(--flag-deep) 100%);
+    color:var(--navy);
+    filter:drop-shadow(0 12px 26px rgba(242,194,48,.38)) drop-shadow(0 3px 8px rgba(0,0,0,.5));}
+  .btn.go:hover,.btn.gold:hover{filter:drop-shadow(0 16px 34px rgba(242,194,48,.55)) drop-shadow(0 3px 8px rgba(0,0,0,.5));}
+  .btn.ghost{border:2px solid rgba(246,244,238,.45);color:var(--paper);
+    background:rgba(246,244,238,.04);}
+  .btn.ghost:hover{border-color:var(--flag);color:var(--flag);
+    filter:drop-shadow(0 10px 22px rgba(242,194,48,.22));}
+  .btn .arrow{display:inline-block;transition:transform .18s ease;}
+  .btn:hover .arrow{transform:translateX(5px);}
+  .whyfree{margin-top:22px;font-size:13.5px;line-height:1.65;color:#9DB0C6;max-width:580px;
+    border-left:3px solid var(--flag);padding:10px 0 10px 16px;
+    background:linear-gradient(90deg,rgba(242,194,48,.07),transparent 70%);}
 
-  /* field graphic */
-  .fieldwrap{margin-top:34px;max-width:620px;}
-  .field{position:relative;height:52px;border:2px solid var(--paper);
+  /* proof chips → oversized gold stat tiles */
+  .proof-chips{display:flex;flex-wrap:wrap;gap:34px 44px;margin-top:44px;}
+  .chip{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:12.5px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--dusk);
+    border-left:3px solid var(--gold-edge);padding-left:16px;}
+  .chip b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:clamp(32px,4.4vw,54px);line-height:.95;letter-spacing:.01em;color:var(--flag);
+    font-variant-numeric:tabular-nums;
+    text-shadow:0 0 22px rgba(242,194,48,.38), 0 2px 0 rgba(0,0,0,.4);}
+
+  /* field graphic — night game under the lights */
+  .fieldwrap{margin-top:48px;max-width:640px;}
+  .field{position:relative;height:62px;border:1px solid rgba(246,244,238,.28);
     background:
-      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(246,244,238,.35) calc(10% - 1px) 10%),
-      linear-gradient(90deg,#24513A 0 61%, #5C3230 61% 100%);}
-  .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
-  .field .endzone.l{left:0;background:var(--turf);}
-  .field .endzone.r{right:0;background:var(--brick);}
+      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(246,244,238,.30) calc(10% - 1px) 10%),
+      linear-gradient(90deg,#11492B 0 61%, #47231D 61% 100%);
+    box-shadow:0 0 0 1px rgba(0,0,0,.45), 0 22px 44px -18px rgba(0,0,0,.75),
+      inset 0 0 34px rgba(0,0,0,.5);}
+  .field .endzone{position:absolute;top:0;bottom:0;width:18px;}
+  .field .endzone.l{left:0;background:linear-gradient(180deg,var(--turf-glow),var(--turf));
+    box-shadow:2px 0 14px rgba(46,169,104,.45);}
+  .field .endzone.r{right:0;background:linear-gradient(180deg,var(--brick-glow),var(--brick));
+    box-shadow:-2px 0 14px rgba(224,101,79,.4);}
   .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
-    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
-    border:2px solid var(--paper);}
-  .fieldlabel{display:flex;justify-content:space-between;font-size:11px;font-weight:800;
-    letter-spacing:.1em;text-transform:uppercase;margin-top:6px;color:#C9D4E2;}
+    width:28px;height:18px;background:#6B3A1F;border-radius:50%/45%;
+    border:2px solid var(--flag);box-shadow:0 0 14px rgba(242,194,48,.65), 0 3px 8px rgba(0,0,0,.6);}
+  .field .ball::after{content:"";position:absolute;left:7px;right:7px;top:50%;height:2px;
+    background:var(--paper);transform:translateY(-50%);}
+  .fieldlabel{display:flex;justify-content:space-between;font-family:'Barlow Condensed';
+    font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
+  .fieldlabel span:first-child{color:var(--turf-glow);}
+  .fieldlabel span:last-child{color:var(--brick-glow);}
+  @keyframes drive{0%{left:38%;} 55%{left:64%;} 70%{left:58%;} 100%{left:61%;}}
+  .field .ball{animation:drive 5s ease-in-out 1 both;}
 
-  /* ---------- sections ---------- */
-  section{padding:52px 0;}
-  section.alt{background:var(--paper);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
-  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
-    text-transform:uppercase;color:var(--slate);display:flex;align-items:center;gap:10px;}
-  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:38px;line-height:1;
-    text-transform:uppercase;margin-top:10px;}
-  .lede{margin-top:12px;font-size:16.5px;line-height:1.65;color:var(--ink2);max-width:640px;}
+  /* ---------- receipts ticker ---------- */
+  .ticker{position:relative;border-top:1px solid var(--gold-edge);border-bottom:1px solid var(--gold-edge);
+    background:linear-gradient(180deg,#0E1D31,#0A1420);
+    box-shadow:inset 0 1px 0 rgba(246,244,238,.05), inset 0 0 46px rgba(0,0,0,.5),
+      0 14px 30px -18px rgba(0,0,0,.8);
+    overflow:hidden;}
+  .ticker .track{display:flex;width:max-content;animation:tick 46s linear infinite;}
+  .ticker:hover .track{animation-play-state:paused;}
+  .reel{display:flex;list-style:none;align-items:center;}
+  .reel li{display:flex;align-items:center;white-space:nowrap;padding:13px 24px 13px 0;
+    font-family:'Barlow Condensed';font-weight:700;font-size:16.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--dusk2);}
+  .reel li::before{content:"◆";font-size:8px;color:var(--turf-glow);margin-right:24px;
+    text-shadow:0 0 9px rgba(46,169,104,.9);}
+  .reel li b{color:var(--flag);font-weight:800;font-variant-numeric:tabular-nums;padding:0 .28em;
+    text-shadow:0 0 14px rgba(242,194,48,.35);}
+  @keyframes tick{from{transform:translateX(0);}to{transform:translateX(-50%);}}
 
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
-  .fcard{background:var(--card);border:1px solid var(--line);padding:18px;}
-  .fcard h3{font-family:'Barlow Condensed';font-weight:800;font-size:20px;text-transform:uppercase;}
-  .fcard p{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
-  .real{display:inline-block;margin-top:12px;font-size:10.5px;font-weight:800;letter-spacing:.08em;
-    text-transform:uppercase;color:var(--slate);border-top:1px dashed var(--line);padding-top:8px;}
+  /* ---------- section scaffolding ---------- */
+  section{padding:92px 0;position:relative;}
+  section.alt{background:linear-gradient(180deg,rgba(246,244,238,.035),rgba(246,244,238,.015));
+    border-top:1px solid rgba(242,194,48,.12);border-bottom:1px solid rgba(242,194,48,.12);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--flag);display:flex;align-items:center;gap:14px;
+    text-shadow:0 0 14px rgba(242,194,48,.3);}
+  .eyebrow::after{content:"";flex:1;height:1px;
+    background:linear-gradient(90deg,rgba(242,194,48,.45),transparent);}
+  h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:clamp(34px,5.8vw,66px);line-height:.95;text-transform:uppercase;margin-top:16px;
+    text-shadow:0 2px 0 rgba(0,0,0,.35), 0 16px 40px rgba(0,0,0,.5);}
+  .lede{margin-top:16px;font-size:17px;line-height:1.7;color:var(--dusk2);max-width:660px;}
 
-  /* mini report visuals — real data, labeled */
-  .mini{margin-top:14px;background:var(--card);border:2px solid var(--navy);}
-  .mrow{display:grid;grid-template-columns:44px 1fr 52px;gap:10px;align-items:center;
-    padding:9px 12px;border-top:1px solid #EDEAE1;font-size:13.5px;}
+  /* ---------- floating paper (the signature) ---------- */
+  .tilt{transform:var(--tilt,none);transition:transform .28s cubic-bezier(.2,.7,.3,1);}
+  .tilt:hover{transform:translateY(-8px) rotate(0deg);}
+  .sheet{position:relative;background:linear-gradient(180deg,#FFFFFF 0%,var(--paper) 100%);
+    color:var(--navy);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.6),
+      0 34px 60px -24px rgba(0,0,0,.72),
+      0 12px 26px -12px rgba(0,0,0,.55),
+      0 0 0 1px var(--gold-edge),
+      0 0 38px -6px rgba(242,194,48,.16);
+    transition:box-shadow .28s ease;}
+  .tilt:hover .sheet, .sheet.tilt:hover{
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.6),
+      0 46px 80px -28px rgba(0,0,0,.8),
+      0 16px 32px -12px rgba(0,0,0,.6),
+      0 0 0 1px rgba(242,194,48,.4),
+      0 0 52px -4px rgba(242,194,48,.3);}
+  .sheet::before{ /* gold gaffer tape pinning the sheet */
+    content:"";position:absolute;top:-13px;left:50%;margin-left:-46px;width:92px;height:26px;
+    background:linear-gradient(180deg,rgba(255,218,94,.92),rgba(242,194,48,.82));
+    clip-path:polygon(5% 8%,98% 0,95% 92%,0 100%);
+    box-shadow:0 5px 12px rgba(0,0,0,.4);opacity:.95;}
+
+  /* ---------- section 1: what you get ---------- */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:52px;}
+  .grid3 .reveal{display:flex;min-width:0;}
+  .grid3 .reveal:nth-child(2){margin-top:30px;}
+  .grid3 .reveal:nth-child(3){margin-top:12px;}
+  .fcard{flex:1;padding:26px 22px 20px;}
+  .fcard h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:26px;
+    line-height:1;text-transform:uppercase;display:flex;align-items:center;gap:10px;}
+  .fcard h3::before{content:"";width:20px;height:5px;flex:none;background:var(--flag);
+    clip-path:polygon(20% 0,100% 0,80% 100%,0 100%);}
+  .fcard p{margin-top:12px;font-size:14px;line-height:1.6;color:var(--ink2);}
+  .real{display:block;margin-top:14px;font-size:10.5px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--slate);border-top:1px dashed var(--line);padding-top:10px;}
+
+  /* mini report excerpts — the actual product paper */
+  .mini{margin-top:16px;background:var(--card);border:2px solid var(--navy);
+    box-shadow:0 12px 24px -14px rgba(16,30,51,.55);}
+  .mrow{display:grid;grid-template-columns:44px 1fr 56px;gap:10px;align-items:center;
+    padding:10px 12px;border-top:1px solid #EDEAE1;font-size:13.5px;}
   .mrow:first-child{border-top:none;}
-  .mrow .slot{font-family:'Barlow Condensed';font-weight:800;color:var(--slate);}
+  .mrow .slot{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);}
   .mrow .p{font-weight:700;}
   .mrow .p small{display:block;font-weight:500;color:var(--slate);font-size:11px;}
-  .mrow .pts{font-family:'Barlow Condensed';font-weight:800;text-align:right;font-size:16px;}
-  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;padding:12px;}
+  .mrow .pts{font-family:'Barlow Condensed';font-weight:900;font-style:italic;text-align:right;
+    font-size:19px;color:var(--turf);font-variant-numeric:tabular-nums;}
+  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;padding:13px 12px;}
   .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:var(--brick);
     border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
     justify-content:center;border-radius:50%;}
-  .srow .why{font-size:13.5px;color:var(--ink2);line-height:1.5;}
+  .srow .why{font-size:13.5px;color:var(--ink2);line-height:1.55;}
   .srow .why b{color:var(--navy);}
 
-  /* calibration table */
-  .caltable{width:100%;border-collapse:collapse;margin-top:16px;background:var(--card);
+  /* ---------- section 2: calibration exhibit ---------- */
+  .exhibit{max-width:740px;margin-top:44px;padding:18px 18px 16px;}
+  .caltable{width:100%;border-collapse:collapse;background:var(--card);
     border:2px solid var(--navy);font-variant-numeric:tabular-nums;}
-  .caltable th{background:var(--navy);color:#C9D4E2;font-size:11px;font-weight:800;
-    letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;text-align:right;}
+  .caltable th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-size:13px;
+    font-weight:800;letter-spacing:.14em;text-transform:uppercase;padding:10px 14px;text-align:right;}
   .caltable th:first-child{text-align:left;}
-  .caltable td{padding:9px 12px;border-top:1px solid #EDEAE1;font-size:14px;text-align:right;}
-  .caltable td:first-child{text-align:left;font-weight:700;}
-  .caltable .ok{color:var(--turf);font-weight:800;}
-  .stamp{display:inline-block;margin-top:16px;border:2px solid var(--turf);color:var(--turf);
-    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.18em;font-size:13px;
-    text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
+  .caltable td{padding:11px 14px;border-top:1px solid #EDEAE1;font-size:15px;text-align:right;
+    color:var(--ink2);}
+  .caltable td:first-child{text-align:left;font-weight:700;color:var(--navy);}
+  .caltable td:nth-child(3){font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:19px;color:var(--navy);}
+  .caltable .ok{color:var(--turf);font-weight:800;letter-spacing:.04em;}
+  .caltable tr{transition:background .15s ease;}
+  .caltable tbody tr:hover td, .caltable tr:hover td{background:var(--turf-tint);}
+  .honest{margin-top:20px;font-size:13px;color:var(--dusk);line-height:1.7;max-width:680px;}
+  .stamp{display:inline-block;margin-top:22px;border:3px double var(--turf-glow);color:var(--turf-glow);
+    font-family:'Barlow Condensed';font-weight:900;letter-spacing:.22em;font-size:14px;
+    text-transform:uppercase;padding:8px 16px;transform:rotate(-2.5deg);border-radius:3px;
+    box-shadow:0 0 24px rgba(46,169,104,.25), inset 0 0 14px rgba(46,169,104,.12);
+    text-shadow:0 0 10px rgba(46,169,104,.5);}
 
-  /* steps */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
-  .step{background:var(--card);border:1px solid var(--line);padding:18px;}
-  .step .n{font-family:'Barlow Condensed';font-weight:800;font-size:34px;color:var(--flag);
-    -webkit-text-stroke:1.5px var(--navy);}
-  .step h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;margin-top:6px;}
-  .step p{margin-top:6px;font-size:13.5px;line-height:1.55;color:var(--ink2);}
-
-  /* pricing */
-  .plans{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-top:26px;max-width:660px;}
-  .plan{background:var(--card);border:2px solid var(--navy);padding:22px;}
-  .plan.founder{border-color:var(--turf);box-shadow:0 2px 18px rgba(30,122,70,.15);}
-  .plan .tag{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);}
-  .plan.founder .tag{color:var(--turf);}
-  .plan .price{font-family:'Barlow Condensed';font-weight:800;font-size:46px;margin-top:6px;}
-  .plan .price small{font-size:16px;color:var(--slate);font-family:'Barlow';font-weight:700;}
-  .plan ul{margin:12px 0 0 18px;font-size:13.5px;line-height:1.7;color:var(--ink2);}
-  .plan .btn{margin-top:16px;font-size:15px;padding:11px 18px;}
-  .honest{margin-top:14px;font-size:12.5px;color:var(--slate);line-height:1.6;max-width:640px;}
-  .soon{margin-top:16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
-    letter-spacing:.1em;text-transform:uppercase;color:var(--slate);
-    border:2px dashed var(--line);padding:11px 18px;text-align:center;}
-  .funnel{margin-top:22px;background:var(--card);border-left:5px solid var(--turf);
-    border-top:1px solid var(--line);border-right:1px solid var(--line);
-    border-bottom:1px solid var(--line);padding:16px 18px;max-width:660px;}
-  .funnel > b{font-family:'Barlow Condensed';font-weight:800;font-size:17px;
-    text-transform:uppercase;letter-spacing:.06em;}
-  .funnel ol{margin:10px 0 0 20px;font-size:13.5px;line-height:1.7;color:var(--ink2);}
-
-  /* trust + footer */
-  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
-  .trust div{font-size:13px;line-height:1.55;color:var(--ink2);background:var(--card);
-    border:1px solid var(--line);padding:14px;}
-  .trust b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
-    text-transform:uppercase;color:var(--navy);margin-bottom:4px;}
-  footer{padding:26px 0 40px;font-size:12px;color:var(--slate);line-height:1.7;}
-
-  /* ---------- motion (restrained, brand-consistent) ---------- */
-  .btn{transition:transform .15s ease, box-shadow .15s ease, background .15s ease;}
-  .btn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(16,30,51,.25);}
-  .btn.go:hover{background:#1A6A3D;}
-  .btn .arrow{display:inline-block;transition:transform .15s ease;}
-  .btn:hover .arrow{transform:translateX(4px);}
-  .fcard,.step,.plan,.trust div{transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
-  .fcard:hover,.step:hover,.trust div:hover{transform:translateY(-3px);
-    box-shadow:0 8px 20px rgba(16,30,51,.12);border-color:var(--navy);}
-  .plan:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(16,30,51,.16);}
-  .caltable tr{transition:background .12s ease;}
-  .caltable tr:hover td{background:var(--turf-tint);}
-
-  /* signature move: the ball drifts into rival territory */
-  @keyframes drive{
-    0%{left:38%;} 55%{left:64%;} 70%{left:58%;} 100%{left:61%;}
+  /* ---------- section 3: steps ---------- */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px;}
+  .step{background:linear-gradient(180deg,rgba(24,42,69,.75),rgba(12,23,39,.9));
+    border:1px solid rgba(143,163,188,.18);border-top:1px solid rgba(246,244,238,.18);
+    padding:28px 24px;min-width:0;
+    box-shadow:0 26px 44px -26px rgba(0,0,0,.75);
+    transition:border-color .22s ease, box-shadow .22s ease, background .22s ease;}
+  .step:hover{border-color:rgba(242,194,48,.55);
+    box-shadow:0 30px 52px -26px rgba(0,0,0,.85), 0 0 40px -8px rgba(242,194,48,.25);}
+  .step .n{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:88px;
+    line-height:.8;color:var(--flag);}
+  @supports ((-webkit-text-stroke:2px #000)){
+    .step .n{color:transparent;-webkit-text-stroke:2.5px var(--flag);
+      text-shadow:0 0 26px rgba(242,194,48,.25);}
   }
-  .field .ball{animation:drive 5s ease-in-out 1 both;}
+  .step h3{font-family:'Barlow Condensed';font-weight:800;font-size:22px;text-transform:uppercase;
+    margin-top:14px;color:var(--paper);line-height:1.1;}
+  .step p{margin-top:10px;font-size:14px;line-height:1.6;color:#A9B9CC;}
 
-  /* scroll reveal — hidden state only applies when JS is running, so the
-     page is never blank for a no-script visitor */
-  html.js .reveal{opacity:0;transform:translateY(18px);
-    transition:opacity .5s ease, transform .5s ease;}
+  /* ---------- section 4: pricing ---------- */
+  .plans{display:grid;grid-template-columns:1.2fr 1fr;gap:28px;margin-top:52px;max-width:760px;}
+  .plans .reveal{display:flex;min-width:0;}
+  .plan{flex:1;background:var(--card);border:2px solid var(--navy);padding:28px 26px;
+    position:relative;color:var(--navy);}
+  .plan.founder{border-color:#E9B92B;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.6),
+      0 40px 70px -26px rgba(0,0,0,.8),
+      0 0 0 1px rgba(242,194,48,.35),
+      0 0 54px -4px rgba(242,194,48,.34);}
+  .plan .tag{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);}
+  .plan.founder .tag{color:var(--turf);}
+  .plan .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:64px;
+    line-height:1;margin-top:10px;font-variant-numeric:tabular-nums;}
+  .plan .price small{font-size:16px;color:var(--slate);font-family:'Barlow';font-weight:700;font-style:normal;}
+  .plan ul{margin:16px 0 0 18px;font-size:13.5px;line-height:1.75;color:var(--ink2);}
+  .plan .btn{margin-top:20px;font-size:16px;padding:13px 22px;}
+  .stamp50{position:absolute;top:16px;right:16px;font-family:'Barlow Condensed';font-weight:900;
+    font-size:19px;line-height:1;letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(179,64,47,.88);border:3px double rgba(179,64,47,.8);border-radius:4px;
+    padding:9px 11px 8px;transform:rotate(9deg);mix-blend-mode:multiply;pointer-events:none;
+    box-shadow:inset 0 0 12px rgba(179,64,47,.14);}
+  .honest2{margin-top:18px;font-size:12.5px;color:var(--dusk);line-height:1.65;max-width:660px;}
+  .soon{margin-top:20px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--slate);
+    border:2px dashed var(--line);padding:12px 18px;text-align:center;}
+  .funnel{margin-top:36px;padding:20px 22px;max-width:760px;border-left:6px solid var(--turf);}
+  .funnel > b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:20px;
+    text-transform:uppercase;letter-spacing:.06em;}
+  .funnel ol{margin:12px 0 0 20px;font-size:13.5px;line-height:1.75;color:var(--ink2);}
+
+  /* ---------- trust + footer ---------- */
+  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px;}
+  .trust > div{font-size:13.5px;line-height:1.65;color:#A9B9CC;min-width:0;
+    background:linear-gradient(180deg,rgba(24,42,69,.7),rgba(12,23,39,.88));
+    border:1px solid rgba(143,163,188,.16);border-top:3px solid var(--brick-glow);
+    padding:20px 18px;box-shadow:0 22px 38px -24px rgba(0,0,0,.75);
+    transition:border-color .22s ease, box-shadow .22s ease;}
+  .trust > div:nth-child(2){border-top-color:var(--flag);}
+  .trust > div:nth-child(3){border-top-color:var(--turf-glow);}
+  .trust > div:hover{border-color:rgba(242,194,48,.4);border-top-width:3px;
+    box-shadow:0 26px 44px -24px rgba(0,0,0,.85), 0 0 34px -8px rgba(242,194,48,.2);}
+  .trust b{display:block;font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:19px;letter-spacing:.04em;text-transform:uppercase;color:var(--paper);margin-bottom:6px;}
+  footer{padding:44px 0 60px;font-size:12.5px;color:#7E90A8;line-height:1.75;
+    border-top:1px solid rgba(242,194,48,.14);}
+  footer b{color:var(--paper);}
+
+  /* ---------- scroll reveal — hidden state only applies when JS is running,
+       so the page is never blank for a no-script visitor ---------- */
+  html.js .reveal{opacity:0;transform:translateY(28px);
+    transition:opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1);
+    transition-delay:var(--d,0s);}
   html.js .reveal.in{opacity:1;transform:none;}
-  html.js .reveal:nth-child(2){transition-delay:.08s;}
-  html.js .reveal:nth-child(3){transition-delay:.16s;}
 
-  /* accessibility: motion off means motion OFF */
+  /* ---------- accessibility: motion off means motion OFF ---------- */
   @media (prefers-reduced-motion: reduce){
-    .btn,.fcard,.step,.plan,.trust div,.caltable tr,.reveal{transition:none !important;transform:none !important;}
-    .field .ball{animation:none !important;}
-    .reveal{opacity:1 !important;}
+    *,*::before,*::after{animation:none !important;transition:none !important;}
+    .tilt,.tilt:hover,.btn,.btn:hover,.step,.stamp,.stamp50,.herofb{transform:none !important;}
+    html.js .reveal{opacity:1 !important;transform:none !important;}
+    .ticker .track{animation:none !important;}
+    .reel.dup{display:none;}
+    .ticker{overflow-x:auto;}
     html{scroll-behavior:auto;}
   }
 
-  @media (max-width:680px){
-    .hero h1{font-size:44px;}
-    .grid3,.steps,.trust{grid-template-columns:1fr;}
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .grid3{grid-template-columns:1fr;gap:34px;}
+    .grid3 .reveal:nth-child(2),.grid3 .reveal:nth-child(3){margin-top:0;}
+    .steps,.trust{grid-template-columns:1fr;}
     .plans{grid-template-columns:1fr;}
-    h2{font-size:30px;}
+    .herofb{right:-140px;opacity:.09;}
+  }
+  @media (max-width:680px){
+    section{padding:64px 0;}
+    .hero{padding:64px 0 56px;}
+    .proof-chips{gap:24px 28px;}
+    .step .n{font-size:64px;}
+    .plan .price{font-size:54px;}
+    .reel li{font-size:14.5px;padding-right:18px;}
+    .reel li::before{margin-right:18px;}
   }
 </style>
 </head>
 <body>
 
 <header class="hero">
+  <svg class="herofb" viewBox="0 0 520 320" aria-hidden="true" focusable="false">
+    <ellipse cx="260" cy="160" rx="242" ry="140" fill="rgba(242,194,48,.05)" stroke="rgba(242,194,48,.55)" stroke-width="3"/>
+    <path d="M52 96 C 150 22, 370 22, 468 96" stroke="rgba(242,194,48,.30)" fill="none" stroke-width="2"/>
+    <path d="M52 224 C 150 298, 370 298, 468 224" stroke="rgba(242,194,48,.30)" fill="none" stroke-width="2"/>
+    <line x1="185" y1="160" x2="335" y2="160" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="205" y1="146" x2="205" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="232" y1="146" x2="232" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="260" y1="146" x2="260" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="288" y1="146" x2="288" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <line x1="315" y1="146" x2="315" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+  </svg>
   <div class="wrap">
-    <div class="brand">Beat Your League</div>
-    <h1>Beat your league, <em>not the books.</em></h1>
+    <div class="topline">
+      <div class="brand">
+        <svg viewBox="0 0 26 17" aria-hidden="true" focusable="false">
+          <ellipse cx="13" cy="8.5" rx="12" ry="7.5" fill="#6B3A1F" stroke="#F2C230" stroke-width="1.5"/>
+          <line x1="8" y1="8.5" x2="18" y2="8.5" stroke="#F6F4EE" stroke-width="1.4"/>
+          <line x1="10.5" y1="6.5" x2="10.5" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
+          <line x1="13" y1="6.5" x2="13" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
+          <line x1="15.5" y1="6.5" x2="15.5" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
+        </svg>
+        Beat Your League
+      </div>
+      <span class="livepill"><i></i>Ledger: live every Monday</span>
+    </div>
+    <h1>Beat your league, <em><span>not the books.</span></em></h1>
     <p class="sub">A weekly Rival Report built from your Sleeper league's real data — your lineup,
     your opponent's weak spots, the one coin-flip call decided — delivered every Tuesday.
     Analysis, never picks. And every call we make gets graded in public.</p>
@@ -213,6 +409,34 @@
   </div>
 </header>
 
+<!-- receipts ticker — every figure below already appears on this page, sourced where shown -->
+<div class="ticker" aria-label="Graded calls from the launch backtest">
+  <div class="track">
+    <ul class="reel">
+      <li><b>2,056</b> calls graded before launch</li>
+      <li>stated <b>50–55%</b> → hit <b>57.4%</b></li>
+      <li>stated <b>55–60%</b> → hit <b>58.6%</b></li>
+      <li>stated <b>60–65%</b> → hit <b>63.6%</b></li>
+      <li>stated <b>65–70%</b> → hit <b>69.1%</b></li>
+      <li>stated <b>70–80%</b> → hit <b>78.3%</b></li>
+      <li><b>318</b> points left on one bench · 2017</li>
+      <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
+      <li>wins <b>and</b> misses · graded every monday</li>
+    </ul>
+    <ul class="reel dup" aria-hidden="true">
+      <li><b>2,056</b> calls graded before launch</li>
+      <li>stated <b>50–55%</b> → hit <b>57.4%</b></li>
+      <li>stated <b>55–60%</b> → hit <b>58.6%</b></li>
+      <li>stated <b>60–65%</b> → hit <b>63.6%</b></li>
+      <li>stated <b>65–70%</b> → hit <b>69.1%</b></li>
+      <li>stated <b>70–80%</b> → hit <b>78.3%</b></li>
+      <li><b>318</b> points left on one bench · 2017</li>
+      <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
+      <li>wins <b>and</b> misses · graded every monday</li>
+    </ul>
+  </div>
+</div>
+
 <section>
   <div class="wrap">
     <div class="eyebrow">What you get every Tuesday</div>
@@ -221,38 +445,44 @@
     specific people, one of whom you need to beat this week and one of whom you need to beat
     forever. The Rival Report is built from your league's own record on Sleeper.</p>
     <div class="grid3">
-      <div class="fcard reveal">
-        <h3>Your optimal lineup</h3>
-        <p>Every slot set from your league's scoring, with the reasoning attached — and when a
-        call is too close or a status is unknown, it says so instead of faking certainty.</p>
-        <div class="mini">
-          <div class="mrow"><span class="slot">QB</span><span class="p">Ryan Fitzpatrick<small>4 games of form</small></span><span class="pts">23.7</span></div>
-          <div class="mrow"><span class="slot">RB</span><span class="p">Alvin Kamara<small>8 games of form</small></span><span class="pts">19.2</span></div>
-          <div class="mrow"><span class="slot">WR</span><span class="p">Davante Adams<small>8 games of form</small></span><span class="pts">16.3</span></div>
+      <div class="reveal">
+        <div class="fcard sheet tilt" style="--tilt:rotate(-2.2deg)">
+          <h3>Your optimal lineup</h3>
+          <p>Every slot set from your league's scoring, with the reasoning attached — and when a
+          call is too close or a status is unknown, it says so instead of faking certainty.</p>
+          <div class="mini">
+            <div class="mrow"><span class="slot">QB</span><span class="p">Ryan Fitzpatrick<small>4 games of form</small></span><span class="pts">23.7</span></div>
+            <div class="mrow"><span class="slot">RB</span><span class="p">Alvin Kamara<small>8 games of form</small></span><span class="pts">19.2</span></div>
+            <div class="mrow"><span class="slot">WR</span><span class="p">Davante Adams<small>8 games of form</small></span><span class="pts">16.3</span></div>
+          </div>
+          <span class="real">Real output · Sleeper's public sample league, 2018</span>
         </div>
-        <span class="real">Real output · Sleeper's public sample league, 2018</span>
       </div>
-      <div class="fcard reveal">
-        <h3>Where your rival is fragile</h3>
-        <p>Their lineup, scouted. The report reads their bench, their habits, their blind spots —
-        and tells you which ones matter this week.</p>
-        <div class="mini">
-          <div class="srow"><div class="x">1</div><div class="why"><b>DeAndre Hopkins is sitting on their bench</b> —
-          projecting 17.8, above four of their set starters. They never noticed. You did.</div></div>
+      <div class="reveal" style="--d:.12s">
+        <div class="fcard sheet tilt" style="--tilt:rotate(1.7deg)">
+          <h3>Where your rival is fragile</h3>
+          <p>Their lineup, scouted. The report reads their bench, their habits, their blind spots —
+          and tells you which ones matter this week.</p>
+          <div class="mini">
+            <div class="srow"><div class="x">1</div><div class="why"><b>DeAndre Hopkins is sitting on their bench</b> —
+            projecting 17.8, above four of their set starters. They never noticed. You did.</div></div>
+          </div>
+          <span class="real">Real find · sample-league rival, week 10, 2018</span>
         </div>
-        <span class="real">Real find · sample-league rival, week 10, 2018</span>
       </div>
-      <div class="fcard reveal">
-        <h3>The receipts</h3>
-        <p>Last week's calls, graded against the real box score every Monday — hits and misses
-        alike, on a public ledger. When your call lands, you get the timestamped receipt for
-        the group chat.</p>
-        <div class="mini">
-          <div class="srow"><div class="x" style="color:var(--turf);border-color:var(--turf)">✓</div>
-          <div class="why"><b>One sample-league manager left 318 points on his bench in a single
-          season.</b> That's the gap this report exists to close.</div></div>
+      <div class="reveal" style="--d:.24s">
+        <div class="fcard sheet tilt" style="--tilt:rotate(-1.4deg)">
+          <h3>The receipts</h3>
+          <p>Last week's calls, graded against the real box score every Monday — hits and misses
+          alike, on a public ledger. When your call lands, you get the timestamped receipt for
+          the group chat.</p>
+          <div class="mini">
+            <div class="srow"><div class="x" style="color:var(--turf);border-color:var(--turf)">✓</div>
+            <div class="why"><b>One sample-league manager left 318 points on his bench in a single
+            season.</b> That's the gap this report exists to close.</div></div>
+          </div>
+          <span class="real">Real number · sample league, 2017 season log</span>
         </div>
-        <span class="real">Real number · sample league, 2017 season log</span>
       </div>
     </div>
   </div>
@@ -265,14 +495,18 @@
     <p class="lede">Before launch, the engine re-played two full seasons of a real league and graded
     every one of its own start/sit calls against the actual box scores — 2,056 of them. When it
     says 62%, it should hit about 62%. Here's how that test came out, bucket by bucket:</p>
-    <table class="caltable">
-      <tr><th>When we said…</th><th>Calls</th><th>We hit</th><th>Verdict</th></tr>
-      <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">calibrated</td></tr>
-      <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">calibrated</td></tr>
-      <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">calibrated</td></tr>
-      <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">calibrated</td></tr>
-      <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">calibrated</td></tr>
-    </table>
+    <div class="reveal">
+      <div class="exhibit sheet tilt" style="--tilt:rotate(1.1deg)">
+        <table class="caltable">
+          <tr><th>When we said…</th><th>Calls</th><th>We hit</th><th>Verdict</th></tr>
+          <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">calibrated</td></tr>
+          <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">calibrated</td></tr>
+          <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">calibrated</td></tr>
+          <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">calibrated</td></tr>
+          <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">calibrated</td></tr>
+        </table>
+      </div>
+    </div>
     <p class="honest">The fine print, because we publish it: these are the head-to-heads where both
     players took the field (availability-verified — the regime the live report publishes in). The
     full backtest, including the buckets that failed and what we gated because of them, is in the
@@ -289,14 +523,14 @@
       <div class="step reveal"><div class="n">1</div><h3>Type your Sleeper username</h3>
         <p>That's all we ever ask for. Sleeper league data is public — we never want your
         password, and we never see a payment card.</p></div>
-      <div class="step reveal"><div class="n">2</div><h3>Tap your league, tap your rival</h3>
+      <div class="step reveal" style="--d:.12s"><div class="n">2</div><h3>Tap your league, tap your rival</h3>
         <p>Your leagues appear; pick one. Then pick the one manager you most need to beat.
         We find your roster automatically.</p></div>
-      <div class="step reveal"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
+      <div class="step reveal" style="--d:.24s"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
         <p>Lineup set, rival scouted, waiver hype rated, pivot plan for late news — and last
         week's calls graded, win or lose.</p></div>
     </div>
-    <div class="cta-row" style="margin-top:26px">
+    <div class="cta-row" style="margin-top:36px">
       <a class="btn go" href="join/index.html">Pick your rival <span class="arrow">→</span></a>
     </div>
   </div>
@@ -310,39 +544,46 @@
     run the group chat — one flat season price covers every weekly report, refundable
     no-questions through Week 2.</p>
     <div class="plans">
-      <div class="plan founder reveal">
-        <div class="tag">Founding Season Pass · first 50 only</div>
-        <div class="price">$29 <small>/ season</small></div>
-        <ul>
-          <li>Every weekly Rival Report, Week 1 through your title game</li>
-          <li>Rival Watch on your named nemesis all season</li>
-          <li>Public receipts ledger — our record, your bragging rights</li>
-          <li>No-questions refund through Week 2</li>
-        </ul>
-        <a class="btn gold" href="join/index.html" data-checkout>Reserve a founding spot</a>
+      <div class="reveal">
+        <div class="plan founder sheet tilt" style="--tilt:rotate(-1.3deg)">
+          <span class="stamp50" aria-hidden="true">First 50</span>
+          <div class="tag">Founding Season Pass · first 50 only</div>
+          <div class="price">$29 <small>/ season</small></div>
+          <ul>
+            <li>Every weekly Rival Report, Week 1 through your title game</li>
+            <li>Rival Watch on your named nemesis all season</li>
+            <li>Public receipts ledger — our record, your bragging rights</li>
+            <li>No-questions refund through Week 2</li>
+          </ul>
+          <a class="btn gold" href="join/index.html" data-checkout>Reserve a founding spot</a>
+        </div>
       </div>
-      <div class="plan reveal">
-        <div class="tag">Or month to month</div>
-        <div class="price">$6.99 <small>/ month</small></div>
-        <ul>
-          <li>Same report, same receipts</li>
-          <li>Cancel any time</li>
-        </ul>
-        <div class="soon" id="monthly-cta">Checkout opens at launch · via Substack</div>
+      <div class="reveal" style="--d:.12s">
+        <div class="plan sheet tilt" style="--tilt:rotate(1.2deg)">
+          <div class="tag">Or month to month</div>
+          <div class="price">$6.99 <small>/ month</small></div>
+          <ul>
+            <li>Same report, same receipts</li>
+            <li>Cancel any time</li>
+          </ul>
+          <div class="soon" id="monthly-cta">Checkout opens at launch · via Substack</div>
+        </div>
       </div>
     </div>
-    <div class="funnel reveal">
-      <b>How buying works, in the open:</b>
-      <ol>
-        <li><b>Today:</b> reserve your spot — pick your league and your rival in sixty
-        seconds. No card yet, only because checkout hasn't opened; the first 50
-        reservations lock the $29 founding price.</li>
-        <li><b>Before Week 1:</b> checkout opens through Substack — you pay there, and card
-        details never touch our systems. Reports go only to paid subscribers, from the
-        first issue on.</li>
-        <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds no-questions through
-        Week 2, and every call we send you is graded on the public ledger.</li>
-      </ol>
+    <div class="reveal" style="--d:.1s">
+      <div class="funnel sheet tilt" style="--tilt:rotate(-.6deg)">
+        <b>How buying works, in the open:</b>
+        <ol>
+          <li><b>Today:</b> reserve your spot — pick your league and your rival in sixty
+          seconds. No card yet, only because checkout hasn't opened; the first 50
+          reservations lock the $29 founding price.</li>
+          <li><b>Before Week 1:</b> checkout opens through Substack — you pay there, and card
+          details never touch our systems. Reports go only to paid subscribers, from the
+          first issue on.</li>
+          <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds no-questions through
+          Week 2, and every call we send you is graded on the public ledger.</li>
+        </ol>
+      </div>
     </div>
     <!-- When Substack goes live: set SUBSTACK_URL in the script below — the
          founder button becomes real checkout and the monthly note becomes a
@@ -367,7 +608,7 @@
 
 <footer>
   <div class="wrap">
-    <b style="color:var(--navy)">Beat Your League</b> — the weekly edge report built around your
+    <b>Beat Your League</b> — the weekly edge report built around your
     rival, not just your roster.<br>
     Sample visuals above are real engine output from Sleeper's public sample league (2017–2018
     seasons), labeled where shown. Projections are analysis, not guarantees. Not affiliated with
