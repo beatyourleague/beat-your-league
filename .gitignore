@@ -1,0 +1,13 @@
+# Cached API data and any local secrets stay out of the repo (CLAUDE.md security)
+data/
+.env
+.env.*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS noise
+.DS_Store

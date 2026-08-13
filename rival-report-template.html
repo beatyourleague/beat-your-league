@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — Week 1 Rival Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#101E33;
+    --navy2:#182A45;
+    --paper:#F6F4EE;
+    --card:#FFFFFF;
+    --turf:#1E7A46;
+    --turf-tint:#DFF0E4;
+    --flag:#F2C230;
+    --flag-tint:#FBF3D9;
+    --brick:#B3402F;
+    --brick-tint:#F7E3DE;
+    --slate:#5A6B80;
+    --ink2:#33445C;
+    --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:#E7E4DA;
+    font-family:'Barlow',-apple-system,sans-serif;
+    color:var(--navy);
+    padding:14px 8px 44px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .report{max-width:680px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+
+  /* ================= header ================= */
+  .bug{
+    background:
+      repeating-linear-gradient(-55deg, rgba(246,244,238,.045) 0 2px, transparent 2px 14px),
+      linear-gradient(180deg,var(--navy2),var(--navy));
+    color:var(--paper);padding:24px 24px 22px;
+  }
+  .bug .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  .bug h1{font-family:'Barlow Condensed';font-weight:800;font-size:46px;line-height:.95;
+    text-transform:uppercase;margin-top:8px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .chip{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid rgba(246,244,238,.35);color:#C9D4E2;padding:4px 9px;border-radius:2px;}
+  .chip b{color:var(--paper);}
+
+  /* ================= section scaffolding ================= */
+  section{padding:24px 24px 28px;border-top:3px double var(--line);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--slate);display:flex;align-items:center;gap:10px;}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
+  .eyebrow .tag{color:var(--navy);}
+  .eyebrow .n{color:var(--slate);font-size:12px;letter-spacing:.14em;}
+
+  /* ================= 30-second game plan ================= */
+  .plan{margin-top:16px;display:grid;gap:10px;}
+  .task{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;
+    background:var(--card);border:1px solid var(--line);padding:13px 14px;}
+  .task .box{width:20px;height:20px;border:2.5px solid var(--navy);margin-top:1px;background:#fff;}
+  .task .do{font-weight:700;font-size:15px;line-height:1.35;}
+  .task .dl{margin-top:3px;font-size:12.5px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--brick);}
+  .task .dl.ok{color:var(--turf);}
+
+  /* ================= matchup ================= */
+  .board{display:flex;align-items:flex-end;justify-content:space-between;margin-top:18px;gap:8px;}
+  .team{flex:1;}
+  .team .name{font-family:'Barlow Condensed';font-weight:800;font-size:20px;text-transform:uppercase;line-height:1.05;}
+  .team .sub{font-size:12px;color:var(--slate);margin-top:2px;font-weight:600;}
+  .team .pts{font-family:'Barlow Condensed';font-weight:800;font-size:54px;line-height:1;
+    font-variant-numeric:tabular-nums;margin-top:6px;}
+  .team.you .pts{color:var(--turf);}
+  .team.rival{text-align:right;}
+  .team.rival .pts{color:var(--brick);}
+  .pts small{font-size:13px;letter-spacing:.08em;color:var(--slate);font-family:'Barlow';font-weight:700;}
+  .vs{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);padding-bottom:14px;}
+
+  .field-wrap{margin-top:20px;}
+  .field-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
+    letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .field-label .l{color:var(--turf);} .field-label .r{color:var(--brick);}
+  .field{position:relative;height:56px;border:2px solid var(--navy);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(16,30,51,.30) calc(10% - 1px) 10%),
+      linear-gradient(90deg,#DCEEE2 0 61%, #F5E0DB 61% 100%);}
+  .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
+  .field .endzone.l{left:0;background:var(--turf);}
+  .field .endzone.r{right:0;background:var(--brick);}
+  .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
+    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
+    border:2px solid var(--paper);box-shadow:0 0 0 2px var(--navy);}
+  .field .ball::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;
+    background:var(--paper);transform:translateY(-50%);}
+  .yards{display:flex;justify-content:space-between;padding:3px 14px 0;
+    font-family:'Barlow Condensed';font-weight:600;font-size:11px;color:var(--slate);
+    font-variant-numeric:tabular-nums;}
+  .field-read{margin-top:12px;font-size:15px;line-height:1.55;color:var(--ink2);}
+  .field-read b.win{color:var(--turf);font-variant-numeric:tabular-nums;}
+  .mkt{margin-top:12px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:13px;font-weight:600;color:var(--slate);line-height:1.55;}
+  .mkt b{color:var(--ink2);}
+  .drivers{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+  .drv{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink2);background:#F2F0E8;border:1px solid var(--line);padding:4px 9px;}
+  .drv b{color:var(--turf);font-variant-numeric:tabular-nums;}
+
+  .ranges{margin-top:18px;display:grid;gap:12px;}
+  .range .rl{display:flex;justify-content:space-between;font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;color:var(--ink2);}
+  .range .track{position:relative;height:14px;background:#EAE7DE;border:1px solid var(--line);}
+  .range .band{position:absolute;top:0;bottom:0;}
+  .range.you .band{left:38%;right:9%;background:var(--turf-tint);border:1px solid var(--turf);}
+  .range.rival .band{left:31%;right:11%;background:var(--brick-tint);border:1px solid var(--brick);}
+  .range .med{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--navy);}
+  .range.you .med{left:61%;} .range.rival .med{left:56%;}
+  .range .nums{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+
+  /* ================= lineup grid ================= */
+  .lineup{margin-top:16px;background:var(--card);border:2px solid var(--navy);}
+  .lrow{display:grid;grid-template-columns:46px 1fr 48px 62px;gap:10px;align-items:center;
+    padding:11px 14px;border-top:1px solid #EDEAE1;}
+  .lrow:first-child{border-top:none;}
+  .lrow.head{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
+    letter-spacing:.14em;text-transform:uppercase;padding:8px 14px;}
+  .slot{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);}
+  .pl .pname{font-weight:700;font-size:14.5px;line-height:1.2;}
+  .pl .pmeta{font-size:11.5px;color:var(--slate);margin-top:2px;font-weight:500;}
+  .proj{font-family:'Barlow Condensed';font-weight:800;font-size:18px;text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .cwrap{display:flex;flex-direction:column;gap:3px;}
+  .cbar{height:7px;background:#EAE7DE;border:1px solid var(--line);}
+  .cbar i{display:block;height:100%;background:var(--turf);}
+  .clab{font-size:10px;color:var(--slate);font-weight:700;letter-spacing:.05em;text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .lrow.flip{background:var(--flag-tint);}
+  .lrow.flip .cbar i{background:#C99A12;}
+  .fliptag{display:inline-block;margin-top:3px;font-size:10px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:#8A6A10;}
+  .lrow.total{background:#F2F0E8;border-top:2px solid var(--navy);}
+  .lrow.total .pl .pname{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.1em;text-transform:uppercase;}
+  .benchnote{padding:11px 14px;border-top:1px dashed var(--line);font-size:13px;color:var(--ink2);
+    background:#FBFAF6;line-height:1.5;}
+  .benchnote b{color:var(--brick);}
+
+  /* ================= scouting ================= */
+  .scout{margin-top:16px;display:grid;gap:12px;}
+  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;}
+  .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:18px;color:var(--brick);
+    border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
+    justify-content:center;border-radius:50%;}
+  .srow .who{font-weight:700;font-size:15.5px;}
+  .srow .why{font-size:14.5px;color:var(--ink2);line-height:1.55;margin-top:2px;}
+
+  /* ================= regret ================= */
+  .call{margin-top:16px;background:var(--card);border:2px solid var(--navy);padding:18px 18px 16px;}
+  .call .verdict{font-family:'Barlow Condensed';font-weight:800;font-size:27px;
+    text-transform:uppercase;line-height:1.05;}
+  .call .verdict .over{color:var(--slate);font-size:19px;}
+  .conf{display:flex;align-items:center;gap:10px;margin-top:12px;}
+  .conf .bar{flex:1;height:10px;background:#EAE7DE;border:1px solid var(--line);}
+  .conf .bar i{display:block;height:100%;width:64%;background:var(--turf);}
+  .conf .num{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+    font-variant-numeric:tabular-nums;color:var(--turf);}
+  .call .why{margin-top:12px;font-size:14.5px;line-height:1.55;color:var(--ink2);}
+  .regret-note{margin-top:14px;padding:10px 12px;background:var(--brick-tint);
+    border-left:4px solid var(--brick);font-size:13.5px;line-height:1.5;color:#7A2C1F;font-weight:500;}
+
+  /* ================= hype ================= */
+  .hype{margin-top:16px;display:grid;gap:14px;}
+  .hcard{background:var(--card);border:1px solid var(--line);padding:16px 16px 14px;}
+  .hcard .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .hcard .player{font-weight:700;font-size:15.5px;}
+  .badge{font-family:'Barlow Condensed';font-weight:800;font-size:13px;letter-spacing:.14em;
+    text-transform:uppercase;padding:4px 10px;white-space:nowrap;}
+  .badge.real{background:var(--turf);color:#fff;}
+  .badge.mirage{background:var(--flag);color:var(--navy);}
+  .gauge{margin-top:10px;height:8px;background:#EAE7DE;border:1px solid var(--line);}
+  .gauge i{display:block;height:100%;}
+  .gauge.g1 i{width:82%;background:var(--turf);}
+  .gauge.g2 i{width:88%;background:var(--flag);}
+  .gauge-label{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+  .hcard .read{margin-top:10px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .hcard .action{margin-top:8px;font-size:13.5px;font-weight:700;}
+  .hcard .action.go{color:var(--turf);} .hcard .action.no{color:#8A6A10;}
+
+  /* ================= pivot plan ================= */
+  .pivots{margin-top:16px;display:grid;gap:12px;}
+  .pivot{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--navy);
+    padding:14px 16px;}
+  .pivot .if{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--slate);}
+  .pivot .cond{font-weight:700;font-size:15px;margin-top:3px;}
+  .pivot .then{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .pivot .then b{color:var(--turf);}
+
+  /* ================= receipts ================= */
+  .ledger{margin-top:16px;background:var(--navy);color:#C9D4E2;padding:18px 20px;
+    font-size:14.5px;line-height:1.6;}
+  .ledger b{color:var(--flag);}
+  .ledger .stamp{display:inline-block;margin-top:10px;border:2px solid var(--flag);color:var(--flag);
+    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.18em;font-size:13px;
+    text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
+
+  footer{padding:18px 24px 26px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+  footer b{color:var(--navy);}
+
+  @media (max-width:430px){
+    .bug h1{font-size:36px;}
+    .team .pts{font-size:42px;}
+    .call .verdict{font-size:23px;}
+    section{padding:20px 14px 24px;}
+    .bug{padding:20px 16px 18px;}
+    .lrow{grid-template-columns:40px 1fr 44px 54px;gap:8px;padding:10px 10px;}
+    .lrow.head{padding:8px 10px;}
+  }
+</style>
+</head>
+<body>
+<div class="report">
+
+  <header class="bug">
+    <div class="brand">Beat Your League</div>
+    <h1>Week 1 · Rival Report</h1>
+    <div class="chips">
+      <span class="chip"><b>The Gridiron Gang</b> · 12-team PPR</span>
+      <span class="chip">Rival: <b>Mike's Marauders</b></span>
+      <span class="chip">Tue Sep 8 · 7:00 AM</span>
+    </div>
+  </header>
+
+  <!-- ===== 1. THE 30-SECOND GAME PLAN ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">The 30-Second Game Plan</span><span class="n">§1</span></div>
+    <div class="plan">
+      <div class="task">
+        <div class="box"></div>
+        <div>
+          <div class="do">Set the lineup in §3 — one change from last week: Achane in, Hall to the bench.</div>
+          <div class="dl ok">2 minutes · do it now</div>
+        </div>
+      </div>
+      <div class="task">
+        <div class="box"></div>
+        <div>
+          <div class="do">Claim Jaylin Noel — bid 12% of FAAB. Mike holds waiver priority; outbid, don't outwait.</div>
+          <div class="dl">Deadline: Wed 12:00 PM ET</div>
+        </div>
+      </div>
+      <div class="task">
+        <div class="box"></div>
+        <div>
+          <div class="do">Check Stevenson news Monday afternoon — your pivot table in §6 already covers both outcomes.</div>
+          <div class="dl">Mon 4:00 PM ET · 30 seconds</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 2. THE MATCHUP ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">The Matchup</span><span class="n">§2</span></div>
+    <div class="board">
+      <div class="team you">
+        <div class="name">Your Lineup</div>
+        <div class="sub">Optimal set · 0 flags</div>
+        <div class="pts">128.4 <small>PROJ</small></div>
+      </div>
+      <div class="vs">VS</div>
+      <div class="team rival">
+        <div class="name">Mike's Marauders</div>
+        <div class="sub">2 exploitable spots</div>
+        <div class="pts">121.7 <small>PROJ</small></div>
+      </div>
+    </div>
+
+    <div class="field-wrap">
+      <div class="field-label"><span class="l">Your territory</span><span class="r">Mike's territory</span></div>
+      <div class="field">
+        <div class="endzone l"></div>
+        <div class="endzone r"></div>
+        <div class="ball"></div>
+      </div>
+      <div class="yards"><span>G</span><span>20</span><span>40</span><span>50</span><span>40</span><span>20</span><span>G</span></div>
+      <p class="field-read"><b class="win">61% win probability.</b> You have the ball in his territory — but note the ranges below:
+      his ceiling is real if Lamb escapes shadow coverage. Your edge comes from his fragile floor, so §4 is where this game is won.</p>
+      <p class="mkt"><b>Market check:</b> three of your starters play in the slate's two highest Vegas totals
+      (MIA/BUF 51.5 · WAS/NYG 49.0); two of Mike's sit in the lowest. Shown as context, not picks — the market's
+      expectations are data, and this week they lean your way.</p>
+    </div>
+
+    <div class="ranges">
+      <div class="range you">
+        <div class="rl"><span>You — realistic range</span><span>proj 128.4</span></div>
+        <div class="track"><span class="band"></span><span class="med"></span></div>
+        <div class="nums"><span>floor 104</span><span>ceiling 151</span></div>
+      </div>
+      <div class="range rival">
+        <div class="rl"><span>Mike — realistic range</span><span>proj 121.7</span></div>
+        <div class="track"><span class="band"></span><span class="med"></span></div>
+        <div class="nums"><span>floor 96</span><span>ceiling 149</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 3. YOUR OPTIMAL LINEUP ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">Your Optimal Lineup</span><span class="n">§3</span></div>
+    <div class="lineup">
+      <div class="lrow head"><span>Slot</span><span>Player</span><span style="text-align:right">Proj</span><span style="text-align:right">Conf</span></div>
+
+      <div class="lrow"><span class="slot">QB</span>
+        <span class="pl"><span class="pname">Jayden Daniels</span><span class="pmeta">WAS · @ NYG · Sun 1:00</span></span>
+        <span class="proj">21.9</span>
+        <span class="cwrap"><span class="cbar"><i style="width:90%"></i></span><span class="clab">90 · lock</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">RB1</span>
+        <span class="pl"><span class="pname">Bijan Robinson</span><span class="pmeta">ATL · vs CAR · Sun 1:00</span></span>
+        <span class="proj">19.6</span>
+        <span class="cwrap"><span class="cbar"><i style="width:93%"></i></span><span class="clab">93 · lock</span></span>
+      </div>
+
+      <div class="lrow flip"><span class="slot">RB2</span>
+        <span class="pl"><span class="pname">De'Von Achane</span><span class="pmeta">MIA · vs BUF · Sun 4:25</span><span class="fliptag">Coin flip — called in §5</span></span>
+        <span class="proj">14.8</span>
+        <span class="cwrap"><span class="cbar"><i style="width:64%"></i></span><span class="clab">64 · edge</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">WR1</span>
+        <span class="pl"><span class="pname">Malik Nabers</span><span class="pmeta">NYG · vs WAS · Sun 1:00</span></span>
+        <span class="proj">17.2</span>
+        <span class="cwrap"><span class="cbar"><i style="width:86%"></i></span><span class="clab">86 · lock</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">WR2</span>
+        <span class="pl"><span class="pname">Nico Collins</span><span class="pmeta">HOU · @ IND · Sun 1:00</span></span>
+        <span class="proj">14.5</span>
+        <span class="cwrap"><span class="cbar"><i style="width:81%"></i></span><span class="clab">81 · start</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">TE</span>
+        <span class="pl"><span class="pname">Brock Bowers</span><span class="pmeta">LV · vs LAC · Mon 8:15</span></span>
+        <span class="proj">13.6</span>
+        <span class="cwrap"><span class="cbar"><i style="width:84%"></i></span><span class="clab">84 · lock</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">FLEX</span>
+        <span class="pl"><span class="pname">Zay Flowers</span><span class="pmeta">BAL · @ PIT · Sun 1:00</span></span>
+        <span class="proj">11.9</span>
+        <span class="cwrap"><span class="cbar"><i style="width:72%"></i></span><span class="clab">72 · start</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">DST</span>
+        <span class="pl"><span class="pname">Broncos D/ST</span><span class="pmeta">DEN · vs TEN · Sun 4:05</span></span>
+        <span class="proj">6.8</span>
+        <span class="cwrap"><span class="cbar"><i style="width:66%"></i></span><span class="clab">66 · start</span></span>
+      </div>
+
+      <div class="lrow"><span class="slot">K</span>
+        <span class="pl"><span class="pname">Brandon Aubrey</span><span class="pmeta">DAL · @ PHI · Thu 8:20</span></span>
+        <span class="proj">8.1</span>
+        <span class="cwrap"><span class="cbar"><i style="width:78%"></i></span><span class="clab">78 · early lock</span></span>
+      </div>
+
+      <div class="lrow total"><span class="slot"></span>
+        <span class="pl"><span class="pname">Projected Total</span></span>
+        <span class="proj">128.4</span>
+        <span class="cwrap"><span class="clab">vs Mike 121.7</span></span>
+      </div>
+
+      <div class="benchnote"><b>Benched on purpose:</b> Breece Hall sits this week — the full reasoning is your Regret Score call in §5. Everyone else on your bench stays down; no other decision is within 3 points.</div>
+    </div>
+  </section>
+
+  <!-- ===== 4. WHERE MIKE IS FRAGILE ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">Where Mike Is Fragile</span><span class="n">§4</span></div>
+    <div class="scout">
+      <div class="srow">
+        <div class="x">1</div>
+        <div>
+          <div class="who">His RB2 is a Monday-night trap</div>
+          <div class="why">Rhamondre Stevenson (ankle, questionable) plays in the late Monday slot. If Mike starts him and he's inactive, Mike eats a zero with no time to pivot. Historically he holds injured starters. Let him.</div>
+        </div>
+      </div>
+      <div class="srow">
+        <div class="x">2</div>
+        <div>
+          <div class="who">His WR1 draws shadow coverage</div>
+          <div class="why">CeeDee Lamb projects to see the opponent's top corner on ~80% of routes. Lamb's floor games cluster in exactly this coverage profile — his 24.1 projection is the most inflated number on the roster, and it's why Mike's floor (96) is so far below his ceiling.</div>
+        </div>
+      </div>
+      <div class="srow">
+        <div class="x">3</div>
+        <div>
+          <div class="who">His flex is touchdown-or-bust</div>
+          <div class="why">Mike's flex averages 4.2 targets per game — no volume floor, needs a score to return value. Your flex edge is the quiet 6 points nobody notices until Sunday night.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 5. YOUR REGRET SCORE ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">Your Regret Score</span><span class="n">§5</span></div>
+    <div class="call">
+      <div class="verdict">Start De'Von Achane <span class="over">over</span> Breece Hall</div>
+      <div class="conf">
+        <div class="bar"><i></i></div>
+        <div class="num">64%</div>
+      </div>
+      <div class="drivers">
+        <span class="drv">Route rate <b>71%</b></span>
+        <span class="drv">Vegas total <b>51.5</b> · MIA/BUF</span>
+        <span class="drv">BUF vs receiving RBs <b>28th</b></span>
+      </div>
+      <p class="why">Your one true coin flip, and the tiebreaker is usage: Achane ran a route on 71% of dropbacks this preseason
+      against a defense that funnels catches to backs. Hall faces the tougher front and now shares passing downs. Volume beats vibes.</p>
+      <div class="regret-note">Regret insurance: the single most likely Monday-morning mistake this week was benching Achane.
+      This call just took it off the table.</div>
+    </div>
+  </section>
+
+  <!-- ===== 6. PIVOT PLAN ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">Pivot Plan — Set It, Forget It</span><span class="n">§6</span></div>
+    <div class="pivots">
+      <div class="pivot">
+        <div class="if">If, before Mon 8:15 PM</div>
+        <div class="cond">Stevenson is ruled OUT</div>
+        <div class="then">Mike's projection drops to 110.4 and your win probability jumps to <b>69%</b>. You do nothing —
+        and you say nothing in the group chat until his lineup locks.</div>
+      </div>
+      <div class="pivot">
+        <div class="if">If, in Friday's practice report</div>
+        <div class="cond">Nabers is limited or worse</div>
+        <div class="then">Pre-set the pivot now so it's one tap later: Flowers moves to WR2, Hall enters at FLEX.
+        Everything locks <b>Sun 1:00 PM</b> — this is your only early-lock exposure besides Aubrey on Thursday.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 7. WAIVER HYPE METER ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">Waiver Hype Meter</span><span class="n">§7</span></div>
+    <div class="hype">
+      <div class="hcard">
+        <div class="top"><span class="player">Jaylin Noel · WR</span><span class="badge real">Hype = Real</span></div>
+        <div class="gauge g1"><i></i></div>
+        <div class="gauge-label"><span>League-wide FOMO</span><span>High</span></div>
+        <p class="read">Everyone in your league saw the highlight. What they didn't see: an 82% route rate and first-team snaps
+        all week. The usage arrived before the box score did — this is the add window.</p>
+        <div class="action go">→ Bid 12% of FAAB by Wed 12:00 PM. Beat Mike to it — he has waiver priority.</div>
+      </div>
+      <div class="hcard">
+        <div class="top"><span class="player">Jerome Ford · RB</span><span class="badge mirage">Buying the Top</span></div>
+        <div class="gauge g2"><i></i></div>
+        <div class="gauge-label"><span>League-wide FOMO</span><span>Very high</span></div>
+        <p class="read">94 yards on 3 carries is an efficiency mirage — two broken tackles and a busted assignment.
+        Snap share was 31% and didn't grow. The crowd is about to pay a premium for last week.</p>
+        <div class="action no">→ Pass. Let a rival burn their budget here.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 8. RECEIPTS ===== -->
+  <section>
+    <div class="eyebrow"><span class="tag">The Receipts</span><span class="n">§8</span></div>
+    <div class="ledger">
+      Season ledger: <b>0–0.</b> Every number on this page gets graded against the real box score <b>Monday 8:00 AM</b> —
+      publicly, wins and misses alike. When the Achane call hits, you'll have the timestamped receipt for the group chat.
+      <br><span class="stamp">Ledger opens · Week 1</span>
+    </div>
+  </section>
+
+  <footer>
+    <b>Beat Your League</b> — the weekly edge report built around your rival, not just your roster.<br>
+    Sample report with illustrative data for product demonstration. Projections are analysis, not guarantees.
+    Fantasy decisions are yours to make (that's the fun part).
+  </footer>
+
+</div>
+</body>
+</html>

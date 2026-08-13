@@ -1,0 +1,5 @@
+# Pinned per CLAUDE.md security requirements. Runtime:
+requests==2.34.2
+
+# Development / tests:
+pytest==9.1.1

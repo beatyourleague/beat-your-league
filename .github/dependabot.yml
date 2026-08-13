@@ -1,0 +1,12 @@
+# Monthly dependency review per CLAUDE.md security NFR.
+# Activates automatically once this repo is pushed to GitHub.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
