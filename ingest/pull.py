@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ingest.availability import write_snapshot
 from ingest.config import resolve_league_id
 from ingest.sleeper import SleeperClient, SleeperError, SleeperNotFound, is_valid_league_id
 
@@ -208,12 +209,26 @@ def main(argv: list[str] | None = None) -> int:
             seasons.append(history)
 
         player_count = players_bytes = None
+        snapshot_players = None
         if not args.skip_players:
             print("Fetching players table (cached daily; large file)...")
             players = client.players()
             player_count = len(players)
             players_file = RAW_DIR / "players" / "nfl.json"
             players_bytes = players_file.stat().st_size if players_file.is_file() else 0
+            # Availability snapshot: zero extra HTTP, but it can only ever be
+            # captured live — /players/nfl has no history (Phase 2 finding).
+            snapshot_file, snapshot_players = write_snapshot(RAW_DIR, players, state)
+            print(f"Availability snapshot: {snapshot_players} players -> "
+                  f"{snapshot_file.relative_to(REPO_ROOT)}")
+
+        # NFL schedule for each pulled season: source of bye weeks. Completed
+        # seasons never change; the live season refreshes daily.
+        for pull in seasons:
+            completed = pull.league.get("status") == "complete"
+            games = client.schedule(pull.season,
+                                    max_age_hours=None if completed else 24.0)
+            print(f"Schedule {pull.season}: {len(games)} games cached")
     except SleeperError as exc:
         print(f"Sleeper API failure: {exc}\n"
               "Everything fetched so far is cached under data/raw/ — "

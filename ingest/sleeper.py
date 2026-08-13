@@ -30,11 +30,15 @@ from typing import Any, Callable
 import requests
 
 BASE_URL = "https://api.sleeper.app/v1"
+SCHEDULE_BASE = "https://api.sleeper.app"
 USER_AGENT = "beat-your-league/0.1 (solo fantasy tool; disk-cached; throttled)"
 
 # Sleeper IDs are numeric strings (snowflake-style). Validate before letting an
 # ID anywhere near a URL: external input is untrusted (CLAUDE.md security).
 _LEAGUE_ID_RE = re.compile(r"^\d{6,20}$")
+# Sleeper usernames: word characters only. Anything fancier is rejected before
+# it can reach a URL or a cache path.
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 
 _MANIFEST_NAME = "_manifest.json"
 
@@ -134,6 +138,54 @@ class SleeperClient:
             raise SleeperError(f"/players/{sport} returned {type(data).__name__}, expected object")
         return data
 
+    def user(self, username_or_id: str,
+             max_age_hours: float | None = 6.0) -> dict[str, Any]:
+        """Resolve a Sleeper username (or numeric user id) to the user record.
+
+        Onboarding entry point: the subscriber types a username, everything
+        else is derived. 404 -> SleeperNotFound ("no such user").
+        """
+        key = str(username_or_id).strip()
+        if not (_LEAGUE_ID_RE.match(key) or _USERNAME_RE.match(key)):
+            raise ValueError(f"invalid Sleeper username or user id: {username_or_id!r}")
+        data = self._get(f"/user/{key}", Path("user") / f"{key.lower()}.json",
+                         max_age_hours=max_age_hours, expect=dict)
+        if not isinstance(data, dict):
+            raise SleeperError(f"user {key} returned {type(data).__name__}, expected object")
+        return data
+
+    def user_leagues(self, user_id: str, season: str, sport: str = "nfl",
+                     max_age_hours: float | None = 6.0) -> list[dict[str, Any]]:
+        """Every league this user plays in for a season — the onboarding picker."""
+        key = str(user_id).strip()
+        if not _LEAGUE_ID_RE.match(key):
+            raise ValueError(f"invalid Sleeper user id: {user_id!r}")
+        if not re.match(r"^\d{4}$", str(season)):
+            raise ValueError(f"invalid season: {season!r}")
+        return self._expect_list(
+            self._get(f"/user/{key}/leagues/{sport}/{season}",
+                      Path("user") / key / f"leagues_{sport}_{season}.json",
+                      max_age_hours=max_age_hours, expect=list),
+            f"leagues for user {key}")
+
+    def schedule(self, season: str, season_type: str = "regular",
+                 max_age_hours: float | None = 24.0) -> list[dict[str, Any]]:
+        """NFL game schedule for a season — the source for bye weeks.
+
+        Lives at ``api.sleeper.app/schedule/...`` (same public host, outside
+        /v1; verified live Aug 2026). Completed seasons should be fetched with
+        ``max_age_hours=None`` — a finished schedule never changes.
+        """
+        if not re.match(r"^\d{4}$", str(season)):
+            raise ValueError(f"invalid season: {season!r}")
+        if season_type not in ("regular", "pre", "post"):
+            raise ValueError(f"invalid season_type: {season_type!r}")
+        data = self._get(
+            f"{SCHEDULE_BASE}/schedule/{'nfl'}/{season_type}/{season}",
+            Path("schedule") / f"nfl_{season_type}_{season}.json",
+            max_age_hours=max_age_hours, expect=list)
+        return self._expect_list(data, f"schedule {season_type} {season}")
+
     # ------------------------------------------------------------------ #
     # internals
     # ------------------------------------------------------------------ #
@@ -157,7 +209,7 @@ class SleeperClient:
     def _get(self, endpoint: str, rel_path: Path, max_age_hours: float | None,
              timeout_seconds: float | None = None, expect: type | None = None) -> Any:
         cache_path = self.cache_dir / rel_path
-        url = BASE_URL + endpoint
+        url = endpoint if endpoint.startswith("http") else BASE_URL + endpoint
         cached = self._read_cache(cache_path, max_age_hours, expect)
         if cached is not None:
             self.cache_hits += 1

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — 2018 Week 10 Rival Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#101E33;
+    --navy2:#182A45;
+    --paper:#F6F4EE;
+    --card:#FFFFFF;
+    --turf:#1E7A46;
+    --turf-tint:#DFF0E4;
+    --flag:#F2C230;
+    --flag-tint:#FBF3D9;
+    --brick:#B3402F;
+    --brick-tint:#F7E3DE;
+    --slate:#5A6B80;
+    --ink2:#33445C;
+    --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:#E7E4DA;
+    font-family:'Barlow',-apple-system,sans-serif;
+    color:var(--navy);
+    padding:14px 8px 44px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .report{max-width:680px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+
+  /* ================= header ================= */
+  .bug{
+    background:
+      repeating-linear-gradient(-55deg, rgba(246,244,238,.045) 0 2px, transparent 2px 14px),
+      linear-gradient(180deg,var(--navy2),var(--navy));
+    color:var(--paper);padding:24px 24px 22px;
+  }
+  .bug .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  .bug h1{font-family:'Barlow Condensed';font-weight:800;font-size:46px;line-height:.95;
+    text-transform:uppercase;margin-top:8px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .chip{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid rgba(246,244,238,.35);color:#C9D4E2;padding:4px 9px;border-radius:2px;}
+  .chip b{color:var(--paper);}
+
+  /* ================= section scaffolding ================= */
+  section{padding:24px 24px 28px;border-top:3px double var(--line);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--slate);display:flex;align-items:center;gap:10px;}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
+  .eyebrow .tag{color:var(--navy);}
+  .eyebrow .n{color:var(--slate);font-size:12px;letter-spacing:.14em;}
+
+  /* ================= 30-second game plan ================= */
+  .plan{margin-top:16px;display:grid;gap:10px;}
+  .task{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;
+    background:var(--card);border:1px solid var(--line);padding:13px 14px;}
+  .task .box{width:20px;height:20px;border:2.5px solid var(--navy);margin-top:1px;background:#fff;}
+  .task .do{font-weight:700;font-size:15px;line-height:1.35;}
+  .task .dl{margin-top:3px;font-size:12.5px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--brick);}
+  .task .dl.ok{color:var(--turf);}
+
+  /* ================= matchup ================= */
+  .board{display:flex;align-items:flex-end;justify-content:space-between;margin-top:18px;gap:8px;}
+  .team{flex:1;}
+  .team .name{font-family:'Barlow Condensed';font-weight:800;font-size:20px;text-transform:uppercase;line-height:1.05;}
+  .team .sub{font-size:12px;color:var(--slate);margin-top:2px;font-weight:600;}
+  .team .pts{font-family:'Barlow Condensed';font-weight:800;font-size:54px;line-height:1;
+    font-variant-numeric:tabular-nums;margin-top:6px;}
+  .team.you .pts{color:var(--turf);}
+  .team.rival{text-align:right;}
+  .team.rival .pts{color:var(--brick);}
+  .pts small{font-size:13px;letter-spacing:.08em;color:var(--slate);font-family:'Barlow';font-weight:700;}
+  .vs{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);padding-bottom:14px;}
+
+  .field-wrap{margin-top:20px;}
+  .field-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
+    letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .field-label .l{color:var(--turf);} .field-label .r{color:var(--brick);}
+  .field{position:relative;height:56px;border:2px solid var(--navy);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(16,30,51,.30) calc(10% - 1px) 10%),
+      linear-gradient(90deg,#DCEEE2 0 61%, #F5E0DB 61% 100%);}
+  .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
+  .field .endzone.l{left:0;background:var(--turf);}
+  .field .endzone.r{right:0;background:var(--brick);}
+  .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
+    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
+    border:2px solid var(--paper);box-shadow:0 0 0 2px var(--navy);}
+  .field .ball::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;
+    background:var(--paper);transform:translateY(-50%);}
+  .yards{display:flex;justify-content:space-between;padding:3px 14px 0;
+    font-family:'Barlow Condensed';font-weight:600;font-size:11px;color:var(--slate);
+    font-variant-numeric:tabular-nums;}
+  .field-read{margin-top:12px;font-size:15px;line-height:1.55;color:var(--ink2);}
+  .field-read b.win{color:var(--turf);font-variant-numeric:tabular-nums;}
+  .mkt{margin-top:12px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:13px;font-weight:600;color:var(--slate);line-height:1.55;}
+  .mkt b{color:var(--ink2);}
+  .drivers{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+  .drv{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink2);background:#F2F0E8;border:1px solid var(--line);padding:4px 9px;}
+  .drv b{color:var(--turf);font-variant-numeric:tabular-nums;}
+
+  .ranges{margin-top:18px;display:grid;gap:12px;}
+  .range .rl{display:flex;justify-content:space-between;font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;color:var(--ink2);}
+  .range .track{position:relative;height:14px;background:#EAE7DE;border:1px solid var(--line);}
+  .range .band{position:absolute;top:0;bottom:0;}
+  .range.you .band{left:38%;right:9%;background:var(--turf-tint);border:1px solid var(--turf);}
+  .range.rival .band{left:31%;right:11%;background:var(--brick-tint);border:1px solid var(--brick);}
+  .range .med{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--navy);}
+  .range.you .med{left:61%;} .range.rival .med{left:56%;}
+  .range .nums{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+
+  /* ================= lineup grid ================= */
+  .lineup{margin-top:16px;background:var(--card);border:2px solid var(--navy);}
+  .lrow{display:grid;grid-template-columns:46px 1fr 48px 62px;gap:10px;align-items:center;
+    padding:11px 14px;border-top:1px solid #EDEAE1;}
+  .lrow:first-child{border-top:none;}
+  .lrow.head{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
+    letter-spacing:.14em;text-transform:uppercase;padding:8px 14px;}
+  .slot{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);}
+  .pl .pname{font-weight:700;font-size:14.5px;line-height:1.2;}
+  .pl .pmeta{font-size:11.5px;color:var(--slate);margin-top:2px;font-weight:500;}
+  .proj{font-family:'Barlow Condensed';font-weight:800;font-size:18px;text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .cwrap{display:flex;flex-direction:column;gap:3px;}
+  .cbar{height:7px;background:#EAE7DE;border:1px solid var(--line);}
+  .cbar i{display:block;height:100%;background:var(--turf);}
+  .clab{font-size:10px;color:var(--slate);font-weight:700;letter-spacing:.05em;text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .lrow.flip{background:var(--flag-tint);}
+  .lrow.flip .cbar i{background:#C99A12;}
+  .fliptag{display:inline-block;margin-top:3px;font-size:10px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:#8A6A10;}
+  .lrow.total{background:#F2F0E8;border-top:2px solid var(--navy);}
+  .lrow.total .pl .pname{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.1em;text-transform:uppercase;}
+  .benchnote{padding:11px 14px;border-top:1px dashed var(--line);font-size:13px;color:var(--ink2);
+    background:#FBFAF6;line-height:1.5;}
+  .benchnote b{color:var(--brick);}
+
+  /* ================= scouting ================= */
+  .scout{margin-top:16px;display:grid;gap:12px;}
+  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;}
+  .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:18px;color:var(--brick);
+    border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
+    justify-content:center;border-radius:50%;}
+  .srow .who{font-weight:700;font-size:15.5px;}
+  .srow .why{font-size:14.5px;color:var(--ink2);line-height:1.55;margin-top:2px;}
+
+  /* ================= regret ================= */
+  .call{margin-top:16px;background:var(--card);border:2px solid var(--navy);padding:18px 18px 16px;}
+  .call .verdict{font-family:'Barlow Condensed';font-weight:800;font-size:27px;
+    text-transform:uppercase;line-height:1.05;}
+  .call .verdict .over{color:var(--slate);font-size:19px;}
+  .conf{display:flex;align-items:center;gap:10px;margin-top:12px;}
+  .conf .bar{flex:1;height:10px;background:#EAE7DE;border:1px solid var(--line);}
+  .conf .bar i{display:block;height:100%;width:64%;background:var(--turf);}
+  .conf .num{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+    font-variant-numeric:tabular-nums;color:var(--turf);}
+  .call .why{margin-top:12px;font-size:14.5px;line-height:1.55;color:var(--ink2);}
+  .regret-note{margin-top:14px;padding:10px 12px;background:var(--brick-tint);
+    border-left:4px solid var(--brick);font-size:13.5px;line-height:1.5;color:#7A2C1F;font-weight:500;}
+
+  /* ================= hype ================= */
+  .hype{margin-top:16px;display:grid;gap:14px;}
+  .hcard{background:var(--card);border:1px solid var(--line);padding:16px 16px 14px;}
+  .hcard .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .hcard .player{font-weight:700;font-size:15.5px;}
+  .badge{font-family:'Barlow Condensed';font-weight:800;font-size:13px;letter-spacing:.14em;
+    text-transform:uppercase;padding:4px 10px;white-space:nowrap;}
+  .badge.real{background:var(--turf);color:#fff;}
+  .badge.mirage{background:var(--flag);color:var(--navy);}
+  .gauge{margin-top:10px;height:8px;background:#EAE7DE;border:1px solid var(--line);}
+  .gauge i{display:block;height:100%;}
+  .gauge.g1 i{width:82%;background:var(--turf);}
+  .gauge.g2 i{width:88%;background:var(--flag);}
+  .gauge-label{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+  .hcard .read{margin-top:10px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .hcard .action{margin-top:8px;font-size:13.5px;font-weight:700;}
+  .hcard .action.go{color:var(--turf);} .hcard .action.no{color:#8A6A10;}
+
+  /* ================= pivot plan ================= */
+  .pivots{margin-top:16px;display:grid;gap:12px;}
+  .pivot{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--navy);
+    padding:14px 16px;}
+  .pivot .if{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--slate);}
+  .pivot .cond{font-weight:700;font-size:15px;margin-top:3px;}
+  .pivot .then{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .pivot .then b{color:var(--turf);}
+
+  /* ================= receipts ================= */
+  .ledger{margin-top:16px;background:var(--navy);color:#C9D4E2;padding:18px 20px;
+    font-size:14.5px;line-height:1.6;}
+  .ledger b{color:var(--flag);}
+  .ledger .stamp{display:inline-block;margin-top:10px;border:2px solid var(--flag);color:var(--flag);
+    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.18em;font-size:13px;
+    text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
+
+  footer{padding:18px 24px 26px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+  footer b{color:var(--navy);}
+
+  @media (max-width:430px){
+    .bug h1{font-size:36px;}
+    .team .pts{font-size:42px;}
+    .call .verdict{font-size:23px;}
+    section{padding:20px 14px 24px;}
+    .bug{padding:20px 16px 18px;}
+    .lrow{grid-template-columns:40px 1fr 44px 54px;gap:8px;padding:10px 10px;}
+    .lrow.head{padding:8px 10px;}
+  }
+</style>
+</head>
+<body>
+<div class="report">
+<header class="bug"><div class="brand">Beat Your League</div><h1>Week 10 · Rival Report</h1><div class="chips"><span class="chip"><b>Sleeper Friends League</b> · 12 teams · Full PPR</span><span class="chip">Rival: <b>Manager 15 (Manager 23)</b></span><span class="chip">Generated Thu Aug 13 · 08:13 UTC</span></div></header><div class="regret-note" style="margin:0;border-left:none;">HISTORICAL DEMONSTRATION — real data from the 2018 season of Sleeper Friends League, rendered as the report would have looked before week 10. Availability snapshots did not exist then, so probability numbers are gated per our calibration policy.</div><section><div class="eyebrow"><span class="tag">The 30-Second Game Plan</span><span class="n">§1</span></div><div class="plan"><div class="task"><div class="box"></div><div><div class="do">Set the lineup in §3 — 4 changes: Robert Woods into WR, Eric Ebron into TE, Stefon Diggs into FLEX, Adam Humphries into FLEX.</div><div class="dl ok">before this week&#x27;s first kickoff</div></div></div><div class="task"><div class="box"></div><div><div class="do">Decide on Mike Davis (RB) — 5 managers chasing, top bid 17.</div><div class="dl">before waivers clear (league waiver day)</div></div></div></div></section><section><div class="eyebrow"><span class="tag">The Matchup</span><span class="n">§2</span></div><div class="board"><div class="team you"><div class="name">Manager 04 (Manager 24)</div><div class="sub">Engine-optimal lineup</div><div class="pts">128.5 <small>PROJ</small></div></div><div class="vs">VS</div><div class="team rival"><div class="name">Manager 15 (Manager 23)</div><div class="sub">Lineup as currently set</div><div class="pts">123.2 <small>PROJ</small></div></div></div><div class="benchnote"><b>coming in v0.3:</b> win probability — matchup-level win probability is not yet calibrated — in backtest (2 seasons, 170 matchups) favorites stated at ~52% won 64.5% of the time; see the matchup section of reports/backtest.md</div><div class="ranges"><div class="range you"><div class="rl"><span>Manager 04 (Manager 24) — realistic range</span><span>proj 128.5</span></div><div class="track"><span class="band" style="left:4%;right:0%"></span><span class="med" style="left:52%"></span></div><div class="nums"><span>floor 90</span><span>ceiling 167</span></div></div><div class="range rival"><div class="rl"><span>Manager 15 (Manager 23) — realistic range</span><span>proj 123.2</span></div><div class="track"><span class="band" style="left:0%;right:9%"></span><span class="med" style="left:45%"></span></div><div class="nums"><span>floor 86</span><span>ceiling 160</span></div></div></div><div class="yards" style="justify-content:flex-end">80% projection band per team; backtested at 77.9% coverage over 340 team-weeks (2017-2018) — see reports/backtest.md</div><p class="mkt"><b>Market check:</b> coming in v0.3 — Vegas game totals not ingested — coming in v0.3</p></section><section><div class="eyebrow"><span class="tag">Your Optimal Lineup</span><span class="n">§3</span></div><div class="lineup"><div class="lrow head"><span>Slot</span><span>Player</span><span style="text-align:right">Proj</span><span style="text-align:right">Conf</span></div><div class="lrow"><span class="slot">QB</span><span class="pl"><span class="pname">Ryan Fitzpatrick</span><span class="pmeta">QB · 4 games of form</span></span><span class="proj">23.7</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">RB</span><span class="pl"><span class="pname">Alvin Kamara</span><span class="pmeta">RB · 8 games of form</span></span><span class="proj">19.2</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">RB</span><span class="pl"><span class="pname">Dion Lewis</span><span class="pmeta">RB · 8 games of form</span></span><span class="proj">10.9</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">WR</span><span class="pl"><span class="pname">Davante Adams</span><span class="pmeta">WR · 8 games of form</span></span><span class="proj">16.3</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">WR</span><span class="pl"><span class="pname">Robert Woods</span><span class="pmeta">WR · 9 games of form</span></span><span class="proj">14.9</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">TE</span><span class="pl"><span class="pname">Eric Ebron</span><span class="pmeta">TE · 8 games of form</span></span><span class="proj">11.7</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">FLEX</span><span class="pl"><span class="pname">Stefon Diggs</span><span class="pmeta">WR · 8 games of form</span></span><span class="proj">14.4</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">FLEX</span><span class="pl"><span class="pname">Adam Humphries</span><span class="pmeta">WR · 0 games of form</span></span><span class="proj">10.8</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">DEF</span><span class="pl"><span class="pname">Cleveland Browns</span><span class="pmeta">DEF · 5 games of form</span></span><span class="proj">6.4</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow total"><span class="slot"></span><span class="pl"><span class="pname">Projected Total</span></span><span class="proj">128.5</span><span class="cwrap"><span class="clab">vs 123.2</span></span></div><div class="benchnote"><b>Why some slots show no confidence:</b> no availability snapshot for 2018 week 10 · no available bench alternative at this slot · thin evidence (0 vs 8 prior games; need 3). Confidence = probability the start outscores the best bench alternative at that slot; it prints only when availability is known for both players (calibration policy).</div></div></section><section><div class="eyebrow"><span class="tag">Manager 15 (Manager 23) — Lineup As Set</span><span class="n">§4</span></div><div class="lineup"><div class="lrow head"><span>Slot</span><span>Player</span><span style="text-align:right">Proj</span><span style="text-align:right">Conf</span></div><div class="lrow"><span class="slot">QB</span><span class="pl"><span class="pname">Tom Brady</span><span class="pmeta">QB · 9 games of form</span></span><span class="proj">21.9</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">RB</span><span class="pl"><span class="pname">Christian McCaffrey</span><span class="pmeta">RB · 8 games of form</span></span><span class="proj">15.4</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">RB</span><span class="pl"><span class="pname">Kareem Hunt</span><span class="pmeta">RB · 9 games of form</span></span><span class="proj">17.9</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow flip"><span class="slot">WR</span><span class="pl"><span class="pname">Michael Thomas</span><span class="pmeta">WR · 8 games of form</span><span class="fliptag">their bench DeAndre Hopkins projects higher (17.8 vs 17.1)</span></span><span class="proj">17.1</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow flip"><span class="slot">WR</span><span class="pl"><span class="pname">Calvin Ridley</span><span class="pmeta">WR · 6 games of form</span><span class="fliptag">their bench DeAndre Hopkins projects higher (17.8 vs 12.3)</span></span><span class="proj">12.3</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">TE</span><span class="pl"><span class="pname">George Kittle</span><span class="pmeta">TE · 9 games of form</span></span><span class="proj">12.7</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow flip"><span class="slot">FLEX</span><span class="pl"><span class="pname">Alshon Jeffery</span><span class="pmeta">WR · 5 games of form</span><span class="fliptag">their bench DeAndre Hopkins projects higher (17.8 vs 9.9)</span></span><span class="proj">9.9</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow flip"><span class="slot">FLEX</span><span class="pl"><span class="pname">Peyton Barber</span><span class="pmeta">RB · 8 games of form</span><span class="fliptag">their bench DeAndre Hopkins projects higher (17.8 vs 8.0)</span></span><span class="proj">8.0</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow"><span class="slot">DEF</span><span class="pl"><span class="pname">New York Jets</span><span class="pmeta">DEF · 4 games of form</span></span><span class="proj">8.0</span><span class="cwrap"><span class="clab">coming in v0.3</span></span></div><div class="lrow total"><span class="slot"></span><span class="pl"><span class="pname">Projected Total</span></span><span class="proj">123.2</span><span class="cwrap"><span class="clab">vs you 128.5</span></span></div></div></section><section><div class="eyebrow"><span class="tag">Where Manager 15 (Manager 23) Is Fragile</span><span class="n">§5</span></div><div class="scout"><div class="srow"><div class="x">1</div><div><div class="who">DeAndre Hopkins is sitting on their bench</div><div class="why">He projects 17.8 — above 4 of their set starters: Michael Thomas at WR (17.1), Calvin Ridley at WR (12.3), Alshon Jeffery at FLEX (9.9), Peyton Barber at FLEX (8.0). <em>(trailing-form projections before week 10, 2018)</em></div></div></div></div></section><section><div class="eyebrow"><span class="tag">Your Regret Score</span><span class="n">§6</span></div><div class="call"><div class="verdict">No coin-flip call published</div><div class="benchnote"><b>coming in v0.3:</b> no publishable head-to-head — no availability snapshot for 2018 week 10</div></div></section><section><div class="eyebrow"><span class="tag">Pivot Plan — Set It, Forget It</span><span class="n">§7</span></div><div class="benchnote"><b>coming in v0.3:</b> no conditional pivots this week — no questionable statuses among the starters the engine can see</div></section><section><div class="eyebrow"><span class="tag">Waiver Hype Meter</span><span class="n">§8</span></div><div class="hype"><div class="hcard"><div class="top"><span class="player">Mike Davis · RB</span><span class="badge mirage">coming in v0.3</span></div><div class="gauge g2"><i style="width:100%"></i></div><div class="gauge-label"><span>League-wide FOMO</span><span>5 managers chasing</span></div><p class="read">5 claims filed, 1 completed, top bid 17 of 100 FAAB (league transaction log, weeks 9-9).</p><div class="action no">→ real-or-mirage verdict needs usage data (routes/snaps) — coming in v0.3</div></div><div class="hcard"><div class="top"><span class="player">Maurice Harris · WR</span><span class="badge mirage">coming in v0.3</span></div><div class="gauge g2"><i style="width:40%"></i></div><div class="gauge-label"><span>League-wide FOMO</span><span>2 managers chasing</span></div><p class="read">3 claims filed, 1 completed, top bid 6 of 100 FAAB (league transaction log, weeks 9-9).</p><div class="action no">→ real-or-mirage verdict needs usage data (routes/snaps) — coming in v0.3</div></div></div></section><section><div class="eyebrow"><span class="tag">The Receipts</span><span class="n">§9</span></div><div class="ledger">Ledger opens this week — every published call gets graded against the real box score, hit or miss.<br><span class="stamp">Ledger opens · this week</span></div></section><footer><b>Beat Your League</b> — the weekly edge report built around your rival, not just your roster.<br>Historical demonstration on real cached league data. No availability snapshot for this week — probability numbers gated. Known gaps this run: 3 (listed in week_report.json).<br>Projections are analysis, not guarantees — no betting picks, no staking advice. Fantasy decisions are yours to make (that's the fun part).<br>Generated deterministically from cached league data · LLM tokens: 0</footer>
+</div>
+</body>
+</html>

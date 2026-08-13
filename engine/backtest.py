@@ -41,6 +41,7 @@ from engine.decisions import (
     summarize,
 )
 from engine.history import HistoryError, PlayerIndex, Season, load_players, load_season_chain
+from engine.matchup_backtest import MatchupCall, band_coverage, matchup_calls
 from engine.projection import (
     DEFAULT_SHRINKAGE_K,
     MIN_GAMES_FOR_CALL,
@@ -350,6 +351,81 @@ def _by_slot(calls: Sequence[StartSitCall]) -> list[str]:
     return lines
 
 
+def _matchup_section(seasons: Sequence[Season], players: PlayerIndex) -> list[str]:
+    """Backtest of the MATCHUP-level method the Phase 3 report publishes:
+    team win probability + the 80% floor/ceiling band (rules M1-M4 frozen in
+    engine/matchup_backtest.py before these numbers were computed)."""
+    calls: list[MatchupCall] = []
+    skipped_total = 0
+    for season in seasons:
+        model = ProjectionModel(season, players)
+        season_calls, skipped = matchup_calls(season, model)
+        calls.extend(season_calls)
+        skipped_total += skipped
+
+    lines = [
+        "",
+        "## Matchup-level backtest: win probability and floor/ceiling",
+        "",
+        "The weekly report's §2 publishes P(your set-lineup total beats the rival's) "
+        "and an 80% projection band per team. Same rule as everywhere else: those "
+        "numbers ship only if this table earns them (principle 1).",
+        "",
+    ]
+    if not calls:
+        lines += ["No gradeable matchups in the cache."]
+        return lines
+
+    decided = [c for c in calls if c.outcome in (HIT, MISS)]
+    hits = sum(1 for c in decided if c.outcome == HIT)
+    lines += [
+        f"- **Matchups graded:** {len(calls)} ({skipped_total} skipped under RULE M1 "
+        "— a starter without a buildable pre-week projection)",
+        f"- **Favorite won:** {hits} of {len(decided)} decided "
+        f"({_pct(hits / len(decided) if decided else None)}); "
+        f"{len(calls) - len(decided)} exact ties",
+        f"- **Brier score:** {_num(brier_score(calls), 4)} "
+        "(0.25 = a constant 50% guess)",
+    ]
+    covered, total = band_coverage(calls)
+    lines += [
+        f"- **80% band coverage:** {covered} of {total} team-weeks landed inside "
+        f"their band ({_pct(covered / total if total else None)}; calibrated ≈ 80%)",
+        "",
+        "| Stated win prob | Graded | Decided | Stated avg | Observed | 95% interval | Verdict |",
+        "| --- | ---: | ---: | ---: | ---: | --- | --- |",
+    ]
+    reports = bucket_calls(calls)
+    judgeable = [r for r in reports if r.calibrated is not None]
+    for report in reports:
+        bucket = report.bucket
+        if bucket.graded == 0:
+            continue
+        if report.calibrated is None:
+            verdict = f"too few (< {MIN_DECIDED_TO_JUDGE})"
+        else:
+            verdict = "calibrated" if report.calibrated else "off"
+        interval = (
+            f"{_pct(report.ci_low, 0)} – {_pct(report.ci_high, 0)}"
+            if report.ci_low is not None else "n/a"
+        )
+        lines.append(
+            f"| {bucket.label} | {bucket.graded} | {bucket.decided} | "
+            f"{_pct(report.stated_mean)} | {_pct(bucket.hit_rate)} | {interval} | {verdict} |"
+        )
+    passed = sum(1 for r in judgeable if r.calibrated)
+    lines += [
+        "",
+        f"Buckets with enough data to judge: {len(judgeable)}; "
+        f"{passed} calibrated, {len(judgeable) - passed} off.",
+        "",
+        "Availability caveat: set lineups here occasionally start players who "
+        "did not play, exactly as live lineups do — so unlike the start/sit "
+        "table, this measures the published quantity under real conditions.",
+    ]
+    return lines
+
+
 def _by_season(seasons: Sequence[Season], calls_by_season: dict[str, list[StartSitCall]]) -> list[str]:
     lines = [
         "",
@@ -571,6 +647,7 @@ def build_report(seasons: Sequence[Season], players: PlayerIndex) -> tuple[str, 
         ],
     )
     lines += _implications(all_graded)
+    lines += _matchup_section(seasons, players)
     lines += _by_season(seasons, calls_by_season)
     lines += _by_slot(all_graded)
     lines += _managers(seasons, calls_by_season)

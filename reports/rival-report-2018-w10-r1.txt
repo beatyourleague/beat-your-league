@@ -1,0 +1,32 @@
+BEAT YOUR LEAGUE — Sleeper Friends League — season 2018 week 10
+Manager 04 (Manager 24) vs Manager 15 (Manager 23)
+
+GAME PLAN
+  [ ] Set the lineup in §3 — 4 changes: Robert Woods into WR, Eric Ebron into TE, Stefon Diggs into FLEX, Adam Humphries into FLEX.  (before this week's first kickoff)
+  [ ] Decide on Mike Davis (RB) — 5 managers chasing, top bid 17.  (before waivers clear (league waiver day))
+
+MATCHUP: you 128.5 proj vs rival 123.2 proj
+  win probability: gated — matchup-level win probability is not yet calibrated — in backtest (2 seasons, 170 matchups) favorites stated at ~52% won 64.5% of the time; see the matchup section of reports/backtest.md
+
+OPTIMAL LINEUP
+  QB     Ryan Fitzpatrick           23.7  no call
+  RB     Alvin Kamara               19.2  no call
+  RB     Dion Lewis                 10.9  no call
+  WR     Davante Adams              16.3  no call
+  WR     Robert Woods               14.9  no call
+  TE     Eric Ebron                 11.7  no call
+  FLEX   Stefon Diggs               14.4  no call
+  FLEX   Adam Humphries             10.8  no call
+  DEF    Cleveland Browns            6.4  no call
+
+REGRET SCORE: no publishable head-to-head — no availability snapshot for 2018 week 10
+
+RECEIPTS: Ledger opens this week — every published call gets graded against the real box score, hit or miss.
+
+KNOWN GAPS (3):
+  - availability: no snapshot exists for 2018 week 10; statuses UNKNOWN, so no confidence numbers print (snapshots accumulate from Aug 2026 onward)
+  - win_probability: matchup-level win probability is not yet calibrated — in backtest (2 seasons, 170 matchups) favorites stated at ~52% won 64.5% of the time; see the matchup section of reports/backtest.md
+  - market_context: Vegas game totals not ingested — coming in v0.3
+
+Projections are analysis, not guarantees. Decisions are yours.
+LLM tokens this run: 0

@@ -1,0 +1,58 @@
+# Tuesday weekly pipeline (PLAN.md season ops: reports generate Tue morning).
+# Activates once this repo is pushed to GitHub with the two secrets set:
+#   SLEEPER_LEAGUE_ID  — the league to report on
+#   SLEEPER_ROSTER_ID  — my roster id in that league
+# The runner starts with an empty cache, so each run is one real pull against
+# Sleeper (~80 throttled requests); reports upload as workflow artifacts.
+# Nothing is committed back — data/ stays out of git by design.
+
+name: weekly-report
+
+on:
+  schedule:
+    - cron: "0 11 * * 2" # Tuesdays 11:00 UTC (7am ET)
+  workflow_dispatch: {}
+
+jobs:
+  week:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      # Availability snapshots are the one dataset that can only ever be
+      # captured live (players table has no history) — they must survive
+      # across ephemeral runners or the gating policy has nothing to stand on.
+      - name: Restore availability snapshot archive
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/availability
+          key: availability-archive-${{ github.run_id }}
+          restore-keys: availability-archive-
+      - name: Run weekly pipeline
+        env:
+          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
+          SLEEPER_ROSTER_ID: ${{ secrets.SLEEPER_ROSTER_ID }}
+        run: .venv/bin/python -m run.week
+      - name: Save availability snapshot archive
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/availability
+          key: availability-archive-${{ github.run_id }}
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-reports
+          path: |
+            reports/
+            data/processed/week_report.json
+            data/raw/availability/
+          if-no-files-found: error

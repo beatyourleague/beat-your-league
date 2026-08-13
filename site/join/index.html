@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — Pick Your Rival</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
+    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --brick:#B3402F;
+    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#E7E4DA;font-family:'Barlow',-apple-system,sans-serif;color:var(--navy);
+    padding:14px 8px 44px;-webkit-font-smoothing:antialiased;}
+  .page{max-width:560px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+  header{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
+    padding:24px;}
+  header .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:38px;line-height:.95;
+    text-transform:uppercase;margin-top:8px;}
+  header p{margin-top:10px;font-size:14px;color:#C9D4E2;line-height:1.5;}
+  section{padding:20px 24px 24px;border-top:3px double var(--line);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--slate);margin-bottom:12px;}
+  input[type=text], input[type=email]{width:100%;padding:12px 14px;font:inherit;font-size:16px;
+    border:2px solid var(--navy);background:var(--card);}
+  button{font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    letter-spacing:.1em;text-transform:uppercase;padding:12px 22px;margin-top:10px;
+    background:var(--turf);color:#fff;border:none;cursor:pointer;}
+  button:disabled{background:var(--slate);cursor:default;}
+  .cards{display:grid;gap:8px;margin-top:6px;}
+  .cardbtn{display:block;width:100%;text-align:left;background:var(--card);
+    border:1px solid var(--line);padding:12px 14px;margin:0;color:var(--navy);
+    font-family:'Barlow';text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
+  .cardbtn small{display:block;font-weight:500;color:var(--slate);font-size:12.5px;margin-top:2px;}
+  .cardbtn:hover{border-color:var(--turf);}
+  .cardbtn.rival:hover{border-color:var(--brick);}
+  .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
+    font-size:13.5px;color:#7A2C1F;display:none;}
+  .note{margin-top:12px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+  .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px;margin-top:8px;
+    font-size:14px;line-height:1.6;display:none;}
+  .hidden{display:none;}
+  footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="brand">Beat Your League</div>
+    <h1>Pick Your Rival</h1>
+    <p>Three taps and your weekly Rival Report knows your league. We only ever ask for
+    your Sleeper <b>username</b> — never a password (Sleeper league data is public).</p>
+  </header>
+
+  <section id="step-user">
+    <div class="eyebrow">1 · Your Sleeper username</div>
+    <input type="text" id="username" autocomplete="off" spellcheck="false"
+           placeholder="e.g. FantasyKevin" maxlength="32">
+    <button id="find-user">Find my leagues</button>
+    <div class="err" id="err-user"></div>
+  </section>
+
+  <section id="step-league" class="hidden">
+    <div class="eyebrow">2 · Which league?</div>
+    <div class="cards" id="league-cards"></div>
+    <div class="err" id="err-league"></div>
+  </section>
+
+  <section id="step-rival" class="hidden">
+    <div class="eyebrow">3 · Who's the rival?</div>
+    <div class="note">The one you most need to beat. Your report tracks them every week
+    and goes full Rivalry Week when the schedule pairs you up.</div>
+    <div class="cards" id="rival-cards"></div>
+    <div class="err" id="err-rival"></div>
+  </section>
+
+  <section id="step-email" class="hidden">
+    <div class="eyebrow">4 · Where do reports go?</div>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+    <button id="submit">Finish signup</button>
+    <div class="err" id="err-email"></div>
+    <div class="done" id="done"></div>
+  </section>
+
+  <footer>
+    We store the minimum: your email, league, and rival pick. No passwords, no accounts.
+    Analysis, not picks — fantasy decisions are yours to make.
+  </footer>
+</div>
+
+<script>
+"use strict";
+// Set this to a form backend endpoint (Tally/Formspree/etc.) to submit
+// directly; while empty, signup falls back to a prefilled email draft.
+const FORM_ENDPOINT = "";
+const CONTACT_EMAIL = "kevinxhli@gmail.com";
+const SEASON = "2026";
+const API = "https://api.sleeper.app/v1";
+const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
+
+const state = { user: null, league: null, myRosterId: null, rival: null };
+
+const $ = (id) => document.getElementById(id);
+function showError(id, message) { const el = $(id); el.textContent = message; el.style.display = "block"; }
+function clearError(id) { const el = $(id); el.textContent = ""; el.style.display = "none"; }
+
+// Changing an earlier step invalidates everything picked after it — a rival
+// belongs to one league, and must never survive a league change.
+function resetFromLeague() {
+  state.league = null; state.myRosterId = null;
+  $("league-cards").replaceChildren();
+  $("step-league").classList.add("hidden");
+  clearError("err-league");
+  resetFromRival();
+}
+function resetFromRival() {
+  state.rival = null;
+  $("rival-cards").replaceChildren();
+  $("step-rival").classList.add("hidden");
+  $("step-email").classList.add("hidden");
+  $("done").style.display = "none";
+  clearError("err-rival");
+  clearError("err-email");
+}
+
+async function getJSON(path) {
+  const res = await fetch(API + path);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Sleeper API error " + res.status);
+  return res.json();
+}
+
+// All rendering goes through createElement/textContent — league and team
+// names are other people's data and are never treated as HTML.
+function card(title, subtitle, className, onPick) {
+  const btn = document.createElement("button");
+  btn.className = "cardbtn " + className;
+  btn.type = "button";
+  btn.textContent = title;
+  const small = document.createElement("small");
+  small.textContent = subtitle;
+  btn.appendChild(small);
+  btn.addEventListener("click", onPick);
+  return btn;
+}
+
+$("find-user").addEventListener("click", async () => {
+  clearError("err-user");
+  resetFromLeague();
+  const username = $("username").value.trim();
+  if (!USERNAME_RE.test(username)) {
+    showError("err-user", "That doesn't look like a Sleeper username (letters, numbers, underscores).");
+    return;
+  }
+  $("find-user").disabled = true;
+  try {
+    const user = await getJSON("/user/" + username);
+    if (!user || !user.user_id) {
+      showError("err-user", "No Sleeper account with that username — check the spelling.");
+      return;
+    }
+    state.user = { user_id: String(user.user_id), username: user.display_name || username };
+    const leagues = await getJSON("/user/" + state.user.user_id + "/leagues/nfl/" + SEASON) || [];
+    const cards = $("league-cards");
+    cards.replaceChildren();
+    if (!leagues.length) {
+      showError("err-user", "That account has no " + SEASON + " NFL leagues yet.");
+      return;
+    }
+    for (const league of leagues) {
+      const teams = league.total_rosters ? league.total_rosters + " teams" : "league";
+      cards.appendChild(card(String(league.name || "Unnamed league"), teams, "", () => pickLeague(league)));
+    }
+    $("step-league").classList.remove("hidden");
+    $("step-league").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showError("err-user", "Couldn't reach Sleeper — try again in a moment.");
+  } finally {
+    $("find-user").disabled = false;
+  }
+});
+
+async function pickLeague(league) {
+  clearError("err-league");
+  resetFromRival();
+  try {
+    const leagueId = String(league.league_id);
+    const [users, rosters] = await Promise.all([
+      getJSON("/league/" + leagueId + "/users"),
+      getJSON("/league/" + leagueId + "/rosters"),
+    ]);
+    const usersById = new Map((users || []).map(u => [String(u.user_id), u]));
+    const mine = (rosters || []).find(r =>
+      String(r.owner_id) === state.user.user_id ||
+      (r.co_owners || []).map(String).includes(state.user.user_id));
+    if (!mine) {
+      showError("err-league", "You don't own a roster in that league — pick another.");
+      return;
+    }
+    state.league = { league_id: leagueId, name: String(league.name || "") };
+    state.myRosterId = mine.roster_id;
+    const cards = $("rival-cards");
+    cards.replaceChildren();
+    for (const roster of rosters) {
+      if (roster.roster_id === mine.roster_id) continue;
+      const owner = usersById.get(String(roster.owner_id));
+      const teamName = (owner && owner.metadata && owner.metadata.team_name) ||
+                       (owner && owner.display_name) || "(unclaimed team)";
+      const ownerName = (owner && owner.display_name) || "no owner";
+      cards.appendChild(card(String(teamName), "managed by " + ownerName, "rival", () => {
+        state.rival = {
+          roster_id: roster.roster_id,
+          owner_id: roster.owner_id ? String(roster.owner_id) : null,
+          label: String(teamName),
+        };
+        clearError("err-rival");
+        $("step-email").classList.remove("hidden");
+        $("step-email").scrollIntoView({ behavior: "smooth" });
+      }));
+    }
+    $("step-rival").classList.remove("hidden");
+    $("step-rival").scrollIntoView({ behavior: "smooth" });
+  } catch (err) {
+    showError("err-league", "Couldn't load that league — try again.");
+  }
+}
+
+$("submit").addEventListener("click", async () => {
+  clearError("err-email");
+  const email = $("email").value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    showError("err-email", "That email doesn't look right.");
+    return;
+  }
+  if (!state.user || !state.league || !state.rival) {
+    showError("err-email", "Finish steps 1-3 first.");
+    return;
+  }
+  const entry = {
+    email: email,
+    sleeper_username: state.user.username,
+    user_id: state.user.user_id,
+    league_id: state.league.league_id,
+    rival_owner_id: state.rival.owner_id,
+    rival_roster_id: state.rival.roster_id,
+    added_at: new Date().toISOString().slice(0, 10),
+  };
+  const done = $("done");
+  if (FORM_ENDPOINT) {
+    try {
+      const res = await fetch(FORM_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entry),
+      });
+      if (!res.ok) throw new Error("form backend " + res.status);
+      done.textContent = "You're in. First report lands Tuesday morning — rival: " +
+        state.rival.label + ".";
+      done.style.display = "block";
+      return;
+    } catch (err) {
+      // fall through to the email path
+    }
+  }
+  const body = "My Rival Report signup:\n\n" + JSON.stringify(entry, null, 2) + "\n";
+  const href = "mailto:" + CONTACT_EMAIL +
+    "?subject=" + encodeURIComponent("Rival Report signup") +
+    "&body=" + encodeURIComponent(body);
+  done.textContent = "One last tap: send the pre-filled email that just opened " +
+    "(it contains your picks — nothing else). Your first report lands Tuesday. Rival: " +
+    state.rival.label + ".";
+  done.style.display = "block";
+  window.location.href = href;
+});
+</script>
+</body>
+</html>

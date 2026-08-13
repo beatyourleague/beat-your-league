@@ -79,7 +79,10 @@ modern, professional product. Nothing ships with default or unstyled HTML.
 
 - **Sleeper API** (public, no auth, JSON): base `https://api.sleeper.app/v1/`. Key endpoints:
   `/league/{id}`, `/league/{id}/rosters`, `/league/{id}/users`, `/league/{id}/matchups/{week}`,
-  `/league/{id}/transactions/{week}`, `/state/nfl`, `/players/nfl` (large — cache to disk).
+  `/league/{id}/transactions/{week}`, `/state/nfl`, `/players/nfl` (large — cache to disk),
+  `/user/{username-or-id}` and `/user/{user_id}/leagues/nfl/{season}` (onboarding),
+  and the schedule feed at `api.sleeper.app/schedule/nfl/{type}/{season}` (outside /v1).
+  CORS is open (`access-control-allow-origin: *`), which the signup picker relies on.
   League history: follow the `previous_league_id` field to walk back prior seasons.
   Verify current endpoint shapes against docs.sleeper.com before relying on them.
   Be polite: cache all raw responses under `data/raw/`, throttle requests, never hammer.
@@ -149,11 +152,25 @@ Daily **reply kit**: each morning the pipeline writes `content/reply-kit-<date>.
 is paste-and-adapt, not composition. (Automated reply *targeting* would require paid X API access that
 breaks the PLAN.md budget and is out of scope; the kit reduces human effort to selection only.)
 
-**Phase 6 — Delivery + onboarding (Season Weeks 4–6).**
-Subscriber registry (league ID + rival name per subscriber, collected at signup) drives the
-Tuesday batch run; per-subscriber reports emailed automatically. Onboarding becomes self-serve:
-form → registry → included in next run with zero human touch. Substack first; revisit Stripe
-direct only if its fees beat Substack's 10% at current volume. See PLAN.md §3 for dates.
+**Phase 6 — Delivery + onboarding (Season Weeks 4–6; mechanism built Aug 2026).**
+Subscriber registry drives the Tuesday batch run; per-subscriber reports emailed automatically.
+Onboarding becomes self-serve: picker page → registry → included in next run with zero human
+touch. Substack first; revisit Stripe direct only if its fees beat Substack's 10% at current
+volume. See PLAN.md §3 for dates. Design decisions (verified against the live API):
+- **Username-first onboarding, never raw IDs.** `/v1/user/{username}` → user_id →
+  `/v1/user/{user_id}/leagues/nfl/{season}` lists their leagues; picking a league also
+  identifies their own roster (owner match) — the subscriber never sees a roster ID.
+- **Rival is selected, not typed:** a tap on one of the other teams' real names, keyed by
+  owner_id (stable across seasons; roster_id kept only as orphan-team fallback).
+- **Named rival ≠ weekly opponent.** The report's main matchup is always the actual scheduled
+  opponent; the named rival gets a Rival Watch strip every week (their record, fragile spots,
+  head-to-head history), and when the schedule pairs them it renders as Rivalry Week.
+- **Static picker page** (`site/join/`) calls Sleeper's public API from the browser —
+  `access-control-allow-origin: *` verified live — so no server of ours exists. Submission
+  falls back to a prefilled email until a free-tier form backend is plugged in.
+- Registry lives at `data/registry/subscribers.json` (gitignored — it holds emails); schema
+  and loader in `run/registry.py`; batch runner in `run/batch.py` writes per-subscriber
+  reports under `reports/subscribers/` (gitignored, filenames carry no emails).
 
 ## Working agreements for Claude Code sessions
 
@@ -161,14 +178,34 @@ direct only if its fees beat Substack's 10% at current volume. See PLAN.md §3 f
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status:** Phases 1 and 2 complete (90 tests passing). Phase 2 built the projection model,
-start/sit grader, calibration math and rival behavioral profiles, verified against the sample
-league's 2018+2017 seasons: 2,056 graded calls, `reports/backtest.md`. Run it with
-`.venv/bin/python -m engine.backtest`; output is deterministic and costs 0 HTTP requests.
+**Status:** Phases 1-4 complete + Phase 6 subscriber mechanism built early (147 tests passing).
+Phase 6 mechanism: signup picker (`site/join/`, live-tested against real Sleeper accounts —
+username → leagues → own-roster auto-resolved → rival tapped from real team names), subscriber
+registry (`run/registry.py`, gitignored data), batch runner (`python -m run.batch`: one ingest
+per league, one report per subscriber, failures contained per-subscriber), and the Rival Watch
+strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Remaining for
+launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
+and connect the Substack list. Phase 5 (content system) is untouched and next in order. Phase 3 built the availability feed
+(weekly injury snapshots + NFL schedule byes), `engine/week_report.py` (single JSON with every
+number gated on its own calibration evidence), and `render/report.py` (template-faithful HTML,
+all data escaped). Phase 4: `make week` / `python -m run.week` runs ingest→report→render→text
+summary in one command; `.github/workflows/weekly.yml` is the Tuesday cron (activates on push
+to GitHub with SLEEPER_LEAGUE_ID + SLEEPER_ROSTER_ID secrets; persists availability snapshots
+via actions/cache). Both build phases were adversarially reviewed (12 confirmed findings fixed,
+incl. two principle-1 gate bypasses). Demo artifacts from real 2018 sample-league data:
+`reports/rival-report-2018-w10-r1.{html,txt}`.
 
-Still waiting on ONE thing: paste the real league ID at the top of this file, then
-`.venv/bin/python -m ingest.pull` (venv is Python 3.11) pulls my league, and
-`-m engine.backtest` grades it.
+What publishes vs gates (principle 1, wired in code, not prose):
+- Slot confidence: publishes only when availability is KNOWN-ACTIVE for both players
+  (snapshot + schedule); calibrated regime per backtest (ECE 3.1%, 5/5 buckets).
+- Floor/ceiling band: publishes — matchup backtest coverage 77.9% vs 80% target.
+- Win probability: GATED (`WIN_PROBABILITY_CALIBRATED = False` in engine/week_report.py) —
+  matchup backtest shows it underconfident (stated ~52% bucket observed 64.5%). Un-gate only
+  with fresh passing evidence in backtest.md; more seasons of history will firm this up.
+
+Still waiting on TWO things: paste the real league ID at the top of this file, and my roster id
+(env SLEEPER_ROSTER_ID). Then `make week` (in season) or
+`.venv/bin/python -m run.week --week N` (explicit week) builds my real report.
 
 **Session continuity — read this first if you are picking up on the desktop.**
 Phases 1 and 2 were built in Claude Code sessions *other than* the machine I normally
@@ -248,3 +285,20 @@ rival starting a player who will not play is the most exploitable event in the d
   bench alternative) runs 68–95% and is **inflated by the same availability asymmetry** — it
   measures engagement, not skill. Do not publish it as a rival's accuracy; points-left-on-bench
   is the honest version and the right basis for the Regret Score.
+
+**Data learnings (Phase 3-4, verified live Aug 2026):**
+- NFL schedule lives at `api.sleeper.app/schedule/nfl/{regular|pre|post}/{season}` — public,
+  no auth, OUTSIDE /v1 (undocumented on docs.sleeper.com but stable and verified). Byes =
+  teams absent from a week's games. Completed-season schedules cache forever.
+- Availability snapshots (`data/raw/availability/`) can only be captured live — written on
+  every `ingest.pull` from the players table at zero extra HTTP cost. They are the one
+  unrecoverable dataset: the CI cron persists them via actions/cache + artifacts.
+- "ACTIVE" requires knowing the player is NOT on bye: when the schedule is unavailable, a
+  clean injury report classifies UNKNOWN, never active (review-confirmed gate bypass).
+- Historical renders must not read the report week's own transaction log (waiver moves made
+  after the games = lookahead); live weeks may (all transactions are in the past then).
+- The receipts ledger grades only calls that passed the publication gate in their own week —
+  not hypothetical engine calls — so it starts exactly when publishing starts.
+- Cross-season rival joins go by owner_id, never roster_id (verified: sample-league roster 6
+  changed owners between 2017 and 2018).
+- A 0.0-vs-0.0 matchup total means "not played yet", never a tie (matchup backtest RULE M1).

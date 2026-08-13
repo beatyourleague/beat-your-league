@@ -1,6 +1,6 @@
 # Backtest & calibration report
 
-Generated 2026-08-13 05:12 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-13 08:14 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
 
 ## Leagues graded
 
@@ -87,6 +87,27 @@ The same calls, restricted to head-to-heads where **both players actually played
 2. **The probability math itself passes.** On the availability-controlled set, 5 of 5 judgeable buckets are calibrated. A stated 64% is worth publishing once the engine knows who is playing — and not before (CLAUDE.md principle 1).
 3. **Until then, the report must not print a confidence for a player whose status is unknown.** Per the Phase 3 spec, that slot renders as *coming in v0.3*, never as a number. The honest version of this engine declines more calls than it makes.
 4. **The rival's bench is where the edge is.** A rival starting a player who will not play is the single most exploitable event in this data, and it is visible to us the moment an availability feed exists — this is exactly the "where the rival is fragile" section the product promises.
+
+## Matchup-level backtest: win probability and floor/ceiling
+
+The weekly report's §2 publishes P(your set-lineup total beats the rival's) and an 80% projection band per team. Same rule as everywhere else: those numbers ship only if this table earns them (principle 1).
+
+- **Matchups graded:** 170 (14 skipped under RULE M1 — a starter without a buildable pre-week projection)
+- **Favorite won:** 105 of 170 decided (61.8%); 0 exact ties
+- **Brier score:** 0.2385 (0.25 = a constant 50% guess)
+- **80% band coverage:** 265 of 340 team-weeks landed inside their band (77.9%; calibrated ≈ 80%)
+
+| Stated win prob | Graded | Decided | Stated avg | Observed | 95% interval | Verdict |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+| 50-55% | 76 | 76 | 52.4% | 64.5% | 53% – 74% | off |
+| 55-60% | 41 | 41 | 57.1% | 58.5% | 43% – 72% | calibrated |
+| 60-65% | 29 | 29 | 62.0% | 51.7% | 34% – 69% | too few (< 30) |
+| 65-70% | 22 | 22 | 66.8% | 68.2% | 47% – 84% | too few (< 30) |
+| 70-80% | 2 | 2 | 74.9% | 100.0% | 34% – 100% | too few (< 30) |
+
+Buckets with enough data to judge: 2; 1 calibrated, 1 off.
+
+Availability caveat: set lineups here occasionally start players who did not play, exactly as live lineups do — so unlike the start/sit table, this measures the published quantity under real conditions.
 
 ## By season
 

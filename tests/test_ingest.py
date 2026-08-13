@@ -294,8 +294,24 @@ def test_main_reports_api_failure_without_traceback(
 
 
 # --------------------------------------------------------------------- #
-# summary helpers
+# availability snapshots
 # --------------------------------------------------------------------- #
+
+def test_snapshot_rejects_traversal_in_state_fields(tmp_path: Path) -> None:
+    """Review finding: /state/nfl season and season_type flow into a file path."""
+    from ingest.availability import write_snapshot
+    players = {"1": {"position": "RB", "fantasy_positions": ["RB"],
+                     "active": True, "team": "KC", "injury_status": None}}
+    for bad_state in (
+        {"season": "../../etc", "season_type": "regular", "week": 1},
+        {"season": "2026", "season_type": "../evil", "week": 1},
+        {"season": "20261", "season_type": "regular", "week": 1},
+    ):
+        with pytest.raises(ValueError):
+            write_snapshot(tmp_path, players, bad_state)
+    path, count = write_snapshot(
+        tmp_path, players, {"season": "2026", "season_type": "pre", "week": 1})
+    assert path.is_file() and count == 1
 
 def test_scoring_labels() -> None:
     assert scoring_label({"rec": 1.0}).startswith("Full PPR")
