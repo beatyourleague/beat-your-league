@@ -26,7 +26,8 @@ import ingest.pull as ingest_pull
 import render.report as render_report
 from engine.history import HistoryError
 from engine.week_report import RAW_DIR, WeekReportError, build_week_report
-from run.registry import DEFAULT_REGISTRY, RegistryError, Subscriber, load_registry
+from run.registry import (DEFAULT_REGISTRY, RegistryError, Subscriber,
+                          league_pass_seats, load_registry)
 from run.week import _current_week, text_summary
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -143,6 +144,25 @@ def main(argv: list[str] | None = None) -> int:
         marker = "ok " if result.ok else "FAIL"
         who = result.subscriber.slug
         print(f"  [{marker}] {who}: {result.detail}")
+    # League Pass coverage: the commissioner paid for the whole league, so an
+    # unclaimed seat is someone who was promised a report and isn't getting one.
+    seats = league_pass_seats(subscribers)
+    for league_id, members in sorted(seats.items()):
+        rosters_file = RAW_DIR / "league" / league_id / "rosters.json"
+        total = None
+        if rosters_file.is_file():
+            try:
+                total = len(json.loads(rosters_file.read_text(encoding="utf-8")))
+            except (OSError, json.JSONDecodeError):
+                total = None
+        payer = members[0].covered_by
+        claimed = f"{len(members)} of {total}" if total else str(len(members))
+        print(f"League Pass · league {league_id}: {claimed} seats claimed "
+              f"(paid by {payer})")
+        if total and len(members) < total:
+            print(f"    {total - len(members)} team(s) haven't signed up yet — "
+                  "they get nothing until they pick a rival.")
+
     if ok:
         print(f"Reports under: {SUBSCRIBER_REPORTS.relative_to(REPO_ROOT)}/")
     print("LLM tokens this run: 0 (deterministic layer only)")

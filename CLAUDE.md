@@ -236,6 +236,22 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 - **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
   headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
   landing page links it and a test asserts the failures survive publication.
+- **League Pass ($99, commissioner buys) is built.** Registry seats carry `plan:"league_pass"`
+  and `covered_by` (the payer's email — a seat naming no payer is rejected, since that is an
+  unpaid report waiting to be sent); `run/batch.py` reports seats claimed vs league size, because
+  an unclaimed seat is a promise the commissioner made that we aren't keeping. Every seat still
+  gets its OWN report — the pass changes who paid, never what is delivered. The offer lives on
+  `site/league-pass.html`, reached by one link, never as a third pricing card (PLAN §4: exactly
+  one decision at checkout). Two entries for the same (league, Sleeper user) are rejected —
+  that would mail one person another manager's team.
+- **`site/legal.html` now carries the protective half too**, not just promises: liability capped
+  at fees paid, no consequential/lost-winnings damages, as-is + implied-warranty disclaimer,
+  refund as the exclusive remedy, no-redistribution (which is what makes League Pass defensible),
+  Sleeper-dependency and force-majeure carve-outs, right to discontinue with pro-rata refund,
+  changes-to-terms, governing law, severability — each with a consumer-rights savings clause so
+  none of it strips protections buyers have by law. `test_legal_page_actually_protects_the_business`
+  fails the build if any clause is deleted. Jurisdiction and contact are visible placeholders:
+  **never guess them**.
 - **Waiver-market intelligence (`engine/waivers.py`) is the edge rankings can't copy.** From
   the league's own transaction log: what a claim actually costs here (going rate, priciest
   win), how much FAAB each team has left, and — from *failed* bids — the price a manager was

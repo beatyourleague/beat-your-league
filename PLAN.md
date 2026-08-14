@@ -82,8 +82,12 @@ Implementation: Substack monthly + annual tiers (annual = season pass). One-offs
    one line inside subscriber reports only).
 2. Week 13 — **Playoff Gauntlet $12** (weeks 14–17 intensity package, offered only to alive teams —
    monetizes the elimination churn cliff instead of suffering it).
-3. If traction — **League Pass $99** (commissioner buys; every team gets its own rival report; arms-dealer
-   dynamics make the league itself the marketing channel).
+3. **League Pass $99** — BUILT Aug 2026 (`site/league-pass.html`; `plan:"league_pass"` seats in the
+   registry; seat-coverage reporting in `run/batch.py`). Commissioner pays once; every manager who
+   signs up gets their own report aimed at their own rival. Deliberately NOT a third card in the
+   pricing section — one quiet link instead, so the individual buyer still faces exactly one
+   decision. Wire `LEAGUE_PASS_URL` on that page when the Substack tier exists. Arms-dealer
+   dynamics make the league itself the marketing channel.
 4. Off-season — **Season 2 earlybird renewal** (Feb, higher price justified by the public ledger) +
    **NBA fantasy module** (Oct) to bridge revenue between football seasons.
 

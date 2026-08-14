@@ -92,6 +92,47 @@ def test_registry_missing_file_is_actionable(tmp_path: Path) -> None:
         load_registry(tmp_path / "nope.json")
 
 
+def test_league_pass_seat_must_name_its_payer(tmp_path: Path) -> None:
+    """A seat with no payer is an unpaid report waiting to be sent."""
+    with pytest.raises(RegistryError, match="covered_by"):
+        load_registry(_write_registry(tmp_path, [_entry(plan="league_pass")]))
+    subs = load_registry(_write_registry(tmp_path, [
+        _entry(plan="league_pass", covered_by="commish@example.com")]))
+    assert subs[0].is_league_seat and subs[0].covered_by == "commish@example.com"
+
+
+def test_covered_by_is_rejected_on_an_individual_pass(tmp_path: Path) -> None:
+    with pytest.raises(RegistryError, match="only meaningful"):
+        load_registry(_write_registry(tmp_path, [_entry(covered_by="commish@example.com")]))
+
+
+def test_unknown_plan_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(RegistryError, match="plan must be"):
+        load_registry(_write_registry(tmp_path, [_entry(plan="lifetime_free")]))
+
+
+def test_two_entries_cannot_claim_the_same_roster(tmp_path: Path) -> None:
+    """Same league + same Sleeper user twice means someone would receive another
+    manager's team."""
+    with pytest.raises(RegistryError, match="two entries for Sleeper user"):
+        load_registry(_write_registry(tmp_path, [
+            _entry(), _entry(email="other@example.com")]))
+
+
+def test_league_pass_seats_groups_by_league(tmp_path: Path) -> None:
+    from run.registry import league_pass_seats
+    subs = load_registry(_write_registry(tmp_path, [
+        _entry(email="a@x.co", user_id="111111111", plan="league_pass",
+               covered_by="commish@example.com"),
+        _entry(email="b@x.co", user_id="222222222", plan="league_pass",
+               covered_by="commish@example.com"),
+        _entry(email="solo@x.co", user_id="333333333"),
+    ]))
+    seats = league_pass_seats(subs)
+    assert set(seats) == {"289646328504385536"}
+    assert len(seats["289646328504385536"]) == 2  # the solo pass isn't a seat
+
+
 def test_slug_never_contains_email() -> None:
     subscriber = Subscriber(
         email="secret.person@example.com", user_id="123456789",

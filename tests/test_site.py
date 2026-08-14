@@ -309,6 +309,39 @@ def test_legal_page_covers_the_promises_money_depends_on() -> None:
                      r"one refund per person", r"18 or older",
                      r"never see or store your card", r"not affiliated"):
         assert re.search(required, legal, re.I), f"legal page is missing: {required}"
+
+
+def test_legal_page_actually_protects_the_business() -> None:
+    """Consumer promises without limits is a one-sided contract. These are the
+    clauses that stop a $29 sale becoming an unbounded claim."""
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    protections = {
+        "liability cap": r"total liability to you.{0,80}limited to the amount you",
+        "no consequential damages": r"indirect, incidental, special, or consequential",
+        "as-is / warranty disclaimer": r"provided <b>as is</b>|provided as is",
+        "implied warranty disclaimer": r"merchantability",
+        "refund is the exclusive remedy": r"only remedy we offer",
+        "no redistribution (protects League Pass)": r"may <b>not</b> forward the full report",
+        "third-party data dependency": r"depend on Sleeper's public data",
+        "force majeure": r"beyond our reasonable control",
+        "right to discontinue": r"change, pause, or discontinue",
+        "changes to terms": r"we may update these terms",
+        "governing law": r"governed by the laws of",
+        "severability": r"unenforceable, the rest stays in force",
+    }
+    for name, pattern in protections.items():
+        assert re.search(pattern, legal, re.I), f"terms are missing: {name}"
+    # Protective clauses must not be used to strip consumer rights.
+    assert re.search(r"doesn't remove protections you have|"
+                     r"nothing here takes away consumer rights", legal, re.I)
+
+
+def test_unset_legal_placeholders_are_visible_not_invented() -> None:
+    """A guessed jurisdiction is worse than a blank one."""
+    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    assert re.search(r"\[jurisdiction — to be set before", legal), \
+        "governing law must stay an explicit placeholder until the owner sets it"
+    assert re.search(r"\[contact address — added before launch\]", legal)
     for page, name in ((LANDING, "landing"), (JOIN, "join")):
         assert re.search(r'href="\.\./legal\.html"|href="legal\.html"', page), \
             f"{name} page does not link the terms"
@@ -318,6 +351,35 @@ def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
     """A gated slot must say we chose not to call it — never a version number."""
     assert "no call" in SAMPLE_REPORT.lower()
     assert re.search(r"not calling it", SAMPLE_REPORT, re.I)
+
+
+LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
+
+
+def test_league_pass_never_competes_with_the_single_checkout_decision() -> None:
+    """PLAN §4: exactly one decision at checkout. The commissioner offer is
+    reachable by one link, never a third pricing card."""
+    assert re.search(r'href="league-pass\.html"', LANDING), \
+        "League Pass must be reachable from the pricing section"
+    rendered = markup_only(LANDING)
+    assert "$99" not in rendered, \
+        "the League Pass price must not appear beside the individual decision"
+
+
+def test_league_pass_states_its_own_terms() -> None:
+    prose_page = prose(LEAGUE_PASS)
+    for required in (r"\$99", r"renews once a year", r"cancel yourself any time",
+                     r"no-questions refund", r"18\+", r"not affiliated"):
+        assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
+    # It must not promise a report to managers who never signed up.
+    assert re.search(r"can't write anyone's report until they do", prose_page, re.I)
+    assert re.search(r'href="legal\.html"', LEAGUE_PASS)
+
+
+def test_league_pass_makes_no_win_promise() -> None:
+    prose_page = prose(LEAGUE_PASS)
+    assert re.search(r"not a guarantee", prose_page, re.I)
+    assert re.search(r"somebody finishes last", prose_page, re.I)
 
 
 def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
