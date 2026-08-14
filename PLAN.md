@@ -87,6 +87,46 @@ Implementation: Substack monthly + annual tiers (annual = season pass). One-offs
 4. Off-season — **Season 2 earlybird renewal** (Feb, higher price justified by the public ledger) +
    **NBA fantasy module** (Oct) to bridge revenue between football seasons.
 
+### Retention & refund policy (owner decision, Aug 14 2026)
+
+Goal: recurring revenue that sticks, with as little refunded as possible. The structure below
+reaches that **without** dark patterns, which are ruled out here permanently — not on taste, but
+because this product's growth channel is twelve people in a group chat vetting us for each other,
+and its entire moat is a public ledger that says *we publish our misses*. A "can't cancel"
+screenshot kills both. Cancellation also lives inside Substack, so obstructing it is not even
+technically available to us; ROSCA and state auto-renewal laws require clear terms and easy exit;
+and chargebacks cost more than a retained month while endangering the payment account.
+
+**Where the non-refundable money legitimately comes from:**
+1. **Season pass, paid upfront.** $29 lands on day one. The no-questions window closes at
+   Week 2; everything after is earned revenue, not float.
+2. **Value must land before that window shuts.** Weeks 1 and 2 reports are the highest-stakes
+   deliverables of the season — a missed or thin Week 1 is a refund request with a stamp on it.
+3. **Reduce refunds by removing their causes, never their availability:** set expectations about
+   gated numbers up front ("when we don't show a number, that's the product working"), frame the
+   first miss before it happens (a calibrated 64% call misses 36% of the time — Receipts Monday
+   is the mechanism), and make Week 1 land on time.
+
+**Stickiness comes from engagement, not entrapment:** the rivalry (a named nemesis tracked all
+season), the ledger streak (a running public record they're part of), Rivalry Week, and the
+receipt cards they screenshot into their group chat. A subscriber who forgets they're subscribed
+is a chargeback and a bad review waiting to happen; a subscriber who opens Tuesday's email
+because they want to beat Mike renews without being asked.
+
+**Renewal disclosure (non-negotiable).** The $29 pass is a Substack **annual tier**, so it
+auto-renews — which is fine revenue and NOT fine to leave unsaid. Both decision points (landing
+pricing card + picker confirmation) must state "renews once a year at $29 unless you cancel", and
+a reminder email must go out **before** it bills. An undisclosed annual auto-renewal is the
+forget-to-cancel pattern with better manners, and it is ruled out here. `tests/test_site.py`
+enforces the on-page half of this.
+*Consequence to keep straight:* an auto-renewing pass cannot also be sold a "Season 2 earlybird
+renewal" (§4 upsell 4) — for renewing subscribers that offer becomes a thank-you//loyalty credit,
+not a second charge.
+
+**Seasonality rule:** the monthly tier must not silently auto-renew through the Feb–Aug offseason
+when no product ships. Cancel or pause monthly subscribers at season end and invite them back for
+Season 2 — the alternative is a spring of chargebacks and the exact reputation this plan avoids.
+
 **Rules:** never more than one offer visible to a non-customer; never raise complexity before trust;
 Season 1 optimizes for renewals, referrals, and list growth — not maximum extraction. Rationale: monthly-only
 revenue collapses at the Week 10–12 elimination cliff; season-pass-led pricing collects value before it.

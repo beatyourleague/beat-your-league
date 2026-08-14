@@ -66,7 +66,10 @@
   .hero h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(46px,11.5vw,120px);line-height:.88;letter-spacing:-.01em;
     text-transform:uppercase;margin-top:20px;max-width:920px;
-    text-shadow:0 2px 0 rgba(0,0,0,.35), 0 20px 50px rgba(0,0,0,.55);}
+    /* stacked hard offsets extrude the letters off the page; the wide soft
+       shadow underneath sits them in the scene */
+    text-shadow:0 3px 0 rgba(0,0,0,.55), 0 6px 0 rgba(0,0,0,.22),
+      0 24px 54px rgba(0,0,0,.62);}
   /* grafted from concept C: the second line slams onto a gold broadcast plate */
   .hero h1 em{display:inline-block;font-style:italic;color:var(--navy);
     background:linear-gradient(180deg,#FFD75E 0%,var(--flag) 60%,var(--flag-deep) 100%);
@@ -115,32 +118,89 @@
   .chip b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(32px,4.4vw,54px);line-height:.95;letter-spacing:.01em;color:var(--flag);
     font-variant-numeric:tabular-nums;
-    text-shadow:0 0 22px rgba(242,194,48,.38), 0 2px 0 rgba(0,0,0,.4);}
+    text-shadow:0 0 22px rgba(242,194,48,.38), 0 3px 0 rgba(0,0,0,.55),
+      0 6px 0 rgba(0,0,0,.22);}
 
-  /* field graphic — night game under the lights */
-  .fieldwrap{margin-top:48px;max-width:640px;}
-  .field{position:relative;height:62px;border:1px solid rgba(246,244,238,.28);
-    background:
-      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(246,244,238,.30) calc(10% - 1px) 10%),
-      linear-gradient(90deg,#11492B 0 61%, #47231D 61% 100%);
-    box-shadow:0 0 0 1px rgba(0,0,0,.45), 0 22px 44px -18px rgba(0,0,0,.75),
-      inset 0 0 34px rgba(0,0,0,.5);}
-  .field .endzone{position:absolute;top:0;bottom:0;width:18px;}
-  .field .endzone.l{left:0;background:linear-gradient(180deg,var(--turf-glow),var(--turf));
-    box-shadow:2px 0 14px rgba(46,169,104,.45);}
-  .field .endzone.r{right:0;background:linear-gradient(180deg,var(--brick-glow),var(--brick));
-    box-shadow:-2px 0 14px rgba(224,101,79,.4);}
-  .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
-    width:28px;height:18px;background:#6B3A1F;border-radius:50%/45%;
-    border:2px solid var(--flag);box-shadow:0 0 14px rgba(242,194,48,.65), 0 3px 8px rgba(0,0,0,.6);}
-  .field .ball::after{content:"";position:absolute;left:7px;right:7px;top:50%;height:2px;
-    background:var(--paper);transform:translateY(-50%);}
+  /* field graphic — broadcast-angle night pitch: perspective yard lines that
+     converge toward the far sideline, floodlight beams and light pools, the
+     drive trail ending where the ball sits in rival territory. Pure SVG. */
+  .fieldwrap{margin-top:48px;max-width:660px;}
+  /* the shadow grounds the TURF only — applying it to the whole svg turned
+     the light beams into grey wedges */
+  .pitch{display:block;width:100%;height:auto;}
+  .pitch .turf{filter:drop-shadow(0 22px 40px rgba(0,0,0,.8));}
+  .pitch .ln{stroke:rgba(246,244,238,.30);stroke-width:1.3;}
+  .pitch .ln.goal{stroke:rgba(246,244,238,.62);stroke-width:2.2;}
+  .pitch .ln.fifty{stroke:rgba(242,194,48,.5);stroke-width:2.4;}
+  .pitch .hash{stroke:rgba(246,244,238,.22);stroke-width:1.1;}
+  .pitch .num{fill:rgba(246,244,238,.40);font-family:'Barlow Condensed',sans-serif;
+    font-weight:800;font-size:15px;text-anchor:middle;letter-spacing:.06em;}
+  .pitch .split{stroke:var(--flag);stroke-width:2;stroke-dasharray:6 6;opacity:.8;}
+  /* final states declared here, so no-JS and reduced-motion see the finished
+     picture; the keyframes animate FROM the hidden state. */
+  /* The ball rides the SAME quadratic the trail is drawn from (sampled below),
+     so the two can never disagree, and it only ever moves downfield — the old
+     overshoot-and-bounce was a possession-meter behaviour, not a football's.
+     Deceleration lives in the keyframe spacing (timing stays linear) so the
+     trail tip and the ball stay locked together. */
+  /* The trail is DOTTED and lands one dot at a time in the ball's wake: a
+     solid line that draws itself reads as a graphic being constructed, while
+     dots read as a path being travelled. Each dot's delay is the exact moment
+     the ball reaches it, so the wake can never run ahead of the carrier. */
+  .pitch-dot{fill:var(--flag);opacity:.5;transform-box:fill-box;
+    transform-origin:center;animation:dotdrop .42s cubic-bezier(.2,.8,.3,1) 1 both;}
+  /* The drive sits below the fold, so it must play when it is LOOKED at, not
+     on page load — otherwise it is always over by the time you scroll down.
+     No-JS visitors keep the default running state. */
+  html.js .pitch-ball,html.js .pitch-dot,html.js .pitch-adv{animation-play-state:paused;}
+  html.js .fieldwrap.in .pitch-ball,html.js .fieldwrap.in .pitch-dot,
+  html.js .fieldwrap.in .pitch-adv{animation-play-state:running;}
+  /* The field reacts to the drive: the colour boundary IS the ball, so ground
+     changes hands as it advances. Sampled from the ball's own x at each stop,
+     minus the boundary's resting x (465.7 at the ball's height), so the two
+     are the same motion expressed twice — they cannot drift apart. */
+  .pitch-adv{transform:translateX(0);animation:advance 3s linear 1 both;}
+  @keyframes advance{
+    0%{transform:translateX(-138px);}  10%{transform:translateX(-111px);}
+    20%{transform:translateX(-87px);}  30%{transform:translateX(-66px);}
+    40%{transform:translateX(-48px);}  50%{transform:translateX(-33px);}
+    60%{transform:translateX(-21px);}  70%{transform:translateX(-12px);}
+    80%{transform:translateX(-5px);}   90%{transform:translateX(-1px);}
+    100%{transform:translateX(0);}}
+  @keyframes dotdrop{
+    0%{opacity:0;transform:scale(.2);}
+    55%{opacity:.9;transform:scale(1.45);}
+    100%{opacity:.5;transform:scale(1);}}
+  .pitch-ball{transform:translate(466px,0);animation:drive 3s linear 1 both;}
+  @keyframes drive{
+    0%{transform:translate(328px,0);}      10%{transform:translate(355px,-6.2px);}
+    20%{transform:translate(379px,-9.2px);} 30%{transform:translate(400px,-10px);}
+    40%{transform:translate(418px,-9.2px);} 50%{transform:translate(433px,-7.5px);}
+    60%{transform:translate(445px,-5.4px);} 70%{transform:translate(454px,-3.3px);}
+    80%{transform:translate(461px,-1.5px);} 90%{transform:translate(465px,-0.4px);}
+    100%{transform:translate(466px,0);}}
   .fieldlabel{display:flex;justify-content:space-between;font-family:'Barlow Condensed';
-    font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-top:8px;}
+    font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-top:10px;}
   .fieldlabel span:first-child{color:var(--turf-glow);}
   .fieldlabel span:last-child{color:var(--brick-glow);}
-  @keyframes drive{0%{left:38%;} 55%{left:64%;} 70%{left:58%;} 100%{left:61%;}}
-  .field .ball{animation:drive 5s ease-in-out 1 both;}
+
+  /* ---------- watch-the-ledger capture: the off-ramp for everyone who wants
+       proof before payment. Their patience is reasonable, and the ledger is
+       the asset that answers it — so give them a way to wait WITH us. ------ */
+  .watch{display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:center;
+    margin-top:30px;padding:22px 24px;border:1px solid var(--gold-edge);
+    background:linear-gradient(120deg,rgba(242,194,48,.07),rgba(10,20,32,.4) 60%);}
+  .watch h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:27px;
+    text-transform:uppercase;line-height:1.05;
+    text-shadow:0 3px 0 rgba(0,0,0,.5), 0 6px 0 rgba(0,0,0,.2);}
+  .watch p{margin-top:9px;font-size:14.5px;line-height:1.6;color:var(--dusk2);}
+  .watchform{display:flex;flex-wrap:wrap;gap:10px;}
+  .watchform input{flex:1 1 190px;min-width:0;padding:14px 15px;font:inherit;font-size:16px;
+    color:var(--paper);background:rgba(10,20,32,.75);border:2px solid rgba(246,244,238,.35);}
+  .watchform input::placeholder{color:#7C8DA5;}
+  .watchform input:focus{outline:none;border-color:var(--flag);}
+  .watchform .btn{flex:0 0 auto;font-size:16px;padding:14px 22px;}
+  .watchnote{flex:1 0 100%;margin-top:2px;font-size:13px;color:var(--flag);min-height:1em;}
 
   /* ---------- receipts ticker ---------- */
   .ticker{position:relative;border-top:1px solid var(--gold-edge);border-bottom:1px solid var(--gold-edge);
@@ -171,7 +231,8 @@
     background:linear-gradient(90deg,rgba(242,194,48,.45),transparent);}
   h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(34px,5.8vw,66px);line-height:.95;text-transform:uppercase;margin-top:16px;
-    text-shadow:0 2px 0 rgba(0,0,0,.35), 0 16px 40px rgba(0,0,0,.5);}
+    text-shadow:0 3px 0 rgba(0,0,0,.5), 0 6px 0 rgba(0,0,0,.2),
+      0 18px 42px rgba(0,0,0,.55);}
   .lede{margin-top:16px;font-size:17px;line-height:1.7;color:var(--dusk2);max-width:660px;}
 
   /* ---------- floating paper (the signature) ---------- */
@@ -233,6 +294,8 @@
 
   /* ---------- section 2: calibration exhibit ---------- */
   .exhibit{max-width:740px;margin-top:44px;padding:18px 18px 16px;}
+  .exhibit-cap{font-family:'Barlow Condensed';font-weight:800;font-size:13px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--brick);margin-bottom:9px;}
   .caltable{width:100%;border-collapse:collapse;background:var(--card);
     border:2px solid var(--navy);font-variant-numeric:tabular-nums;}
   .caltable th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-size:13px;
@@ -286,7 +349,8 @@
   .plan .tag{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);}
   .plan.founder .tag{color:var(--turf);}
   .plan .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:64px;
-    line-height:1;margin-top:10px;font-variant-numeric:tabular-nums;}
+    line-height:1;margin-top:10px;font-variant-numeric:tabular-nums;
+    text-shadow:0 3px 0 rgba(16,30,51,.13);}
   .plan .price small{font-size:16px;color:var(--slate);font-family:'Barlow';font-weight:700;font-style:normal;}
   .plan ul{margin:16px 0 0 18px;font-size:13.5px;line-height:1.75;color:var(--ink2);}
   .plan .btn{margin-top:20px;font-size:16px;padding:13px 22px;}
@@ -323,8 +387,10 @@
 
   /* ---------- scroll reveal — hidden state only applies when JS is running,
        so the page is never blank for a no-script visitor ---------- */
-  html.js .reveal{opacity:0;transform:translateY(28px);
-    transition:opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1);
+  /* a hair of scale plus a gentle overshoot makes things ARRIVE rather than
+     just fade in — the difference between lively and mechanical */
+  html.js .reveal{opacity:0;transform:translateY(30px) scale(.975);
+    transition:opacity .55s ease, transform .62s cubic-bezier(.16,.9,.28,1.06);
     transition-delay:var(--d,0s);}
   html.js .reveal.in{opacity:1;transform:none;}
 
@@ -403,8 +469,149 @@
       <span class="chip"><b>Wins AND misses</b> published every Monday</span>
       <span class="chip">No password needed · <b>ever</b></span>
     </div>
-    <div class="fieldwrap">
-      <div class="field"><div class="endzone l"></div><div class="endzone r"></div><div class="ball"></div></div>
+    <div class="fieldwrap reveal">
+      <svg class="pitch" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg"
+           role="img" aria-label="A night stadium field under the lights: your territory on the left, your rival's on the right, and the ball driven deep into their half.">
+        <defs>
+          <linearGradient id="turfSide" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#1C7345"/><stop offset="1" stop-color="#0C3721"/>
+          </linearGradient>
+          <linearGradient id="brickSide" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#7C2C21" stop-opacity=".92"/><stop offset="1" stop-color="#3E170F"/>
+          </linearGradient>
+          <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#F6F4EE" stop-opacity=".16"/>
+            <stop offset=".4" stop-color="#F2C230" stop-opacity=".04"/>
+            <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
+          </linearGradient>
+          <!-- light has no edges: the cones get blurred into haze -->
+          <filter id="haze" x="-60%" y="-40%" width="220%" height="200%">
+            <feGaussianBlur stdDeviation="14"/>
+          </filter>
+          <radialGradient id="pool">
+            <stop offset="0" stop-color="#F6F4EE" stop-opacity=".20"/>
+            <stop offset="1" stop-color="#F6F4EE" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="ballglow">
+            <stop offset="0" stop-color="#F2C230" stop-opacity=".55"/>
+            <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="stands" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0A1420" stop-opacity="0"/>
+            <stop offset="1" stop-color="#16273E"/>
+          </linearGradient>
+          <clipPath id="turfClip"><polygon points="60,255 740,255 620,95 180,95"/></clipPath>
+        </defs>
+
+        <!-- far stands, hinted not drawn -->
+        <path d="M150 95 L650 95 L690 52 L110 52 Z" fill="url(#stands)"/>
+        <g fill="#F6F4EE" opacity=".16">
+          <rect x="176" y="70" width="3" height="3"/><rect x="214" y="64" width="3" height="3"/>
+          <rect x="262" y="74" width="3" height="3"/><rect x="309" y="61" width="3" height="3"/>
+          <rect x="357" y="72" width="3" height="3"/><rect x="404" y="63" width="3" height="3"/>
+          <rect x="451" y="73" width="3" height="3"/><rect x="498" y="66" width="3" height="3"/>
+          <rect x="546" y="71" width="3" height="3"/><rect x="593" y="62" width="3" height="3"/>
+        </g>
+
+        <!-- floodlight towers + beams -->
+        <g>
+          <g filter="url(#haze)">
+            <polygon points="98,36 110,36 206,228 58,228" fill="url(#beam)"/>
+            <polygon points="690,36 702,36 742,228 594,228" fill="url(#beam)"/>
+          </g>
+          <g stroke="#8FA3BC" stroke-width="2" opacity=".45">
+            <line x1="104" y1="36" x2="104" y2="76"/><line x1="696" y1="36" x2="696" y2="76"/>
+          </g>
+          <g fill="#F2C230">
+            <rect x="86" y="20" width="36" height="12" rx="2" opacity=".85"/>
+            <rect x="678" y="20" width="36" height="12" rx="2" opacity=".85"/>
+          </g>
+          <ellipse cx="104" cy="26" rx="40" ry="18" fill="url(#pool)"/>
+          <ellipse cx="696" cy="26" rx="40" ry="18" fill="url(#pool)"/>
+        </g>
+
+        <!-- the field: near edge wide, far edge narrow -> yard lines converge -->
+        <g class="turf" clip-path="url(#turfClip)">
+          <!-- ground you hold is the whole field; the rival's half is laid over
+               it and slides right as the ball advances, so territory visibly
+               changes hands. Extended past the sideline so sliding it can
+               never expose a gap; the field clip keeps it honest. -->
+          <polygon points="60,255 740,255 620,95 180,95" fill="url(#turfSide)"/>
+          <g class="pitch-adv">
+            <polygon points="474.8,255 1240,255 1240,95 448.4,95" fill="url(#brickSide)"/>
+          </g>
+          <polygon points="60,255 128,255 224,95 180,95" fill="#1C7345" opacity=".55"/>
+          <polygon points="672,255 740,255 620,95 576,95" fill="#7C2C21" opacity=".55"/>
+          <ellipse cx="215" cy="180" rx="150" ry="80" fill="url(#pool)"/>
+          <ellipse cx="590" cy="180" rx="150" ry="80" fill="url(#pool)"/>
+        </g>
+
+        <!-- yard lines, goal to goal, plus hash marks and numbers -->
+        <g>
+          <line class="ln goal" x1="128" y1="255" x2="224" y2="95"/>
+          <line class="ln" x1="182.4" y1="255" x2="259.2" y2="95"/>
+          <line class="ln" x1="236.8" y1="255" x2="294.4" y2="95"/>
+          <line class="ln" x1="291.2" y1="255" x2="329.6" y2="95"/>
+          <line class="ln" x1="345.6" y1="255" x2="364.8" y2="95"/>
+          <line class="ln fifty" x1="400" y1="255" x2="400" y2="95"/>
+          <line class="ln" x1="454.4" y1="255" x2="435.2" y2="95"/>
+          <line class="ln" x1="508.8" y1="255" x2="470.4" y2="95"/>
+          <line class="ln" x1="563.2" y1="255" x2="505.6" y2="95"/>
+          <line class="ln" x1="617.6" y1="255" x2="540.8" y2="95"/>
+          <line class="ln goal" x1="672" y1="255" x2="576" y2="95"/>
+          <g class="hash">
+            <line x1="176" y1="168" x2="188" y2="168"/><line x1="230" y1="168" x2="242" y2="168"/>
+            <line x1="284" y1="168" x2="296" y2="168"/><line x1="338" y1="168" x2="350" y2="168"/>
+            <line x1="394" y1="168" x2="406" y2="168"/><line x1="448" y1="168" x2="460" y2="168"/>
+            <line x1="502" y1="168" x2="514" y2="168"/><line x1="556" y1="168" x2="568" y2="168"/>
+            <line x1="610" y1="168" x2="622" y2="168"/>
+          </g>
+          <g class="num">
+            <text x="196.8" y="230">10</text><text x="247.6" y="230">20</text>
+            <text x="298.4" y="230">30</text><text x="349.2" y="230">40</text>
+            <text x="400" y="230">50</text><text x="450.8" y="230">40</text>
+            <text x="501.6" y="230">30</text><text x="552.4" y="230">20</text>
+            <text x="603.2" y="230">10</text>
+          </g>
+          <polygon points="60,255 740,255 620,95 180,95" fill="none"
+                   stroke="rgba(246,244,238,.42)" stroke-width="2"/>
+        </g>
+
+        <!-- where their half starts -->
+        <!-- the line of scrimmage travels with the ball -->
+        <g class="pitch-adv">
+          <line class="split" x1="474.8" y1="255" x2="448.4" y2="95"/>
+        </g>
+
+        <!-- the drive: trail, then the ball resting in their territory -->
+        <g transform="translate(0,200)">
+          <!-- dot positions sampled from the same quadratic the ball rides;
+               delays are when the ball arrives, so dots land behind it -->
+          <g>
+            <circle class="pitch-dot" cx="338.1" cy="-2.6" r="1.9" style="animation-delay:.107s"/>
+            <circle class="pitch-dot" cx="348.1" cy="-4.82" r="2" style="animation-delay:.218s"/>
+            <circle class="pitch-dot" cx="358" cy="-6.64" r="2.1" style="animation-delay:.334s"/>
+            <circle class="pitch-dot" cx="367.8" cy="-8.06" r="2.2" style="animation-delay:.454s"/>
+            <circle class="pitch-dot" cx="377.7" cy="-9.1" r="2.3" style="animation-delay:.581s"/>
+            <circle class="pitch-dot" cx="387.4" cy="-9.74" r="2.4" style="animation-delay:.715s"/>
+            <circle class="pitch-dot" cx="397.1" cy="-10" r="2.5" style="animation-delay:.858s"/>
+            <circle class="pitch-dot" cx="406.8" cy="-9.86" r="2.6" style="animation-delay:1.01s"/>
+            <circle class="pitch-dot" cx="416.3" cy="-9.32" r="2.7" style="animation-delay:1.175s"/>
+            <circle class="pitch-dot" cx="425.8" cy="-8.4" r="2.8" style="animation-delay:1.357s"/>
+            <circle class="pitch-dot" cx="435.4" cy="-7.08" r="2.9" style="animation-delay:1.561s"/>
+            <circle class="pitch-dot" cx="444.7" cy="-5.38" r="3" style="animation-delay:1.8s"/>
+            <circle class="pitch-dot" cx="454.1" cy="-3.28" r="3.1" style="animation-delay:2.1s"/>
+          </g>
+          <g class="pitch-ball">
+            <circle r="26" fill="url(#ballglow)"/>
+            <ellipse rx="15" ry="9.5" fill="#6B3A1F" stroke="#F2C230" stroke-width="2"/>
+            <line x1="-7.5" y1="0" x2="7.5" y2="0" stroke="#F6F4EE" stroke-width="1.6"/>
+            <line x1="-3.6" y1="-3.2" x2="-3.6" y2="3.2" stroke="#F6F4EE" stroke-width="1.2"/>
+            <line x1="0" y1="-3.8" x2="0" y2="3.8" stroke="#F6F4EE" stroke-width="1.2"/>
+            <line x1="3.6" y1="-3.2" x2="3.6" y2="3.2" stroke="#F6F4EE" stroke-width="1.2"/>
+          </g>
+        </g>
+      </svg>
       <div class="fieldlabel"><span>Your territory</span><span>Their territory</span></div>
     </div>
   </div>
@@ -415,22 +622,18 @@
   <div class="track">
     <ul class="reel">
       <li><b>2,056</b> calls graded before launch</li>
-      <li>stated <b>50–55%</b> → hit <b>57.4%</b></li>
-      <li>stated <b>55–60%</b> → hit <b>58.6%</b></li>
-      <li>stated <b>60–65%</b> → hit <b>63.6%</b></li>
-      <li>stated <b>65–70%</b> → hit <b>69.1%</b></li>
-      <li>stated <b>70–80%</b> → hit <b>78.3%</b></li>
+      <li>overall hit rate in backtest · <b>53.5%</b></li>
+      <li>win probability · <b>withheld</b> until it earns its calibration</li>
+      <li>no confidence printed unless <b>both players verified active</b></li>
       <li><b>318</b> points left on one bench · 2017</li>
       <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
       <li>wins <b>and</b> misses · graded every monday</li>
     </ul>
     <ul class="reel dup" aria-hidden="true">
       <li><b>2,056</b> calls graded before launch</li>
-      <li>stated <b>50–55%</b> → hit <b>57.4%</b></li>
-      <li>stated <b>55–60%</b> → hit <b>58.6%</b></li>
-      <li>stated <b>60–65%</b> → hit <b>63.6%</b></li>
-      <li>stated <b>65–70%</b> → hit <b>69.1%</b></li>
-      <li>stated <b>70–80%</b> → hit <b>78.3%</b></li>
+      <li>overall hit rate in backtest · <b>53.5%</b></li>
+      <li>win probability · <b>withheld</b> until it earns its calibration</li>
+      <li>no confidence printed unless <b>both players verified active</b></li>
       <li><b>318</b> points left on one bench · 2017</li>
       <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
       <li>wins <b>and</b> misses · graded every monday</li>
@@ -494,25 +697,47 @@
     <div class="eyebrow">Why trust the numbers</div>
     <h2>We graded ourselves before charging you a dollar.</h2>
     <p class="lede">Before launch, the engine re-played two full seasons of a real league and graded
-    every one of its own start/sit calls against the actual box scores — 2,056 of them. When it
-    says 62%, it should hit about 62%. Here's how that test came out, bucket by bucket:</p>
+    every one of its own start/sit calls against the actual box scores — 2,056 of them. Across all
+    of them it hit <b>53.5%</b>, and five of six confidence buckets came in wrong. The reason is the
+    most useful thing we learned: the engine couldn't see who was inactive. That single failure is
+    why the live report refuses to print a confidence number until it has verified both players are
+    active — and why win probability is still withheld entirely.</p>
     <div class="reveal">
       <div class="exhibit sheet tilt" style="--tilt:rotate(1.1deg)">
+        <div class="exhibit-cap">Diagnostic — is the math sound once availability is known?</div>
         <table class="caltable">
           <tr><th>When we said…</th><th>Calls</th><th>We hit</th><th>Verdict</th></tr>
-          <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">calibrated</td></tr>
-          <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">calibrated</td></tr>
-          <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">calibrated</td></tr>
-          <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">calibrated</td></tr>
-          <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">calibrated</td></tr>
+          <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">math sound</td></tr>
+          <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">math sound</td></tr>
+          <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">math sound</td></tr>
+          <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">math sound</td></tr>
+          <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">math sound</td></tr>
         </table>
       </div>
     </div>
-    <p class="honest">The fine print, because we publish it: these are the head-to-heads where both
-    players took the field (availability-verified — the regime the live report publishes in). The
-    full backtest, including the buckets that failed and what we gated because of them, is in the
-    open: numbers we can't defend render as "coming in v0.3", never as a guess.</p>
+    <p class="honest">Read that table honestly, because we do: it is a <b>hindsight filter</b>, keeping
+    only the head-to-heads where both players ended up scoring. It shows the probability math is
+    sound — it is <b>not</b> a measurement of the shipping product, whose known-active gate is
+    different and has no backtest yet, because weekly availability snapshots only begin this season.
+    The first real record of what you'll actually receive is the
+    <a href="ledger/index.html">public ledger</a>. The full backtest — the failing buckets, the 7.2%
+    calibration error, all of it — is <a href="backtest.html">published here</a>.</p>
     <span class="stamp">Graded on real box scores</span>
+
+    <div class="watch reveal">
+      <div>
+        <h3>Not ready to pay? Watch the record instead.</h3>
+        <p>Every Monday we publish that week's calls, graded — hits and misses — to the
+        public ledger. Get it by email, free, for as long as you like. Judge us on the
+        record, then decide. No card, and unsubscribe in one click.</p>
+      </div>
+      <form class="watchform" id="watch-form" novalidate>
+        <input type="email" id="watch-email" placeholder="you@example.com"
+               autocomplete="email" aria-label="Email for the free Monday ledger">
+        <button class="btn ghost" type="submit">Follow the ledger</button>
+        <p class="watchnote" id="watch-note" role="status"></p>
+      </form>
+    </div>
   </div>
 </section>
 
@@ -555,6 +780,8 @@
             <li>Rival Watch on your named nemesis all season</li>
             <li>Public receipts ledger — our record, your bragging rights</li>
             <li>No-questions refund through Week 2</li>
+            <li>Renews once a year at $29 unless you cancel — we email you first,
+            and you cancel yourself in one click</li>
           </ul>
           <a class="btn gold" href="join/index.html" data-checkout>Reserve a founding spot</a>
         </div>
@@ -583,6 +810,9 @@
           first issue on.</li>
           <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds no-questions through
           Week 2, and every call we send you is graded on the public ledger.</li>
+          <li><b>A year from now:</b> the pass renews at $29 unless you cancel. We email you
+          before it bills, cancelling is one click in your own Substack account, and we will
+          never make you ask us to stop charging you.</li>
         </ol>
       </div>
     </div>
@@ -628,6 +858,48 @@ document.documentElement.classList.add("js");
 // becomes real checkout and the monthly note becomes a subscribe link.
 // Substack/Stripe host the checkout; card data never touches this site.
 const SUBSTACK_URL = "";
+// Free Monday-ledger list. Point at a form backend to collect directly; with
+// only SUBSTACK_URL set, it hands off to Substack's own free-subscribe page.
+const LEDGER_LIST_ENDPOINT = "";
+// Where the FREE list lives. Must be a page that offers a no-card free option —
+// never the paid checkout URL, or the page would promise "free" and hand over a
+// $29 subscribe form. Empty means fall through to the mailto capture below.
+const LEDGER_FREE_URL = "";
+const CONTACT_EMAIL = "kevinxhli@gmail.com";
+
+const watchForm = document.getElementById("watch-form");
+if (watchForm) {
+  watchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const note = document.getElementById("watch-note");
+    const email = document.getElementById("watch-email").value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      note.textContent = "That email doesn't look right.";
+      return;
+    }
+    if (LEDGER_LIST_ENDPOINT) {
+      try {
+        const res = await fetch(LEDGER_LIST_ENDPOINT, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, list: "ledger-weekly" }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        note.textContent = "You're on the list — first ledger email lands Monday.";
+        return;
+      } catch (err) { /* fall through to the paths below */ }
+    }
+    if (LEDGER_FREE_URL) {
+      note.textContent = "Opening the free signup page…";
+      window.location.href = LEDGER_FREE_URL;
+      return;
+    }
+    note.textContent = "Opening a pre-filled email — send it and you're on the list.";
+    window.location.href = "mailto:" + CONTACT_EMAIL +
+      "?subject=" + encodeURIComponent("Follow the ledger") +
+      "&body=" + encodeURIComponent("Add me to the free Monday ledger email: " + email + "\n");
+  });
+}
+
 if (SUBSTACK_URL) {
   const founder = document.querySelector("[data-checkout]");
   if (founder) {

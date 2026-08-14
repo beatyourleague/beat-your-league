@@ -210,7 +210,37 @@ paper product delivers),
 copy never mentions the implementation (product summary: the AI is invisible to the buyer).
 Paid from day one (owner decision Aug 13 2026, recorded in PLAN §4): the picker takes
 founding-price reservations, not free signups; reports go only to paid subscribers once
-Substack checkout is live (set SUBSTACK_URL in site/index.html to activate it). Phase 3 built the availability feed
+Substack checkout is live (set SUBSTACK_URL in site/index.html AND site/join/index.html to
+activate it — one constant per page turns on real checkout).
+
+Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole flow:
+- **Live scouting demo** in `site/join/` — after picking a rival, the page computes one REAL
+  number about them in-browser (points left on their bench = Sleeper's own `ppts - fpts`,
+  plus record/FAAB), from the league record every member can already see. Verified against
+  cached data: 228.4 for sample roster 1. The season label must come from the league actually
+  read, never the page's SEASON default (a right number under the wrong year is fabrication).
+  Leagues with no games played get an honest empty state, never an invented one.
+- **"Watch the ledger" capture** on the landing page — the free off-ramp for buyers who
+  reasonably want proof first (the paid-from-day-one decision had removed every non-purchase
+  path, so intent leaked away with no way back). Wires to LEDGER_LIST_ENDPOINT, else Substack.
+- **Retention/refund policy is in PLAN §4 and is a hard boundary:** no dark patterns, no
+  cancellation friction, no designing for forgotten subscriptions. Non-refundable revenue comes
+  from the upfront season pass plus delivering value before the Week-2 window closes.
+  `tests/test_site.py` enforces the consumer-facing half of this (refund promise, cancellation
+  language, unsubscribe promise, price honesty, no betting language, no innerHTML on
+  stranger-supplied names) so the protections cannot be quietly removed later.
+- **The $29 pass auto-renews** (it is a Substack annual tier), so both decision points state
+  "renews once a year at $29 unless you cancel" and promise a pre-billing email. An undisclosed
+  annual renewal is the forget-to-cancel pattern wearing a suit — `test_pass_states_its_renewal_terms`
+  fails the build if the disclosure goes missing.
+- **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
+  headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
+  landing page links it and a test asserts the failures survive publication.
+- **The landing page must never present the availability-controlled table as accuracy.**
+  backtest.md itself says that table is "a diagnostic, not a result to publish"; the page now
+  labels it as a hindsight filter, leads with the unconditional 53.5%, and explains that the
+  shipping product's known-active gate has no backtest yet (snapshots start this season).
+  Adversarial review caught this being published as five "calibrated" buckets — do not undo it. Phase 3 built the availability feed
 (weekly injury snapshots + NFL schedule byes), `engine/week_report.py` (single JSON with every
 number gated on its own calibration evidence), and `render/report.py` (template-faithful HTML,
 all data escaped). Phase 4: `make week` / `python -m run.week` runs ingest→report→render→text

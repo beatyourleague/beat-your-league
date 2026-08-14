@@ -49,6 +49,22 @@
   }
   .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
     font-size:13.5px;color:#7A2C1F;display:none;}
+  .scout{background:var(--card);border:2px solid var(--navy);padding:16px 18px;margin-top:6px;}
+  .scout .lead{font-family:'Barlow Condensed';font-weight:800;font-size:21px;
+    text-transform:uppercase;line-height:1.12;}
+  .scout .big{font-family:'Barlow Condensed';font-weight:800;font-size:46px;color:var(--brick);
+    line-height:1;margin:10px 0 0;font-variant-numeric:tabular-nums;}
+  .scout .big small{display:block;font-family:'Barlow';font-size:13px;font-weight:700;
+    color:var(--slate);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
+  .scout ul{margin:12px 0 0 18px;font-size:14px;line-height:1.65;color:var(--ink2);}
+  .scout .cite{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);
+    font-size:12px;color:var(--slate);line-height:1.55;}
+  .scout .kicker{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:600;}
+  .checkout{display:inline-block;margin-top:14px;background:var(--turf);color:#fff;
+    text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+    letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;
+    transition:transform .15s ease;}
+  .checkout:hover{transform:translateY(-2px);}
   .beta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
   .beta-chips span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
     border:1px solid rgba(246,244,238,.35);color:#F2C230;padding:4px 9px;border-radius:2px;}
@@ -100,24 +116,35 @@
     <div class="err" id="err-rival"></div>
   </section>
 
+  <section id="step-scout" class="hidden">
+    <div class="eyebrow">Your rival, already scouted</div>
+    <div class="scout" id="scout-body"></div>
+  </section>
+
   <section id="step-email" class="hidden">
     <div class="eyebrow">4 · Where do reports go?</div>
     <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
     <button id="submit">Reserve my spot</button>
     <div class="err" id="err-email"></div>
     <div class="done" id="done">
-      <b>Your founding spot is reserved.</b>
+      <b id="done-head">Your founding spot is reserved.</b>
       <ol>
         <li id="send-step">One last tap: <b>send the pre-filled email that just opened</b> —
         it carries your league and rival picks, nothing else. No email appeared? Write to
         us with the word "reserve" and your Sleeper username.</li>
-        <li>Checkout opens through Substack before Week 1 — the link comes to this address,
-        and your reservation holds the <b>$29 founding price</b>. Card details never touch
-        our systems.</li>
-        <li>Once you're paid, your first Rival Report — targeting
-        <b><span id="success-rival"></span></b> — lands <b>Tuesday, Sep 8</b>. Refunds
-        no-questions through Week 2; every call we send you is graded on the public ledger.</li>
+        <li id="pay-now" style="display:none">Finish checkout below and you're locked in at
+        the <b>$29 founding price</b>. Substack handles the payment — card details never
+        touch our systems.</li>
+        <li id="pay-later">Checkout opens through Substack before Week 1 — the link comes to
+        this address, and once that email is in, your reservation holds the
+        <b>$29 founding price</b>. Card details never touch our systems.</li>
+        <li>The season pass is <b>$29 today and renews once a year at $29 unless you
+        cancel</b> — we email you before any renewal, and you can cancel yourself any time
+        from your own Substack account. We never hold anyone in.</li>
+        <li>Your first Rival Report — targeting <b><span id="success-rival"></span></b> —
+        lands <b>Tuesday, Sep 8</b>. Refunds are no-questions through Week 2.</li>
       </ol>
+      <a class="checkout hidden" id="checkout" href="#">Complete checkout — $29</a>
     </div>
   </section>
 
@@ -132,12 +159,17 @@
 // Set this to a form backend endpoint (Tally/Formspree/etc.) to submit
 // directly; while empty, signup falls back to a prefilled email draft.
 const FORM_ENDPOINT = "";
+// Set this the day the Substack publication exists. It turns the confirmation
+// panel's primary action into real checkout, so someone who just picked their
+// rival can pay in the same breath instead of waiting for an email.
+const SUBSTACK_URL = "";
 const CONTACT_EMAIL = "kevinxhli@gmail.com";
 const SEASON = "2026";
 const API = "https://api.sleeper.app/v1";
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
-const state = { user: null, league: null, myRosterId: null, rival: null };
+const state = { user: null, league: null, myRosterId: null, rival: null,
+                rosters: null, leagueRaw: null };
 
 const $ = (id) => document.getElementById(id);
 function showError(id, message) { const el = $(id); el.textContent = message; el.style.display = "block"; }
@@ -156,6 +188,8 @@ function resetFromRival() {
   state.rival = null;
   $("rival-cards").replaceChildren();
   $("step-rival").classList.add("hidden");
+  $("step-scout").classList.add("hidden");
+  $("scout-body").replaceChildren();
   $("step-email").classList.add("hidden");
   $("done").style.display = "none";
   clearError("err-rival");
@@ -163,7 +197,8 @@ function resetFromRival() {
 }
 
 async function getJSON(path) {
-  const res = await fetch(API + path);
+  // A hung request must become a rejection, not a permanent spinner.
+  const res = await fetch(API + path, { signal: AbortSignal.timeout(8000) });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error("Sleeper API error " + res.status);
   return res.json();
@@ -238,6 +273,8 @@ async function pickLeague(league) {
     }
     state.league = { league_id: leagueId, name: String(league.name || "") };
     state.myRosterId = mine.roster_id;
+    state.rosters = rosters || [];
+    state.leagueRaw = league;
     const cards = $("rival-cards");
     cards.replaceChildren();
     for (const roster of rosters) {
@@ -253,8 +290,7 @@ async function pickLeague(league) {
           label: String(teamName),
         };
         clearError("err-rival");
-        $("step-email").classList.remove("hidden");
-        $("step-email").scrollIntoView({ behavior: "smooth" });
+        scoutRival();
       }));
     }
     $("step-rival").classList.remove("hidden");
@@ -262,6 +298,124 @@ async function pickLeague(league) {
   } catch (err) {
     showError("err-league", "Couldn't load that league — try again.");
   }
+}
+
+// One real number about THEIR rival, computed live from the public league
+// record, at the moment curiosity peaks. Everything shown here is Sleeper's
+// own season accounting — nothing is modelled, projected, or invented, and
+// every figure names the season it came from.
+let scoutGen = 0;   // rapid re-picks: only the newest run may draw
+
+async function scoutRival() {
+  // Snapshot the selection: everything below must describe the rival that was
+  // tapped, even if a newer tap lands mid-fetch.
+  const gen = ++scoutGen;
+  const rival = state.rival;
+  const leagueRaw = state.leagueRaw;
+  const rosters = state.rosters;
+
+  const body = $("scout-body");
+  body.replaceChildren();
+  $("step-scout").classList.remove("hidden");
+  $("step-scout").scrollIntoView({ behavior: "smooth" });
+
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;   // never innerHTML
+    return n;
+  };
+
+  // The scout is a bonus, not a gate: signing up stays reachable the moment a
+  // rival is picked, and the box says what it is doing while it reads.
+  $("step-email").classList.remove("hidden");
+  body.appendChild(el("p", "kicker",
+    "Reading " + rival.label + "'s record from your league's public history…"));
+
+  let roster = (rosters || []).find(r => r.roster_id === rival.roster_id);
+  let s = roster && roster.settings ? roster.settings : null;
+  // The season label MUST come from the league we actually read, never from the
+  // page's default — mislabelling which year a number is from is fabrication,
+  // even when the number itself is right.
+  let season = String((leagueRaw && leagueRaw.season) || SEASON);
+  const games = (x) => ((x && x.wins) || 0) + ((x && x.losses) || 0) + ((x && x.ties) || 0);
+  let unread = false;   // we tried to read prior seasons and came back empty-handed
+
+  // Preseason: this year's record is empty, so scout them from the season
+  // that actually happened, matched by OWNER (roster ids move between years).
+  if (games(s) === 0 && leagueRaw && leagueRaw.previous_league_id) {
+    if (!rival.owner_id) {
+      unread = true;                        // orphan team: nothing to match on
+    } else {
+      try {
+        const prevId = String(leagueRaw.previous_league_id);
+        const [prevLeague, prevRosters] = await Promise.all([
+          getJSON("/league/" + prevId),
+          getJSON("/league/" + prevId + "/rosters"),
+        ]);
+        const oid = rival.owner_id;
+        const prev = (prevRosters || []).find(r =>
+          String(r.owner_id) === oid || (r.co_owners || []).map(String).includes(oid));
+        if (prev && games(prev.settings) > 0) {
+          s = prev.settings;
+          season = (prevLeague && prevLeague.season) ? String(prevLeague.season) : "last season";
+        } else {
+          unread = true;                    // no record for this manager back there
+        }
+      } catch (err) { unread = true; }      // Sleeper down: unknown, NOT absent
+    }
+  }
+
+  if (gen !== scoutGen) return;             // a newer pick won this race
+  body.replaceChildren();
+  body.appendChild(el("div", "lead", rival.label + " — from your league's own record"));
+
+  if (games(s) === 0) {
+    body.appendChild(el("p", "kicker", unread
+      ? "We couldn't read this league's earlier seasons for " + rival.label + " just now — " +
+        "either Sleeper didn't answer or this manager has no record in them. That's a gap in " +
+        "what we could read, not a claim that nothing happened, and we won't dress a failed " +
+        "lookup up as a fact. Their file opens in Week 1 either way."
+      : "This league has no games on the record yet, so there is honestly nothing to " +
+        "scout — and we would rather show you nothing than invent something. Their file " +
+        "opens in Week 1: every start they get wrong, every point left on their bench, " +
+        "sourced from the same league record you can already see."));
+    return;
+  }
+
+  const fpts = (s.fpts || 0) + (s.fpts_decimal || 0) / 100;
+  const ppts = (s.ppts || 0) + (s.ppts_decimal || 0) / 100;
+  const bench = ppts - fpts;
+
+  if (ppts > 0 && bench > 0) {
+    const big = el("div", "big", bench.toFixed(1));
+    big.appendChild(el("small", null, "points they left on their bench in " + season));
+    body.appendChild(big);
+  }
+
+  const facts = el("ul");
+  const record = (s.wins || 0) + "-" + (s.losses || 0) + (s.ties ? "-" + s.ties : "");
+  facts.appendChild(el("li", null, "Record in " + season + ": " + record));
+  if (ppts > 0) {
+    facts.appendChild(el("li", null,
+      "Scored " + fpts.toFixed(1) + " of a possible " + ppts.toFixed(1) + " points"));
+  }
+  if (s.waiver_budget_used) {
+    facts.appendChild(el("li", null, "FAAB spent chasing waivers: " + s.waiver_budget_used));
+  }
+  if (s.total_moves) {
+    facts.appendChild(el("li", null, "Roster moves made: " + s.total_moves));
+  }
+  body.appendChild(facts);
+
+  body.appendChild(el("p", "cite",
+    "Season totals straight from your league's record on Sleeper — their roster's " +
+    "potential points minus what they actually started. We did not model or estimate " +
+    "any of it, and we only ever read what every member of your league can already see."));
+  body.appendChild(el("p", "kicker",
+    "That took three seconds. The Tuesday report does this every week, live: which of " +
+    "their starters may not play, where their own bench beats their lineup, and the one " +
+    "call you would have regretted."));
 }
 
 $("submit").addEventListener("click", async () => {
@@ -289,6 +443,20 @@ $("submit").addEventListener("click", async () => {
   function showSuccess(needsEmailSend) {
     $("success-rival").textContent = state.rival.label;
     $("send-step").style.display = needsEmailSend ? "list-item" : "none";
+    // Only claim the spot is held when something actually recorded it. On the
+    // mailto path nothing exists until they hit send, so say exactly that.
+    $("done-head").textContent = needsEmailSend
+      ? "One step left — your spot is held once you send this."
+      : "Your founding spot is reserved.";
+    // With checkout live, paying is the next tap — not a link mailed out days
+    // later, by which time the reason they came is gone.
+    if (SUBSTACK_URL) {
+      const checkout = $("checkout");
+      checkout.href = SUBSTACK_URL;
+      checkout.classList.remove("hidden");
+      $("pay-now").style.display = "list-item";
+      $("pay-later").style.display = "none";
+    }
     const done = $("done");
     done.style.display = "block";
     done.scrollIntoView({ behavior: "smooth", block: "center" });
