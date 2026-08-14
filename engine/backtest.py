@@ -466,6 +466,14 @@ def _managers(seasons: Sequence[Season], calls_by_season: dict[str, list[StartSi
         profiles = profile_season(season)
         if not profiles:
             continue
+        # This document is published on the public site. The managers in it are
+        # real people who never signed up to have their habits profiled next to
+        # a sales page, so they are aliased here at the source — one stable
+        # letter per roster, so a reader can still follow the same manager
+        # across both tables. Naming a rival is legitimate ONLY in the private
+        # weekly report, which goes solely to the person entitled to see it.
+        alias = {p.roster_id: f"Manager {chr(65 + i)}"
+                 for i, p in enumerate(rank_by_aggression(list(profiles.values())))}
         weeks = sorted(season.transactions)
         span = f"weeks {min(weeks)}-{max(weeks)}" if weeks else "no transaction weeks"
         lines += [
@@ -488,7 +496,7 @@ def _managers(seasons: Sequence[Season], calls_by_season: dict[str, list[StartSi
                 budget += " ⚠"
             lines.append(
                 f"| {profile.aggression_rank}/{profile.league_size} "
-                f"| {profile.team_label} | {profile.aggression_label()} | "
+                f"| {alias[profile.roster_id]} | {profile.aggression_label()} | "
                 f"{budget} | "
                 f"{profile.waiver_bids_won}/{profile.waiver_bids_placed} | "
                 f"{profile.max_bid if profile.max_bid is not None else 'n/a'} | "
@@ -535,7 +543,8 @@ def _managers(seasons: Sequence[Season], calls_by_season: dict[str, list[StartSi
             ]
             for record in lineup_records(season, season_calls):
                 lines.append(
-                    f"| {record.team_label} | {record.calls} | {record.manager_correct} "
+                    f"| {alias.get(record.roster_id, 'Manager ?')} | {record.calls} "
+                    f"| {record.manager_correct} "
                     f"| {_pct(record.accuracy)} | {record.points_left_on_bench:.1f} |"
                 )
     return lines

@@ -237,7 +237,7 @@ def test_confidence_prints_when_active_and_gates_when_unknown() -> None:
     picks_unknown, *_ = _build(_availability(None))
     qb_unknown = next(p for p in picks_unknown if p.slot == "QB")
     assert qb_unknown.confidence is None
-    assert "no availability snapshot" in (qb_unknown.confidence_gate or "")
+    assert "couldn't confirm who was active" in (qb_unknown.confidence_gate or "")
 
 
 def test_thin_evidence_gates_before_availability() -> None:
@@ -261,7 +261,7 @@ def test_win_probability_calibration_gate_is_default() -> None:
     my_picks = optimal_lineup(season, mine, model, players, known)
     rival_picks = rival_lineup(season, rival, model, players, known)
     prob, gate = win_probability(my_picks, rival_picks)
-    assert prob is None and "not yet calibrated" in (gate or "")
+    assert prob is None and "not putting a win percentage" in (gate or "")
 
 
 def test_win_probability_gates_on_any_non_active_starter(
@@ -388,7 +388,7 @@ def test_hype_meter_counts_only_real_chases() -> None:
     assert hype and hype[0]["player_id"] == "wr2"
     assert hype[0]["managers_chasing"] == 2
     assert hype[0]["top_bid"] == 21
-    assert "v0.3" in hype[0]["verdict_gate"]  # verdict is a gap, not a guess
+    assert "not calling this one" in hype[0]["verdict_gate"]  # a gap, not a guess
     assert all(e["player_id"] != "rk1" for e in hype)  # one quiet add isn't FOMO
 
 
@@ -580,10 +580,10 @@ def test_render_gates_and_disclaimer(tmp_path: Path) -> None:
     raw = _write_cache(tmp_path, season)
     report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
     html_out = render(report, _template())
-    assert "coming in v0.3" in html_out          # gates visible, not hidden
+    assert "Not calling it" in html_out          # gates visible, not hidden
     assert "not guarantees" in html_out          # disclaimer footer present
     assert "Mike's Marauders" not in html_out    # no sample-data leakage
-    assert "LLM tokens: 0" in html_out
+    assert "Not affiliated with Sleeper" in html_out
     assert html_out.count('<div class="lrow head">') == 2  # both lineup grids
 
 
@@ -603,11 +603,11 @@ def test_render_shows_numbers_when_available(tmp_path: Path) -> None:
     assert any(s["confidence"] is not None for s in report["lineup"])
     # ...but the matchup win probability stays calibration-gated for now.
     assert report["matchup"]["win_probability"] is None
-    assert "not yet calibrated" in report["matchup"]["win_probability_gate"]
+    assert "not putting a win percentage" in report["matchup"]["win_probability_gate"]
     html_out = render(report, _template())
     # Ranges render on their own evidence, independent of the prob gate.
     assert "realistic range" in html_out
-    assert "80% projection band" in html_out
+    assert "realistic high and low" in html_out.lower()
 
 
 def test_render_ball_position_tracks_probability(tmp_path: Path) -> None:

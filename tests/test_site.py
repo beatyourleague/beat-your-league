@@ -45,6 +45,15 @@ def test_refund_promise_is_stated_where_money_is_asked_for() -> None:
     assert re.search(r"no-questions", LANDING, re.I)
 
 
+def test_refund_limit_is_disclosed_before_purchase_not_after() -> None:
+    """The one-per-person limit closes the refund-cycling loop only if the buyer
+    is told up front — otherwise it's a trap sprung at claim time."""
+    for page, name in ((LANDING_PROSE, "landing"), (JOIN_PROSE, "join")):
+        assert re.search(r"one per person", page, re.I), \
+            f"{name} page states no refund limit, so the stated limit is unenforceable"
+        assert re.search(r"final", page, re.I)
+
+
 def test_cancellation_is_promised_and_never_obstructed() -> None:
     """Subscribers must be told they can leave, in plain words."""
     assert re.search(r"cancel yourself any time|cancel any time", JOIN, re.I), \
@@ -211,6 +220,110 @@ def test_ledger_page_promises_misses_are_published() -> None:
 
 def test_landing_links_to_the_public_ledger() -> None:
     assert 'href="ledger/index.html"' in LANDING
+
+
+# --------------------------------------------------------------------- #
+# the buyer never reads our internal vocabulary
+# --------------------------------------------------------------------- #
+
+SAMPLE_REPORT = (SITE / "sample-report.html").read_text(encoding="utf-8")
+
+# Words that mean something to the person BUILDING this and nothing (or something
+# alarming) to the person paying for it. "v0.3" in particular reads as "I bought
+# unfinished software" when the truth is the opposite — we withhold what we can't
+# defend. The backtest page is exempt: it is deliberately the technical document.
+_DEV_SPEAK = [
+    r"v0\.\d",                # version numbers
+    r"week_report\.json",     # our filenames
+    r"reports/backtest\.md",
+    r"\bLLM\b", r"\btokens?\b(?!\s*of)",   # model/cost telemetry
+    r"\bpipeline\b", r"\bschema\b", r"\bJSON\b",
+    r"availability snapshot", r"calibration policy",
+    r"deterministic", r"ingested",
+]
+
+
+@pytest.mark.parametrize("name", ["sample report", "landing", "join"])
+def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
+    page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN}[name]
+    text = prose(markup_only(page))
+    for pattern in _DEV_SPEAK:
+        assert not re.search(pattern, text, re.I), \
+            f"developer vocabulary {pattern!r} reached the {name}"
+
+
+def test_no_real_league_member_is_named_on_any_public_page() -> None:
+    """Public pages profile people's habits. Those people never signed up to
+    appear next to a sales page, so every public surface uses neutral labels."""
+    import json
+    raw = Path(__file__).resolve().parent.parent / "data" / "raw" / "league"
+    names: set[str] = set()
+    for users_file in raw.glob("*/users.json"):
+        for user in json.loads(users_file.read_text(encoding="utf-8")):
+            if user.get("display_name"):
+                names.add(user["display_name"])
+            team = (user.get("metadata") or {}).get("team_name")
+            if team:
+                names.add(team)
+    if not names:
+        pytest.skip("no cached league data to build the forbidden-name set")
+    public = {
+        "landing": LANDING, "join": JOIN, "ledger": LEDGER,
+        "sample report": SAMPLE_REPORT,
+        "backtest": (SITE / "backtest.html").read_text(encoding="utf-8"),
+        "legal": (SITE / "legal.html").read_text(encoding="utf-8"),
+    }
+    for page_name, page in public.items():
+        for person in names:
+            assert person not in page, f"{person!r} is named on the public {page_name} page"
+
+
+def test_no_personal_contact_details_are_published() -> None:
+    """The owner's personal address must never appear on a public page. Ship a
+    product inbox instead — this guards against it creeping back in."""
+    personal = re.compile(r"[A-Za-z0-9._%+-]+@(gmail|googlemail|yahoo|hotmail|outlook|"
+                          r"icloud|proton(mail)?|me|aol)\.[A-Za-z.]{2,}", re.I)
+    for page_path in sorted(SITE.rglob("*.html")):
+        text = page_path.read_text(encoding="utf-8")
+        found = personal.findall(text)
+        assert not personal.search(text), \
+            f"personal email address published in {page_path.relative_to(SITE)}"
+    # Placeholder addresses must not look real either — a fake-but-plausible
+    # address silently swallows refund and deletion requests.
+    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    assert re.search(r"added before launch", legal, re.I), \
+        "legal page must flag the missing contact address, not invent one"
+
+
+def test_signup_degrades_honestly_without_a_contact_route() -> None:
+    """With no form backend and no inbox, the form must say signups aren't open
+    rather than opening an empty mailto: that looks like it worked."""
+    assert re.search(r"Signups aren't open just yet", JOIN_PROSE, re.I)
+    assert re.search(r"if \(!CONTACT_EMAIL\)", JOIN)
+    assert re.search(r"if \(!CONTACT_EMAIL\)", LANDING)
+
+
+def test_legal_page_covers_the_promises_money_depends_on() -> None:
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    for required in (r"renews once a year", r"cancel yourself at any time",
+                     r"one refund per person", r"18 or older",
+                     r"never see or store your card", r"not affiliated"):
+        assert re.search(required, legal, re.I), f"legal page is missing: {required}"
+    for page, name in ((LANDING, "landing"), (JOIN, "join")):
+        assert re.search(r'href="\.\./legal\.html"|href="legal\.html"', page), \
+            f"{name} page does not link the terms"
+
+
+def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
+    """A gated slot must say we chose not to call it — never a version number."""
+    assert "no call" in SAMPLE_REPORT.lower()
+    assert re.search(r"not calling it", SAMPLE_REPORT, re.I)
+
+
+def test_sample_report_explains_what_to_do_with_it() -> None:
+    """The buyer's decisive question is 'what do I actually do on Tuesday?'"""
+    assert re.search(r"30-second game plan", SAMPLE_REPORT, re.I)
+    assert re.search(r"set (the|your) lineup", SAMPLE_REPORT, re.I)
 
 
 # --------------------------------------------------------------------- #

@@ -87,6 +87,13 @@ Implementation: Substack monthly + annual tiers (annual = season pass). One-offs
 4. Off-season — **Season 2 earlybird renewal** (Feb, higher price justified by the public ledger) +
    **NBA fantasy module** (Oct) to bridge revenue between football seasons.
 
+**Launch blockers before the site goes public** (each is a one-line edit once the account exists):
+a project contact inbox (never a personal address) into `CONTACT_EMAIL` on both funnel pages and
+into `legal.html`; the Substack URL into `SUBSTACK_URL`; a form backend into `FORM_ENDPOINT` and
+`LEDGER_LIST_ENDPOINT`; and the free-list page into `LEDGER_FREE_URL`. Until the inbox exists the
+signup forms honestly say signups aren't open — which is correct, but it also means zero
+conversions, so this is the first thing to fix.
+
 ### Retention & refund policy (owner decision, Aug 14 2026)
 
 Goal: recurring revenue that sticks, with as little refunded as possible. The structure below
@@ -96,6 +103,22 @@ and its entire moat is a public ledger that says *we publish our misses*. A "can
 screenshot kills both. Cancellation also lives inside Substack, so obstructing it is not even
 technically available to us; ROSCA and state auto-renewal laws require clear terms and easy exit;
 and chargebacks cost more than a retained month while endangering the payment account.
+
+**Closing the refund-cycling loop (decided Aug 14 2026).** The exposure: buy the pass, take two
+weeks of reports, refund inside the no-questions window, re-subscribe later, refund again — a free
+season. The honest close is a policy stated *before* purchase, not friction added after it:
+
+> **One no-questions refund per person.** The window runs through Week 2 of your first season
+> pass. Re-subscribe after a refund and that purchase is final — you keep every report either way.
+
+Why this is the right shape: it is disclosed pre-purchase (so it is a term, not a trap), it costs
+an honest customer nothing, and it removes the only version of the loop worth running. Note the
+operator eats the payment-processing fee on every refund — roughly $1–1.50 a cycle — so even
+without abuse, refunds are never free; that is a reason to prevent the *causes* of refunds, not to
+obstruct the refunds themselves. Enforcement is manual and trivial at this scale: Substack refunds
+are issued by the operator, who can see prior refunds against the same email before granting one.
+Do not attempt device/IP fingerprinting or any other tracking to detect repeat refunders — it is
+disproportionate, hostile, and would collect exactly the data this project promises never to hold.
 
 **Where the non-refundable money legitimately comes from:**
 1. **Season pass, paid upfront.** $29 lands on day one. The no-questions window closes at

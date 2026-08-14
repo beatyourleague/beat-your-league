@@ -29,7 +29,13 @@ from typing import Any, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
-V03 = "coming in v0.3"
+# What a withheld number says to a BUYER. Version numbers, file paths and cost
+# telemetry are operator vocabulary and never appear in a report someone paid
+# for — a customer reading "v0.3" reasonably concludes they bought unfinished
+# software, when the truth is the opposite: we refuse to print what we can't
+# stand behind.
+NO_CALL = "no call"          # in a tight column
+NOT_CALLING_IT = "Not calling it"   # as a label above the reason
 
 
 def esc(value: Any) -> str:
@@ -51,7 +57,7 @@ def extract_design(template_html: str) -> tuple[str, str]:
 
 def gate_note(reason: str) -> str:
     """The one honest way a missing number renders (principle 3)."""
-    return (f'<div class="benchnote"><b>{esc(V03)}:</b> {esc(reason)}</div>')
+    return (f'<div class="benchnote"><b>{esc(NOT_CALLING_IT)}:</b> {esc(reason)}</div>')
 
 
 # --------------------------------------------------------------------- #
@@ -76,10 +82,14 @@ def header(meta: Mapping[str, Any]) -> str:
     if meta.get("historical_demo"):
         banner = (
             '<div class="regret-note" style="margin:0;border-left:none;">'
-            f'HISTORICAL DEMONSTRATION — real data from the {esc(meta["season"])} season of '
-            f'{esc(meta["league_name"])}, rendered as the report would have looked before '
-            f'week {esc(meta["week"])}. Availability snapshots did not exist then, so '
-            'probability numbers are gated per our calibration policy.</div>'
+            f'SAMPLE REPORT — real data from the {esc(meta["season"])} season of '
+            f'{esc(meta["league_name"])}, built to show exactly what lands in your inbox '
+            f'on a Tuesday. Because it\'s a past season we can\'t check who was hurt or '
+            f'inactive back then, so the confidence numbers are left off — in a live week '
+            f'you get them.'
+            + (' Team and manager names here are placeholders; every number is that '
+               'league\'s real record.' if meta.get("anonymized_demo") else "")
+            + '</div>'
         )
     return (
         f'<header class="bug"><div class="brand">Beat Your League</div>'
@@ -114,7 +124,7 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     board = (
         f'<div class="board">'
         f'<div class="team you"><div class="name">{esc(you["label"])}</div>'
-        f'<div class="sub">Engine-optimal lineup</div>'
+        f'<div class="sub">Your best lineup this week</div>'
         f'<div class="pts">{you["projected_total"]:.1f} <small>PROJ</small></div></div>'
         f'<div class="vs">VS</div>'
         f'<div class="team rival"><div class="name">{esc(rival["label"])}</div>'
@@ -162,9 +172,7 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
                   f'{esc(basis)}</div>' if basis else "")
     ranges = f'<div class="ranges">{band(you, "you")}{band(rival, "rival")}</div>{basis_html}'
 
-    market = (f'<p class="mkt"><b>Market check:</b> {esc(V03)} — '
-              f'{esc(matchup.get("market_context_gate", ""))}</p>')
-    return _section("The Matchup", 2, board + field + ranges + market)
+    return _section("The Matchup", 2, board + field + ranges)
 
 
 def _lineup_row(slot: Mapping[str, Any]) -> str:
@@ -182,7 +190,7 @@ def _lineup_row(slot: Mapping[str, Any]) -> str:
                      f'<i style="width:{_pct(confidence)}%"></i></span>'
                      f'<span class="clab">{_pct(confidence)} · vs {esc(slot.get("alternative_name") or "bench")}</span></span>')
     else:
-        conf_cell = f'<span class="cwrap"><span class="clab">{esc(V03)}</span></span>'
+        conf_cell = f'<span class="cwrap"><span class="clab">{esc(NO_CALL)}</span></span>'
     return (
         f'<div class="lrow{flip}"><span class="slot">{esc(slot["slot"])}</span>'
         f'<span class="pl"><span class="pname">{esc(name)}</span>'
@@ -255,10 +263,11 @@ def section_lineup(report: Mapping[str, Any]) -> str:
     note = ""
     if gates:
         listed = " · ".join(sorted(gates))
-        note = (f'<div class="benchnote"><b>Why some slots show no confidence:</b> '
-                f'{esc(listed)}. Confidence = probability the start outscores the best '
-                f'bench alternative at that slot; it prints only when availability is '
-                f'known for both players (calibration policy).</div>')
+        note = (f'<div class="benchnote"><b>Why some slots say "no call":</b> '
+                f'{esc(listed)}. When we do put a number on a slot, it means: the odds '
+                f'this guy outscores the best option on your bench. We only show it once '
+                f'we\'ve confirmed both players are active — otherwise we\'d be guessing, '
+                f'and you can guess for free.</div>')
     matchup = report["matchup"]
     grid = _lineup_grid(slots, matchup["you"]["projected_total"],
                         f'vs {matchup["rival"]["projected_total"]:.1f}',
@@ -340,7 +349,7 @@ def section_hype(entries: list[Mapping[str, Any]]) -> str:
             cards.append(
                 f'<div class="hcard"><div class="top">'
                 f'<span class="player">{esc(entry["player_name"])} · {esc(entry["position"])}</span>'
-                f'<span class="badge mirage">{esc(V03)}</span></div>'
+                f'<span class="badge mirage">Usage unknown</span></div>'
                 f'<div class="gauge g2"><i style="width:{fomo}%"></i></div>'
                 f'<div class="gauge-label"><span>League-wide FOMO</span>'
                 f'<span>{esc(entry["managers_chasing"])} managers chasing</span></div>'
@@ -376,20 +385,21 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
 
 def footer(meta: Mapping[str, Any]) -> str:
     availability = meta.get("availability_as_of")
-    basis = (f"Availability data as of {availability}." if availability
-             else "No availability snapshot for this week — probability numbers gated.")
-    demo = ("Historical demonstration on real cached league data. "
+    basis = (f"Injury and inactive data as of {availability}." if availability
+             else "We couldn't confirm injuries or inactives for this week, so "
+                  "some calls are left unmade rather than guessed.")
+    demo = ("Sample report built from a real past season, to show what you get. "
             if meta.get("historical_demo") else "")
-    gaps = meta.get("gaps") or []
-    gap_line = (f" Known gaps this run: {len(gaps)} (listed in week_report.json)."
-                if gaps else "")
+    # The gap COUNT is operator bookkeeping; a buyer only needs to know that
+    # anything unproven was withheld, which the report already says in place.
+    gap_line = ""
     return (
         f'<footer><b>Beat Your League</b> — the weekly edge report built around your '
         f'rival, not just your roster.<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'Projections are analysis, not guarantees — no betting picks, no staking '
         f'advice. Fantasy decisions are yours to make (that\'s the fun part).<br>'
-        f'Generated deterministically from cached league data · LLM tokens: '
-        f'{esc(meta.get("llm_tokens", 0))}</footer>'
+        f'Built from your league\'s own record on Sleeper. Not affiliated with '
+        f'Sleeper or the NFL.</footer>'
     )
 
 
@@ -404,6 +414,45 @@ def _section(title: str, n: int, body: str) -> str:
 # --------------------------------------------------------------------- #
 # page assembly
 # --------------------------------------------------------------------- #
+
+def anonymize_for_public(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Swap real league identities for neutral labels, for the PUBLIC demo only.
+
+    A live subscriber report names the rival on purpose — it goes to the one
+    person entitled to see it. The demo on the marketing site is a different
+    thing: it would put a real stranger's name, habits and weak spots on a
+    sales page they never agreed to appear on. Numbers are untouched; only the
+    labels change, and the banner says so.
+    """
+    import copy
+    out = copy.deepcopy(dict(report))
+    meta = out["meta"]
+    swaps = {
+        str(meta.get("my_label") or ""): "Your Team",
+        str(meta.get("rival_label") or ""): "Rival Manager",
+        str(meta.get("named_rival_label") or ""): "Your Named Rival",
+    }
+    swaps.pop("", None)
+    meta["my_label"] = "Your Team"
+    meta["rival_label"] = "Rival Manager"
+    if meta.get("named_rival_label"):
+        meta["named_rival_label"] = "Your Named Rival"
+    meta["league_name"] = "a 12-team Sleeper league"
+    meta["anonymized_demo"] = True
+
+    def scrub(value: Any) -> Any:
+        if isinstance(value, str):
+            for real, fake in swaps.items():
+                value = value.replace(real, fake)
+            return value
+        if isinstance(value, list):
+            return [scrub(v) for v in value]
+        if isinstance(value, dict):
+            return {k: scrub(v) for k, v in value.items()}
+        return value
+
+    return scrub(out)
+
 
 def render(report: Mapping[str, Any], template_html: str) -> str:
     style, links = extract_design(template_html)

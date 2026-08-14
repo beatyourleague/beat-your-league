@@ -80,8 +80,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
     if matchup.get("win_probability") is not None:
         lines.append(f"  win probability: {matchup['win_probability']:.0%}")
     else:
-        lines.append(f"  win probability: gated — {matchup.get('win_probability_gate')}")
-    lines += ["", "OPTIMAL LINEUP"]
+        lines.append(f"  win probability: {matchup.get('win_probability_gate')}")
+    lines += ["", "YOUR BEST LINEUP"]
     for slot in report["lineup"]:
         name = slot.get("player_name") or "(empty)"
         projected = f"{slot['projected']:.1f}" if slot.get("projected") is not None else "—"
@@ -97,12 +97,13 @@ def text_summary(report: Mapping[str, Any]) -> str:
             f"REGRET SCORE: start {regret['start_name']} over {regret['over_name']} "
             f"({regret['confidence']:.0%})")
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    gaps = meta.get("gaps") or []
-    if gaps:
-        lines += ["", f"KNOWN GAPS ({len(gaps)}):"]
-        lines += [f"  - {g['field']}: {g['reason']}" for g in gaps]
-    lines += ["", "Projections are analysis, not guarantees. Decisions are yours.",
-              f"LLM tokens this run: {meta.get('llm_tokens', 0)}"]
+    # The gap list is operator bookkeeping (field names, internal reasons) and
+    # never goes in a subscriber's email — the report already says, in place and
+    # in plain words, wherever it declined to call something.
+    lines += ["", "Projections are analysis, not guarantees — no betting picks, "
+                  "no staking advice. Your decisions are yours (that's the fun part).",
+              "Built from your league's own record on Sleeper. "
+              "Not affiliated with Sleeper or the NFL."]
     return "\n".join(lines) + "\n"
 
 

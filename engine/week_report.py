@@ -54,13 +54,14 @@ Z_80_BAND = 1.2816
 #   64.5% — systematically underconfident, so per principle 1 the number does
 #   NOT ship. Flip this flag only with fresh backtest.md evidence that passes.
 WIN_PROBABILITY_CALIBRATED = False
+# Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
-    "matchup-level win probability is not yet calibrated — in backtest "
-    "(2 seasons, 170 matchups) favorites stated at ~52% won 64.5% of the "
-    "time; see the matchup section of reports/backtest.md")
+    "we're not putting a win percentage on this yet. We tested it on two past "
+    "seasons and our favourites won more often than we predicted, which means "
+    "the number would be misleading — so we're leaving it off until it's right")
 TEAM_RANGE_BASIS = (
-    "80% projection band per team; backtested at 77.9% coverage over 340 "
-    "team-weeks (2017-2018) — see reports/backtest.md")
+    "Your realistic high and low. Testing on two past seasons, real weekly "
+    "totals landed inside this range about 78% of the time.")
 
 
 class WeekReportError(RuntimeError):
@@ -164,11 +165,11 @@ def optimal_lineup(
         gate: str | None = None
         alt_projection = projections.get(alt_id) if alt_id else None
         if alt_id is None or alt_projection is None:
-            gate = "no available bench alternative at this slot"
+            gate = "nobody on your bench is eligible here"
         elif (projection.games < MIN_GAMES_FOR_CALL
               or alt_projection.games < MIN_GAMES_FOR_CALL):
-            gate = (f"thin evidence ({projection.games} vs "
-                    f"{alt_projection.games} prior games; need {MIN_GAMES_FOR_CALL})")
+            gate = (f"not enough games on record yet ({projection.games} and "
+                    f"{alt_projection.games}; we want at least {MIN_GAMES_FOR_CALL})")
         else:
             ok, reason = may_publish_confidence(status, statuses[alt_id])
             if ok:
@@ -316,8 +317,8 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex) -> dict[str, Any]:
     ]
     if not decided:
         gates = [p.confidence_gate for p in picks if p.confidence_gate]
-        reason = gates[0] if gates else "no close call this week"
-        return {"gate": f"no publishable head-to-head — {reason}"}
+        reason = gates[0] if gates else "nothing close enough to be worth calling"
+        return {"gate": f"no coin-flip call this week — {reason}"}
     closest = min(decided, key=lambda p: p.confidence or 1.0)
     assert closest.projection and closest.alternative_projection
     return {
@@ -335,8 +336,8 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex) -> dict[str, Any]:
             {"label": "appear prob", "value": f"{closest.projection.appear_probability:.0%} vs "
                                               f"{closest.alternative_projection.appear_probability:.0%}"},
         ],
-        "definition": ("Confidence = probability this start outscores that specific "
-                       "bench alternative at this slot, under our model."),
+        "definition": ("What the number means: the odds this guy outscores that "
+                       "specific bench option at this slot."),
     }
 
 
@@ -402,8 +403,10 @@ def hype_meter(
                           if len(windows) == 1 else
                           f"league transaction log, weeks {min(windows)}-{max(windows)}")
                          if windows else "no transaction data"),
-            "verdict_gate": ("real-or-mirage verdict needs usage data "
-                            "(routes/snaps) — coming in v0.3"),
+            "verdict_gate": ("We can see the whole league chasing him. Whether "
+                             "the usage backs it up — routes, snaps, target "
+                             "share — isn't something we track yet, so we're "
+                             "not calling this one real or a mirage."),
         })
     return out
 
@@ -510,8 +513,8 @@ def fragility(
             "title": f"{players.name(alt_id)} is sitting on their bench",
             "detail": (f"He projects {alt_projection.mean:.1f} — above "
                        f"{len(beaten)} of their set starters: {starters}."),
-            "evidence": f"trailing-form projections before week "
-                        f"{alt_projection.as_of_week}, {season.season}",
+            "evidence": f"based on scoring through week "
+                        f"{alt_projection.as_of_week - 1}, {season.season}",
         })
 
     # Behavioral lines join across seasons by OWNER, not roster id — owners
@@ -719,7 +722,9 @@ def checklist(
             f"{players.name(p.player_id or '')} into {p.slot}" for p in changes
         )
         items.append({
-            "action": f"Set the lineup in §3 — {len(changes)} change"
+            # No §-references in action items: they read as legalese, and they
+            # dangle entirely in the plain-text email that has no sections.
+            "action": f"Set your lineup — {len(changes)} change"
                       f"{'s' if len(changes) != 1 else ''}: {detail}.",
             "deadline": "before this week's first kickoff",
             "urgency": "now",
@@ -744,7 +749,7 @@ def checklist(
     if watch:
         names = ", ".join(players.name(p.player_id or "") for p in watch)
         items.append({
-            "action": f"Check late news on: {names} — pivot plan in §6 covers both outcomes.",
+            "action": f"Check late news on: {names} — your pivot plan below covers both outcomes.",
             "deadline": "gameday morning",
             "urgency": "deadline",
         })
@@ -842,8 +847,12 @@ def build_week_report(
                                "so ACTIVE cannot be concluded for anyone"})
     if prob_gate:
         gaps.append({"field": "win_probability", "reason": prob_gate})
+    # Operator-facing note only. Deliberately NOT rendered to buyers: an empty
+    # betting-market section on a product that promises "no picks" advertises a
+    # missing feature and drags the brand toward the sportsbook framing we sell
+    # against (principle 4).
     gaps.append({"field": "market_context",
-                 "reason": "Vegas game totals not ingested — coming in v0.3"})
+                 "reason": "betting-market context not ingested; not shown to buyers"})
 
     report = {
         "meta": {
@@ -872,7 +881,6 @@ def build_week_report(
             "win_probability": round(prob, 3) if prob is not None else None,
             "win_probability_gate": prob_gate,
             "range_basis": TEAM_RANGE_BASIS,
-            "market_context_gate": "Vegas game totals not ingested — coming in v0.3",
         },
         "rival_watch": watch,
         "lineup": [_slot_json(p, players) for p in my_picks],

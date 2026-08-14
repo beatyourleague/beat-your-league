@@ -718,7 +718,8 @@
     <p class="honest">Read that table honestly, because we do: it is a <b>hindsight filter</b>, keeping
     only the head-to-heads where both players ended up scoring. It shows the probability math is
     sound — it is <b>not</b> a measurement of the shipping product, whose known-active gate is
-    different and has no backtest yet, because weekly availability snapshots only begin this season.
+    different and has no track record yet, because we only start recording who was hurt or
+    inactive each week from this season on.
     The first real record of what you'll actually receive is the
     <a href="ledger/index.html">public ledger</a>. The full backtest — the failing buckets, the 7.2%
     calibration error, all of it — is <a href="backtest.html">published here</a>.</p>
@@ -779,7 +780,8 @@
             <li>Every weekly Rival Report, Week 1 through your title game</li>
             <li>Rival Watch on your named nemesis all season</li>
             <li>Public receipts ledger — our record, your bragging rights</li>
-            <li>No-questions refund through Week 2</li>
+            <li>No-questions refund through Week 2 — one per person; if you
+            re-subscribe after a refund, that one's final</li>
             <li>Renews once a year at $29 unless you cancel — we email you first,
             and you cancel yourself in one click</li>
           </ul>
@@ -843,9 +845,13 @@
   <div class="wrap">
     <b>Beat Your League</b> — the weekly edge report built around your
     rival, not just your roster.<br>
-    Sample visuals above are real engine output from Sleeper's public sample league (2017–2018
-    seasons), labeled where shown. Projections are analysis, not guarantees. Not affiliated with
-    Sleeper. Fantasy decisions are yours to make.
+    Sample visuals above are real output from a real 2017–2018 Sleeper league, labelled where
+    shown; manager names in anything public are replaced with neutral labels. Projections are
+    analysis, not guarantees. Must be 18+ to subscribe. Not affiliated with Sleeper or the NFL.
+    Fantasy decisions are yours to make.<br>
+    <a href="legal.html" style="color:var(--flag)">Terms, refunds &amp; privacy</a> ·
+    <a href="ledger/index.html" style="color:var(--flag)">The public ledger</a> ·
+    <a href="backtest.html" style="color:var(--flag)">The full backtest</a>
   </div>
 </footer>
 
@@ -865,7 +871,8 @@ const LEDGER_LIST_ENDPOINT = "";
 // never the paid checkout URL, or the page would promise "free" and hand over a
 // $29 subscribe form. Empty means fall through to the mailto capture below.
 const LEDGER_FREE_URL = "";
-const CONTACT_EMAIL = "kevinxhli@gmail.com";
+// Empty on purpose — no personal address on a public page. Set before launch.
+const CONTACT_EMAIL = "";
 
 const watchForm = document.getElementById("watch-form");
 if (watchForm) {
@@ -891,6 +898,11 @@ if (watchForm) {
     if (LEDGER_FREE_URL) {
       note.textContent = "Opening the free signup page…";
       window.location.href = LEDGER_FREE_URL;
+      return;
+    }
+    if (!CONTACT_EMAIL) {
+      note.textContent = "The ledger email isn't open for signups yet — the ledger " +
+        "itself is public, so you can read it any time without us.";
       return;
     }
     note.textContent = "Opening a pre-filled email — send it and you're on the list.";

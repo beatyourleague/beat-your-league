@@ -1,6 +1,6 @@
 # Backtest & calibration report
 
-Generated 2026-08-13 08:14 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-14 08:06 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
 
 ## Leagues graded
 
@@ -139,18 +139,18 @@ Rival profiles for Phase 3. Every line cites the season and week span it was com
 
 | Rank | Team | Waiver style | FAAB spent | Bids (won/placed) | Top bid | Median bid | FA adds | Trades | Moves/wk | Game-day adds |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1/12 | Manager 15 (Manager 23) | very aggressive | 140/100 ⚠ | 28/109 | 39 | 0 | 28 | 3 | 3.69 | 25% |
-| 2/12 | Manager 06 (Manager 26) | very aggressive | 101/100 ⚠ | 19/42 | 36 | 2 | 21 | 1 | 2.56 | 33% |
-| 3/12 | Manager 31 | very aggressive | 100/100 | 22/47 | 25 | 1 | 34 | 0 | 3.50 | 12% |
-| 4/12 | Manager 10 (Manager 25) | aggressive | 100/100 | 14/34 | 37 | 4 | 28 | 5 | 2.94 | 31% |
-| 5/12 | Manager 04 (Manager 24) | aggressive | 90/100 | 14/33 | 33 | 3 | 37 | 2 | 3.31 | 28% |
-| 6/12 | Manager 16 (Manager 13) | selective | 89/100 | 23/51 | 40 | 0 | 42 | 4 | 4.31 | 26% |
-| 7/12 | Manager 11 (Manager 22) | selective | 89/100 | 13/20 | 51 | 1 | 23 | 1 | 2.31 | 23% |
-| 8/12 | Manager 05 (Manager 30) | selective | 80/100 | 12/28 | 38 | 4 | 22 | 1 | 2.19 | 16% |
-| 9/12 | Manager 36 (Manager 14) | quiet | 72/100 | 11/16 | 21 | 4 | 9 | 1 | 1.31 | 27% |
-| 10/12 | Manager 02 (Manager 35) | quiet | 52/100 | 5/12 | 29 | 10 | 7 | 0 | 0.75 | 25% |
-| 11/12 | Manager 20 | quiet | 21/100 | 4/23 | 12 | 2 | 13 | 2 | 1.19 | 77% |
-| 12/12 | Manager 33 | quiet | 12/100 | 2/6 | 7 | 2 | 11 | 0 | 0.81 | 38% |
+| 1/12 | Manager A | very aggressive | 140/100 ⚠ | 28/109 | 39 | 0 | 28 | 3 | 3.69 | 25% |
+| 2/12 | Manager B | very aggressive | 101/100 ⚠ | 19/42 | 36 | 2 | 21 | 1 | 2.56 | 33% |
+| 3/12 | Manager C | very aggressive | 100/100 | 22/47 | 25 | 1 | 34 | 0 | 3.50 | 12% |
+| 4/12 | Manager D | aggressive | 100/100 | 14/34 | 37 | 4 | 28 | 5 | 2.94 | 31% |
+| 5/12 | Manager E | aggressive | 90/100 | 14/33 | 33 | 3 | 37 | 2 | 3.31 | 28% |
+| 6/12 | Manager F | selective | 89/100 | 23/51 | 40 | 0 | 42 | 4 | 4.31 | 26% |
+| 7/12 | Manager G | selective | 89/100 | 13/20 | 51 | 1 | 23 | 1 | 2.31 | 23% |
+| 8/12 | Manager H | selective | 80/100 | 12/28 | 38 | 4 | 22 | 1 | 2.19 | 16% |
+| 9/12 | Manager I | quiet | 72/100 | 11/16 | 21 | 4 | 9 | 1 | 1.31 | 27% |
+| 10/12 | Manager J | quiet | 52/100 | 5/12 | 29 | 10 | 7 | 0 | 0.75 | 25% |
+| 11/12 | Manager K | quiet | 21/100 | 4/23 | 12 | 2 | 13 | 2 | 1.19 | 77% |
+| 12/12 | Manager L | quiet | 12/100 | 2/6 | 7 | 2 | 11 | 0 | 0.81 | 38% |
 
 Waiver style is a rank **within this league**, not an absolute grade: league cultures differ too much for a fixed threshold to separate anyone. Bids counted include failed claims, which reveal intent and price; only winning bids spend FAAB. *Game-day adds* is a proxy for engagement (share of adds made Thu/Sun/Mon, US Eastern), not lineup-setting time.
 
@@ -162,35 +162,35 @@ These numbers look flattering, and they are: roughly a third of bench players sc
 
 | Team | Decided calls | Manager right | Accuracy | Points left on bench |
 | --- | ---: | ---: | ---: | ---: |
-| Manager 15 (Manager 23) | 79 | 75 | 94.9% | 24.2 |
-| Manager 11 (Manager 22) | 76 | 69 | 90.8% | 39.4 |
-| Manager 06 (Manager 26) | 63 | 56 | 88.9% | 41.1 |
-| Manager 05 (Manager 30) | 97 | 79 | 81.4% | 114.7 |
-| Manager 16 (Manager 13) | 69 | 56 | 81.2% | 95.8 |
-| Manager 20 | 82 | 65 | 79.3% | 108.8 |
-| Manager 10 (Manager 25) | 82 | 64 | 78.0% | 130.0 |
-| Manager 04 (Manager 24) | 93 | 72 | 77.4% | 117.3 |
-| Manager 31 | 81 | 60 | 74.1% | 196.2 |
-| Manager 02 (Manager 35) | 84 | 62 | 73.8% | 139.5 |
-| Manager 33 | 97 | 68 | 70.1% | 288.0 |
-| Manager 36 (Manager 14) | 71 | 48 | 67.6% | 128.9 |
+| Manager A | 79 | 75 | 94.9% | 24.2 |
+| Manager G | 76 | 69 | 90.8% | 39.4 |
+| Manager B | 63 | 56 | 88.9% | 41.1 |
+| Manager H | 97 | 79 | 81.4% | 114.7 |
+| Manager F | 69 | 56 | 81.2% | 95.8 |
+| Manager K | 82 | 65 | 79.3% | 108.8 |
+| Manager D | 82 | 64 | 78.0% | 130.0 |
+| Manager E | 93 | 72 | 77.4% | 117.3 |
+| Manager C | 81 | 60 | 74.1% | 196.2 |
+| Manager J | 84 | 62 | 73.8% | 139.5 |
+| Manager L | 97 | 68 | 70.1% | 288.0 |
+| Manager I | 71 | 48 | 67.6% | 128.9 |
 
 ### 2017 — Sleeperbot Friends League (transaction log: weeks 1-16)
 
 | Rank | Team | Waiver style | FAAB spent | Bids (won/placed) | Top bid | Median bid | FA adds | Trades | Moves/wk | Game-day adds |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1/12 | Manager 27 | very aggressive | 119/100 ⚠ | 15/38 | 35 | 2 | 8 | 0 | 1.44 | 12% |
-| 2/12 | Manager 03 (Manager 24) | very aggressive | 100/100 | 14/35 | 37 | 1 | 51 | 1 | 4.12 | 34% |
-| 3/12 | Manager 09 (Manager 13) | very aggressive | 100/100 | 19/38 | 45 | 3 | 28 | 3 | 3.12 | 42% |
-| 4/12 | Manager 08 (Manager 26) | aggressive | 100/100 | 12/36 | 41 | 8 | 29 | 4 | 2.81 | 17% |
-| 5/12 | Manager 21 (Manager 34) | aggressive | 100/100 | 11/20 | 36 | 4 | 17 | 0 | 1.75 | 14% |
-| 6/12 | Manager 18 (Manager 12) | selective | 100/100 | 4/8 | 39 | 18 | 11 | 1 | 1.00 | 47% |
-| 7/12 | Manager 22 | selective | 83/100 | 14/36 | 47 | 1 | 17 | 2 | 2.06 | 21% |
-| 8/12 | Manager 19 (Manager 25) | selective | 80/100 | 19/43 | 38 | 1 | 33 | 5 | 3.56 | 32% |
-| 9/12 | Manager 07 (Manager 20) | quiet | 59/100 | 13/52 | 18 | 3 | 18 | 3 | 2.12 | 42% |
-| 10/12 | Manager 01 (Manager 35) | quiet | 35/100 | 5/7 | 20 | 3 | 11 | 0 | 1.00 | 0% |
-| 11/12 | Manager 17 | quiet | 27/100 | 5/11 | 9 | 5 | 9 | 0 | 0.88 | 40% |
-| 12/12 | Manager 28 (Manager 33) | quiet | 6/100 | 4/6 | 13 | 2 | 13 | 1 | 1.12 | 47% |
+| 1/12 | Manager A | very aggressive | 119/100 ⚠ | 15/38 | 35 | 2 | 8 | 0 | 1.44 | 12% |
+| 2/12 | Manager B | very aggressive | 100/100 | 14/35 | 37 | 1 | 51 | 1 | 4.12 | 34% |
+| 3/12 | Manager C | very aggressive | 100/100 | 19/38 | 45 | 3 | 28 | 3 | 3.12 | 42% |
+| 4/12 | Manager D | aggressive | 100/100 | 12/36 | 41 | 8 | 29 | 4 | 2.81 | 17% |
+| 5/12 | Manager E | aggressive | 100/100 | 11/20 | 36 | 4 | 17 | 0 | 1.75 | 14% |
+| 6/12 | Manager F | selective | 100/100 | 4/8 | 39 | 18 | 11 | 1 | 1.00 | 47% |
+| 7/12 | Manager G | selective | 83/100 | 14/36 | 47 | 1 | 17 | 2 | 2.06 | 21% |
+| 8/12 | Manager H | selective | 80/100 | 19/43 | 38 | 1 | 33 | 5 | 3.56 | 32% |
+| 9/12 | Manager I | quiet | 59/100 | 13/52 | 18 | 3 | 18 | 3 | 2.12 | 42% |
+| 10/12 | Manager J | quiet | 35/100 | 5/7 | 20 | 3 | 11 | 0 | 1.00 | 0% |
+| 11/12 | Manager K | quiet | 27/100 | 5/11 | 9 | 5 | 9 | 0 | 0.88 | 40% |
+| 12/12 | Manager L | quiet | 6/100 | 4/6 | 13 | 2 | 13 | 1 | 1.12 | 47% |
 
 Waiver style is a rank **within this league**, not an absolute grade: league cultures differ too much for a fixed threshold to separate anyone. Bids counted include failed claims, which reveal intent and price; only winning bids spend FAAB. *Game-day adds* is a proxy for engagement (share of adds made Thu/Sun/Mon, US Eastern), not lineup-setting time.
 
@@ -202,18 +202,18 @@ These numbers look flattering, and they are: roughly a third of bench players sc
 
 | Team | Decided calls | Manager right | Accuracy | Points left on bench |
 | --- | ---: | ---: | ---: | ---: |
-| Manager 28 (Manager 33) | 101 | 78 | 77.2% | 158.2 |
-| Manager 07 (Manager 20) | 65 | 50 | 76.9% | 112.8 |
-| Manager 22 | 83 | 63 | 75.9% | 138.7 |
-| Manager 19 (Manager 25) | 88 | 65 | 73.9% | 140.9 |
-| Manager 17 | 88 | 64 | 72.7% | 233.0 |
-| Manager 27 | 79 | 57 | 72.2% | 180.2 |
-| Manager 21 (Manager 34) | 92 | 66 | 71.7% | 208.4 |
-| Manager 03 (Manager 24) | 84 | 60 | 71.4% | 120.3 |
-| Manager 01 (Manager 35) | 92 | 65 | 70.7% | 197.6 |
-| Manager 09 (Manager 13) | 97 | 68 | 70.1% | 202.9 |
-| Manager 18 (Manager 12) | 90 | 61 | 67.8% | 269.9 |
-| Manager 08 (Manager 26) | 80 | 53 | 66.2% | 317.9 |
+| Manager L | 101 | 78 | 77.2% | 158.2 |
+| Manager I | 65 | 50 | 76.9% | 112.8 |
+| Manager G | 83 | 63 | 75.9% | 138.7 |
+| Manager H | 88 | 65 | 73.9% | 140.9 |
+| Manager K | 88 | 64 | 72.7% | 233.0 |
+| Manager A | 79 | 57 | 72.2% | 180.2 |
+| Manager E | 92 | 66 | 71.7% | 208.4 |
+| Manager B | 84 | 60 | 71.4% | 120.3 |
+| Manager J | 92 | 65 | 70.7% | 197.6 |
+| Manager C | 97 | 68 | 70.1% | 202.9 |
+| Manager F | 90 | 61 | 67.8% | 269.9 |
+| Manager D | 80 | 53 | 66.2% | 317.9 |
 
 ## Limitations — read before quoting any number above
 

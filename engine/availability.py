@@ -66,14 +66,14 @@ class WeekAvailability:
         if not self.has_snapshot:
             return PlayerStatus(
                 Status.UNKNOWN,
-                f"no availability snapshot for {self.season} week {self.week}",
+                f"we couldn't confirm who was active in week {self.week}",
                 None,
             )
         assert self.statuses is not None
         record = self.statuses.get(player_id)
         if record is None:
             return PlayerStatus(
-                Status.UNKNOWN, "player absent from availability snapshot",
+                Status.UNKNOWN, "we have no injury status for this player",
                 self.snapshot_as_of,
             )
         team = record.get("team")

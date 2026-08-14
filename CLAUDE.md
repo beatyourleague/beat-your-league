@@ -236,6 +236,27 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 - **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
   headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
   landing page links it and a test asserts the failures survive publication.
+- **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file
+  names, "LLM tokens", "pipeline", "availability snapshot", "calibration policy" are ours, not
+  the customer's — a buyer reading "coming in v0.3" concludes they bought unfinished software.
+  Withheld numbers say **"no call"** / **"Not calling it"** with a plain reason.
+  `test_no_developer_vocabulary_in_buyer_copy` fails the build if any of it leaks back.
+- **No real league member is ever named on a public surface.** `engine/backtest.py` aliases
+  managers as "Manager A…L" (stable per roster across both tables) and
+  `render.report.anonymize_for_public()` relabels the demo report; the live subscriber report
+  still names the rival, because it goes only to the person entitled to see it. Guarded by
+  `test_no_real_league_member_is_named_on_any_public_page`. Regenerate `site/backtest.html`
+  and `site/sample-report.html` through those paths — never by hand.
+- **`site/legal.html`** carries terms, renewal, refunds (one per person), privacy, 18+, and
+  contact; both funnel pages link it. It is plain-language, not lawyer-reviewed — say so if
+  asked, and recommend a real review before scale.
+- **No personal contact details ship on the site (owner instruction, Aug 14 2026).**
+  `CONTACT_EMAIL` is empty in both funnel pages and `legal.html` says "[contact address —
+  added before launch]". With it empty the forms say signups aren't open rather than opening
+  a dead `mailto:` that looks like it worked — verified in-browser. Setting a project inbox is
+  a **launch blocker**: a paid subscription needs a working route for refund and deletion
+  requests. `test_no_personal_contact_details_are_published` blocks any personal address
+  (gmail/outlook/icloud/etc.) from re-entering any page under `site/`.
 - **The landing page must never present the availability-controlled table as accuracy.**
   backtest.md itself says that table is "a diagnostic, not a result to publish"; the page now
   labels it as a hindsight filter, leads with the unconditional 53.5%, and explains that the
