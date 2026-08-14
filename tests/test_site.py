@@ -305,10 +305,20 @@ def test_signup_degrades_honestly_without_a_contact_route() -> None:
 
 def test_legal_page_covers_the_promises_money_depends_on() -> None:
     legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
-    for required in (r"renews once a year", r"cancel yourself at any time",
+    for required in (r"renew once a year|renews once a year", r"cancel yourself at any time",
                      r"one refund per person", r"18 or older",
                      r"never see or store your card", r"not affiliated"):
         assert re.search(required, legal, re.I), f"legal page is missing: {required}"
+
+
+def test_billing_never_outlives_the_product() -> None:
+    """We only charge for months we actually send something. Monthly billing
+    stops at season end; the annual renewal lands before the season it covers."""
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    assert re.search(r"billing runs only while the season runs", legal, re.I)
+    assert re.search(r"do not charge monthly through the offseason", legal, re.I)
+    assert re.search(r"never during\s+the offseason", legal, re.I)
+    assert re.search(r"billing stops when the season does", prose(LANDING), re.I)
 
 
 def test_legal_page_actually_protects_the_business() -> None:
@@ -354,6 +364,31 @@ def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
 
 
 LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
+
+
+def test_monthly_price_never_undercuts_the_season_pass() -> None:
+    """The monthly tier exists to make the pass obvious. If a full season of
+    monthly costs LESS than the pass, the anchor inverts and the pass becomes
+    the sucker's choice — which is exactly what $6.99 did (PLAN §4)."""
+    SEASON_MONTHS = 3.65   # Sep 8 -> late Dec, 111 days
+    rendered = markup_only(LANDING)
+    monthly = re.search(r'class="price">\$(\d+\.\d\d) <small>/ month', rendered)
+    season = re.search(r'class="price">\$(\d+) <small>/ season', rendered)
+    assert monthly and season, "could not read both prices off the pricing cards"
+    monthly_season_total = float(monthly.group(1)) * SEASON_MONTHS
+    pass_price = float(season.group(1))
+    assert monthly_season_total > pass_price, (
+        f"a full season month-to-month costs ${monthly_season_total:.2f}, which is "
+        f"less than the ${pass_price:.2f} pass — the anchor is inverted")
+
+
+def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
+    """An unlabelled '$29' is ambiguous to a buyer and a support burden."""
+    for page, name in ((LANDING, "landing"), (JOIN, "join"),
+                       (LEAGUE_PASS, "league pass")):
+        assert re.search(r"USD", page), f"{name} page shows a price with no currency"
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    assert re.search(r"All prices are in US dollars", legal, re.I)
 
 
 def test_league_pass_never_competes_with_the_single_checkout_decision() -> None:

@@ -73,7 +73,20 @@ cut them too if they conflict with this.) The risk-reversal replacing "free" is 
 ledger + the Week-2 refund promise.
 
 **At checkout, exactly one decision:** Founding Season Pass **$29** (first 50 — honest capacity limit)
-shown beside **$6.99/mo** (the anchor that makes the pass obvious). Refunds no-questions through Week 2.
+shown beside **$9.99/mo** (the anchor that makes the pass obvious). Refunds no-questions through Week 2.
+
+**Prices are USD** (owner decision, Aug 14 2026) — the paying fantasy market is overwhelmingly US
+and Substack bills in USD by default. Every price shown to a buyer must carry the currency; an
+unlabelled "$29" is ambiguous for buyers and a support burden. Confirm the currency setting in
+Substack before launch so the charge matches the page.
+
+**Why $9.99 and not $6.99** (corrected Aug 14 2026): a paid season runs Sep 8 -> late Dec = 111
+days ≈ 3.65 months ≈ 16 weekly reports. At $6.99 a full season cost **$25.49 — LESS than the $29
+pass** ($1.61 vs $1.83 per report), so the "anchor" made the pass look like the worse buy and
+invited exactly the month-to-month churn this pricing exists to prevent. At $9.99 a season runs
+$36.43, so the pass visibly saves ~20% and a monthly subscriber who stays all season is worth more
+than a pass buyer. Rule to keep: **monthly x 3.65 must always exceed the season pass**, or the
+ladder inverts again.
 Copy anchors price to the league pot ("your buy-in is $100; the edge is $29"), never to media subscriptions.
 Implementation: Substack monthly + annual tiers (annual = season pass). One-offs via Stripe payment links.
 
@@ -88,8 +101,35 @@ Implementation: Substack monthly + annual tiers (annual = season pass). One-offs
    pricing section — one quiet link instead, so the individual buyer still faces exactly one
    decision. Wire `LEAGUE_PASS_URL` on that page when the Substack tier exists. Arms-dealer
    dynamics make the league itself the marketing channel.
-4. Off-season — **Season 2 earlybird renewal** (Feb, higher price justified by the public ledger) +
-   **NBA fantasy module** (Oct) to bridge revenue between football seasons.
+4. Off-season — **NBA fantasy module** (Oct) to bridge revenue between football seasons.
+   (The old "Season 2 earlybird renewal (Feb)" is REMOVED: the pass already auto-renews at its
+   anniversary, so selling the same person a renewal in February would either double-charge them
+   or require cancelling a subscription they already have. Reposition it only as a win-back offer
+   to people who actually cancelled.)
+
+### Recurring revenue without charging for months we don't deliver (owner decision, Aug 14 2026)
+
+The goal is continuous billing with no repurchase friction. **The annual auto-renewing season pass
+already is that** — bought once, it renews every year until cancelled, and the renewal lands
+shortly before the season it covers. That is a season ticket, not a trick, and it collects the
+whole season's revenue upfront, ahead of the Week 10-12 elimination cliff.
+
+What we will NOT do is bill monthly through Feb-Aug. There is no product in those months: no
+games, no waivers, no rival to scout. Charging there fails four ways at once — it is the
+forget-to-cancel revenue this plan already rules out, it invites chargebacks, several states'
+auto-renewal statutes expect the service to actually be delivered, and a subscriber looking at a
+publication that hasn't posted since December cancels anyway. So **monthly billing stops at season
+end automatically**, and both the pricing card and the terms say so.
+
+**The only honest route to 12 months of billing is 12 months of product.** If that is wanted
+later, the candidates in rough order of realism:
+- **Dynasty/keeper leagues** — genuinely year-round (rookie drafts, offseason trades). The engine
+  already reads league history, so this is the most plausible offseason product.
+- **Draft Kit / draft-week product** (Aug) — already in Sprint 1, and the highest-demand offseason
+  moment of the year.
+- **NBA module** (Oct-Apr) — a different sport on the same engine, per item 4 above.
+Until one of those ships, the honest model is: charge for the season, renew for the next one, and
+make the renewal easy to say yes to by having a public ledger that argues for itself.
 
 **Launch blockers before the site goes public** (each is a one-line edit once the account exists):
 a project contact inbox (never a personal address) into `CONTACT_EMAIL` on both funnel pages and
