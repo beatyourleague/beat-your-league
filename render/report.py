@@ -333,7 +333,8 @@ def section_pivots(plans: list[Mapping[str, Any]]) -> str:
     return _section("Pivot Plan — Set It, Forget It", 7, body)
 
 
-def section_hype(entries: list[Mapping[str, Any]]) -> str:
+def section_hype(entries: list[Mapping[str, Any]],
+                 market: Mapping[str, Any] | None = None) -> str:
     if not entries:
         body = gate_note("no waiver FOMO detected in the league transaction log "
                          "for this window")
@@ -356,10 +357,74 @@ def section_hype(entries: list[Mapping[str, Any]]) -> str:
                 f'<p class="read">{esc(entry["bids"])} claims filed, '
                 f'{esc(entry["completed_adds"])} completed, {esc(bid_text)} '
                 f'({esc(entry["evidence"])}).</p>'
-                f'<div class="action no">→ {esc(entry["verdict_gate"])}</div></div>'
+                f'<div class="action no">→ {esc(entry["verdict_gate"])}</div>'
+                f'{_bid_line(entry)}</div>'
             )
         body = f'<div class="hype">{"".join(cards)}</div>'
-    return _section("Waiver Hype Meter", 8, body)
+    return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
+
+
+def _bid_line(entry: Mapping[str, Any]) -> str:
+    """What it takes to win this player HERE — the part rankings can't do."""
+    bid = entry.get("bid_to_beat")
+    if not bid:
+        return ""
+    rivals = entry.get("rivals_who_can_pay")
+    if rivals is None:
+        who = "we can't tell what anyone has left — see the note below"
+    elif rivals == 0:
+        who = "nobody else in your league can even cover that"
+    elif rivals == 1:
+        who = "one other team can cover that"
+    else:
+        who = f"{rivals} other teams can cover that"
+
+    if entry.get("affordable") is False:
+        left = entry.get("my_remaining")
+        return (f'<div class="action no">→ It takes <b>{esc(bid)}</b> to top the highest '
+                f'bid he\'s drawn, and you have <b>{esc(left)}</b> left. You can\'t win '
+                f'this one — keep your budget for a player you can actually land.</div>')
+
+    appetite = entry.get("league_top_appetite")
+    tail = ""
+    if appetite and appetite > bid:
+        tail = (f' If someone really wants him, the biggest bid anyone still funded has '
+                f'ever made is {esc(appetite)}.')
+    return (f'<div class="action go">→ Bid <b>{esc(bid)}</b> or more to top the highest bid '
+            f'he has drawn here — {esc(who)}.{tail}</div>')
+
+
+def section_waiver_market(market: Mapping[str, Any] | None) -> str:
+    """The league's waiver economy: what things cost, and who can still pay."""
+    if not market:
+        return ""
+    rows = []
+    if market.get("going_rate") is not None:
+        rows.append(f'<span class="drv">Going rate <b>{esc(market["going_rate"])}</b></span>')
+    if market.get("top_winning_bid") is not None:
+        rows.append(f'<span class="drv">Priciest win <b>{esc(market["top_winning_bid"])}</b></span>')
+    if market.get("my_remaining") is not None:
+        rows.append(f'<span class="drv">You have <b>{esc(market["my_remaining"])}</b> left</span>')
+    if market.get("rival_remaining") is not None:
+        rows.append(f'<span class="drv">{esc(market["rival_label"])} has '
+                    f'<b>{esc(market["rival_remaining"])}</b></span>')
+    if market.get("rival_top_bid_shown"):
+        rows.append(f'<span class="drv">They\'ve gone as high as '
+                    f'<b>{esc(market["rival_top_bid_shown"])}</b></span>')
+    if not rows:
+        return ""
+    note = ""
+    if market.get("budget_note"):
+        note = f'<p class="mkt">{esc(market["budget_note"])}</p>'
+    lost = market.get("rival_claims_lost") or 0
+    tell = ""
+    if lost:
+        tell = (f'<p class="mkt">{esc(market["rival_label"])} has lost <b>{esc(lost)}</b> '
+                f'claim{"s" if lost != 1 else ""} this season — every one of those is a '
+                f'price they were willing to pay and didn\'t get.</p>')
+    return _section("The Waiver Market In Your League", 0,
+                    f'<div class="drivers">{"".join(rows)}</div>{tell}{note}'
+                    f'<p class="mkt">{esc(market.get("evidence", ""))}</p>')
 
 
 def section_receipts(receipts: Mapping[str, Any]) -> str:
@@ -467,7 +532,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
         section_fragility(report["fragility"], meta["rival_label"]),
         section_regret(report["regret"]),
         section_pivots(report["pivots"]),
-        section_hype(report["hype"]),
+        section_hype(report["hype"], report.get("waiver_market")),
         section_receipts(report["receipts"]),
         footer(meta),
     ])

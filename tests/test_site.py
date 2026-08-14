@@ -320,6 +320,42 @@ def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
     assert re.search(r"not calling it", SAMPLE_REPORT, re.I)
 
 
+def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
+    """People buy a habit, not a document. The page must say what the week
+    actually looks like: when it arrives, how long it takes, what you do."""
+    assert re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
+    assert re.search(r"tuesday morning", LANDING_PROSE, re.I)
+    assert re.search(r"tick the boxes|three-box checklist", LANDING_PROSE, re.I)
+
+
+def test_waiver_edge_is_sold_as_a_decision_not_a_stat() -> None:
+    """The FAAB read is the thing rankings can't do — it has to reach the buyer
+    as an action ('bid X, N teams can answer'), not a raw number."""
+    assert re.search(r"what a waiver claim actually costs", LANDING_PROSE, re.I)
+    assert re.search(r"who can afford to outbid you", LANDING_PROSE, re.I)
+    # Numbers sit inside <b> tags, so match the phrasing that carries the action.
+    assert re.search(r"or more to top the highest bid|to top the highest bid he's drawn",
+                     SAMPLE_REPORT, re.I)
+    assert re.search(r"other teams can cover that|nobody else in your league can even cover",
+                     SAMPLE_REPORT, re.I)
+    assert re.search(r"waiver market in your league", SAMPLE_REPORT, re.I)
+
+
+def test_bid_advice_never_exceeds_what_the_reader_can_pay() -> None:
+    """Telling someone with 10 FAAB to bid 38 would waste their season. The
+    unaffordable case must say so instead of recommending it."""
+    import json as _json
+    from engine.week_report import build_week_report, RAW_DIR
+    report = build_week_report(RAW_DIR, "289646328504385536", 10, 1)
+    left = report["waiver_market"]["my_remaining"]
+    if left is None:
+        pytest.skip("budget setting unreliable in this league")
+    for entry in report["hype"]:
+        if entry.get("bid_to_beat") and entry["bid_to_beat"] > left:
+            assert entry["affordable"] is False, \
+                f"{entry['player_name']}: recommends {entry['bid_to_beat']} with {left} left"
+
+
 def test_sample_report_explains_what_to_do_with_it() -> None:
     """The buyer's decisive question is 'what do I actually do on Tuesday?'"""
     assert re.search(r"30-second game plan", SAMPLE_REPORT, re.I)

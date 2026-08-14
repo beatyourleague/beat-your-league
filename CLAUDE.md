@@ -236,6 +236,17 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 - **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
   headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
   landing page links it and a test asserts the failures survive publication.
+- **Waiver-market intelligence (`engine/waivers.py`) is the edge rankings can't copy.** From
+  the league's own transaction log: what a claim actually costs here (going rate, priciest
+  win), how much FAAB each team has left, and — from *failed* bids — the price a manager was
+  willing to pay and didn't get. Two rules are frozen in the module: RULE W1, one manager over
+  the stated budget voids `waiver_budget` as a denominator for everyone (measured: two sample
+  managers spent 140 and 101 against a stated 100), so it falls back to spend and says why;
+  RULE W2, only weeks strictly before the report week count, so a live report can't quote an
+  unprocessed claim. Bid guidance is derived from what THAT player has actually drawn, never
+  the league-wide maximum, and is checked against what the reader can afford — recommending 38
+  to someone holding 10 would burn their season. Rivals are **counted, never named** ("2 other
+  teams can cover that"), which keeps other people's identities off any public surface.
 - **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file
   names, "LLM tokens", "pipeline", "availability snapshot", "calibration policy" are ours, not
   the customer's — a buyer reading "coming in v0.3" concludes they bought unfinished software.

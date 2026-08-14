@@ -38,6 +38,7 @@ from engine.history import (
 from engine.projection import (
     MIN_GAMES_FOR_CALL, Projection, ProjectionModel, probability_outscores,
 )
+from engine.waivers import build_waiver_market, market_json
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = REPO_ROOT / "data" / "raw"
@@ -827,6 +828,25 @@ def build_week_report(
 
     prob, prob_gate = win_probability(my_picks, rival_picks)
     hype = hype_meter(season, week, players, season.waiver_budget)
+    market = build_waiver_market(season, week)
+    waiver_market = market_json(market, my_roster_id, rival.roster_id,
+                                season.team_label(rival.roster_id))
+    # Turn each chase into a decision. The threshold must come from what THIS
+    # player has actually drawn — using the league-wide max appetite would tell
+    # someone to spend 38 on a player nobody has valued above 17. The league's
+    # top appetite is reported separately, as the worst case if a rival really
+    # wants him, and everything is checked against what the reader can afford.
+    my_left = waiver_market.get("my_remaining")
+    for entry in hype:
+        observed = entry.get("top_bid") or market.going_rate
+        if not observed:
+            continue
+        entry["bid_to_beat"] = observed + 1
+        entry["rivals_who_can_pay"] = market.rivals_who_can_pay(
+            entry["bid_to_beat"], exclude=my_roster_id)
+        entry["league_top_appetite"] = market.bid_to_beat(my_roster_id)
+        entry["affordable"] = my_left is None or entry["bid_to_beat"] <= my_left
+        entry["my_remaining"] = my_left
     watch = rival_watch(seasons, week, my_roster_id, rival.roster_id,
                         named_rival_owner_id, named_rival_roster_id,
                         players, model, availability)
@@ -890,6 +910,7 @@ def build_week_report(
         "regret": regret_call(my_picks, players),
         "pivots": pivots(my_picks, rival_picks, players),
         "hype": hype,
+        "waiver_market": waiver_market,
         "receipts": receipts(season, week, model, players, my_roster_id, raw_dir),
     }
     return report
