@@ -1,0 +1,392 @@
+"""The published-calls ledger: record at publish time, grade when games end.
+
+This is principle 2 made durable. The weekly pipeline APPENDS every probability
+it actually published (slot confidences + the regret call) the moment a report
+is built; a separate grading pass later settles each call against the real box
+score. Nothing enters retroactively, nothing is edited after grading, and the
+public ledger page is generated only from graded entries — so the record shown
+to the world is, by construction, the record of what was published.
+
+Grading safety (the receipts brand dies on one premature grade):
+    RULE L1  A call is gradeable only when BOTH players' games for that week
+             are final. Teams come from the week's availability snapshot —
+             which exists for every published call by construction, because
+             confidence only publishes when availability was known. Game
+             finality comes from the cached NFL schedule (status "complete").
+             A completed season (league status "complete") is always final.
+    RULE L2  HIT = published pick outscored the alternative; MISS = it didn't;
+             TIE = exactly equal, excluded from the record, shown separately.
+    RULE L3  A player absent from the week's scoring record grades VOID, shown
+             separately — never silently dropped, never guessed. Both players
+             at exactly 0.0 is also VOID: per the Phase 2 data finding, 0.0
+             means "did not play", and a non-event must not count as a tie.
+    RULE L4  Once graded, an entry is immutable. Re-running any pipeline step
+             must not change it (append is idempotent by call_id).
+"""
+
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import os
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field, fields
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Mapping
+
+from engine.availability import load_week_availability
+
+
+class LedgerError(ValueError):
+    """A ledger file that cannot be trusted. Raised loudly with file+line —
+    a public record must never be silently repaired or partially read."""
+
+PENDING = "pending"
+GRADED = "graded"
+VOID = "void"
+
+HIT = "hit"
+MISS = "miss"
+TIE = "tie"
+
+
+@dataclass
+class LedgerCall:
+    """One published call. Identity is (league, season, week, roster, slot,
+    pick, over) — re-publishing the same call is the same call."""
+
+    call_id: str
+    source: str                # "slot" (report lineup) | "coinflip" (public Friday call)
+    league_id: str
+    season: str
+    week: int
+    roster_id: int
+    slot: str
+    pick_id: str
+    pick_name: str
+    over_id: str
+    over_name: str
+    confidence: float
+    is_regret: bool = False    # this slot call was also the week's Regret Score
+    recorded_at: str = ""
+    status: str = PENDING
+    outcome: str | None = None
+    pick_points: float | None = None
+    over_points: float | None = None
+    graded_at: str | None = None
+    void_reason: str | None = None
+
+    @property
+    def margin(self) -> float | None:
+        if self.pick_points is None or self.over_points is None:
+            return None
+        return self.pick_points - self.over_points
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _call_id(league_id: str, season: str, week: int, roster_id: int,
+             slot: str, pick_id: str, over_id: str) -> str:
+    key = f"{league_id}|{season}|{week}|{roster_id}|{slot}|{pick_id}|{over_id}"
+    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+
+
+def ledger_path(processed_dir: Path, league_id: str) -> Path:
+    return Path(processed_dir) / "ledger" / league_id / "calls.jsonl"
+
+
+# --------------------------------------------------------------------- #
+# recording
+# --------------------------------------------------------------------- #
+
+def extract_published_calls(report: Mapping[str, Any]) -> list[LedgerCall]:
+    """Every probability the report actually published, from its JSON.
+
+    Slots whose confidence was gated contribute nothing — the ledger records
+    what subscribers saw, not what the engine privately computed.
+    """
+    meta = report["meta"]
+    regret = report.get("regret") or {}
+    regret_pair = (regret.get("start_id"), regret.get("over_id"))
+    calls: list[LedgerCall] = []
+    for slot in report.get("lineup", []):
+        if slot.get("confidence") is None:
+            continue
+        pick_id = slot.get("player_id")
+        over_id = slot.get("alternative_id")
+        if not pick_id or not over_id:
+            continue
+        calls.append(LedgerCall(
+            call_id=_call_id(meta["league_id"], meta["season"], meta["week"],
+                             meta["my_roster_id"], slot["slot"],
+                             str(pick_id), str(over_id)),
+            source="slot",
+            league_id=str(meta["league_id"]),
+            season=str(meta["season"]),
+            week=int(meta["week"]),
+            roster_id=int(meta["my_roster_id"]),
+            slot=str(slot["slot"]),
+            pick_id=str(pick_id),
+            pick_name=str(slot.get("player_name") or pick_id),
+            over_id=str(over_id),
+            over_name=str(slot.get("alternative_name") or over_id),
+            confidence=float(slot["confidence"]),
+            is_regret=(pick_id, over_id) == regret_pair,
+            recorded_at=_now_iso(),
+        ))
+    return calls
+
+
+_KNOWN_FIELDS = {f.name for f in fields(LedgerCall)}
+
+
+def load_ledger(path: Path) -> list[LedgerCall]:
+    if not path.is_file():
+        return []
+    calls: list[LedgerCall] = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            raw = json.loads(line)
+            # Unknown fields from a newer schema are dropped, not fatal;
+            # missing required fields ARE fatal — that's corruption.
+            calls.append(LedgerCall(**{k: v for k, v in raw.items()
+                                       if k in _KNOWN_FIELDS}))
+        except (json.JSONDecodeError, TypeError, AttributeError) as exc:
+            raise LedgerError(
+                f"ledger {path} line {line_no} is unreadable ({exc}) — "
+                "the public record must be fixed by hand, never skipped") from exc
+    return calls
+
+
+@contextmanager
+def _ledger_lock(path: Path) -> Iterator[None]:
+    """Exclusive lock spanning a read-modify-write. Two pipelines writing the
+    same league's ledger concurrently must serialize, or one silently erases
+    the other's published calls (RULE L4)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("w", encoding="utf-8") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def _write_ledger(path: Path, calls: Iterable[LedgerCall]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for call in calls:
+            fh.write(json.dumps(asdict(call), separators=(",", ":")) + "\n")
+    os.replace(tmp, path)
+
+
+def record_calls(path: Path, new_calls: Iterable[LedgerCall]) -> int:
+    """Append calls not already present (RULE L4: idempotent). Returns count added."""
+    with _ledger_lock(path):
+        existing = load_ledger(path)
+        known = {c.call_id for c in existing}
+        added = [c for c in new_calls if c.call_id not in known]
+        if added:
+            _write_ledger(path, existing + added)
+        return len(added)
+
+
+# --------------------------------------------------------------------- #
+# grading
+# --------------------------------------------------------------------- #
+
+def _load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _week_game_status(raw_dir: Path, season: str) -> dict[int, dict[str, str]]:
+    """week -> {team: game status} from the cached schedule."""
+    games = _load_json(Path(raw_dir) / "schedule" / f"nfl_regular_{season}.json")
+    table: dict[int, dict[str, str]] = {}
+    for game in games if isinstance(games, list) else []:
+        if not isinstance(game, dict) or not isinstance(game.get("week"), int):
+            continue
+        status = str(game.get("status") or "")
+        for side in ("home", "away"):
+            team = game.get(side)
+            if isinstance(team, str) and team:
+                table.setdefault(game["week"], {})[team] = status
+    return table
+
+
+def _league_complete(raw_dir: Path, league_id: str) -> bool:
+    doc = _load_json(Path(raw_dir) / "league" / league_id / "league.json")
+    return isinstance(doc, dict) and doc.get("status") == "complete"
+
+
+def _call_is_final(call: LedgerCall, raw_dir: Path,
+                   games: dict[int, dict[str, str]],
+                   league_complete: bool) -> bool:
+    """RULE L1. Conservative on every unknown: not final."""
+    if league_complete:
+        return True
+    availability = load_week_availability(raw_dir, call.season, call.week)
+    if not availability.has_snapshot:
+        return False
+    assert availability.statuses is not None
+    week_games = games.get(call.week, {})
+    for player_id in (call.pick_id, call.over_id):
+        record = availability.statuses.get(player_id)
+        team = record.get("team") if isinstance(record, dict) else None
+        if not team or week_games.get(team) != "complete":
+            return False
+    return True
+
+
+def grade_ledger(path: Path, raw_dir: Path) -> tuple[int, int]:
+    """Grade every pending call whose games are final.
+
+    Returns (graded_count, still_pending_count). Already-graded entries are
+    never touched (RULE L4).
+    """
+    with _ledger_lock(path):
+        return _grade_locked(path, raw_dir)
+
+
+def _grade_locked(path: Path, raw_dir: Path) -> tuple[int, int]:
+    calls = load_ledger(path)
+    if not calls:
+        return 0, 0
+    graded_now = 0
+    games_by_season: dict[str, dict[int, dict[str, str]]] = {}
+    complete_by_league: dict[str, bool] = {}
+
+    for call in calls:
+        if call.status != PENDING:
+            continue
+        if call.season not in games_by_season:
+            games_by_season[call.season] = _week_game_status(raw_dir, call.season)
+        if call.league_id not in complete_by_league:
+            complete_by_league[call.league_id] = _league_complete(raw_dir, call.league_id)
+        if not _call_is_final(call, raw_dir, games_by_season[call.season],
+                              complete_by_league[call.league_id]):
+            continue
+
+        matchups = _load_json(Path(raw_dir) / "league" / call.league_id
+                              / "matchups" / f"week_{call.week:02d}.json")
+        points: Mapping[str, Any] | None = None
+        for record in matchups if isinstance(matchups, list) else []:
+            if isinstance(record, dict) and record.get("roster_id") == call.roster_id:
+                points = record.get("players_points") or {}
+                break
+        if points is None:
+            continue  # matchup record missing entirely: stay pending, retry later
+
+        pick_points = points.get(call.pick_id)
+        over_points = points.get(call.over_id)
+        call.graded_at = _now_iso()
+        if not isinstance(pick_points, (int, float)) or not isinstance(over_points, (int, float)):
+            call.status = VOID
+            missing = call.pick_name if not isinstance(pick_points, (int, float)) else call.over_name
+            call.void_reason = f"no scoring record for {missing} (RULE L3)"
+        elif pick_points == 0.0 and over_points == 0.0:
+            call.status = VOID
+            call.void_reason = ("both players scored exactly 0.0 — the absence "
+                                "signal, not a result (RULE L3)")
+        else:
+            call.status = GRADED
+            call.pick_points = float(pick_points)
+            call.over_points = float(over_points)
+            if pick_points > over_points:
+                call.outcome = HIT
+            elif pick_points < over_points:
+                call.outcome = MISS
+            else:
+                call.outcome = TIE
+        graded_now += 1
+
+    if graded_now:
+        _write_ledger(path, calls)
+    still_pending = sum(1 for c in calls if c.status == PENDING)
+    return graded_now, still_pending
+
+
+# --------------------------------------------------------------------- #
+# summaries — the numbers every public surface cites
+# --------------------------------------------------------------------- #
+
+def load_all_ledgers(processed_dir: Path) -> list[LedgerCall]:
+    """Every league's ledger, combined — the public page must reflect every
+    published call, not just the configured league's."""
+    root = Path(processed_dir) / "ledger"
+    calls: list[LedgerCall] = []
+    if root.is_dir():
+        for path in sorted(root.glob("*/calls.jsonl")):
+            calls.extend(load_ledger(path))
+    return calls
+
+
+def ledger_summary(calls: list[LedgerCall]) -> dict[str, Any]:
+    graded = [c for c in calls if c.status == GRADED]
+    decided = [c for c in graded if c.outcome in (HIT, MISS)]
+    hits = [c for c in decided if c.outcome == HIT]
+    buckets: list[dict[str, Any]] = []
+    for low, high in ((0.50, 0.55), (0.55, 0.60), (0.60, 0.65),
+                      (0.65, 0.70), (0.70, 0.80), (0.80, 1.01)):
+        rows = [c for c in decided if low <= c.confidence < high]
+        if not rows:
+            continue
+        buckets.append({
+            "label": f"{low:.0%}–{min(high, 1.0):.0%}",
+            "decided": len(rows),
+            "stated": sum(c.confidence for c in rows) / len(rows),
+            "observed": sum(1 for c in rows if c.outcome == HIT) / len(rows),
+        })
+    best = max(decided, key=lambda c: c.margin or 0.0, default=None)
+    worst = min(decided, key=lambda c: c.margin or 0.0, default=None)
+    return {
+        "recorded": len(calls),
+        "pending": sum(1 for c in calls if c.status == PENDING),
+        "void": sum(1 for c in calls if c.status == VOID),
+        "graded": len(graded),
+        "hits": len(hits),
+        "misses": len(decided) - len(hits),
+        "ties": len(graded) - len(decided),
+        "hit_rate": len(hits) / len(decided) if decided else None,
+        "buckets": buckets,
+        "best": best,
+        "worst": worst,
+    }
+
+
+def public_entries(calls: list[LedgerCall]) -> list[dict[str, Any]]:
+    """The anonymized view for site/ledger — no league ids, no roster ids.
+
+    Player names and results are public NFL facts; which league the call was
+    made in is a subscriber's business and stays private.
+    """
+    rows = []
+    for call in sorted(calls, key=lambda c: (c.season, c.week, c.slot)):
+        if call.status == PENDING:
+            continue
+        rows.append({
+            "season": call.season,
+            "week": call.week,
+            "slot": call.slot,
+            "pick": call.pick_name,
+            "over": call.over_name,
+            "confidence": round(call.confidence, 3),
+            "status": call.status,
+            "outcome": call.outcome,
+            "margin": round(call.margin, 1) if call.margin is not None else None,
+            "void_reason": call.void_reason,
+            "regret": call.is_regret,
+        })
+    return rows

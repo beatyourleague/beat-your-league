@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#E7E4DA"/>
+  <rect x="40" y="40" width="1120" height="595" fill="#F6F4EE" stroke="#D8D3C6" stroke-width="2"/>
+  <rect x="40" y="40" width="1120" height="86" fill="#101E33"/>
+  <text x="76" y="95" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="26" font-weight="800" letter-spacing="6" fill="#F2C230">BEAT YOUR LEAGUE · THE RECEIPTS</text>
+  <text x="1124" y="95" text-anchor="end" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#C9D4E2">2026 · WEEK 1 · RB2</text>
+
+  <text x="76" y="205" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="30" font-weight="800" letter-spacing="4" fill="#5A6B80">THE CALL, AS PUBLISHED</text>
+  <text x="76" y="285" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="64" font-weight="800" fill="#101E33">START De'Von Achane</text>
+  <text x="76" y="352" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="44" font-weight="700" fill="#5A6B80">over Breece Hall</text>
+
+  <rect x="76" y="395" width="360" height="14" fill="#EAE7DE" stroke="#D8D3C6"/>
+  <rect x="76" y="395" width="230" height="14" fill="#1E7A46"/>
+  <text x="452" y="409" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="30" font-weight="800" fill="#1E7A46">64% stated</text>
+
+  <text x="76" y="490" font-family="'Barlow','Helvetica Neue',Arial,sans-serif" font-size="30" font-weight="600" fill="#33445C">De'Von Achane 21.4 · Breece Hall 9.8  (+11.6)</text>
+
+  <g transform="rotate(-7 950 300)">
+    <rect x="800" y="230" width="300" height="120" fill="none" stroke="#1E7A46" stroke-width="8"/>
+    <text x="950" y="315" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="84" font-weight="800" letter-spacing="8" fill="#1E7A46">HIT</text>
+  </g>
+  <text x="600" y="360" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="150" font-weight="800" fill="rgba(90,107,128,.14)" transform="rotate(-18 600 337)">SAMPLE · DESIGN PREVIEW</text>
+  <line x1="76" y1="545" x2="1124" y2="545" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="76" y="590" font-family="'Barlow','Helvetica Neue',Arial,sans-serif" font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
+  <text x="1124" y="590" text-anchor="end" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT PICKS</text>
+</svg>

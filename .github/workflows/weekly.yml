@@ -35,6 +35,14 @@ jobs:
           path: data/raw/availability
           key: availability-archive-${{ github.run_id }}
           restore-keys: availability-archive-
+      # The ledger is the public record: this run RECORDS calls, Monday's run
+      # grades them. Both workflows share the ledger-archive- key family.
+      - name: Restore ledger archive
+        uses: actions/cache/restore@v4
+        with:
+          path: data/processed/ledger
+          key: ledger-archive-${{ github.run_id }}
+          restore-keys: ledger-archive-
       - name: Run weekly pipeline
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
@@ -46,6 +54,12 @@ jobs:
         with:
           path: data/raw/availability
           key: availability-archive-${{ github.run_id }}
+      - name: Save ledger archive
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/processed/ledger
+          key: ledger-archive-${{ github.run_id }}
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -55,4 +69,5 @@ jobs:
             reports/
             data/processed/week_report.json
             data/raw/availability/
+            data/processed/ledger/
           if-no-files-found: error

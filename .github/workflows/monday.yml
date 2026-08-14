@@ -1,0 +1,77 @@
+# Monday grading run (PLAN.md season ops): settle the ledger against the
+# weekend's box scores, render receipt cards, regenerate the public ledger
+# page, and draft the Receipts Monday thread. MNF calls stay pending until
+# their game is final (ledger RULE L1) and settle on the next run.
+#
+# Activates on push to GitHub with SLEEPER_LEAGUE_ID + SLEEPER_ROSTER_ID
+# secrets. Outputs upload as artifacts; if the repo variable PUSH_LEDGER is
+# set to "true", the refreshed site/ledger/ page is committed back so GitHub
+# Pages serves the updated public record.
+
+name: monday-receipts
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 13:00 UTC (9am ET — Sunday slate final)
+  workflow_dispatch: {}
+
+jobs:
+  receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      - name: Restore availability snapshot archive
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/availability
+          key: availability-archive-${{ github.run_id }}
+          restore-keys: availability-archive-
+      - name: Restore ledger archive
+        uses: actions/cache/restore@v4
+        with:
+          path: data/processed/ledger
+          key: ledger-archive-${{ github.run_id }}
+          restore-keys: ledger-archive-
+      - name: Ingest fresh box scores
+        env:
+          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
+        run: .venv/bin/python -m ingest.pull
+      - name: Grade ledger + draft Receipts Monday
+        env:
+          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
+          SLEEPER_ROSTER_ID: ${{ secrets.SLEEPER_ROSTER_ID }}
+        run: .venv/bin/python -m run.content receipts
+      - name: Save ledger archive
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/processed/ledger
+          key: ledger-archive-${{ github.run_id }}
+      - name: Upload drafts, cards, and ledger page
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipts-monday
+          path: |
+            content/
+            site/ledger/
+            data/processed/ledger/
+          if-no-files-found: warn
+      - name: Publish ledger page to the site
+        if: vars.PUSH_LEDGER == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/ledger/
+          git diff --cached --quiet || git commit -m "Ledger update: Monday grading run"
+          git push

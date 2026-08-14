@@ -82,12 +82,24 @@ def run_subscriber(subscriber: Subscriber, week: int,
     html_path.write_text(render_report.render(report, template_html), encoding="utf-8")
     (out_dir / f"{stem}.txt").write_text(text_summary(report), encoding="utf-8")
 
+    # Every published probability lands on the league's ledger (principle 2).
+    # Guarded separately: the report above is already delivered, and a corrupt
+    # shared ledger file must not sink this or any other subscriber's Tuesday.
+    ledger_note = ""
+    try:
+        from engine.ledger import extract_published_calls, ledger_path, record_calls
+        from engine.week_report import PROCESSED_DIR
+        record_calls(ledger_path(PROCESSED_DIR, subscriber.league_id),
+                     extract_published_calls(report))
+    except Exception as exc:  # noqa: BLE001 — batch contract
+        ledger_note = f" · LEDGER RECORD FAILED: {exc!r}"
+
     meta = report["meta"]
     published = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     detail = (f"{meta['my_label']} vs {meta['rival_label']}"
               + (" · RIVALRY WEEK" if meta.get("rivalry_week") else "")
               + f" · {published}/{len(report['lineup'])} confidences · "
-              f"{len(meta.get('gaps') or [])} gaps")
+              f"{len(meta.get('gaps') or [])} gaps" + ledger_note)
     return BatchResult(subscriber, ok=True, detail=detail, html_path=html_path)
 
 

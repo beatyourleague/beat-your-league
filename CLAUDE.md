@@ -178,14 +178,26 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status:** Phases 1-4 complete + Phase 6 subscriber mechanism built early (147 tests passing).
+**Status:** Phases 1-5 complete + Phase 6 subscriber mechanism built early (172 tests passing).
+Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
+probability at report time, grades only after both players' games are final, RULES L1-L4:
+never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
+receipt-card SVGs (`render/cards.py`), public ledger page (`render/ledger_site.py` →
+`site/ledger/`, aggregated across every league's ledger, anonymized, with a fail-closed
+shrink guard so a data-lost store can never silently wipe the published record), and the
+four content drafts (`python -m run.content all` / `make content`: Receipts Monday, Hype
+Wednesday, Coin-Flip Friday — which quotes ONLY the recorded ledger entry, never a fresh
+number — and the daily reply kit, which never names league members). `monday.yml` is the
+Monday grading cron; both crons persist the ledger via actions/cache + artifacts. Phase 5
+was adversarially reviewed: 10 confirmed findings fixed (incl. a reproduced cross-process
+race that silently erased recorded calls), 2 refuted.
 Phase 6 mechanism: signup picker (`site/join/`, live-tested against real Sleeper accounts —
 username → leagues → own-roster auto-resolved → rival tapped from real team names), subscriber
 registry (`run/registry.py`, gitignored data), batch runner (`python -m run.batch`: one ingest
 per league, one report per subscriber, failures contained per-subscriber), and the Rival Watch
 strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Remaining for
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
-and connect the Substack list. Phase 5 (content system) is untouched and next in order.
+and connect the Substack list. All build phases are now complete.
 
 Public site (`site/`, GH Pages root): landing page (`index.html` — design-system CSS/SVG
 visuals only, no stock imagery; every cited number is real backtest/demo output, labeled with

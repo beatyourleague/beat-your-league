@@ -145,6 +145,23 @@ def main(argv: list[str] | None = None) -> int:
     text_path = REPORTS_DIR / f"{stem}.txt"
     text_path.write_text(text_summary(report), encoding="utf-8")
 
+    # Ledger bookkeeping runs AFTER the deliverables are on disk: a corrupt
+    # ledger must never cost a subscriber their report. It does flag the run
+    # (exit 1) so the cron surfaces it instead of quietly skipping grading.
+    from engine.ledger import (extract_published_calls, grade_ledger,
+                               ledger_path, record_calls)
+    ledger_file = ledger_path(PROCESSED_DIR, league_id)
+    ledger_ok = True
+    try:
+        recorded = record_calls(ledger_file, extract_published_calls(report))
+        graded, pending = grade_ledger(ledger_file, RAW_DIR)
+    except Exception as exc:  # noqa: BLE001 — report first, bookkeeping second
+        ledger_ok = False
+        recorded = graded = pending = 0
+        print(f"WARNING: ledger update failed ({exc!r}). The report rendered "
+              f"fine; inspect {ledger_file} and re-run to record/grade this "
+              "week's calls.", file=sys.stderr)
+
     line = "=" * 62
     print(f"\n{line}\nWEEKLY RUN COMPLETE\n{line}")
     print(f"{meta['my_label']} vs {meta['rival_label']} — "
@@ -155,9 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     published = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"  published confidences: {published}/{len(report['lineup'])} slots; "
           f"declared gaps: {len(meta.get('gaps') or [])}")
+    print(f"  ledger: {recorded} new call(s) recorded, {graded} graded this run, "
+          f"{pending} awaiting final games"
+          + ("" if ledger_ok else " · LEDGER UPDATE FAILED (see warning above)"))
     print("  LLM tokens this run: 0 (deterministic layer only)")
     print(line)
-    return 0
+    return 0 if ledger_ok else 1
 
 
 if __name__ == "__main__":

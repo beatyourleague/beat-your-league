@@ -398,8 +398,10 @@ def hype_meter(
             "completed_adds": entry["adds"],
             "top_bid": entry["top_bid"],
             "faab_budget": budget,
-            "evidence": f"league transaction log, weeks {min(windows)}-{max(windows)}"
-                        if windows else "no transaction data",
+            "evidence": ((f"league transaction log, week {windows[0]}"
+                          if len(windows) == 1 else
+                          f"league transaction log, weeks {min(windows)}-{max(windows)}")
+                         if windows else "no transaction data"),
             "verdict_gate": ("real-or-mirage verdict needs usage data "
                             "(routes/snaps) — coming in v0.3"),
         })
@@ -765,6 +767,7 @@ def _slot_json(pick: SlotPick, players: PlayerIndex) -> dict[str, Any]:
         "appear_probability": round(projection.appear_probability, 2) if projection else None,
         "confidence": round(pick.confidence, 3) if pick.confidence is not None else None,
         "confidence_gate": pick.confidence_gate,
+        "alternative_id": pick.alternative_id,
         "alternative_name": players.name(pick.alternative_id) if pick.alternative_id else None,
         "status": pick.status.status.value if pick.status else None,
         "status_reason": pick.status.reason if pick.status else None,
