@@ -311,6 +311,43 @@ def test_legal_page_covers_the_promises_money_depends_on() -> None:
         assert re.search(required, legal, re.I), f"legal page is missing: {required}"
 
 
+def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
+    """"You can cancel any time" without saying HOW is friction wearing a
+    promise's clothes. The terms must give real, followable steps."""
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    assert re.search(r'id="cancel"', (SITE / "legal.html").read_text(encoding="utf-8")), \
+        "the cancellation steps need a linkable anchor"
+    assert re.search(r"substack\.com/account", legal, re.I), \
+        "the self-serve cancel path must name where to go"
+    assert re.search(r"billing stops immediately", legal, re.I)
+    # Self-serve must be the advertised route: any promise that WE cancel on
+    # request creates an inbox someone has to watch every day of the season.
+    assert not re.search(r"reply to (any report|this email) with the word", legal, re.I), \
+        "cancellation must not depend on the operator reading email"
+    # And the trap must be called out, not left for the customer to discover.
+    assert re.search(r"does not always stop a", legal, re.I), \
+        "terms must warn that unsubscribing is not the same as cancelling"
+    for page, name in ((LANDING, "landing"), (JOIN, "join")):
+        assert re.search(r'legal\.html#cancel', page), \
+            f"{name} page should link straight to the cancellation steps"
+
+
+def test_every_report_carries_a_way_out() -> None:
+    """A weekly commercial email with no exit is friction and a compliance
+    problem; one that stops emails while billing continues is worse."""
+    for page, name in ((SAMPLE_REPORT, "html report"),
+                       ((Path(__file__).resolve().parent.parent / "reports"
+                         / "rival-report-2018-w10-r1.txt").read_text(encoding="utf-8"),
+                        "emailed text report")):
+        text = prose(page)
+        assert re.search(r"cancel", text, re.I), f"{name} offers no way to cancel"
+        assert re.search(r"unsubscrib\w+ from emails alone does ?not|"
+                         r"unsubscribing from emails alone does NOT", text, re.I), \
+            f"{name} must distinguish stopping emails from stopping billing"
+        assert not re.search(r"reply to this email with the word", text, re.I), \
+            f"{name} must not route cancellation through a human inbox"
+
+
 def test_billing_never_outlives_the_product() -> None:
     """We only charge for months we actually send something. Monthly billing
     stops at season end; the annual renewal lands before the season it covers."""

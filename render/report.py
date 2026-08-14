@@ -464,7 +464,16 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'Projections are analysis, not guarantees — no betting picks, no staking '
         f'advice. Fantasy decisions are yours to make (that\'s the fun part).<br>'
         f'Built from your league\'s own record on Sleeper. Not affiliated with '
-        f'Sleeper or the NFL.</footer>'
+        f'Sleeper or the NFL.<br>'
+        # Every commercial email needs a working way out. It points at the
+        # self-serve cancel because that costs the reader ~15 seconds and the
+        # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
+        # distinction stays: stopping emails while billing continues is how you
+        # earn a chargeback and deserve it.
+        f'<b>Done with this?</b> Cancel yourself in your Substack account — it '
+        f'takes about fifteen seconds and stops the billing immediately. '
+        f'Unsubscribing from emails alone does not stop a subscription, so cancel '
+        f'there if you want the charges to end.</footer>'
     )
 
 

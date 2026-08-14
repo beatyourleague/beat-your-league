@@ -138,6 +138,43 @@ into `legal.html`; the Substack URL into `SUBSTACK_URL`; a form backend into `FO
 signup forms honestly say signups aren't open — which is correct, but it also means zero
 conversions, so this is the first thing to fix.
 
+### Payment → delivery: how a purchase becomes a Tuesday email (decided Aug 14 2026)
+
+Requirement: someone pays, and reports start arriving and keep arriving every Tuesday for as long
+as they are paid up — with no human step anywhere, at near-zero cost.
+
+**Recommended stack: Stripe (billing + entitlement) + Resend (sending).** Both are wired and
+tested; both are config, not code, so switching either is a secret change.
+
+| Piece | Choice | Cost at 100 subscribers | Why |
+|---|---|---|---|
+| Billing | Stripe Checkout/Payment Links | 2.9% + 30¢ | vs Substack's 10%, saves ~$4.60 per $29 pass |
+| Entitlement | Stripe Subscriptions API | $0 | answers "is this person paid up right now" natively |
+| Sending | Resend | $0 (3,000 emails/mo free) | ~1,700 sends/season for 100 subs fits the free tier |
+| Sending at scale | Amazon SES | ~$0.17/season | if the list outgrows the free tier |
+| Scheduling | GitHub Actions cron | $0 | already the weekly runner |
+
+**The property that makes this work without date arithmetic on our side:** when a subscriber
+cancels, Stripe does *not* delete the subscription — it stays `status:"active"` with
+`cancel_at_period_end:true` until the period they paid for actually ends. So "still paying, or paid
+for a period we're still inside" is one API query, and the pipeline stops on its own the week their
+period lapses. `trialing` counts as entitled; `past_due` deliberately does not (the card bounced
+and Stripe is retrying — it flips back to `active` by itself if it clears).
+
+Implementation: `run/subscriptions.py` (`resolve_paid_list()` — Stripe when `STRIPE_API_KEY` is
+set, CSV export otherwise) and `run/delivery.py` (dry/resend/postmark/ses/smtp, idempotency-keyed
+so a re-run or a double-fired cron cannot mail the same week twice). With no entitlement source
+configured the run **refuses and sends nothing** rather than mailing a stale list — a cancelled
+person receiving a paid report is the failure that becomes a chargeback.
+
+Substack stays the fallback and the free-list home. If it is used for billing instead, the CSV
+export path covers it; the 10% fee is the price of not running the checkout.
+
+New launch blockers from this decision: `STRIPE_API_KEY` (a **restricted** key, read access to
+subscriptions + customers only), `EMAIL_PROVIDER` + that provider's key, and `EMAIL_FROM` on a
+domain with SPF/DKIM configured — an unauthenticated From address goes to spam, which at this
+volume is indistinguishable from not sending at all.
+
 ### Retention & refund policy (owner decision, Aug 14 2026)
 
 Goal: recurring revenue that sticks, with as little refunded as possible. The structure below

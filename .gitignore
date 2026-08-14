@@ -5,6 +5,8 @@ data/
 
 # Per-subscriber output (personal league data; the registry itself is under data/)
 reports/subscribers/
+# Dry-run drafts: real subscriber addresses and their personalised reports.
+reports/outbox/
 
 # Python
 .venv/

@@ -28,6 +28,9 @@ from engine.history import HistoryError
 from engine.week_report import RAW_DIR, WeekReportError, build_week_report
 from run.registry import (DEFAULT_REGISTRY, RegistryError, Subscriber,
                           league_pass_seats, load_registry)
+from run.delivery import (DRY_OUTBOX, DeliveryError, Message, build_provider,
+                          send_all)
+from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 from run.week import _current_week, text_summary
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -40,6 +43,15 @@ class BatchResult:
     ok: bool
     detail: str
     html_path: Path | None = None
+    message: Message | None = None
+
+
+def _subject(report: dict) -> str:
+    """What lands in the inbox. The rival's name is the reason they open it."""
+    meta = report["meta"]
+    if meta.get("rivalry_week"):
+        return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
+    return f"Week {meta['week']}: your report vs {meta['rival_label']}"
 
 
 def _my_roster_id(raw_dir: Path, subscriber: Subscriber) -> int:
@@ -80,8 +92,21 @@ def run_subscriber(subscriber: Subscriber, week: int,
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = f"w{week:02d}-{subscriber.slug}"
     html_path = out_dir / f"{stem}.html"
-    html_path.write_text(render_report.render(report, template_html), encoding="utf-8")
-    (out_dir / f"{stem}.txt").write_text(text_summary(report), encoding="utf-8")
+    html = render_report.render(report, template_html)
+    text = text_summary(report)
+    html_path.write_text(html, encoding="utf-8")
+    (out_dir / f"{stem}.txt").write_text(text, encoding="utf-8")
+
+    # The idempotency key is per subscriber, season and week — so a re-run,
+    # a resumed workflow, or a second cron firing all resolve to the same send.
+    meta_season = report["meta"]["season"]
+    message = Message(
+        to=subscriber.email,
+        subject=_subject(report),
+        html=html,
+        text=text,
+        key=f"{subscriber.league_id}-{meta_season}-w{week:02d}-{subscriber.slug}",
+    )
 
     # Every published probability lands on the league's ledger (principle 2).
     # Guarded separately: the report above is already delivered, and a corrupt
@@ -101,7 +126,8 @@ def run_subscriber(subscriber: Subscriber, week: int,
               + (" · RIVALRY WEEK" if meta.get("rivalry_week") else "")
               + f" · {published}/{len(report['lineup'])} confidences · "
               f"{len(meta.get('gaps') or [])} gaps" + ledger_note)
-    return BatchResult(subscriber, ok=True, detail=detail, html_path=html_path)
+    return BatchResult(subscriber, ok=True, detail=detail, html_path=html_path,
+                       message=message)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,6 +136,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--skip-ingest", action="store_true",
                         help="use the existing cache without hitting Sleeper")
+    parser.add_argument("--paid-list", type=Path, default=DEFAULT_EXPORT,
+                        help="CSV subscriber export, used only when STRIPE_API_KEY "
+                             "is unset; cancelled people are skipped either way")
+    parser.add_argument("--no-paid-check", action="store_true",
+                        help="send to everyone in the registry without checking who paid")
+    parser.add_argument("--email-provider", default=None,
+                        help="dry (default), resend, postmark, ses or smtp; "
+                             "overrides EMAIL_PROVIDER")
+    parser.add_argument("--no-send", action="store_true",
+                        help="build the reports but skip delivery entirely")
+    parser.add_argument("--resend", action="store_true",
+                        help="send again even if this week already went out")
     args = parser.parse_args(argv)
 
     try:
@@ -120,6 +158,34 @@ def main(argv: list[str] | None = None) -> int:
     if not subscribers:
         print("registry is empty — nothing to do")
         return 0
+
+    # Cancellation must cost the operator nothing: the payment platform stops the
+    # billing on its own, and this is how the pipeline learns to stop the reports.
+    # Someone who cancelled mid-period still counts — Stripe keeps them active
+    # until the period they paid for ends, which is exactly what they bought.
+    # Refusing to run without an answer is deliberate: silently mailing people who
+    # cancelled is the one failure that turns into chargebacks and screenshots.
+    dropped: list[Subscriber] = []
+    if not args.no_paid_check:
+        try:
+            paid = resolve_paid_list(args.paid_list)
+        except SubscriptionError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        still_paying = [s for s in subscribers if paid.covers(s.email)]
+        dropped = [s for s in subscribers if not paid.covers(s.email)]
+        print(f"Paid check: {len(paid.emails)} entitled subscriber(s) "
+              f"(source: {paid.source})")
+        if paid.status_column is None:
+            print("NOTE: that export has no subscription-status column, so everyone "
+                  "listed in it is treated as paying.")
+        subscribers = still_paying
+        if dropped:
+            print(f"Skipping {len(dropped)} subscriber(s) who are no longer paying: "
+                  + ", ".join(s.slug for s in dropped))
+        if not subscribers:
+            print("nobody in the registry is currently paying — nothing to send")
+            return 0
 
     leagues = sorted({s.league_id for s in subscribers})
     if not args.skip_ingest:
@@ -162,6 +228,29 @@ def main(argv: list[str] | None = None) -> int:
         if total and len(members) < total:
             print(f"    {total - len(members)} team(s) haven't signed up yet — "
                   "they get nothing until they pick a rival.")
+
+    # Delivery. Dry-run by default: a misconfigured cron must never mail people
+    # by accident, so sending is opt-in via EMAIL_PROVIDER.
+    if ok and not args.no_send:
+        try:
+            provider = build_provider(args.email_provider)
+        except DeliveryError as exc:
+            print(f"Delivery not configured: {exc}", file=sys.stderr)
+            return 1
+        sends = send_all([r.message for r in ok if r.message], provider=provider,
+                         resend_anyway=args.resend)
+        delivered = [s for s in sends if s.ok and not s.skipped]
+        skipped = [s for s in sends if s.skipped]
+        failed = [s for s in sends if not s.ok]
+        print(f"Delivery via {provider.name}: {len(delivered)} sent, "
+              f"{len(skipped)} already sent, {len(failed)} failed")
+        for send in failed:
+            print(f"    FAILED {send.message.to}: {send.detail}", file=sys.stderr)
+        if provider.name == "dry":
+            print(f"    (dry run — nothing left this machine; drafts in "
+                  f"{DRY_OUTBOX.relative_to(REPO_ROOT)}/)")
+        if failed:
+            return 1
 
     if ok:
         print(f"Reports under: {SUBSCRIBER_REPORTS.relative_to(REPO_ROOT)}/")

@@ -92,6 +92,50 @@ def test_registry_missing_file_is_actionable(tmp_path: Path) -> None:
         load_registry(tmp_path / "nope.json")
 
 
+def _export(tmp_path: Path, rows: str) -> Path:
+    path = tmp_path / "substack-export.csv"
+    path.write_text(rows, encoding="utf-8")
+    return path
+
+
+def test_cancelled_subscribers_drop_out_without_operator_action(tmp_path: Path) -> None:
+    """Substack stops the billing on its own; this is how the pipeline learns to
+    stop the reports. No inbox, no manual list."""
+    from run.subscriptions import load_paid_list
+    path = _export(tmp_path, "email,active_subscription\n"
+                             "stays@example.com,true\n"
+                             "quit@example.com,false\n")
+    paid = load_paid_list(path)
+    assert paid.covers("stays@example.com")
+    assert not paid.covers("quit@example.com")
+    assert paid.covers("STAYS@Example.com ")   # case/whitespace tolerant
+
+
+def test_missing_export_refuses_rather_than_mailing_everyone(tmp_path: Path) -> None:
+    """Silently sending to people who cancelled is the failure that becomes a
+    chargeback, so an absent list is an error the operator must resolve."""
+    from run.subscriptions import SubscriptionError, load_paid_list
+    with pytest.raises(SubscriptionError, match="no subscriber export"):
+        load_paid_list(tmp_path / "nope.csv")
+
+
+def test_unrecognised_status_is_not_treated_as_paid(tmp_path: Path) -> None:
+    from run.subscriptions import load_paid_list
+    paid = load_paid_list(_export(tmp_path, "email,status\n"
+                                            "weird@example.com,something_new\n"
+                                            "ok@example.com,active\n"))
+    assert paid.covers("ok@example.com")
+    assert not paid.covers("weird@example.com")
+
+
+def test_export_without_status_column_is_flagged(tmp_path: Path) -> None:
+    """A plain list has no cancellation signal — callers must be told, not
+    silently handed 'everyone is paying'."""
+    from run.subscriptions import load_paid_list
+    paid = load_paid_list(_export(tmp_path, "email\na@example.com\n"))
+    assert paid.status_column is None and paid.covers("a@example.com")
+
+
 def test_league_pass_seat_must_name_its_payer(tmp_path: Path) -> None:
     """A seat with no payer is an unpaid report waiting to be sent."""
     with pytest.raises(RegistryError, match="covered_by"):
@@ -244,3 +288,109 @@ def test_user_leagues_rejects_bad_inputs(tmp_path: Path) -> None:
         client.user_leagues("abc", "2026")
     with pytest.raises(ValueError):
         client.user_leagues("457511950237696", "20x6")
+
+
+# --------------------------------------------------------------------- #
+# Stripe as the source of truth for "is this person entitled to a report"
+# --------------------------------------------------------------------- #
+
+def _stripe_page(subs, has_more=False):
+    return {"data": subs, "has_more": has_more}
+
+
+def _sub(sub_id, email, deleted=False):
+    return {"id": sub_id, "customer": {"email": email, "deleted": deleted}}
+
+
+def test_stripe_lists_entitled_subscribers(monkeypatch: pytest.MonkeyPatch) -> None:
+    import run.subscriptions as subs
+    calls = []
+
+    def fake_get(url, api_key):
+        calls.append(url)
+        if "status=active" in url:
+            return _stripe_page([_sub("sub_1", "Paying@Example.com")])
+        return _stripe_page([_sub("sub_2", "trial@example.com")])
+
+    monkeypatch.setattr(subs, "_stripe_get", fake_get)
+    paid = subs.load_paid_from_stripe(api_key="sk_test_x")
+    assert paid.covers("paying@example.com")     # normalised
+    assert paid.covers("trial@example.com")      # trialing counts
+    assert paid.source == "stripe"
+    assert not any("sk_test_x" in c for c in calls)   # key never in a URL
+
+
+def test_cancelled_but_still_inside_paid_period_still_gets_reports(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The requirement: someone who cancelled in October but paid through
+    December keeps receiving. Stripe keeps them 'active' until the period ends,
+    so querying active is exactly right — no date arithmetic on our side."""
+    import run.subscriptions as subs
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        [{"id": "sub_1", "cancel_at_period_end": True,
+          "customer": {"email": "leaving@example.com"}}]
+        if "status=active" in url else []))
+    assert subs.load_paid_from_stripe(api_key="sk").covers("leaving@example.com")
+
+
+def test_stripe_pagination_collects_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    import run.subscriptions as subs
+    pages = {
+        0: _stripe_page([_sub("sub_1", "a@example.com")], has_more=True),
+        1: _stripe_page([_sub("sub_2", "b@example.com")], has_more=False),
+    }
+    seen = {"n": 0}
+
+    def fake_get(url, key):
+        if "status=trialing" in url:
+            return _stripe_page([])
+        page = pages[seen["n"]]
+        seen["n"] += 1
+        return page
+
+    monkeypatch.setattr(subs, "_stripe_get", fake_get)
+    paid = subs.load_paid_from_stripe(api_key="sk")
+    assert paid.covers("a@example.com") and paid.covers("b@example.com")
+
+
+def test_deleted_stripe_customer_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    import run.subscriptions as subs
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        [_sub("sub_1", "gone@example.com", deleted=True)]))
+    assert subs.load_paid_from_stripe(api_key="sk").emails == frozenset()
+
+
+def test_malformed_stripe_page_does_not_crash_the_batch(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stripe's response is external input like any other feed: a shape we did
+    not expect must not raise out of the Tuesday run."""
+    import run.subscriptions as subs
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        ["not-a-dict", {"customer": "cus_123"}, {"customer": {"email": None}},
+         _sub("sub_ok", "real@example.com")]))
+    assert subs.load_paid_from_stripe(api_key="sk").emails == frozenset(
+        {"real@example.com"})
+
+
+def test_stripe_without_a_key_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    import run.subscriptions as subs
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    with pytest.raises(subs.SubscriptionError, match="STRIPE_API_KEY"):
+        subs.load_paid_from_stripe()
+
+
+def test_stripe_wins_over_csv_when_configured(monkeypatch: pytest.MonkeyPatch,
+                                              tmp_path: Path) -> None:
+    """Platform choice is a config change, not a rewrite: the batch never
+    learns which source answered."""
+    import run.subscriptions as subs
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test_x")
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        [_sub("sub_1", "fromstripe@example.com")] if "status=active" in url else []))
+    paid = subs.resolve_paid_list(tmp_path / "unused.csv")
+    assert paid.source == "stripe" and paid.covers("fromstripe@example.com")
+    monkeypatch.delenv("STRIPE_API_KEY")
+    csv_path = tmp_path / "export.csv"
+    csv_path.write_text("email,active_subscription\nfromcsv@example.com,true\n",
+                        encoding="utf-8")
+    assert subs.resolve_paid_list(csv_path).covers("fromcsv@example.com")

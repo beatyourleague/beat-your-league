@@ -199,6 +199,28 @@ strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Re
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
 and connect the Substack list. All build phases are now complete.
 
+**Payment → delivery (Aug 14 2026).** Nothing in the repo actually sent an email until now; that
+was the largest automation gap. Two modules close it, both provider-agnostic so the platform
+choice is a secret, never a rewrite (rationale + cost table in PLAN §4):
+- `run/subscriptions.py` — *who is entitled to this week's report*. `resolve_paid_list()` asks
+  **Stripe** directly when `STRIPE_API_KEY` is set, else parses a CSV export. The Stripe property
+  that matters: a cancelled subscriber stays `status:"active"` with `cancel_at_period_end` until
+  the period they paid for ends, so "they paid for a window and we're still in it" needs no date
+  arithmetic of ours. `trialing` counts; `past_due` does not (the card bounced — Stripe retries and
+  restores `active` itself). Stripe responses are parsed as untrusted input. With **no** entitlement
+  source configured the run refuses and sends nothing: silently mailing people who cancelled is the
+  one failure that becomes a chargeback.
+- `run/delivery.py` — *the send*. Providers: `dry` (default — writes `.eml` drafts to
+  `reports/outbox/`, gitignored, nothing leaves the machine), `resend`, `postmark`, `ses`, `smtp`.
+  Every message carries an idempotency key (`league-season-week-slug`) checked against
+  `data/processed/sent.jsonl`, so a re-run, a resumed workflow, or a double-fired cron cannot mail
+  the same week twice. **Dry-run is the default on purpose**: a misconfigured cron must never mail
+  real people by accident, so sending is opt-in via `EMAIL_PROVIDER`.
+`make dry-send` builds every subscriber email without sending; `make send` is the real thing.
+`weekly.yml` passes `STRIPE_API_KEY`/`EMAIL_*` as secrets and caches `sent.jsonl` across runners
+(without it, an ephemeral runner would forget who it already mailed). Use a **restricted** Stripe
+key — read access to subscriptions and customers is all this needs.
+
 Public site (`site/`, GH Pages root): landing page (`index.html` — design-system CSS/SVG
 visuals only, no stock imagery; every cited number is real backtest/demo output, labeled with
 its source; pricing per PLAN §4 with checkout deferred to Substack links marked in comments;
@@ -236,6 +258,36 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 - **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
   headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
   landing page links it and a test asserts the failures survive publication.
+- **Delivery (`run/delivery.py`) is provider-agnostic and dry by default.** Until this existed
+  the pipeline produced files a human had to mail — the largest automation gap in the product.
+  `EMAIL_PROVIDER` picks the backend (`dry` | `resend` | `postmark` | `ses` | `smtp`); unset
+  means **dry-run**, so a misconfigured cron writes `.eml` drafts to `reports/outbox/` instead
+  of mailing anyone. Four properties are load-bearing and tested: sends are **idempotent** per
+  (league, season, week, subscriber) so a re-run or resumed workflow never mails twice; **one
+  failed send never stops the batch** and is not recorded, so it retries next run; provider
+  errors **never echo credentials**; and the paid check in `run/batch.py` gates delivery, so
+  nobody who cancelled is mailed. The send log (`data/processed/sent.jsonl`) is cached across
+  CI runs — losing it would mean duplicate sends.
+- **Platform note:** Substack cannot deliver this product. It broadcasts one post to everyone,
+  while every subscriber needs a different report; it can only ever be payments + a CSV. The
+  recommended end state is Stripe (checkout + customer portal + API-queried subscriber list)
+  with a transactional email provider, both driven from the existing cron — no server, ~10% of
+  revenue saved, and no manual export step. Substack's free tier still suits the *public*
+  broadcast content (Receipts Monday, ledger posts). Decision not yet made; the delivery layer
+  is deliberately independent of it.
+- **Cancellation must cost the operator nothing (owner instruction, Aug 14 2026).** Substack
+  already handles the cancel itself — the subscriber clicks, billing stops, we are not
+  involved — so self-serve is the ONLY route the product advertises. Any copy promising
+  "reply and we'll cancel it" creates an inbox someone has to read every day of the season and
+  is banned by test (`test_cancelling_has_concrete_steps_not_just_a_promise`,
+  `test_every_report_carries_a_way_out`). Because reports are personalised and therefore sent
+  directly rather than as Substack posts, the pipeline learns who left from a Substack CSV
+  export: `run/subscriptions.py` parses it (tolerant column matching; an unrecognised status is
+  never treated as paid) and `run/batch.py` filters the run, refusing to proceed without either
+  the export or an explicit `--no-paid-check`. Silently mailing people who cancelled is the
+  failure that becomes a chargeback. Every report footer states that unsubscribing from emails
+  does not stop a subscription — leaving that ambiguous is how honest businesses accidentally
+  behave like dishonest ones.
 - **League Pass ($99, commissioner buys) is built.** Registry seats carry `plan:"league_pass"`
   and `covered_by` (the payer's email — a seat naming no payer is rejected, since that is an
   unpaid report waiting to be sent); `run/batch.py` reports seats claimed vs league size, because

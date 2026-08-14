@@ -43,11 +43,44 @@ jobs:
           path: data/processed/ledger
           key: ledger-archive-${{ github.run_id }}
           restore-keys: ledger-archive-
-      - name: Run weekly pipeline
+      # Remembering who was already mailed is what stops a re-run from sending
+      # Tuesday's report twice, so it has to survive the ephemeral runner.
+      - name: Restore delivery log
+        uses: actions/cache/restore@v4
+        with:
+          path: data/processed/sent.jsonl
+          key: sent-log-${{ github.run_id }}
+          restore-keys: sent-log-
+      - name: Run weekly pipeline (my own report)
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
           SLEEPER_ROSTER_ID: ${{ secrets.SLEEPER_ROSTER_ID }}
         run: .venv/bin/python -m run.week
+      # Subscriber delivery. EMAIL_PROVIDER is unset until the sending account
+      # exists, and unset means dry-run — so this step is safe to enable now and
+      # starts mailing the day the secret is added, with no code change.
+      # STRIPE_API_KEY is the entitlement source: with it set, the run asks
+      # Stripe who is currently paying and mails exactly those people, with no
+      # export and no human step. A RESTRICTED key with read access to
+      # subscriptions + customers is enough — never the full secret key.
+      # Without it the run falls back to data/registry/substack-export.csv.
+      - name: Send subscriber reports
+        if: ${{ hashFiles('data/registry/subscribers.json') != '' }}
+        env:
+          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+        run: .venv/bin/python -m run.batch
+      - name: Save delivery log
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/processed/sent.jsonl
+          key: sent-log-${{ github.run_id }}
       - name: Save availability snapshot archive
         if: always()
         uses: actions/cache/save@v4
