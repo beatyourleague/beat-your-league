@@ -58,9 +58,36 @@ class PaidList:
     emails: frozenset[str]
     source: Path | str
     status_column: str | None
+    # Stripe only. Customer ids are the durable join key — see Subscriber
+    # .stripe_customer_id for why an email is not one.
+    customer_ids: frozenset[str] = frozenset()
+    # Leagues covered by an entitled League Pass, read from the payer's own
+    # Stripe record rather than from a covered_by email somebody typed.
+    covered_leagues: frozenset[str] = frozenset()
 
     def covers(self, email: str) -> bool:
         return email.strip().lower() in self.emails
+
+    def entitles(self, subscriber) -> bool:
+        """Is this subscriber entitled to this week's report?
+
+        Three routes, most durable first:
+          1. their Stripe customer is paying (survives an email change);
+          2. their league is covered by somebody's League Pass;
+          3. the email on file is paying — the fallback for hand-added entries
+             and for the CSV path, which has no customer ids at all.
+        """
+        customer = getattr(subscriber, "stripe_customer_id", None)
+        if customer and customer in self.customer_ids:
+            return True
+        league = getattr(subscriber, "league_id", None)
+        if league and league in self.covered_leagues:
+            return True
+        payer = getattr(subscriber, "covered_by", None) or subscriber.email
+        # A seat whose payer cannot be found is NOT entitled — a League Pass
+        # seat must die with the pass that bought it, or a lapsed commissioner
+        # leaves eleven people receiving a product nobody is paying for.
+        return self.covers(payer)
 
 
 # --------------------------------------------------------------------- #
@@ -78,6 +105,10 @@ class PaidList:
 _ENTITLED_STATUSES = ("active", "trialing")
 
 STRIPE_API = "https://api.stripe.com/v1/subscriptions"
+
+# Customer-metadata keys written by run/sync.py. Namespaced so we never collide
+# with anything the operator sets by hand in the Stripe dashboard.
+PASS_LEAGUE_KEY = "byl_pass_league"
 
 
 def _stripe_get(url: str, api_key: str) -> dict:
@@ -114,6 +145,8 @@ def load_paid_from_stripe(api_key: str | None = None,
             "read access to subscriptions and customers is enough), or point "
             "--paid-list at a CSV export instead.")
     emails: set[str] = set()
+    customer_ids: set[str] = set()
+    covered_leagues: set[str] = set()
     for status in statuses:
         params = {"status": status, "limit": "100", "expand[]": "data.customer"}
         url = f"{STRIPE_API}?{urllib.parse.urlencode(params)}"
@@ -134,13 +167,26 @@ def load_paid_from_stripe(api_key: str | None = None,
                 email = (customer.get("email") or "").strip().lower()
                 if email:
                     emails.add(email)
+                customer_id = customer.get("id")
+                if isinstance(customer_id, str) and customer_id:
+                    customer_ids.add(customer_id)
+                # A League Pass covers a whole league. run/sync.py stamps the
+                # league onto the payer's customer record at first sight, so
+                # coverage is answered here without listing sessions — and it
+                # lapses the moment the payer's subscription does.
+                metadata = customer.get("metadata")
+                league = (metadata or {}).get(PASS_LEAGUE_KEY) if isinstance(metadata, dict) else None
+                if isinstance(league, str) and league.strip().isdigit():
+                    covered_leagues.add(league.strip())
             last_id = data[-1].get("id") if data and isinstance(data[-1], dict) else None
             if not page.get("has_more") or not last_id:
                 break
             url = (f"{STRIPE_API}?{urllib.parse.urlencode(params)}"
                    f"&starting_after={urllib.parse.quote(str(last_id))}")
     return PaidList(emails=frozenset(emails), source="stripe",
-                    status_column=",".join(statuses))
+                    status_column=",".join(statuses),
+                    customer_ids=frozenset(customer_ids),
+                    covered_leagues=frozenset(covered_leagues))
 
 
 def resolve_paid_list(csv_path: Path | None = None) -> PaidList:

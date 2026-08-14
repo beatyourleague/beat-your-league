@@ -1,6 +1,6 @@
 PY := .venv/bin/python
 
-.PHONY: week ingest backtest test content receipts
+.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send
 
 week:
 	$(PY) -m run.week
@@ -13,6 +13,14 @@ backtest:
 
 content:
 	$(PY) -m run.content all
+
+# Turn completed payments into the subscriber registry. Needs STRIPE_API_KEY.
+sync:
+	$(PY) -m run.sync
+
+# What the next sync WOULD change, without writing or stamping anything.
+sync-preview:
+	$(PY) -m run.sync --dry-run --no-promote
 
 # Build every subscriber's report and write the emails WITHOUT sending them.
 # Read reports/outbox/*.eml to see exactly what would land in an inbox.

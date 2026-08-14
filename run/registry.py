@@ -37,6 +37,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SEASON_PLAN = "season"
 LEAGUE_PASS_PLAN = "league_pass"
 _PLANS = (SEASON_PLAN, LEAGUE_PASS_PLAN)
+_CUSTOMER_RE = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
 
 
 class RegistryError(ValueError):
@@ -57,6 +58,14 @@ class Subscriber:
     #                the pass only changes who paid, never what is delivered.
     plan: str = SEASON_PLAN
     covered_by: str | None = None   # payer's email, for league_pass seats
+    # The Stripe customer this signup was paid by, when it came through
+    # checkout. This is the JOIN KEY for entitlement: an email is something the
+    # buyer types (twice, in two forms, minutes apart) and can change later in
+    # the billing portal, so joining on it means reconciling typos, work-vs-
+    # personal addresses and plus-tags forever. A customer id is issued by the
+    # system that took the money and never changes. Entries added by hand have
+    # none, and fall back to the email join.
+    stripe_customer_id: str | None = None
 
     @property
     def is_league_seat(self) -> bool:
@@ -118,6 +127,11 @@ def _parse_entry(raw: dict, index: int) -> Subscriber:
     elif covered_by:
         raise RegistryError(
             f"{where}: covered_by is only meaningful on a {LEAGUE_PASS_PLAN} seat")
+    customer = raw.get("stripe_customer_id")
+    stripe_customer_id = str(customer).strip() if customer else None
+    if stripe_customer_id is not None and not _CUSTOMER_RE.match(stripe_customer_id):
+        raise RegistryError(
+            f"{where}: stripe_customer_id must look like 'cus_...', got {customer!r}")
     return Subscriber(
         email=email,
         user_id=user_id,
@@ -127,6 +141,7 @@ def _parse_entry(raw: dict, index: int) -> Subscriber:
         sleeper_username=str(username).strip() if username else None,
         plan=plan,
         covered_by=covered_by,
+        stripe_customer_id=stripe_customer_id,
     )
 
 

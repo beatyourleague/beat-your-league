@@ -178,6 +178,7 @@
 // ---------------------------------------------------------------------------
 const STRIPE_LINK_SEASON = "";    // $29/season, auto-renewing annual
 const STRIPE_LINK_MONTHLY = "";   // $9.99/month
+const STRIPE_LINK_PASS = "";      // $99 League Pass, recurring annual
 
 // League Pass SEATS only. A seat holder pays nothing — their commissioner
 // already did — so there is no payment to carry their picks, and this is the
@@ -201,9 +202,13 @@ let SEASON = "2026";
 // shares. In this mode the buyer picks exactly as normal but never pays.
 const QUERY = new URLSearchParams(location.search);
 const SEAT_FOR_LEAGUE = (QUERY.get("pass") || "").replace(/[^0-9]/g, "");
-// /join/?plan=monthly — which pricing card they came from. Anything else is
-// the season pass, so a mangled link can never silently downgrade the sale.
+// /join/?plan=monthly | ?plan=pass — which card they came from. Anything else
+// is the season pass, so a mangled link can never silently downgrade the sale.
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
+const WANTS_PASS = QUERY.get("plan") === "pass";
+// The plan prefix run/refs.py decodes on Tuesday. A commissioner's "p" ref is
+// BOTH their own signup and the league's coverage — one purchase, two meanings.
+const REF_PREFIX = WANTS_PASS ? "p" : (WANTS_MONTHLY ? "m" : "s");
 const API = "https://api.sleeper.app/v1";
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
@@ -265,6 +270,15 @@ function card(title, subtitle, className, onPick) {
   if (SEAT_FOR_LEAGUE) {
     button.textContent = "Claim my seat — already paid";
     $("renew-note").style.display = "none";
+  } else if (WANTS_PASS) {
+    // The commissioner buys for the league AND gets their own report — so they
+    // pick a rival like anyone else. The ref carries both meanings.
+    button.textContent = "Buy the League Pass — $99";
+    $("renew-note").textContent =
+      "The League Pass is $99 today and renews once a year at $99 unless you " +
+      "cancel — we email you before any renewal, and you can cancel yourself " +
+      "any time from your own account page. Every manager who signs up gets " +
+      "their own report aimed at their own rival, including you.";
   } else if (WANTS_MONTHLY) {
     button.textContent = "Continue to checkout — $9.99/mo";
     // Monthly has different terms from the pass and must say its own, not the
@@ -503,8 +517,8 @@ $("submit").addEventListener("click", async () => {
   // Sleeper ids are digits and our own prefixes are letters, so the result is
   // inside Stripe's [A-Za-z0-9_-] set by construction — but it is asserted
   // below rather than assumed, because Stripe drops a bad one silently.
-  const ref = "s-" + state.user.user_id + "-" + state.league.league_id + "-" +
-    (state.rival.owner_id ? state.rival.owner_id : "r" + state.rival.roster_id);
+  const ref = REF_PREFIX + "-" + state.user.user_id + "-" + state.league.league_id +
+    "-" + (state.rival.owner_id ? state.rival.owner_id : "r" + state.rival.roster_id);
 
   // The success panel is static HTML; only the rival name is injected, and
   // only ever via textContent.
@@ -561,7 +575,8 @@ $("submit").addEventListener("click", async () => {
   }
 
   // --- Individual buyer: straight to checkout, picks attached.
-  const link = WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+  const link = WANTS_PASS ? STRIPE_LINK_PASS
+             : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
   if (!link) {
     // Nothing is stored anywhere yet, so saying "reserved" would be a lie.
     showError("err-email",

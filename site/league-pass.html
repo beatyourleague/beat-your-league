@@ -124,14 +124,17 @@
 
 <script>
 "use strict";
-// Same one-constant wiring as the other pages: set this when the Substack
-// league tier exists and the note becomes a real checkout button.
-const LEAGUE_PASS_URL = "";
-if (LEAGUE_PASS_URL) {
+// Same one-constant wiring as the other pages, and the same rule: the CTA goes
+// to the PICKER, never straight to a payment link. The commissioner has to pick
+// their league before paying, because the payment carries the league it covers
+// — that is what tells us whose seats to honour. They pick a rival too: the
+// pass buys them their own report as well as the league's.
+const CHECKOUT_OPEN = false;
+if (CHECKOUT_OPEN) {
   const slot = document.getElementById("league-cta");
   const link = document.createElement("a");
   link.className = "btn";
-  link.href = LEAGUE_PASS_URL;
+  link.href = "join/index.html?plan=pass";
   link.textContent = "Buy the League Pass — $99";
   slot.replaceWith(link);
 }

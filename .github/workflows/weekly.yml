@@ -80,6 +80,19 @@ jobs:
       # actually mailed anybody. run.batch already exits 0 with "registry is
       # empty — nothing to do" when there are no subscribers, which is the
       # correct place for that decision.
+      # Turn payments into a registry BEFORE building anything. With
+      # STRIPE_API_KEY unset this is a no-op and the run falls back to whatever
+      # registry the cache restored, so enabling it is a secret, not a deploy.
+      # continue-on-error: a sync that cannot reach Stripe must not stop last
+      # week's known-good registry from being delivered.
+      - name: Sync signups from payments
+        continue-on-error: true
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
+          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
+          FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
+        run: .venv/bin/python -m run.sync
       - name: Send subscriber reports
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}

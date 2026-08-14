@@ -200,11 +200,32 @@ configuration live in one system — the one that already has to be correct. Lea
 which produce no payment of their own, are the single exception and use one free-tier form
 backend. Mechanics and the verified Stripe facts are in CLAUDE.md.
 
-Deferred deliberately, and worth revisiting: `run/sync.py` (sweep Checkout Sessions → materialise
-the registry) and the August season auto-roll would take this to zero touches including seats.
-Until then seats are an annual hand-export, which is a once-a-year chore rather than a weekly one.
+**Built (Aug 14 2026): `run/sync.py` and the season auto-roll**, so the flow is zero-touch
+end to end including League Pass seats. A stranger picks their rival, pays, and receives a report
+every Tuesday with no human step anywhere. Mechanics in CLAUDE.md; the operator-visible facts:
+- Runs before the batch in `weekly.yml`, `continue-on-error` — a sync that cannot reach Stripe
+  must not stop last week's known-good registry from being delivered.
+- With `STRIPE_API_KEY` unset it is a no-op, so enabling the whole pipeline is a secret, not a
+  deploy.
+- `make sync-preview` shows what the next run would change without writing or stamping anything.
+- The restricted Stripe key needs **write** on Customers as well as read, for the metadata
+  promotion. Nothing else needs write.
+- **`STRIPE_PAYMENT_LINKS` is a launch blocker, not an optimisation.** Set it to
+  `s:<season link id>,m:<monthly link id>,p:<pass link id>`. It is what makes the purchased plan
+  a fact about the payment instead of a claim in the buyer's URL — without it, no purchase can
+  grant League Pass coverage (deliberate: fail closed). Adversarial review found that trusting the
+  URL let anyone buy the $99 pass for $9.99, for any league; see CLAUDE.md for the three rules
+  that now hold.
+- Make the **$99 League Pass a recurring annual price**, not a one-time charge. A one-time payment
+  creates no Subscription, so there would be nothing for entitlement to read next season. As an
+  annual subscription it renews like the $29 pass and gets the same self-serve portal cancel —
+  and `site/league-pass.html` already discloses "renews once a year at $99 unless you cancel", so
+  the term is stated where it is sold.
+
 **Revisit a small server (Cloudflare Worker) as a §7 risk item if either trigger fires: League
-Pass passes ~5 leagues, or the form backend proves flaky twice.**
+Pass passes ~5 leagues, or the form backend proves flaky twice.** The form backend is now the
+only external dependency in the signup path and only affects seats, which is what makes that
+threshold the right one.
 
 New launch blockers from this decision:
 - Create the Stripe products/prices and **Payment Links**, then paste them into

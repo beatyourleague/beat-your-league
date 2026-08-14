@@ -265,7 +265,81 @@ Plus a silent-success case: a non-empty registry where **everyone** fails the pa
 exits non-zero. That is far more likely to be a broken entitlement source than every customer
 cancelling in one week, and exiting 0 made it a green cron with an empty inbox.
 
+**The signup pipeline (`python -m run.sync` / `make sync`) — zero touches, including seats.**
+Runs before `run.batch` every Tuesday and turns payments into the registry:
+1. **Sweep** completed Checkout Sessions since a watermark (`data/registry/sync-state.json`),
+   decode each `client_reference_id` via `run/refs.py`.
+2. **Promote** the picks onto the Stripe **Customer** as `byl_*` metadata. Stripe documents no
+   retention guarantee for old Checkout Sessions, so this caps our dependence on session
+   listability at one week instead of a season. Metadata writes merge — additive and idempotent.
+3. **Seats** from `FORM_ENDPOINT` — the ONLY external dependency in the signup path, and it only
+   ever affects League Pass seats. A seat is honoured only if a pass actually covers that league;
+   the seat link is necessarily public, so an unvalidated endpoint would be a free-report
+   generator. If the backend is unreadable the run **refuses** rather than writing a
+   Stripe-only registry that silently drops every seat.
+4. **Verify** every row against live Sleeper: does this user own a roster in this league, is the
+   rival a real *different* team. A ref is a string a browser put in a URL; trusting it would mail
+   someone another manager's team. A Sleeper **outage raises**, and the caller keeps the row —
+   an outage must never look like a rejection.
+5. **Roll the season** (see the data learning below). Ambiguous rolls change nothing and say so:
+   a wrong league is worse than a missing one because it looks like it worked. A rival recorded
+   only as a `roster_id` cannot be rolled at all — roster ids are not stable across seasons.
+6. **Project** `subscribers.json` in the exact shape `run/registry.py` validates.
+
+Storage under gitignored `data/registry/`: `signups.jsonl` (append-only event log),
+`sync-state.json` (watermark), `subscribers.json` (the projection). `project()` is latest-wins per
+`(league_id, user_id)`, which is what makes re-running the picker a **rival change** rather than a
+duplicate, and what makes the whole sweep idempotent — verified end-to-end: run twice, identical
+registry, no log growth; change a rival, still one entry with the new rival.
+
+**Entitlement no longer joins on an email.** `PaidList.entitles()` tries, in order: the
+subscriber's own `stripe_customer_id` (survives them changing their billing email in Stripe's
+portal), their league appearing in `covered_leagues` (a League Pass, read from the payer's own
+customer metadata so it lapses exactly when their billing does), then the email on file — the
+fallback that keeps hand-added entries and the CSV path working.
+
+**Plan prefixes are a JS↔Python contract with nothing type-checking across it**: the picker builds
+`s|m|p-<user_id>-<league_id>-<rival>` in the browser, `run/refs.py` decodes it on Tuesday, and
+`test_the_browser_and_python_agree_on_the_format` pins the literal JavaScript. A `p` ref is BOTH
+the commissioner's own signup and the league's coverage — one purchase, two meanings. Payment
+links: `STRIPE_LINK_SEASON` / `_MONTHLY` / `_PASS`, reached via `join/`, `join/?plan=monthly`,
+`join/?plan=pass`; seats via `join/?pass=<league_id>`.
+
+**The ref's plan prefix is a CLAIM, never a fact — this was a real hole, found in adversarial
+review and fixed.** Every payment link is visible in the page source and `client_reference_id` is
+a URL parameter, so a buyer could open the $9.99 monthly link by hand with a `p-` ref and receive
+the $99 League Pass, *for any league id they cared to type* — collapsing every tier to the
+cheapest. Three rules now hold, each mutation-tested:
+- **The plan comes from the link that took the money.** `STRIPE_PAYMENT_LINKS` is a MAP
+  (`s:plink_A,m:plink_B,p:plink_C`), and coverage is granted only when the session's own
+  `payment_link` is the pass link. A mismatch still delivers the report they paid for, grants
+  nothing, and is reported. **Fail closed**: with no map configured no purchase can grant coverage.
+- **Coverage is stamped only after verification.** `byl_pass_league` is written by
+  `stamp_pass_coverage()` from `main()` *after* Sleeper confirms the payer owns a roster in the
+  league they are covering — never by `_promote()` during the sweep, and `covered` is built from
+  verified payers, not the raw log. Otherwise an unverified claim hands twelve strangers a
+  free product.
+- **`payment_status` must be paid.** A session can be `status:"complete"` and still unpaid with
+  delayed-notification methods.
+Also fixed in the same review: the season roll now carries `pass_league_id` onto the new league id
+(a pass pinned to last season's id means the commissioner keeps paying while every seat claim
+finds no coverage), and `run/batch.py` no longer rebinds `failed` for send failures — that made a
+run where somebody's report failed to build but every send succeeded exit 0.
+
+**Module path constants must never be default arguments** (`run/sync.py`, `run/delivery.py`):
+a constant baked into a signature cannot be redirected by a caller or a test, which is what let a
+pipeline run write over the real registry and a test poison the real send log. Paths are resolved
+inside the function (`path = path or SENT_LOG`) or threaded from `main()` (`--registry-dir`).
+
+**Tests may not touch `data/registry/`** — `tests/conftest.py` fails any test that writes there.
+This exists because it happened: a pipeline run wrote over the real subscriber list. Nothing was
+lost (one demo entry), but on a machine with paying subscribers that destroys the list of who gets
+a report and stays invisible until the following Tuesday. Related: `run/sync.py` takes
+`--registry-dir` and every function takes an explicit path, because module constants baked in as
+default arguments cannot be redirected by a caller — which is what made that accident possible.
+
 `make dry-send` builds every subscriber email without sending; `make send` is the real thing.
+`make sync-preview` shows what the next sync would change without writing or stamping anything.
 `weekly.yml` passes `STRIPE_API_KEY`/`EMAIL_*` as secrets and caches `sent.jsonl` across runners
 (without it, an ephemeral runner would forget who it already mailed). Use a **restricted** Stripe
 key — read access to subscriptions and customers is all this needs.
@@ -514,4 +588,10 @@ rival starting a player who will not play is the most exploitable event in the d
   `build_week_report(..., require_season=...)` makes it loud. `run/batch.py` — the only path that
   mails strangers — passes the current season from `/state/nfl`; historical and demo renders leave
   it unset. Re-resolving a subscriber's current league from their stable `user_id` through the
-  `previous_league_id` chain each August is the fix that would make this self-healing (not built).
+  `previous_league_id` chain each August is the fix that would make this self-healing — **built**,
+  in `run/sync.py:roll_season()`. It walks each of the subscriber's current-season leagues back
+  through its own `previous_league_id` chain (max 8 hops) looking for the league they signed up
+  for. Exactly one match rolls silently; zero or several changes nothing and reports it, because a
+  wrong league is worse than a missing one — it looks like it worked. The rival is carried by
+  `owner_id` only and its `roster_id` is dropped, since roster ids are not stable across seasons;
+  a rival recorded ONLY as a roster number cannot be rolled and the subscriber is asked to re-pick.

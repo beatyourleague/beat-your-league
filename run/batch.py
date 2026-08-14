@@ -183,14 +183,14 @@ def main(argv: list[str] | None = None) -> int:
         except SubscriptionError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        # A League Pass seat holder never paid us a cent — their commissioner
-        # did. Checking the seat's own email drops every seat and reports it
-        # in the words meant for a cancellation, so the pass is undeliverable
-        # unless the operator disables the gate for everybody. The payer's
-        # entitlement is the seat's entitlement; registry.py has already
-        # refused any seat that names no payer.
-        entitled = [s for s in subscribers if paid.covers(s.covered_by or s.email)]
-        dropped = [s for s in subscribers if not paid.covers(s.covered_by or s.email)]
+        # PaidList.entitles() knows the three routes: the subscriber's own
+        # Stripe customer, a League Pass covering their league, or the email on
+        # file. A seat holder never paid us a cent — their commissioner did —
+        # so checking the seat's OWN email drops every seat and reports it in
+        # the words meant for a cancellation, leaving the pass undeliverable
+        # unless the operator disables the gate for everybody.
+        entitled = [s for s in subscribers if paid.entitles(s)]
+        dropped = [s for s in subscribers if not paid.entitles(s)]
         print(f"Paid check: {len(paid.emails)} entitled subscriber(s) "
               f"(source: {paid.source})")
         if paid.status_column is None:
@@ -272,15 +272,19 @@ def main(argv: list[str] | None = None) -> int:
                          resend_anyway=args.resend)
         delivered = [s for s in sends if s.ok and not s.skipped]
         skipped = [s for s in sends if s.skipped]
-        failed = [s for s in sends if not s.ok]
+        # Deliberately NOT named `failed`: that name already holds the
+        # subscribers whose report could not be BUILT, and rebinding it here
+        # made a run where somebody's report failed but every send succeeded
+        # exit 0 — a green cron with a subscriber silently missing.
+        send_failures = [s for s in sends if not s.ok]
         print(f"Delivery via {provider.name}: {len(delivered)} sent, "
-              f"{len(skipped)} already sent, {len(failed)} failed")
-        for send in failed:
+              f"{len(skipped)} already sent, {len(send_failures)} failed")
+        for send in send_failures:
             print(f"    FAILED {send.message.to}: {send.detail}", file=sys.stderr)
         if provider.name == "dry":
             print(f"    (dry run — nothing left this machine; drafts in "
                   f"{_display(DRY_OUTBOX)})")
-        if failed:
+        if send_failures:
             return 1
 
     if ok:

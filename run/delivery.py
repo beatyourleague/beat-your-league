@@ -84,8 +84,10 @@ class DryRunProvider:
 
     name = "dry"
 
-    def __init__(self, outbox: Path = DRY_OUTBOX) -> None:
-        self.outbox = outbox
+    def __init__(self, outbox: Path | None = None) -> None:
+        # Resolved here, not in the signature: a module constant baked into a
+        # default argument cannot be redirected by a caller or a test.
+        self.outbox = outbox or DRY_OUTBOX
 
     def send(self, message: Message, sender: str, reply_to: str | None) -> str:
         self.outbox.mkdir(parents=True, exist_ok=True)
@@ -244,7 +246,8 @@ def build_provider(name: str | None = None) -> Provider:
 # idempotency — a subscriber must never get Tuesday's report twice
 # --------------------------------------------------------------------- #
 
-def load_sent(path: Path = SENT_LOG) -> set[str]:
+def load_sent(path: Path | None = None) -> set[str]:
+    path = path or SENT_LOG
     if not path.is_file():
         return set()
     keys: set[str] = set()
@@ -259,7 +262,9 @@ def load_sent(path: Path = SENT_LOG) -> set[str]:
     return keys
 
 
-def record_sent(key: str, provider: str, message_id: str, path: Path = SENT_LOG) -> None:
+def record_sent(key: str, provider: str, message_id: str,
+                path: Path | None = None) -> None:
+    path = path or SENT_LOG
     path.parent.mkdir(parents=True, exist_ok=True)
     entry = {"key": key, "provider": provider, "message_id": message_id,
              "sent_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
@@ -269,9 +274,11 @@ def record_sent(key: str, provider: str, message_id: str, path: Path = SENT_LOG)
 
 def send_all(messages: list[Message], provider: Provider | None = None,
              sender: str = DEFAULT_FROM, reply_to: str | None = DEFAULT_REPLY_TO,
-             sent_log: Path = SENT_LOG, resend_anyway: bool = False) -> list[SendResult]:
+             sent_log: Path | None = None,
+             resend_anyway: bool = False) -> list[SendResult]:
     """Send each message once. Never raises: failures come back as results."""
     provider = provider or build_provider()
+    sent_log = sent_log or SENT_LOG
     already = set() if resend_anyway else load_sent(sent_log)
     results: list[SendResult] = []
     for message in messages:

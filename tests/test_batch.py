@@ -500,3 +500,29 @@ def test_current_nfl_season_reads_state(tmp_path: Path) -> None:
     assert current_nfl_season(tmp_path) == "2026"
     state.joinpath("nfl.json").write_text('{"season":"not-a-year"}', encoding="utf-8")
     assert current_nfl_season(tmp_path) is None          # untrusted input
+
+
+def test_a_subscriber_whose_report_failed_fails_the_run(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """One subscriber's report failing to build must fail the run even when
+    every send that DID happen succeeded. The delivery block used to rebind the
+    same name for send failures, so a run that quietly skipped somebody exited
+    0 — a green cron with a paying subscriber missing."""
+    import run.batch as batch
+    import run.delivery as delivery
+    monkeypatch.setattr(batch, "SUBSCRIBER_REPORTS", tmp_path / "out")
+    # Isolate the send log and outbox, or this test would mark the demo
+    # subscriber as mailed and make its own second run a no-op.
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    monkeypatch.setattr(delivery, "DRY_OUTBOX", tmp_path / "outbox")
+    registry = _write_registry(tmp_path, [
+        _entry(),                                              # builds fine
+        _entry(email="broken@example.com", user_id="111111111111",
+               league_id="999999999999999999"),                # not cached
+    ])
+    code = batch.main(["--week", "10", "--skip-ingest", "--registry", str(registry),
+                       "--no-paid-check", "--email-provider", "dry"])
+    out = capsys.readouterr().out
+    assert "1 reports written, 1 failed" in out
+    assert "1 sent" in out, "the healthy subscriber should still be delivered"
+    assert code == 1, "a failed report must not exit 0 just because sends worked"
