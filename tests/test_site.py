@@ -122,9 +122,54 @@ def test_scout_renders_untrusted_names_as_text_only() -> None:
 # --------------------------------------------------------------------- #
 
 def test_checkout_is_a_single_constant_away_on_both_pages() -> None:
-    for page, name in ((LANDING, "landing"), (JOIN, "join")):
-        assert re.search(r'const SUBSTACK_URL = ""', page), \
-            f"{name} page lost its checkout wiring slot"
+    assert re.search(r"const CHECKOUT_OPEN = false", LANDING), \
+        "landing page lost its checkout wiring slot"
+    for const in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY"):
+        assert re.search(rf'const {const} = ""', JOIN), \
+            f"join page lost its {const} wiring slot"
+
+
+def test_every_paid_cta_routes_through_the_picker() -> None:
+    """Load-bearing, not cosmetic: the picker is what attaches the buyer's league
+    and rival to the payment (as Stripe's client_reference_id). A CTA that jumps
+    straight to checkout takes the money and leaves us with no idea whose team
+    to report on."""
+    for target in re.findall(r'(?:href|\.href)\s*=\s*"([^"]*)"', LANDING):
+        assert "stripe.com" not in target and "buy.stripe" not in target, \
+            f"landing page publishes a payment URL directly: {target}"
+    rewrites = LANDING.split("if (CHECKOUT_OPEN)")[1]
+    assert rewrites.count("join/index.html") >= 2, \
+        "both pricing CTAs must point at join/, not at a payment link"
+
+
+def test_the_checkout_url_carries_the_signup() -> None:
+    """This IS the architecture: no server, no second list — the picks ride into
+    the payment, and the paying email is forced to equal the picking email."""
+    assert "client_reference_id=" in JOIN, \
+        "checkout URL must carry the picks as client_reference_id"
+    assert "locked_prefilled_email=" in JOIN, (
+        "must use locked_prefilled_email (non-editable), not prefilled_email — an "
+        "editable address reintroduces the mismatch this design removes")
+
+
+def test_the_reference_is_validated_before_we_take_money() -> None:
+    """Stripe silently drops an invalid client_reference_id and still shows a
+    working payment page, so the browser is the only place this can be loud."""
+    assert re.search(r"const REF_RE = /\^\[A-Za-z0-9_-\]\{1,200\}\$/", JOIN), \
+        "the ref must be checked against Stripe's documented charset and length"
+    assert re.search(r"if \(!REF_RE\.test\(ref\)\)", JOIN), \
+        "the ref must be tested before navigating to checkout"
+
+
+def test_an_individual_signup_is_never_posted_anywhere() -> None:
+    """Individual buyers go browser -> Stripe. Only League Pass seats (who have
+    no payment to ride) touch a form backend, so a vendor outage costs seats,
+    never sales."""
+    handler = JOIN.split('$("submit").addEventListener')[1]
+    seat_branch, individual_branch = handler.split("--- Individual buyer")
+    assert "FORM_ENDPOINT" not in individual_branch, \
+        "the individual checkout path must not depend on a form backend"
+    assert "FORM_ENDPOINT" in seat_branch
 
 
 def test_no_payment_details_are_collected_by_us() -> None:
@@ -152,16 +197,20 @@ def test_pass_states_its_renewal_terms() -> None:
 
 def test_free_list_never_routes_to_paid_checkout() -> None:
     """The free ledger form must not hand a "free" clicker to the $29 page."""
-    handler = LANDING.split("const watchForm")[1].split("if (SUBSTACK_URL)")[0]
-    assert "SUBSTACK_URL" not in handler, \
-        "free ledger signup must not navigate to the paid checkout constant"
+    handler = LANDING.split("const watchForm")[1].split("if (CHECKOUT_OPEN)")[0]
+    assert "CHECKOUT_OPEN" not in handler, \
+        "free ledger signup must not navigate to the paid checkout"
     assert "LEDGER_FREE_URL" in handler
 
 
-def test_reservation_claim_is_conditional_on_being_recorded() -> None:
-    """Nothing may be declared 'reserved' when nothing recorded it."""
+def test_nothing_is_claimed_saved_when_nothing_recorded_it() -> None:
+    """The picker holds no state of its own. Until checkout is wired, a signup
+    goes nowhere — so the page must say the picks are NOT saved, rather than
+    congratulating someone on a reservation that does not exist."""
     assert 'id="done-head"' in JOIN
-    assert re.search(r"your spot is held once you send this", JOIN_PROSE, re.I)
+    assert re.search(r"your picks aren't saved", JOIN_PROSE, re.I), \
+        "the not-open path must admit the picks were not stored"
+    assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
 
 
 def test_scout_has_an_in_flight_guard() -> None:
@@ -296,10 +345,12 @@ def test_no_personal_contact_details_are_published() -> None:
 
 
 def test_signup_degrades_honestly_without_a_contact_route() -> None:
-    """With no form backend and no inbox, the form must say signups aren't open
-    rather than opening an empty mailto: that looks like it worked."""
-    assert re.search(r"Signups aren't open just yet", JOIN_PROSE, re.I)
-    assert re.search(r"if \(!CONTACT_EMAIL\)", JOIN)
+    """With checkout unwired, the form must say so rather than opening an empty
+    mailto: that looks like it worked. The join page no longer has a mailto path
+    at all — the picks ride into Stripe or nowhere."""
+    assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
+    assert "mailto:" not in JOIN, \
+        "the join page must not fall back to an email draft — it loses the signup"
     assert re.search(r"if \(!CONTACT_EMAIL\)", LANDING)
 
 
@@ -317,8 +368,10 @@ def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
     legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
     assert re.search(r'id="cancel"', (SITE / "legal.html").read_text(encoding="utf-8")), \
         "the cancellation steps need a linkable anchor"
-    assert re.search(r"substack\.com/account", legal, re.I), \
-        "the self-serve cancel path must name where to go"
+    # A concrete destination, not "contact your provider". Which vendor it names
+    # is a platform decision; that it names ONE is not negotiable.
+    assert re.search(r"(substack|stripe|billing)\S*\.com\S*/\S+", legal, re.I), \
+        "the self-serve cancel path must name a concrete place to go"
     assert re.search(r"billing stops immediately", legal, re.I)
     # Self-serve must be the advertised route: any promise that WE cancel on
     # request creates an inbox someone has to watch every day of the season.

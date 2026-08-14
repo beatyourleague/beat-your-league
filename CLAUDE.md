@@ -216,6 +216,55 @@ choice is a secret, never a rewrite (rationale + cost table in PLAN §4):
   `data/processed/sent.jsonl`, so a re-run, a resumed workflow, or a double-fired cron cannot mail
   the same week twice. **Dry-run is the default on purpose**: a misconfigured cron must never mail
   real people by accident, so sending is opt-in via `EMAIL_PROVIDER`.
+**The payment IS the signup (Aug 14 2026).** The picker used to be a dead end — it collected
+picks and had nowhere to put them, so a signup and a payment were two records joined by an email
+the buyer typed twice. Now `site/join/` packs the picks into Stripe's `client_reference_id` and
+sends the buyer straight to a Payment Link:
+
+    <payment link>?client_reference_id=s-<user_id>-<league_id>-<rival_owner_id>
+                 &locked_prefilled_email=<their email>
+
+Verified against Stripe's docs and in-browser: `client_reference_id` is settable as a URL
+parameter (200 chars, `[A-Za-z0-9_-]`; our ref measures 55), it lands on the Checkout Session,
+and `locked_prefilled_email` makes the payment address **non-editable** — so the address that
+pays is the address that picked, by construction, and there is no mismatch left to reconcile.
+Stripe **silently drops** an invalid `client_reference_id` while still showing a working payment
+page, so the ref is asserted against `REF_RE` in the browser before we navigate: that is the only
+place the failure can be made loud.
+
+Consequences wired in code:
+- `STRIPE_LINK_SEASON` / `STRIPE_LINK_MONTHLY` in `site/join/index.html` are the whole payment
+  integration; empty means "not open" and the page says the picks are **not saved** rather than
+  congratulating anyone on a reservation that does not exist. The mailto fallback is gone — it
+  lost signups and looked like it worked.
+- `CHECKOUT_OPEN` in `site/index.html` flips the pricing CTAs on, and **both point at `join/`**.
+  A CTA that jumps straight to checkout takes the money with no picks attached; guarded by
+  `test_every_paid_cta_routes_through_the_picker`, and no payment URL is ever published on a page.
+- `?plan=monthly` selects the monthly link and rewrites the renewal line to monthly terms — the
+  pass's "renews once a year" is not true of monthly and must not be shown to a monthly buyer.
+- **League Pass seats cannot ride on this**: one $99 payment produces exactly ONE session with
+  ONE `client_reference_id`, and the other eleven seat-holders never transact. `?pass=<league_id>`
+  runs the picker in seat mode — no checkout, league-matched (a seat for another league is
+  refused), posting to `FORM_ENDPOINT`. That is the ONLY path that needs a form backend, so a
+  vendor outage costs seats, never sales.
+- `SEASON` comes from `/v1/state/nfl`, not a constant that goes stale every September.
+
+**Three delivery bugs found and fixed the same day (all reproduced before fixing, all
+mutation-tested after):**
+1. `run/batch.py` filtered on `paid.covers(s.email)` and never looked at `covered_by`, so **every
+   League Pass seat was dropped** — reported in the words meant for a cancellation. The $99 tier
+   was undeliverable except via `--no-paid-check`, which disables the gate for everyone.
+2. `weekly.yml` gated the send step on `hashFiles('data/registry/subscribers.json')` — a path
+   under the gitignored `data/`, which cannot exist on a fresh runner. **The cron had never been
+   able to mail anybody.** The gate is gone (batch already handles an empty registry) and
+   `data/registry` is now cached across runs.
+3. The artifact upload took `reports/` wholesale, which would have published `subscribers/` and
+   `outbox/` — real addresses and personalised reports — to anyone who can read the Actions tab.
+   Both are excluded explicitly.
+Plus a silent-success case: a non-empty registry where **everyone** fails the paid check now
+exits non-zero. That is far more likely to be a broken entitlement source than every customer
+cancelling in one week, and exiting 0 made it a green cron with an empty inbox.
+
 `make dry-send` builds every subscriber email without sending; `make send` is the real thing.
 `weekly.yml` passes `STRIPE_API_KEY`/`EMAIL_*` as secrets and caches `sent.jsonl` across runners
 (without it, an ephemeral runner would forget who it already mailed). Use a **restricted** Stripe
@@ -457,3 +506,12 @@ rival starting a player who will not play is the most exploitable event in the d
 - Cross-season rival joins go by owner_id, never roster_id (verified: sample-league roster 6
   changed owners between 2017 and 2018).
 - A 0.0-vs-0.0 matchup total means "not played yet", never a tie (matchup backtest RULE M1).
+- **Sleeper mints a NEW league_id every season**, and the old one keeps resolving forever — out of
+  a cache that never expires once a season is `complete`. Nothing in the data marks it stale. So a
+  renewed subscriber whose registry entry still carries last year's id renders a **complete,
+  confident report about games played twelve months ago**: no gap, no warning, exit code 0. This
+  is the quietest principle-3 violation in the codebase and it has no natural alarm, so
+  `build_week_report(..., require_season=...)` makes it loud. `run/batch.py` — the only path that
+  mails strangers — passes the current season from `/state/nfl`; historical and demo renders leave
+  it unset. Re-resolving a subscriber's current league from their stable `user_id` through the
+  `previous_league_id` chain each August is the fix that would make this self-healing (not built).

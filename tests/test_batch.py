@@ -394,3 +394,109 @@ def test_stripe_wins_over_csv_when_configured(monkeypatch: pytest.MonkeyPatch,
     csv_path.write_text("email,active_subscription\nfromcsv@example.com,true\n",
                         encoding="utf-8")
     assert subs.resolve_paid_list(csv_path).covers("fromcsv@example.com")
+
+
+# --------------------------------------------------------------------- #
+# Entitlement: who the paid check lets through
+# --------------------------------------------------------------------- #
+
+def _paid(*emails):
+    from run.subscriptions import PaidList
+    return PaidList(emails=frozenset(emails), source="stripe", status_column="active")
+
+
+def test_a_league_pass_seat_survives_the_paid_check(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """The seat holder never paid us a cent — their commissioner did. Checking
+    the seat's own email drops every seat and reports it in the words meant for
+    a cancellation, making the $99 tier undeliverable except by disabling the
+    cancellation gate for everyone. Runs the real batch filter, not PaidList."""
+    import run.batch as batch
+    monkeypatch.setattr(batch, "SUBSCRIBER_REPORTS", tmp_path / "out")
+    registry = _write_registry(tmp_path, [
+        _entry(email="member@example.com", plan="league_pass",
+               covered_by="commish@example.com")])
+    export = _export(tmp_path, "email,active_subscription\n"
+                               "commish@example.com,true\n")
+    batch.main(["--week", "10", "--skip-ingest", "--registry", str(registry),
+                "--paid-list", str(export), "--no-send"])
+    out = capsys.readouterr().out
+    assert "no longer paying" not in out, \
+        "a covered seat was dropped as if it had cancelled"
+    assert "1 reports written" in out
+
+
+def test_a_seat_is_entitled_through_its_payer_not_itself() -> None:
+    seat = Subscriber(email="member@example.com", user_id="1",
+                      league_id="289646328504385536", rival_owner_id="2",
+                      rival_roster_id=None, plan="league_pass",
+                      covered_by="commish@example.com")
+    paid = _paid("commish@example.com")
+    assert not paid.covers(seat.email)                      # they never paid
+    assert paid.covers(seat.covered_by or seat.email)       # but they are covered
+
+
+def test_a_seat_dies_with_its_payer() -> None:
+    """When the commissioner stops paying, the whole league stops — a seat must
+    not outlive the pass that bought it."""
+    seat = Subscriber(email="member@example.com", user_id="1",
+                      league_id="289646328504385536", rival_owner_id="2",
+                      rival_roster_id=None, plan="league_pass",
+                      covered_by="lapsed@example.com")
+    assert not _paid("someone-else@example.com").covers(seat.covered_by or seat.email)
+
+
+def test_everyone_failing_the_paid_check_at_once_is_an_error_not_a_quiet_success(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """A whole registry failing at once is far more likely to be a broken
+    entitlement source than every customer cancelling in the same week. Exiting
+    0 made that a green cron with an empty inbox."""
+    import run.batch as batch
+    registry = _write_registry(tmp_path, [_entry()])
+    export = _export(tmp_path, "email,active_subscription\nnobody@example.com,true\n")
+    code = batch.main(["--week", "10", "--skip-ingest", "--registry", str(registry),
+                       "--paid-list", str(export), "--no-send"])
+    assert code == 1, "a fully-empty entitled set must fail the run, not pass it"
+    assert "NOTHING TO SEND" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------- #
+# Stale league id: the quietest way to break principle 3
+# --------------------------------------------------------------------- #
+
+def test_a_league_from_a_finished_season_refuses_to_render(tmp_path: Path) -> None:
+    """Sleeper mints a NEW league id every season and the old one keeps
+    resolving forever, out of a cache that never expires for a completed
+    season. A renewed subscriber still carrying last year's id would otherwise
+    get a complete, confident report about games played twelve months ago —
+    no gap, no warning, exit code 0."""
+    from engine.week_report import WeekReportError, build_week_report
+    season = twr._season()
+    raw = twr._write_cache(tmp_path, season)
+    stale = str(int(season.season) + 1)
+    with pytest.raises(WeekReportError, match="new league id each season"):
+        build_week_report(raw, season.league_id, twr.REPORT_WEEK, 1,
+                          require_season=stale)
+
+
+def test_the_guard_gates_on_staleness_only(tmp_path: Path) -> None:
+    """It must not become a blanket refusal: the league's own season passes, and
+    historical/demo renders (require_season unset) are unaffected."""
+    from engine.week_report import build_week_report
+    season = twr._season()
+    raw = twr._write_cache(tmp_path, season)
+    assert build_week_report(raw, season.league_id, twr.REPORT_WEEK, 1,
+                             require_season=season.season)["meta"]["season"]
+    assert build_week_report(raw, season.league_id, twr.REPORT_WEEK, 1
+                             )["meta"]["season"] == season.season
+
+
+def test_current_nfl_season_reads_state(tmp_path: Path) -> None:
+    from engine.week_report import current_nfl_season
+    assert current_nfl_season(tmp_path) is None          # no state cached
+    state = tmp_path / "state"
+    state.mkdir()
+    state.joinpath("nfl.json").write_text('{"league_season":"2026"}', encoding="utf-8")
+    assert current_nfl_season(tmp_path) == "2026"
+    state.joinpath("nfl.json").write_text('{"season":"not-a-year"}', encoding="utf-8")
+    assert current_nfl_season(tmp_path) is None          # untrusted input

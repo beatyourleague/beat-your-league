@@ -84,13 +84,15 @@
 <div class="page">
   <header>
     <div class="brand"><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
-    <h1>Reserve Your Founding Spot</h1>
-    <p>Three taps and your weekly Rival Report is pointed at your league. This is a paid
-    product from day one — <b>$29 USD for the season</b>, first 50 spots — and reserving now
-    locks that price. Checkout opens through Substack before Week 1; no card today, and we
-    only ever ask for your Sleeper <b>username</b> — never a password.</p>
+    <h1>Claim Your Founding Spot</h1>
+    <p>Three taps to point your weekly Rival Report at your league, then checkout — your
+    picks travel with it, so there is nothing to send us afterwards. This is a paid product
+    from day one: <b>$29 USD for the season</b>, first 50 spots, no free tier and no trial
+    that quietly becomes a charge. Payment happens on our provider's own secure page; card
+    details never touch this site, and we only ever ask for your Sleeper <b>username</b> —
+    never a password.</p>
     <div class="beta-chips">
-      <span>$29 USD / season · first 50</span><span>Pay at checkout · via Substack</span><span>First report Tue Sep 8</span>
+      <span>$29 USD / season · first 50</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
     </div>
   </header>
 
@@ -124,30 +126,26 @@
   <section id="step-email" class="hidden">
     <div class="eyebrow">4 · Where do reports go?</div>
     <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-    <button id="submit">Reserve my spot</button>
+    <button id="submit">Continue to checkout — $29</button>
     <div class="err" id="err-email"></div>
     <div class="done" id="done">
-      <b id="done-head">Your founding spot is reserved.</b>
+      <b id="done-head">You're all set.</b>
       <ol>
-        <li id="send-step">One last tap: <b>send the pre-filled email that just opened</b> —
-        it carries your league and rival picks, nothing else. No email appeared? Write to
-        us with the word "reserve" and your Sleeper username.</li>
-        <li id="pay-now" style="display:none">Finish checkout below and you're locked in at
-        the <b>$29 founding price</b>. Substack handles the payment — card details never
-        touch our systems.</li>
-        <li id="pay-later">Checkout opens through Substack before Week 1 — the link comes to
-        this address, and once that email is in, your reservation holds the
-        <b>$29 founding price</b>. Card details never touch our systems.</li>
-        <li>The season pass is <b>$29 today and renews once a year at $29 unless you
-        cancel</b> — we email you before any renewal, and you can cancel yourself any time
-        from your own Substack account. We never hold anyone in.</li>
+        <li id="seat-note" style="display:none">Your commissioner already paid for this
+        seat, so there's nothing to pay and nothing else to do. You get your <b>own</b>
+        report, aimed at the rival you just picked — not a copy of theirs.</li>
+        <li id="pay-note">Card details never touch our systems — Stripe handles the
+        payment and we never see, transmit or store them. Your league and rival picks
+        travel with the checkout, so there's nothing else to send us.</li>
+        <li id="renew-note">The season pass is <b>$29 today and renews once a year at $29
+        unless you cancel</b> — we email you before any renewal, and you can cancel
+        yourself any time from your own account page. We never hold anyone in.</li>
         <li>Your first Rival Report — targeting <b><span id="success-rival"></span></b> —
         lands <b>Tuesday, Sep 8</b>. Refunds are no-questions through Week 2 — one per
         person, and a re-subscription after a refund is final. Changed your mind later?
         <a href="../legal.html#cancel">Cancelling takes about fifteen seconds</a> in your
-        own Substack account — you never have to ask us.</li>
+        own account — you never have to ask us.</li>
       </ol>
-      <a class="checkout hidden" id="checkout" href="#">Complete checkout — $29</a>
     </div>
   </section>
 
@@ -160,18 +158,52 @@
 
 <script>
 "use strict";
-// Set this to a form backend endpoint (Tally/Formspree/etc.) to submit
-// directly; while empty, signup falls back to a prefilled email draft.
+// ---------------------------------------------------------------------------
+// The payment IS the signup.
+//
+// This page cannot write to a database, and we deliberately do not run a server.
+// So instead of storing the picks somewhere and reconciling them against Stripe
+// later by email — two lists joined by a string the buyer types twice — the
+// picks ride INTO the payment on the checkout URL:
+//
+//     <payment link>?client_reference_id=<ref>&locked_prefilled_email=<email>
+//
+// Stripe stores client_reference_id on the resulting Checkout Session, and the
+// Tuesday run reads it back. locked_prefilled_email makes the payment email
+// NON-EDITABLE, so the address that pays is the address that picked, by
+// construction — there is no mismatch left to reconcile.
+//
+// Paste the Payment Link URLs below to switch checkout on. One constant per
+// plan; empty means "not open yet" and the page says so honestly.
+// ---------------------------------------------------------------------------
+const STRIPE_LINK_SEASON = "";    // $29/season, auto-renewing annual
+const STRIPE_LINK_MONTHLY = "";   // $9.99/month
+
+// League Pass SEATS only. A seat holder pays nothing — their commissioner
+// already did — so there is no payment to carry their picks, and this is the
+// one path that still needs a form backend (Tally/Fillout/Formspree).
+// Individual buyers never touch it, so an outage here costs seats, not sales.
 const FORM_ENDPOINT = "";
-// Set this the day the Substack publication exists. It turns the confirmation
-// panel's primary action into real checkout, so someone who just picked their
-// rival can pay in the same breath instead of waiting for an email.
-const SUBSTACK_URL = "";
 // Product contact address. Deliberately EMPTY: no personal address ships on a
-// public page. Set this to the project's own inbox before launch — until then
-// the form tells people signup isn't open rather than opening a dead draft.
+// public page. Set this to the project's own inbox before launch.
 const CONTACT_EMAIL = "";
-const SEASON = "2026";
+// Stripe accepts up to 200 chars of [A-Za-z0-9_-] and SILENTLY DROPS anything
+// else while still showing a working payment page — a dropped ref is a payment
+// with no idea who it belongs to. The browser is the only place that failure
+// can be made loud, so it is checked here before we navigate.
+const REF_RE = /^[A-Za-z0-9_-]{1,200}$/;
+
+// Which league season to offer. Defaults to a plausible year but is replaced at
+// load with Sleeper's own answer: a hardcoded season silently shows the wrong
+// year's leagues every September.
+let SEASON = "2026";
+// League Pass seat mode: /join/?pass=<league_id> — the link the commissioner
+// shares. In this mode the buyer picks exactly as normal but never pays.
+const QUERY = new URLSearchParams(location.search);
+const SEAT_FOR_LEAGUE = (QUERY.get("pass") || "").replace(/[^0-9]/g, "");
+// /join/?plan=monthly — which pricing card they came from. Anything else is
+// the season pass, so a mangled link can never silently downgrade the sale.
+const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
 const API = "https://api.sleeper.app/v1";
 const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
 
@@ -224,6 +256,37 @@ function card(title, subtitle, className, onPick) {
   btn.addEventListener("click", onPick);
   return btn;
 }
+
+// A seat holder is not a buyer — asking them to "continue to checkout" for
+// something already paid for is the fastest way to lose them. A monthly buyer
+// came from a different card and must not see the season price.
+(function labelTheAsk() {
+  const button = $("submit");
+  if (SEAT_FOR_LEAGUE) {
+    button.textContent = "Claim my seat — already paid";
+    $("renew-note").style.display = "none";
+  } else if (WANTS_MONTHLY) {
+    button.textContent = "Continue to checkout — $9.99/mo";
+    // Monthly has different terms from the pass and must say its own, not the
+    // pass's: it recurs monthly, and it stops on its own at season end because
+    // there is no product in February to charge for.
+    $("renew-note").textContent =
+      "Monthly is $9.99 and bills again each month until you cancel — and billing " +
+      "stops on its own when the season ends, because we don't charge for months " +
+      "we don't deliver. Cancel yourself any time from your own account page.";
+  }
+})();
+
+// Ask Sleeper what season it is rather than trusting a constant that goes stale
+// every September. A failure here is not fatal — the default stands — but a
+// wrong year would show someone an empty league list and read as "we're broken".
+(async function initSeason() {
+  try {
+    const state = await getJSON("/state/nfl");
+    const season = state && (state.league_season || state.season);
+    if (/^\d{4}$/.test(String(season))) SEASON = String(season);
+  } catch (err) { /* keep the default */ }
+})();
 
 $("find-user").addEventListener("click", async () => {
   clearError("err-user");
@@ -436,66 +499,88 @@ $("submit").addEventListener("click", async () => {
     showError("err-email", "Finish steps 1-3 first.");
     return;
   }
-  const entry = {
-    email: email,
-    sleeper_username: state.user.username,
-    user_id: state.user.user_id,
-    league_id: state.league.league_id,
-    rival_owner_id: state.rival.owner_id,
-    rival_roster_id: state.rival.roster_id,
-    added_at: new Date().toISOString().slice(0, 10),
-  };
+  // The whole signup, in one 200-char-safe string that rides into the payment.
+  // Sleeper ids are digits and our own prefixes are letters, so the result is
+  // inside Stripe's [A-Za-z0-9_-] set by construction — but it is asserted
+  // below rather than assumed, because Stripe drops a bad one silently.
+  const ref = "s-" + state.user.user_id + "-" + state.league.league_id + "-" +
+    (state.rival.owner_id ? state.rival.owner_id : "r" + state.rival.roster_id);
+
   // The success panel is static HTML; only the rival name is injected, and
   // only ever via textContent.
-  function showSuccess(needsEmailSend) {
+  function showSuccess(headline) {
     $("success-rival").textContent = state.rival.label;
-    $("send-step").style.display = needsEmailSend ? "list-item" : "none";
-    // Only claim the spot is held when something actually recorded it. On the
-    // mailto path nothing exists until they hit send, so say exactly that.
-    $("done-head").textContent = needsEmailSend
-      ? "One step left — your spot is held once you send this."
-      : "Your founding spot is reserved.";
-    // With checkout live, paying is the next tap — not a link mailed out days
-    // later, by which time the reason they came is gone.
-    if (SUBSTACK_URL) {
-      const checkout = $("checkout");
-      checkout.href = SUBSTACK_URL;
-      checkout.classList.remove("hidden");
-      $("pay-now").style.display = "list-item";
-      $("pay-later").style.display = "none";
-    }
+    $("done-head").textContent = headline;
     const done = $("done");
     done.style.display = "block";
     done.scrollIntoView({ behavior: "smooth", block: "center" });
   }
-  if (FORM_ENDPOINT) {
+
+  // --- League Pass seat: the commissioner already paid, so there is no
+  // checkout to carry these picks. This is the only path that needs a form.
+  if (SEAT_FOR_LEAGUE) {
+    if (state.league.league_id !== SEAT_FOR_LEAGUE) {
+      showError("err-email",
+        "That pass covers a different league. Pick the league your commissioner " +
+        "bought the pass for, or ask them to re-send their link.");
+      return;
+    }
+    if (!FORM_ENDPOINT) {
+      showError("err-email",
+        "Seat signups aren't open just yet — we're finishing setup. Your picks " +
+        "aren't saved, so please come back and run this again in a day or two.");
+      return;
+    }
     try {
       const res = await fetch(FORM_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(entry),
+        body: JSON.stringify({
+          email: email,
+          sleeper_username: state.user.username,
+          user_id: state.user.user_id,
+          league_id: state.league.league_id,
+          rival_owner_id: state.rival.owner_id,
+          rival_roster_id: state.rival.roster_id,
+          plan: "league_pass",
+          added_at: new Date().toISOString().slice(0, 10),
+        }),
       });
       if (!res.ok) throw new Error("form backend " + res.status);
-      showSuccess(false);
-      return;
     } catch (err) {
-      // fall through to the email path
+      showError("err-email",
+        "That didn't save — please try once more. If it keeps failing, your " +
+        "commissioner can pass your Sleeper username along instead.");
+      return;
     }
+    $("seat-note").style.display = "list-item";
+    $("pay-note").style.display = "none";
+    $("renew-note").style.display = "none";
+    showSuccess("Your seat is claimed.");
+    return;
   }
-  if (!CONTACT_EMAIL) {
-    // No form backend and no inbox yet: say so plainly. Opening an empty
-    // mailto: would look like it worked and quietly lose the signup.
+
+  // --- Individual buyer: straight to checkout, picks attached.
+  const link = WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+  if (!link) {
+    // Nothing is stored anywhere yet, so saying "reserved" would be a lie.
     showError("err-email",
-      "Signups aren't open just yet — we're finishing setup. Your picks aren't " +
+      "Checkout isn't open just yet — we're finishing setup. Your picks aren't " +
       "saved, so please come back and run this again in a day or two.");
     return;
   }
-  const body = "My Rival Report signup:\n\n" + JSON.stringify(entry, null, 2) + "\n";
-  const href = "mailto:" + CONTACT_EMAIL +
-    "?subject=" + encodeURIComponent("Rival Report signup") +
-    "&body=" + encodeURIComponent(body);
-  showSuccess(true);
-  window.location.href = href;
+  if (!REF_RE.test(ref)) {
+    // Should be unreachable; if it ever fires, stopping here is much better
+    // than taking someone's money with no idea which team it was for.
+    showError("err-email",
+      "Something went wrong reading your league — please reload and try again.");
+    return;
+  }
+  window.location.assign(
+    link +
+    (link.indexOf("?") === -1 ? "?" : "&") +
+    "client_reference_id=" + encodeURIComponent(ref) +
+    "&locked_prefilled_email=" + encodeURIComponent(email));
 });
 </script>
 </body>

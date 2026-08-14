@@ -51,6 +51,15 @@ jobs:
           path: data/processed/sent.jsonl
           key: sent-log-${{ github.run_id }}
           restore-keys: sent-log-
+      # The registry holds subscriber emails, so it is gitignored and cannot
+      # arrive with the checkout — it has to be restored, or the send step below
+      # has nothing to send and silently skips itself.
+      - name: Restore subscriber registry
+        uses: actions/cache/restore@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+          restore-keys: registry-
       - name: Run weekly pipeline (my own report)
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
@@ -64,8 +73,14 @@ jobs:
       # export and no human step. A RESTRICTED key with read access to
       # subscriptions + customers is enough — never the full secret key.
       # Without it the run falls back to data/registry/substack-export.csv.
+      # No `if:` guard here on purpose. It used to gate on
+      # hashFiles('data/registry/subscribers.json'), which is a path under the
+      # gitignored data/ — on a fresh runner that file could never exist, so
+      # this step skipped itself on every single run and the cron has never
+      # actually mailed anybody. run.batch already exits 0 with "registry is
+      # empty — nothing to do" when there are no subscribers, which is the
+      # correct place for that decision.
       - name: Send subscriber reports
-        if: ${{ hashFiles('data/registry/subscribers.json') != '' }}
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -81,6 +96,12 @@ jobs:
         with:
           path: data/processed/sent.jsonl
           key: sent-log-${{ github.run_id }}
+      - name: Save subscriber registry
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
       - name: Save availability snapshot archive
         if: always()
         uses: actions/cache/save@v4
@@ -98,8 +119,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: weekly-reports
+          # reports/subscribers/ and reports/outbox/ are EXCLUDED deliberately.
+          # They hold real subscriber addresses and their personalised reports;
+          # a workflow artifact is downloadable by anyone who can read the repo's
+          # Actions tab, so uploading reports/ wholesale would publish exactly
+          # the data this project promises to keep off every public surface.
           path: |
             reports/
+            !reports/subscribers/
+            !reports/outbox/
             data/processed/week_report.json
             data/raw/availability/
             data/processed/ledger/

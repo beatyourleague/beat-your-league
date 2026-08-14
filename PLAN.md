@@ -175,6 +175,50 @@ subscriptions + customers only), `EMAIL_PROVIDER` + that provider's key, and `EM
 domain with SPF/DKIM configured — an unauthenticated From address goes to spam, which at this
 volume is indistinguishable from not sending at all.
 
+### How a signup reaches the Tuesday run (decided Aug 14 2026)
+
+The question asked: is a published Google Sheet CSV the sustainable long-run answer? **No.**
+Recorded here so it is not re-litigated next August:
+
+- **It is a store, not a receiver.** A static GH Pages page cannot write to a Sheet. Getting a row
+  in requires either an Apps Script web app open to anonymous writes (a server we run, with none
+  of a form vendor's abuse protection) or a form backend that also writes to Sheets — in which
+  case the form backend does the work and the Sheet is a middleman. It removes zero manual steps.
+- **"Publish to the web" is a public, unauthenticated, cached URL** with no expiry and no access
+  log. The rows would carry subscriber emails *and* `rival_owner_id`, which resolves to a third
+  party's real display name in one unauthenticated Sleeper call — breaking both the
+  no-emails-on-a-public-surface rule and the no-naming-league-members rule. Obscurity is not
+  access control.
+- **It does nothing about the actual problem**, which was two lists joined by a typed email, and
+  nothing at all for League Pass.
+- (A *private* Sheet via Sheets API v4 clears the privacy objection but costs a GCP project and a
+  service-account key with no natural rotation, to buy a store we do not need.)
+
+**Decision: the payment carries the signup.** The picker sends buyers to a Stripe Payment Link
+with their picks in `client_reference_id` and a locked prefilled email, so entitlement and
+configuration live in one system — the one that already has to be correct. League Pass seats,
+which produce no payment of their own, are the single exception and use one free-tier form
+backend. Mechanics and the verified Stripe facts are in CLAUDE.md.
+
+Deferred deliberately, and worth revisiting: `run/sync.py` (sweep Checkout Sessions → materialise
+the registry) and the August season auto-roll would take this to zero touches including seats.
+Until then seats are an annual hand-export, which is a once-a-year chore rather than a weekly one.
+**Revisit a small server (Cloudflare Worker) as a §7 risk item if either trigger fires: League
+Pass passes ~5 leagues, or the form backend proves flaky twice.**
+
+New launch blockers from this decision:
+- Create the Stripe products/prices and **Payment Links**, then paste them into
+  `STRIPE_LINK_SEASON` / `STRIPE_LINK_MONTHLY` and set `CHECKOUT_OPEN = true`.
+- Make the **$99 League Pass a recurring annual price, not a one-time charge** — a one-time
+  payment creates no Subscription, leaving the Checkout Session (whose retention Stripe does not
+  document) as the only record of an entitlement that must survive a season. If it becomes
+  recurring it also needs the same renewal disclosure the $29 card carries.
+- **`legal.html` still names Substack as the place to cancel.** Whichever platform actually takes
+  the money, the cancel instructions must name *that* one. Shipping checkout on Stripe with cancel
+  steps pointing at Substack is exactly the ambiguity §4 exists to prevent.
+- A restricted `STRIPE_API_KEY` (read: subscriptions, customers, checkout sessions). Create it in
+  a sandbox first and confirm the permission labels against the request log rather than guessing.
+
 ### Retention & refund policy (owner decision, Aug 14 2026)
 
 Goal: recurring revenue that sticks, with as little refunded as possible. The structure below

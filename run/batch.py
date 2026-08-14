@@ -25,7 +25,8 @@ from typing import Any
 import ingest.pull as ingest_pull
 import render.report as render_report
 from engine.history import HistoryError
-from engine.week_report import RAW_DIR, WeekReportError, build_week_report
+from engine.week_report import (RAW_DIR, WeekReportError, build_week_report,
+                                current_nfl_season)
 from run.registry import (DEFAULT_REGISTRY, RegistryError, Subscriber,
                           league_pass_seats, load_registry)
 from run.delivery import (DRY_OUTBOX, DeliveryError, Message, build_provider,
@@ -35,6 +36,15 @@ from run.week import _current_week, text_summary
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUBSCRIBER_REPORTS = REPO_ROOT / "reports" / "subscribers"
+
+
+def _display(path: Path) -> str:
+    """Repo-relative when it can be, absolute otherwise — a cosmetic path in a
+    summary line must never be the thing that raises at the end of a good run."""
+    try:
+        return f"{path.relative_to(REPO_ROOT)}/"
+    except ValueError:
+        return str(path)
 
 
 @dataclass
@@ -72,14 +82,15 @@ def _my_roster_id(raw_dir: Path, subscriber: Subscriber) -> int:
         f"roster in league {subscriber.league_id} — re-check their signup")
 
 
-def run_subscriber(subscriber: Subscriber, week: int,
-                   template_html: str) -> BatchResult:
+def run_subscriber(subscriber: Subscriber, week: int, template_html: str,
+                   require_season: str | None = None) -> BatchResult:
     try:
         my_roster = _my_roster_id(RAW_DIR, subscriber)
         report = build_week_report(
             RAW_DIR, subscriber.league_id, week, my_roster,
             named_rival_owner_id=subscriber.rival_owner_id,
             named_rival_roster_id=subscriber.rival_roster_id,
+            require_season=require_season,
         )
     except (WeekReportError, HistoryError) as exc:
         return BatchResult(subscriber, ok=False, detail=str(exc))
@@ -172,20 +183,36 @@ def main(argv: list[str] | None = None) -> int:
         except SubscriptionError as exc:
             print(str(exc), file=sys.stderr)
             return 1
-        still_paying = [s for s in subscribers if paid.covers(s.email)]
-        dropped = [s for s in subscribers if not paid.covers(s.email)]
+        # A League Pass seat holder never paid us a cent — their commissioner
+        # did. Checking the seat's own email drops every seat and reports it
+        # in the words meant for a cancellation, so the pass is undeliverable
+        # unless the operator disables the gate for everybody. The payer's
+        # entitlement is the seat's entitlement; registry.py has already
+        # refused any seat that names no payer.
+        entitled = [s for s in subscribers if paid.covers(s.covered_by or s.email)]
+        dropped = [s for s in subscribers if not paid.covers(s.covered_by or s.email)]
         print(f"Paid check: {len(paid.emails)} entitled subscriber(s) "
               f"(source: {paid.source})")
         if paid.status_column is None:
             print("NOTE: that export has no subscription-status column, so everyone "
                   "listed in it is treated as paying.")
-        subscribers = still_paying
+        had_registry = len(subscribers)
+        subscribers = entitled
         if dropped:
             print(f"Skipping {len(dropped)} subscriber(s) who are no longer paying: "
                   + ", ".join(s.slug for s in dropped))
         if not subscribers:
-            print("nobody in the registry is currently paying — nothing to send")
-            return 0
+            # Everyone in a non-empty registry failing the check at once is far
+            # more likely to be a broken entitlement source than a business that
+            # lost every customer in one week. Exiting 0 here made that a green
+            # cron with an empty inbox — the failure nobody notices until a
+            # subscriber asks where their report went.
+            print(f"NOTHING TO SEND: all {had_registry} registry entries failed the "
+                  f"paid check against {paid.source}.", file=sys.stderr)
+            print("  If that is genuinely everyone cancelling, re-run with "
+                  "--no-paid-check to confirm. Otherwise the entitlement source is "
+                  "wrong or stale — check it before next Tuesday.", file=sys.stderr)
+            return 1
 
     leagues = sorted({s.league_id for s in subscribers})
     if not args.skip_ingest:
@@ -198,7 +225,11 @@ def main(argv: list[str] | None = None) -> int:
     week = args.week if args.week is not None else _current_week(RAW_DIR)
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    results = [run_subscriber(s, week, template_html) for s in subscribers]
+    # This is the one path that mails strangers, so a league id pointing at a
+    # season that is already over must fail loudly rather than render.
+    require_season = None if args.week is not None else current_nfl_season(RAW_DIR)
+    results = [run_subscriber(s, week, template_html, require_season)
+               for s in subscribers]
 
     line = "=" * 62
     ok = [r for r in results if r.ok]
@@ -248,12 +279,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    FAILED {send.message.to}: {send.detail}", file=sys.stderr)
         if provider.name == "dry":
             print(f"    (dry run — nothing left this machine; drafts in "
-                  f"{DRY_OUTBOX.relative_to(REPO_ROOT)}/)")
+                  f"{_display(DRY_OUTBOX)})")
         if failed:
             return 1
 
     if ok:
-        print(f"Reports under: {SUBSCRIBER_REPORTS.relative_to(REPO_ROOT)}/")
+        print(f"Reports under: {_display(SUBSCRIBER_REPORTS)}")
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
     return 0 if not failed else 1

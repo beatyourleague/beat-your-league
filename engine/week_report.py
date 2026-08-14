@@ -781,10 +781,24 @@ def _slot_json(pick: SlotPick, players: PlayerIndex) -> dict[str, Any]:
     }
 
 
+def current_nfl_season(raw_dir: Path) -> str | None:
+    """The season Sleeper says we are in, or None if state isn't cached."""
+    state_path = raw_dir / "state" / "nfl.json"
+    if not state_path.is_file():
+        return None
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    season = state.get("league_season") or state.get("season")
+    return season if isinstance(season, str) and re.fullmatch(r"\d{4}", season) else None
+
+
 def build_week_report(
     raw_dir: Path, league_id: str, week: int, my_roster_id: int,
     named_rival_owner_id: str | None = None,
     named_rival_roster_id: int | None = None,
+    require_season: str | None = None,
 ) -> dict[str, Any]:
     seasons = load_season_chain(raw_dir, league_id, max_seasons=2)
     season = seasons[0]
@@ -793,6 +807,21 @@ def build_week_report(
         raise WeekReportError(
             f"league {league_id} reports season {season.season!r}, "
             "which is not a plausible year")
+    # Principle 3, the quietest way to break it: Sleeper mints a NEW league id
+    # every season and the old one keeps resolving forever, with a completed
+    # season that our cache never expires. A subscriber whose registry entry
+    # still carries last year's league id would therefore get a complete,
+    # confident report about games played twelve months ago — no gap, no
+    # warning, exit code 0. Callers that MAIL people pass require_season so
+    # that failure is loud; historical and demo renders leave it unset.
+    if require_season is not None and season.season != require_season:
+        raise WeekReportError(
+            f"league {league_id} is season {season.season}, but the current NFL "
+            f"season is {require_season}. Sleeper issues a new league id each "
+            "season, so this entry is pointing at last season's league and would "
+            "produce a confident report about games that are already over. "
+            "Re-resolve the league id from the owner's Sleeper user before "
+            "sending anything.")
     history = seasons[1] if len(seasons) > 1 else None
     players = load_players(raw_dir)
     model = ProjectionModel(season, players)

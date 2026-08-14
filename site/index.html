@@ -831,7 +831,7 @@
             <li>Four charges across a season, about $40 — the pass is the
             cheaper road if you're staying</li>
           </ul>
-          <div class="soon" id="monthly-cta">Checkout opens at launch · via Substack</div>
+          <div class="soon" id="monthly-cta">Checkout opens at launch</div>
         </div>
       </div>
     </div>
@@ -846,13 +846,14 @@
           <li><b>Today:</b> reserve your spot — pick your league and your rival in sixty
           seconds. No card yet, only because checkout hasn't opened; the first 50
           reservations lock the $29 founding price.</li>
-          <li><b>Before Week 1:</b> checkout opens through Substack — you pay there, and card
+          <li><b>Before Week 1:</b> checkout opens — you pay on our payment provider's own
+          secure page, and card
           details never touch our systems. Reports go only to paid subscribers, from the
           first issue on.</li>
           <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds no-questions through
           Week 2, and every call we send you is graded on the public ledger.</li>
           <li><b>A year from now:</b> the pass renews at $29 unless you cancel. We email you
-          before it bills, cancelling is one click in your own Substack account, and we will
+          before it bills, cancelling is one click in your own account page, and we will
           never make you ask us to stop charging you.</li>
         </ol>
       </div>
@@ -898,11 +899,12 @@
 "use strict";
 document.documentElement.classList.add("js");
 
-// Paste the Substack subscribe URL here the day the publication goes live.
-// That single edit is the entire payment integration: the founder button
-// becomes real checkout and the monthly note becomes a subscribe link.
-// Substack/Stripe host the checkout; card data never touches this site.
-const SUBSTACK_URL = "";
+// Flip to true the day the Stripe Payment Links are pasted into site/join/.
+// It turns the pricing cards into live CTAs — both of which point at join/,
+// because the picker is what attaches the buyer's league and rival to the
+// payment. Checkout itself is hosted by Stripe; card data never touches this
+// site, and no payment URL is ever published on this page.
+const CHECKOUT_OPEN = false;
 // Free Monday-ledger list. Point at a form backend to collect directly; with
 // only SUBSTACK_URL set, it hands off to Substack's own free-subscribe page.
 const LEDGER_LIST_ENDPOINT = "";
@@ -951,10 +953,15 @@ if (watchForm) {
   });
 }
 
-if (SUBSTACK_URL) {
+// Every pricing CTA routes through join/, never straight to a payment link.
+// This is load-bearing, not a preference: the picker is what attaches the
+// buyer's league and rival to the payment (it puts them in the checkout URL as
+// Stripe's client_reference_id). A CTA that jumps a buyer to checkout directly
+// takes their money and leaves us with no idea whose team to report on.
+if (CHECKOUT_OPEN) {
   const founder = document.querySelector("[data-checkout]");
   if (founder) {
-    founder.href = SUBSTACK_URL;
+    founder.href = "join/index.html";
     founder.textContent = "Get the season pass — $29";
   }
   const monthly = document.getElementById("monthly-cta");
@@ -963,7 +970,7 @@ if (SUBSTACK_URL) {
     link.className = "btn ghost";
     link.style.borderColor = "var(--navy)";
     link.style.color = "var(--navy)";
-    link.href = SUBSTACK_URL;
+    link.href = "join/index.html?plan=monthly";
     link.textContent = "Subscribe monthly";
     monthly.replaceWith(link);
   }
