@@ -1,6 +1,6 @@
 # Backtest & calibration report
 
-Generated 2026-08-14 08:06 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-15 12:26 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
 
 ## Leagues graded
 
@@ -90,7 +90,7 @@ The same calls, restricted to head-to-heads where **both players actually played
 
 ## Matchup-level backtest: win probability and floor/ceiling
 
-The weekly report's §2 publishes P(your set-lineup total beats the rival's) and an 80% projection band per team. Same rule as everywhere else: those numbers ship only if this table earns them (principle 1).
+The weekly report's matchup section publishes P(your set-lineup total beats the rival's) and an 80% projection band per team. Same rule as everywhere else: those numbers ship only if this table earns them (principle 1).
 
 - **Matchups graded:** 170 (14 skipped under RULE M1 — a starter without a buildable pre-week projection)
 - **Favorite won:** 105 of 170 decided (61.8%); 0 exact ties

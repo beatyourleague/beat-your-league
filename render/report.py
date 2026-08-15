@@ -478,7 +478,10 @@ def footer(meta: Mapping[str, Any]) -> str:
 
 
 def _section(title: str, n: int, body: str) -> str:
-    marker = f'<span class="n">§{n}</span>' if n else ""
+    # Zero-padded, not "§n": the section sign is legal/academic citation
+    # register. "01" reads like a case file, which is the register the product
+    # actually sells ("the file on Mike").
+    marker = f'<span class="n">{n:02d}</span>' if n else ""
     return (
         f'<section><div class="eyebrow"><span class="tag">{esc(title)}</span>'
         f'{marker}</div>{body}</section>'

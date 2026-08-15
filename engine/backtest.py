@@ -367,7 +367,7 @@ def _matchup_section(seasons: Sequence[Season], players: PlayerIndex) -> list[st
         "",
         "## Matchup-level backtest: win probability and floor/ceiling",
         "",
-        "The weekly report's §2 publishes P(your set-lineup total beats the rival's) "
+        "The weekly report's matchup section publishes P(your set-lineup total beats the rival's) "
         "and an 80% projection band per team. Same rule as everywhere else: those "
         "numbers ship only if this table earns them (principle 1).",
         "",

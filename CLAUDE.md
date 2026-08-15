@@ -517,6 +517,13 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   price"). When editing render/report.py or engine/week_report.py strings, regenerate
   site/sample-report.html + the local demo pair + site/ledger/index.html through their real
   paths, never by hand.
+- **Section markers are `01`-`09`, never `§n`.** The section sign is legal/academic citation
+  register — wrong for a fantasy product, and it reads as a flourish rather than a design
+  element. Zero-padded numbers read like a case file, which is the register the product sells
+  ("the file on Mike", "this buys the scouting file"). Set in `render/report.py` and mirrored in
+  `rival-report-template.html`. Prose never cites a section number at all (an earlier pass had
+  already stripped `§`-references from action items as legalese, and they dangle in the
+  plain-text email, which has no sections) — name the section instead: "the matchup section".
 - **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file
   names, "LLM tokens", "pipeline", "availability snapshot", "calibration policy" are ours, not
   the customer's — a buyer reading "coming in v0.3" concludes they bought unfinished software.
