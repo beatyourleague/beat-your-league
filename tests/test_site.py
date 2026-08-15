@@ -73,7 +73,11 @@ def test_free_watch_list_exists_and_promises_unsubscribe() -> None:
 
 
 def test_paid_from_day_one_is_stated_not_hidden() -> None:
-    assert re.search(r"no free tier", LANDING_PROSE, re.I)
+    # The protection is that paid-from-day-one is STATED, not hidden. It used
+    # to be pinned as the phrase "no free tier", which sells an absence —
+    # defensive copy that markets what the product doesn't have. The positive
+    # statement carries the same disclosure with none of the apology.
+    assert re.search(r"the report is the product from day one", LANDING_PROSE, re.I)
     assert re.search(r"paid product from day one", JOIN_PROSE, re.I)
 
 
