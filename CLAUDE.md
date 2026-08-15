@@ -444,7 +444,13 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   "renews once a year at $29 unless you cancel" and promise a pre-billing email. An undisclosed
   annual renewal is the forget-to-cancel pattern wearing a suit — `test_pass_states_its_renewal_terms`
   fails the build if the disclosure goes missing.
-- **`site/backtest.html` publishes `reports/backtest.md` whole** — failing buckets, 53.5%
+- **`site/backtest.html` is GENERATED from `reports/backtest.md`** by
+  `render/backtest_site.py` (`make backtest` runs both; `python -m render.backtest_site --check`
+  fails if the page is stale, and a test asserts generator output == published page). It used to
+  be hand-maintained under a header claiming "never hand-edited", and it drifted — the published
+  page carried a generation timestamp older than its own source. `verify()` refuses to publish if
+  any figure in the source is missing from the page, if the failing `off` buckets vanish, or if an
+  ordered list would be silently renumbered by `<ol>`. It publishes `reports/backtest.md` whole — failing buckets, 53.5%
   headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
   landing page links it and a test asserts the failures survive publication.
 - **Delivery (`run/delivery.py`) is provider-agnostic and dry by default.** Until this existed

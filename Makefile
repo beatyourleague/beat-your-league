@@ -8,8 +8,11 @@ week:
 ingest:
 	$(PY) -m ingest.pull
 
+# Regenerate the record AND republish it. The published page claims to be
+# generated, so the two must never be run apart.
 backtest:
 	$(PY) -m engine.backtest
+	$(PY) -m render.backtest_site
 
 content:
 	$(PY) -m run.content all
