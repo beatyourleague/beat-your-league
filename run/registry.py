@@ -158,10 +158,18 @@ def load_registry(path: Path = DEFAULT_REGISTRY) -> list[Subscriber]:
     if not isinstance(raw, list):
         raise RegistryError(f"registry {path} must be a JSON array")
     subscribers = [_parse_entry(entry, i) for i, entry in enumerate(raw)]
-    emails = [s.email.lower() for s in subscribers]
-    duplicates = {e for e in emails if emails.count(e) > 1}
+    # Uniqueness is per (email, league) — NOT per email. One person can genuinely
+    # play in two leagues and buy a subscription for each, and they get one
+    # report per league. Rejecting a repeated email outright made that legitimate
+    # customer unloadable, and because the loader fails the WHOLE file, it took
+    # every other subscriber's Tuesday down with it. The same rule fires at every
+    # season rollover, when a rolled entry briefly coexists with the old one.
+    pairs = [(s.email.lower(), s.league_id) for s in subscribers]
+    duplicates = {p for p in pairs if pairs.count(p) > 1}
     if duplicates:
-        raise RegistryError(f"duplicate emails in registry: {sorted(duplicates)}")
+        raise RegistryError(
+            "the same email is registered twice for one league: "
+            + ", ".join(f"{email} in {league}" for email, league in sorted(duplicates)))
     # Two people in one league cannot both hold the same roster — that means a
     # bad signup, and it would send one person another person's team.
     seen: dict[tuple[str, str], str] = {}

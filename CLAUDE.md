@@ -326,6 +326,43 @@ Also fixed in the same review: the season roll now carries `pass_league_id` onto
 finds no coverage), and `run/batch.py` no longer rebinds `failed` for send failures — that made a
 run where somebody's report failed to build but every send succeeded exit 0.
 
+**Second review pass (48 agents, 18 confirmed / 25 refuted) — the "one bad row stops everyone"
+class.** `run/registry.py` fails the WHOLE file on any invalid entry, so anything that can put one
+bad row in `subscribers.json` is a total outage, not a single-subscriber problem. Four ways in,
+all fixed and mutation-tested:
+- **Registry uniqueness is per (email, league), not per email.** `sync.project()` is keyed on
+  `(league_id, user_id)` and deliberately emits one row per league, so a subscriber in two leagues
+  — and *every* subscriber during a season rollover — made the registry unloadable. The old rule
+  and the projection were a contract that disagreed, with `test_two_leagues_for_one_person` on one
+  side and `load_registry` on the other.
+- **A season roll writes a tombstone** (`Signup.retired`, `retire()`). The roll gives the
+  subscriber a NEW `(league, user)` key, so without retiring the old one the projection carries
+  both — two reports, one about a season that is over.
+- **Seat emails are validated to `registry.py`'s own standard in `seats_to_signups()`.** The seat
+  endpoint is public, so `"not an email"` from any stranger stopped every subscriber's Tuesday.
+- **`drop_unloadable()` validates every projected row before it is written**, against both of the
+  loader's whole-file rules. Defence in depth: a row we cannot parse is dropped and reported
+  instead of taking the run down.
+
+**A payment always beats an unpaid claim** (`project()`). Sleeper user ids are public and the seat
+form must be public, so a stranger could POST a seat claim naming a paying subscriber's id with
+their own address and receive that manager's report — while the subscriber, still being charged,
+silently stopped getting it. Two seams had to be closed for this to hold: `main()` runs **one
+combined projection** of payers and seats (projecting them separately never let the rule compare
+them), and `payers` is built from **Stripe-sourced rows only** (projecting the whole log folded
+seats into payers, so every legitimate seat was flagged as an attack on the next run — a security
+warning that fires weekly for nothing trains you to ignore the real one).
+
+Also fixed in that pass: `sweep_stripe` **sorts by Stripe's `created`** (Stripe lists newest-first
+and `project()` is latest-by-position, so a changed rival lost to the pick they abandoned); the
+new-event dedupe key includes `plan` and `pass_league_id` (an existing subscriber upgrading to a
+League Pass changes neither rival nor email, so their upgrade was never logged and their league
+stayed uncovered); unattributable payments **persist in `sync-state.json`** and are re-reported
+every run until `--clear-unresolved` (the watermark moves past the session within days, so a
+once-only message meant the third run forgot a customer who is still being charged); run output
+uses `Signup.label` (Sleeper username) rather than the email, because summaries land in a CI log;
+and `--dry-run` no longer writes Stripe customer metadata.
+
 **Module path constants must never be default arguments** (`run/sync.py`, `run/delivery.py`):
 a constant baked into a signature cannot be redirected by a caller or a test, which is what let a
 pipeline run write over the real registry and a test poison the real send log. Paths are resolved

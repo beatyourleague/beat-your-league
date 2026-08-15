@@ -96,6 +96,21 @@ def test_the_browser_and_python_agree_on_the_format() -> None:
     for prefix in ('WANTS_PASS ? "p"', '(WANTS_MONTHLY ? "m" : "s")'):
         assert prefix in join, f"picker lost the {prefix} plan prefix"
 
+    # Pinning only the JavaScript leaves the gap open from the other side: if
+    # Python's prefix map changed, the browser would keep emitting refs the
+    # Tuesday run could no longer decode, and every test would still pass. So
+    # extract the prefixes the PAGE actually emits and decode them for real.
+    import re as _re
+    from run import refs
+    emitted = set(_re.findall(r'WANTS_PASS \? "(\w)" : \(WANTS_MONTHLY \? "(\w)" : "(\w)"\)',
+                              join)[0])
+    assert emitted == set(refs._PREFIX_TO_PLAN), (
+        f"the picker emits prefixes {sorted(emitted)} but run/refs.py decodes "
+        f"{sorted(refs._PREFIX_TO_PLAN)} — a buyer would pay and be undecodable")
+    for prefix in emitted:
+        ref = f"{prefix}-{USER}-{LEAGUE}-{RIVAL}"
+        assert decode(ref).user_id == USER, f"python cannot decode a {prefix!r} ref"
+
 
 # --------------------------------------------------------------------- #
 # fakes
@@ -181,9 +196,16 @@ def test_a_payment_we_cannot_attribute_is_reported_never_dropped(
     signups, _, problems = sync.sweep_stripe("sk")
     assert signups == []
     assert len(problems) == 2
-    assert any("NO reference" in p and "noref@example.com" in p for p in problems)
+    assert any("NO reference" in p and "cs_noref" in p for p in problems)
     assert any("unreadable reference" in p for p in problems)
-    assert all("paid" in p or "undeliverable" in p for p in problems)
+    # Tagged so main() can carry them across runs: the watermark moves past the
+    # session within days, and a once-only message means the third run forgets
+    # a customer who is still being charged.
+    assert all(p.startswith("PAID-UNATTRIBUTED") for p in problems)
+    # The email is deliberately NOT in the message — these land in a CI log that
+    # anyone who can read the Actions tab can read. The session id is enough to
+    # find the person in Stripe.
+    assert not any("@example.com" in p for p in problems)
 
 
 def test_the_sweep_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -598,3 +620,222 @@ def test_rolling_a_non_payer_does_not_invent_coverage() -> None:
     rolled, _ = sync.roll_season(_signup(league_id="111111111111111111"),
                                 _rolling_client(), "2026")
     assert rolled.pass_league_id is None
+
+
+# --------------------------------------------------------------------- #
+# One bad row must never cost everyone their Tuesday
+# --------------------------------------------------------------------- #
+
+def test_a_season_roll_retires_the_row_it_leaves_behind() -> None:
+    """A roll gives the subscriber a NEW (league, user) key, so without a
+    tombstone the old row survives the projection: two entries for one person,
+    one of them pointing at a season that is already over."""
+    old = _signup(league_id="111111111111111111")
+    new = _signup(league_id="222222222222222222")
+    both = sync.project([old, new])
+    assert len(both) == 2, "sanity: two keys, both live"
+    one = sync.project([old, sync.retire(old), new])
+    assert [s.league_id for s in one] == ["222222222222222222"]
+
+
+def test_the_registry_written_by_a_roll_actually_loads(tmp_path: Path) -> None:
+    """The end-to-end version of the above: this exact shape used to make
+    load_registry reject the WHOLE file, which stops every subscriber."""
+    old = _signup(league_id="111111111111111111")
+    new = _signup(league_id="222222222222222222")
+    entries, _ = sync.drop_unloadable(
+        sync.to_registry_entries(sync.project([old, sync.retire(old), new])))
+    path = tmp_path / "subscribers.json"
+    sync.write_registry(entries, path)
+    assert len(load_registry(path)) == 1
+
+
+def test_one_person_in_two_leagues_produces_a_loadable_registry(tmp_path: Path) -> None:
+    """sync is designed to emit one row per league, and registry.py has to
+    accept that — they are a contract, and they used to disagree."""
+    entries, problems = sync.drop_unloadable(sync.to_registry_entries(
+        sync.project([_signup(), _signup(league_id="123456789012345678")])))
+    path = tmp_path / "subscribers.json"
+    sync.write_registry(entries, path)
+    assert len(load_registry(path)) == 2 and not problems
+
+
+def test_a_malformed_seat_claim_cannot_stop_everyone_elses_report(tmp_path: Path) -> None:
+    """The seat endpoint is public. The registry loader fails the whole file on
+    one bad row, so an unvalidated claim was an unauthenticated way for any
+    stranger to stop every subscriber's Tuesday."""
+    seats, problems = sync.seats_to_signups(
+        [{"email": "not an email", "user_id": "111111111111",
+          "league_id": LEAGUE, "rival_owner_id": RIVAL}],
+        {LEAGUE: "commish@example.com"})
+    assert seats == [] and problems
+
+
+def test_an_unloadable_row_is_dropped_and_reported_not_written(tmp_path: Path) -> None:
+    good = sync.to_registry_entries([_signup()])
+    bad = [{"email": "nope", "user_id": "1", "league_id": "x",
+            "rival_owner_id": None, "rival_roster_id": None, "plan": "season"}]
+    entries, problems = sync.drop_unloadable(good + bad)
+    assert len(entries) == 1 and problems
+    path = tmp_path / "subscribers.json"
+    sync.write_registry(entries, path)
+    assert len(load_registry(path)) == 1
+
+
+# --------------------------------------------------------------------- #
+# ordering, upgrades, and the CI log
+# --------------------------------------------------------------------- #
+
+def test_a_newer_pick_wins_even_though_stripe_lists_newest_first(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stripe lists newest-first and project() is latest-by-position, so
+    returning Stripe's order verbatim scouted the rival they abandoned."""
+    old = _session(encode(SEASON, USER, LEAGUE, rival_owner_id="111111111111"),
+                   created=1_700_000_000, sid="cs_old")
+    new = _session(encode(SEASON, USER, LEAGUE, rival_owner_id="999999999999"),
+                   created=1_700_009_999, sid="cs_new")
+    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([new, old]))
+    monkeypatch.setattr(sync, "_promote", lambda *a: None)
+    signups, _, _ = sync.sweep_stripe("sk")
+    assert sync.project(signups)[0].rival_owner_id == "999999999999"
+
+
+def test_upgrading_to_a_league_pass_is_a_new_event() -> None:
+    """Same person, same rival, same email — only the plan changed. A narrower
+    dedupe key treated the upgrade as a duplicate and never logged it, so every
+    seat in their league stayed uncovered."""
+    before = _signup()
+    after = _signup(pass_league_id=LEAGUE)
+    key = lambda s: (s.key, s.rival_owner_id, s.rival_roster_id, s.email,
+                     s.plan, s.pass_league_id, s.retired)
+    assert key(before) != key(after)
+
+
+def test_run_output_never_carries_a_subscriber_email() -> None:
+    """Run summaries land in a CI log readable by anyone with Actions access."""
+    signup = _signup(sleeper_username="FantasyFan")
+    assert signup.label == "FantasyFan"
+    assert "@" not in signup.label
+    assert _signup().label == f"user {USER}"
+
+
+def test_main_validates_before_it_writes(tmp_path: Path,
+                                         monkeypatch: pytest.MonkeyPatch) -> None:
+    """Defence in depth, checked through main(): if anything ever produces a row
+    registry.py cannot parse, the run must drop and report it rather than write
+    a file whose first bad line stops every subscriber."""
+    ref = encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL)
+    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([_session(ref)]))
+    monkeypatch.setattr(sync, "_promote", lambda *a: None)
+    monkeypatch.setenv("STRIPE_API_KEY", "sk")
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    real = sync.to_registry_entries
+    monkeypatch.setattr(sync, "to_registry_entries",
+                        lambda s: real(s) + [{"email": "nope", "user_id": "1",
+                                              "league_id": "x", "plan": "season",
+                                              "rival_owner_id": None,
+                                              "rival_roster_id": None}])
+    code = sync.main(["--season", "2018", "--no-verify", "--no-roll",
+                      "--registry-dir", str(tmp_path)])
+    assert code == 0
+    # The healthy subscriber survives and the file is loadable.
+    assert len(load_registry(tmp_path / "subscribers.json")) == 1
+
+
+def test_a_public_seat_claim_cannot_hijack_a_paid_signup() -> None:
+    """Sleeper user ids are public and the seat form has to be public, so a
+    stranger could POST a claim naming a paying subscriber's id with their own
+    address. Latest-wins handed them that manager's report while the subscriber
+    — still being charged — silently stopped receiving it."""
+    paid = _signup(email="victim@example.com", source="stripe")
+    attack = _signup(email="attacker@example.com", source="form",
+                     plan="league_pass", covered_by="commish@example.com",
+                     seen_at="9999999999")
+    kept = sync.project([paid, attack])
+    assert len(kept) == 1
+    assert kept[0].email == "victim@example.com"
+    assert kept[0].source == "stripe"
+
+
+def test_a_seat_still_fills_a_key_no_payment_holds() -> None:
+    """The rule must not break the ordinary case: a seat holder who never paid
+    is exactly who the League Pass is for."""
+    seat = _signup(email="member@example.com", source="form", plan="league_pass",
+                   covered_by="commish@example.com")
+    assert sync.project([seat])[0].email == "member@example.com"
+    newer = _signup(email="member@example.com", source="form", plan="league_pass",
+                    covered_by="commish@example.com", rival_owner_id="999999999999")
+    assert sync.project([seat, newer])[0].rival_owner_id == "999999999999"
+
+
+# --------------------------------------------------------------------- #
+# main(): the seams unit tests miss
+# --------------------------------------------------------------------- #
+
+def _wire(monkeypatch, sessions, seats):
+    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page(
+        [s for s in sessions if s.get("payment_link", "") in url] if "payment_link" in url
+        else sessions))
+    monkeypatch.setattr(sync, "_promote", lambda *a: None)
+    monkeypatch.setattr(sync, "stamp_pass_coverage", lambda *a: None)
+    monkeypatch.setattr(sync, "fetch_seats", lambda e, k=None: seats)
+    monkeypatch.setenv("STRIPE_API_KEY", "sk")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://form.test/x")
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS",
+                       "s:plink_SEASON,m:plink_MONTHLY,p:plink_PASS")
+
+
+def _paid_session(ref, email, customer, link, created=1, sid="cs"):
+    s = _session(ref, email=email, customer=customer, created=created, sid=sid)
+    s["payment_link"] = link
+    s["payment_status"] = "paid"
+    return s
+
+
+OTHER_USER = "111111111111"
+
+
+def test_a_seat_claim_naming_a_paying_subscriber_is_refused_through_main(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """THE REAL ATTACK. A commissioner covers the league, a second manager pays
+    for their own season pass, and a stranger POSTs a seat claim naming that
+    manager's PUBLIC Sleeper id with their own address. Projecting payers and
+    seats as two separate lists never let the payment-beats-claim rule compare
+    them, so the claim survived main() even though project() rejected it in
+    isolation."""
+    _wire(monkeypatch, [
+        _paid_session(encode(LEAGUE_PASS, USER, LEAGUE, rival_owner_id=RIVAL),
+                      "commish@example.com", "cus_COMMISH1", "plink_PASS",
+                      created=1, sid="cs_pass"),
+        _paid_session(encode(SEASON, OTHER_USER, LEAGUE, rival_owner_id=RIVAL),
+                      "victim@example.com", "cus_VICTIM01", "plink_SEASON",
+                      created=2, sid="cs_paid"),
+    ], [{"email": "attacker@example.com", "user_id": OTHER_USER,
+         "league_id": LEAGUE, "rival_owner_id": RIVAL}])
+    sync.main(["--season", "2018", "--no-verify", "--no-roll",
+               "--registry-dir", str(tmp_path)])
+    emails = {s.email for s in load_registry(tmp_path / "subscribers.json")}
+    assert "attacker@example.com" not in emails
+    assert emails == {"commish@example.com", "victim@example.com"}
+    assert "already has a paid subscription" in capsys.readouterr().err
+
+
+def test_a_legitimate_seat_never_looks_like_a_hijack_on_a_later_run(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """`payers` was projected from the WHOLE log, so once a seat was recorded it
+    appeared in payers and every later run flagged it as an attack. A security
+    warning that fires weekly for nothing trains the operator to ignore the
+    real one."""
+    _wire(monkeypatch,
+          [_paid_session(encode(LEAGUE_PASS, USER, LEAGUE, rival_owner_id=RIVAL),
+                         "commish@example.com", "cus_COMMISH1", "plink_PASS",
+                         sid="cs_pass")],
+          [{"email": "member@example.com", "user_id": OTHER_USER,
+            "league_id": LEAGUE, "rival_owner_id": RIVAL}])
+    args = ["--season", "2018", "--no-verify", "--no-roll",
+            "--registry-dir", str(tmp_path)]
+    sync.main(args)
+    capsys.readouterr()
+    sync.main(args)                                   # the run that used to lie
+    assert "already has a paid subscription" not in capsys.readouterr().err
+    assert len(load_registry(tmp_path / "subscribers.json")) == 2

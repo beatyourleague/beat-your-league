@@ -81,10 +81,21 @@ def test_batch_contains_unexpected_exceptions(tmp_path: Path,
     assert not result.ok and "failure" in result.detail.lower() or "owns no" in result.detail
 
 
-def test_registry_rejects_duplicate_emails(tmp_path: Path) -> None:
-    with pytest.raises(RegistryError, match="duplicate"):
+def test_registry_rejects_the_same_email_twice_in_one_league(tmp_path: Path) -> None:
+    with pytest.raises(RegistryError, match="registered twice for one league"):
         load_registry(_write_registry(
             tmp_path, [_entry(), _entry(user_id="111111111111")]))
+
+
+def test_one_person_can_subscribe_for_two_leagues(tmp_path: Path) -> None:
+    """They play in two leagues and buy a subscription for each — one report per
+    league. Rejecting the repeated email made that customer unloadable, and
+    because the loader fails the WHOLE file it took every other subscriber's
+    Tuesday with it. It also fires at every season rollover."""
+    subs = load_registry(_write_registry(
+        tmp_path, [_entry(), _entry(league_id="123456789012345678")]))
+    assert len(subs) == 2
+    assert {s.league_id for s in subs} == {"289646328504385536", "123456789012345678"}
 
 
 def test_registry_missing_file_is_actionable(tmp_path: Path) -> None:
