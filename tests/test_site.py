@@ -316,15 +316,27 @@ def test_no_real_league_member_is_named_on_any_public_page() -> None:
                 names.add(team)
     if not names:
         pytest.skip("no cached league data to build the forbidden-name set")
-    public = {
-        "landing": LANDING, "join": JOIN, "ledger": LEDGER,
-        "sample report": SAMPLE_REPORT,
-        "backtest": (SITE / "backtest.html").read_text(encoding="utf-8"),
-        "legal": (SITE / "legal.html").read_text(encoding="utf-8"),
-    }
-    for page_name, page in public.items():
+    # EVERY tracked file, not a hardcoded list of six site/ pages. The narrow
+    # version passed green while reports/rival-report-2018-w10-r1.{html,txt}
+    # — also tracked, and therefore also published by a push — named four real
+    # managers and profiled their waiver habits. "Public surface" is anything
+    # that leaves this machine, not just the pages under site/.
+    import subprocess
+    repo = Path(__file__).resolve().parent.parent
+    tracked = subprocess.run(["git", "ls-files"], cwd=repo, capture_output=True,
+                             text=True, check=True).stdout.split()
+    skip_dirs = ("tests/", "data/")
+    for rel in tracked:
+        if rel.startswith(skip_dirs):
+            continue
+        path = repo / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue                      # binary or unreadable: nothing to name
         for person in names:
-            assert person not in page, f"{person!r} is named on the public {page_name} page"
+            assert person not in text, \
+                f"{person!r} is named in tracked file {rel}, which a push publishes"
 
 
 def test_no_personal_contact_details_are_published() -> None:

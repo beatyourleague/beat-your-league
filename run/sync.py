@@ -547,7 +547,7 @@ def seats_to_signups(rows: Iterable[dict], covered_leagues: dict[str, str]) -> \
         rival_owner_id = str(rival_owner).strip() if rival_owner else None
         rival_roster_id = int(rival_roster) if str(rival_roster or "").isdigit() else None
         if not rival_owner_id and rival_roster_id is None:
-            problems.append(f"seat claim from {email} names no rival")
+            problems.append(f"seat claim from Sleeper user {user_id} names no rival")
             continue
         username = row.get("sleeper_username")
         signups.append(Signup(

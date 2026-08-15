@@ -7,6 +7,11 @@ data/
 reports/subscribers/
 # Dry-run drafts: real subscriber addresses and their personalised reports.
 reports/outbox/
+# Generated reports name real league members (rival, opponent, waiver rivals).
+# The anonymised public demo is site/sample-report.html, built through
+# render.report.anonymize_for_public(); these raw renders must not be tracked.
+reports/rival-report-*.html
+reports/rival-report-*.txt
 
 # Python
 .venv/

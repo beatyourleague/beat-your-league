@@ -252,10 +252,15 @@ def main(argv: list[str] | None = None) -> int:
                 total = len(json.loads(rosters_file.read_text(encoding="utf-8")))
             except (OSError, json.JSONDecodeError):
                 total = None
-        payer = members[0].covered_by
+        # covered_by is the payer's EMAIL, and this line lands in a CI log —
+        # mask it the way every other operator-facing message does. The league
+        # id is what the operator needs to find the pass in Stripe anyway.
+        payer = members[0].covered_by or ""
+        masked = (payer.split("@")[0][:1] + "***@" + payer.split("@")[1]
+                  if "@" in payer else "unknown")
         claimed = f"{len(members)} of {total}" if total else str(len(members))
         print(f"League Pass · league {league_id}: {claimed} seats claimed "
-              f"(paid by {payer})")
+              f"(paid by {masked})")
         if total and len(members) < total:
             print(f"    {total - len(members)} team(s) haven't signed up yet — "
                   "they get nothing until they pick a rival.")
