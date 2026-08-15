@@ -121,15 +121,22 @@ def section_checklist(items: list[Mapping[str, Any]]) -> str:
 
 def section_matchup(matchup: Mapping[str, Any]) -> str:
     you, rival = matchup["you"], matchup["rival"]
+    # A side without a published total renders VS with the names only — a
+    # "0.0 PROJ" is a fabricated number wearing a scoreboard font.
+    gated = matchup.get("range_gate")
+
+    def pts(team: Mapping[str, Any]) -> str:
+        if gated or "projected_total" not in team:
+            return ""
+        return f'<div class="pts">{team["projected_total"]:.1f} <small>PROJ</small></div>'
+
     board = (
         f'<div class="board">'
         f'<div class="team you"><div class="name">{esc(you["label"])}</div>'
-        f'<div class="sub">Your best lineup this week</div>'
-        f'<div class="pts">{you["projected_total"]:.1f} <small>PROJ</small></div></div>'
+        f'<div class="sub">Your best lineup this week</div>{pts(you)}</div>'
         f'<div class="vs">VS</div>'
         f'<div class="team rival"><div class="name">{esc(rival["label"])}</div>'
-        f'<div class="sub">Lineup as currently set</div>'
-        f'<div class="pts">{rival["projected_total"]:.1f} <small>PROJ</small></div></div>'
+        f'<div class="sub">Lineup as currently set</div>{pts(rival)}</div>'
         f'</div>'
     )
     prob = matchup.get("win_probability")
@@ -149,7 +156,12 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
         field = gate_note(f'win probability — {matchup.get("win_probability_gate", "gated")}')
 
     # Ranges carry their own backtest evidence (band coverage), so they render
-    # independently of the win-probability gate.
+    # independently of the win-probability gate — but only when the engine
+    # published them. A gated week renders the reason, never a zeroed band.
+    if gated:
+        ranges = gate_note(f"projected totals and ranges — {gated}")
+        return _section("The Matchup", 2, board + field + ranges)
+
     lo = min(you["floor"], rival["floor"])
     hi = max(you["ceiling"], rival["ceiling"])
     span = (hi - lo) or 1.0
@@ -199,20 +211,24 @@ def _lineup_row(slot: Mapping[str, Any]) -> str:
     )
 
 
-def _lineup_grid(slots: list[Mapping[str, Any]], total: float, total_label: str,
-                 note_html: str = "") -> str:
+def _lineup_grid(slots: list[Mapping[str, Any]], total: float | None,
+                 total_label: str, note_html: str = "") -> str:
     """``total`` comes from the matchup section so the board and the grid can
-    never disagree (summing per-row rounded values drifts)."""
+    never disagree (summing per-row rounded values drifts). ``None`` means the
+    engine gated the totals — the row is omitted rather than printing a 0.0
+    that no game produced."""
     head = ('<div class="lrow head"><span>Slot</span><span>Player</span>'
             '<span style="text-align:right">Proj</span>'
             '<span style="text-align:right">Conf</span></div>')
     rows = "".join(_lineup_row(s) for s in slots)
-    total_row = (
-        f'<div class="lrow total"><span class="slot"></span>'
-        f'<span class="pl"><span class="pname">Projected Total</span></span>'
-        f'<span class="proj">{total:.1f}</span>'
-        f'<span class="cwrap"><span class="clab">{esc(total_label)}</span></span></div>'
-    )
+    total_row = ""
+    if total is not None:
+        total_row = (
+            f'<div class="lrow total"><span class="slot"></span>'
+            f'<span class="pl"><span class="pname">Projected Total</span></span>'
+            f'<span class="proj">{total:.1f}</span>'
+            f'<span class="cwrap"><span class="clab">{esc(total_label)}</span></span></div>'
+        )
     return f'<div class="lineup">{head}{rows}{total_row}{note_html}</div>'
 
 
@@ -269,16 +285,22 @@ def section_lineup(report: Mapping[str, Any]) -> str:
                 f'we\'ve confirmed both players are active — otherwise we\'d be guessing, '
                 f'and you can guess for free.</div>')
     matchup = report["matchup"]
-    grid = _lineup_grid(slots, matchup["you"]["projected_total"],
-                        f'vs {matchup["rival"]["projected_total"]:.1f}',
+    # When totals are gated (week 1: nothing to project from), the grid total
+    # row is omitted rather than showing a 0.0 that no game produced.
+    you_total = matchup["you"].get("projected_total")
+    rival_total = matchup["rival"].get("projected_total")
+    grid = _lineup_grid(slots, you_total,
+                        f"vs {rival_total:.1f}" if rival_total is not None else "",
                         note_html=note)
     return _section("Your Optimal Lineup", 3, grid)
 
 
 def section_rival_lineup(report: Mapping[str, Any]) -> str:
     matchup = report["matchup"]
-    grid = _lineup_grid(report["rival_lineup"], matchup["rival"]["projected_total"],
-                        f'vs you {matchup["you"]["projected_total"]:.1f}')
+    you_total = matchup["you"].get("projected_total")
+    rival_total = matchup["rival"].get("projected_total")
+    grid = _lineup_grid(report["rival_lineup"], rival_total,
+                        f"vs you {you_total:.1f}" if you_total is not None else "")
     return _section(f'{report["meta"]["rival_label"]} — Lineup As Set', 4, grid)
 
 

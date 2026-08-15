@@ -633,3 +633,57 @@ def test_untrusted_season_string_is_rejected(tmp_path: Path) -> None:
     from engine.week_report import WeekReportError
     with pytest.raises(WeekReportError, match="not a plausible year"):
         build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+
+
+# --------------------------------------------------------------------- #
+# Week 1: the model has no record and must say so, not fabricate
+# --------------------------------------------------------------------- #
+
+def test_week_one_gates_totals_instead_of_printing_zeros(tmp_path: Path) -> None:
+    """With no prior weeks there is nothing to project from. The old behavior
+    summed an empty generator and published 'proj 0.0 · floor 0 · ceiling 0'
+    under a '78% of the time' basis line — a fabricated band in the paying
+    subscriber's FIRST report, inside the refund window."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, 1, 1)
+    matchup = report["matchup"]
+    assert matchup["range_gate"], "week 1 must gate the totals"
+    assert "projected_total" not in matchup["you"]
+    assert "floor" not in matchup["you"] and "ceiling" not in matchup["rival"]
+    assert any(g["field"] == "team_ranges" for g in report["meta"]["gaps"])
+
+
+def test_week_one_checklist_never_claims_agreement(tmp_path: Path) -> None:
+    """'We agree with your lineup' and 'we have nothing to compare it to' are
+    different sentences. A model holding zero projections must not endorse."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, 1, 1)
+    first = report["checklist"][0]["action"]
+    assert "the one we'd set" not in first
+    assert "No lineup call yet" in first
+
+
+def test_week_one_render_carries_no_fabricated_numbers(tmp_path: Path) -> None:
+    import re
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, 1, 1)
+    html = render(report, _template())
+    text = re.sub(r"<[^>]+>", " ", html)
+    assert not re.search(r"floor 0\b|ceiling 0\b", text)
+    assert not re.search(r"0\.0\s+PROJ", text)
+    assert "no projected totals yet" in text
+
+
+def test_data_rich_weeks_still_publish_the_band(tmp_path: Path) -> None:
+    """The gate must fire on absence only — the established mid-season path
+    keeps its totals, floor and ceiling exactly as before."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+    matchup = report["matchup"]
+    assert matchup["range_gate"] is None
+    assert matchup["you"]["projected_total"] > 0
+    assert matchup["you"]["floor"] < matchup["you"]["ceiling"]

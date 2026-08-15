@@ -72,11 +72,14 @@ def text_summary(report: Mapping[str, Any]) -> str:
     for item in report["checklist"]:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
     matchup = report["matchup"]
-    lines += [
-        "",
-        f"MATCHUP: you {matchup['you']['projected_total']:.1f} proj vs "
-        f"rival {matchup['rival']['projected_total']:.1f} proj",
-    ]
+    if matchup.get("range_gate"):
+        lines += ["", f"MATCHUP: {matchup['range_gate']}"]
+    else:
+        lines += [
+            "",
+            f"MATCHUP: you {matchup['you']['projected_total']:.1f} proj vs "
+            f"rival {matchup['rival']['projected_total']:.1f} proj",
+        ]
     if matchup.get("win_probability") is not None:
         lines.append(f"  win probability: {matchup['win_probability']:.0%}")
     else:

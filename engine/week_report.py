@@ -268,9 +268,30 @@ def rival_lineup(
 # sections
 # --------------------------------------------------------------------- #
 
-def _team_range(picks: list[SlotPick]) -> dict[str, float]:
-    mean = sum(p.projection.mean for p in picks if p.projection)
-    variance = sum(p.projection.sd ** 2 for p in picks if p.projection)
+# Buyer-facing reason when the totals/band cannot be published. Week 1 is the
+# common case: no games have been played, so there is no record to project from.
+TEAM_RANGE_GATE = (
+    "no projected totals yet — your league hasn't played its first games, and "
+    "we don't publish a number without a record behind it. Totals and ranges "
+    "start once box scores exist.")
+
+
+def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
+    """The team total and its 80% band — or None when it cannot be honest.
+
+    The 77.9% coverage evidence behind TEAM_RANGE_BASIS was measured only on
+    team-weeks where every starter had a buildable pre-week projection (matchup
+    backtest RULE M1 skips the rest). Summing whatever projections happen to
+    exist would publish an UNDERCOUNT dressed as a total — in week 1, with no
+    projections at all, it rendered "proj 0.0 · floor 0 · ceiling 0" under a
+    "78% of the time" basis line. A fabricated zero is still a fabrication
+    (principle 3), so the band gates instead.
+    """
+    filled = [p for p in picks if p.player_id is not None]
+    if not filled or any(p.projection is None for p in filled):
+        return None
+    mean = sum(p.projection.mean for p in filled)
+    variance = sum(p.projection.sd ** 2 for p in filled)
     sd = variance ** 0.5
     return {
         "projected_total": round(mean, 1),
@@ -730,6 +751,19 @@ def checklist(
             "deadline": "before this week's first kickoff",
             "urgency": "now",
         })
+    elif not any(p.projection for p in my_picks):
+        # "We agree with your lineup" and "we have nothing to compare it to"
+        # are different sentences. In week 1 the optimal lineup is empty
+        # because no games exist to project from, so `changes` is empty too —
+        # and claiming agreement there is a fabricated endorsement from a
+        # model holding no opinion (principle 3).
+        items.append({
+            "action": "No lineup call yet — your league's first box scores land "
+                      "this weekend, and we don't compare lineups without a "
+                      "record to compare against. Your lineup is untouched.",
+            "deadline": "calls start next week",
+            "urgency": "done",
+        })
     else:
         items.append({
             "action": "Nothing to change — the lineup you've set is the one we'd set.",
@@ -896,6 +930,10 @@ def build_week_report(
                                "so ACTIVE cannot be concluded for anyone"})
     if prob_gate:
         gaps.append({"field": "win_probability", "reason": prob_gate})
+    my_range = _team_range(my_picks)
+    rival_range = _team_range(rival_picks)
+    if my_range is None or rival_range is None:
+        gaps.append({"field": "team_ranges", "reason": TEAM_RANGE_GATE})
     # Operator-facing note only. Deliberately NOT rendered to buyers: an empty
     # betting-market section on a product that promises "no picks" advertises a
     # missing feature and drags the brand toward the sportsbook framing we sell
@@ -925,11 +963,15 @@ def build_week_report(
         },
         "checklist": checklist(my_picks, mine.starters, hype, players),
         "matchup": {
-            "you": {"label": season.team_label(my_roster_id), **_team_range(my_picks)},
-            "rival": {"label": season.team_label(rival.roster_id), **_team_range(rival_picks)},
+            # A side without an honest total carries label only — the renderer
+            # and the text summary print the gate reason instead of a number.
+            "you": {"label": season.team_label(my_roster_id), **(my_range or {})},
+            "rival": {"label": season.team_label(rival.roster_id),
+                      **(rival_range or {})},
             "win_probability": round(prob, 3) if prob is not None else None,
             "win_probability_gate": prob_gate,
             "range_basis": TEAM_RANGE_BASIS,
+            "range_gate": (None if my_range and rival_range else TEAM_RANGE_GATE),
         },
         "rival_watch": watch,
         "lineup": [_slot_json(p, players) for p in my_picks],
