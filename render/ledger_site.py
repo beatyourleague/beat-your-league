@@ -142,7 +142,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
   <header>
     <div class="brand"><a href="../index.html">&larr; Beat Your League</a></div>
     <h1>The Public Ledger</h1>
-    <p>Every probability we publish gets recorded when it ships and graded against the real box
+    <p>Every probability we publish is recorded the moment it's sent and graded against the real box
     score when the games end. Method and backtest are frozen in code before the season.</p>
   </header>
   <main>{body}</main>

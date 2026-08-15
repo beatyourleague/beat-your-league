@@ -101,11 +101,11 @@ def text_summary(report: Mapping[str, Any]) -> str:
     # never goes in a subscriber's email — the report already says, in place and
     # in plain words, wherever it declined to call something.
     lines += ["", "Projections are analysis, not guarantees — no betting picks, "
-                  "no staking advice. Your decisions are yours (that's the fun part).",
+                  "no staking advice. Your decisions are yours.",
               "Built from your league's own record on Sleeper. "
               "Not affiliated with Sleeper or the NFL.",
               "",
-              "DONE WITH THIS? Cancel yourself in your Substack account — about "
+              "DONE WITH THIS? Cancel it yourself in your Substack account — about "
               "fifteen seconds, and the billing stops immediately. Note that "
               "unsubscribing from emails alone does NOT stop a subscription; cancel "
               "there if you want the charges to end. The reports stop on their own "

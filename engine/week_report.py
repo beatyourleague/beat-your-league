@@ -58,7 +58,7 @@ WIN_PROBABILITY_CALIBRATED = False
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
     "we're not putting a win percentage on this yet. We tested it on two past "
-    "seasons and our favourites won more often than we predicted, which means "
+    "seasons and our favorites won more often than we predicted, which means "
     "the number would be misleading — so we're leaving it off until it's right")
 TEAM_RANGE_BASIS = (
     "Your realistic high and low. Testing on two past seasons, real weekly "
@@ -334,7 +334,7 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex) -> dict[str, Any]:
                                        f"{closest.alternative_projection.mean:.1f}"},
             {"label": "form games", "value": f"{closest.projection.games} vs "
                                              f"{closest.alternative_projection.games}"},
-            {"label": "appear prob", "value": f"{closest.projection.appear_probability:.0%} vs "
+            {"label": "suits up", "value": f"{closest.projection.appear_probability:.0%} vs "
                                               f"{closest.alternative_projection.appear_probability:.0%}"},
         ],
         "definition": ("What the number means: the odds this guy outscores that "
@@ -491,7 +491,7 @@ def fragility(
                 items.append({
                     "title": f"Their {pick.slot} may not play",
                     "detail": f"{name}: {flag['text']}.",
-                    "evidence": "availability snapshot"
+                    "evidence": "injury and inactive report"
                                 + (f", as of {pick.status.as_of}" if pick.status and pick.status.as_of else ""),
                 })
 
@@ -732,8 +732,8 @@ def checklist(
         })
     else:
         items.append({
-            "action": "Your current lineup already matches the engine's optimal — no changes.",
-            "deadline": "verified this run",
+            "action": "Nothing to change — the lineup you've set is the one we'd set.",
+            "deadline": "checked today",
             "urgency": "done",
         })
     if hype:

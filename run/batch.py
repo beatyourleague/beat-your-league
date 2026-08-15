@@ -61,7 +61,7 @@ def _subject(report: dict) -> str:
     meta = report["meta"]
     if meta.get("rivalry_week"):
         return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
-    return f"Week {meta['week']}: your report vs {meta['rival_label']}"
+    return f"Week {meta['week']}: the file on {meta['rival_label']}"
 
 
 def _my_roster_id(raw_dir: Path, subscriber: Subscriber) -> int:

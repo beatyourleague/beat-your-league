@@ -289,12 +289,28 @@ _DEV_SPEAK = [
     r"\bpipeline\b", r"\bschema\b", r"\bJSON\b",
     r"availability snapshot", r"calibration policy",
     r"deterministic", r"ingested",
+    # The machinery stays invisible (CLAUDE.md: the AI is invisible to the
+    # buyer). "Engine" kept leaking into live-report strings precisely where
+    # this sweep didn't look, so it is banned outright in buyer copy.
+    r"\bengine\b",
 ]
 
 
-@pytest.mark.parametrize("name", ["sample report", "landing", "join"])
+def _demo_report_html() -> str:
+    """The raw (un-anonymised) demo render — the live-report shape. Local-only
+    (gitignored), so skip when absent rather than failing a fresh clone."""
+    path = Path(__file__).resolve().parent.parent / "reports" / "rival-report-2018-w10-r1.html"
+    if not path.is_file():
+        pytest.skip("demo report not rendered locally — run the demo render first")
+    return path.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("name", ["sample report", "landing", "join", "live report"])
 def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
-    page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN}[name]
+    if name == "live report":
+        page = _demo_report_html()
+    else:
+        page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN}[name]
     text = prose(markup_only(page))
     for pattern in _DEV_SPEAK:
         assert not re.search(pattern, text, re.I), \

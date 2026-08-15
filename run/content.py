@@ -138,9 +138,9 @@ def receipts_monday(league_id: str, week: int | None) -> tuple[Path, str]:
             "publication gate (an honest quiet week) or games aren't final yet. The honest",
             "post, if you want one:",
             "",
-            "> No graded calls this week — our gate held more back than we published.",
-            "> The rules that decide what publishes were frozen before the season,",
-            "> and the ledger only counts what actually shipped. See the method: [ledger link]",
+            "> No graded calls this week — nothing cleared the bar we set before the season.",
+            "> The grading rules were locked before Week 1, and the ledger only counts",
+            "> calls we actually sent. See the method: [ledger link]",
         ]
     else:
         record = f"{week_summary['hits']}-{week_summary['misses']}"
@@ -295,7 +295,7 @@ def coinflip_friday(league_id: str, week: int | None, roster_id: int) -> tuple[P
             "",
             "Honest post option (the pass IS the brand):",
             "",
-            "> Coin-Flip Friday, except: our gate wouldn't clear a single close call",
+            "> Coin-Flip Friday, except: not one close call cleared our bar",
             "> this week, so we're not publishing one. A confidence number we can't",
             "> stand behind is a vibe, and vibes are free elsewhere. Back next week.",
         ]
@@ -316,12 +316,12 @@ def coinflip_friday(league_id: str, week: int | None, roster_id: int) -> tuple[P
         if drivers:
             lines += [f"- Drivers: {drivers}"]
         lines += [
-            "- Definition (cite if asked): confidence = probability this start",
-            "  outscores that specific bench alternative, under our model.",
+            "- Definition (cite if asked): confidence = the odds this start",
+            "  outscores that specific bench alternative. Graded Monday either way.",
             "",
             "Draft:",
             "",
-            f"> Coin-Flip Friday \U0001FA99 The closest call our engine published this week:",
+            f"> Coin-Flip Friday \U0001FA99 The closest call we published this week:",
             f"> **{call.pick_name} over {call.over_name}, {call.confidence:.0%}.**",
         ]
         if drivers:
@@ -402,7 +402,7 @@ def reply_kit(league_id: str, week: int | None, roster_id: int,
         lines += [
             f"## {number}",
             f"- Why it's true: {why}",
-            f"- Reply template: \"Data point from a calibrated league engine: {number}.\"",
+            f"- Reply template: \"The receipts say: {number}.\"",
             f"- Softer variant: \"FWIW, the numbers here say: {number}. Happy to be wrong Sunday.\"",
             "",
         ]

@@ -86,7 +86,7 @@ def header(meta: Mapping[str, Any]) -> str:
             f'{esc(meta["league_name"])}, built to show exactly what lands in your inbox '
             f'on a Tuesday. Because it\'s a past season we can\'t check who was hurt or '
             f'inactive back then, so the confidence numbers are left off — in a live week '
-            f'you get them.'
+            f'you get them on every slot where both players are confirmed active.'
             + (' Team and manager names here are placeholders; every number is that '
                'league\'s real record.' if meta.get("anonymized_demo") else "")
             + '</div>'
@@ -143,7 +143,7 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
             f'<div class="field"><div class="endzone l"></div><div class="endzone r"></div>'
             f'<div class="ball" style="left:{ball_left}%"></div></div>'
             f'<p class="field-read"><b class="win">{_pct(prob)}% win probability.</b> '
-            f'P(your optimal total beats their set total) under our projection model.</p></div>'
+            f'The odds your best lineup outscores the lineup they have set.</p></div>'
         )
     else:
         field = gate_note(f'win probability — {matchup.get("win_probability_gate", "gated")}')
@@ -284,7 +284,7 @@ def section_rival_lineup(report: Mapping[str, Any]) -> str:
 
 def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
     if not items:
-        body = gate_note("no fragile spots identified from cached data this week")
+        body = gate_note("nothing in their lineup we can call fragile this week")
     else:
         rows = "".join(
             f'<div class="srow"><div class="x">{i + 1}</div><div>'
@@ -320,8 +320,8 @@ def section_regret(regret: Mapping[str, Any]) -> str:
 
 def section_pivots(plans: list[Mapping[str, Any]]) -> str:
     if not plans:
-        body = gate_note("no conditional pivots this week — no questionable "
-                         "statuses among the starters the engine can see")
+        body = gate_note("no pivots this week — no starter we can check is "
+                         "listed questionable")
     else:
         rows = "".join(
             f'<div class="pivot"><div class="if">If</div>'
@@ -336,8 +336,8 @@ def section_pivots(plans: list[Mapping[str, Any]]) -> str:
 def section_hype(entries: list[Mapping[str, Any]],
                  market: Mapping[str, Any] | None = None) -> str:
     if not entries:
-        body = gate_note("no waiver FOMO detected in the league transaction log "
-                         "for this window")
+        body = gate_note("a quiet waiver week — no sign of a league-wide chase "
+                         "in your league's transaction log")
     else:
         cards = []
         for entry in entries:
@@ -459,10 +459,10 @@ def footer(meta: Mapping[str, Any]) -> str:
     # anything unproven was withheld, which the report already says in place.
     gap_line = ""
     return (
-        f'<footer><b>Beat Your League</b> — the weekly edge report built around your '
+        f'<footer><b>Beat Your League</b> — the weekly scouting report built around your '
         f'rival, not just your roster.<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'Projections are analysis, not guarantees — no betting picks, no staking '
-        f'advice. Fantasy decisions are yours to make (that\'s the fun part).<br>'
+        f'advice. Fantasy decisions are yours to make.<br>'
         f'Built from your league\'s own record on Sleeper. Not affiliated with '
         f'Sleeper or the NFL.<br>'
         # Every commercial email needs a working way out. It points at the
@@ -470,7 +470,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
         # distinction stays: stopping emails while billing continues is how you
         # earn a chargeback and deserve it.
-        f'<b>Done with this?</b> Cancel yourself in your Substack account — it '
+        f'<b>Done with this?</b> Cancel it yourself in your Substack account — it '
         f'takes about fifteen seconds and stops the billing immediately. '
         f'Unsubscribing from emails alone does not stop a subscription, so cancel '
         f'there if you want the charges to end.</footer>'

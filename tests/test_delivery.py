@@ -17,7 +17,7 @@ from run.delivery import (DeliveryError, DryRunProvider, Message, SendResult,
 
 
 def _message(to: str = "fan@example.com", key: str = "k1") -> Message:
-    return Message(to=to, subject="Week 3: your report vs Mike",
+    return Message(to=to, subject="Week 3: the file on Mike",
                    html="<p>hello</p>", text="hello", key=key)
 
 
@@ -178,4 +178,7 @@ def test_batch_only_builds_messages_for_paying_subscribers(
     # The key pins subscriber + season + week, so re-runs collapse to one send.
     assert season.league_id in result.message.key
     assert f"w{twr.REPORT_WEEK - 1:02d}" in result.message.key
-    assert "Week" in result.message.subject and "vs" in result.message.subject
+    assert "Week" in result.message.subject
+    # The two real subject shapes: rivalry weeks keep the vs framing.
+    assert ("the file on" in result.message.subject
+            or "RIVALRY WEEK vs" in result.message.subject)

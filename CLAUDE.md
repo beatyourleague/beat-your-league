@@ -504,6 +504,19 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   the league-wide maximum, and is checked against what the reader can afford — recommending 38
   to someone holding 10 would burn their season. Rivals are **counted, never named** ("2 other
   teams can cover that"), which keeps other people's identities off any public surface.
+- **Copy voice (Aug 15 2026, full-funnel pass against Underdog/ETR/Action Network):** a sharp
+  leaguemate who did the homework — first person, short sentences, US spelling, group-chat
+  vocabulary ("the file on Mike", "receipts"), numbers doing the selling. No template rhythms
+  ("No X. No Y. No Z.", "One X. One Y:", em-dash triples), no "edge/unlock/elevate" filler, and
+  honesty stated once then demonstrated, never preached. **"Engine" is now banned buyer
+  vocabulary** (added to `_DEV_SPEAK`, swept across sample report + landing + join + the local
+  live-report render): the machinery stays invisible, the honest register is "we tested
+  everything against two seasons of real box scores". Email subject: "Week N: the file on
+  <rival>" (rivalry weeks keep "RIVALRY WEEK vs"). Nothing is called "reserved" while checkout
+  is closed — the CTA says what actually happens ("Pick your rival — first 50 get the founding
+  price"). When editing render/report.py or engine/week_report.py strings, regenerate
+  site/sample-report.html + the local demo pair + site/ledger/index.html through their real
+  paths, never by hand.
 - **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file
   names, "LLM tokens", "pipeline", "availability snapshot", "calibration policy" are ours, not
   the customer's — a buyer reading "coming in v0.3" concludes they bought unfinished software.
