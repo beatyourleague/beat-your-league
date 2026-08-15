@@ -345,3 +345,15 @@ def test_team_table_joins_and_falls_back() -> None:
         (3, "dana", "dana"),
         (4, "(no owner)", "(no owner)"),
     ]
+
+
+def test_projections_endpoint_validates_input(tmp_path: Path) -> None:
+    """The projections fetcher must refuse garbage before it builds a URL."""
+    from ingest.sleeper import SleeperClient
+    client = SleeperClient(tmp_path)
+    with pytest.raises(ValueError):
+        client.projections("18", 10)
+    with pytest.raises(ValueError):
+        client.projections("2018", 0)
+    with pytest.raises(ValueError):
+        client.projections("2018", 10, season_type="playoffs")

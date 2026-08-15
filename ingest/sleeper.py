@@ -186,6 +186,34 @@ class SleeperClient:
             max_age_hours=max_age_hours, expect=list)
         return self._expect_list(data, f"schedule {season_type} {season}")
 
+    def projections(self, season: str, week: int, season_type: str = "regular",
+                    max_age_hours: float | None = 24.0) -> dict[str, Any]:
+        """Sleeper's own weekly player projections (Rotowire-sourced).
+
+        ``/v1/projections/nfl/{type}/{season}/{week}`` — public, no auth,
+        verified live Aug 2026 including HISTORICAL seasons back to at least
+        2018, which is what makes the feed backtestable before it is ever
+        adopted (principle 1). Returns ``{player_id: {stat: value, ...}}``
+        with ``pts_ppr`` / ``pts_half_ppr`` / ``pts_std`` alongside the
+        stat-level lines. Completed seasons should be fetched with
+        ``max_age_hours=None`` — a finished week's projection archive is final.
+        """
+        if not re.match(r"^\d{4}$", str(season)):
+            raise ValueError(f"invalid season: {season!r}")
+        if season_type not in ("regular", "pre", "post"):
+            raise ValueError(f"invalid season_type: {season_type!r}")
+        if not isinstance(week, int) or not 1 <= week <= 22:
+            raise ValueError(f"invalid week: {week!r}")
+        data = self._get(
+            f"/projections/nfl/{season_type}/{season}/{week}",
+            Path("projections") / f"nfl_{season_type}_{season}_w{week:02d}.json",
+            max_age_hours=max_age_hours, expect=dict)
+        if not isinstance(data, dict):
+            raise SleeperError(
+                f"projections {season} w{week} returned "
+                f"{type(data).__name__}, expected object")
+        return data
+
     # ------------------------------------------------------------------ #
     # internals
     # ------------------------------------------------------------------ #

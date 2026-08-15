@@ -656,6 +656,27 @@ rival starting a player who will not play is the most exploitable event in the d
   measures engagement, not skill. Do not publish it as a rival's accuracy; points-left-on-bench
   is the honest version and the right basis for the Regret Score.
 
+**Data learnings — Sleeper projections feed (verified live Aug 2026):**
+- `/v1/projections/nfl/{type}/{season}/{week}` — public, no auth, Rotowire-sourced,
+  OUTSIDE the documented API but stable (same family as the schedule feed). Serves
+  historical seasons, which is what made `engine/projections_eval.py` possible: the feed
+  was graded on the frozen 2018 call set BEFORE any adoption decision (principle 1).
+- **The archive's usable universe is a fixed ~400-520 players per week in every era**
+  (2018: ~513, 2022: 383, 2024: 370, 2025: 383). Every other record is a husk holding only
+  `adp_dd_ppr` — including 2018 Derek Carr, all 17 weeks. 2017 is entirely husks. A husk
+  must parse as "no projection", NEVER as 0.0 points (`feed_points`, mutation-tested).
+- Not survivorship-filtered: 85 of 513 usable 2018-w10 records are players inactive in
+  2026, and 8,139 currently-active players are husks.
+- Eval verdict (reports/projections-eval.md): on 368 identical head-to-heads the feed hit
+  68.8% vs the model's 64.4% (McNemar p=0.089 — suggestive, not conclusive), better
+  MAE/RMSE, and it projects most week-1 starters where trailing-form is structurally
+  silent. But it had NO OPINION on 626 of 994 calls, so it can only ever be a BLEND (feed
+  where it speaks, trailing-form fallback). Blending invalidates the band's 77.9%
+  coverage evidence — re-run the matchup backtest under the blend before the band
+  publishes on feed numbers. Feed points are computed from stat lines x the league's own
+  `scoring_settings` (2017-style husks and non-PPR leagues both demand it), never from
+  the pre-baked `pts_ppr` fields.
+
 **Data learnings (Phase 3-4, verified live Aug 2026):**
 - NFL schedule lives at `api.sleeper.app/schedule/nfl/{regular|pre|post}/{season}` — public,
   no auth, OUTSIDE /v1 (undocumented on docs.sleeper.com but stable and verified). Byes =
