@@ -363,6 +363,35 @@ once-only message meant the third run forgot a customer who is still being charg
 uses `Signup.label` (Sleeper username) rather than the email, because summaries land in a CI log;
 and `--dry-run` no longer writes Stripe customer metadata.
 
+**Third review pass (fresh eyes on the second pass's own fixes) — ordering, precedence and
+log hygiene.** `project()` is now **recency-aware**, not position-only: among same-source events
+the newer `seen_at` wins, so a season roll (which carries last year's timestamp) can never revert a
+subscriber who re-purchased with a new rival, and a rival changed via the seat form beats the older
+logged claim. Other fixes, each mutation-tested: `drop_unloadable()` keeps the **payer** when a
+shared inbox collides a paid signup with a seat (a seat must never evict a paying subscriber);
+`verify_all()` tracks **outage-kept** keys separately so an unverified League Pass claim cannot
+grant coverage during a Sleeper outage; the hijack warning fires only when the seat's address
+**differs** from the payer's (a self-upgrade from seat to paid is not an attack and must not alarm
+weekly); `--full` no longer discards the unresolved-payment memory (it ignores only the watermark);
+`event_key` is module-level and tested directly (the old test pinned a copy); and every
+operator-facing message routes addresses through `_no_email()` / uses `Signup.label` — run
+summaries land in a CI log.
+
+**Two known limitations, left in deliberately (documented, not fixed):**
+- **League Pass seats are not season-rolled.** Payers roll via `roll_season`, but a seat comes
+  from the live form each week carrying whatever league id was submitted. At a rollover the
+  commissioner's coverage rolls to the new league while old seat submissions still name the old
+  one, so those seats drop with "no League Pass covers that league" until members re-pick through
+  `join/?pass=<new league id>`. Honest (no fabrication, it is reported) but not zero-touch for
+  seats across seasons. Auto-rolling external form rows needs a design that keys seats to the
+  payer's rolled league; out of scope here.
+- **Entitlement is per Stripe customer, not per subscription.** `PaidList.entitles()` route 1 is
+  "this customer has *an* active subscription", so a subscriber in two leagues who cancels ONE
+  keeps both reports until the other lapses too. It errs toward giving product, never overcharging.
+  A correct fix needs a subscription→league mapping (stamp the league on `subscription_data
+  .metadata` at checkout and read entitlement per subscription); revisit if multi-league
+  subscribers become common.
+
 **Module path constants must never be default arguments** (`run/sync.py`, `run/delivery.py`):
 a constant baked into a signature cannot be redirected by a caller or a test, which is what let a
 pipeline run write over the real registry and a test poison the real send log. Paths are resolved

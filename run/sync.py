@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -89,6 +90,18 @@ WATERMARK_SLACK_SECONDS = 3 * 24 * 3600
 
 class SyncError(RuntimeError):
     """The sync cannot produce a trustworthy registry, so it must not write one."""
+
+
+_EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+
+def _no_email(text: str) -> str:
+    """Mask any address in an operator-facing message. Run summaries land in a
+    CI log that anyone with Actions access can read, and the registry is
+    gitignored precisely so subscriber addresses never leave this machine."""
+    return _EMAIL_IN_TEXT.sub(
+        lambda m: m.group(0).split("@")[0][:1] + "***@" + m.group(0).split("@")[1],
+        text)
 
 
 @dataclass
@@ -165,6 +178,24 @@ def append_log(signups: Iterable[Signup], path: Path = SIGNUP_LOG) -> int:
     return len(signups)
 
 
+def event_key(s: "Signup") -> tuple:
+    """What makes a signup a NEW event worth logging. Includes plan and coverage
+    because an existing subscriber who later buys the League Pass changes neither
+    their rival nor their email — a narrower key treated that upgrade as a
+    duplicate and never logged it, leaving every seat in their league uncovered
+    forever. `retired` is here so a tombstone is always its own event."""
+    return (s.key, s.rival_owner_id, s.rival_roster_id, s.email, s.plan,
+            s.pass_league_id, s.retired)
+
+
+def _recency(signup: "Signup") -> str:
+    """A time-order key. ``seen_at`` is a Stripe epoch (all ten digits this era)
+    for payers and an ISO date for seats; within a single projection every row
+    is the same kind, and both forms are lexically ordered, so comparing the
+    strings compares the times. An empty timestamp sorts oldest."""
+    return signup.seen_at
+
+
 def project(log: Iterable[Signup]) -> list[Signup]:
     """Latest-wins per (league, user), minus anything retired.
 
@@ -179,14 +210,25 @@ def project(log: Iterable[Signup]) -> list[Signup]:
     latest: dict[tuple[str, str], Signup] = {}
     for signup in log:
         held = latest.get(signup.key)
-        # A PAYMENT OUTRANKS AN UNPAID CLAIM, always. Sleeper user ids are
-        # public and the seat form is public by necessity, so without this a
-        # stranger could POST a seat claim naming a paying subscriber's id with
-        # their own address and receive that manager's report — while the
-        # subscriber, who is still being charged, silently stopped getting it.
-        # A seat may only fill a key no payment holds, or update its own claim.
-        if held is not None and held.source == "stripe" and signup.source != "stripe":
-            continue
+        if held is not None:
+            # A PAYMENT OUTRANKS AN UNPAID CLAIM, always. Sleeper user ids are
+            # public and the seat form is public by necessity, so without this a
+            # stranger could POST a seat claim naming a paying subscriber's id
+            # with their own address and receive that manager's report — while
+            # the subscriber, who is still being charged, silently stopped
+            # getting it. A seat may only fill a key no payment holds.
+            if held.source == "stripe" and signup.source != "stripe":
+                continue
+            # Among same-source events, the NEWER one wins — and position is not
+            # recency. Stripe lists newest-first, and a season-rolled row carries
+            # the OLD subscription's timestamp, so a subscriber who re-purchased
+            # for the new season with a new rival must not lose to the rolled
+            # forward of last year's pick just because the roll was appended
+            # later. A tombstone is always the newest fact about a superseded
+            # key, so it is never skipped here.
+            if (not signup.retired and signup.source == held.source
+                    and _recency(signup) < _recency(held)):
+                continue
         latest[signup.key] = signup
     return [s for s in latest.values() if not s.retired]
 
@@ -491,13 +533,14 @@ def seats_to_signups(rows: Iterable[dict], covered_leagues: dict[str, str]) -> \
         # stranger who finds the seat link stop every subscriber's report.
         if not _EMAIL_RE.match(email) or not user_id.isdigit() \
                 or not is_valid_league_id(league_id):
-            problems.append(f"seat claim with unusable fields: {row.get('email')!r}")
+            problems.append("a seat claim arrived with unusable fields "
+                            f"(user {user_id or '?'}, league {league_id or '?'})")
             continue
         payer = covered_leagues.get(league_id)
         if not payer:
             problems.append(
-                f"seat claim for league {league_id} ({email}) — no League Pass "
-                f"covers that league, so it was ignored")
+                f"seat claim from Sleeper user {user_id} for league {league_id} "
+                f"— no League Pass covers that league, so it was ignored")
             continue
         rival_owner = row.get("rival_owner_id")
         rival_roster = row.get("rival_roster_id")
@@ -690,27 +733,54 @@ def drop_unloadable(entries: list[dict]) -> tuple[list[dict], list[str]]:
         try:
             _parse_entry(entry, index)
         except RegistryError as exc:
-            problems.append(f"dropped an unusable signup: {exc}")
+            # _parse_entry names the offending field; a genuinely malformed row
+            # is not a real subscriber, but scrub any address out of the message
+            # all the same — these lines land in a CI log.
+            problems.append(f"dropped an unusable signup: {_no_email(str(exc))}")
             continue
         good.append(entry)
-    # Both of the loader's whole-file failures: the same email twice in one
-    # league, and two entries for one Sleeper user in one league (which would
-    # mail somebody another manager's team).
-    deduped: list[dict] = []
-    for by in (lambda e: (str(e["email"]).lower(), e["league_id"]),
-               lambda e: (e["league_id"], e["user_id"])):
-        seen: dict[tuple, dict] = {}
-        deduped = []
-        for entry in good:
-            key = by(entry)
-            if key in seen:
-                problems.append(
-                    f"two signups for {key} — kept the later one")
-                deduped = [e for e in deduped if e is not seen[key]]
-            seen[key] = entry
-            deduped.append(entry)
-        good = deduped
-    return deduped, problems
+
+    def is_seat(entry: dict) -> bool:
+        return bool(entry.get("covered_by"))
+
+    # The two whole-file failures the loader rejects on, resolved here so one
+    # bad row cannot take the file down. Keys are normalised the SAME way
+    # _parse_entry normalises them, or a padded field would dedupe here and
+    # still collide in the loader.
+    def norm(entry: dict, *fields: str) -> tuple:
+        return tuple(str(entry[f]).strip().lower() for f in fields)
+
+    # (league, user): two entries would mail one person another manager's team.
+    # These are already unique on the main path (project keys on it); this is
+    # defence in depth for hand-added rows. Keep the later (newer) one.
+    seen: dict[tuple, dict] = {}
+    for entry in good:
+        key = norm(entry, "league_id", "user_id")
+        if key in seen:
+            problems.append(f"two signups for one Sleeper user in league "
+                            f"{entry['league_id']} — kept the later one")
+            good = [e for e in good if e is not seen[key]]
+        seen[key] = entry
+    good = [e for e in good if e is seen.get(norm(e, "league_id", "user_id"))]
+
+    # (email, league): only one row can own an address in a league. When two
+    # DIFFERENT people share one inbox, the PAYER keeps it — a league-pass seat
+    # sharing an address must never evict a paying subscriber's own report.
+    # Among equals, the later (newer) row wins.
+    kept: dict[tuple, dict] = {}
+    for entry in good:
+        key = norm(entry, "email", "league_id")
+        held = kept.get(key)
+        if held is not None:
+            if is_seat(entry) and not is_seat(held):
+                problems.append(f"a seat and a paid signup share one address in "
+                                f"league {entry['league_id']} — kept the paid one")
+                continue
+            problems.append(f"one address is registered twice in league "
+                            f"{entry['league_id']} — kept "
+                            + ("the paid one" if is_seat(held) else "the later one"))
+        kept[key] = entry
+    return [e for e in good if e is kept.get(norm(e, "email", "league_id"))], problems
 
 
 def write_registry(entries: list[dict], path: Path = REGISTRY) -> None:
@@ -767,7 +837,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"unusable season {season!r}", file=sys.stderr)
         return 1
 
-    state = {} if args.full else _read_state(sync_state)
+    # --full ignores the WATERMARK (re-read every session), but it must not
+    # discard the memory of payments we still cannot attribute — those people
+    # are still being charged, and forgetting them is exactly the failure the
+    # persistence exists to prevent.
+    persisted = _read_state(sync_state)
+    state = {} if args.full else dict(persisted)
     since = state.get("stripe_watermark")
     # "s:plink_A,m:plink_B,p:plink_C" — the map that makes the plan a fact
     # about the payment rather than a claim in the buyer's URL.
@@ -797,22 +872,28 @@ def main(argv: list[str] | None = None) -> int:
     # otherwise a claim to cover a league the payer has never played in would
     # hand twelve strangers a free product.
     def verify_all(signups):
-        kept, notes, rejected = [], [], []
+        # `outage` holds the keys we kept only because Sleeper could not be
+        # reached — they are NOT confirmed. An outage must never look like a
+        # rejection (we keep the row for their own report), but it also must not
+        # look like a confirmation: an unverified League Pass claim must not
+        # grant coverage, or a Sleeper outage becomes a window to hand twelve
+        # strangers a free product on a league the payer may not even play in.
+        kept, notes, rejected, outage = [], [], [], set()
         if args.no_verify:
-            return list(signups), notes, rejected
+            return list(signups), notes, rejected, outage
         for signup in signups:
             try:
                 reason = verify(signup, client)
             except (SleeperError, ValueError) as exc:
-                # Outage, not rejection: keep them and try again next week.
                 notes.append(f"{signup.label}: could not verify ({exc}) — kept")
                 kept.append(signup)
+                outage.add(signup.key)
                 continue
             if reason:
                 rejected.append(f"{signup.label}: {reason}")
             else:
                 kept.append(signup)
-        return kept, notes, rejected
+        return kept, notes, rejected, outage
 
     def roll_all(signups):
         moved, notes = [], []
@@ -826,14 +907,6 @@ def main(argv: list[str] | None = None) -> int:
         return moved, notes
 
     notes: list[str] = []
-    # The key includes plan and coverage: an existing subscriber who later buys
-    # the League Pass changes neither their rival nor their email, so a narrower
-    # key treated their upgrade as a duplicate and never logged it — leaving
-    # every seat in their league uncovered forever.
-    def event_key(s):
-        return (s.key, s.rival_owner_id, s.rival_roster_id, s.email, s.plan,
-                s.pass_league_id, s.retired)
-
     known = {event_key(s) for s in load_log(signup_log)}
     new_events = [s for s in fresh if event_key(s) not in known]
     # Stripe-sourced rows ONLY. Projecting the whole log here would fold seat
@@ -858,14 +931,18 @@ def main(argv: list[str] | None = None) -> int:
             if event_key(after) not in known:
                 new_events.append(after)
 
-    payers, verify_notes, payer_problems = verify_all(payers)
+    payers, verify_notes, payer_problems, payer_outage = verify_all(payers)
     notes.extend(verify_notes)
     problems.extend(payer_problems)
 
-    # Only a VERIFIED League Pass payer covers a league.
-    covered = {p.pass_league_id: p.email for p in payers if p.pass_league_id}
+    # Only a VERIFIED League Pass payer covers a league — never one merely kept
+    # through a Sleeper outage, whose roster ownership we could not confirm.
+    covered = {p.pass_league_id: p.email for p in payers
+               if p.pass_league_id and p.key not in payer_outage}
     if not (args.no_promote or args.dry_run):
         for payer in payers:
+            if payer.key in payer_outage:
+                continue
             if payer.pass_league_id and payer.stripe_customer_id:
                 try:
                     stamp_pass_coverage(api_key, payer.stripe_customer_id,
@@ -896,9 +973,13 @@ def main(argv: list[str] | None = None) -> int:
               f"unset, so no seats can be claimed.", file=sys.stderr)
 
     new_seat_events = [s for s in seats if event_key(s) not in known]
-    seats, seat_notes, seat_problems = verify_all(
-        project(new_seat_events + [s for s in load_log(signup_log)
-                                   if s.source == "form"]))
+    # Log rows FIRST, then this run's new claims — same order as the payer path
+    # (project resolves recency, but a consistent oldest-first order keeps the
+    # tie-breaks predictable). Putting new events first would let an older
+    # logged claim, appearing later in the list, revert a fresh rival change.
+    seats, seat_notes, seat_problems, _seat_outage = verify_all(
+        project([s for s in load_log(signup_log) if s.source == "form"]
+                + new_seat_events))
     notes.extend(seat_notes)
     problems.extend(seat_problems)
     new_events += new_seat_events
@@ -912,12 +993,19 @@ def main(argv: list[str] | None = None) -> int:
     # subscriber's public Sleeper id would sail through as a second entry for
     # the same (league, user), which registry.py rejects by failing the WHOLE
     # file. Payers are listed first so they hold their key.
-    hijacked = {s.key for s in seats} & {p.key for p in payers}
-    for key in sorted(hijacked):
-        problems.append(
-            f"a seat claim named Sleeper user {key[1]} in league {key[0]}, who "
-            f"already has a paid subscription — ignored (a payment always beats "
-            f"an unpaid claim)")
+    # A hijack is a seat claim landing on a key a PAYER holds with a DIFFERENT
+    # address. When the addresses match it is the same person who took a seat
+    # and later bought their own subscription — a legitimate upgrade, not an
+    # attack — and warning about it every week would train the operator to
+    # ignore the real alarm. Either way project() below keeps the payer.
+    payer_email = {p.key: p.email for p in payers}
+    for seat in seats:
+        if seat.key in payer_email and seat.email != payer_email[seat.key]:
+            problems.append(
+                f"a seat claim named Sleeper user {seat.key[1]} in league "
+                f"{seat.key[0]}, who already has a paid subscription under a "
+                f"different address — ignored (a payment always beats an unpaid "
+                f"claim)")
     verified = project(payers + seats)
 
     entries, unloadable = drop_unloadable(to_registry_entries(verified))
@@ -930,8 +1018,8 @@ def main(argv: list[str] | None = None) -> int:
     # Someone who paid and cannot be matched must keep being reported. The
     # watermark moves past their session within days, so a once-only message
     # means the third run forgets them entirely — while they are still charged.
-    unresolved = state.get("unresolved_payments")
-    unresolved = list(unresolved) if isinstance(unresolved, list) else []
+    carried_unresolved = persisted.get("unresolved_payments")
+    unresolved = list(carried_unresolved) if isinstance(carried_unresolved, list) else []
     if args.clear_unresolved:
         unresolved = []
     fresh_unresolved = [p for p in problems if p.startswith("PAID-UNATTRIBUTED")]

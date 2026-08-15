@@ -703,12 +703,12 @@ def test_a_newer_pick_wins_even_though_stripe_lists_newest_first(
 def test_upgrading_to_a_league_pass_is_a_new_event() -> None:
     """Same person, same rival, same email — only the plan changed. A narrower
     dedupe key treated the upgrade as a duplicate and never logged it, so every
-    seat in their league stayed uncovered."""
-    before = _signup()
-    after = _signup(pass_league_id=LEAGUE)
-    key = lambda s: (s.key, s.rival_owner_id, s.rival_roster_id, s.email,
-                     s.plan, s.pass_league_id, s.retired)
-    assert key(before) != key(after)
+    seat in their league stayed uncovered. Tests the REAL event_key, not a copy
+    of it, so narrowing the key in the module is what this catches."""
+    assert sync.event_key(_signup()) != sync.event_key(_signup(pass_league_id=LEAGUE))
+    assert sync.event_key(_signup()) != sync.event_key(_signup(plan="league_pass"))
+    # An identical signup is the same event — that is what makes re-runs idempotent.
+    assert sync.event_key(_signup()) == sync.event_key(_signup())
 
 
 def test_run_output_never_carries_a_subscriber_email() -> None:
@@ -839,3 +839,85 @@ def test_a_legitimate_seat_never_looks_like_a_hijack_on_a_later_run(
     sync.main(args)                                   # the run that used to lie
     assert "already has a paid subscription" not in capsys.readouterr().err
     assert len(load_registry(tmp_path / "subscribers.json")) == 2
+
+
+# --------------------------------------------------------------------- #
+# Third review pass: ordering, precedence and log-hygiene fixes
+# --------------------------------------------------------------------- #
+
+def test_a_roll_never_resurrects_a_pick_a_fresh_purchase_replaced() -> None:
+    """A renewing subscriber re-buys for the new league with a NEW rival. The
+    roll of last season's row (carrying the OLD rival) is appended later in the
+    log, so a position-only projection reverted them to the abandoned rival on
+    the NEXT run. project() is recency-aware, so the fresh pick holds."""
+    old = _signup(league_id="111111111111111111", rival_owner_id="R_OLD", seen_at="100")
+    fresh = _signup(league_id="222222222222222222", rival_owner_id="R_NEW", seen_at="200")
+    rolled = _signup(league_id="222222222222222222", rival_owner_id="R_OLD", seen_at="100")
+    survivors = sync.project([old, fresh, sync.retire(old), rolled])
+    live = [s for s in survivors if s.league_id == "222222222222222222"]
+    assert len(live) == 1 and live[0].rival_owner_id == "R_NEW"
+
+
+def test_the_newer_event_wins_regardless_of_log_position() -> None:
+    """The general property behind the roll fix: recency, not append order."""
+    old = _signup(rival_owner_id="R_OLD", seen_at="100")
+    new = _signup(rival_owner_id="R_NEW", seen_at="200")
+    assert sync.project([new, old])[0].rival_owner_id == "R_NEW"   # new listed first
+    assert sync.project([old, new])[0].rival_owner_id == "R_NEW"   # new listed last
+
+
+def test_a_shared_inbox_never_lets_a_seat_evict_the_payer() -> None:
+    """(email, league) is unique in the registry. Two people sharing one inbox
+    in one league — one paid individually, one a league-pass seat — collide, and
+    the drop must keep the PAYER, not the later-listed seat."""
+    payer = {"email": "shared@e.com", "user_id": USER, "league_id": LEAGUE,
+             "rival_owner_id": RIVAL, "rival_roster_id": None, "plan": "season",
+             "stripe_customer_id": "cus_PAYER01"}
+    seat = {"email": "shared@e.com", "user_id": OTHER_USER, "league_id": LEAGUE,
+            "rival_owner_id": RIVAL, "rival_roster_id": None,
+            "plan": "league_pass", "covered_by": "commish@e.com"}
+    for order in ([payer, seat], [seat, payer]):        # payer wins either way
+        kept, problems = sync.drop_unloadable(order)
+        assert [e["user_id"] for e in kept] == [USER]
+        assert problems and not any("@" in p and ".com" in p and
+                                    "***" not in p for p in problems)
+
+
+def test_no_email_masks_any_address_in_a_message() -> None:
+    """Operator-facing strings can be assembled from many places; _no_email is
+    the backstop that keeps a real address out of the CI log wherever one slips
+    through."""
+    assert sync._no_email("two for alice@example.com in L") == \
+        "two for a***@example.com in L"
+    assert sync._no_email("a@b.co and c.d@sub.example.org clashed") == \
+        "a***@b.co and c***@sub.example.org clashed"
+    assert sync._no_email("no address here") == "no address here"
+
+
+def test_seat_problem_lines_carry_no_address() -> None:
+    _, problems = sync.seats_to_signups(
+        [{"email": "someone@example.com", "user_id": "111111111111",
+          "league_id": "999999999999999999", "rival_owner_id": RIVAL}],
+        {LEAGUE: "commish@example.com"})            # league not covered
+    assert problems and not any("@" in p for p in problems)
+    _, problems2 = sync.seats_to_signups(
+        [{"email": "bad", "user_id": "x", "league_id": "y"}], {})
+    assert problems2 and not any("@" in p for p in problems2)
+
+
+def test_seat_rival_change_beats_the_abandoned_claim() -> None:
+    """The seat-side twin of the sweep-ordering fix: a rival changed via the
+    form must not lose to the older logged claim."""
+    old = _signup(user_id="9", rival_owner_id="R_OLD", source="form",
+                  plan="league_pass", covered_by="c@e.com", seen_at="2026-08-01")
+    new = _signup(user_id="9", rival_owner_id="R_NEW", source="form",
+                  plan="league_pass", covered_by="c@e.com", seen_at="2026-08-14")
+    assert sync.project([old, new])[0].rival_owner_id == "R_NEW"
+
+
+def test_event_key_is_the_real_one_not_a_copy() -> None:
+    """The upgrade-is-a-new-event guard is worthless if the test pins a copy of
+    the key logic. This asserts the module's own function."""
+    assert sync.event_key(_signup()) != sync.event_key(_signup(plan="league_pass"))
+    assert sync.event_key(_signup()) != sync.event_key(_signup(pass_league_id=LEAGUE))
+    assert sync.event_key(_signup()) == sync.event_key(_signup())

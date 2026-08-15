@@ -280,7 +280,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Delivery via {provider.name}: {len(delivered)} sent, "
               f"{len(skipped)} already sent, {len(send_failures)} failed")
         for send in send_failures:
-            print(f"    FAILED {send.message.to}: {send.detail}", file=sys.stderr)
+            # The idempotency key carries the Sleeper username, never the email
+            # — this line lands in a CI log, and the registry is gitignored so
+            # subscriber addresses never leave the machine.
+            print(f"    FAILED {send.message.key}: {send.detail}", file=sys.stderr)
         if provider.name == "dry":
             print(f"    (dry run — nothing left this machine; drafts in "
                   f"{_display(DRY_OUTBOX)})")
