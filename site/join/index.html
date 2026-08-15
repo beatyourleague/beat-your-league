@@ -85,11 +85,10 @@
   <header>
     <div class="brand"><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
     <h1>Pick Your Rival</h1>
-    <p>Your league, your rival, checkout — your picks travel with the payment, so there's
-    nothing to send us afterwards. A paid product from day one: <b>$29 USD for the season</b>,
-    and the first 50 lock it in at that price. You pay on our payment provider's own
-    secure page; card details never touch this site. All we ever ask for is your Sleeper
-    <b>username</b> — never a password.</p>
+    <p>Three taps — username, league, rival — and we pull the file on them while you
+    watch. A paid product from day one: <b>$29 USD for the season</b>, and the first 50
+    lock it in at that price. Checkout runs on our payment provider's own secure page;
+    all we ever ask for is your Sleeper <b>username</b> — never a password.</p>
     <div class="beta-chips">
       <span>$29 USD / season · first 50</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
     </div>
@@ -184,6 +183,10 @@ const STRIPE_LINK_PASS = "";      // $99 League Pass, recurring annual
 // one path that still needs a form backend (Tally/Fillout/Formspree).
 // Individual buyers never touch it, so an outage here costs seats, not sales.
 const FORM_ENDPOINT = "";
+// Launch-notify list (same backend as the landing page's ledger list). While
+// checkout is closed, a buyer who typed their email gets remembered — EMAIL
+// ONLY, no league or rival data — instead of being told to come back later.
+const LEDGER_LIST_ENDPOINT = "";
 // Product contact address. Deliberately EMPTY: no personal address ships on a
 // public page. Set this to the project's own inbox before launch.
 const CONTACT_EMAIL = "";
@@ -288,6 +291,17 @@ function card(title, subtitle, className, onPick) {
       "stops on its own when the season ends, because we don't charge for months " +
       "we don't deliver. Cancel yourself any time from your own account page.";
   }
+})();
+
+// The landing hero hands its username over as ?u= (GET, nothing stored) so the
+// momentum of typing it carries straight into the league list. Garbage in the
+// param just lands on the same honest error the button produces.
+(function prefillFromHero() {
+  const u = (QUERY.get("u") || "").trim();
+  if (!u || !USERNAME_RE.test(u)) return;
+  $("username").value = u;
+  // Defer one tick so every listener below is bound before the click fires.
+  setTimeout(() => $("find-user").click(), 0);
 })();
 
 // Ask Sleeper what season it is rather than trusting a constant that goes stale
@@ -576,7 +590,23 @@ $("submit").addEventListener("click", async () => {
   const link = WANTS_PASS ? STRIPE_LINK_PASS
              : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
   if (!link) {
-    // Nothing is stored anywhere yet, so saying "reserved" would be a lie.
+    // Nothing is stored anywhere yet, so saying "reserved" would be a lie —
+    // but the email they just typed is real intent, and with a list backend
+    // configured it is kept (email only, clearly told) instead of discarded.
+    if (LEDGER_LIST_ENDPOINT) {
+      try {
+        await fetch(LEDGER_LIST_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, list: "launch-notify" }),
+        });
+        showError("err-email",
+          "Checkout isn't open just yet — we're finishing setup. Your picks aren't " +
+          "saved (redoing them takes sixty seconds), but we kept your email: " +
+          "you'll get the link the morning checkout opens.");
+        return;
+      } catch (err) { /* fall through to the honest message */ }
+    }
     showError("err-email",
       "Checkout isn't open just yet — we're finishing setup. Your picks aren't " +
       "saved, so please come back and run this again in a day or two.");

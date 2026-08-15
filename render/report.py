@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -470,6 +471,39 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
     return _section("The Receipts", 9, f'<div class="ledger">{inner}</div>')
 
 
+def demo_band(meta: Mapping[str, Any]) -> str:
+    """The public sample's closing ask. DEMO SURFACES ONLY.
+
+    The sample report is the highest-intent page in the funnel — a reader here
+    has just finished due diligence — and it used to end at a footer with zero
+    links to the picker. Never rendered in a live subscriber report: selling a
+    subscriber the thing they already own reads as spam.
+    """
+    if not meta.get("anonymized_demo"):
+        return ""
+    return (
+        '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
+        'This file is from a 2018 sample league. Yours is about <b>your</b> rival — '
+        '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
+        'pick them</a> and the first one lands Tuesday.</div>'
+    )
+
+
+def _forward_line() -> str:
+    """The standing acquisition line, above the cancellation block.
+
+    A forwarded report is the one organic touch with the eleven best prospects
+    a subscriber knows. Gated on SITE_URL (set at launch, with the domain):
+    a call to action with nowhere to go is worse than none.
+    """
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    if not site:
+        return ""
+    return (f'Got this from a leaguemate? Every manager gets their own file, aimed '
+            f'at their own rival — {esc(site)}/join. The record we\'re graded on '
+            f'is public: {esc(site)}/ledger.<br>')
+
+
 def footer(meta: Mapping[str, Any]) -> str:
     availability = meta.get("availability_as_of")
     basis = (f"Injury and inactive data as of {availability}." if availability
@@ -481,8 +515,10 @@ def footer(meta: Mapping[str, Any]) -> str:
     # anything unproven was withheld, which the report already says in place.
     gap_line = ""
     return (
+        f'{demo_band(meta)}'
         f'<footer><b>Beat Your League</b> — the weekly scouting report built around your '
         f'rival, not just your roster.<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
+        f'{_forward_line()}'
         f'Projections are analysis, not guarantees — no betting picks, no staking '
         f'advice. Fantasy decisions are yours to make.<br>'
         f'Built from your league\'s own record on Sleeper. Not affiliated with '

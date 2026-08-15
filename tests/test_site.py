@@ -73,11 +73,14 @@ def test_free_watch_list_exists_and_promises_unsubscribe() -> None:
 
 
 def test_paid_from_day_one_is_stated_not_hidden() -> None:
-    # The protection is that paid-from-day-one is STATED, not hidden. It used
-    # to be pinned as the phrase "no free tier", which sells an absence —
-    # defensive copy that markets what the product doesn't have. The positive
-    # statement carries the same disclosure with none of the apology.
-    assert re.search(r"the report is the product from day one", LANDING_PROSE, re.I)
+    # The protection is that paid-from-day-one is STATED, not hidden. It has
+    # been pinned as "no free tier" (sells an absence) and then as "the report
+    # is the product from day one" (internal product-strategy register). The
+    # strongest form of the disclosure is the PRICE ITSELF, visible in the
+    # hero before any scroll — a page that shows $29 up front cannot be
+    # accused of hiding that it charges.
+    assert re.search(r"\$29 USD for the season", LANDING_PROSE), \
+        "the landing hero must state the price plainly"
     assert re.search(r"paid product from day one", JOIN_PROSE, re.I)
 
 
@@ -88,7 +91,10 @@ def test_price_appears_only_at_decision_points_and_renewal_terms() -> None:
     which pushes cost evaluation ahead of value. (A further mention lives in the
     checkout script, which only ever replaces the button's own text.)"""
     rendered = markup_only(LANDING)
-    assert rendered.count("$29") == 4, "landing page price mentions drifted"
+    # Five rendered $29s, each load-bearing: the HERO microcopy (the price is
+    # the paid-from-day-one disclosure, per the test above), the pricing card,
+    # the reservation step, and the two renewal disclosures.
+    assert rendered.count("$29") == 5, "landing page price mentions drifted"
     renewal_mentions = len(re.findall(r"renews? (?:once a year )?at \$29", rendered, re.I))
     assert renewal_mentions == 2, "renewal disclosures must state the amount"
 
@@ -615,3 +621,63 @@ def test_the_backtest_generator_refuses_to_drop_a_figure() -> None:
     # A page missing only the failing buckets must still be rejected.
     stripped = (SITE / "backtest.html").read_text(encoding="utf-8").replace(">off<", ">ok<")
     assert any("failing calibration" in p for p in verify(md, stripped))
+
+
+# --------------------------------------------------------------------- #
+# the funnel asks and the artifacts recruit
+# --------------------------------------------------------------------- #
+
+def test_hero_form_hands_the_username_to_the_picker() -> None:
+    """The hero IS the product: type a username, land in the picker with your
+    leagues already loading. GET only — nothing is stored from the landing."""
+    assert re.search(r'<form class="hero-scout" action="join/index.html" method="get">',
+                     LANDING)
+    assert re.search(r'name="u"', LANDING)
+    assert 'prefillFromHero' in JOIN
+    # The param is validated against the same rule as the typed field, so
+    # garbage in the URL lands on the picker's honest error, not a crash.
+    assert re.search(r'USERNAME_RE\.test\(u\)', JOIN)
+
+
+def test_every_proof_page_ends_with_an_ask() -> None:
+    """The sample report, backtest and ledger are the highest-intent surfaces
+    in the funnel; each used to end at a footer with no way to buy."""
+    backtest = (SITE / "backtest.html").read_text(encoding="utf-8")
+    sample = SAMPLE_REPORT
+    assert "join/index.html" in sample, "sample report is a dead end"
+    assert "join/index.html" in backtest, "backtest page is a dead end"
+    assert "../join/index.html" in LEDGER, "ledger page is a dead end"
+
+
+def test_the_demo_band_never_reaches_a_live_report() -> None:
+    """Selling a subscriber the thing they already own reads as spam. The
+    closing ask renders on the anonymized demo only."""
+    from render.report import demo_band
+    assert demo_band({"anonymized_demo": True})
+    assert demo_band({"historical_demo": True}) == ""     # live-shaped render
+    assert demo_band({}) == ""
+
+
+def test_forward_line_is_gated_on_a_real_destination(monkeypatch) -> None:
+    """An acquisition line with nowhere to go is worse than none. With SITE_URL
+    set it appears ABOVE the cancellation block; without it, silence."""
+    from render.report import _forward_line
+    monkeypatch.delenv("SITE_URL", raising=False)
+    assert _forward_line() == ""
+    monkeypatch.setenv("SITE_URL", "https://example.com/")
+    line = _forward_line()
+    assert "example.com/join" in line and "example.com/ledger" in line
+
+
+def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
+    """The closed-checkout capture keeps the email ONLY, on the ledger-list
+    backend. The seat form endpoint must stay reserved for League Pass seats —
+    an individual signup posted there would bypass the payment architecture."""
+    handler = JOIN.split('$("submit").addEventListener')[1]
+    closed = handler.split("if (!link) {")[1].split("if (!REF_RE.test(ref))")[0]
+    assert "LEDGER_LIST_ENDPOINT" in closed
+    assert "FORM_ENDPOINT" not in closed
+    assert "league_id" not in closed, "launch-notify must carry the email only"
+    # The honest-refusal phrases survive in both outcomes.
+    assert closed.count("isn't open just yet") == 2
+    assert closed.count("aren't") == 2

@@ -146,6 +146,13 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
     score when the games end. Method and backtest are frozen in code before the season.</p>
   </header>
   <main>{body}</main>
+  <div style="padding:24px 28px;border-top:3px double var(--line);text-align:center;">
+    <p style="margin:0 0 12px;font-size:15px;">Every row here is a call somebody paid for,
+    graded in the open. Your league's version starts when you pick a rival.</p>
+    <a href="../join/index.html" style="display:inline-block;background:var(--turf);color:#fff;
+      text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+      letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Pick your rival</a>
+  </div>
   <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not picks. No betting
   content, no staking advice. Page generated {esc(stamp)} · league identities of subscribers
   are never shown here.</footer>

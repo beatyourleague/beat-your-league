@@ -85,7 +85,14 @@
     box-shadow:0 0 10px rgba(229,72,77,.9);animation:pillpulse 1.6s ease-in-out infinite;}
   @keyframes pillpulse{0%,100%{opacity:1;}50%{opacity:.35;}}
   .hero .sub{margin-top:24px;font-size:18.5px;line-height:1.65;color:var(--dusk2);max-width:640px;}
-  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px;}
+  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px;}
+  .hero-scout{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px;max-width:620px;}
+  .hero-scout input{flex:1 1 240px;padding:15px 18px;font:inherit;font-size:16px;
+    background:rgba(246,244,238,.06);border:2px solid rgba(246,244,238,.35);
+    color:var(--paper);min-width:0;}
+  .hero-scout input::placeholder{color:#8FA2BA;}
+  .hero-scout input:focus{outline:none;border-color:var(--flag);}
+  .hero-scout .btn{flex:0 0 auto;border:none;cursor:pointer;}
   .btn{position:relative;display:inline-block;font-family:'Barlow Condensed';font-weight:800;
     font-size:19px;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;
     padding:16px 30px;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
@@ -468,18 +475,26 @@
     to set, where your opponent is soft, and the week's one coin-flip call. Lands every Tuesday.
     Analysis, never picks. When we can't defend a number we print "no call" — and every call
     we do make gets graded in public.</p>
+    <!-- The hero IS the product (the KeepTradeCut move): type a username, get
+         a real number about your rival in seconds. GET only — the username
+         rides to the picker as ?u= and nothing is stored from this page. -->
+    <form class="hero-scout" action="join/index.html" method="get">
+      <input type="text" name="u" placeholder="Your Sleeper username" maxlength="32"
+             autocomplete="off" spellcheck="false" aria-label="Your Sleeper username">
+      <button class="btn go" type="submit">Pull the file on your rival</button>
+    </form>
+    <p class="whyfree">$29 USD for the season — under $2 a week, against a league buy-in
+    that's probably $100. First report lands Tuesday, Sep 8. Every call in it is graded on
+    the <a href="ledger/index.html"
+    style="color:var(--flag);text-decoration:underline">public ledger</a> Monday morning,
+    and refunds are no-questions through Week 2.</p>
     <div class="cta-row">
-      <a class="btn go" href="join/index.html">Pick your rival — first 50 get the founding price</a>
       <a class="btn ghost" href="sample-report.html">See a real report</a>
     </div>
-    <p class="whyfree">The report is the product from day one — and the risk sits with us,
-    not you: every call we send lands on a <a href="ledger/index.html"
-    style="color:var(--flag);text-decoration:underline">public ledger</a>, graded, and refunds
-    are no-questions through Week 2.</p>
     <div class="proof-chips">
       <span class="chip"><b>2,056</b> calls graded before launch</span>
       <span class="chip"><b>Wins AND misses</b> published every Monday</span>
-      <span class="chip">No password needed · <b>ever</b></span>
+      <span class="chip">Setup: <b>your Sleeper username</b> · sixty seconds</span>
     </div>
     <div class="fieldwrap reveal">
       <svg class="pitch" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg"
@@ -740,7 +755,7 @@
 
     <div class="watch reveal">
       <div>
-        <h3>Not ready to pay? Watch the record instead.</h3>
+        <h3>Want proof first? Watch us grade ourselves.</h3>
         <p>Every Monday we publish that week's calls, graded — hits and misses — to the
         public ledger. Get it by email, free, for as long as you like. Judge us on the
         record, then decide. No card, and unsubscribe in one click.</p>
@@ -761,8 +776,8 @@
     <h2>Setup is a username and two taps.</h2>
     <div class="steps">
       <div class="step reveal"><div class="n">1</div><h3>Type your Sleeper username</h3>
-        <p>That's all we ever ask for. Sleeper league data is public — we never want your
-        password, and we never see a payment card.</p></div>
+        <p>Sleeper league data is public, so your username is all it takes — passwords
+        and cards stay where they belong.</p></div>
       <div class="step reveal" style="--d:.12s"><div class="n">2</div><h3>Tap your league, tap your rival</h3>
         <p>Your leagues appear; pick one. Then pick the one manager you most need to beat.
         We find your roster automatically.</p></div>
@@ -879,6 +894,20 @@
       Every call lands on <a href="ledger/index.html" style="color:var(--flag);
       text-decoration:underline">the public ledger</a> Monday morning — including the ones
       we blow.</div>
+    </div>
+  </div>
+</section>
+
+<!-- The page ends on an ask, not a disclaimer. A visitor who read this far is
+     the warmest lead the page will ever hold. -->
+<section class="closer">
+  <div class="wrap" style="text-align:center">
+    <h2 style="margin-bottom:6px">The first file goes out Tuesday, Sep 8.</h2>
+    <p style="margin:0 auto 22px;max-width:520px">A season of scouting the one opponent
+    who actually matters, graded in public the whole way.</p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn gold" href="join/index.html">Pick your rival</a>
+      <a class="btn ghost" href="sample-report.html">See a real report</a>
     </div>
   </div>
 </section>

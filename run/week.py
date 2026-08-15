@@ -59,6 +59,19 @@ def _current_week(raw_dir: Path) -> int:
     return week
 
 
+def _forward_lines() -> list[str]:
+    """The standing acquisition line for the plain-text email, above the
+    cancellation block. A forwarded report reaches the eleven best prospects a
+    subscriber knows; gated on SITE_URL exactly like the HTML footer."""
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    if not site:
+        return []
+    return ["",
+            f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own file, "
+            f"aimed at their own rival — {site}/join. The record we're graded "
+            f"on is public: {site}/ledger."]
+
+
 def text_summary(report: Mapping[str, Any]) -> str:
     """Plain-text digest of the report — the email/Substack body seed."""
     meta = report["meta"]
@@ -107,6 +120,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
                   "no staking advice. Your decisions are yours.",
               "Built from your league's own record on Sleeper. "
               "Not affiliated with Sleeper or the NFL.",
+              *_forward_lines(),
               "",
               "DONE WITH THIS? Cancel it yourself in your Substack account — about "
               "fifteen seconds, and the billing stops immediately. Note that "
