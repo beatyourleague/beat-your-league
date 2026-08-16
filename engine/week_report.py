@@ -790,10 +790,25 @@ def checklist(
         })
     if hype:
         top = hype[0]
+        # The checklist is for someone who reads nothing else, so it carries the
+        # verdict rather than handing back the question. Every number here is
+        # already computed and already shown in the waiver section below.
+        who = f"{top['player_name']} ({top['position']})"
+        bid, left = top.get("bid_to_beat"), top.get("my_remaining")
+        if bid and top.get("affordable") is False and left is not None:
+            action = (f"Skip {who} — it takes {bid} to top the highest bid he's drawn "
+                      f"and you have {left} left. Save it for one you can land.")
+        elif bid:
+            rivals = top.get("rivals_who_can_pay")
+            cover = ("" if rivals is None else
+                     f" — nobody else can cover that" if rivals == 0 else
+                     f" — {rivals} other team{'s' if rivals != 1 else ''} can cover that")
+            action = f"Bid {bid} or more on {who}{cover}."
+        else:
+            action = (f"Decide on {who} — {top['managers_chasing']} managers chasing, "
+                      f"top bid {top['top_bid'] if top['top_bid'] is not None else '—'}.")
         items.append({
-            "action": f"Decide on {top['player_name']} ({top['position']}) — "
-                      f"{top['managers_chasing']} managers chasing, "
-                      f"top bid {top['top_bid'] if top['top_bid'] is not None else '—'}.",
+            "action": action,
             "deadline": "before waivers clear (league waiver day)",
             "urgency": "deadline",
         })

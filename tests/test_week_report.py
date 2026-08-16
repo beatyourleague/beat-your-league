@@ -715,3 +715,21 @@ def test_mid_season_still_claims_optimal(tmp_path: Path) -> None:
     assert report["meta"]["lineup_as_set"] is False
     html = render(report, _template())
     assert "Your Optimal Lineup" in html
+
+
+def test_the_checklist_decides_rather_than_asking() -> None:
+    """Section 01 is written for someone who reads nothing else, so it must carry
+    the verdict the engine already computed — not hand back the question while
+    the answer sits four sections lower in the waiver block."""
+    import json as _json
+    report = _json.loads(
+        (Path(__file__).resolve().parent.parent / "data" / "processed" /
+         "week_report.json").read_text(encoding="utf-8"))
+    waiver = [c["action"] for c in report["checklist"]
+              if "waivers clear" in c["deadline"]]
+    if not waiver:
+        return  # a quiet waiver week has no item to decide
+    action = waiver[0]
+    assert not action.startswith("Decide on"), \
+        "the checklist asked a question the engine had already answered"
+    assert action.startswith(("Skip ", "Bid ")), action
