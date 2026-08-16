@@ -734,3 +734,18 @@ def test_picker_inputs_live_in_real_forms() -> None:
     # The router must prevent the default submission (no reload) and never
     # re-click a button whose own click produced the submission (no double run).
     assert "e.preventDefault();" in JOIN and "e.submitter !== btn" in JOIN
+
+
+def test_seat_and_pass_modes_rewrite_the_ask() -> None:
+    """A seat holder must never read a price for something their commissioner
+    already paid; a pass or monthly buyer must never read the season price.
+    The static header stays the season default — the rewrites are JS, so we
+    pin their presence and their key phrases."""
+    assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
+    assert "Seat already paid by your commissioner" in JOIN
+    assert "covers " in JOIN and "every manager in your league" in prose(JOIN)
+    assert "$9.99 USD / month" in JOIN
+    # The commissioner's shareable seat link exists only pre-checkout (Stripe
+    # confirmation messages are static per link and cannot carry a league id).
+    assert 'id="seat-share"' in JOIN
+    assert '"?pass=" + leagueId' in JOIN

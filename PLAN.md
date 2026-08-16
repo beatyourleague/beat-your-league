@@ -239,6 +239,13 @@ New launch blockers from this decision:
   steps pointing at Substack is exactly the ambiguity §4 exists to prevent.
 - A restricted `STRIPE_API_KEY` (read: subscriptions, customers, checkout sessions). Create it in
   a sandbox first and confirm the permission labels against the request log rather than guessing.
+- **Set the pass Payment Link's confirmation-page message** to remind the commissioner about the
+  seat link: "Your league's seat link was shown on the page where you picked your rival — it's
+  beatyourleague's join page plus `?pass=<your league id>`. Send it to your leaguemates; each
+  picks their own rival and claims a free seat." Stripe confirmation messages are static per
+  link, so the exact URL can only be shown pre-checkout — the picker displays it the moment the
+  commissioner selects their league (built Aug 2026), and this message is the backstop for the
+  one who paid without noticing it.
 
 ### Retention & refund policy (owner decision, Aug 14 2026)
 
