@@ -117,6 +117,24 @@ def optimal_lineup(
     }
     statuses = {pid: availability.classify(pid) for pid in team_week.players}
 
+    if not projections:
+        # Week 1: the model holds no opinion about anyone on the roster. An
+        # "optimal" lineup of nine empty slots reads as broken software, not
+        # honesty — the subscriber HAS a lineup. Render it exactly as set,
+        # the same treatment the rival's grid gets, with calls starting once
+        # a record exists to compare against.
+        picks: list[SlotPick] = []
+        for index, slot in enumerate(season.starting_slots):
+            pid = (team_week.starters[index]
+                   if index < len(team_week.starters) else None)
+            if pid in EMPTY_SLOT_IDS:
+                pid = None
+            picks.append(SlotPick(
+                slot, index, pid, None,
+                statuses.get(pid) if pid else None, None,
+                "no game record yet to compare against", None, None, []))
+        return picks
+
     order = sorted(
         range(len(season.starting_slots)),
         key=lambda i: (_slot_restrictiveness(season.starting_slots[i]), i),
@@ -958,6 +976,12 @@ def build_week_report(
             "rivalry_week": bool((watch or {}).get("rivalry_week")),
             "availability_as_of": availability.snapshot_as_of,
             "historical_demo": season.status == "complete",
+            # True when the model held no opinion and the grid shows the
+            # lineup exactly as the subscriber set it (week 1). The renderer
+            # switches the section title so "optimal" is never claimed for a
+            # lineup nobody optimized.
+            "lineup_as_set": (any(p.player_id for p in my_picks)
+                              and all(p.projection is None for p in my_picks)),
             "gaps": gaps,
             "llm_tokens": 0,
         },

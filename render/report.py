@@ -276,9 +276,19 @@ def section_rival_watch(watch: Mapping[str, Any] | None) -> str:
 
 def section_lineup(report: Mapping[str, Any]) -> str:
     slots = report["lineup"]
+    as_set = report["meta"].get("lineup_as_set")
     gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
     note = ""
-    if gates:
+    if as_set:
+        # Week 1: the grid is the subscriber's own lineup, untouched. Claiming
+        # "optimal" for a lineup nobody optimized would be a fabricated
+        # endorsement; nine empty rows would read as broken software. This is
+        # the honest middle: their lineup, plainly labeled, calls dated.
+        note = ('<div class="benchnote"><b>Your lineup, exactly as set.</b> '
+                'Start-sit calls begin once your league has box scores to '
+                'compare against — from next week, this grid shows the lineup '
+                'we would set and why.</div>')
+    elif gates:
         listed = " · ".join(sorted(gates))
         note = (f'<div class="benchnote"><b>Why some slots say "no call":</b> '
                 f'{esc(listed)}. When we do put a number on a slot, it means: the odds '
@@ -293,7 +303,8 @@ def section_lineup(report: Mapping[str, Any]) -> str:
     grid = _lineup_grid(slots, you_total,
                         f"vs {rival_total:.1f}" if rival_total is not None else "",
                         note_html=note)
-    return _section("Your Optimal Lineup", 3, grid)
+    title = "Your Lineup — As Set" if as_set else "Your Optimal Lineup"
+    return _section(title, 3, grid)
 
 
 def section_rival_lineup(report: Mapping[str, Any]) -> str:

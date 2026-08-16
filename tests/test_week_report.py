@@ -687,3 +687,31 @@ def test_data_rich_weeks_still_publish_the_band(tmp_path: Path) -> None:
     assert matchup["range_gate"] is None
     assert matchup["you"]["projected_total"] > 0
     assert matchup["you"]["floor"] < matchup["you"]["ceiling"]
+
+
+def test_week_one_shows_the_lineup_as_set_never_empty_rows(tmp_path: Path) -> None:
+    """The fresh-eyes review reproduced the first paid report rendering the
+    subscriber's own lineup as nine '(empty)' rows — the model held no opinion,
+    so no slot could be filled. The honest render is the lineup AS SET (the
+    rival grid's treatment), plainly titled, with calls dated."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, 1, 1)
+    assert report["meta"]["lineup_as_set"] is True
+    named = [s for s in report["lineup"] if s.get("player_name")]
+    assert len(named) == len(season.starting_slots) - sum(
+        1 for s in report["lineup"] if s["slot"] == "BN")
+    assert named, "the set starters must appear"
+    html = render(report, _template())
+    assert "(empty)" not in html
+    assert "Your Lineup — As Set" in html
+    assert "Your Optimal Lineup" not in html
+
+
+def test_mid_season_still_claims_optimal(tmp_path: Path) -> None:
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+    assert report["meta"]["lineup_as_set"] is False
+    html = render(report, _template())
+    assert "Your Optimal Lineup" in html
