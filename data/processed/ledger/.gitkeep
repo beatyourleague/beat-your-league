@@ -1,0 +1,2 @@
+The published-calls ledger. Tracked in git deliberately: it is the record every
+accountability claim rests on, and an Actions cache is evicted after 7 days.

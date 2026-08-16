@@ -1,5 +1,24 @@
-# Cached API data and any local secrets stay out of the repo (CLAUDE.md security)
-data/
+# Cached API data and any local secrets stay out of the repo (CLAUDE.md security).
+# Three exceptions, and they are exceptions because they CANNOT BE REBUILT:
+#   availability/ — snapshots of who was hurt, capturable only live (the players
+#     table holds no history), so a lost snapshot is lost forever;
+#   ledger/       — the published record every accountability claim rests on;
+#   sent.jsonl    — who has already been mailed; losing it double-sends to
+#     paying subscribers.
+# These previously lived only in a GitHub Actions cache, which is evicted after
+# 7 days without access — and the Tuesday run touches sent.jsonl on exactly a
+# 7-day cycle. The registry stays ignored: it holds addresses, and run/sync.py
+# rebuilds it from Stripe, so it is recoverable.
+data/*
+!data/raw/
+data/raw/*
+!data/raw/availability/
+!data/processed/
+data/processed/*
+!data/processed/ledger/
+!data/processed/sent.jsonl
+# flock artifacts are transient, never part of the record
+data/processed/ledger/**/*.lock
 .env
 .env.*
 

@@ -13,6 +13,10 @@ on:
     - cron: "0 11 * * 2" # Tuesdays 11:00 UTC (7am ET)
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # commit the record (availability, ledger, send log) back
+  issues: write     # raise an issue when a run fails, so it is never silent
+
 jobs:
   week:
     runs-on: ubuntu-latest
@@ -26,31 +30,11 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      # Availability snapshots are the one dataset that can only ever be
-      # captured live (players table has no history) — they must survive
-      # across ephemeral runners or the gating policy has nothing to stand on.
-      - name: Restore availability snapshot archive
-        uses: actions/cache/restore@v4
-        with:
-          path: data/raw/availability
-          key: availability-archive-${{ github.run_id }}
-          restore-keys: availability-archive-
-      # The ledger is the public record: this run RECORDS calls, Monday's run
-      # grades them. Both workflows share the ledger-archive- key family.
-      - name: Restore ledger archive
-        uses: actions/cache/restore@v4
-        with:
-          path: data/processed/ledger
-          key: ledger-archive-${{ github.run_id }}
-          restore-keys: ledger-archive-
-      # Remembering who was already mailed is what stops a re-run from sending
-      # Tuesday's report twice, so it has to survive the ephemeral runner.
-      - name: Restore delivery log
-        uses: actions/cache/restore@v4
-        with:
-          path: data/processed/sent.jsonl
-          key: sent-log-${{ github.run_id }}
-          restore-keys: sent-log-
+      # Availability snapshots, the ledger and the send log now arrive WITH the
+      # checkout — they are committed to the repo. They used to live only in an
+      # Actions cache, which GitHub evicts after 7 days without access, and the
+      # Tuesday run touched the send log on exactly a 7-day cycle: one delayed
+      # run and the next would have mailed every paying subscriber twice.
       # The registry holds subscriber emails, so it is gitignored and cannot
       # arrive with the checkout — it has to be restored, or the send step below
       # has nothing to send and silently skips itself.
@@ -103,30 +87,26 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
         run: .venv/bin/python -m run.batch
-      - name: Save delivery log
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data/processed/sent.jsonl
-          key: sent-log-${{ github.run_id }}
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
-      - name: Save availability snapshot archive
+      # Persist the three things that cannot be rebuilt. `always()` so a failed
+      # send still records who WAS mailed — the alternative is double-sending
+      # them on the retry. Rebase before pushing: Monday's run commits too.
+      - name: Persist the record
         if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data/raw/availability
-          key: availability-archive-${{ github.run_id }}
-      - name: Save ledger archive
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data/processed/ledger
-          key: ledger-archive-${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/raw/availability data/processed/ledger
+          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Weekly run: availability, ledger, send log"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -145,3 +125,19 @@ jobs:
             data/raw/availability/
             data/processed/ledger/
           if-no-files-found: error
+      # A silent failure costs a paying subscriber their Tuesday and nobody
+      # finds out until they complain. One issue per failed run, free.
+      - name: Raise an issue if the run failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Weekly run failed: $(date -u +%Y-%m-%d)" \
+            --body "The Tuesday pipeline failed. Subscribers may not have been mailed.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Check in this order: Sleeper reachable, STRIPE_API_KEY valid, email provider
+          credentials, then whether data/processed/sent.jsonl shows a partial send." \
+            --label bug || true
