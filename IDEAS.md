@@ -35,13 +35,18 @@ is in the current sprint.
 - Usage on the rival's fragile spots, not just waiver targets. "Hopkins: 33
   targets in 4 games, 4 inside the 20" makes the bench case far harder to
   argue with than a projection alone. engine/usage.py already computes it.
-- Tiers as the display unit for slot calls (Boris Chen's convention: "if
-  experts are 50/50 there is no wrong choice"). Display tiers, keep recording
-  probabilities so engine/ledger.py stays gradeable.
+- ~~Tiers as the display unit for slot calls.~~ **STRUCK Aug 16 2026 by our own
+  evidence.** The gate backtest measured resolution at a 6.0-point spread across
+  the entire stated range, so labelling calls "clear" versus "lean" would assert
+  a discrimination we have just shown we do not have. The market convention is
+  real; we have not earned it. Revisit only if resolution improves.
 - Side-by-side rosters instead of two stacked lineup tables — Yahoo lists it as
   a headline matchup feature and it is what the market expects.
-- FAAB as percent-of-remaining alongside the raw number. Our unit is better;
-  theirs is the one the reader arrived with. Show both.
+- ~~FAAB as a percentage of budget.~~ **STRUCK — RULE W1 already voids it.**
+  `waiver_budget` is not a trustworthy denominator (two sample managers spent
+  140 and 101 against a stated 100), so the market's percentage cannot be
+  computed honestly here. The existing phrasing — "it takes 18 and you have 10
+  left" — is clearer than a percentage anyway.
 
 ### Stability and automation
 - Re-run the automation audit properly: one of three agents in the Aug 16 run

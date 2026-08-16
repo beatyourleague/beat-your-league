@@ -77,3 +77,31 @@ def test_the_bench_case_cites_what_he_is_given_not_just_our_opinion() -> None:
     assert "projects" in detail, "the projection is still the lead"
     assert "being used:" in detail and "targets" in detail, \
         "the bench case dropped its usage evidence"
+
+
+def test_the_regret_driver_refuses_a_one_sided_comparison(tmp_path: Path) -> None:
+    """A target count for one player and a blank for the other invites a
+    comparison the data does not support, so both sides or neither."""
+    from engine.week_report import _usage_driver
+    d = tmp_path / "stats"
+    d.mkdir(parents=True)
+    (d / "nfl_regular_2026_w04.json").write_text(json.dumps({
+        "a": {"gp": 1, "rec_tgt": 9},          # only one side has usage
+    }), encoding="utf-8")
+    assert _usage_driver(tmp_path, "2026", 5, "a", "b") == []
+    assert _usage_driver(None, "2026", 5, "a", "b") == []
+
+
+def test_the_regret_driver_reports_both_sides_when_both_are_known(
+        tmp_path: Path) -> None:
+    from engine.week_report import _usage_driver
+    d = tmp_path / "stats"
+    d.mkdir(parents=True)
+    (d / "nfl_regular_2026_w04.json").write_text(json.dumps({
+        "a": {"gp": 1, "rec_tgt": 9, "off_snp": 55},
+        "b": {"gp": 1, "rec_tgt": 3, "off_snp": 20},
+    }), encoding="utf-8")
+    drivers = _usage_driver(tmp_path, "2026", 5, "a", "b")
+    labels = {x["label"]: x["value"] for x in drivers}
+    assert labels["targets"] == "9 vs 3"
+    assert labels["snaps"] == "55 vs 20"

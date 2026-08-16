@@ -351,7 +351,34 @@ def win_probability(
     return _normal_beats(my_mean, my_var ** 0.5, their_mean, their_var ** 0.5), None
 
 
-def regret_call(picks: list[SlotPick], players: PlayerIndex) -> dict[str, Any]:
+def _usage_driver(raw_dir: Path | None, season: str | None, week: int | None,
+                  pick_id: str | None, alt_id: str | None) -> list[dict[str, str]]:
+    """Opportunity for both sides of the week's closest call.
+
+    Every other driver is the model talking about itself. This one is the
+    league's own record, and it is the axis the gate backtest showed actually
+    separates players — the availability blind spot turned out to be healthy
+    players who were not going to get the ball, not injured ones.
+
+    Only shown when BOTH sides have a figure: a count for one player and a
+    blank for the other invites a comparison the data does not support.
+    """
+    if not (raw_dir and season and week and pick_id and alt_id):
+        return []
+    a = recent_usage(raw_dir, pick_id, season, week)
+    b = recent_usage(raw_dir, alt_id, season, week)
+    drivers: list[dict[str, str]] = []
+    if a.targets is not None and b.targets is not None:
+        drivers.append({"label": "targets",
+                        "value": f"{a.targets} vs {b.targets}"})
+    if a.snaps is not None and b.snaps is not None:
+        drivers.append({"label": "snaps", "value": f"{a.snaps} vs {b.snaps}"})
+    return drivers
+
+
+def regret_call(picks: list[SlotPick], players: PlayerIndex,
+                raw_dir: Path | None = None, season: str | None = None,
+                week: int | None = None) -> dict[str, Any]:
     """The week's closest published call — decided, with its drivers."""
     decided = [
         p for p in picks
@@ -377,7 +404,8 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex) -> dict[str, Any]:
                                              f"{closest.alternative_projection.games}"},
             {"label": "suits up", "value": f"{closest.projection.appear_probability:.0%} vs "
                                               f"{closest.alternative_projection.appear_probability:.0%}"},
-        ],
+        ] + _usage_driver(raw_dir, season, week, closest.player_id,
+                          closest.alternative_id),
         "definition": ("What the number means: the odds this guy outscores that "
                        "specific bench option at this slot."),
     }
@@ -1101,7 +1129,7 @@ def build_week_report(
         "rival_lineup": [_slot_json(p, players) for p in rival_picks],
         "fragility": fragility(season, history, rival_picks, rival.roster_id,
                                players, history_model, raw_dir, week),
-        "regret": regret_call(my_picks, players),
+        "regret": regret_call(my_picks, players, raw_dir, season.season, week),
         "pivots": pivots(my_picks, rival_picks, players),
         "hype": hype,
         "waiver_market": waiver_market,
