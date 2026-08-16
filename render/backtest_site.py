@@ -58,7 +58,7 @@ HEAD = """<!DOCTYPE html>
 <meta name="twitter:card" content="summary">
 <!-- og:image needs the live absolute URL. After the domain exists, add:
      <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
-<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath d=%22M-13 0A14.5625 14.5625 0 0 1 13 0A14.5625 14.5625 0 0 1-13 0Z%22 fill=%22%23F2C230%22/%3E%3Cg stroke=%22%23101E33%22 stroke-width=%221.9%22 stroke-linecap=%22round%22%3E%3Cpath d=%22M-7.6 0H7.6%22/%3E%3Cpath d=%22M-3.6-2.5V2.5M0-2.9V2.9M3.6-2.5V2.5%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
