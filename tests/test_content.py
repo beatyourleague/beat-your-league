@@ -243,7 +243,12 @@ def test_receipt_cards_written_only_for_settled(tmp_path: Path) -> None:
 
 def test_ledger_page_escapes_and_handles_both_states() -> None:
     empty = render_ledger([], ledger_summary([]))
-    assert "ledger opens" in empty.lower()
+    # The empty state is what every launch visitor sees — it must show the rule
+    # it can actually stand behind today, and must never announce its own
+    # emptiness to someone who arrived looking for proof.
+    assert "rules are up before the first game" in empty.lower()
+    assert "hit or miss" in empty.lower()
+    assert "nothing to show" not in empty.lower()
     call = _settled_call()
     page = render_ledger(public_entries([call]), ledger_summary([call]))
     assert "<script>" not in page

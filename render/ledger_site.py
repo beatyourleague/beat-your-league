@@ -83,11 +83,13 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
         )
     else:
         body = (
-            '<div class="empty"><b>The ledger opens with Week 1.</b>'
-            '<p>The grading rules are already frozen in code — every published call will land '
-            'here within a day of its games going final, hit or miss, and nothing gets edited '
-            'after the fact. An empty ledger with public rules beats a full one with private '
-            'edits.</p><span class="stampbox">NOTHING TO HIDE · YET NOTHING TO SHOW</span></div>'
+            '<div class="empty"><b>The rules are up before the first game.</b>'
+            '<p>Here is what gets recorded, written down before anyone has played. Every call '
+            'we send a subscriber is stamped before kickoff and graded against the real box '
+            'score once the games are final, hit or miss, and nothing is edited afterwards. '
+            'Calls need three games of record behind both players, so the first ones are made '
+            'in week 4 and graded the Monday after — this page fills from October.</p>'
+            '<span class="stampbox">RULES FROZEN &middot; NOTHING EDITED AFTER THE FACT</span></div>'
         )
 
     return f'''<!DOCTYPE html>
@@ -95,9 +97,9 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — The Public Ledger</title>
+<title>Beat Your League — The Receipts</title>
 <meta name="description" content="Every published call, graded against real box scores after the games go final. Wins and misses both.">
-<meta property="og:title" content="Beat Your League — The Public Ledger">
+<meta property="og:title" content="Beat Your League — The Receipts">
 <meta property="og:description" content="Every published call, graded against real box scores after the games go final. Wins and misses both.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
@@ -153,9 +155,10 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 <div class="sheet">
   <header>
     <div class="brand">{mark_svg("byll")}<a href="../index.html">Beat Your League</a></div>
-    <h1>The Public Ledger</h1>
-    <p>Every probability we publish is recorded the moment it's sent and graded against the real box
-    score when the games end. Method and backtest are frozen in code before the season.</p>
+    <h1>The Receipts</h1>
+    <p>Every call we send is stamped before kickoff and graded against the real box score once
+    the games end. The rules that decide it were locked before the season, and nothing is edited
+    after the fact.</p>
   </header>
   <main>{body}</main>
   <div style="padding:24px 28px;border-top:3px double var(--line);text-align:center;">

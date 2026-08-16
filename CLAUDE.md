@@ -434,6 +434,26 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 - **"Watch the ledger" capture** on the landing page — the free off-ramp for buyers who
   reasonably want proof first (the paid-from-day-one decision had removed every non-purchase
   path, so intent leaked away with no way back). Wires to LEDGER_LIST_ENDPOINT, else Substack.
+- **The receipts page is demoted at launch, not deleted (owner decision, Aug 16 2026).** The
+  ledger was the site's designated proof asset — hero pill, ~14 buyer-visible mentions, five
+  outbound links — pointing at a page whose stamp read "NOTHING TO HIDE · YET NOTHING TO SHOW".
+  Worse, "Judge us on the record, then decide" sat between the honesty section and the pricing:
+  a verbatim instruction not to buy, aimed at a record that does not exist. **A call needs three
+  prior appearances from both players (`MIN_GAMES_FOR_CALL = 3`), so weeks 1-3 publish no
+  confidences at all and the first rows cannot be graded before early October** — the Week-2
+  refund window closes before a single row exists. Any copy promising September grades is false.
+  So: the machinery, the page, the principle and the footer link all stay; the ledger stops
+  being the launch proof and the **backtest** becomes it (it is the thing a buyer can check
+  today). Buyer-visible mentions went ~14 -> 1, miss-vocabulary 6 -> 0. Promote it back into the
+  funnel once it holds real rows. The public noun is now **"the receipts"** — the buyer's
+  group-chat word aimed at their rivalry, not an accounting word aimed at our honesty; it also
+  matches report section 09, Receipts Monday and the receipt cards. Kept exactly one honesty
+  statement ("No moving the goalposts", frozen rules) per the state-once-then-demonstrate rule.
+  **Do not "fix" this by quoting the availability-controlled calibration numbers** (62.1% ->
+  63.6% etc.): backtest.md calls that table a diagnostic, not a result to publish, because it
+  conditions on an outcome unknowable at call time. The publishable calibration is the weak one
+  (ECE 7.2%, 1 of 6 buckets), so the honest sellable claim is the **discipline** — we found the
+  availability blind spot ourselves and switched the number off there.
 - **Retention/refund policy is in PLAN §4 and is a hard boundary:** no dark patterns, no
   cancellation friction, no designing for forgotten subscriptions. Non-refundable revenue comes
   from the upfront season pass plus delivering value before the Week-2 window closes.
