@@ -73,7 +73,7 @@ def _header(seasons: Sequence[Season]) -> list[str]:
         "# Backtest & calibration report",
         "",
         f"Generated {generated} from cached Sleeper data in `data/raw/`. "
-        "No network calls, no LLM calls, no estimates: every number below is "
+        "No network calls, no generated text, no estimates: every number below is "
         "reproducible by re-running `python -m engine.backtest`.",
         "",
         "## Leagues graded",
@@ -111,7 +111,8 @@ def _method(seasons: Sequence[Season]) -> list[str]:
         "projection is unchanged when future weeks are altered.",
         f"- **Confidence** = P(recommended outscores that specific alternative), "
         "independent normals. This is the published unit "
-        "(CLAUDE.md principle 5) — not a generic 'good start' score.",
+        "(our published rule: every score shown carries its definition) — not a "
+        "generic 'good start' score.",
         f"- **Minimum evidence:** both players need ≥ {MIN_GAMES_FOR_CALL} prior "
         "appearances or the engine declines to make a call at all.",
         f"- **Standard-deviation floor:** {MIN_SD:g} points, so a three-game low-variance "
@@ -120,7 +121,8 @@ def _method(seasons: Sequence[Season]) -> list[str]:
         "equal, excluded from hit rates and reported separately.",
         "",
         "Rules are frozen in `engine/decisions.py` and were written before these "
-        "numbers were computed (CLAUDE.md principle 2).",
+        "numbers were computed — grading rules are frozen before the season and "
+        "never adjusted after results.",
     ]
 
 
@@ -177,7 +179,7 @@ def _calibration(
         "",
     ]
     lines += list(preamble) or [
-        "The test that matters (CLAUDE.md principle 1): when the engine says 64%, do "
+        "The test that matters — calibration over confidence: when the engine says 64%, do "
         "roughly 64% of those calls hit? *Observed* is the real hit rate; the interval "
         "is a 95% Wilson score interval."
     ]
@@ -306,7 +308,7 @@ def _implications(calls: Sequence[StartSitCall]) -> list[str]:
     calibrated = sum(1 for r in judged if r.calibrated)
     return [
         "",
-        "## What this means for Phase 3",
+        "## What this means for the live report",
         "",
         "1. **Ship an availability feed before shipping a confidence number.** Bye weeks "
         "come from the free public NFL schedule and injury designations are already on "
@@ -316,10 +318,10 @@ def _implications(calls: Sequence[StartSitCall]) -> list[str]:
         f"2. **The probability math itself passes.** On the availability-controlled set, "
         f"{calibrated} of {len(judged)} judgeable buckets are calibrated. A stated 64% is "
         "worth publishing once the engine knows who is playing — and not before "
-        "(CLAUDE.md principle 1).",
+        "— no probability is published without evidence it is calibrated.",
         "3. **Until then, the report must not print a confidence for a player whose "
-        "status is unknown.** Per the Phase 3 spec, that slot renders as *coming in "
-        "v0.3*, never as a number. The honest version of this engine declines more calls "
+        "status is unknown.** That slot renders as *no call*, never as a number. "
+        "The honest version of this engine declines more calls "
         "than it makes.",
         "4. **The rival's bench is where the edge is.** A rival starting a player who "
         "will not play is the single most exploitable event in this data, and it is "
@@ -352,7 +354,7 @@ def _by_slot(calls: Sequence[StartSitCall]) -> list[str]:
 
 
 def _matchup_section(seasons: Sequence[Season], players: PlayerIndex) -> list[str]:
-    """Backtest of the MATCHUP-level method the Phase 3 report publishes:
+    """Backtest of the MATCHUP-level method the live report publishes:
     team win probability + the 80% floor/ceiling band (rules M1-M4 frozen in
     engine/matchup_backtest.py before these numbers were computed)."""
     calls: list[MatchupCall] = []
@@ -459,7 +461,7 @@ def _managers(seasons: Sequence[Season], calls_by_season: dict[str, list[StartSi
         "",
         "## Manager profiles",
         "",
-        "Rival profiles for Phase 3. Every line cites the season and week span it "
+        "Rival profiles for the live report. Every line cites the season and week span it "
         "was computed from.",
     ]
     for season in seasons:
@@ -600,7 +602,8 @@ def _verification(
         f"- Players table: {len(players):,} entries",
         f"- Calls graded: {len(calls):,}; slot-weeks declined for thin evidence: {skipped:,}",
         "- HTTP requests: 0 (cache only)",
-        "- LLM tokens: 0 (deterministic layer — no language calls in the backtest)",
+        "- Every number above is arithmetic on cached box scores — no generated text, "
+        "no estimates, nothing a re-run cannot reproduce.",
     ]
 
 

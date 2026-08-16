@@ -1,6 +1,6 @@
 # Backtest & calibration report
 
-Generated 2026-08-15 12:26 UTC from cached Sleeper data in `data/raw/`. No network calls, no LLM calls, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-16 04:23 UTC from cached Sleeper data in `data/raw/`. No network calls, no generated text, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
 
 ## Leagues graded
 
@@ -15,12 +15,12 @@ For every roster, every week, every starting slot, the engine compares the playe
 
 - **Starting slots:** QB, RB, RB, WR, WR, TE, FLEX, FLEX, DEF
 - **Projection:** trailing-form mean shrunk toward the league-wide positional mean (K = 4 pseudo-games), built **only from weeks before the graded week**. No lookahead: `tests/test_engine.py` asserts a projection is unchanged when future weeks are altered.
-- **Confidence** = P(recommended outscores that specific alternative), independent normals. This is the published unit (CLAUDE.md principle 5) — not a generic 'good start' score.
+- **Confidence** = P(recommended outscores that specific alternative), independent normals. This is the published unit (our published rule: every score shown carries its definition) — not a generic 'good start' score.
 - **Minimum evidence:** both players need ≥ 3 prior appearances or the engine declines to make a call at all.
 - **Standard-deviation floor:** 2 points, so a three-game low-variance sample cannot manufacture a 99% confidence.
 - **Hit** = recommended scored more than the alternative. **Tie** = exactly equal, excluded from hit rates and reported separately.
 
-Rules are frozen in `engine/decisions.py` and were written before these numbers were computed (CLAUDE.md principle 2).
+Rules are frozen in `engine/decisions.py` and were written before these numbers were computed — grading rules are frozen before the season and never adjusted after results.
 
 ## Headline
 
@@ -47,7 +47,7 @@ The conditional table below is a **diagnostic, not a result to publish**: it con
 
 ## Calibration
 
-The test that matters (CLAUDE.md principle 1): when the engine says 64%, do roughly 64% of those calls hit? *Observed* is the real hit rate; the interval is a 95% Wilson score interval.
+The test that matters — calibration over confidence: when the engine says 64%, do roughly 64% of those calls hit? *Observed* is the real hit rate; the interval is a 95% Wilson score interval.
 
 | Stated confidence | Graded | Decided | Ties | Stated avg | Observed | 95% interval | Verdict |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
@@ -81,11 +81,11 @@ The same calls, restricted to head-to-heads where **both players actually played
 - **Resolution:** least-confident decile hits 60.5%, most-confident decile hits 77.2%. Calibration without this gap would mean the number sorts nothing.
 - **Buckets with enough data to judge:** 5; 5 calibrated, 0 off.
 
-## What this means for Phase 3
+## What this means for the live report
 
 1. **Ship an availability feed before shipping a confidence number.** Bye weeks come from the free public NFL schedule and injury designations are already on Sleeper's player records — they simply have to be captured weekly, since the players table only ever holds today's status. This is the highest-value change available to the engine, and it is cheap.
-2. **The probability math itself passes.** On the availability-controlled set, 5 of 5 judgeable buckets are calibrated. A stated 64% is worth publishing once the engine knows who is playing — and not before (CLAUDE.md principle 1).
-3. **Until then, the report must not print a confidence for a player whose status is unknown.** Per the Phase 3 spec, that slot renders as *coming in v0.3*, never as a number. The honest version of this engine declines more calls than it makes.
+2. **The probability math itself passes.** On the availability-controlled set, 5 of 5 judgeable buckets are calibrated. A stated 64% is worth publishing once the engine knows who is playing — and not before — no probability is published without evidence it is calibrated.
+3. **Until then, the report must not print a confidence for a player whose status is unknown.** That slot renders as *no call*, never as a number. The honest version of this engine declines more calls than it makes.
 4. **The rival's bench is where the edge is.** A rival starting a player who will not play is the single most exploitable event in this data, and it is visible to us the moment an availability feed exists — this is exactly the "where the rival is fragile" section the product promises.
 
 ## Matchup-level backtest: win probability and floor/ceiling
@@ -133,7 +133,7 @@ Where the engine earns its keep, and where it does not.
 
 ## Manager profiles
 
-Rival profiles for Phase 3. Every line cites the season and week span it was computed from.
+Rival profiles for the live report. Every line cites the season and week span it was computed from.
 
 ### 2018 — Sleeper Friends League (transaction log: weeks 1-16)
 
@@ -236,4 +236,4 @@ Metrics deliberately **not** computed, rather than approximated:
 - Players table: 12,218 entries
 - Calls graded: 2,056; slot-weeks declined for thin evidence: 1,616
 - HTTP requests: 0 (cache only)
-- LLM tokens: 0 (deterministic layer — no language calls in the backtest)
+- Every number above is arithmetic on cached box scores — no generated text, no estimates, nothing a re-run cannot reproduce.

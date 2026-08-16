@@ -681,3 +681,17 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     # The honest-refusal phrases survive in both outcomes.
     assert closed.count("isn't open just yet") == 2
     assert closed.count("aren't") == 2
+
+
+def test_backtest_page_carries_no_internal_register() -> None:
+    """The backtest page is deliberately the technical document — commands and
+    file paths are its verifiability story and stay. But the internal spec,
+    the AI layer, version numbers and phase names are operator vocabulary, and
+    this page is read by exactly the persona a group chat sends to vet the
+    purchase. 'CLAUDE.md' on a public page is the screenshot the
+    invisible-machinery rule exists to prevent. Every earlier sweep exempted
+    this page wholesale; that exemption was the leak."""
+    page = (SITE / "backtest.html").read_text(encoding="utf-8")
+    for banned in (r"CLAUDE", r"\bLLM\b", r"v0\.\d", r"Phase \d",
+                   r"week_report\.json", r"\bdeterministic\b"):
+        assert not re.search(banned, page), f"{banned!r} leaked onto the public backtest page"
