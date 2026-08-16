@@ -131,6 +131,16 @@ def pull_season(client: SleeperClient, league: dict[str, Any]) -> SeasonPull:
         if transactions:
             result.weeks_with_transactions.append(week)
             result.transaction_count += len(transactions)
+        # Counted usage for the same week. A completed season's stats are final,
+        # so they cache forever; the live season revalidates on the normal
+        # window. Failures here are not fatal — usage enriches the report, it
+        # is never load-bearing, and a report without it is still correct.
+        if matchups:
+            try:
+                client.stats(result.season, week,
+                             max_age_hours=None if completed else max_age)
+            except Exception:  # noqa: BLE001 — usage is optional enrichment
+                pass
     return result
 
 

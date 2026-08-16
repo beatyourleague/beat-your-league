@@ -214,6 +214,37 @@ class SleeperClient:
                 f"{type(data).__name__}, expected object")
         return data
 
+    def stats(self, season: str, week: int, season_type: str = "regular",
+              max_age_hours: float | None = 24.0) -> dict[str, Any]:
+        """Actual weekly usage — what a player was GIVEN, not what he scored.
+
+        ``/v1/stats/nfl/{type}/{season}/{week}`` — the same public, no-auth
+        family as the projections feed and verified live against historical
+        seasons. Carries the vocabulary the fantasy market actually argues in:
+        ``rec_tgt`` (targets), ``off_snp`` (offensive snaps), ``rec_air_yd``
+        (air yards) and ``rec_rz_tgt`` (red-zone targets), keyed by Sleeper
+        player id — so it joins to everything else here with no id mapping.
+
+        Usage is the half the report has been missing: a player's points tell
+        you what happened, his snaps and targets tell you whether it is likely
+        to happen again. Completed weeks should use ``max_age_hours=None``.
+        """
+        if not re.match(r"^\d{4}$", str(season)):
+            raise ValueError(f"invalid season: {season!r}")
+        if season_type not in ("regular", "pre", "post"):
+            raise ValueError(f"invalid season_type: {season_type!r}")
+        if not isinstance(week, int) or not 1 <= week <= 22:
+            raise ValueError(f"invalid week: {week!r}")
+        data = self._get(
+            f"/stats/nfl/{season_type}/{season}/{week}",
+            Path("stats") / f"nfl_{season_type}_{season}_w{week:02d}.json",
+            max_age_hours=max_age_hours, expect=dict)
+        if not isinstance(data, dict):
+            raise SleeperError(
+                f"stats {season} w{week} returned "
+                f"{type(data).__name__}, expected object")
+        return data
+
     # ------------------------------------------------------------------ #
     # internals
     # ------------------------------------------------------------------ #

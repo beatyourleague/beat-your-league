@@ -508,6 +508,8 @@ def section_hype(entries: list[Mapping[str, Any]],
             fomo = min(100, entry["managers_chasing"] * 20)
             gate_line = ("" if shared_gate else
                          f'<div class="action no">→ {esc(entry["verdict_gate"])}</div>')
+            usage_line_html = (f'<p class="usage">{esc(entry["usage"])}</p>'
+                               if entry.get("usage") else "")
             cards.append(
                 f'<div class="hcard"><div class="top">'
                 f'<span class="player">{esc(entry["player_name"])} · {esc(entry["position"])}</span>'
@@ -518,6 +520,7 @@ def section_hype(entries: list[Mapping[str, Any]],
                 f'<p class="read">{esc(entry["bids"])} claims filed, '
                 f'{esc(entry["completed_adds"])} completed, {esc(bid_text)} '
                 f'({esc(entry["evidence"])}).</p>'
+                f'{usage_line_html}'
                 f'{gate_line}'
                 f'{_bid_line(entry)}</div>'
             )

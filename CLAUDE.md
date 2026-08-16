@@ -199,6 +199,26 @@ strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Re
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
 and connect the Substack list. All build phases are now complete.
 
+**Counted usage (`engine/usage.py`, Aug 16 2026) — the market's vocabulary, from a feed we
+already had.** The report said in print that routes, snaps and target share "isn't something we
+track yet"; two thirds of that was closable for free. Sleeper's own
+`/v1/stats/nfl/{type}/{season}/{week}` — same public no-auth family as the projections feed,
+keyed by Sleeper player id so there is NO id mapping — carries `rec_tgt`, `off_snp`,
+`rec_air_yd`, `rec_rz_tgt` and `rush_att`. `ingest.pull` caches it per week alongside matchups
+(completed seasons forever, live season on the 6h window) and a failure there is swallowed:
+usage enriches the report, it is never load-bearing.
+Two rules, measured not assumed, against rostered skill players who actually played:
+- **RULE U1 — reported, never projected.** Every value is a count of something that already
+  happened, so it carries no calibration burden. Using one to PREDICT needs its own backtest.
+- **RULE U2 — snaps are live-only.** `off_snp` is 100% populated for 2024 and **0% for 2018**, so
+  a snap figure can ship in a live report but can never be validated against the 2017-18 call
+  set. Targets (81%/66%) and air yards (76%/66%) exist in both eras; the shortfall there is
+  rushers and QBs with no receiving line, an honest zero rather than a hole.
+An absent field renders absent, never as 0, and weeks the player did not play do not dilute the
+per-game rate — that would understate exactly the returning starter worth flagging. The hype
+verdict gate no longer claims we track nothing; it now shows what he was given and withholds
+only the part we genuinely cannot judge (whether it holds up behind a different offence).
+
 **Units: points lead, dollars act, probability supports (Aug 16 2026).** A 64% call and a 58%
 call feel identical to a human, and the backtest says we may not be entitled to that precision
 anyway — unconditional resolution is nearly flat (least-confident decile 55.2%, most-confident

@@ -35,6 +35,7 @@ from engine.history import (
     EMPTY_SLOT_IDS, FLEX_ELIGIBILITY, HistoryError, PlayerIndex, Season,
     TeamWeek, load_players, load_season_chain,
 )
+from engine.usage import recent_usage, usage_line
 from engine.projection import (
     MIN_GAMES_FOR_CALL, Projection, ProjectionModel, probability_outscores,
 )
@@ -444,10 +445,11 @@ def hype_meter(
                           if len(windows) == 1 else
                           f"league transaction log, weeks {min(windows)}-{max(windows)}")
                          if windows else "no transaction data"),
-            "verdict_gate": ("We can see the whole league chasing him. Whether "
-                             "the usage backs it up — routes, snaps, target "
-                             "share — isn't something we track yet, so we're "
-                             "not calling this one real or a mirage."),
+            "verdict_gate": ("We can see the whole league chasing him, and the "
+                             "usage below is what he has actually been given. "
+                             "Whether that holds up behind a different offence "
+                             "is not something we put a number on, so we're not "
+                             "calling this one real or a mirage."),
         })
     return out
 
@@ -981,6 +983,12 @@ def build_week_report(
         # A bare count has no scale. "8 teams" means nothing; "8 of the other
         # 11" is a reason to act. League size is already known here.
         entry["league_others"] = max(len(season.teams) - 1, 0)
+        # What the league is chasing him FOR. Counted, never projected
+        # (engine/usage.py RULE U1), and strictly from weeks before this one.
+        usage = recent_usage(raw_dir, entry["player_id"], season.season, week)
+        line = usage_line(usage)
+        if line:
+            entry["usage"] = line
     watch = rival_watch(seasons, week, my_roster_id, rival.roster_id,
                         named_rival_owner_id, named_rival_roster_id,
                         players, model, availability)
