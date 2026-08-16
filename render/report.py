@@ -143,7 +143,8 @@ def extract_design(template_html: str) -> tuple[str, str]:
 
 def gate_note(reason: str) -> str:
     """The one honest way a missing number renders (principle 3)."""
-    return (f'<div class="benchnote"><b>{esc(NOT_CALLING_IT)}:</b> {esc(reason)}</div>')
+    return (f'<div class="withheld"><span class="lab">{esc(NOT_CALLING_IT)}</span>'
+            f'{esc(reason)}</div>')
 
 
 # --------------------------------------------------------------------- #
@@ -418,9 +419,9 @@ def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
 
 def section_regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
-        body = (f'<div class="call"><div class="verdict">No coin-flip call published</div>'
-                f'{gate_note(regret["gate"])}</div>')
-        return _section("Your Regret Score", 6, body)
+        # No .call frame: a heavy navy card whose only content is an absence
+        # reads as broken software rather than restraint.
+        return _section("Your Regret Score", 6, gate_note(regret["gate"]))
     confidence = _pct(regret["confidence"])
     drivers = "".join(
         f'<span class="drv">{esc(d["label"])} <b>{esc(d["value"])}</b></span>'
@@ -483,8 +484,8 @@ def section_hype(entries: list[Mapping[str, Any]],
                 f'{gate_line}'
                 f'{_bid_line(entry)}</div>'
             )
-        note = (f'<div class="benchnote">{esc(shared_gate)}</div>'
-                if shared_gate else "")
+        note = (f'<div class="withheld"><span class="lab">Why no verdict</span>'
+                f'{esc(shared_gate)}</div>' if shared_gate else "")
         body = f'<div class="hype">{"".join(cards)}</div>{note}'
     return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
 

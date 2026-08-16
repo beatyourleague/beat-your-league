@@ -132,8 +132,13 @@
   .lrow.head{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
     letter-spacing:.14em;text-transform:uppercase;padding:8px 14px;}
   .slot{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);}
-  .pl .pname{font-weight:700;font-size:14.5px;line-height:1.2;}
-  .pl .pmeta{font-size:11.5px;color:var(--slate);margin-top:2px;font-weight:500;}
+  /* These three stack. Left inline they concatenate with no separator and the
+     row renders "Ryan FitzpatrickQB · 4 games of form" — the most repeated
+     element on the page, wrong on every row. min-width:0 lets the 1fr grid
+     cell actually wrap a long name instead of overflowing its column. */
+  .pl{min-width:0;}
+  .pl .pname{display:block;font-weight:700;font-size:14.5px;line-height:1.2;}
+  .pl .pmeta{display:block;font-size:11.5px;color:var(--slate);margin-top:2px;font-weight:500;}
   .proj{font-family:'Barlow Condensed';font-weight:800;font-size:18px;text-align:right;
     font-variant-numeric:tabular-nums;}
   .cwrap{display:flex;flex-direction:column;gap:3px;}
@@ -143,7 +148,7 @@
     font-variant-numeric:tabular-nums;}
   .lrow.flip{background:var(--flag-tint);}
   .lrow.flip .cbar i{background:#C99A12;}
-  .fliptag{display:inline-block;margin-top:3px;font-size:10px;font-weight:800;letter-spacing:.1em;
+  .fliptag{display:block;margin-top:4px;font-size:10px;font-weight:800;letter-spacing:.1em;
     text-transform:uppercase;color:#8A6A10;}
   .lrow.total{background:#F2F0E8;border-top:2px solid var(--navy);}
   .lrow.total .pl .pname{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
@@ -151,6 +156,12 @@
   .benchnote{padding:11px 14px;border-top:1px dashed var(--line);font-size:13px;color:var(--ink2);
     background:#FBFAF6;line-height:1.5;}
   .benchnote b{color:var(--brick);}
+  .withheld{margin-top:16px;background:#F2F0E8;border:1px solid var(--line);
+    border-left:4px solid var(--slate);padding:13px 15px;font-size:13.5px;
+    line-height:1.5;color:var(--ink2);}
+  .withheld .lab{display:block;margin-bottom:3px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--slate);}
 
   /* ================= scouting ================= */
   .scout{margin-top:16px;display:grid;gap:12px;}
