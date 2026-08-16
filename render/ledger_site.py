@@ -65,9 +65,9 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
             '<h2>Does the confidence number mean anything?</h2>'
             '<p class="note">Calibration, running: when we said X%, how often did the call hit? '
             'Small samples wobble — judge the gap, not single rows.</p>'
-            '<table><tr><th>Stated</th><th class="num">Decided</th>'
+            '<div style="overflow-x:auto"><table><tr><th>Stated</th><th class="num">Decided</th>'
             '<th class="num">Stated avg</th><th class="num">Observed</th></tr>'
-            f'{buckets}</table>'
+            f'{buckets}</table></div>'
         ) if summary.get("buckets") else ""
         body = (
             f'<div class="record"><b>{record_line}</b><span>{esc(rate_line)}</span></div>'
@@ -75,9 +75,9 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
             '<h2>Every call, in the open</h2>'
             '<p class="note">Recorded the moment it was published, graded when the games went '
             'final, never edited after. Voids are shown, not hidden.</p>'
-            '<table><tr><th>Week</th><th>Slot</th><th>The call</th>'
+            '<div style="overflow-x:auto"><table><tr><th>Week</th><th>Slot</th><th>The call</th>'
             '<th class="num">Stated</th><th>Result</th><th class="num">Margin</th></tr>'
-            + "".join(_row(e) for e in entries) + "</table>"
+            + "".join(_row(e) for e in entries) + "</table></div>"
         )
     else:
         body = (
@@ -94,6 +94,15 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — The Public Ledger</title>
+<meta name="description" content="Every published call, graded against real box scores after the games go final. Wins and misses both.">
+<meta property="og:title" content="Beat Your League — The Public Ledger">
+<meta property="og:description" content="Every published call, graded against real box scores after the games go final. Wins and misses both.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<!-- og:image needs the live absolute URL. After the domain exists, add:
+     <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>

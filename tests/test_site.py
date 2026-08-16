@@ -695,3 +695,42 @@ def test_backtest_page_carries_no_internal_register() -> None:
     for banned in (r"CLAUDE", r"\bLLM\b", r"v0\.\d", r"Phase \d",
                    r"week_report\.json", r"\bdeterministic\b"):
         assert not re.search(banned, page), f"{banned!r} leaked onto the public backtest page"
+
+
+def test_every_page_carries_social_meta_and_a_favicon() -> None:
+    """A shared link is the product's main growth channel — the group chat.
+    A page without og: meta unfurls as a bare URL; a page without a favicon
+    looks unfinished in the tab bar. Both generators emit theirs too, so this
+    covers generated pages by construction."""
+    for page_path in sorted(SITE.rglob("*.html")):
+        text = page_path.read_text(encoding="utf-8")
+        rel = page_path.relative_to(SITE)
+        for needle in ('property="og:title"', 'property="og:description"',
+                       'name="twitter:card"', 'rel="icon"'):
+            assert needle in text, f"{rel} is missing {needle}"
+
+
+def test_wide_tables_scroll_inside_their_own_container() -> None:
+    """Generated tables (backtest, ledger) are wider than a phone. Each must
+    live in an overflow-x container so the table scrolls, never the page."""
+    for name in ("backtest.html", "ledger/index.html"):
+        text = (SITE / name).read_text(encoding="utf-8")
+        opens = text.count("<table>")
+        wrapped = text.count('overflow-x:auto')
+        assert wrapped >= opens, \
+            f"{name}: {opens} tables but only {wrapped} scroll containers"
+    # The backtest page always carries tables; if that ever hits zero the
+    # generator broke, not the guard.
+    assert (SITE / "backtest.html").read_text(encoding="utf-8").count("<table>") > 0
+
+
+def test_picker_inputs_live_in_real_forms() -> None:
+    """Enter (and the mobile keyboard's Go) must submit the username and email
+    steps — dead Enter keys read as a broken page. The forms never POST
+    anywhere themselves; submit is prevented and routed to the buttons."""
+    for form_id, button_id in (("form-user", "find-user"), ("form-email", "submit")):
+        assert f'<form id="{form_id}"' in JOIN, f"missing {form_id}"
+        assert f'wireEnter("{form_id}", "{button_id}")' in JOIN
+    # The router must prevent the default submission (no reload) and never
+    # re-click a button whose own click produced the submission (no double run).
+    assert "e.preventDefault();" in JOIN and "e.submitter !== btn" in JOIN

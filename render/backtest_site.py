@@ -48,6 +48,15 @@ HEAD = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — The Full Backtest</title>
+<meta name="description" content="Two seasons of graded calls — hits, misses, and the buckets that failed. The complete record behind the product.">
+<meta property="og:title" content="Beat Your League — The Full Backtest">
+<meta property="og:description" content="Two seasons of graded calls — hits, misses, and the buckets that failed. The complete record behind the product.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<!-- og:image needs the live absolute URL. After the domain exists, add:
+     <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
@@ -158,11 +167,14 @@ def to_html(markdown: str) -> str:
                 i += 1
             if rows:
                 head, *body = rows
+                # Phones: a wide table scrolls inside its own container —
+                # never the page body sideways.
+                out.append('<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">')
                 out.append("<table>")
                 out.append("<tr>" + "".join(f"<th>{_inline(c)}</th>" for c in head) + "</tr>")
                 for row in body:
                     out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in row) + "</tr>")
-                out.append("</table>")
+                out.append("</table></div>")
             continue
 
         bullet = re.match(r"^\s*[-*]\s+(.*)$", line)

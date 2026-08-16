@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — Pick Your Rival</title>
+<meta name="description" content="Three taps — username, league, rival. Your weekly Rival Report starts with the next one that ships.">
+<meta property="og:title" content="Beat Your League — Pick Your Rival">
+<meta property="og:description" content="Three taps — username, league, rival. Your weekly Rival Report starts with the next one that ships.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<!-- og:image needs the live absolute URL. After the domain exists, add:
+     <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
@@ -96,9 +105,11 @@
 
   <section id="step-user">
     <div class="eyebrow">1 · Your Sleeper username</div>
-    <input type="text" id="username" autocomplete="off" spellcheck="false"
-           placeholder="e.g. ZeroRB_Zealot" maxlength="32">
-    <button id="find-user">Find my leagues</button>
+    <form id="form-user" novalidate>
+      <input type="text" id="username" autocomplete="off" spellcheck="false"
+             placeholder="e.g. ZeroRB_Zealot" maxlength="32">
+      <button id="find-user" type="submit">Find my leagues</button>
+    </form>
     <div class="err" id="err-user"></div>
   </section>
 
@@ -123,8 +134,10 @@
 
   <section id="step-email" class="hidden">
     <div class="eyebrow">4 · Where do reports go?</div>
-    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-    <button id="submit">Continue to checkout — $29</button>
+    <form id="form-email" novalidate>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <button id="submit" type="submit">Continue to checkout — $29</button>
+    </form>
     <div class="err" id="err-email"></div>
     <div class="done" id="done">
       <b id="done-head">You're all set.</b>
@@ -315,6 +328,26 @@ function card(title, subtitle, className, onPick) {
   } catch (err) { /* keep the default */ }
 })();
 
+// Enter (and the mobile keyboard's Go) must work in both single-input steps.
+// Routed explicitly instead of trusting implicit submission: the keydown
+// handler intercepts Enter and clicks the button itself, so behavior is
+// identical in every browser. The submit handler catches whatever arrives as
+// a form submission anyway — but never re-clicks a button whose own click
+// produced the submission (e.submitter), which would run the handler twice.
+function wireEnter(formId, buttonId) {
+  const form = $(formId), btn = $(buttonId);
+  form.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.target.tagName !== "INPUT") return;
+    e.preventDefault();
+    if (!btn.disabled) btn.click();
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (e.submitter !== btn && !btn.disabled) btn.click();
+  });
+}
+wireEnter("form-user", "find-user");
+wireEnter("form-email", "submit");
 $("find-user").addEventListener("click", async () => {
   clearError("err-user");
   resetFromLeague();
