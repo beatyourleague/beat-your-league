@@ -463,6 +463,15 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   errors **never echo credentials**; and the paid check in `run/batch.py` gates delivery, so
   nobody who cancelled is mailed. The send log (`data/processed/sent.jsonl`) is cached across
   CI runs — losing it would mean duplicate sends.
+- **`render/email.py` is what actually lands in the inbox (Aug 16 2026).** The browser
+  report leans on grid/flex/`var()`/loaded fonts — Outlook renders email with Word's engine and
+  Gmail strips `<style>` on forward, so mailing that file shipped soup. The batch now mails a
+  table-based, inline-styled, web-safe rendering of the same `week_report.json`; it must be
+  self-contained because per-subscriber reports are private (no hosted copy to link). Every
+  pinned sentence — cancel/unsubscribe distinction, no-betting, data-age basis, the as-set
+  explainer — is a shared constant in `render/report.py` imported by both renderers, so the two
+  surfaces cannot drift. The browser HTML still goes to disk as the archival artifact.
+  Mutation-tested: rewiring batch to mail the browser HTML fails the suite.
 - **Platform note:** Substack cannot deliver this product. It broadcasts one post to everyone,
   while every subscriber needs a different report; it can only ever be payments + a CSV. The
   recommended end state is Stripe (checkout + customer portal + API-queried subscriber list)

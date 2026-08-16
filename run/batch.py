@@ -24,6 +24,7 @@ from typing import Any
 
 import ingest.pull as ingest_pull
 import render.report as render_report
+from render.email import render_email
 from engine.history import HistoryError
 from engine.week_report import (RAW_DIR, WeekReportError, build_week_report,
                                 current_nfl_season)
@@ -111,10 +112,12 @@ def run_subscriber(subscriber: Subscriber, week: int, template_html: str,
     # The idempotency key is per subscriber, season and week — so a re-run,
     # a resumed workflow, or a second cron firing all resolve to the same send.
     meta_season = report["meta"]["season"]
+    # The email body is the email-safe rendering — the browser-grade HTML
+    # written above is the archival artifact, not what an inbox can display.
     message = Message(
         to=subscriber.email,
         subject=_subject(report),
-        html=html,
+        html=render_email(report),
         text=text,
         key=f"{subscriber.league_id}-{meta_season}-w{week:02d}-{subscriber.slug}",
     )

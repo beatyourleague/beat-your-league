@@ -38,6 +38,43 @@ TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 NO_CALL = "no call"          # in a tight column
 NOT_CALLING_IT = "Not calling it"   # as a label above the reason
 
+# Sentences shared verbatim between the browser report (this module) and the
+# email digest (render/email.py). Single-sourced so the pinned consumer
+# protections and the buyer voice cannot drift apart between the two surfaces.
+BRAND_LINE = ("the weekly scouting report built around your rival, "
+              "not just your roster.")
+NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
+                   "picks, no staking advice. Fantasy decisions are yours to make.")
+SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
+                "Not affiliated with Sleeper or the NFL.")
+CANCEL_HEAD = "Done with this?"
+CANCEL_BODY = ("Cancel it yourself in your Substack account — it takes about "
+               "fifteen seconds and stops the billing immediately. "
+               "Unsubscribing from emails alone does not stop a subscription, "
+               "so cancel there if you want the charges to end.")
+AS_SET_TITLE = "Your Lineup — As Set"
+OPTIMAL_TITLE = "Your Optimal Lineup"
+AS_SET_HEAD = "Your lineup, exactly as set."
+AS_SET_BODY = ("Start-sit calls begin once your league has box scores to "
+               "compare against — from next week, this grid shows the lineup "
+               "we would set and why.")
+
+
+def no_call_explainer(listed: str) -> str:
+    """Why gated slots say "no call" — one definition, both renderers."""
+    return (f"{listed}. When we do put a number on a slot, it means: the odds "
+            f"this guy outscores the best option on your bench. We only show it once "
+            f"we've confirmed both players are active — otherwise we'd be guessing, "
+            f"and you can guess for free.")
+
+
+def availability_basis(meta: Mapping[str, Any]) -> str:
+    """The data-age sentence (principle 3), shared by both renderers."""
+    availability = meta.get("availability_as_of")
+    return (f"Injury and inactive data as of {availability}." if availability
+            else "We couldn't confirm injuries or inactives for this week, so "
+                 "some calls are left unmade rather than guessed.")
+
 
 def esc(value: Any) -> str:
     return html.escape(str(value), quote=True)
@@ -287,17 +324,12 @@ def section_lineup(report: Mapping[str, Any]) -> str:
         # "optimal" for a lineup nobody optimized would be a fabricated
         # endorsement; nine empty rows would read as broken software. This is
         # the honest middle: their lineup, plainly labeled, calls dated.
-        note = ('<div class="benchnote"><b>Your lineup, exactly as set.</b> '
-                'Start-sit calls begin once your league has box scores to '
-                'compare against — from next week, this grid shows the lineup '
-                'we would set and why.</div>')
+        note = (f'<div class="benchnote"><b>{esc(AS_SET_HEAD)}</b> '
+                f'{esc(AS_SET_BODY)}</div>')
     elif gates:
         listed = " · ".join(sorted(gates))
         note = (f'<div class="benchnote"><b>Why some slots say "no call":</b> '
-                f'{esc(listed)}. When we do put a number on a slot, it means: the odds '
-                f'this guy outscores the best option on your bench. We only show it once '
-                f'we\'ve confirmed both players are active — otherwise we\'d be guessing, '
-                f'and you can guess for free.</div>')
+                f'{esc(no_call_explainer(listed))}</div>')
     matchup = report["matchup"]
     # When totals are gated (week 1: nothing to project from), the grid total
     # row is omitted rather than showing a 0.0 that no game produced.
@@ -306,7 +338,7 @@ def section_lineup(report: Mapping[str, Any]) -> str:
     grid = _lineup_grid(slots, you_total,
                         f"vs {rival_total:.1f}" if rival_total is not None else "",
                         note_html=note)
-    title = "Your Lineup — As Set" if as_set else "Your Optimal Lineup"
+    title = AS_SET_TITLE if as_set else OPTIMAL_TITLE
     return _section(title, 3, grid)
 
 
@@ -526,10 +558,7 @@ def _forward_line() -> str:
 
 
 def footer(meta: Mapping[str, Any]) -> str:
-    availability = meta.get("availability_as_of")
-    basis = (f"Injury and inactive data as of {availability}." if availability
-             else "We couldn't confirm injuries or inactives for this week, so "
-                  "some calls are left unmade rather than guessed.")
+    basis = availability_basis(meta)
     demo = ("Sample report built from a real past season, to show what you get. "
             if meta.get("historical_demo") else "")
     # The gap COUNT is operator bookkeeping; a buyer only needs to know that
@@ -537,22 +566,17 @@ def footer(meta: Mapping[str, Any]) -> str:
     gap_line = ""
     return (
         f'{demo_band(meta)}'
-        f'<footer><b>Beat Your League</b> — the weekly scouting report built around your '
-        f'rival, not just your roster.<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
+        f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
+        f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{_forward_line()}'
-        f'Projections are analysis, not guarantees — no betting picks, no staking '
-        f'advice. Fantasy decisions are yours to make.<br>'
-        f'Built from your league\'s own record on Sleeper. Not affiliated with '
-        f'Sleeper or the NFL.<br>'
+        f'{esc(NO_BETTING_LINE)}<br>'
+        f'{esc(SLEEPER_LINE)}<br>'
         # Every commercial email needs a working way out. It points at the
         # self-serve cancel because that costs the reader ~15 seconds and the
         # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
         # distinction stays: stopping emails while billing continues is how you
         # earn a chargeback and deserve it.
-        f'<b>Done with this?</b> Cancel it yourself in your Substack account — it '
-        f'takes about fifteen seconds and stops the billing immediately. '
-        f'Unsubscribing from emails alone does not stop a subscription, so cancel '
-        f'there if you want the charges to end.</footer>'
+        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}</footer>'
     )
 
 
