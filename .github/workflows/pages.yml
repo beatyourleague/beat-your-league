@@ -1,0 +1,47 @@
+# Publishes site/ to GitHub Pages. This is the ONLY deploy mechanism — classic
+# branch-based Pages cannot serve a subdirectory as the site root, and serving
+# the repo root would publish PLAN.md and CLAUDE.md alongside the product.
+#
+# One-time setup after pushing: repo Settings -> Pages -> Source = "GitHub
+# Actions". Nothing else.
+#
+# Triggers: any push that changes site/, a manual run, and the completion of
+# the Monday grading cron — monday.yml commits the refreshed ledger with
+# GITHUB_TOKEN, and pushes made with that token deliberately do NOT trigger
+# on:push workflows, so without the workflow_run trigger the public ledger
+# would go stale the moment it mattered.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**"]
+  workflow_dispatch: {}
+  workflow_run:
+    workflows: [monday-receipts]
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
