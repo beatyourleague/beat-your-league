@@ -199,6 +199,24 @@ strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Re
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
 and connect the Substack list. All build phases are now complete.
 
+**The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
+result.** The product publishes a confidence only when both players are confirmed active, and
+that rule had never been tested because live availability snapshots start this season. nflverse's
+historical injury archive (CC-BY-4.0, plain CSV, joined to Sleeper through `gsis_id`) closes it:
+an injury report is published BEFORE kickoff, so conditioning on it is legitimate, unlike the
+availability-controlled diagnostic which conditions on both players having scored.
+Result on the frozen 2017-18 call set: the gate keeps 1,597 of 2,056 calls (77.7%), and
+calibrated buckets go from **1 of 6 to 2 of 5 — an improvement, not a rescue**. Observed rates
+barely move (53.3 -> 54.2, 53.0 -> 53.2, 52.6 -> 52.5) and resolution stays flat at a 6.0-point
+spread. **So the gate does NOT earn a published accuracy claim and `reports/gate-backtest.md`
+makes none.** The reason is the useful part: most of what the availability-controlled table was
+really selecting for is not injury at all, it is healthy players who were never going to get the
+ball — a backup in a committee carries no designation. Keep the gate as an honesty measure; do
+not upgrade the marketing on the back of it. Limits that must travel with the number: byes are
+not modelled (a player's historical team is not recoverable from today's players table), so this
+is the injury half of the gate only. Reconstructed weeks are written to their own directory and
+NEVER into `data/raw/availability/`, which holds only snapshots observed live.
+
 **Counted usage (`engine/usage.py`, Aug 16 2026) — the market's vocabulary, from a feed we
 already had.** The report said in print that routes, snaps and target share "isn't something we
 track yet"; two thirds of that was closable for free. Sleeper's own
