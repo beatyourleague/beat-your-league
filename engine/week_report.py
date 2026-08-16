@@ -523,6 +523,8 @@ def fragility(
     rival_roster_id: int,
     players: PlayerIndex,
     history_model: ProjectionModel | None,
+    raw_dir: Path | None = None,
+    week: int | None = None,
 ) -> list[dict[str, str]]:
     """Where the rival is fragile — every line cites its evidence."""
     items: list[dict[str, str]] = []
@@ -552,10 +554,19 @@ def fragility(
             f"{players.name(p.player_id or '')} at {p.slot} ({p.projection.mean:.1f})"
             for p in beaten if p.projection
         )
+        # What he has actually been given, when we can say it. A projection is
+        # our opinion; a target count is the league's own record, and it is the
+        # difference between "we think he is better" and "look what he gets".
+        usage_note = ""
+        if raw_dir is not None and week is not None:
+            line = usage_line(recent_usage(raw_dir, alt_id, season.season, week))
+            if line:
+                usage_note = f" And he is being used: {line}."
         items.append({
             "title": f"{players.name(alt_id)} is sitting on their bench",
             "detail": (f"He projects {alt_projection.mean:.1f} — above "
-                       f"{len(beaten)} of their set starters: {starters}."),
+                       f"{len(beaten)} of their set starters: {starters}."
+                       f"{usage_note}"),
             "evidence": f"based on scoring through week "
                         f"{alt_projection.as_of_week - 1}, {season.season}",
         })
@@ -1089,7 +1100,7 @@ def build_week_report(
         "lineup": [_slot_json(p, players) for p in my_picks],
         "rival_lineup": [_slot_json(p, players) for p in rival_picks],
         "fragility": fragility(season, history, rival_picks, rival.roster_id,
-                               players, history_model),
+                               players, history_model, raw_dir, week),
         "regret": regret_call(my_picks, players),
         "pivots": pivots(my_picks, rival_picks, players),
         "hype": hype,
