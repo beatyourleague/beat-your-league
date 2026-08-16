@@ -530,6 +530,19 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   `rival-report-template.html`. Prose never cites a section number at all (an earlier pass had
   already stripped `§`-references from action items as legalese, and they dangle in the
   plain-text email, which has no sections) — name the section instead: "the matchup section".
+- **Money is disclosure, never argument (owner direction, Aug 15 2026).** The
+  high-probability buyer is not making a logical money decision — they are buying
+  reassurance (due diligence done without becoming the spreadsheet guy), absolution (the
+  defensible call, receipts if it goes wrong), and identity (the manager with the file).
+  Price-justification math ("under $2 a week", "about $40 across a season", "the cheaper
+  road") primes analytical thinking, and analytical buyers defer. So: prices appear plainly
+  at decision points and in the legally required disclosures (renewal amounts, refund
+  terms) — and are never argued, itemized per-unit, or compared. The ONE exception is the
+  League Pass page: a commissioner justifying spend to eleven leaguemates is a genuinely
+  deliberative buyer, and the $348-vs-$99 arithmetic is their language. Emotional value is
+  sold through specific scenarios in the buyer's own life (Tuesday morning, the group chat,
+  the call you would have regretted), never through adjectives — and never through invented
+  behavior claims ("most people..."), because there are no customers to cite yet.
 - **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file
   names, "LLM tokens", "pipeline", "availability snapshot", "calibration policy" are ours, not
   the customer's — a buyer reading "coming in v0.3" concludes they bought unfinished software.
