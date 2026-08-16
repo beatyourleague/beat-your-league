@@ -199,6 +199,31 @@ strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Re
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
 and connect the Substack list. All build phases are now complete.
 
+**Units: points lead, dollars act, probability supports (Aug 16 2026).** A 64% call and a 58%
+call feel identical to a human, and the backtest says we may not be entitled to that precision
+anyway — unconditional resolution is nearly flat (least-confident decile 55.2%, most-confident
+55.7%). So the report now leads with magnitudes a manager has spent years calibrating:
+- `matchup.margin` + `matchup.margin_swing` — the gap and how far the week actually moves. They
+  are serialised together and a test fails if either ships alone: the sample week's gap is 5.3
+  against a swing of ±53 (z·sqrt(sd_you²+sd_rival²)), so a bare gap in a verdict colour would
+  claim with size what the gated win probability refuses to claim in words. No odds word may be
+  attached — the matchup backtest found favourites won MORE often than stated.
+- `matchup.as_set_total` / `swap_value` — what doing nothing costs. The report used to say the
+  optimal lineup wins by 5.3 and never that the lineup as set LOSES by 3.1. Both totals must
+  pass `_team_range`'s gate or neither is quoted (a partial sum is a fabricated total).
+- `lineup[].edge` / `alternative_projected` — computed on every SlotPick and previously never
+  serialised. The point gap does not depend on availability, so a gated row carries it honestly;
+  nine rows reading only "no call" was withholding something that never needed withholding.
+  The number sits in the narrow column, the name it beats in the 1fr player column — a real name
+  in a 62px cell grows every row to three lines and the grid stops reading as a table.
+- Counts carry denominators (`hype[].league_others`): "8 of the other 11 teams can cover that".
+- The checklist DECIDES rather than asking — "Skip Mike Davis (RB), it takes 18 and you have 10"
+  rather than "Decide on Mike Davis", since the engine already knew the answer.
+Kept deliberately: the confidence NUMERAL. Coarsening it to labels ("clear call" / "lean") was
+rejected on a structural ground, not taste — `engine/ledger.py` grades probabilities, and a word
+records nothing gradeable, so labels would silently destroy the receipts ledger, which is the
+only mechanism that can turn the shipping availability gate into measured evidence.
+
 **Payment → delivery (Aug 14 2026).** Nothing in the repo actually sent an email until now; that
 was the largest automation gap. Two modules close it, both provider-agnostic so the platform
 choice is a secret, never a rewrite (rationale + cost table in PLAN §4):

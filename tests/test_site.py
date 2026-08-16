@@ -561,8 +561,12 @@ def test_waiver_edge_is_sold_as_a_decision_not_a_stat() -> None:
     # Numbers sit inside <b> tags, so match the phrasing that carries the action.
     assert re.search(r"or more to top the highest bid|to top the highest bid he's drawn",
                      SAMPLE_REPORT, re.I)
-    assert re.search(r"other teams can cover that|nobody else in your league can even cover",
+    # The count now carries its denominator ("8 of the other 11 teams"), because
+    # a bare count has no scale — so match the action, not the old phrasing.
+    assert re.search(r"teams? can cover that|nobody else in your league can even cover",
                      SAMPLE_REPORT, re.I)
+    assert re.search(r"of the other \d+ teams? can cover that", SAMPLE_REPORT, re.I), \
+        "the count lost its denominator"
     assert re.search(r"waiver market in your league", SAMPLE_REPORT, re.I)
 
 

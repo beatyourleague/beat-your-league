@@ -304,18 +304,31 @@ def _lineup_row(slot: Mapping[str, Any], calls: bool = True) -> str:
     fliptags = "".join(f'<span class="fliptag">{esc(f["text"])}</span>' for f in flags)
     projected = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
     confidence = slot.get("confidence")
+    # The point gap to the named alternative. It does not depend on
+    # availability, so a gated row can carry it honestly — withholding it
+    # withheld nothing that needed withholding, and left nine blank rows.
+    edge = slot.get("edge")
+    # The number goes in the narrow column; the name it beats goes in the 1fr
+    # player column. Put a real name in a 62px cell and every row grows to three
+    # lines and the grid stops reading as a table.
+    edge_lab = f'<span class="cedge">{edge:+.1f}</span>' if edge is not None else ""
+    edge_line = (f'<span class="pvs">{edge:+.1f} on our numbers vs '
+                 f'{esc(slot.get("alternative_name"))}</span>'
+                 if edge is not None and slot.get("alternative_name") else "")
     if confidence is not None:
         conf_cell = (f'<span class="cwrap"><span class="cbar">'
                      f'<i style="width:{_pct(confidence)}%"></i></span>'
-                     f'<span class="clab">{_pct(confidence)} · vs {esc(slot.get("alternative_name") or "bench")}</span></span>')
+                     f'<span class="clab">{_pct(confidence)}</span>{edge_lab}</span>')
     elif calls:
-        conf_cell = f'<span class="cwrap"><span class="clab">{esc(NO_CALL)}</span></span>'
+        conf_cell = (f'<span class="cwrap"><span class="clab">{esc(NO_CALL)}</span>'
+                     f'{edge_lab}</span>')
     else:
         conf_cell = '<span class="cwrap"></span>'
     return (
         f'<div class="lrow{flip}"><span class="slot">{esc(slot["slot"])}</span>'
         f'<span class="pl"><span class="pname">{esc(name)}</span>'
-        f'<span class="pmeta">{esc(" · ".join(meta_bits))}</span>{fliptags}</span>'
+        f'<span class="pmeta">{esc(" · ".join(meta_bits))}</span>'
+        f'{edge_line}{fliptags}</span>'
         f'<span class="proj">{projected}</span>{conf_cell}</div>'
     )
 
@@ -515,14 +528,16 @@ def _bid_line(entry: Mapping[str, Any]) -> str:
     if not bid:
         return ""
     rivals = entry.get("rivals_who_can_pay")
+    others = entry.get("league_others")
+    scale = f" of the other {others}" if others else ""
     if rivals is None:
         who = "we can't tell what anyone has left — see the note below"
     elif rivals == 0:
         who = "nobody else in your league can even cover that"
     elif rivals == 1:
-        who = "one other team can cover that"
+        who = f"one{scale} team can cover that"
     else:
-        who = f"{rivals} other teams can cover that"
+        who = f"{rivals}{scale} teams can cover that"
 
     if entry.get("affordable") is False:
         left = entry.get("my_remaining")

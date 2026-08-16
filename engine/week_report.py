@@ -745,11 +745,39 @@ def rival_watch(
     return watch
 
 
+def _stakes_clause(stakes: Mapping[str, Any] | None) -> str:
+    """What the swaps are worth, and — when it is true — that the lineup as it
+    stands is losing. The report used to say the optimal lineup wins by 5.3 and
+    never that doing nothing loses by 3.1, which is the fact that makes the
+    section urgent rather than informational. Both totals must be honest or
+    neither is quoted (a partial sum is a fabricated total)."""
+    if not stakes:
+        return ""
+    swap = stakes.get("swap_value")
+    as_set, theirs = stakes.get("as_set_total"), stakes.get("rival_total")
+    if swap is None or swap <= 0:
+        return ""
+    return f" worth +{swap:.1f}"
+
+
+def _behind_sentence(stakes: Mapping[str, Any] | None) -> str:
+    """Stated only when the set lineup is actually losing — the whole force of
+    it is that it is true this week, so it must never become boilerplate."""
+    if not stakes:
+        return ""
+    as_set, theirs = stakes.get("as_set_total"), stakes.get("rival_total")
+    if as_set is None or theirs is None or as_set >= theirs:
+        return ""
+    return (f" As it stands you project {as_set:.1f} against their "
+            f"{theirs:.1f}.")
+
+
 def checklist(
     my_picks: list[SlotPick],
     current_starters: tuple[str, ...],
     hype: list[dict[str, Any]],
     players: PlayerIndex,
+    stakes: Mapping[str, Any] | None = None,
 ) -> list[dict[str, str]]:
     changes = [
         p for p in my_picks
@@ -766,7 +794,9 @@ def checklist(
             # No §-references in action items: they read as legalese, and they
             # dangle entirely in the plain-text email that has no sections.
             "action": f"Set your lineup — {len(changes)} change"
-                      f"{'s' if len(changes) != 1 else ''}: {detail}.",
+                      f"{'s' if len(changes) != 1 else ''}"
+                      f"{_stakes_clause(stakes)}: {detail}."
+                      f"{_behind_sentence(stakes)}",
             "deadline": "before this week's first kickoff",
             "urgency": "now",
         })
@@ -843,6 +873,10 @@ def _slot_json(pick: SlotPick, players: PlayerIndex) -> dict[str, Any]:
         "confidence_gate": pick.confidence_gate,
         "alternative_id": pick.alternative_id,
         "alternative_name": players.name(pick.alternative_id) if pick.alternative_id else None,
+        "alternative_projected": (round(pick.alternative_projection.mean, 1)
+                                  if pick.alternative_projection else None),
+        "edge": (round(projection.mean - pick.alternative_projection.mean, 1)
+                 if projection and pick.alternative_projection else None),
         "status": pick.status.status.value if pick.status else None,
         "status_reason": pick.status.reason if pick.status else None,
         "flags": pick.flags,
@@ -944,6 +978,9 @@ def build_week_report(
         entry["league_top_appetite"] = market.bid_to_beat(my_roster_id)
         entry["affordable"] = my_left is None or entry["bid_to_beat"] <= my_left
         entry["my_remaining"] = my_left
+        # A bare count has no scale. "8 teams" means nothing; "8 of the other
+        # 11" is a reason to act. League size is already known here.
+        entry["league_others"] = max(len(season.teams) - 1, 0)
     watch = rival_watch(seasons, week, my_roster_id, rival.roster_id,
                         named_rival_owner_id, named_rival_roster_id,
                         players, model, availability)
@@ -966,6 +1003,8 @@ def build_week_report(
         gaps.append({"field": "win_probability", "reason": prob_gate})
     my_range = _team_range(my_picks)
     rival_range = _team_range(rival_picks)
+    # What the lineup they have SET projects, under the identical gate.
+    as_set_range = _team_range(rival_lineup(season, mine, model, players, availability))
     if my_range is None or rival_range is None:
         gaps.append({"field": "team_ranges", "reason": TEAM_RANGE_GATE})
     # Operator-facing note only. Deliberately NOT rendered to buyers: an empty
@@ -1001,7 +1040,13 @@ def build_week_report(
             "gaps": gaps,
             "llm_tokens": 0,
         },
-        "checklist": checklist(my_picks, mine.starters, hype, players),
+        "checklist": checklist(
+            my_picks, mine.starters, hype, players,
+            stakes=({"swap_value": round(my_range["projected_total"]
+                                         - as_set_range["projected_total"], 1),
+                     "as_set_total": as_set_range["projected_total"],
+                     "rival_total": rival_range["projected_total"]}
+                    if my_range and as_set_range and rival_range else None)),
         "matchup": {
             # A side without an honest total carries label only — the renderer
             # and the text summary print the gate reason instead of a number.
@@ -1014,6 +1059,13 @@ def build_week_report(
             # with its uncertainty stripped off. Independent teams, so the
             # variances add: swing = z * sqrt(sd_you^2 + sd_rival^2). On the
             # sample week the gap is 5.3 and the swing is 53 — a tenth of it.
+            # What doing nothing costs. Published only when BOTH totals are
+            # honest — a sum over eight of nine starters in scoreboard font is
+            # a fabricated number, and it would understate the swap value.
+            **({"as_set_total": as_set_range["projected_total"],
+                "swap_value": round(my_range["projected_total"]
+                                    - as_set_range["projected_total"], 1)}
+               if my_range and as_set_range else {}),
             **({"margin": round(my_range["projected_total"]
                                 - rival_range["projected_total"], 1),
                 "margin_swing": round(
