@@ -16,6 +16,8 @@ import html
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+
+from render.report import mark_svg
 from typing import Any, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -113,9 +115,10 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
   .sheet{{max-width:860px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}}
   header{{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}}
-  header .brand{{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}}
   header .brand a{{color:inherit;text-decoration:none;}}
+  header .brand svg.mark{{width:22px;height:15px;flex:none;}}
   header h1{{font-family:'Barlow Condensed';font-weight:800;font-size:42px;text-transform:uppercase;margin-top:6px;}}
   header p{{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:560px;}}
   main{{padding:24px 28px 34px;}}
@@ -149,7 +152,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 <body>
 <div class="sheet">
   <header>
-    <div class="brand"><a href="../index.html">&larr; Beat Your League</a></div>
+    <div class="brand">{mark_svg("byll")}<a href="../index.html">&larr; Beat Your League</a></div>
     <h1>The Public Ledger</h1>
     <p>Every probability we publish is recorded the moment it's sent and graded against the real box
     score when the games end. Method and backtest are frozen in code before the season.</p>

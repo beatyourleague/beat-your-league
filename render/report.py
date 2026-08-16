@@ -38,6 +38,54 @@ TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 NO_CALL = "no call"          # in a tight column
 NOT_CALLING_IT = "Not calling it"   # as a label above the reason
 
+# The logo mark, single-sourced. It shipped on the landing hero and NOWHERE
+# else — not on the report the subscriber actually pays for, not on the ledger
+# or the backtest a skeptic is sent to. One shape, one file, every surface.
+#
+# The silhouette is a VESICA (two circular arcs meeting at points), not an
+# ellipse: a football is a prolate spheroid and the ellipse is what made the
+# old mark read as a sticker. Radius is derived from the half-length L and
+# half-height H as (L^2+H^2)/2H — at L=11.4, H=6.6 that is 13.145. Depth is
+# three layers on one path (form gradient, specular bloom, edge vignette) and
+# the -18 degree tilt is what stops it reading as inert.
+# ``uid`` namespaces the gradient ids so two marks can share a document.
+MARK_PATH = "M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z"
+
+
+def mark_svg(uid: str = "byl", klass: str = "mark") -> str:
+    """The football mark as standalone inline SVG. Decorative: the wordmark
+    beside it carries the name, so this is aria-hidden."""
+    return (
+        f'<svg class="{klass}" viewBox="0 0 26 17" aria-hidden="true" focusable="false">'
+        f'<defs>'
+        f'<linearGradient id="{uid}Body" x1=".12" y1="0" x2=".72" y2="1">'
+        f'<stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>'
+        f'<stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>'
+        f'</linearGradient>'
+        f'<radialGradient id="{uid}Spec" cx=".34" cy=".24" r=".40">'
+        f'<stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>'
+        f'<stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient>'
+        f'<radialGradient id="{uid}Vig" cx=".5" cy=".5" r=".60">'
+        f'<stop offset=".42" stop-color="#25120A" stop-opacity="0"/>'
+        f'<stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient>'
+        f'</defs>'
+        f'<g transform="translate(13 8.5) rotate(-18)">'
+        f'<path id="{uid}Path" d="{MARK_PATH}" fill="url(#{uid}Body)" '
+        f'stroke="#F2C230" stroke-width=".9"/>'
+        f'<use href="#{uid}Path" fill="url(#{uid}Spec)" stroke="none"/>'
+        f'<use href="#{uid}Path" fill="url(#{uid}Vig)" stroke="none"/>'
+        f'<g stroke="#F6F4EE" stroke-linecap="round" fill="none">'
+        f'<path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/>'
+        f'<path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10'
+        f'M3.18-1.36L2.82 .91" stroke-width="1"/>'
+        f'</g></g></svg>'
+    )
+
+
+# Every surface that shows the wordmark styles the mark the same way.
+MARK_CSS = (".brand svg.mark{width:22px;height:15px;flex:none;}"
+            ".brand{display:inline-flex;align-items:center;gap:9px;}")
+
 # Sentences shared verbatim between the browser report (this module) and the
 # email digest (render/email.py). Single-sourced so the pinned consumer
 # protections and the buyer voice cannot drift apart between the two surfaces.
@@ -130,7 +178,8 @@ def header(meta: Mapping[str, Any]) -> str:
             + '</div>'
         )
     return (
-        f'<header class="bug"><div class="brand">Beat Your League</div>'
+        f'<header class="bug"><div class="brand">{mark_svg("bylm")}'
+        f'<span>Beat Your League</span></div>'
         f'<h1>Week {esc(meta["week"])} · Rival Report</h1>'
         f'<div class="chips">{"".join(chips)}</div></header>{banner}'
     )
@@ -636,6 +685,7 @@ def anonymize_for_public(report: Mapping[str, Any]) -> dict[str, Any]:
 
 def render(report: Mapping[str, Any], template_html: str) -> str:
     style, links = extract_design(template_html)
+    style += MARK_CSS
     meta = report["meta"]
     body = "".join([
         header(meta),

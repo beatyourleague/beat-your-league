@@ -749,3 +749,27 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     # confirmation messages are static per link and cannot carry a league id).
     assert 'id="seat-share"' in JOIN
     assert '"?pass=" + leagueId' in JOIN
+
+
+def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
+    """The mark shipped on the landing hero and nowhere else — not on the report
+    a subscriber pays for, not on the ledger or backtest a skeptic is sent to.
+    It is now single-sourced in render/report.py; this pins that every surface
+    carries it AND that they all carry the SAME geometry, so a hand-edit to one
+    page cannot quietly fork the logo."""
+    from render.report import MARK_PATH
+
+    surfaces = [
+        SITE / "index.html", SITE / "join" / "index.html",
+        SITE / "league-pass.html", SITE / "legal.html",
+        SITE / "backtest.html", SITE / "ledger" / "index.html",
+        SITE / "sample-report.html",
+        SITE.parent / "rival-report-template.html",
+    ]
+    for path in surfaces:
+        text = path.read_text(encoding="utf-8")
+        assert MARK_PATH in text, f"{path.name} is missing the logo mark"
+    # The silhouette must stay a vesica (two arcs), never revert to an ellipse.
+    assert MARK_PATH.count("A13.145 13.145") == 2
+    assert "<ellipse" not in (SITE / "index.html").read_text(
+        encoding="utf-8").split('class="brand"')[1].split("</svg>")[0]

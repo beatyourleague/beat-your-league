@@ -41,8 +41,10 @@
       linear-gradient(180deg,var(--navy2),var(--navy));
     color:var(--paper);padding:24px 24px 22px;
   }
-  .bug .brand{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+  .bug .brand{display:inline-flex;align-items:center;gap:9px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:15px;
     letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  .brand svg.mark{width:22px;height:15px;flex:none;}
   .bug h1{font-family:'Barlow Condensed';font-weight:800;font-size:46px;line-height:.95;
     text-transform:uppercase;margin-top:8px;}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
@@ -229,7 +231,7 @@
 <div class="report">
 
   <header class="bug">
-    <div class="brand">Beat Your League</div>
+    <div class="brand"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byltBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byltSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byltVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byltPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byltBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byltPath" fill="url(#byltSpec)" stroke="none"/><use href="#byltPath" fill="url(#byltVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><span>Beat Your League</span></div>
     <h1>Week 1 · Rival Report</h1>
     <div class="chips">
       <span class="chip"><b>The Gridiron Gang</b> · 12-team PPR</span>

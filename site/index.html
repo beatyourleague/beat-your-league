@@ -454,26 +454,61 @@
 <body>
 
 <header class="hero">
+  <!-- The same ball at watermark scale (L=238, H=132 -> r=280.561). Outline only
+       at 14% opacity, so it carries the true geometry — pointed ends, the seam's
+       bow, laces that shorten toward the tips — rather than shading nobody would
+       see. The two inner arcs are the panel seams reading around the far side. -->
   <svg class="herofb" viewBox="0 0 520 320" aria-hidden="true" focusable="false">
-    <ellipse cx="260" cy="160" rx="242" ry="140" fill="rgba(242,194,48,.05)" stroke="rgba(242,194,48,.55)" stroke-width="3"/>
-    <path d="M52 96 C 150 22, 370 22, 468 96" stroke="rgba(242,194,48,.30)" fill="none" stroke-width="2"/>
-    <path d="M52 224 C 150 298, 370 298, 468 224" stroke="rgba(242,194,48,.30)" fill="none" stroke-width="2"/>
-    <line x1="185" y1="160" x2="335" y2="160" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
-    <line x1="205" y1="146" x2="205" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
-    <line x1="232" y1="146" x2="232" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
-    <line x1="260" y1="146" x2="260" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
-    <line x1="288" y1="146" x2="288" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
-    <line x1="315" y1="146" x2="315" y2="174" stroke="rgba(242,194,48,.6)" stroke-width="4" stroke-linecap="round"/>
+    <g transform="translate(260 160) rotate(-18)" fill="none" stroke="#F2C230" stroke-linecap="round">
+      <path d="M-238 0A280.561 280.561 0 0 1 238 0A280.561 280.561 0 0 1-238 0Z" stroke-width="3.5"/>
+      <path d="M-150 6Q0-19 150 6" stroke-width="2.6" opacity=".75"/>
+      <path d="M-65.8-28.6L-58.2 19.8M-22.6-36.2L-19.4 23.7M22.6-36.2L19.4 23.7M65.8-28.6L58.2 19.8"
+            stroke-width="3.2" opacity=".75"/>
+      <path d="M-196 0A280.561 280.561 0 0 1 196 0" stroke-width="1.6" opacity=".35"/>
+      <path d="M-196 0A280.561 280.561 0 0 0 196 0" stroke-width="1.6" opacity=".35"/>
+    </g>
   </svg>
   <div class="wrap">
     <div class="topline">
       <div class="brand">
+        <!-- The mark. A football is a prolate spheroid, so the silhouette is a
+             VESICA — two circular arcs meeting at sharp points — not an ellipse;
+             that one substitution is what made the old mark read as a sticker.
+             Arc radius is derived, not eyeballed: through (-L,0),(0,-H),(L,0)
+             the radius is (L²+H²)/2H, giving r=13.145 at L=11.4, H=6.6. The
+             points come out at ~60°, whose miter ratio (2.0) sits under SVG's
+             default limit of 4, so they stay sharp with no extra handling.
+             Depth is three stacked layers on one path: a form gradient lit from
+             the upper left, a specular bloom, and a vignette that darkens the
+             tips where they turn away. The -18° tilt is the dynamism — a
+             horizontal football is inert — and the rotated bounding box is
+             22.1x14.4, so it still fits the 26x17 viewBox untouched. -->
         <svg viewBox="0 0 26 17" aria-hidden="true" focusable="false">
-          <ellipse cx="13" cy="8.5" rx="12" ry="7.5" fill="#6B3A1F" stroke="#F2C230" stroke-width="1.5"/>
-          <line x1="8" y1="8.5" x2="18" y2="8.5" stroke="#F6F4EE" stroke-width="1.4"/>
-          <line x1="10.5" y1="6.5" x2="10.5" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
-          <line x1="13" y1="6.5" x2="13" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
-          <line x1="15.5" y1="6.5" x2="15.5" y2="10.5" stroke="#F6F4EE" stroke-width="1.2"/>
+          <defs>
+            <linearGradient id="bylMarkBody" x1=".12" y1="0" x2=".72" y2="1">
+              <stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>
+              <stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>
+            </linearGradient>
+            <radialGradient id="bylMarkSpec" cx=".34" cy=".24" r=".40">
+              <stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>
+              <stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="bylMarkVig" cx=".5" cy=".5" r=".60">
+              <stop offset=".42" stop-color="#25120A" stop-opacity="0"/>
+              <stop offset="1" stop-color="#25120A" stop-opacity=".62"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(13 8.5) rotate(-18)">
+            <path id="bylMarkPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z"
+                  fill="url(#bylMarkBody)" stroke="#F2C230" stroke-width=".9"/>
+            <use href="#bylMarkPath" fill="url(#bylMarkSpec)" stroke="none"/>
+            <use href="#bylMarkPath" fill="url(#bylMarkVig)" stroke="none"/>
+            <g stroke="#F6F4EE" stroke-linecap="round" fill="none">
+              <path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/>
+              <path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91"
+                    stroke-width="1"/>
+            </g>
+          </g>
         </svg>
         Beat Your League
       </div>
@@ -529,6 +564,19 @@
           <radialGradient id="ballglow">
             <stop offset="0" stop-color="#F2C230" stop-opacity=".55"/>
             <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
+          </radialGradient>
+          <!-- the ball's own form shading, matching the logo mark -->
+          <linearGradient id="ballBody" x1=".12" y1="0" x2=".72" y2="1">
+            <stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>
+            <stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>
+          </linearGradient>
+          <radialGradient id="ballSpec" cx=".34" cy=".24" r=".40">
+            <stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>
+            <stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="ballVig" cx=".5" cy=".5" r=".60">
+            <stop offset=".42" stop-color="#25120A" stop-opacity="0"/>
+            <stop offset="1" stop-color="#25120A" stop-opacity=".62"/>
           </radialGradient>
           <linearGradient id="stands" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#0A1420" stop-opacity="0"/>
@@ -636,13 +684,23 @@
             <circle class="pitch-dot" cx="444.7" cy="-5.38" r="3" style="animation-delay:1.8s"/>
             <circle class="pitch-dot" cx="454.1" cy="-3.28" r="3.1" style="animation-delay:2.1s"/>
           </g>
+          <!-- Same vesica as the logo mark, at L=15/H=9 (r=17). The tilt lives on
+               an INNER group on purpose: .pitch-ball's own transform is owned by
+               the drive keyframes, so a rotate written here would be erased the
+               moment the animation starts. -->
           <g class="pitch-ball">
             <circle r="26" fill="url(#ballglow)"/>
-            <ellipse rx="15" ry="9.5" fill="#6B3A1F" stroke="#F2C230" stroke-width="2"/>
-            <line x1="-7.5" y1="0" x2="7.5" y2="0" stroke="#F6F4EE" stroke-width="1.6"/>
-            <line x1="-3.6" y1="-3.2" x2="-3.6" y2="3.2" stroke="#F6F4EE" stroke-width="1.2"/>
-            <line x1="0" y1="-3.8" x2="0" y2="3.8" stroke="#F6F4EE" stroke-width="1.2"/>
-            <line x1="3.6" y1="-3.2" x2="3.6" y2="3.2" stroke="#F6F4EE" stroke-width="1.2"/>
+            <g transform="rotate(-18)">
+              <path id="pitchBallPath" d="M-15 0A17 17 0 0 1 15 0A17 17 0 0 1-15 0Z"
+                    fill="url(#ballBody)" stroke="#F2C230" stroke-width="1.15"/>
+              <use href="#pitchBallPath" fill="url(#ballSpec)" stroke="none"/>
+              <use href="#pitchBallPath" fill="url(#ballVig)" stroke="none"/>
+              <g stroke="#F6F4EE" stroke-linecap="round" fill="none">
+                <path d="M-9.7 .39Q0-1.25 9.7 .39" stroke-width="1.05" opacity=".92"/>
+                <path d="M-4.18-1.79L-3.71 1.20M-1.41-2.28L-1.22 1.45M1.41-2.28L1.22 1.45M4.18-1.79L3.71 1.20"
+                      stroke-width="1.32"/>
+              </g>
+            </g>
           </g>
         </g>
       </svg>

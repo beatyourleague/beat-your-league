@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>final marks</title>
+<style>
+:root{--navy:#101E33;--flag:#F2C230;}
+body{background:linear-gradient(180deg,#0C1930 0%,#0A1420 34%,#05090F 100%);
+  color:#F6F4EE;font-family:system-ui;margin:0;padding:0;}
+h3{font-size:13px;color:#8FA3BC;letter-spacing:.1em;text-transform:uppercase;margin:18px 20px 6px;}
+.hero{position:relative;padding:40px 20px 30px;overflow:hidden;min-height:300px;}
+.herofb{position:absolute;right:-70px;top:16px;width:min(46vw,560px);opacity:.14;
+  transform:rotate(-14deg);pointer-events:none;
+  filter:drop-shadow(0 0 44px rgba(242,194,48,.35));}
+.brand{display:inline-flex;align-items:center;gap:10px;font-family:system-ui;
+  font-weight:800;font-size:15px;letter-spacing:.3em;text-transform:uppercase;color:var(--flag);
+  text-shadow:0 0 18px rgba(242,194,48,.35);}
+.brand svg{width:26px;height:17px;flex:none;}
+.big svg{width:78px;height:51px;}
+.huge svg{width:240px;height:157px;}
+h1{font-weight:900;font-style:italic;font-size:60px;line-height:.88;text-transform:uppercase;
+  margin:20px 0 0;position:relative;}
+.pitchbox{padding:0 20px 30px;}
+.row{display:flex;align-items:center;gap:30px;padding:0 20px;}
+</style></head><body>
+
+<div class="hero">
+<!-- ===== HERO WATERMARK ===== -->
+<svg class="herofb" viewBox="0 0 520 320" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="bylHeroRim" x1=".04" y1="0" x2=".94" y2="1">
+      <stop offset="0" stop-color="#FFE79B" stop-opacity=".95"/>
+      <stop offset=".42" stop-color="#F2C230" stop-opacity=".62"/>
+      <stop offset="1" stop-color="#F2C230" stop-opacity=".18"/>
+    </linearGradient>
+    <linearGradient id="bylHeroLit" x1=".12" y1="0" x2=".82" y2="1">
+      <stop offset="0" stop-color="#FFE486" stop-opacity=".17"/>
+      <stop offset="1" stop-color="#F2C230" stop-opacity=".04"/>
+    </linearGradient>
+  </defs>
+  <g transform="rotate(-9 260 160)">
+    <path d="M22 160C107 24 413 24 498 160C413 296 107 296 22 160Z"
+          transform="translate(14 18)" fill="none" stroke="#F2C230"
+          stroke-width="2" stroke-linejoin="round" opacity=".16"/>
+    <path d="M22 160C176.5 243.2 385.3 112.1 498 160C413 296 107 296 22 160Z"
+          fill="#F2C230" opacity=".04"/>
+    <path d="M22 160C176.5 243.2 385.3 112.1 498 160C413 24 107 24 22 160Z" fill="url(#bylHeroLit)"/>
+    <path d="M22 160C176.5 243.2 385.3 112.1 498 160" fill="none" stroke="#F2C230"
+          stroke-width="1.6" opacity=".3"/>
+    <path d="M22 160C87.9 75.7 432.1 75.7 498 160" fill="none" stroke="#F2C230"
+          stroke-width="2.2" opacity=".34"/>
+    <path d="M22 160C77.2 230.7 442.8 230.7 498 160" fill="none" stroke="#F2C230"
+          stroke-width="2.2" opacity=".2"/>
+    <path d="M96.8 130.9C129.8 109.5 170.6 92 215.3 80.3" fill="none" stroke="#FFEBB4"
+          stroke-width="7" stroke-linecap="round" opacity=".45"/>
+    <path d="M22 160C107 24 413 24 498 160C413 296 107 296 22 160Z"
+          fill="none" stroke="url(#bylHeroRim)" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M124 152.2Q260 128.9 396 152.2" fill="none" stroke="#F2C230" stroke-width="3.6"
+          stroke-linecap="round" opacity=".55"/>
+    <g stroke="#F2C230" stroke-linecap="round" fill="none">
+      <path d="M153.3 121.5L160 173" stroke-width="4" opacity=".6"/>
+      <path d="M206.4 111.8L210.3 172.7" stroke-width="4.3" opacity=".66"/>
+      <path d="M260 108.1L260 173.1" stroke-width="4.3" opacity=".66"/>
+      <path d="M313.5 113.8L309.8 170.7" stroke-width="4" opacity=".52"/>
+      <path d="M366.3 124.5L360.4 170.1" stroke-width="3.5" opacity=".4"/>
+    </g>
+  </g>
+</svg>
+
+<!-- ===== LOGO MARK ===== -->
+<div class="brand">
+<svg viewBox="0 0 26 17" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="bylMarkRim" x1=".06" y1="0" x2=".92" y2="1">
+      <stop offset="0" stop-color="#FFE79B"/>
+      <stop offset=".38" stop-color="#F2C230"/>
+      <stop offset="1" stop-color="#7E5A0C"/>
+    </linearGradient>
+    <linearGradient id="bylMarkSeam" gradientUnits="userSpaceOnUse" x1="6.6" y1="6" x2="19.4" y2="10">
+      <stop offset="0" stop-color="#FFFDF6"/>
+      <stop offset="1" stop-color="#C4B49C"/>
+    </linearGradient>
+  </defs>
+  <g transform="rotate(-18 13 8.5)">
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z"
+          transform="translate(.85 1.25)" fill="#04080F" opacity=".55"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#A9522A"/>
+    <path d="M1.6 8.5C9 12.5 19 6.2 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#44200F"/>
+    <path d="M7 6.15C8.5 5.6 10.1 5.2 11.7 5" fill="none" stroke="#FFE9AC"
+          stroke-width=".95" stroke-linecap="round" opacity=".85"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z"
+          fill="none" stroke="url(#bylMarkRim)" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M6.6 8.2Q13 6.55 19.4 8.2" fill="none" stroke="url(#bylMarkSeam)"
+          stroke-width="1.2" stroke-linecap="round"/>
+    <g stroke-linecap="round">
+      <path d="M9.18 6.03L9.65 9.24" stroke="#FFFDF6" stroke-width="1.15"/>
+      <path d="M13 5.6L13 9.16" stroke="#F6F1E5" stroke-width="1.15"/>
+      <path d="M16.79 6.23L16.38 9.04" stroke="#DFD3BF" stroke-width="1.1"/>
+    </g>
+  </g>
+</svg>
+Beat Your League</div>
+<h1>Beat your league,<br>not the books.</h1>
+</div>
+
+<h3>logo at 26 / 78 / 240</h3>
+<div class="row">
+ <span class="brand"><svg viewBox="0 0 26 17"><g transform="rotate(-18 13 8.5)">
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" transform="translate(.85 1.25)" fill="#04080F" opacity=".55"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#A9522A"/>
+    <path d="M1.6 8.5C9 12.5 19 6.2 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#44200F"/>
+    <path d="M7 6.15C8.5 5.6 10.1 5.2 11.7 5" fill="none" stroke="#FFE9AC" stroke-width=".95" stroke-linecap="round" opacity=".85"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="none" stroke="url(#bylMarkRim)" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M6.6 8.2Q13 6.55 19.4 8.2" fill="none" stroke="url(#bylMarkSeam)" stroke-width="1.2" stroke-linecap="round"/>
+    <g stroke-linecap="round"><path d="M9.18 6.03L9.65 9.24" stroke="#FFFDF6" stroke-width="1.15"/>
+      <path d="M13 5.6L13 9.16" stroke="#F6F1E5" stroke-width="1.15"/>
+      <path d="M16.79 6.23L16.38 9.04" stroke="#DFD3BF" stroke-width="1.1"/></g></g></svg></span>
+ <span class="brand big"><svg viewBox="0 0 26 17"><g transform="rotate(-18 13 8.5)">
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" transform="translate(.85 1.25)" fill="#04080F" opacity=".55"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#A9522A"/>
+    <path d="M1.6 8.5C9 12.5 19 6.2 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#44200F"/>
+    <path d="M7 6.15C8.5 5.6 10.1 5.2 11.7 5" fill="none" stroke="#FFE9AC" stroke-width=".95" stroke-linecap="round" opacity=".85"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="none" stroke="url(#bylMarkRim)" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M6.6 8.2Q13 6.55 19.4 8.2" fill="none" stroke="url(#bylMarkSeam)" stroke-width="1.2" stroke-linecap="round"/>
+    <g stroke-linecap="round"><path d="M9.18 6.03L9.65 9.24" stroke="#FFFDF6" stroke-width="1.15"/>
+      <path d="M13 5.6L13 9.16" stroke="#F6F1E5" stroke-width="1.15"/>
+      <path d="M16.79 6.23L16.38 9.04" stroke="#DFD3BF" stroke-width="1.1"/></g></g></svg></span>
+ <span class="brand huge"><svg viewBox="0 0 26 17"><g transform="rotate(-18 13 8.5)">
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" transform="translate(.85 1.25)" fill="#04080F" opacity=".55"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#A9522A"/>
+    <path d="M1.6 8.5C9 12.5 19 6.2 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="#44200F"/>
+    <path d="M7 6.15C8.5 5.6 10.1 5.2 11.7 5" fill="none" stroke="#FFE9AC" stroke-width=".95" stroke-linecap="round" opacity=".85"/>
+    <path d="M1.6 8.5C5.68 1.97 20.32 1.97 24.4 8.5C20.32 15.03 5.68 15.03 1.6 8.5Z" fill="none" stroke="url(#bylMarkRim)" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M6.6 8.2Q13 6.55 19.4 8.2" fill="none" stroke="url(#bylMarkSeam)" stroke-width="1.2" stroke-linecap="round"/>
+    <g stroke-linecap="round"><path d="M9.18 6.03L9.65 9.24" stroke="#FFFDF6" stroke-width="1.15"/>
+      <path d="M13 5.6L13 9.16" stroke="#F6F1E5" stroke-width="1.15"/>
+      <path d="M16.79 6.23L16.38 9.04" stroke="#DFD3BF" stroke-width="1.1"/></g></g></svg></span>
+</div>
+
+<h3>field ball on the pitch (rendered at true size, then 3x)</h3>
+<div class="pitchbox">
+<svg viewBox="0 0 300 100" width="660" style="background:#0A1420;display:block">
+  <defs>
+    <radialGradient id="ballglow">
+      <stop offset="0" stop-color="#F2C230" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bylBallRim" x1=".06" y1="0" x2=".92" y2="1">
+      <stop offset="0" stop-color="#FFE79B"/><stop offset=".38" stop-color="#F2C230"/>
+      <stop offset="1" stop-color="#7E5A0C"/>
+    </linearGradient>
+    <linearGradient id="bylBallSeam" gradientUnits="userSpaceOnUse" x1="-9.5" y1="-4" x2="9.5" y2="2">
+      <stop offset="0" stop-color="#FFFDF6"/><stop offset="1" stop-color="#C4B49C"/>
+    </linearGradient>
+    <radialGradient id="bylBallCast">
+      <stop offset="0" stop-color="#02060C" stop-opacity=".62"/>
+      <stop offset="1" stop-color="#02060C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g transform="translate(70,50)">
+    <g class="pitch-ball">
+      <circle r="27" fill="url(#ballglow)"/>
+      <ellipse cx="2.4" cy="10.8" rx="17" ry="4" fill="url(#bylBallCast)"/>
+      <g transform="rotate(-18)">
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              transform="translate(1.27 1.86)" fill="#02060C" opacity=".5"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              fill="none" stroke="#05090F" stroke-width="4.4" stroke-linejoin="round" opacity=".85"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z" fill="#B0552B"/>
+        <path d="M-17 0C-5.96 5.96 8.94 -3.43 17 0C10.9 9.73 -10.9 9.73 -17 0Z" fill="#45200F"/>
+        <path d="M-8.94 -3.5C-6.71 -4.32 -4.32 -4.92 -1.94 -5.22" fill="none" stroke="#FFE9AC"
+              stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              fill="none" stroke="url(#bylBallRim)" stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M-9.54 -.45Q0 -2.91 9.54 -.45" fill="none" stroke="url(#bylBallSeam)"
+              stroke-width="1.8" stroke-linecap="round"/>
+        <g stroke-linecap="round">
+          <path d="M-5.69 -3.68L-4.99 1.1" stroke="#FFFDF6" stroke-width="1.7"/>
+          <path d="M0 -4.32L0 .98" stroke="#F6F1E5" stroke-width="1.7"/>
+          <path d="M5.65 -3.38L5.04 .8" stroke="#DFD3BF" stroke-width="1.6"/>
+        </g>
+      </g>
+    </g>
+  </g>
+  <g transform="translate(200,50) scale(2.2)">
+      <circle r="27" fill="url(#ballglow)"/>
+      <ellipse cx="2.4" cy="10.8" rx="17" ry="4" fill="url(#bylBallCast)"/>
+      <g transform="rotate(-18)">
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              transform="translate(1.27 1.86)" fill="#02060C" opacity=".5"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              fill="none" stroke="#05090F" stroke-width="4.4" stroke-linejoin="round" opacity=".85"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z" fill="#B0552B"/>
+        <path d="M-17 0C-5.96 5.96 8.94 -3.43 17 0C10.9 9.73 -10.9 9.73 -17 0Z" fill="#45200F"/>
+        <path d="M-8.94 -3.5C-6.71 -4.32 -4.32 -4.92 -1.94 -5.22" fill="none" stroke="#FFE9AC"
+              stroke-width="1.4" stroke-linecap="round" opacity=".85"/>
+        <path d="M-17 0C-10.9 -9.73 10.9 -9.73 17 0C10.9 9.73 -10.9 9.73 -17 0Z"
+              fill="none" stroke="url(#bylBallRim)" stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M-9.54 -.45Q0 -2.91 9.54 -.45" fill="none" stroke="url(#bylBallSeam)"
+              stroke-width="1.8" stroke-linecap="round"/>
+        <g stroke-linecap="round">
+          <path d="M-5.69 -3.68L-4.99 1.1" stroke="#FFFDF6" stroke-width="1.7"/>
+          <path d="M0 -4.32L0 .98" stroke="#F6F1E5" stroke-width="1.7"/>
+          <path d="M5.65 -3.38L5.04 .8" stroke="#DFD3BF" stroke-width="1.6"/>
+        </g>
+      </g>
+  </g>
+</svg>
+</div>
+
+</body></html>
