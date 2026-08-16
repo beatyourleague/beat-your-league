@@ -79,11 +79,11 @@
 <h2>Headline</h2>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Set</th><th>Graded</th><th>Decided</th><th>Hits</th><th>Hit rate</th></tr>
-<tr><td>All calls</td><td>2056</td><td>2013</td><td>1077</td><td>53.5%</td></tr>
-<tr><td>Coin-flip calls (confidence &lt; 60%)</td><td>1156</td><td>1133</td><td>602</td><td>53.1%</td></tr>
-<tr><td>Both players scored</td><td>1152</td><td>1142</td><td>714</td><td>62.5%</td></tr>
-<tr><td>Engine overrules the manager</td><td>890</td><td>861</td><td>207</td><td>24.0%</td></tr>
+<tr><th>Set</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Hits</th><th style="text-align:right">Hit rate</th></tr>
+<tr><td>All calls</td><td style="text-align:right">2056</td><td style="text-align:right">2013</td><td style="text-align:right">1077</td><td style="text-align:right">53.5%</td></tr>
+<tr><td>Coin-flip calls (confidence &lt; 60%)</td><td style="text-align:right">1156</td><td style="text-align:right">1133</td><td style="text-align:right">602</td><td style="text-align:right">53.1%</td></tr>
+<tr><td>Both players scored</td><td style="text-align:right">1152</td><td style="text-align:right">1142</td><td style="text-align:right">714</td><td style="text-align:right">62.5%</td></tr>
+<tr><td>Engine overrules the manager</td><td style="text-align:right">890</td><td style="text-align:right">861</td><td style="text-align:right">207</td><td style="text-align:right">24.0%</td></tr>
 </table></div>
 <p>Ties excluded from every hit rate above: 43 of 2056 calls ended exactly level.</p>
 <p>On the 890 calls where the engine would have overruled the human, following the engine would have changed the score by <b>-5670.6 points</b> in total (-6.37 per call).</p>
@@ -99,13 +99,13 @@
 <p>The test that matters — calibration over confidence: when the engine says 64%, do roughly 64% of those calls hit? <em>Observed</em> is the real hit rate; the interval is a 95% Wilson score interval.</p>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Stated confidence</th><th>Graded</th><th>Decided</th><th>Ties</th><th>Stated avg</th><th>Observed</th><th>95% interval</th><th>Verdict</th></tr>
-<tr><td>50-55%</td><td>617</td><td>608</td><td>9</td><td>52.4%</td><td>53.3%</td><td>49% – 57%</td><td>calibrated</td></tr>
-<tr><td>55-60%</td><td>539</td><td>525</td><td>14</td><td>57.4%</td><td>53.0%</td><td>49% – 57%</td><td>off</td></tr>
-<tr><td>60-65%</td><td>399</td><td>390</td><td>9</td><td>62.2%</td><td>52.6%</td><td>48% – 57%</td><td>off</td></tr>
-<tr><td>65-70%</td><td>249</td><td>245</td><td>4</td><td>67.3%</td><td>54.3%</td><td>48% – 60%</td><td>off</td></tr>
-<tr><td>70-80%</td><td>214</td><td>208</td><td>6</td><td>73.8%</td><td>56.2%</td><td>49% – 63%</td><td>off</td></tr>
-<tr><td>80-90%</td><td>38</td><td>37</td><td>1</td><td>83.6%</td><td>54.1%</td><td>38% – 69%</td><td>off</td></tr>
+<tr><th>Stated confidence</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Ties</th><th style="text-align:right">Stated avg</th><th style="text-align:right">Observed</th><th>95% interval</th><th>Verdict</th></tr>
+<tr><td>50-55%</td><td style="text-align:right">617</td><td style="text-align:right">608</td><td style="text-align:right">9</td><td style="text-align:right">52.4%</td><td style="text-align:right">53.3%</td><td>49% – 57%</td><td>calibrated</td></tr>
+<tr><td>55-60%</td><td style="text-align:right">539</td><td style="text-align:right">525</td><td style="text-align:right">14</td><td style="text-align:right">57.4%</td><td style="text-align:right">53.0%</td><td>49% – 57%</td><td>off</td></tr>
+<tr><td>60-65%</td><td style="text-align:right">399</td><td style="text-align:right">390</td><td style="text-align:right">9</td><td style="text-align:right">62.2%</td><td style="text-align:right">52.6%</td><td>48% – 57%</td><td>off</td></tr>
+<tr><td>65-70%</td><td style="text-align:right">249</td><td style="text-align:right">245</td><td style="text-align:right">4</td><td style="text-align:right">67.3%</td><td style="text-align:right">54.3%</td><td>48% – 60%</td><td>off</td></tr>
+<tr><td>70-80%</td><td style="text-align:right">214</td><td style="text-align:right">208</td><td style="text-align:right">6</td><td style="text-align:right">73.8%</td><td style="text-align:right">56.2%</td><td>49% – 63%</td><td>off</td></tr>
+<tr><td>80-90%</td><td style="text-align:right">38</td><td style="text-align:right">37</td><td style="text-align:right">1</td><td style="text-align:right">83.6%</td><td style="text-align:right">54.1%</td><td>38% – 69%</td><td>off</td></tr>
 </table></div>
 <ul>
 <li><b>Brier score:</b> 0.2582 (0.25 = always guessing 50%; lower carries information).</li>
@@ -117,13 +117,13 @@
 <p>The same calls, restricted to head-to-heads where <b>both players actually played</b>. This isolates the scoring and probability math from the availability blind spot. It is not a publishable accuracy claim — it conditions on an outcome — it is the evidence that the confidence number becomes trustworthy once the engine can see who is active.</p>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Stated confidence</th><th>Graded</th><th>Decided</th><th>Ties</th><th>Stated avg</th><th>Observed</th><th>95% interval</th><th>Verdict</th></tr>
-<tr><td>50-55%</td><td>375</td><td>373</td><td>2</td><td>52.4%</td><td>57.4%</td><td>52% – 62%</td><td>calibrated</td></tr>
-<tr><td>55-60%</td><td>307</td><td>302</td><td>5</td><td>57.3%</td><td>58.6%</td><td>53% – 64%</td><td>calibrated</td></tr>
-<tr><td>60-65%</td><td>212</td><td>209</td><td>3</td><td>62.1%</td><td>63.6%</td><td>57% – 70%</td><td>calibrated</td></tr>
-<tr><td>65-70%</td><td>123</td><td>123</td><td>0</td><td>67.3%</td><td>69.1%</td><td>60% – 77%</td><td>calibrated</td></tr>
-<tr><td>70-80%</td><td>120</td><td>120</td><td>0</td><td>73.9%</td><td>78.3%</td><td>70% – 85%</td><td>calibrated</td></tr>
-<tr><td>80-90%</td><td>15</td><td>15</td><td>0</td><td>83.8%</td><td>73.3%</td><td>48% – 89%</td><td>too few (&lt; 30)</td></tr>
+<tr><th>Stated confidence</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Ties</th><th style="text-align:right">Stated avg</th><th style="text-align:right">Observed</th><th>95% interval</th><th>Verdict</th></tr>
+<tr><td>50-55%</td><td style="text-align:right">375</td><td style="text-align:right">373</td><td style="text-align:right">2</td><td style="text-align:right">52.4%</td><td style="text-align:right">57.4%</td><td>52% – 62%</td><td>calibrated</td></tr>
+<tr><td>55-60%</td><td style="text-align:right">307</td><td style="text-align:right">302</td><td style="text-align:right">5</td><td style="text-align:right">57.3%</td><td style="text-align:right">58.6%</td><td>53% – 64%</td><td>calibrated</td></tr>
+<tr><td>60-65%</td><td style="text-align:right">212</td><td style="text-align:right">209</td><td style="text-align:right">3</td><td style="text-align:right">62.1%</td><td style="text-align:right">63.6%</td><td>57% – 70%</td><td>calibrated</td></tr>
+<tr><td>65-70%</td><td style="text-align:right">123</td><td style="text-align:right">123</td><td style="text-align:right">0</td><td style="text-align:right">67.3%</td><td style="text-align:right">69.1%</td><td>60% – 77%</td><td>calibrated</td></tr>
+<tr><td>70-80%</td><td style="text-align:right">120</td><td style="text-align:right">120</td><td style="text-align:right">0</td><td style="text-align:right">73.9%</td><td style="text-align:right">78.3%</td><td>70% – 85%</td><td>calibrated</td></tr>
+<tr><td>80-90%</td><td style="text-align:right">15</td><td style="text-align:right">15</td><td style="text-align:right">0</td><td style="text-align:right">83.8%</td><td style="text-align:right">73.3%</td><td>48% – 89%</td><td>too few (&lt; 30)</td></tr>
 </table></div>
 <ul>
 <li><b>Brier score:</b> 0.2310 (0.25 = always guessing 50%; lower carries information).</li>
@@ -148,53 +148,53 @@
 </ul>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Stated win prob</th><th>Graded</th><th>Decided</th><th>Stated avg</th><th>Observed</th><th>95% interval</th><th>Verdict</th></tr>
-<tr><td>50-55%</td><td>76</td><td>76</td><td>52.4%</td><td>64.5%</td><td>53% – 74%</td><td>off</td></tr>
-<tr><td>55-60%</td><td>41</td><td>41</td><td>57.1%</td><td>58.5%</td><td>43% – 72%</td><td>calibrated</td></tr>
-<tr><td>60-65%</td><td>29</td><td>29</td><td>62.0%</td><td>51.7%</td><td>34% – 69%</td><td>too few (&lt; 30)</td></tr>
-<tr><td>65-70%</td><td>22</td><td>22</td><td>66.8%</td><td>68.2%</td><td>47% – 84%</td><td>too few (&lt; 30)</td></tr>
-<tr><td>70-80%</td><td>2</td><td>2</td><td>74.9%</td><td>100.0%</td><td>34% – 100%</td><td>too few (&lt; 30)</td></tr>
+<tr><th>Stated win prob</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Stated avg</th><th style="text-align:right">Observed</th><th>95% interval</th><th>Verdict</th></tr>
+<tr><td>50-55%</td><td style="text-align:right">76</td><td style="text-align:right">76</td><td style="text-align:right">52.4%</td><td style="text-align:right">64.5%</td><td>53% – 74%</td><td>off</td></tr>
+<tr><td>55-60%</td><td style="text-align:right">41</td><td style="text-align:right">41</td><td style="text-align:right">57.1%</td><td style="text-align:right">58.5%</td><td>43% – 72%</td><td>calibrated</td></tr>
+<tr><td>60-65%</td><td style="text-align:right">29</td><td style="text-align:right">29</td><td style="text-align:right">62.0%</td><td style="text-align:right">51.7%</td><td>34% – 69%</td><td>too few (&lt; 30)</td></tr>
+<tr><td>65-70%</td><td style="text-align:right">22</td><td style="text-align:right">22</td><td style="text-align:right">66.8%</td><td style="text-align:right">68.2%</td><td>47% – 84%</td><td>too few (&lt; 30)</td></tr>
+<tr><td>70-80%</td><td style="text-align:right">2</td><td style="text-align:right">2</td><td style="text-align:right">74.9%</td><td style="text-align:right">100.0%</td><td>34% – 100%</td><td>too few (&lt; 30)</td></tr>
 </table></div>
 <p>Buckets with enough data to judge: 2; 1 calibrated, 1 off.</p>
 <p>Availability caveat: set lineups here occasionally start players who did not play, exactly as live lineups do — so unlike the start/sit table, this measures the published quantity under real conditions.</p>
 <h2>By season</h2>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Season</th><th>Graded</th><th>Decided</th><th>Hit rate</th><th>Brier</th></tr>
-<tr><td>2018</td><td>998</td><td>974</td><td>52.8%</td><td>0.2583</td></tr>
-<tr><td>2017</td><td>1058</td><td>1039</td><td>54.2%</td><td>0.2580</td></tr>
+<tr><th>Season</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Hit rate</th><th style="text-align:right">Brier</th></tr>
+<tr><td>2018</td><td style="text-align:right">998</td><td style="text-align:right">974</td><td style="text-align:right">52.8%</td><td style="text-align:right">0.2583</td></tr>
+<tr><td>2017</td><td style="text-align:right">1058</td><td style="text-align:right">1039</td><td style="text-align:right">54.2%</td><td style="text-align:right">0.2580</td></tr>
 </table></div>
 <p>Two seasons is a small out-of-sample check, not a validation. The model has no fitted parameters, so there is nothing overfit to a single season — but a hit rate that swings hard between seasons is a warning, and it is printed here rather than averaged away.</p>
 <h2>By slot</h2>
 <p>Where the engine earns its keep, and where it does not.</p>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Slot</th><th>Graded</th><th>Decided</th><th>Hit rate</th><th>Avg stated</th></tr>
-<tr><td>RB</td><td>581</td><td>573</td><td>56.2%</td><td>61.9%</td></tr>
-<tr><td>FLEX</td><td>570</td><td>550</td><td>43.5%</td><td>59.6%</td></tr>
-<tr><td>WR</td><td>566</td><td>560</td><td>60.5%</td><td>59.9%</td></tr>
-<tr><td>QB</td><td>151</td><td>151</td><td>55.0%</td><td>57.0%</td></tr>
-<tr><td>TE</td><td>129</td><td>126</td><td>54.0%</td><td>61.3%</td></tr>
-<tr><td>DEF</td><td>59</td><td>53</td><td>49.1%</td><td>58.4%</td></tr>
+<tr><th>Slot</th><th style="text-align:right">Graded</th><th style="text-align:right">Decided</th><th style="text-align:right">Hit rate</th><th style="text-align:right">Avg stated</th></tr>
+<tr><td>RB</td><td style="text-align:right">581</td><td style="text-align:right">573</td><td style="text-align:right">56.2%</td><td style="text-align:right">61.9%</td></tr>
+<tr><td>FLEX</td><td style="text-align:right">570</td><td style="text-align:right">550</td><td style="text-align:right">43.5%</td><td style="text-align:right">59.6%</td></tr>
+<tr><td>WR</td><td style="text-align:right">566</td><td style="text-align:right">560</td><td style="text-align:right">60.5%</td><td style="text-align:right">59.9%</td></tr>
+<tr><td>QB</td><td style="text-align:right">151</td><td style="text-align:right">151</td><td style="text-align:right">55.0%</td><td style="text-align:right">57.0%</td></tr>
+<tr><td>TE</td><td style="text-align:right">129</td><td style="text-align:right">126</td><td style="text-align:right">54.0%</td><td style="text-align:right">61.3%</td></tr>
+<tr><td>DEF</td><td style="text-align:right">59</td><td style="text-align:right">53</td><td style="text-align:right">49.1%</td><td style="text-align:right">58.4%</td></tr>
 </table></div>
 <h2>Manager profiles</h2>
 <p>Rival profiles for the live report. Every line cites the season and week span it was computed from.</p>
 <h3>2018 — Sleeper Friends League (transaction log: weeks 1-16)</h3>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Rank</th><th>Team</th><th>Waiver style</th><th>FAAB spent</th><th>Bids (won/placed)</th><th>Top bid</th><th>Median bid</th><th>FA adds</th><th>Trades</th><th>Moves/wk</th><th>Game-day adds</th></tr>
-<tr><td>1/12</td><td>Manager A</td><td>very aggressive</td><td>140/100 ⚠</td><td>28/109</td><td>39</td><td>0</td><td>28</td><td>3</td><td>3.69</td><td>25%</td></tr>
-<tr><td>2/12</td><td>Manager B</td><td>very aggressive</td><td>101/100 ⚠</td><td>19/42</td><td>36</td><td>2</td><td>21</td><td>1</td><td>2.56</td><td>33%</td></tr>
-<tr><td>3/12</td><td>Manager C</td><td>very aggressive</td><td>100/100</td><td>22/47</td><td>25</td><td>1</td><td>34</td><td>0</td><td>3.50</td><td>12%</td></tr>
-<tr><td>4/12</td><td>Manager D</td><td>aggressive</td><td>100/100</td><td>14/34</td><td>37</td><td>4</td><td>28</td><td>5</td><td>2.94</td><td>31%</td></tr>
-<tr><td>5/12</td><td>Manager E</td><td>aggressive</td><td>90/100</td><td>14/33</td><td>33</td><td>3</td><td>37</td><td>2</td><td>3.31</td><td>28%</td></tr>
-<tr><td>6/12</td><td>Manager F</td><td>selective</td><td>89/100</td><td>23/51</td><td>40</td><td>0</td><td>42</td><td>4</td><td>4.31</td><td>26%</td></tr>
-<tr><td>7/12</td><td>Manager G</td><td>selective</td><td>89/100</td><td>13/20</td><td>51</td><td>1</td><td>23</td><td>1</td><td>2.31</td><td>23%</td></tr>
-<tr><td>8/12</td><td>Manager H</td><td>selective</td><td>80/100</td><td>12/28</td><td>38</td><td>4</td><td>22</td><td>1</td><td>2.19</td><td>16%</td></tr>
-<tr><td>9/12</td><td>Manager I</td><td>quiet</td><td>72/100</td><td>11/16</td><td>21</td><td>4</td><td>9</td><td>1</td><td>1.31</td><td>27%</td></tr>
-<tr><td>10/12</td><td>Manager J</td><td>quiet</td><td>52/100</td><td>5/12</td><td>29</td><td>10</td><td>7</td><td>0</td><td>0.75</td><td>25%</td></tr>
-<tr><td>11/12</td><td>Manager K</td><td>quiet</td><td>21/100</td><td>4/23</td><td>12</td><td>2</td><td>13</td><td>2</td><td>1.19</td><td>77%</td></tr>
-<tr><td>12/12</td><td>Manager L</td><td>quiet</td><td>12/100</td><td>2/6</td><td>7</td><td>2</td><td>11</td><td>0</td><td>0.81</td><td>38%</td></tr>
+<tr><th style="text-align:right">Rank</th><th>Team</th><th>Waiver style</th><th style="text-align:right">FAAB spent</th><th style="text-align:right">Bids (won/placed)</th><th style="text-align:right">Top bid</th><th style="text-align:right">Median bid</th><th style="text-align:right">FA adds</th><th style="text-align:right">Trades</th><th style="text-align:right">Moves/wk</th><th style="text-align:right">Game-day adds</th></tr>
+<tr><td style="text-align:right">1/12</td><td>Manager A</td><td>very aggressive</td><td style="text-align:right">140/100 ⚠</td><td style="text-align:right">28/109</td><td style="text-align:right">39</td><td style="text-align:right">0</td><td style="text-align:right">28</td><td style="text-align:right">3</td><td style="text-align:right">3.69</td><td style="text-align:right">25%</td></tr>
+<tr><td style="text-align:right">2/12</td><td>Manager B</td><td>very aggressive</td><td style="text-align:right">101/100 ⚠</td><td style="text-align:right">19/42</td><td style="text-align:right">36</td><td style="text-align:right">2</td><td style="text-align:right">21</td><td style="text-align:right">1</td><td style="text-align:right">2.56</td><td style="text-align:right">33%</td></tr>
+<tr><td style="text-align:right">3/12</td><td>Manager C</td><td>very aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">22/47</td><td style="text-align:right">25</td><td style="text-align:right">1</td><td style="text-align:right">34</td><td style="text-align:right">0</td><td style="text-align:right">3.50</td><td style="text-align:right">12%</td></tr>
+<tr><td style="text-align:right">4/12</td><td>Manager D</td><td>aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">14/34</td><td style="text-align:right">37</td><td style="text-align:right">4</td><td style="text-align:right">28</td><td style="text-align:right">5</td><td style="text-align:right">2.94</td><td style="text-align:right">31%</td></tr>
+<tr><td style="text-align:right">5/12</td><td>Manager E</td><td>aggressive</td><td style="text-align:right">90/100</td><td style="text-align:right">14/33</td><td style="text-align:right">33</td><td style="text-align:right">3</td><td style="text-align:right">37</td><td style="text-align:right">2</td><td style="text-align:right">3.31</td><td style="text-align:right">28%</td></tr>
+<tr><td style="text-align:right">6/12</td><td>Manager F</td><td>selective</td><td style="text-align:right">89/100</td><td style="text-align:right">23/51</td><td style="text-align:right">40</td><td style="text-align:right">0</td><td style="text-align:right">42</td><td style="text-align:right">4</td><td style="text-align:right">4.31</td><td style="text-align:right">26%</td></tr>
+<tr><td style="text-align:right">7/12</td><td>Manager G</td><td>selective</td><td style="text-align:right">89/100</td><td style="text-align:right">13/20</td><td style="text-align:right">51</td><td style="text-align:right">1</td><td style="text-align:right">23</td><td style="text-align:right">1</td><td style="text-align:right">2.31</td><td style="text-align:right">23%</td></tr>
+<tr><td style="text-align:right">8/12</td><td>Manager H</td><td>selective</td><td style="text-align:right">80/100</td><td style="text-align:right">12/28</td><td style="text-align:right">38</td><td style="text-align:right">4</td><td style="text-align:right">22</td><td style="text-align:right">1</td><td style="text-align:right">2.19</td><td style="text-align:right">16%</td></tr>
+<tr><td style="text-align:right">9/12</td><td>Manager I</td><td>quiet</td><td style="text-align:right">72/100</td><td style="text-align:right">11/16</td><td style="text-align:right">21</td><td style="text-align:right">4</td><td style="text-align:right">9</td><td style="text-align:right">1</td><td style="text-align:right">1.31</td><td style="text-align:right">27%</td></tr>
+<tr><td style="text-align:right">10/12</td><td>Manager J</td><td>quiet</td><td style="text-align:right">52/100</td><td style="text-align:right">5/12</td><td style="text-align:right">29</td><td style="text-align:right">10</td><td style="text-align:right">7</td><td style="text-align:right">0</td><td style="text-align:right">0.75</td><td style="text-align:right">25%</td></tr>
+<tr><td style="text-align:right">11/12</td><td>Manager K</td><td>quiet</td><td style="text-align:right">21/100</td><td style="text-align:right">4/23</td><td style="text-align:right">12</td><td style="text-align:right">2</td><td style="text-align:right">13</td><td style="text-align:right">2</td><td style="text-align:right">1.19</td><td style="text-align:right">77%</td></tr>
+<tr><td style="text-align:right">12/12</td><td>Manager L</td><td>quiet</td><td style="text-align:right">12/100</td><td style="text-align:right">2/6</td><td style="text-align:right">7</td><td style="text-align:right">2</td><td style="text-align:right">11</td><td style="text-align:right">0</td><td style="text-align:right">0.81</td><td style="text-align:right">38%</td></tr>
 </table></div>
 <p>Waiver style is a rank <b>within this league</b>, not an absolute grade: league cultures differ too much for a fixed threshold to separate anyone. Bids counted include failed claims, which reveal intent and price; only winning bids spend FAAB. <em>Game-day adds</em> is a proxy for engagement (share of adds made Thu/Sun/Mon, US Eastern), not lineup-setting time.</p>
 <p>⚠ 2 manager(s) spent more FAAB than the league's recorded budget of 100. That setting reports only its current value, so a commissioner raising budgets mid-season makes the <em>percentage</em> meaningless — raw spend is still accurate, and the ranking above uses raw spend for exactly this reason.</p>
@@ -202,36 +202,36 @@
 <p>These numbers look flattering, and they are: roughly a third of bench players score nothing, so "beat the best bench option" is a low bar that a manager clears simply by starting someone on a bye. Read the column as <em>engagement</em> — did they set a lineup at all — not as skill, and do not publish it to a subscriber as a rival's accuracy. Points left on the bench is the more honest column, and it is the one the Regret Score should build on.</p>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Team</th><th>Decided calls</th><th>Manager right</th><th>Accuracy</th><th>Points left on bench</th></tr>
-<tr><td>Manager A</td><td>79</td><td>75</td><td>94.9%</td><td>24.2</td></tr>
-<tr><td>Manager G</td><td>76</td><td>69</td><td>90.8%</td><td>39.4</td></tr>
-<tr><td>Manager B</td><td>63</td><td>56</td><td>88.9%</td><td>41.1</td></tr>
-<tr><td>Manager H</td><td>97</td><td>79</td><td>81.4%</td><td>114.7</td></tr>
-<tr><td>Manager F</td><td>69</td><td>56</td><td>81.2%</td><td>95.8</td></tr>
-<tr><td>Manager K</td><td>82</td><td>65</td><td>79.3%</td><td>108.8</td></tr>
-<tr><td>Manager D</td><td>82</td><td>64</td><td>78.0%</td><td>130.0</td></tr>
-<tr><td>Manager E</td><td>93</td><td>72</td><td>77.4%</td><td>117.3</td></tr>
-<tr><td>Manager C</td><td>81</td><td>60</td><td>74.1%</td><td>196.2</td></tr>
-<tr><td>Manager J</td><td>84</td><td>62</td><td>73.8%</td><td>139.5</td></tr>
-<tr><td>Manager L</td><td>97</td><td>68</td><td>70.1%</td><td>288.0</td></tr>
-<tr><td>Manager I</td><td>71</td><td>48</td><td>67.6%</td><td>128.9</td></tr>
+<tr><th>Team</th><th style="text-align:right">Decided calls</th><th style="text-align:right">Manager right</th><th style="text-align:right">Accuracy</th><th style="text-align:right">Points left on bench</th></tr>
+<tr><td>Manager A</td><td style="text-align:right">79</td><td style="text-align:right">75</td><td style="text-align:right">94.9%</td><td style="text-align:right">24.2</td></tr>
+<tr><td>Manager G</td><td style="text-align:right">76</td><td style="text-align:right">69</td><td style="text-align:right">90.8%</td><td style="text-align:right">39.4</td></tr>
+<tr><td>Manager B</td><td style="text-align:right">63</td><td style="text-align:right">56</td><td style="text-align:right">88.9%</td><td style="text-align:right">41.1</td></tr>
+<tr><td>Manager H</td><td style="text-align:right">97</td><td style="text-align:right">79</td><td style="text-align:right">81.4%</td><td style="text-align:right">114.7</td></tr>
+<tr><td>Manager F</td><td style="text-align:right">69</td><td style="text-align:right">56</td><td style="text-align:right">81.2%</td><td style="text-align:right">95.8</td></tr>
+<tr><td>Manager K</td><td style="text-align:right">82</td><td style="text-align:right">65</td><td style="text-align:right">79.3%</td><td style="text-align:right">108.8</td></tr>
+<tr><td>Manager D</td><td style="text-align:right">82</td><td style="text-align:right">64</td><td style="text-align:right">78.0%</td><td style="text-align:right">130.0</td></tr>
+<tr><td>Manager E</td><td style="text-align:right">93</td><td style="text-align:right">72</td><td style="text-align:right">77.4%</td><td style="text-align:right">117.3</td></tr>
+<tr><td>Manager C</td><td style="text-align:right">81</td><td style="text-align:right">60</td><td style="text-align:right">74.1%</td><td style="text-align:right">196.2</td></tr>
+<tr><td>Manager J</td><td style="text-align:right">84</td><td style="text-align:right">62</td><td style="text-align:right">73.8%</td><td style="text-align:right">139.5</td></tr>
+<tr><td>Manager L</td><td style="text-align:right">97</td><td style="text-align:right">68</td><td style="text-align:right">70.1%</td><td style="text-align:right">288.0</td></tr>
+<tr><td>Manager I</td><td style="text-align:right">71</td><td style="text-align:right">48</td><td style="text-align:right">67.6%</td><td style="text-align:right">128.9</td></tr>
 </table></div>
 <h3>2017 — Sleeperbot Friends League (transaction log: weeks 1-16)</h3>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Rank</th><th>Team</th><th>Waiver style</th><th>FAAB spent</th><th>Bids (won/placed)</th><th>Top bid</th><th>Median bid</th><th>FA adds</th><th>Trades</th><th>Moves/wk</th><th>Game-day adds</th></tr>
-<tr><td>1/12</td><td>Manager A</td><td>very aggressive</td><td>119/100 ⚠</td><td>15/38</td><td>35</td><td>2</td><td>8</td><td>0</td><td>1.44</td><td>12%</td></tr>
-<tr><td>2/12</td><td>Manager B</td><td>very aggressive</td><td>100/100</td><td>14/35</td><td>37</td><td>1</td><td>51</td><td>1</td><td>4.12</td><td>34%</td></tr>
-<tr><td>3/12</td><td>Manager C</td><td>very aggressive</td><td>100/100</td><td>19/38</td><td>45</td><td>3</td><td>28</td><td>3</td><td>3.12</td><td>42%</td></tr>
-<tr><td>4/12</td><td>Manager D</td><td>aggressive</td><td>100/100</td><td>12/36</td><td>41</td><td>8</td><td>29</td><td>4</td><td>2.81</td><td>17%</td></tr>
-<tr><td>5/12</td><td>Manager E</td><td>aggressive</td><td>100/100</td><td>11/20</td><td>36</td><td>4</td><td>17</td><td>0</td><td>1.75</td><td>14%</td></tr>
-<tr><td>6/12</td><td>Manager F</td><td>selective</td><td>100/100</td><td>4/8</td><td>39</td><td>18</td><td>11</td><td>1</td><td>1.00</td><td>47%</td></tr>
-<tr><td>7/12</td><td>Manager G</td><td>selective</td><td>83/100</td><td>14/36</td><td>47</td><td>1</td><td>17</td><td>2</td><td>2.06</td><td>21%</td></tr>
-<tr><td>8/12</td><td>Manager H</td><td>selective</td><td>80/100</td><td>19/43</td><td>38</td><td>1</td><td>33</td><td>5</td><td>3.56</td><td>32%</td></tr>
-<tr><td>9/12</td><td>Manager I</td><td>quiet</td><td>59/100</td><td>13/52</td><td>18</td><td>3</td><td>18</td><td>3</td><td>2.12</td><td>42%</td></tr>
-<tr><td>10/12</td><td>Manager J</td><td>quiet</td><td>35/100</td><td>5/7</td><td>20</td><td>3</td><td>11</td><td>0</td><td>1.00</td><td>0%</td></tr>
-<tr><td>11/12</td><td>Manager K</td><td>quiet</td><td>27/100</td><td>5/11</td><td>9</td><td>5</td><td>9</td><td>0</td><td>0.88</td><td>40%</td></tr>
-<tr><td>12/12</td><td>Manager L</td><td>quiet</td><td>6/100</td><td>4/6</td><td>13</td><td>2</td><td>13</td><td>1</td><td>1.12</td><td>47%</td></tr>
+<tr><th style="text-align:right">Rank</th><th>Team</th><th>Waiver style</th><th style="text-align:right">FAAB spent</th><th style="text-align:right">Bids (won/placed)</th><th style="text-align:right">Top bid</th><th style="text-align:right">Median bid</th><th style="text-align:right">FA adds</th><th style="text-align:right">Trades</th><th style="text-align:right">Moves/wk</th><th style="text-align:right">Game-day adds</th></tr>
+<tr><td style="text-align:right">1/12</td><td>Manager A</td><td>very aggressive</td><td style="text-align:right">119/100 ⚠</td><td style="text-align:right">15/38</td><td style="text-align:right">35</td><td style="text-align:right">2</td><td style="text-align:right">8</td><td style="text-align:right">0</td><td style="text-align:right">1.44</td><td style="text-align:right">12%</td></tr>
+<tr><td style="text-align:right">2/12</td><td>Manager B</td><td>very aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">14/35</td><td style="text-align:right">37</td><td style="text-align:right">1</td><td style="text-align:right">51</td><td style="text-align:right">1</td><td style="text-align:right">4.12</td><td style="text-align:right">34%</td></tr>
+<tr><td style="text-align:right">3/12</td><td>Manager C</td><td>very aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">19/38</td><td style="text-align:right">45</td><td style="text-align:right">3</td><td style="text-align:right">28</td><td style="text-align:right">3</td><td style="text-align:right">3.12</td><td style="text-align:right">42%</td></tr>
+<tr><td style="text-align:right">4/12</td><td>Manager D</td><td>aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">12/36</td><td style="text-align:right">41</td><td style="text-align:right">8</td><td style="text-align:right">29</td><td style="text-align:right">4</td><td style="text-align:right">2.81</td><td style="text-align:right">17%</td></tr>
+<tr><td style="text-align:right">5/12</td><td>Manager E</td><td>aggressive</td><td style="text-align:right">100/100</td><td style="text-align:right">11/20</td><td style="text-align:right">36</td><td style="text-align:right">4</td><td style="text-align:right">17</td><td style="text-align:right">0</td><td style="text-align:right">1.75</td><td style="text-align:right">14%</td></tr>
+<tr><td style="text-align:right">6/12</td><td>Manager F</td><td>selective</td><td style="text-align:right">100/100</td><td style="text-align:right">4/8</td><td style="text-align:right">39</td><td style="text-align:right">18</td><td style="text-align:right">11</td><td style="text-align:right">1</td><td style="text-align:right">1.00</td><td style="text-align:right">47%</td></tr>
+<tr><td style="text-align:right">7/12</td><td>Manager G</td><td>selective</td><td style="text-align:right">83/100</td><td style="text-align:right">14/36</td><td style="text-align:right">47</td><td style="text-align:right">1</td><td style="text-align:right">17</td><td style="text-align:right">2</td><td style="text-align:right">2.06</td><td style="text-align:right">21%</td></tr>
+<tr><td style="text-align:right">8/12</td><td>Manager H</td><td>selective</td><td style="text-align:right">80/100</td><td style="text-align:right">19/43</td><td style="text-align:right">38</td><td style="text-align:right">1</td><td style="text-align:right">33</td><td style="text-align:right">5</td><td style="text-align:right">3.56</td><td style="text-align:right">32%</td></tr>
+<tr><td style="text-align:right">9/12</td><td>Manager I</td><td>quiet</td><td style="text-align:right">59/100</td><td style="text-align:right">13/52</td><td style="text-align:right">18</td><td style="text-align:right">3</td><td style="text-align:right">18</td><td style="text-align:right">3</td><td style="text-align:right">2.12</td><td style="text-align:right">42%</td></tr>
+<tr><td style="text-align:right">10/12</td><td>Manager J</td><td>quiet</td><td style="text-align:right">35/100</td><td style="text-align:right">5/7</td><td style="text-align:right">20</td><td style="text-align:right">3</td><td style="text-align:right">11</td><td style="text-align:right">0</td><td style="text-align:right">1.00</td><td style="text-align:right">0%</td></tr>
+<tr><td style="text-align:right">11/12</td><td>Manager K</td><td>quiet</td><td style="text-align:right">27/100</td><td style="text-align:right">5/11</td><td style="text-align:right">9</td><td style="text-align:right">5</td><td style="text-align:right">9</td><td style="text-align:right">0</td><td style="text-align:right">0.88</td><td style="text-align:right">40%</td></tr>
+<tr><td style="text-align:right">12/12</td><td>Manager L</td><td>quiet</td><td style="text-align:right">6/100</td><td style="text-align:right">4/6</td><td style="text-align:right">13</td><td style="text-align:right">2</td><td style="text-align:right">13</td><td style="text-align:right">1</td><td style="text-align:right">1.12</td><td style="text-align:right">47%</td></tr>
 </table></div>
 <p>Waiver style is a rank <b>within this league</b>, not an absolute grade: league cultures differ too much for a fixed threshold to separate anyone. Bids counted include failed claims, which reveal intent and price; only winning bids spend FAAB. <em>Game-day adds</em> is a proxy for engagement (share of adds made Thu/Sun/Mon, US Eastern), not lineup-setting time.</p>
 <p>⚠ 1 manager(s) spent more FAAB than the league's recorded budget of 100. That setting reports only its current value, so a commissioner raising budgets mid-season makes the <em>percentage</em> meaningless — raw spend is still accurate, and the ranking above uses raw spend for exactly this reason.</p>
@@ -239,19 +239,19 @@
 <p>These numbers look flattering, and they are: roughly a third of bench players score nothing, so "beat the best bench option" is a low bar that a manager clears simply by starting someone on a bye. Read the column as <em>engagement</em> — did they set a lineup at all — not as skill, and do not publish it to a subscriber as a rival's accuracy. Points left on the bench is the more honest column, and it is the one the Regret Score should build on.</p>
 <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
 <table>
-<tr><th>Team</th><th>Decided calls</th><th>Manager right</th><th>Accuracy</th><th>Points left on bench</th></tr>
-<tr><td>Manager L</td><td>101</td><td>78</td><td>77.2%</td><td>158.2</td></tr>
-<tr><td>Manager I</td><td>65</td><td>50</td><td>76.9%</td><td>112.8</td></tr>
-<tr><td>Manager G</td><td>83</td><td>63</td><td>75.9%</td><td>138.7</td></tr>
-<tr><td>Manager H</td><td>88</td><td>65</td><td>73.9%</td><td>140.9</td></tr>
-<tr><td>Manager K</td><td>88</td><td>64</td><td>72.7%</td><td>233.0</td></tr>
-<tr><td>Manager A</td><td>79</td><td>57</td><td>72.2%</td><td>180.2</td></tr>
-<tr><td>Manager E</td><td>92</td><td>66</td><td>71.7%</td><td>208.4</td></tr>
-<tr><td>Manager B</td><td>84</td><td>60</td><td>71.4%</td><td>120.3</td></tr>
-<tr><td>Manager J</td><td>92</td><td>65</td><td>70.7%</td><td>197.6</td></tr>
-<tr><td>Manager C</td><td>97</td><td>68</td><td>70.1%</td><td>202.9</td></tr>
-<tr><td>Manager F</td><td>90</td><td>61</td><td>67.8%</td><td>269.9</td></tr>
-<tr><td>Manager D</td><td>80</td><td>53</td><td>66.2%</td><td>317.9</td></tr>
+<tr><th>Team</th><th style="text-align:right">Decided calls</th><th style="text-align:right">Manager right</th><th style="text-align:right">Accuracy</th><th style="text-align:right">Points left on bench</th></tr>
+<tr><td>Manager L</td><td style="text-align:right">101</td><td style="text-align:right">78</td><td style="text-align:right">77.2%</td><td style="text-align:right">158.2</td></tr>
+<tr><td>Manager I</td><td style="text-align:right">65</td><td style="text-align:right">50</td><td style="text-align:right">76.9%</td><td style="text-align:right">112.8</td></tr>
+<tr><td>Manager G</td><td style="text-align:right">83</td><td style="text-align:right">63</td><td style="text-align:right">75.9%</td><td style="text-align:right">138.7</td></tr>
+<tr><td>Manager H</td><td style="text-align:right">88</td><td style="text-align:right">65</td><td style="text-align:right">73.9%</td><td style="text-align:right">140.9</td></tr>
+<tr><td>Manager K</td><td style="text-align:right">88</td><td style="text-align:right">64</td><td style="text-align:right">72.7%</td><td style="text-align:right">233.0</td></tr>
+<tr><td>Manager A</td><td style="text-align:right">79</td><td style="text-align:right">57</td><td style="text-align:right">72.2%</td><td style="text-align:right">180.2</td></tr>
+<tr><td>Manager E</td><td style="text-align:right">92</td><td style="text-align:right">66</td><td style="text-align:right">71.7%</td><td style="text-align:right">208.4</td></tr>
+<tr><td>Manager B</td><td style="text-align:right">84</td><td style="text-align:right">60</td><td style="text-align:right">71.4%</td><td style="text-align:right">120.3</td></tr>
+<tr><td>Manager J</td><td style="text-align:right">92</td><td style="text-align:right">65</td><td style="text-align:right">70.7%</td><td style="text-align:right">197.6</td></tr>
+<tr><td>Manager C</td><td style="text-align:right">97</td><td style="text-align:right">68</td><td style="text-align:right">70.1%</td><td style="text-align:right">202.9</td></tr>
+<tr><td>Manager F</td><td style="text-align:right">90</td><td style="text-align:right">61</td><td style="text-align:right">67.8%</td><td style="text-align:right">269.9</td></tr>
+<tr><td>Manager D</td><td style="text-align:right">80</td><td style="text-align:right">53</td><td style="text-align:right">66.2%</td><td style="text-align:right">317.9</td></tr>
 </table></div>
 <h2>Limitations — read before quoting any number above</h2>
 <ol>

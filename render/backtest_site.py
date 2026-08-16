@@ -133,6 +133,15 @@ def _inline(text: str) -> str:
     return out
 
 
+def _alignment(cell: str) -> str:
+    """Markdown's divider row carries the column alignment: `---:` is right,
+    `:---:` is centre. Numbers belong right-aligned so their digits line up."""
+    cell = cell.strip()
+    if cell.endswith(":"):
+        return "center" if cell.startswith(":") else "right"
+    return "left"
+
+
 def _is_divider(cells: list[str]) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{2,}:?", c.strip()) for c in cells)
 
@@ -163,9 +172,15 @@ def to_html(markdown: str) -> str:
 
         if stripped.startswith("|"):
             rows = []
+            aligns: list[str] = []
             while i < len(lines) and lines[i].strip().startswith("|"):
                 cells = _split_row(lines[i])
-                if not _is_divider(cells):
+                if _is_divider(cells):
+                    # The divider row IS the alignment spec. Discarding it left
+                    # every figure on the page ragged-left, so columns of
+                    # numbers could not be compared down their digits.
+                    aligns = [_alignment(c) for c in cells]
+                else:
                     rows.append(cells)
                 i += 1
             if rows:
@@ -174,9 +189,15 @@ def to_html(markdown: str) -> str:
                 # never the page body sideways.
                 out.append('<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">')
                 out.append("<table>")
-                out.append("<tr>" + "".join(f"<th>{_inline(c)}</th>" for c in head) + "</tr>")
+                def _style(idx: int) -> str:
+                    align = aligns[idx] if idx < len(aligns) else "left"
+                    return "" if align == "left" else f' style="text-align:{align}"'
+
+                out.append("<tr>" + "".join(f"<th{_style(n)}>{_inline(c)}</th>"
+                                            for n, c in enumerate(head)) + "</tr>")
                 for row in body:
-                    out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in row) + "</tr>")
+                    out.append("<tr>" + "".join(f"<td{_style(n)}>{_inline(c)}</td>"
+                                                for n, c in enumerate(row)) + "</tr>")
                 out.append("</table></div>")
             continue
 
