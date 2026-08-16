@@ -14,7 +14,7 @@
      <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --navy:#101E33;
@@ -103,11 +103,13 @@
   .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
   .field .endzone.l{left:0;background:var(--turf);}
   .field .endzone.r{right:0;background:var(--brick);}
+  /* The fourth football. This was a CSS ellipse with a border-radius and a 2px
+     bar for a seam — the exact shape the mark redraw replaced — sitting ~200px
+     below the real mark in the same document, in a brown used nowhere else. */
   .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
-    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
-    border:2px solid var(--paper);box-shadow:0 0 0 2px var(--navy);}
-  .field .ball::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;
-    background:var(--paper);transform:translateY(-50%);}
+    width:30px;height:20px;line-height:0;}
+  .field .ball svg.fieldball{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
   .yards{display:flex;justify-content:space-between;padding:3px 14px 0;
     font-family:'Barlow Condensed';font-weight:600;font-size:11px;color:var(--slate);
     font-variant-numeric:tabular-nums;}
