@@ -313,6 +313,7 @@ def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
     sd = variance ** 0.5
     return {
         "projected_total": round(mean, 1),
+        "sd": round(sd, 3),
         "floor": round(mean - Z_80_BAND * sd, 1),
         "ceiling": round(mean + Z_80_BAND * sd, 1),
     }
@@ -1007,6 +1008,18 @@ def build_week_report(
             "you": {"label": season.team_label(my_roster_id), **(my_range or {})},
             "rival": {"label": season.team_label(rival.roster_id),
                       **(rival_range or {})},
+            # The gap between the two totals, and — inseparably — how wide the
+            # week actually swings. Publishing the gap alone would republish the
+            # numerator of a quantity we deliberately gate (win probability)
+            # with its uncertainty stripped off. Independent teams, so the
+            # variances add: swing = z * sqrt(sd_you^2 + sd_rival^2). On the
+            # sample week the gap is 5.3 and the swing is 53 — a tenth of it.
+            **({"margin": round(my_range["projected_total"]
+                                - rival_range["projected_total"], 1),
+                "margin_swing": round(
+                    Z_80_BAND * ((my_range["sd"] ** 2
+                                  + rival_range["sd"] ** 2) ** 0.5))}
+               if my_range and rival_range else {}),
             "win_probability": round(prob, 3) if prob is not None else None,
             "win_probability_gate": prob_gate,
             "range_basis": TEAM_RANGE_BASIS,

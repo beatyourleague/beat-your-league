@@ -733,3 +733,21 @@ def test_the_checklist_decides_rather_than_asking() -> None:
     assert not action.startswith("Decide on"), \
         "the checklist asked a question the engine had already answered"
     assert action.startswith(("Skip ", "Bid ")), action
+
+
+def test_the_gap_never_appears_without_its_swing() -> None:
+    """The gap is the numerator of a quantity we deliberately gate (win
+    probability). Published alone it would claim with a big number what we
+    refuse to claim in words — on the sample week it is 5.3 against a swing of
+    53. The two travel together or neither is shown."""
+    import json as _json
+    report = _json.loads(
+        (Path(__file__).resolve().parent.parent / "data" / "processed" /
+         "week_report.json").read_text(encoding="utf-8"))
+    matchup = report["matchup"]
+    assert ("margin" in matchup) == ("margin_swing" in matchup)
+    html_out = render(report, _template())
+    if "margin" in matchup:
+        assert "week swings" in html_out
+        # never a verdict colour on the gap
+        assert 'class="gap up"' not in html_out and 'class="gap down"' not in html_out

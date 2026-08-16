@@ -224,12 +224,18 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     # because we cannot stand behind a likelihood, and the overlapping floor and
     # ceiling bands sit directly beneath it so the closeness stays visible.
     centre = "VS"
-    if not gated and "projected_total" in you and "projected_total" in rival:
-        gap = you["projected_total"] - rival["projected_total"]
-        side = "ahead" if gap >= 0 else "behind"
-        klass = "gap up" if gap >= 0 else "gap down"
-        centre = (f'<div class="{klass}"><span class="gnum">{abs(gap):.1f}</span>'
-                  f'<span class="glab">projected<br>{side}</span></div>')
+    margin, swing = matchup.get("margin"), matchup.get("margin_swing")
+    if not gated and margin is not None and swing is not None:
+        # Neutral, never a verdict colour, and never without the swing beside
+        # it: on a typical week the gap is a tenth of how far the week moves,
+        # and a bare figure in turf green one line above "we won't publish a
+        # win probability" would be claiming with colour what we refuse to
+        # claim in words. No odds word is attached — the matchup backtest
+        # found favourites won MORE often than stated, so we cannot narrate it.
+        side = "ahead" if margin >= 0 else "behind"
+        centre = (f'<div class="gap"><span class="gnum">{abs(margin):.1f}</span>'
+                  f'<span class="glab">projected {side}</span>'
+                  f'<span class="gswing">week swings &plusmn;{swing}</span></div>')
     board = (
         f'<div class="board">'
         f'<div class="team you"><div class="name">{esc(you["label"])}</div>'
