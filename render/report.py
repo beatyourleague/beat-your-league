@@ -218,11 +218,23 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
             return ""
         return f'<div class="pts">{team["projected_total"]:.1f} <small>PROJ</small></div>'
 
+    # The gap is the number the week turns on, and the board printed both totals
+    # and left the subtraction to the reader. It is stated as the PROJECTION GAP,
+    # never as a predicted final margin — win probability is gated off precisely
+    # because we cannot stand behind a likelihood, and the overlapping floor and
+    # ceiling bands sit directly beneath it so the closeness stays visible.
+    centre = "VS"
+    if not gated and "projected_total" in you and "projected_total" in rival:
+        gap = you["projected_total"] - rival["projected_total"]
+        side = "ahead" if gap >= 0 else "behind"
+        klass = "gap up" if gap >= 0 else "gap down"
+        centre = (f'<div class="{klass}"><span class="gnum">{abs(gap):.1f}</span>'
+                  f'<span class="glab">projected<br>{side}</span></div>')
     board = (
         f'<div class="board">'
         f'<div class="team you"><div class="name">{esc(you["label"])}</div>'
         f'<div class="sub">Your best lineup this week</div>{pts(you)}</div>'
-        f'<div class="vs">VS</div>'
+        f'<div class="vs">{centre}</div>'
         f'<div class="team rival"><div class="name">{esc(rival["label"])}</div>'
         f'<div class="sub">Lineup as currently set</div>{pts(rival)}</div>'
         f'</div>'
