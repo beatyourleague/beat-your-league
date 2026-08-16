@@ -82,6 +82,10 @@ HEAD = """<!DOCTYPE html>
   h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;margin:20px 0 6px;}
   p{font-size:14.5px;line-height:1.6;color:var(--ink2);margin:8px 0;}
   ul{margin:8px 0 8px 20px;} li{font-size:14.5px;line-height:1.6;color:var(--ink2);margin:3px 0;}
+  /* The page's own claim, drawn. */
+  .calfig{margin:22px 0 6px;}
+  .calfig svg{width:100%;height:auto;border:1px solid var(--line);background:#fff;}
+  .calfig figcaption{margin-top:9px;font-size:13px;line-height:1.6;color:var(--slate);}
   table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--navy);
     font-size:13.5px;margin:12px 0;font-variant-numeric:tabular-nums;}
   th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-weight:800;
@@ -131,6 +135,105 @@ def _inline(text: str) -> str:
     out = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", out)
     out = re.sub(r"(?<![*\w])\*([^*]+)\*(?![*\w])", r"<em>\1</em>", out)
     return out
+
+
+def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
+    """Draw the page's own claim.
+
+    The whole argument of this document is "when we say 64%, roughly 64% of
+    those calls hit" — and it was only ever tabulated. Six rows of percentages
+    do not show a reader that stated confidence climbs from 52% to 84% while
+    observed sits flat near 54%; one picture does, and that flat line IS the
+    availability finding that made the shipping product gate on who is playing.
+
+    Plots the UNCONDITIONAL table only. The availability-controlled table is a
+    diagnostic (it conditions on an outcome unknowable at call time) and must
+    never be drawn as if it were accuracy.
+    """
+    try:
+        i_stated = head.index("Stated avg")
+        i_obs = head.index("Observed")
+        i_int = head.index("95% interval")
+        i_n = head.index("Decided")
+    except ValueError:
+        return ""
+
+    def num(cell: str) -> float | None:
+        m = re.search(r"-?\d+(?:\.\d+)?", cell)
+        return float(m.group(0)) if m else None
+
+    points = []
+    for row in body:
+        if len(row) <= max(i_stated, i_obs, i_int, i_n):
+            continue
+        stated, obs, n = num(row[i_stated]), num(row[i_obs]), num(row[i_n])
+        bounds = re.findall(r"\d+(?:\.\d+)?", row[i_int])
+        if stated is None or obs is None or len(bounds) < 2:
+            continue
+        points.append((stated, obs, float(bounds[0]), float(bounds[1]),
+                       int(n or 0), row[0]))
+    if len(points) < 3:
+        return ""
+
+    # Fixed 45-90% window on both axes so the diagonal is a true 45 degrees and
+    # the eye can read distance from it directly.
+    lo, hi = 45.0, 90.0
+    W, H, PAD = 560, 300, 42
+    def x(v: float) -> float: return PAD + (v - lo) / (hi - lo) * (W - PAD - 14)
+    def y(v: float) -> float: return H - PAD - (v - lo) / (hi - lo) * (H - PAD - 16)
+
+    grid = []
+    for tick in (50, 60, 70, 80, 90):
+        grid.append(f'<line x1="{x(tick):.1f}" y1="{y(lo):.1f}" x2="{x(tick):.1f}" '
+                    f'y2="{y(hi):.1f}" stroke="#D8D3C6" stroke-width="1"/>')
+        grid.append(f'<line x1="{x(lo):.1f}" y1="{y(tick):.1f}" x2="{x(hi):.1f}" '
+                    f'y2="{y(tick):.1f}" stroke="#D8D3C6" stroke-width="1"/>')
+        grid.append(f'<text x="{x(tick):.1f}" y="{H - PAD + 15:.1f}" text-anchor="middle" '
+                    f'font-size="10" fill="#5A6B80">{tick}%</text>')
+        grid.append(f'<text x="{PAD - 8:.1f}" y="{y(tick) + 3:.1f}" text-anchor="end" '
+                    f'font-size="10" fill="#5A6B80">{tick}%</text>')
+
+    marks = []
+    for stated, obs, lo_i, hi_i, n, label in points:
+        cx = x(stated)
+        marks.append(f'<line x1="{cx:.1f}" y1="{y(lo_i):.1f}" x2="{cx:.1f}" '
+                     f'y2="{y(hi_i):.1f}" stroke="#B3402F" stroke-width="2" '
+                     f'stroke-linecap="round" opacity=".5"/>')
+        # area scales with the bucket's sample size, so a 37-call bucket cannot
+        # look as solid as a 608-call one
+        r = max(3.0, min(9.0, (n ** 0.5) / 3.0))
+        marks.append(f'<circle cx="{cx:.1f}" cy="{y(obs):.1f}" r="{r:.1f}" '
+                     f'fill="#B3402F" stroke="#F6F4EE" stroke-width="1.5">'
+                     f'<title>stated {stated}% \u2192 observed {obs}% '
+                     f'({n} decided calls, {label})</title></circle>')
+
+    return (
+        f'<figure class="calfig">'
+        f'<svg viewBox="0 0 {W} {H}" role="img" '
+        f'aria-label="Stated confidence against observed hit rate. Perfect '
+        f'calibration is the diagonal. Observed stays near 54% while stated '
+        f'climbs to 84%, so the number barely sorts.">'
+        f'<rect width="{W}" height="{H}" fill="#FFFFFF"/>'
+        f'{"".join(grid)}'
+        f'<line x1="{x(lo):.1f}" y1="{y(lo):.1f}" x2="{x(hi):.1f}" y2="{y(hi):.1f}" '
+        f'stroke="#1E7A46" stroke-width="2" stroke-dasharray="6 4"/>'
+        f'<text x="{x(78):.1f}" y="{y(82):.1f}" font-size="10" font-weight="700" '
+        f'fill="#1E7A46">perfect calibration</text>'
+        f'{"".join(marks)}'
+        f'<text x="{W / 2:.1f}" y="{H - 6:.1f}" text-anchor="middle" font-size="10.5" '
+        f'font-weight="700" fill="#33445C">stated confidence</text>'
+        f'<text x="12" y="{H / 2:.1f}" text-anchor="middle" font-size="10.5" '
+        f'font-weight="700" fill="#33445C" '
+        f'transform="rotate(-90 12 {H / 2:.1f})">observed hit rate</text>'
+        f'</svg>'
+        f'<figcaption>Each dot is a confidence bucket, sized by how many calls it '
+        f'holds; the bar is its 95% interval. On the diagonal, stated equals '
+        f'observed. Ours run flat near 54% while stated climbs to 84% \u2014 the '
+        f'number barely sorts, and that gap is the availability blind spot '
+        f'described above, which is why the shipping report only prints a '
+        f'confidence once both players are confirmed active.</figcaption>'
+        f'</figure>'
+    )
 
 
 def _alignment(cell: str) -> str:
@@ -199,6 +302,8 @@ def to_html(markdown: str) -> str:
                     out.append("<tr>" + "".join(f"<td{_style(n)}>{_inline(c)}</td>"
                                                 for n, c in enumerate(row)) + "</tr>")
                 out.append("</table></div>")
+                if head and head[0] == "Stated confidence":
+                    out.append(_calibration_chart(head, body))
             continue
 
         bullet = re.match(r"^\s*[-*]\s+(.*)$", line)

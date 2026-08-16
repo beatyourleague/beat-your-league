@@ -777,3 +777,22 @@ def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
     assert MARK_PATH.count("A13.145 13.145") == 2
     assert "<ellipse" not in (SITE / "index.html").read_text(
         encoding="utf-8").split('class="brand"')[1].split("</svg>")[0]
+
+
+def test_the_backtest_draws_its_own_calibration_claim() -> None:
+    """The page's whole argument is "when we say 64%, roughly 64% hit", and it
+    was only ever tabulated. The chart must exist, must carry one dot per
+    published bucket, and must plot the UNCONDITIONAL table — the
+    availability-controlled one conditions on an outcome unknowable at call
+    time and may never be drawn as if it were accuracy."""
+    page = (SITE / "backtest.html").read_text(encoding="utf-8")
+    assert 'class="calfig"' in page, "the calibration chart is missing"
+    figure = page.split('class="calfig"')[1].split("</figure>")[0]
+    assert figure.count("<circle") == 6, "one dot per unconditional bucket"
+    assert "perfect calibration" in figure
+    # the failure the chart exists to show must stay in words too
+    assert "barely sorts" in figure
+    # the diagnostic table's giveaway values must not appear in the drawing
+    for forbidden in ("77.2", "63.6", "78.3"):
+        assert forbidden not in figure, \
+            f"availability-controlled figure {forbidden} was drawn as accuracy"
