@@ -114,3 +114,29 @@ def test_batch_sends_the_email_rendering_not_the_browser_one(
     assert 'role="presentation"' in result.message.html
     # The archival file on disk stays the full browser rendering.
     assert "var(--" in result.html_path.read_text(encoding="utf-8")
+
+
+def test_the_email_carries_the_design_system(tmp_path: Path) -> None:
+    """The email is the surface a subscriber actually sees — roughly 17 sends a
+    season against one or two visits to the marketing site. It rendered in flat
+    Arial with both scores in navy, so the brand lived on the pages bought once
+    and was absent from the product delivered every week."""
+    html_out = render_email(_report(tmp_path))
+    # A condensed display face that survives Word's engine (Arial Narrow ships
+    # with Windows and macOS); no webfont, so nothing is fetched.
+    assert "'Arial Narrow'" in html_out
+    assert "fonts.googleapis" not in html_out
+    # green-you / red-them, the coding every fantasy platform trains readers on
+    assert "#1E7A46" in html_out and "#B3402F" in html_out
+    # the masthead rule that carries the identity where SVG cannot go
+    assert "border-left:4px solid #F2C230" in html_out
+
+
+def test_the_email_gap_never_ships_without_its_swing(tmp_path: Path) -> None:
+    """Same rule as the browser report: the gap is the numerator of a gated
+    quantity, so it never appears alone or in a verdict colour."""
+    report = _report(tmp_path)
+    html_out = render_email(report)
+    if report["matchup"].get("margin") is not None:
+        assert "swings" in html_out
+        assert "projected ahead" in html_out or "projected behind" in html_out

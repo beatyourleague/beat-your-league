@@ -57,6 +57,7 @@ BRICK_TINT = "#F7E3DE"
 TURF_TINT = "#DFF0E4"
 
 FONT = "Arial,Helvetica,sans-serif"
+DISPLAY = "'Arial Narrow',Arial,Helvetica,sans-serif"
 BASE = f"font-family:{FONT};font-size:14px;line-height:1.55;color:{NAVY};"
 SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
@@ -66,8 +67,8 @@ def _sec(number: int, title: str, body: str) -> str:
     marker = f'<span style="color:{SLATE};">{number:02d}</span> · ' if number else ""
     return (
         f'<tr><td style="padding:26px 28px 0 28px;">'
-        f'<div style="font-family:{FONT};font-size:13px;font-weight:bold;'
-        f'letter-spacing:2px;text-transform:uppercase;color:{NAVY};'
+        f'<div style="font-family:{DISPLAY};font-size:14px;font-weight:bold;'
+        f'letter-spacing:2.5px;text-transform:uppercase;color:{NAVY};'
         f'border-bottom:2px solid {NAVY};padding-bottom:6px;">'
         f'{marker}{esc(title)}</div></td></tr>'
         f'<tr><td style="padding:12px 28px 0 28px;">{body}</td></tr>'
@@ -118,11 +119,13 @@ def _header(meta: Mapping[str, Any]) -> str:
             f'inbox on a Tuesday.</div></td></tr>'
         )
     return (
-        f'<tr><td style="background:{NAVY};padding:26px 28px;">'
-        f'<div style="font-family:{FONT};font-size:12px;font-weight:bold;'
-        f'letter-spacing:3px;text-transform:uppercase;color:{FLAG};">'
+        f'<tr><td style="background:{NAVY};padding:26px 28px;'
+        f'border-left:4px solid {FLAG};">'
+        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
+        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
         f'Beat Your League</div>'
-        f'<div style="font-family:{FONT};font-size:26px;font-weight:bold;'
+        f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
+        f'letter-spacing:1px;text-transform:uppercase;'
         f'color:{CARD};padding:6px 0 10px 0;">Week {esc(meta["week"])} · '
         f'Rival Report</div>'
         f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
@@ -147,14 +150,35 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
     return _sec(1, "The 30-Second Game Plan", body)
 
 
+def _gap_cell(matchup: Mapping[str, Any]) -> str:
+    """The gap and its swing, exactly as the browser report states them: the
+    gap never travels without the swing, and never in a verdict colour."""
+    margin, swing = matchup.get("margin"), matchup.get("margin_swing")
+    if matchup.get("range_gate") or margin is None or swing is None:
+        return (f'<td width="10%" style="{BASE}font-weight:bold;color:{SLATE};'
+                f'text-align:center;">VS</td>')
+    side = "ahead" if margin >= 0 else "behind"
+    return (
+        f'<td width="10%" style="text-align:center;padding:12px 2px;">'
+        f'<div style="font-family:{DISPLAY};font-size:22px;font-weight:bold;'
+        f'color:#33445C;">{abs(margin):.1f}</div>'
+        f'<div style="font-family:{FONT};font-size:9px;font-weight:bold;'
+        f'letter-spacing:1px;text-transform:uppercase;color:{SLATE};">'
+        f'projected {side}</div>'
+        f'<div style="font-family:{FONT};font-size:9px;color:{SLATE};">'
+        f'swings &plusmn;{swing}</div></td>'
+    )
+
+
 def _matchup(matchup: Mapping[str, Any]) -> str:
     you, rival = matchup["you"], matchup["rival"]
     gated = matchup.get("range_gate")
 
-    def side(team: Mapping[str, Any], sub: str, align: str) -> str:
+    def side(team: Mapping[str, Any], sub: str, align: str,
+             tone: str = NAVY) -> str:
         pts = ("" if gated or "projected_total" not in team else
-               f'<div style="font-family:{FONT};font-size:30px;font-weight:bold;'
-               f'color:{NAVY};padding-top:4px;">{team["projected_total"]:.1f} '
+               f'<div style="font-family:{DISPLAY};font-size:34px;font-weight:bold;'
+               f'color:{tone};padding-top:4px;">{team["projected_total"]:.1f} '
                f'<span style="font-size:11px;color:{SLATE};">PROJ</span></div>')
         return (
             f'<td width="45%" style="text-align:{align};padding:12px;'
@@ -165,10 +189,9 @@ def _matchup(matchup: Mapping[str, Any]) -> str:
 
     board = (
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0"><tr>{side(you, "Your best lineup this week", "left")}'
-        f'<td width="10%" style="{BASE}font-weight:bold;color:{SLATE};'
-        f'text-align:center;">VS</td>'
-        f'{side(rival, "Lineup as currently set", "right")}</tr></table>'
+        f'border="0"><tr>{side(you, "Your best lineup this week", "left", TURF)}'
+        f'{_gap_cell(matchup)}'
+        f'{side(rival, "Lineup as currently set", "right", BRICK)}</tr></table>'
     )
     prob = matchup.get("win_probability")
     if prob is not None:
