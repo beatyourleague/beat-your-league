@@ -188,7 +188,7 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     return _section("The Matchup", 2, board + field + ranges)
 
 
-def _lineup_row(slot: Mapping[str, Any]) -> str:
+def _lineup_row(slot: Mapping[str, Any], calls: bool = True) -> str:
     name = slot.get("player_name") or "(empty)"
     meta_bits = [b for b in (slot.get("position"),
                              f'{slot["form_games"]} games of form' if slot.get("form_games") is not None else None)
@@ -202,8 +202,10 @@ def _lineup_row(slot: Mapping[str, Any]) -> str:
         conf_cell = (f'<span class="cwrap"><span class="cbar">'
                      f'<i style="width:{_pct(confidence)}%"></i></span>'
                      f'<span class="clab">{_pct(confidence)} · vs {esc(slot.get("alternative_name") or "bench")}</span></span>')
-    else:
+    elif calls:
         conf_cell = f'<span class="cwrap"><span class="clab">{esc(NO_CALL)}</span></span>'
+    else:
+        conf_cell = '<span class="cwrap"></span>'
     return (
         f'<div class="lrow{flip}"><span class="slot">{esc(slot["slot"])}</span>'
         f'<span class="pl"><span class="pname">{esc(name)}</span>'
@@ -213,15 +215,16 @@ def _lineup_row(slot: Mapping[str, Any]) -> str:
 
 
 def _lineup_grid(slots: list[Mapping[str, Any]], total: float | None,
-                 total_label: str, note_html: str = "") -> str:
+                 total_label: str, note_html: str = "", calls: bool = True) -> str:
     """``total`` comes from the matchup section so the board and the grid can
     never disagree (summing per-row rounded values drifts). ``None`` means the
     engine gated the totals — the row is omitted rather than printing a 0.0
     that no game produced."""
+    conf_head = "Conf" if calls else ""
     head = ('<div class="lrow head"><span>Slot</span><span>Player</span>'
             '<span style="text-align:right">Proj</span>'
-            '<span style="text-align:right">Conf</span></div>')
-    rows = "".join(_lineup_row(s) for s in slots)
+            f'<span style="text-align:right">{conf_head}</span></div>')
+    rows = "".join(_lineup_row(s, calls=calls) for s in slots)
     total_row = ""
     if total is not None:
         total_row = (
@@ -312,7 +315,8 @@ def section_rival_lineup(report: Mapping[str, Any]) -> str:
     you_total = matchup["you"].get("projected_total")
     rival_total = matchup["rival"].get("projected_total")
     grid = _lineup_grid(report["rival_lineup"], rival_total,
-                        f"vs you {you_total:.1f}" if you_total is not None else "")
+                        f"vs you {you_total:.1f}" if you_total is not None else "",
+                        calls=False)
     return _section(f'{report["meta"]["rival_label"]} — Lineup As Set', 4, grid)
 
 
@@ -373,6 +377,8 @@ def section_hype(entries: list[Mapping[str, Any]],
         body = gate_note("a quiet waiver week — no sign of a league-wide chase "
                          "in your league's transaction log")
     else:
+        gates = [entry.get("verdict_gate") for entry in entries]
+        shared_gate = gates[0] if len(set(gates)) == 1 and gates[0] else None
         cards = []
         for entry in entries:
             bid = entry.get("top_bid")
@@ -381,20 +387,24 @@ def section_hype(entries: list[Mapping[str, Any]],
             ) if bid is not None else "no FAAB bids recorded"
             # Visual only; the honest number (managers chasing) is in the label.
             fomo = min(100, entry["managers_chasing"] * 20)
+            gate_line = ("" if shared_gate else
+                         f'<div class="action no">→ {esc(entry["verdict_gate"])}</div>')
             cards.append(
                 f'<div class="hcard"><div class="top">'
                 f'<span class="player">{esc(entry["player_name"])} · {esc(entry["position"])}</span>'
-                f'<span class="badge mirage">Usage unknown</span></div>'
+                f'</div>'
                 f'<div class="gauge g2"><i style="width:{fomo}%"></i></div>'
                 f'<div class="gauge-label"><span>League-wide FOMO</span>'
                 f'<span>{esc(entry["managers_chasing"])} managers chasing</span></div>'
                 f'<p class="read">{esc(entry["bids"])} claims filed, '
                 f'{esc(entry["completed_adds"])} completed, {esc(bid_text)} '
                 f'({esc(entry["evidence"])}).</p>'
-                f'<div class="action no">→ {esc(entry["verdict_gate"])}</div>'
+                f'{gate_line}'
                 f'{_bid_line(entry)}</div>'
             )
-        body = f'<div class="hype">{"".join(cards)}</div>'
+        note = (f'<div class="benchnote">{esc(shared_gate)}</div>'
+                if shared_gate else "")
+        body = f'<div class="hype">{"".join(cards)}</div>{note}'
     return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
 
 
@@ -619,10 +629,30 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     ])
     title = (f'Beat Your League — {meta["season"]} Week {meta["week"]} '
              f'Rival Report')
+    # Only the public demo gets share meta: it is the one render of this
+    # template that lives on the open web. Subscriber reports are private —
+    # share tags on them would just invite pasting a paid report around.
+    social = ""
+    if meta.get("anonymized_demo"):
+        desc = ("A complete Rival Report built from a real league's season — "
+                "every number from actual box scores, nothing invented.")
+        social = (
+            f'<meta name="description" content="{desc}">\n'
+            '<meta property="og:title" content="Beat Your League — a real Rival Report">\n'
+            f'<meta property="og:description" content="{desc}">\n'
+            '<meta property="og:type" content="website">\n'
+            '<meta property="og:site_name" content="Beat Your League">\n'
+            '<meta name="twitter:card" content="summary">\n'
+            '<!-- og:image needs the live absolute URL. After the domain exists, add:\n'
+            '     <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->\n'
+        )
+    favicon = ('<link rel="icon" href="data:image/svg+xml,'
+               '<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22>'
+               '<text y=%22.9em%22 font-size=%2290%22>🧾</text></svg>">\n')
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'<title>{esc(title)}</title>\n{links}\n<style>{style}</style>\n'
+        f'<title>{esc(title)}</title>\n{social}{favicon}{links}\n<style>{style}</style>\n'
         f'</head>\n<body>\n<div class="report">\n{body}\n</div>\n</body>\n</html>\n'
     )
 
