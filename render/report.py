@@ -236,7 +236,8 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
             f'<div class="field-wrap"><div class="field-label">'
             f'<span class="l">Your territory</span><span class="r">Rival territory</span></div>'
             f'<div class="field"><div class="endzone l"></div><div class="endzone r"></div>'
-            f'<div class="ball" style="left:{ball_left}%"></div></div>'
+            f'<div class="ball" style="left:{ball_left}%">'
+            f'{mark_svg("bylf", "fieldball")}</div></div>'
             f'<p class="field-read"><b class="win">{_pct(prob)}% win probability.</b> '
             f'The odds your best lineup outscores the lineup they have set.</p></div>'
         )

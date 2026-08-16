@@ -87,9 +87,9 @@ def receipt_card_svg(call: LedgerCall, sample: bool = False) -> str:
     <text x="{WIDTH - 250}" y="315" text-anchor="middle" font-family={_FONT!r} font-size="84" font-weight="800" letter-spacing="8" fill="{stamp_color}">{stamp_text}</text>
   </g>
   {sample_mark}
-  <line x1="76" y1="545" x2="{WIDTH - 76}" y2="545" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
-  <text x="76" y="590" font-family={_BODY_FONT!r} font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
-  <text x="{WIDTH - 76}" y="590" text-anchor="end" font-family={_FONT!r} font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT PICKS</text>
+  <line x1="76" y1="532" x2="{WIDTH - 76}" y2="532" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="76" y="576" font-family={_BODY_FONT!r} font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
+  <text x="76" y="616" font-family={_FONT!r} font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT PICKS</text>
 </svg>
 '''
 

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — Week 1 Rival Report</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
     --navy:#101E33;
@@ -94,11 +94,13 @@
   .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
   .field .endzone.l{left:0;background:var(--turf);}
   .field .endzone.r{right:0;background:var(--brick);}
+  /* The fourth football. This was a CSS ellipse with a border-radius and a 2px
+     bar for a seam — the exact shape the mark redraw replaced — sitting ~200px
+     below the real mark in the same document, in a brown used nowhere else. */
   .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
-    width:26px;height:17px;background:#6B3A1F;border-radius:50%/45%;
-    border:2px solid var(--paper);box-shadow:0 0 0 2px var(--navy);}
-  .field .ball::after{content:"";position:absolute;left:6px;right:6px;top:50%;height:2px;
-    background:var(--paper);transform:translateY(-50%);}
+    width:30px;height:20px;line-height:0;}
+  .field .ball svg.fieldball{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
   .yards{display:flex;justify-content:space-between;padding:3px 14px 0;
     font-family:'Barlow Condensed';font-weight:600;font-size:11px;color:var(--slate);
     font-variant-numeric:tabular-nums;}
@@ -301,7 +303,7 @@
       <div class="field">
         <div class="endzone l"></div>
         <div class="endzone r"></div>
-        <div class="ball"></div>
+        <div class="ball"><svg class="fieldball" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylfBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylfSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylfVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylfPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylfBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylfPath" fill="url(#bylfSpec)" stroke="none"/><use href="#bylfPath" fill="url(#bylfVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg></div>
       </div>
       <div class="yards"><span>G</span><span>20</span><span>40</span><span>50</span><span>40</span><span>20</span><span>G</span></div>
       <p class="field-read"><b class="win">61% win probability.</b> You have the ball in his territory — but note the ranges below:

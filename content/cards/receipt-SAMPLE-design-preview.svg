@@ -20,7 +20,7 @@
     <text x="950" y="315" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="84" font-weight="800" letter-spacing="8" fill="#1E7A46">HIT</text>
   </g>
   <text x="600" y="360" text-anchor="middle" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="150" font-weight="800" fill="rgba(90,107,128,.14)" transform="rotate(-18 600 337)">SAMPLE · DESIGN PREVIEW</text>
-  <line x1="76" y1="545" x2="1124" y2="545" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
-  <text x="76" y="590" font-family="'Barlow','Helvetica Neue',Arial,sans-serif" font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
-  <text x="1124" y="590" text-anchor="end" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT PICKS</text>
+  <line x1="76" y1="532" x2="1124" y2="532" stroke="#D8D3C6" stroke-width="2" stroke-dasharray="8 6"/>
+  <text x="76" y="576" font-family="'Barlow','Helvetica Neue',Arial,sans-serif" font-size="22" fill="#5A6B80">Graded against the real box score. Wins and misses alike — the full ledger is public.</text>
+  <text x="76" y="616" font-family="'Barlow Condensed','Arial Narrow',sans-serif" font-size="24" font-weight="800" letter-spacing="3" fill="#B3402F">ANALYSIS, NOT PICKS</text>
 </svg>

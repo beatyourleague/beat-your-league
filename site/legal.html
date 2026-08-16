@@ -27,6 +27,11 @@
     text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:15px;flex:none;}
   header .brand a{color:inherit;text-decoration:none;}
+  /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
+     and cancellation instructions a nervous buyer came here to read. */
+  main a,p a,li a{color:var(--brick);text-decoration:underline;
+    text-underline-offset:2px;text-decoration-thickness:1px;}
+  main a:hover,p a:hover,li a:hover{color:var(--navy);}
   header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:10px 28px 34px;}
