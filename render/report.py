@@ -558,14 +558,20 @@ def who_can_cover(rivals: int | None, others: int | None) -> str:
     """Who else can afford the bid. ONE implementation, imported by the email
     renderer too — this sentence used to exist in three copies and the
     denominator was only ever added to one of them."""
-    scale = f" of the other {others}" if others else ""
     if rivals is None:
         return "we can't tell what anyone has left — see the note below"
     if rivals == 0:
         return "nobody else in your league can even cover that"
-    if rivals == 1:
-        return f"one{scale} team can cover that"
-    return f"{rivals}{scale} teams can cover that"
+    # "11 of the other 11 teams can cover that" is a machine counting; a person
+    # says everyone. The denominator earns its place only when it narrows.
+    if others and rivals >= others:
+        return "every other team in your league can cover that"
+    # With a denominator the noun is always plural ("one OF the other 11
+    # teams"); without one it agrees with the count ("one team").
+    if others:
+        noun = "teams"
+        return f"{'one' if rivals == 1 else rivals} of the other {others} {noun} can cover that"
+    return f"one team can cover that" if rivals == 1 else f"{rivals} teams can cover that"
 
 
 def _bid_line(entry: Mapping[str, Any]) -> str:

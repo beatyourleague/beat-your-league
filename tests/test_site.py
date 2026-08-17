@@ -561,12 +561,14 @@ def test_waiver_edge_is_sold_as_a_decision_not_a_stat() -> None:
     # Numbers sit inside <b> tags, so match the phrasing that carries the action.
     assert re.search(r"or more to top the highest bid|to top the highest bid he's drawn",
                      SAMPLE_REPORT, re.I)
-    # The count now carries its denominator ("8 of the other 11 teams"), because
-    # a bare count has no scale — so match the action, not the old phrasing.
-    assert re.search(r"teams? can cover that|nobody else in your league can even cover",
-                     SAMPLE_REPORT, re.I)
-    assert re.search(r"of the other \d+ teams? can cover that", SAMPLE_REPORT, re.I), \
-        "the count lost its denominator"
+    # The count must carry SCALE: usually a denominator ("8 of the other 11
+    # teams"), and when everyone can afford it, "every other team in your
+    # league", because "11 of the other 11" is the machine counting out loud.
+    # A bare "8 teams" has no scale and is the thing this guards against.
+    assert re.search(r"of the other \d+ teams can cover that"
+                     r"|every other team in your league can cover that"
+                     r"|nobody else in your league can even cover",
+                     SAMPLE_REPORT, re.I), "the count lost its scale"
     assert re.search(r"waiver market in your league", SAMPLE_REPORT, re.I)
 
 
@@ -796,3 +798,19 @@ def test_the_backtest_draws_its_own_calibration_claim() -> None:
     for forbidden in ("77.2", "63.6", "78.3"):
         assert forbidden not in figure, \
             f"availability-controlled figure {forbidden} was drawn as accuracy"
+
+
+def test_the_who_can_cover_sentence_reads_like_a_person() -> None:
+    """This line is generated from two counts, and both edge cases used to
+    expose the machine: a full count read "11 of the other 11 teams can cover
+    that", and the singular case lost its plural — "one of the other 11 team"."""
+    from render.report import who_can_cover
+
+    assert who_can_cover(11, 11) == "every other team in your league can cover that"
+    assert who_can_cover(12, 11) == "every other team in your league can cover that"
+    assert who_can_cover(1, 11) == "one of the other 11 teams can cover that"
+    assert who_can_cover(8, 11) == "8 of the other 11 teams can cover that"
+    assert who_can_cover(0, 11).startswith("nobody else")
+    assert who_can_cover(None, 11).startswith("we can't tell")
+    # no denominator available: the noun agrees with the count
+    assert who_can_cover(1, None) == "one team can cover that"
