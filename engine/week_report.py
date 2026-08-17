@@ -60,11 +60,14 @@ Z_80_BAND = 1.2816
 WIN_PROBABILITY_CALIBRATED = False
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
-    "no win percentage. We tested one against two seasons and our favourites "
+    "No win percentage. We tested one against two seasons and our favorites "
     "won more often than it said, so the number would mislead you")
+# "Your" was wrong once both bands shared one axis: this captions the rival's
+# range as much as yours, and it sat directly above a pair of numerals that
+# were the UNION of the two, not either team's.
 TEAM_RANGE_BASIS = (
-    "Your realistic high and low. Testing on two past seasons, real weekly "
-    "totals landed inside this range about 78% of the time.")
+    "Each team's realistic high and low. Testing on two past seasons, real "
+    "weekly totals landed inside this range about 78% of the time.")
 
 
 class WeekReportError(RuntimeError):
@@ -513,7 +516,7 @@ def hype_meter(
                          if windows else "no transaction data"),
             "verdict_gate": ("We can see the whole league chasing him, and the "
                              "usage below is what he has actually been given. "
-                             "Whether that holds up behind a different offence "
+                             "Whether that holds up behind a different offense "
                              "is not something we put a number on, so we're not "
                              "calling this one real or a mirage."),
         })

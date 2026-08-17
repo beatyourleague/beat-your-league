@@ -262,7 +262,7 @@ def test_win_probability_calibration_gate_is_default() -> None:
     my_picks = optimal_lineup(season, mine, model, players, known)
     rival_picks = rival_lineup(season, rival, model, players, known)
     prob, gate = win_probability(my_picks, rival_picks)
-    assert prob is None and "no win percentage" in (gate or "")
+    assert prob is None and "no win percentage" in (gate or "").lower()
     # and it must not promise a fix: the gate backtest moved calibrated
     # buckets only 1-of-6 to 2-of-5, so "until it's right" is a commitment
     # the evidence does not support.
@@ -625,7 +625,7 @@ def test_render_shows_numbers_when_available(tmp_path: Path) -> None:
     assert any(s["confidence"] is not None for s in report["lineup"])
     # ...but the matchup win probability stays calibration-gated for now.
     assert report["matchup"]["win_probability"] is None
-    assert "no win percentage" in report["matchup"]["win_probability_gate"]
+    assert "no win percentage" in report["matchup"]["win_probability_gate"].lower()
     html_out = render(report, _template())
     # Ranges render on their own evidence, independent of the prob gate.
     # Both teams now share ONE axis, so assert the axis and both bands rather

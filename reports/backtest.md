@@ -1,6 +1,6 @@
 # Backtest & calibration report
 
-Generated 2026-08-16 04:23 UTC from cached Sleeper data in `data/raw/`. No network calls, no generated text, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-17 04:51 UTC from cached Sleeper data in `data/raw/`. No network calls, no generated text, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
 
 ## Leagues graded
 
@@ -84,7 +84,7 @@ The same calls, restricted to head-to-heads where **both players actually played
 ## What this means for the live report
 
 1. **Ship an availability feed before shipping a confidence number.** Bye weeks come from the free public NFL schedule and injury designations are already on Sleeper's player records — they simply have to be captured weekly, since the players table only ever holds today's status. This is the highest-value change available to the engine, and it is cheap.
-2. **The probability math itself passes.** On the availability-controlled set, 5 of 5 judgeable buckets are calibrated. A stated 64% is worth publishing once the engine knows who is playing — and not before — no probability is published without evidence it is calibrated.
+2. **The probability math itself passes on this diagnostic — which is not the same as earning a published number.** On the availability-controlled set, 5 of 5 judgeable buckets are calibrated. That table conditions on both players having scored, which nobody knows at call time, so it can motivate the gate but never license a claim. The shipping gate has since been measured separately, against real pre-kickoff injury reports: it moved calibrated buckets from 1 of 6 to 2 of 5 and left observed rates almost unchanged. **An improvement, not a rescue — no accuracy claim is published on the back of it.**
 3. **Until then, the report must not print a confidence for a player whose status is unknown.** That slot renders as *no call*, never as a number. The honest version of this engine declines more calls than it makes.
 4. **The rival's bench is where the edge is.** A rival starting a player who will not play is the single most exploitable event in this data, and it is visible to us the moment an availability feed exists — this is exactly the "where the rival is fragile" section the product promises.
 

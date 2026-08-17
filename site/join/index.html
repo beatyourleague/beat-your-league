@@ -149,9 +149,10 @@
     <div class="done" id="done">
       <b id="done-head">You're all set.</b>
       <ol>
-        <li id="seat-note" style="display:none">Your commissioner already paid for this
-        seat, so there's nothing to pay and nothing else to do. You get your <b>own</b>
-        report, aimed at the rival you just picked — not a copy of theirs.</li>
+        <li id="seat-note" style="display:none">There's nothing for you to pay — the
+        seat comes out of your commissioner's League Pass, so your first report lands
+        the Tuesday after their pass goes through. You get your <b>own</b> report,
+        aimed at the rival you just picked — not a copy of theirs.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them. Your league and rival picks
         travel with the checkout, so there's nothing else to send us.</li>
@@ -455,17 +456,12 @@ async function pickLeague(league) {
     }
     state.league = { league_id: leagueId, name: String(league.name || "") };
     if (WANTS_PASS) {
-      const share = $("seat-share");
-      const seatUrl = location.href.split(/[?#]/)[0] + "?pass=" + leagueId;
-      share.replaceChildren();
-      share.appendChild(document.createTextNode(
-        "The pass covers every manager in " + (state.league.name || "this league") +
-        ". After you pay, send them this link — each picks their own rival and " +
-        "claims their own seat, nothing to pay: "));
-      const code = document.createElement("b");
-      code.textContent = seatUrl;
-      share.appendChild(code);
-      share.style.display = "block";
+      // The URL is built here but NOT shown yet — see showSeatLink(). Rendered
+      // at this step it was a shareable link two steps before checkout, so a
+      // commissioner could paste it in the group chat and then abandon the
+      // payment, leaving eleven managers each told their seat was claimed
+      // while every claim is dropped for want of a pass covering the league.
+      state.seatUrl = location.href.split(/[?#]/)[0] + "?pass=" + leagueId;
     }
     state.myRosterId = mine.roster_id;
     state.rosters = rosters || [];
@@ -640,6 +636,20 @@ $("submit").addEventListener("click", async () => {
     done.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
+  function showSeatLink() {
+    const share = $("seat-share");
+    share.replaceChildren();
+    share.appendChild(document.createTextNode(
+      "Once your payment goes through, the pass covers every manager in " +
+      (state.league.name || "this league") + ". Send them this link then — each " +
+      "picks their own rival and claims their own seat, nothing to pay. Seats " +
+      "only work after the pass is paid for: "));
+    const code = document.createElement("b");
+    code.textContent = state.seatUrl;
+    share.appendChild(code);
+    share.style.display = "block";
+  }
+
   // --- League Pass seat: the commissioner already paid, so there is no
   // checkout to carry these picks. This is the only path that needs a form.
   if (SEAT_FOR_LEAGUE) {
@@ -680,7 +690,7 @@ $("submit").addEventListener("click", async () => {
     $("seat-note").style.display = "list-item";
     $("pay-note").style.display = "none";
     $("renew-note").style.display = "none";
-    showSuccess("Your seat is claimed.");
+    showSuccess("Your seat request is in.");
     return;
   }
 
@@ -717,6 +727,11 @@ $("submit").addEventListener("click", async () => {
       "Something went wrong reading your league — please reload and try again.");
     return;
   }
+  // The seat link appears only now, on the way to Stripe. Still not proof of
+  // payment — nothing in a static page can be — but it is no longer handed out
+  // two steps before the commissioner has even seen a card form, and the
+  // wording says the seats depend on the payment going through.
+  if (WANTS_PASS && state.seatUrl) showSeatLink();
   window.location.assign(
     link +
     (link.indexOf("?") === -1 ? "?" : "&") +

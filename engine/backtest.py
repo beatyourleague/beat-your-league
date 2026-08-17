@@ -315,10 +315,15 @@ def _implications(calls: Sequence[StartSitCall]) -> list[str]:
         "Sleeper's player records — they simply have to be captured weekly, since the "
         "players table only ever holds today's status. This is the highest-value change "
         "available to the engine, and it is cheap.",
-        f"2. **The probability math itself passes.** On the availability-controlled set, "
-        f"{calibrated} of {len(judged)} judgeable buckets are calibrated. A stated 64% is "
-        "worth publishing once the engine knows who is playing — and not before "
-        "— no probability is published without evidence it is calibrated.",
+        f"2. **The probability math itself passes on this diagnostic — which is not "
+        f"the same as earning a published number.** On the availability-controlled "
+        f"set, {calibrated} of {len(judged)} judgeable buckets are calibrated. That "
+        "table conditions on both players having scored, which nobody knows at call "
+        "time, so it can motivate the gate but never license a claim. The shipping "
+        "gate has since been measured separately, against real pre-kickoff "
+        "injury reports: it moved calibrated buckets from 1 of 6 to "
+        "2 of 5 and left observed rates almost unchanged. **An improvement, not a "
+        "rescue — no accuracy claim is published on the back of it.**",
         "3. **Until then, the report must not print a confidence for a player whose "
         "status is unknown.** That slot renders as *no call*, never as a number. "
         "The honest version of this engine declines more calls "

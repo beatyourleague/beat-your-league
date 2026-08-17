@@ -221,7 +221,9 @@ def _matchup(matchup: Mapping[str, Any]) -> str:
                  f'<b style="color:{TURF};">{_pct(prob)}% win probability.</b> '
                  f'The odds your best lineup outscores the lineup they have set.</p>')
     else:
-        field = _gate(f'win probability — {matchup.get("win_probability_gate", "gated")}')
+        # The gate sentence names its own subject; prefixing it repeated the
+        # words and read as a field label with an error in it.
+        field = _gate(matchup.get("win_probability_gate", "gated"))
 
     if gated:
         return _sec(2, "The Matchup", board + field
@@ -489,7 +491,7 @@ def _waiver_market(market: Mapping[str, Any] | None) -> str:
         return ""
     bits = []
     if market.get("going_rate") is not None:
-        bits.append(f'Going rate <b>{esc(market["going_rate"])}</b>')
+        bits.append(f'Going rate <b>{esc(market["going_rate"])} FAAB</b>')
     if market.get("top_winning_bid") is not None:
         bits.append(f'Priciest win <b>{esc(market["top_winning_bid"])}</b>')
     if market.get("my_remaining") is not None:

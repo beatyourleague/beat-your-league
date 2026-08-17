@@ -331,10 +331,20 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     if matchup.get("win_probability") is None and matchup.get("win_probability_gate"):
         withheld = (f'<p class="withheldline">'
                     f'{esc(matchup["win_probability_gate"])}.</p>')
+    # Each team's own floor-ceiling sits beside its own name. The axis ends are
+    # the UNION of both bands, so on the sample week the left end reads 86 —
+    # the rival's floor, not yours (89.6) — and it was the only pair of numerals
+    # on a block captioned "Your realistic high and low". Moving to one shared
+    # axis had dropped the per-team numerals without replacing them, so the
+    # buyer's own floor and ceiling appeared nowhere in the browser report while
+    # the email printed both. Every score shown gets a definition (principle 5).
+    def label(team: Mapping[str, Any], side: str) -> str:
+        return (f'<span class="{side}">{esc(team["label"])} '
+                f'<b>{team["floor"]:.0f}–{team["ceiling"]:.0f}</b></span>')
+
     ranges = (
         f'<div class="rangeaxis">'
-        f'<div class="rlab"><span class="you">{esc(you["label"])}</span>'
-        f'<span class="rival">{esc(rival["label"])}</span></div>'
+        f'<div class="rlab">{label(you, "you")}{label(rival, "rival")}</div>'
         f'<div class="rtrack">{over_html}{row(you, "you")}{row(rival, "rival")}</div>'
         f'<div class="rends"><span>{lo:.0f}</span><span>{hi:.0f}</span></div>'
         f'{read}</div>{withheld}{basis_html}'
@@ -417,6 +427,18 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
             f'{flag_html}{sub}</td><td class="tpts {side}">{proj}</td>')
 
 
+# Explicit column widths. The header row spans two cells per side, so a bare
+# table-layout:fixed reads its widths off a colspan and lands nowhere near
+# symmetric; on auto layout the rival's long fragility flag pulled its column
+# wide and squeezed yours, so identical text wrapped on your side and not on
+# theirs — in a grid whose whole argument is that the two sides compare
+# directly. The colgroup is the only thing that makes the halves equal.
+# Widths live in the template CSS, not inline here: inline styles beat a media
+# query, and at 375px the fixed desktop split clipped "123.2" out of the points
+# column on both sides.
+TAPE_COLS = "<colgroup>" + "<col>" * 5 + "</colgroup>"
+
+
 def section_tape(report: Mapping[str, Any]) -> str:
     """Both lineups, one row per slot, your player against theirs.
 
@@ -468,7 +490,8 @@ def section_tape(report: Mapping[str, Any]) -> str:
                     f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
     title = "The Tape — As Set" if as_set else "The Tape"
     return _section(title, 4,
-                    f'<table class="tape">{head}{"".join(rows)}{total_row}</table>{note}')
+                    f'<table class="tape">{TAPE_COLS}{head}{"".join(rows)}'
+                    f'{total_row}</table>{note}')
 
 
 def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
@@ -565,12 +588,21 @@ def section_hype(entries: list[Mapping[str, Any]],
 def edge_phrase(slot: Mapping[str, Any]) -> str:
     """What this start beats, and by how much. ONE implementation, imported by
     the email renderer — the two surfaces had written it differently, and the
-    longer wording wrapped every row of the email tape onto two lines."""
+    longer wording wrapped every row of the email tape onto two lines.
+
+    "on your bench" is load-bearing. The Tape's row grammar is *your player |
+    position | their player*, so a bare "vs Larry Fitzgerald" named a third
+    person in neither lineup — and since the calibrated unit is per-slot, the
+    same bench player is legitimately named on four consecutive rows, which
+    read as four openings against one man. It also disambiguates the number
+    from the row's tint: the tint compares you to THEM, this compares your
+    start to your own bench, and the two can honestly disagree.
+    """
     edge = slot.get("edge")
     name = slot.get("alternative_name")
     if edge is None or not name:
         return ""
-    return f"{edge:+.1f} vs {name}"
+    return f"{edge:+.1f} over {name} on your bench"
 
 
 def who_can_cover(rivals: int | None, others: int | None) -> str:
@@ -622,7 +654,10 @@ def section_waiver_market(market: Mapping[str, Any] | None) -> str:
         return ""
     rows = []
     if market.get("going_rate") is not None:
-        rows.append(f'<span class="drv">Going rate <b>{esc(market["going_rate"])}</b></span>')
+        # The unit rides on the FIRST chip only; the rest of the strip reads as
+        # the same currency, and repeating "FAAB" five times is noise.
+        rows.append(f'<span class="drv">Going rate '
+                    f'<b>{esc(market["going_rate"])} FAAB</b></span>')
     if market.get("top_winning_bid") is not None:
         rows.append(f'<span class="drv">Priciest win <b>{esc(market["top_winning_bid"])}</b></span>')
     if market.get("my_remaining") is not None:

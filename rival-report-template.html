@@ -143,6 +143,10 @@
   .rlab{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
     letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
   .rlab .you{color:var(--turf);} .rlab .rival{color:var(--brick);}
+  /* The team's own floor-ceiling, beside its own name. The axis ends below
+     are the union of both bands and belong to neither team. */
+  .rlab b{font-family:'Barlow Condensed';font-size:14px;letter-spacing:.02em;
+          font-variant-numeric:tabular-nums;}
   .rtrack{position:relative;height:40px;background:#EAE7DE;border:1px solid var(--line);}
   .rover{position:absolute;top:0;bottom:0;background:#DCD8CC;}
   .rband{position:absolute;height:14px;border:1px solid;}
@@ -169,20 +173,28 @@
   /* One row per slot, your player against theirs, the position badge on the
      spine. The winning half is TINTED — that is the verdict, so no words are
      spent saying it. This is the layout Sleeper's own matchup screen uses. */
+  /* table-layout:fixed so the two halves are SYMMETRIC. On auto layout the
+     rival's long fragility flag pulled its column wide and squeezed yours to
+     two-thirds the width, so the same length of text wrapped on your side and
+     not on theirs — in a grid whose whole argument is that the two sides are
+     directly comparable. */
   .tape{width:100%;margin-top:16px;border-collapse:collapse;background:var(--card);
-    border:2px solid var(--navy);}
+    border:2px solid var(--navy);table-layout:fixed;}
+  .tape col:nth-child(1),.tape col:nth-child(4){width:38%;}
+  .tape col:nth-child(2),.tape col:nth-child(5){width:9%;}
+  .tape col:nth-child(3){width:6%;}
   .tape td{padding:9px 8px;border-top:1px solid #EDEAE1;vertical-align:top;}
   .thead td{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
     letter-spacing:.14em;text-transform:uppercase;padding:8px;border:none;}
   .thead td:last-child{text-align:right;}
-  .tslot{width:44px;text-align:center;font-family:'Barlow Condensed';font-weight:800;
+  .tslot{text-align:center;font-family:'Barlow Condensed';font-weight:800;
     font-size:13px;color:var(--slate);background:#F2F0E8;}
   .tname{display:block;font-weight:700;font-size:14px;line-height:1.2;}
   .tsub{display:block;margin-top:2px;font-size:10.5px;color:var(--slate);line-height:1.3;}
   /* Availability is the one thing on a row a reader must not skim past. */
   .tflag{display:block;margin-top:2px;font-size:10.5px;font-weight:700;
          color:var(--brick);line-height:1.3;letter-spacing:.2px;}
-  .tpts{width:46px;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+  .tpts{font-family:'Barlow Condensed';font-weight:800;font-size:17px;
     font-variant-numeric:tabular-nums;}
   .tside.rival{text-align:right;} .tpts.rival{text-align:right;}
   .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
@@ -191,7 +203,11 @@
     font-family:'Barlow Condensed';font-weight:800;}
   @media (max-width:520px){
     .tname{font-size:12.5px;} .tpts{font-size:15px;width:38px;}
+    /* A narrow screen needs the numbers to fit before it needs long names. */
+    .tape col:nth-child(1),.tape col:nth-child(4){width:32%;}
+    .tape col:nth-child(2),.tape col:nth-child(5){width:15%;}
     .tsub,.tflag{font-size:9.5px;} .tape td{padding:7px 5px;}
+    .tname{font-size:13px;} .tpts{font-size:15px;}
   }
 
   /* The as-set note under the Tape. The lineup-grid block that used to live

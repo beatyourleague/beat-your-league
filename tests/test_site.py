@@ -833,3 +833,59 @@ def test_last_weeks_opponent_is_anonymised_on_the_public_demo() -> None:
     assert "realperson99" not in str(out), \
         "last week's opponent survived the scrub"
     assert "Last Week's Opponent" in out["last_week"]["headline"]
+
+
+def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
+    """A card stamped "Real find" is a factual claim about our own output, and
+    the landing page is hand-written while the report is generated — so the two
+    drift silently. They did: the page kept advertising a bench player "above
+    four of their set starters" for weeks after the engine stopped producing
+    that count and started naming the single slot instead. Every number a
+    "real"-stamped card quotes has to appear in the published sample report."""
+    import html as _html
+    for match in re.finditer(
+            r'<div class="mini">(.*?)</div>\s*</div>\s*<span class="real">([^<]*)</span>',
+            LANDING, re.S):
+        body = _html.unescape(re.sub(r"<[^>]+>", " ", match.group(1)))
+        stamp = match.group(2).strip()
+        for number in sorted(set(re.findall(r"\d+\.\d+", body))):
+            assert number in SAMPLE_REPORT, (
+                f'the landing page cites {number} under "{stamp}", but no such '
+                f"number is in the report it points at")
+
+
+def test_the_scouting_cards_quote_the_report_verbatim() -> None:
+    """The number check above catches an invented figure; this catches the way
+    it actually went wrong — right numbers, a claim the engine no longer makes.
+    The page said "above four of their set starters" for a rival whose bench
+    player is now correctly named against the ONE slot he can fill. Whenever
+    render/engine wording changes, regenerate the demo and update this quote."""
+    quoted = "projects 17.8 against Peyton Barber at FLEX (8.0)"
+    assert quoted in SAMPLE_REPORT, \
+        "the demo no longer says this — regenerate with `make demo` and re-check"
+    assert quoted in LANDING.replace("he projects", "projects"), \
+        "the landing page's fragility card drifted from the report it cites"
+
+
+def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
+    """The League Pass seat URL used to render at step 2 of 4. A commissioner
+    could paste it in the group chat and then abandon the payment, leaving
+    eleven managers each told their seat was claimed — while every claim is
+    dropped on Tuesday for want of a pass covering that league, visible only in
+    a CI log. It is revealed on the way to Stripe, and the seat holder is told
+    what actually happened rather than that they are entitled."""
+    pick = JOIN.split("async function pickLeague")[1].split("async function")[0]
+    assert "state.seatUrl" in pick, "the slice missed pickLeague"
+    # Comment lines stripped: this function's comment explains where the link
+    # IS revealed, and matching that would pass a broken page as fixed.
+    code = "\n".join(line for line in pick.splitlines()
+                     if not line.lstrip().startswith("//"))
+    assert "showSeatLink" not in code, \
+        "the seat link is shown before the commissioner reaches checkout"
+    assert "state.seatUrl" in JOIN and "showSeatLink()" in JOIN
+    # It is revealed immediately before the redirect to the payment link.
+    tail = JOIN.split("showSeatLink()")[-1][:600]
+    assert "window.location.assign" in tail, \
+        "the seat link is no longer tied to the checkout redirect"
+    # And no page copy claims an unpaid seat is already entitled.
+    assert "Your seat is claimed" not in JOIN

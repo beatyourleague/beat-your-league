@@ -116,6 +116,10 @@ def test_the_browser_and_python_agree_on_the_format() -> None:
 # fakes
 # --------------------------------------------------------------------- #
 
+# When the sync RAN, not what the public form claimed — see seats_to_signups.
+SEAT_SEEN = "2026-08-17T11:00:00+00:00"
+
+
 def _session(ref, email="buyer@example.com", customer="cus_ABCD1234",
              created=1_700_000_000, sid="cs_1"):
     return {"id": sid, "created": created, "client_reference_id": ref,
@@ -386,7 +390,7 @@ def test_a_seat_is_only_real_if_a_pass_covers_that_league() -> None:
              "league_id": LEAGUE, "rival_owner_id": RIVAL},
             {"email": "stranger@example.com", "user_id": "222222222222",
              "league_id": "999999999999999999", "rival_owner_id": RIVAL}]
-    seats, problems = sync.seats_to_signups(rows, {LEAGUE: "commish@example.com"})
+    seats, problems = sync.seats_to_signups(rows, {LEAGUE: "commish@example.com"}, SEAT_SEEN)
     assert len(seats) == 1
     assert seats[0].email == "member@example.com"
     assert seats[0].covered_by == "commish@example.com"
@@ -400,7 +404,7 @@ def test_a_seat_always_names_its_payer() -> None:
     seats, _ = sync.seats_to_signups(
         [{"email": "m@example.com", "user_id": "111111111111",
           "league_id": LEAGUE, "rival_owner_id": RIVAL}],
-        {LEAGUE: "commish@example.com"})
+        {LEAGUE: "commish@example.com"}, SEAT_SEEN)
     entries = sync.to_registry_entries(seats)
     assert entries[0]["covered_by"] == "commish@example.com"
 
@@ -412,7 +416,7 @@ def test_a_seat_always_names_its_payer() -> None:
     {"email": "m@example.com", "user_id": "111111111111", "league_id": LEAGUE},
 ])
 def test_unusable_seat_claims_are_rejected(row: dict) -> None:
-    seats, problems = sync.seats_to_signups([row], {LEAGUE: "commish@example.com"})
+    seats, problems = sync.seats_to_signups([row], {LEAGUE: "commish@example.com"}, SEAT_SEEN)
     assert seats == [] and problems
 
 
@@ -530,7 +534,7 @@ def test_the_projection_is_exactly_what_the_registry_validates(tmp_path: Path) -
         [{"email": "member@example.com", "user_id": "111111111111",
           "league_id": LEAGUE, "rival_owner_id": RIVAL,
           "sleeper_username": "Member"}],
-        {LEAGUE: "commish@example.com"})
+        {LEAGUE: "commish@example.com"}, SEAT_SEEN)
     entries = sync.to_registry_entries([_signup(stripe_customer_id="cus_ABCD1234")] + seats)
     path = tmp_path / "subscribers.json"
     sync.write_registry(entries, path)
@@ -667,7 +671,7 @@ def test_a_malformed_seat_claim_cannot_stop_everyone_elses_report(tmp_path: Path
     seats, problems = sync.seats_to_signups(
         [{"email": "not an email", "user_id": "111111111111",
           "league_id": LEAGUE, "rival_owner_id": RIVAL}],
-        {LEAGUE: "commish@example.com"})
+        {LEAGUE: "commish@example.com"}, SEAT_SEEN)
     assert seats == [] and problems
 
 
@@ -898,10 +902,10 @@ def test_seat_problem_lines_carry_no_address() -> None:
     _, problems = sync.seats_to_signups(
         [{"email": "someone@example.com", "user_id": "111111111111",
           "league_id": "999999999999999999", "rival_owner_id": RIVAL}],
-        {LEAGUE: "commish@example.com"})            # league not covered
+        {LEAGUE: "commish@example.com"}, SEAT_SEEN)  # league not covered
     assert problems and not any("@" in p for p in problems)
     _, problems2 = sync.seats_to_signups(
-        [{"email": "bad", "user_id": "x", "league_id": "y"}], {})
+        [{"email": "bad", "user_id": "x", "league_id": "y"}], {}, SEAT_SEEN)
     assert problems2 and not any("@" in p for p in problems2)
 
 
@@ -921,3 +925,52 @@ def test_event_key_is_the_real_one_not_a_copy() -> None:
     assert sync.event_key(_signup()) != sync.event_key(_signup(plan="league_pass"))
     assert sync.event_key(_signup()) != sync.event_key(_signup(pass_league_id=LEAGUE))
     assert sync.event_key(_signup()) == sync.event_key(_signup())
+
+
+def test_a_tier_missing_from_the_link_map_is_still_swept(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """STRIPE_PAYMENT_LINKS doubled as the sweep filter, so a link left out of
+    it was never queried at all: that buyer paid, never reached the registry,
+    never got a report, and kept being charged — silently. The in-code setup
+    message names only the League Pass link, so configuring exactly what it
+    says would have dropped every season and monthly customer. The sweep now
+    always ends with an unfiltered query."""
+    unmapped = _session(encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL),
+                        sid="cs_unmapped")
+    unmapped["payment_link"] = "plink_SEASON_NOT_IN_MAP"
+
+    def fake_get(url, key):
+        # Stripe's own semantics: a payment_link filter returns only that
+        # link's sessions, an unfiltered query returns everything.
+        if "payment_link" in url:
+            return _page([])
+        return _page([unmapped])
+
+    monkeypatch.setattr(sync, "_stripe_get", fake_get)
+    monkeypatch.setattr(sync, "_promote", lambda *a: None)
+    signups, _, _ = sync.sweep_stripe("sk", link_plans={"plink_PASS": LEAGUE_PASS})
+    assert [s.user_id for s in signups] == [USER], \
+        "a paying customer on an unmapped link was never swept"
+    # Fail-closed is unchanged: an unverified plan claim still grants nothing.
+    assert signups[0].pass_league_id is None
+
+
+def test_a_seat_cannot_stamp_itself_into_the_future() -> None:
+    """The seat form is public by necessity, so its `added_at` is a string a
+    stranger chose. Trusted, a claim dated 9999-12-31 outranks every later seat
+    for that (league, user) forever — so the actual league member re-picking
+    their rival would silently never take effect. We stamp what we observed."""
+    forged = {"email": "member@example.com", "user_id": "111111111111",
+              "league_id": LEAGUE, "rival_owner_id": RIVAL,
+              "added_at": "9999-12-31T23:59:59+00:00"}
+    seats, _ = sync.seats_to_signups(
+        [forged], {LEAGUE: "commish@example.com"}, SEAT_SEEN)
+    assert seats and seats[0].seen_at == SEAT_SEEN, \
+        "a seat claim set its own recency"
+
+    # And a later, genuine re-pick by the same member still wins.
+    repick, _ = sync.seats_to_signups(
+        [{**forged, "rival_owner_id": "222222222222"}],
+        {LEAGUE: "commish@example.com"}, "2026-09-01T11:00:00+00:00")
+    projected = sync.project([*seats, *repick])
+    assert [s.rival_owner_id for s in projected] == ["222222222222"]

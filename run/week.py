@@ -96,14 +96,28 @@ def text_summary(report: Mapping[str, Any]) -> str:
     if matchup.get("win_probability") is not None:
         lines.append(f"  win probability: {matchup['win_probability']:.0%}")
     else:
-        lines.append(f"  win probability: {matchup.get('win_probability_gate')}")
+        lines.append(f"  {matchup.get('win_probability_gate')}.")
     lines += ["", "YOUR BEST LINEUP"]
+    # Same rule as the two HTML surfaces: the per-row marker earns its place
+    # only in a MIXED week. With nothing published, nine identical "no call"s
+    # said less than one line saying why — and plain text has no note under the
+    # table to carry the reason, so it goes here.
+    mixed = any(s.get("confidence") is not None for s in report["lineup"])
     for slot in report["lineup"]:
         name = slot.get("player_name") or "(empty)"
         projected = f"{slot['projected']:.1f}" if slot.get("projected") is not None else "—"
-        confidence = (f"{slot['confidence']:.0%} vs {slot.get('alternative_name')}"
-                      if slot.get("confidence") is not None else "no call")
-        lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}")
+        if slot.get("confidence") is not None:
+            confidence = f"{slot['confidence']:.0%} vs {slot.get('alternative_name')}"
+        elif mixed:
+            confidence = "no call"
+        else:
+            confidence = ""
+        lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
+    if not mixed:
+        gates = sorted({s["confidence_gate"] for s in report["lineup"]
+                        if s.get("confidence_gate")})
+        if gates:
+            lines.append(f"  No call on any slot this week: {' · '.join(gates)}.")
     regret = report["regret"]
     lines.append("")
     if "gate" in regret:

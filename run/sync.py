@@ -50,6 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -344,7 +345,16 @@ def sweep_stripe(api_key: str, since: int | None = None,
     base = {"status": "complete", "limit": "100", "expand[]": "data.customer"}
     if since is not None:
         base["created[gte]"] = str(max(0, since - WATERMARK_SLACK_SECONDS))
-    for link in (list(link_plans or {}) or [None]):
+    # The per-link queries are an optimisation, NEVER the filter. Ending with an
+    # unfiltered sweep is what makes a missing map entry survivable: configure
+    # only the League Pass link (which is the one the setup message names) and
+    # every season and monthly buyer paid, was never swept, never reached the
+    # registry, never got a report — and kept being charged. Now they arrive as
+    # a visible signup whose plan claim simply grants no coverage, which is the
+    # fail-closed behaviour we already wanted. seen_sessions dedupes the
+    # overlap, and the authoritative plan still comes from the session's own
+    # payment_link, so nothing about the coverage rule changes.
+    for link in [*(link_plans or {}), None]:
         query = dict(base)
         if link:
             query["payment_link"] = link
@@ -513,13 +523,22 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def seats_to_signups(rows: Iterable[dict], covered_leagues: dict[str, str]) -> \
-        tuple[list[Signup], list[str]]:
+def seats_to_signups(rows: Iterable[dict], covered_leagues: dict[str, str],
+                     received_at: str) -> tuple[list[Signup], list[str]]:
     """Validate seat claims. ``covered_leagues`` maps league_id -> payer email.
 
     A seat is only real if some League Pass actually covers that league. Without
     that check the form endpoint is a free-report generator for anyone who finds
     the URL — it is public by necessity, so it must be validated, not trusted.
+
+    ``received_at`` is WHEN WE READ IT, not when the row says it was made. The
+    form is public, so `added_at` is attacker-supplied: a claim stamped
+    "9999-12-31" outranks every later seat for that key forever, and the league
+    member re-picking their rival would silently never take effect. It is still
+    not our clock in the sense the Stripe path avoids — ``event_key`` ignores
+    timestamps, so a seat we have already logged is not re-logged and keeps its
+    first-observed stamp, which is what keeps the sweep idempotent. It is
+    threaded in rather than read here so a caller and a test can pin it.
     """
     signups: list[Signup] = []
     problems: list[str] = []
@@ -558,7 +577,7 @@ def seats_to_signups(rows: Iterable[dict], covered_leagues: dict[str, str]) -> \
             rival_roster_id=rival_roster_id,
             plan="league_pass",
             source="form",
-            seen_at=str(row.get("added_at") or row.get("created_at") or ""),
+            seen_at=received_at,
             sleeper_username=str(username).strip() if username else None,
             covered_by=payer,
         ))
@@ -958,7 +977,8 @@ def main(argv: list[str] | None = None) -> int:
     if seat_endpoint:
         try:
             rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
-            seats, seat_problems = seats_to_signups(rows, covered)
+            seats, seat_problems = seats_to_signups(
+                rows, covered, datetime.now(timezone.utc).isoformat())
             problems.extend(seat_problems)
             print(f"Seats: {len(seats)} claim(s) across {len(covered)} covered league(s)")
         except SyncError as exc:
