@@ -60,9 +60,8 @@ Z_80_BAND = 1.2816
 WIN_PROBABILITY_CALIBRATED = False
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
-    "we're not putting a win percentage on this yet. We tested it on two past "
-    "seasons and our favorites won more often than we predicted, which means "
-    "the number would be misleading — so we're leaving it off until it's right")
+    "no win percentage. We tested one against two seasons and our favourites "
+    "won more often than it said, so the number would mislead you")
 TEAM_RANGE_BASIS = (
     "Your realistic high and low. Testing on two past seasons, real weekly "
     "totals landed inside this range about 78% of the time.")
@@ -237,6 +236,10 @@ def rival_lineup(
     week = team_week.week
     picks: list[SlotPick] = []
     started = set(team_week.starters)
+    projections: dict[int, Projection] = {}
+    # (slot_index, bench_id) -> that bench player's projection, for every pair
+    # the league would actually allow.
+    candidates: dict[tuple[int, str], Projection] = {}
     for index, slot in enumerate(season.starting_slots):
         # A short or null starters array means unset slots, not fewer slots —
         # emit an unfilled pick so win_probability's gate still sees it.
@@ -256,10 +259,8 @@ def rival_lineup(
         if projection is not None and projection.games < MIN_GAMES_FOR_CALL:
             flags.append({"kind": "thin",
                           "text": f"only {projection.games} scoring games on record"})
-
-        # The exploitable spot: their own bench has a better-projected option.
-        best_alt: Projection | None = None
-        best_alt_id: str | None = None
+        if projection is not None:
+            projections[index] = projection
         for bench_id in team_week.players:
             if bench_id in started or bench_id in EMPTY_SLOT_IDS:
                 continue
@@ -271,18 +272,53 @@ def rival_lineup(
                 continue
             if availability.classify(bench_id).status is Status.OUT:
                 continue
-            if best_alt is None or alt.mean > best_alt.mean:
-                best_alt, best_alt_id = alt, bench_id
-        if (projection is not None and best_alt is not None
-                and best_alt.mean > projection.mean):
-            flags.append({
-                "kind": "bench_better",
-                "text": (f"their bench {players.name(best_alt_id)} projects higher "
-                         f"({best_alt.mean:.1f} vs {projection.mean:.1f})"),
-            })
+            candidates[(index, bench_id)] = alt
         picks.append(SlotPick(slot, index, pid, projection, status, None, None,
-                              best_alt_id, best_alt, flags))
+                              None, None, flags))
+
+    for index, bench_id, alt in _assign_alternatives(candidates, projections):
+        pick = picks[index]
+        pick.alternative_id = bench_id
+        pick.alternative_projection = alt
+        gain = alt.mean - projections[index].mean
+        if gain > 0:
+            pick.flags.append({
+                "kind": "bench_better",
+                "text": (f"their bench {players.name(bench_id)} projects higher "
+                         f"({alt.mean:.1f} vs {projections[index].mean:.1f})"),
+            })
     return picks
+
+
+def _assign_alternatives(
+    candidates: Mapping[tuple[int, str], Projection],
+    projections: Mapping[int, Projection],
+) -> list[tuple[int, str, Projection]]:
+    """Give each bench player to at most ONE slot: the one he improves most.
+
+    Computing the best alternative per slot independently let a single bench
+    receiver be named as the fix for four different slots at once — four
+    exploitable spots reported where the roster only ever contained one. The
+    rival cannot start him twice, so neither may we say so. Greedy by gain,
+    which is the order a manager would actually make the swaps in.
+    """
+    ranked = sorted(
+        ((alt.mean - projections[index].mean, index, bench_id, alt)
+         for (index, bench_id), alt in candidates.items()
+         if index in projections),
+        # Ties broken on the ids so a report is byte-identical across runs.
+        key=lambda item: (-item[0], item[1], item[2]),
+    )
+    taken_slots: set[int] = set()
+    taken_bench: set[str] = set()
+    assigned: list[tuple[int, str, Projection]] = []
+    for _, index, bench_id, alt in ranked:
+        if index in taken_slots or bench_id in taken_bench:
+            continue
+        taken_slots.add(index)
+        taken_bench.add(bench_id)
+        assigned.append((index, bench_id, alt))
+    return assigned
 
 
 # --------------------------------------------------------------------- #
@@ -569,21 +605,18 @@ def fragility(
                                 + (f", as of {pick.status.as_of}" if pick.status and pick.status.as_of else ""),
                 })
 
-    # One bench player can outproject several starters; that is ONE story,
-    # not four repeated lines — group by the benched player.
-    beaten_by_alt: dict[str, list[SlotPick]] = {}
-    for pick in rival_picks:
-        if pick.alternative_id and any(f["kind"] == "bench_better" for f in pick.flags):
-            beaten_by_alt.setdefault(pick.alternative_id, []).append(pick)
-    for alt_id, beaten in sorted(beaten_by_alt.items(),
-                                 key=lambda kv: -len(kv[1])):
-        alt_projection = beaten[0].alternative_projection
-        if alt_projection is None:
-            continue
-        starters = ", ".join(
-            f"{players.name(p.player_id or '')} at {p.slot} ({p.projection.mean:.1f})"
-            for p in beaten if p.projection
-        )
+    # Each bench player is assigned to at most ONE slot upstream, so every
+    # line here is a distinct exploitable spot rather than the same benched
+    # receiver counted once per slot he happens to be eligible for. Biggest
+    # gain first — that is the one worth reading.
+    beating = [p for p in rival_picks
+               if p.alternative_id and p.projection and p.alternative_projection
+               and any(f["kind"] == "bench_better" for f in p.flags)]
+    for pick in sorted(beating, key=lambda p: -(p.alternative_projection.mean
+                                                - p.projection.mean)):
+        alt_id = pick.alternative_id or ""
+        alt_projection = pick.alternative_projection
+        assert alt_projection is not None and pick.projection is not None
         # What he has actually been given, when we can say it. A projection is
         # our opinion; a target count is the league's own record, and it is the
         # difference between "we think he is better" and "look what he gets".
@@ -594,9 +627,9 @@ def fragility(
                 usage_note = f" And he is being used: {line}."
         items.append({
             "title": f"{players.name(alt_id)} is sitting on their bench",
-            "detail": (f"He projects {alt_projection.mean:.1f} — above "
-                       f"{len(beaten)} of their set starters: {starters}."
-                       f"{usage_note}"),
+            "detail": (f"He projects {alt_projection.mean:.1f} against "
+                       f"{players.name(pick.player_id or '')} at {pick.slot} "
+                       f"({pick.projection.mean:.1f}).{usage_note}"),
             "evidence": f"based on scoring through week "
                         f"{alt_projection.as_of_week - 1}, {season.season}",
         })

@@ -286,7 +286,8 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
             f'The odds your best lineup outscores the lineup they have set.</p></div>'
         )
     else:
-        field = gate_note(f'win probability — {matchup.get("win_probability_gate", "gated")}')
+        # Deliberately NOT in the scoreboard slot — see below.
+        field = ""
 
     # Ranges carry their own backtest evidence (band coverage), so they render
     # independently of the win-probability gate — but only when the engine
@@ -328,13 +329,17 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
         read = (f'<p class="rread">Their realistic week and yours overlap by '
                 f'<b>{over_share}%</b> — which is why the gap above is small '
                 f'next to the swing.</p>')
+    withheld = ""
+    if matchup.get("win_probability") is None and matchup.get("win_probability_gate"):
+        withheld = (f'<p class="withheldline">'
+                    f'{esc(matchup["win_probability_gate"])}.</p>')
     ranges = (
         f'<div class="rangeaxis">'
         f'<div class="rlab"><span class="you">{esc(you["label"])}</span>'
         f'<span class="rival">{esc(rival["label"])}</span></div>'
         f'<div class="rtrack">{over_html}{row(you, "you")}{row(rival, "rival")}</div>'
         f'<div class="rends"><span>{lo:.0f}</span><span>{hi:.0f}</span></div>'
-        f'{read}</div>{basis_html}'
+        f'{read}</div>{withheld}{basis_html}'
     )
 
     return _section("The Matchup", 2, board + field + ranges)
@@ -444,6 +449,89 @@ def section_rival_watch(watch: Mapping[str, Any] | None) -> str:
             f'<p class="mkt">{esc(evidence)} · record {esc(watch.get("record_evidence", ""))}</p>'
         )
     return _section("Rival Watch", 0, body)
+
+
+def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
+    """One half of a row. The name leads; the sub-line carries scouting facts,
+    not our methodology — every product in this market uses that line for what
+    the player is getting, and we were spending it on "8 games of form"."""
+    name = slot.get("player_name") or "—"
+    proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+    bits = []
+    if mine:
+        edge = edge_phrase(slot)
+        if edge:
+            bits.append(edge)
+        conf = slot.get("confidence")
+        if conf is not None:
+            bits.append(f"{_pct(conf)}")
+        elif mixed and slot.get("player_name") and slot.get("confidence_gate"):
+            # Only in a MIXED week. Where some rows carry a percentage, silence
+            # on the others would read as a call we forgot to make. Where NO
+            # row does, nine identical "no call" markers say nothing the note
+            # under the table does not say once, properly, with the reason.
+            bits.append(NO_CALL)
+    else:
+        for flag in slot.get("flags") or []:
+            bits.append(flag["text"])
+    sub = (f'<span class="tsub">{esc(" · ".join(bits))}</span>' if bits else "")
+    side = "you" if mine else "rival"
+    return (f'<td class="tside {side}"><span class="tname">{esc(name)}</span>'
+            f'{sub}</td><td class="tpts {side}">{proj}</td>')
+
+
+def section_tape(report: Mapping[str, Any]) -> str:
+    """Both lineups, one row per slot, your player against theirs.
+
+    This replaces two stacked nine-row tables and the prose that restated them.
+    Sleeper's own matchup screen — the one this buyer already lives in — is a
+    centre-spine list with no prose at all, and Fantasy Life's head-to-head
+    comparison contains two words of English. The tint says who wins the slot,
+    so nothing has to say it.
+    """
+    mine, theirs = report["lineup"], report["rival_lineup"]
+    as_set = report["meta"].get("lineup_as_set")
+    mixed = any(s.get("confidence") is not None for s in mine)
+    rows = []
+    for index, slot in enumerate(mine):
+        other = theirs[index] if index < len(theirs) else {}
+        a = slot.get("projected")
+        b = other.get("projected")
+        # The tint is the verdict. It is only claimed when BOTH sides have a
+        # projection — a one-sided comparison would tint on missing data.
+        lead = "" if a is None or b is None else (" alead" if a > b else
+                                                  " blead" if b > a else "")
+        rows.append(
+            f'<tr class="trow{lead}">{_tape_side(slot, True, mixed)}'
+            f'<td class="tslot">{esc(slot["slot"])}</td>'
+            f'{_tape_side(other, False)}</tr>'
+        )
+    matchup = report["matchup"]
+    you_total = matchup["you"].get("projected_total")
+    rival_total = matchup["rival"].get("projected_total")
+    total_row = ""
+    if you_total is not None and rival_total is not None:
+        total_row = (f'<tr class="trow ttotal"><td class="tside you">TOTAL</td>'
+                     f'<td class="tpts you">{you_total:.1f}</td>'
+                     f'<td class="tslot"></td>'
+                     f'<td class="tside rival"></td>'
+                     f'<td class="tpts rival">{rival_total:.1f}</td></tr>')
+    head = (f'<tr class="thead"><td colspan="2">You</td><td></td>'
+            f'<td colspan="2">{esc(report["meta"]["rival_label"])}</td></tr>')
+    note = ""
+    if as_set:
+        note = (f'<div class="benchnote"><b>{esc(AS_SET_HEAD)}</b> '
+                f'{esc(AS_SET_BODY)}</div>')
+    else:
+        gates = {s["confidence_gate"] for s in mine if s.get("confidence_gate")}
+        if gates:
+            head_text = (f'Why some slots say "{NO_CALL}":' if mixed
+                         else f'{NO_CALL.capitalize()} on any slot this week:')
+            note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
+                    f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
+    title = "The Tape — As Set" if as_set else "The Tape"
+    return _section(title, 4,
+                    f'<table class="tape">{head}{"".join(rows)}{total_row}</table>{note}')
 
 
 def section_lineup(report: Mapping[str, Any]) -> str:
@@ -573,6 +661,17 @@ def section_hype(entries: list[Mapping[str, Any]],
                 f'{esc(shared_gate)}</div>' if shared_gate else "")
         body = f'<div class="hype">{"".join(cards)}</div>{note}'
     return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
+
+
+def edge_phrase(slot: Mapping[str, Any]) -> str:
+    """What this start beats, and by how much. ONE implementation, imported by
+    the email renderer — the two surfaces had written it differently, and the
+    longer wording wrapped every row of the email tape onto two lines."""
+    edge = slot.get("edge")
+    name = slot.get("alternative_name")
+    if edge is None or not name:
+        return ""
+    return f"{edge:+.1f} vs {name}"
 
 
 def who_can_cover(rivals: int | None, others: int | None) -> str:
@@ -799,8 +898,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
         section_last_week(report.get("last_week")),
         section_matchup(report["matchup"]),
         section_rival_watch(report.get("rival_watch")),
-        section_lineup(report),
-        section_rival_lineup(report),
+        section_tape(report),
         section_fragility(report["fragility"], meta["rival_label"]),
         section_regret(report["regret"]),
         section_pivots(report["pivots"]),
@@ -841,6 +939,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", type=Path,
                         default=REPO_ROOT / "data" / "processed" / "week_report.json")
     parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--public", action="store_true",
+        help="anonymise league identities (the marketing demo, never a live report)")
     args = parser.parse_args(argv)
 
     if not args.input.is_file():
@@ -848,6 +949,8 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
     report = json.loads(args.input.read_text(encoding="utf-8"))
+    if args.public:
+        report = anonymize_for_public(report)
     template_html = TEMPLATE_PATH.read_text(encoding="utf-8")
 
     meta = report["meta"]

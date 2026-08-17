@@ -25,19 +25,18 @@ from typing import Any, Mapping
 from render.report import (
     AS_SET_BODY,
     AS_SET_HEAD,
-    AS_SET_TITLE,
     BRAND_LINE,
     CANCEL_BODY,
     CANCEL_HEAD,
     NO_BETTING_LINE,
     NO_CALL,
     NOT_CALLING_IT,
-    OPTIMAL_TITLE,
     SLEEPER_LINE,
     _forward_line,
     _generated_stamp,
     _pct,
     availability_basis,
+    edge_phrase,
     esc,
     no_call_explainer,
     who_can_cover,
@@ -273,111 +272,90 @@ def _rival_watch(watch: Mapping[str, Any] | None) -> str:
     return _sec(0, "Rival Watch", body)
 
 
-def _lineup_rows(slots: list[Mapping[str, Any]], calls: bool) -> str:
-    rows = []
-    for slot in slots:
-        name = slot.get("player_name") or "(empty)"
-        meta_bits = [b for b in (
-            slot.get("position"),
-            (f'{slot["form_games"]} games of form'
-             if slot.get("form_games") is not None else None)) if b]
-        flags = "".join(
-            f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
-            f'{esc(f["text"])}</span>' for f in (slot.get("flags") or []))
-        projected = (f'{slot["projected"]:.1f}'
-                     if slot.get("projected") is not None else "—")
+def _tape_cells(slot: Mapping[str, Any], mine: bool, tint: str,
+                mixed: bool = False) -> str:
+    """One half of a tape row: name over its sub-line, then the projection.
+
+    The sub-line carries scouting facts — the point gap on your side, the
+    fragility flag on theirs — never our methodology.
+    """
+    name = slot.get("player_name") or "—"
+    proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+    bits: list[str] = []
+    if mine:
+        edge = edge_phrase(slot)
+        if edge:
+            bits.append(esc(edge))
         confidence = slot.get("confidence")
-        edge = slot.get("edge")
         if confidence is not None:
-            conf = f'<b>{_pct(confidence)}</b>'
-        elif calls:
-            conf = f'<span style="color:{SLATE};">{esc(NO_CALL)}</span>'
-        else:
-            conf = ""
-        if calls and edge is not None:
-            conf += (f'<br><span style="font-size:11px;color:{NAVY};">'
-                     f'{edge:+.1f}</span>')
-        # The name it beats goes in the wide player column, never the narrow
-        # one — and only on your own grid, never the rival's.
-        if calls and edge is not None and slot.get("alternative_name"):
-            flags += (f'<br><span style="{SMALL}color:{NAVY};">{edge:+.1f} on our '
-                      f'numbers vs {esc(slot["alternative_name"])}</span>')
-        # The cell always renders (empty for the rival grid) so every row has
-        # the same column count as the header and the total row.
-        conf_cell = (f'<td style="{BASE}font-size:12px;padding:7px 0 7px 8px;'
-                     f'border-bottom:1px solid {LINE};text-align:right;'
-                     f'white-space:nowrap;">{conf}</td>')
-        rows.append(
-            f'<tr><td style="{BASE}font-weight:bold;font-size:12px;color:{SLATE};'
-            f'padding:7px 8px 7px 0;border-bottom:1px solid {LINE};'
-            f'vertical-align:top;">{esc(slot["slot"])}</td>'
-            f'<td style="{BASE}padding:7px 8px 7px 0;border-bottom:1px solid {LINE};">'
-            f'<b>{esc(name)}</b>'
-            + (f' <span style="{SMALL}">{esc(" · ".join(meta_bits))}</span>'
-               if meta_bits else "")
-            + f'{flags}</td>'
-            f'<td style="{BASE}padding:7px 0;border-bottom:1px solid {LINE};'
-            f'text-align:right;vertical-align:top;"><b>{projected}</b></td>'
-            f'{conf_cell}</tr>'
-        )
-    return "".join(rows)
+            bits.append(f"{_pct(confidence)}")
+        elif mixed and slot.get("player_name") and slot.get("confidence_gate"):
+            # Mixed weeks only — see render.report._tape_side for the reason.
+            bits.append(esc(NO_CALL))
+    else:
+        bits += [esc(f["text"]) for f in (slot.get("flags") or [])]
+    align = "left" if mine else "right"
+    cell = (f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
+            f'text-align:{align};background-color:{tint};')
+    sub = (f'<br><span style="{SMALL}">{" · ".join(bits)}</span>' if bits else "")
+    return (f'<td style="{cell}"><b>{esc(name)}</b>{sub}</td>'
+            f'<td style="{cell}white-space:nowrap;font-weight:bold;'
+            f'text-align:right;">{proj}</td>')
 
 
-def _lineup_head(calls: bool) -> str:
-    th = (f'style="{SMALL}font-weight:bold;text-transform:uppercase;'
-          f'letter-spacing:1px;padding:0 0 5px 0;border-bottom:2px solid {NAVY};"')
-    conf = (f'<td {th} align="right">Conf</td>') if calls else f'<td {th}></td>'
-    return (f'<tr><td {th}>Slot</td><td {th}>Player</td>'
-            f'<td {th} align="right">Proj</td>{conf}</tr>')
+def _tape(report: Mapping[str, Any]) -> str:
+    """Both lineups on one centre spine — the same grid the browser renders.
 
-
-def _lineup_table(slots: list[Mapping[str, Any]], calls: bool,
-                  total: float | None, total_label: str) -> str:
-    total_row = ""
-    if total is not None:
-        total_row = (
-            f'<tr><td style="padding:8px 0;"></td>'
-            f'<td style="{BASE}font-weight:bold;padding:8px 8px 8px 0;">'
-            f'Projected Total</td>'
-            f'<td style="{BASE}font-weight:bold;padding:8px 0;text-align:right;">'
-            f'{total:.1f}</td>'
-            f'<td style="{SMALL}padding:8px 0 8px 8px;text-align:right;'
-            f'white-space:nowrap;">{esc(total_label)}</td></tr>'
-        )
-    return (f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{_lineup_head(calls)}'
-            f'{_lineup_rows(slots, calls)}{total_row}</table>')
-
-
-def _my_lineup(report: Mapping[str, Any]) -> str:
-    slots = report["lineup"]
+    Two stacked nine-row tables made the reader hold your RB in their head
+    while scrolling to find theirs. Here the comparison is the row, and the
+    tint says who wins the slot so no sentence has to.
+    """
+    mine, theirs = report["lineup"], report["rival_lineup"]
     as_set = report["meta"].get("lineup_as_set")
-    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
+    mixed = any(s.get("confidence") is not None for s in mine)
+    rows = []
+    for index, slot in enumerate(mine):
+        other = theirs[index] if index < len(theirs) else {}
+        a, b = slot.get("projected"), other.get("projected")
+        # Only claimed when BOTH sides have a projection — tinting a row on
+        # one number would call a slot we could not compare.
+        atint = TURF_TINT if (a is not None and b is not None and a > b) else CARD
+        btint = BRICK_TINT if (a is not None and b is not None and b > a) else CARD
+        rows.append(
+            f'<tr>{_tape_cells(slot, True, atint, mixed)}'
+            f'<td style="{SMALL}padding:7px 4px;border-bottom:1px solid {LINE};'
+            f'text-align:center;font-weight:bold;color:{SLATE};'
+            f'white-space:nowrap;">{esc(slot["slot"])}</td>'
+            f'{_tape_cells(other, False, btint)}</tr>'
+        )
+    matchup = report["matchup"]
+    you_total = matchup["you"].get("projected_total")
+    rival_total = matchup["rival"].get("projected_total")
+    total = ""
+    if you_total is not None and rival_total is not None:
+        tcell = f'{BASE}font-weight:bold;padding:9px 8px;border-top:2px solid {NAVY};'
+        total = (f'<tr><td style="{tcell}">TOTAL</td>'
+                 f'<td style="{tcell}text-align:right;">{you_total:.1f}</td>'
+                 f'<td style="{tcell}"></td><td style="{tcell}"></td>'
+                 f'<td style="{tcell}text-align:right;">{rival_total:.1f}</td></tr>')
+    th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
+          f'color:{NAVY};padding:0 8px 5px 8px;border-bottom:2px solid {NAVY};')
+    head = (f'<tr><td style="{th}" colspan="2">You</td><td style="{th}"></td>'
+            f'<td style="{th}text-align:right;" colspan="2">'
+            f'{esc(report["meta"]["rival_label"])}</td></tr>')
     note = ""
     if as_set:
         note = _note(f'<b>{esc(AS_SET_HEAD)}</b> {esc(AS_SET_BODY)}')
-    elif gates:
-        listed = " · ".join(sorted(gates))
-        note = _note(f'<b>Why some slots say "no call":</b> '
-                     f'{esc(no_call_explainer(listed))}')
-    matchup = report["matchup"]
-    you_total = matchup["you"].get("projected_total")
-    rival_total = matchup["rival"].get("projected_total")
-    table = _lineup_table(
-        slots, True, you_total,
-        f'vs {rival_total:.1f}' if rival_total is not None else "")
-    title = AS_SET_TITLE if as_set else OPTIMAL_TITLE
-    return _sec(3, title, table + note)
-
-
-def _rival_lineup(report: Mapping[str, Any]) -> str:
-    matchup = report["matchup"]
-    you_total = matchup["you"].get("projected_total")
-    rival_total = matchup["rival"].get("projected_total")
-    table = _lineup_table(
-        report["rival_lineup"], False, rival_total,
-        f'vs you {you_total:.1f}' if you_total is not None else "")
-    return _sec(4, f'{report["meta"]["rival_label"]} — Lineup As Set', table)
+    else:
+        gates = {s["confidence_gate"] for s in mine if s.get("confidence_gate")}
+        if gates:
+            head_text = (f'Why some slots say "{NO_CALL}":' if mixed
+                         else f'{NO_CALL.capitalize()} on any slot this week:')
+            note = _note(f'<b>{esc(head_text)}</b> '
+                         f'{esc(no_call_explainer(" · ".join(sorted(gates))))}')
+    table = (f'<table role="presentation" width="100%" cellpadding="0" '
+             f'cellspacing="0" border="0">{head}{"".join(rows)}{total}</table>')
+    return _sec(4, "The Tape — As Set" if as_set else "The Tape", table + note)
 
 
 def _fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
@@ -579,8 +557,7 @@ def render_email(report: Mapping[str, Any]) -> str:
         _last_week(report.get("last_week")),
         _matchup(report["matchup"]),
         _rival_watch(report.get("rival_watch")),
-        _my_lineup(report),
-        _rival_lineup(report),
+        _tape(report),
         _fragility(report["fragility"], meta["rival_label"]),
         _regret(report["regret"]),
         _pivots(report["pivots"]),

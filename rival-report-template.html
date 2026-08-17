@@ -127,6 +127,10 @@
   .usage{margin-top:6px;font-size:12.5px;font-weight:700;color:var(--ink2);
     font-variant-numeric:tabular-nums;}
 
+  /* What we will not put a number on. Stated once, quietly, AFTER the
+     numbers we do stand behind — never in the scoreboard slot. */
+  .withheldline{margin-top:10px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+
   /* The week just gone. No verdict colour on the loss case — this resolves
      the week, it does not score the reader. */
   .lastread{font-size:15.5px;line-height:1.55;color:var(--ink2);margin-top:16px;}
@@ -160,6 +164,32 @@
   .range.you .med{left:61%;} .range.rival .med{left:56%;}
   .range .nums{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
     margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+
+  /* ================= the tape ================= */
+  /* One row per slot, your player against theirs, the position badge on the
+     spine. The winning half is TINTED — that is the verdict, so no words are
+     spent saying it. This is the layout Sleeper's own matchup screen uses. */
+  .tape{width:100%;margin-top:16px;border-collapse:collapse;background:var(--card);
+    border:2px solid var(--navy);}
+  .tape td{padding:9px 8px;border-top:1px solid #EDEAE1;vertical-align:top;}
+  .thead td{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
+    letter-spacing:.14em;text-transform:uppercase;padding:8px;border:none;}
+  .thead td:last-child{text-align:right;}
+  .tslot{width:44px;text-align:center;font-family:'Barlow Condensed';font-weight:800;
+    font-size:13px;color:var(--slate);background:#F2F0E8;}
+  .tname{display:block;font-weight:700;font-size:14px;line-height:1.2;}
+  .tsub{display:block;margin-top:2px;font-size:10.5px;color:var(--slate);line-height:1.3;}
+  .tpts{width:46px;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+    font-variant-numeric:tabular-nums;}
+  .tside.rival{text-align:right;} .tpts.rival{text-align:right;}
+  .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
+  .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
+  .ttotal td{border-top:2px solid var(--navy);background:#F2F0E8;
+    font-family:'Barlow Condensed';font-weight:800;}
+  @media (max-width:520px){
+    .tname{font-size:12.5px;} .tpts{font-size:15px;width:38px;}
+    .tsub{font-size:9.5px;} .tape td{padding:7px 5px;}
+  }
 
   /* ================= lineup grid ================= */
   .lineup{margin-top:16px;background:var(--card);border:2px solid var(--navy);}

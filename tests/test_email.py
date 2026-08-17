@@ -14,7 +14,13 @@ from pathlib import Path
 import test_week_report as twr
 from engine.week_report import build_week_report
 from render.email import render_email
-from render.report import CANCEL_BODY, CANCEL_HEAD, NO_BETTING_LINE
+from render.report import (
+    CANCEL_BODY,
+    CANCEL_HEAD,
+    NO_BETTING_LINE,
+    edge_phrase,
+    esc,
+)
 
 
 def _report(tmp_path: Path) -> dict:
@@ -155,8 +161,11 @@ def test_the_email_carries_what_the_browser_report_carries(tmp_path: Path) -> No
 
     if any(h.get("usage") for h in report.get("hype", [])):
         assert "targets" in email_html, "email dropped counted usage"
-    if any(s.get("edge") is not None for s in report.get("lineup", [])):
-        assert "on our numbers vs" in email_html, "email dropped the point gap"
+    for slot in report.get("lineup", []):
+        phrase = edge_phrase(slot)
+        if phrase:
+            assert esc(phrase) in email_html, f"email dropped the point gap: {phrase}"
+            assert esc(phrase) in browser_html
     # the sentence that used to exist in three diverging copies
     if "of the other" in browser_html:
         assert "of the other" in email_html, \

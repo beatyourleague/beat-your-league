@@ -8,6 +8,7 @@ each assertion has one unambiguous right answer.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -261,7 +262,11 @@ def test_win_probability_calibration_gate_is_default() -> None:
     my_picks = optimal_lineup(season, mine, model, players, known)
     rival_picks = rival_lineup(season, rival, model, players, known)
     prob, gate = win_probability(my_picks, rival_picks)
-    assert prob is None and "not putting a win percentage" in (gate or "")
+    assert prob is None and "no win percentage" in (gate or "")
+    # and it must not promise a fix: the gate backtest moved calibrated
+    # buckets only 1-of-6 to 2-of-5, so "until it's right" is a commitment
+    # the evidence does not support.
+    assert "until it's right" not in (gate or "")
 
 
 def test_win_probability_gates_on_any_non_active_starter(
@@ -355,8 +360,24 @@ def test_rival_bench_better_flag() -> None:
     model = ProjectionModel(season, players)
     rival = season.weeks[REPORT_WEEK][2]
     picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL))
-    rb = next(p for p in picks if p.slot == "RB")
-    assert any(f["kind"] == "bench_better" for f in rb.flags)  # rb8 (17) > rb9 (12)
+    flagged = [p for p in picks if any(f["kind"] == "bench_better" for f in p.flags)]
+    # rb8 (15.2) is RB- and FLEX-eligible; he is worth +2.8 at RB and +8.2 at
+    # FLEX, so the exploitable spot is FLEX.
+    assert [p.slot for p in flagged] == ["FLEX"]
+    assert flagged[0].alternative_id == "rb8"
+
+
+def test_one_bench_player_is_the_fix_for_only_one_slot() -> None:
+    """A benched receiver eligible at WR, WR and two FLEXes was reported as the
+    fix for all four — four exploitable spots where the roster held one. The
+    rival cannot start him twice, so neither may we say so."""
+    season = _season()
+    players = _player_index()
+    model = ProjectionModel(season, players)
+    rival = season.weeks[REPORT_WEEK][2]
+    picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL))
+    named = [p.alternative_id for p in picks if p.alternative_id]
+    assert len(named) == len(set(named)), f"a bench player was double-booked: {named}"
 
 
 def test_regret_is_closest_published_call() -> None:
@@ -584,7 +605,8 @@ def test_render_gates_and_disclaimer(tmp_path: Path) -> None:
     assert "not guarantees" in html_out          # disclaimer footer present
     assert "Mike's Marauders" not in html_out    # no sample-data leakage
     assert "Not affiliated with Sleeper" in html_out
-    assert html_out.count('<div class="lrow head">') == 2  # both lineup grids
+    assert html_out.count('<table class="tape">') == 1  # both lineups, one grid
+    assert html_out.count('<tr class="trow') == len(report["lineup"]) + 1  # + total
 
 
 def test_render_shows_numbers_when_available(tmp_path: Path) -> None:
@@ -603,7 +625,7 @@ def test_render_shows_numbers_when_available(tmp_path: Path) -> None:
     assert any(s["confidence"] is not None for s in report["lineup"])
     # ...but the matchup win probability stays calibration-gated for now.
     assert report["matchup"]["win_probability"] is None
-    assert "not putting a win percentage" in report["matchup"]["win_probability_gate"]
+    assert "no win percentage" in report["matchup"]["win_probability_gate"]
     html_out = render(report, _template())
     # Ranges render on their own evidence, independent of the prob gate.
     # Both teams now share ONE axis, so assert the axis and both bands rather
@@ -707,8 +729,7 @@ def test_week_one_shows_the_lineup_as_set_never_empty_rows(tmp_path: Path) -> No
     assert named, "the set starters must appear"
     html = render(report, _template())
     assert "(empty)" not in html
-    assert "Your Lineup — As Set" in html
-    assert "Your Optimal Lineup" not in html
+    assert "The Tape — As Set" in html
 
 
 def test_mid_season_still_claims_optimal(tmp_path: Path) -> None:
@@ -717,7 +738,7 @@ def test_mid_season_still_claims_optimal(tmp_path: Path) -> None:
     report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
     assert report["meta"]["lineup_as_set"] is False
     html = render(report, _template())
-    assert "Your Optimal Lineup" in html
+    assert "The Tape" in html and "The Tape — As Set" not in html
 
 
 def test_the_checklist_decides_rather_than_asking() -> None:
@@ -765,9 +786,17 @@ def test_the_rival_grid_carries_no_calls_of_any_kind(tmp_path: Path) -> None:
     raw = _write_cache(tmp_path, season)
     report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
     html_out = render(report, _template())
-    rival_grid = html_out.split("Lineup As Set")[1].split("Is Fragile")[0]
-    assert 'class="pvs"' not in rival_grid, \
-        "the rival grid is coaching their lineup"
+    tape = html_out.split('<table class="tape">')[1].split("</table>")[0]
+    their_side = re.findall(r'<td class="tside rival">(.*?)</td>', tape)
+    assert their_side, "the tape lost its rival half"
+    for cell in their_side:
+        # A fragility flag ("their bench X projects higher") is the product;
+        # a confidence, a gate note, or our per-row point gap is coaching.
+        assert "%" not in cell, f"the tape put a call on their row: {cell}"
+        assert "no call" not in cell, \
+            f"a gate note about our own calls leaked onto their row: {cell}"
+        assert not re.search(r"[+-]\d+\.\d+ vs ", cell), \
+            f"the tape volunteered a swap for their lineup: {cell}"
 
 
 def test_the_two_ranges_share_one_axis_and_show_their_overlap(tmp_path: Path) -> None:
