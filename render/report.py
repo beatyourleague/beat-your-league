@@ -212,6 +212,27 @@ def section_checklist(items: list[Mapping[str, Any]]) -> str:
     return _section("The 30-Second Game Plan", 1, f'<div class="plan">{"".join(tasks)}</div>')
 
 
+def section_last_week(last: Mapping[str, Any] | None) -> str:
+    """The week just gone, closed out. Empty string in week 1.
+
+    The scoreline is the headline and the counts sit under it as chips. No
+    verdict colour on a loss: this section exists to resolve the week, not to
+    score the reader.
+    """
+    if not last:
+        return ""
+    tone = "win" if last.get("won") else "loss"
+    chips = [
+        f'<span class="drv">you <b>{last["points"]:.1f}</b></span>',
+        f'<span class="drv">them <b>{last["opponent_points"]:.1f}</b></span>',
+        f'<span class="drv">best you had <b>{last["best_possible"]:.1f}</b></span>',
+    ]
+    return _section(
+        f'Week {esc(last["week"])} — How It Ended', 2,
+        f'<p class="lastread {tone}">{esc(last["headline"])}</p>'
+        f'<div class="drivers">{"".join(chips)}</div>')
+
+
 def section_matchup(matchup: Mapping[str, Any]) -> str:
     you, rival = matchup["you"], matchup["rival"]
     # A side without a published total renders VS with the names only — a
@@ -739,6 +760,13 @@ def anonymize_for_public(report: Mapping[str, Any]) -> dict[str, Any]:
         str(meta.get("rival_label") or ""): "Rival Manager",
         str(meta.get("named_rival_label") or ""): "Your Named Rival",
     }
+    # LAST WEEK'S opponent is a different manager from this week's, and their
+    # name is baked into a prose headline. Every label that can reach the page
+    # has to be in this map or the scrub misses it — which it did, and the
+    # public-naming guard caught it.
+    prior = out.get("last_week") or {}
+    if prior.get("opponent_label"):
+        swaps[str(prior["opponent_label"])] = "Last Week's Opponent"
     swaps.pop("", None)
     meta["my_label"] = "Your Team"
     meta["rival_label"] = "Rival Manager"
@@ -768,6 +796,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     body = "".join([
         header(meta),
         section_checklist(report["checklist"]),
+        section_last_week(report.get("last_week")),
         section_matchup(report["matchup"]),
         section_rival_watch(report.get("rival_watch")),
         section_lineup(report),

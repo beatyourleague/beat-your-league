@@ -35,6 +35,8 @@ from engine.history import (
     EMPTY_SLOT_IDS, FLEX_ELIGIBILITY, HistoryError, PlayerIndex, Season,
     TeamWeek, load_players, load_season_chain,
 )
+from engine.last_week import headline as last_week_headline
+from engine.last_week import summarise as last_week_summary
 from engine.usage import recent_usage, usage_line
 from engine.projection import (
     MIN_GAMES_FOR_CALL, Projection, ProjectionModel, probability_outscores,
@@ -1025,6 +1027,33 @@ def build_week_report(
         line = usage_line(usage)
         if line:
             entry["usage"] = line
+    # Close out the week just gone. Retrospective and factual, so it carries no
+    # calibration burden — and it is the part of the fantasy week a manager
+    # actually feels, which the report skipped entirely.
+    last = None
+    if week > 1:
+        prior = [t for t in season.team_weeks() if t.week == week - 1]
+        mine_prior = next((t for t in prior if t.roster_id == my_roster_id), None)
+        opp_prior = next((t for t in prior
+                          if mine_prior is not None
+                          and t.roster_id != my_roster_id
+                          and t.matchup_id == mine_prior.matchup_id), None)
+        if mine_prior is not None and opp_prior is not None:
+            summary = last_week_summary(
+                season, mine_prior, opp_prior,
+                season.team_label(opp_prior.roster_id), players)
+            if summary is not None:
+                last = {
+                    "week": summary.week,
+                    "headline": last_week_headline(summary),
+                    "points": summary.points,
+                    "opponent_points": summary.opponent_points,
+                    "opponent_label": summary.opponent_label,
+                    "best_possible": summary.best_possible,
+                    "left_on_bench": summary.left_on_bench,
+                    "won": summary.won,
+                    "winnable": summary.winnable,
+                }
     watch = rival_watch(seasons, week, my_roster_id, rival.roster_id,
                         named_rival_owner_id, named_rival_roster_id,
                         players, model, availability)
@@ -1121,6 +1150,7 @@ def build_week_report(
             "range_basis": TEAM_RANGE_BASIS,
             "range_gate": (None if my_range and rival_range else TEAM_RANGE_GATE),
         },
+        "last_week": last,
         "rival_watch": watch,
         "lineup": [_slot_json(p, players) for p in my_picks],
         "rival_lineup": [_slot_json(p, players) for p in rival_picks],

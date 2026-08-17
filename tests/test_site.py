@@ -814,3 +814,22 @@ def test_the_who_can_cover_sentence_reads_like_a_person() -> None:
     assert who_can_cover(None, 11).startswith("we can't tell")
     # no denominator available: the noun agrees with the count
     assert who_can_cover(1, None) == "one team can cover that"
+
+
+def test_last_weeks_opponent_is_anonymised_on_the_public_demo() -> None:
+    """Last week's opponent is a DIFFERENT manager from this week's rival, and
+    their name is baked into a prose headline rather than sitting in a label
+    field. The first version of that section published a real Sleeper handle on
+    the marketing page; the naming guard caught it."""
+    from render.report import anonymize_for_public
+
+    report = {
+        "meta": {"my_label": "Me", "rival_label": "Them",
+                 "named_rival_label": None, "league_name": "L"},
+        "last_week": {"opponent_label": "realperson99",
+                      "headline": "realperson99 beat you 120.0-100.0."},
+    }
+    out = anonymize_for_public(report)
+    assert "realperson99" not in str(out), \
+        "last week's opponent survived the scrub"
+    assert "Last Week's Opponent" in out["last_week"]["headline"]

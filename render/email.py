@@ -151,6 +151,20 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
     return _sec(1, "The 30-Second Game Plan", body)
 
 
+def _last_week(last: Mapping[str, Any] | None) -> str:
+    """Same section, email-safe. The scoreline leads; the counts follow."""
+    if not last:
+        return ""
+    chips = " &nbsp;·&nbsp; ".join([
+        f'you <b>{last["points"]:.1f}</b>',
+        f'them <b>{last["opponent_points"]:.1f}</b>',
+        f'best you had <b>{last["best_possible"]:.1f}</b>',
+    ])
+    return _sec(2, f'Week {esc(last["week"])} — How It Ended',
+                f'<p style="{BASE}margin:0;">{esc(last["headline"])}</p>'
+                f'<p style="{SMALL}margin:8px 0 0 0;">{chips}</p>')
+
+
 def _gap_cell(matchup: Mapping[str, Any]) -> str:
     """The gap and its swing, exactly as the browser report states them: the
     gap never travels without the swing, and never in a verdict colour."""
@@ -562,6 +576,7 @@ def render_email(report: Mapping[str, Any]) -> str:
     sections = "".join([
         _header(meta),
         _checklist(report["checklist"]),
+        _last_week(report.get("last_week")),
         _matchup(report["matchup"]),
         _rival_watch(report.get("rival_watch")),
         _my_lineup(report),

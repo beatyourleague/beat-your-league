@@ -127,6 +127,11 @@
   .usage{margin-top:6px;font-size:12.5px;font-weight:700;color:var(--ink2);
     font-variant-numeric:tabular-nums;}
 
+  /* The week just gone. No verdict colour on the loss case — this resolves
+     the week, it does not score the reader. */
+  .lastread{font-size:15.5px;line-height:1.55;color:var(--ink2);margin-top:16px;}
+  .lastread.win{color:var(--navy);font-weight:600;}
+
   /* One shared axis. Scaled to the union of both bands each team fills 91-96%
      of its own track, so two separate tracks showed two near-identical bars and
      hid the only thing worth seeing: how much the two weeks OVERLAP. */
