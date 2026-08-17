@@ -813,3 +813,46 @@ def test_the_two_ranges_share_one_axis_and_show_their_overlap(tmp_path: Path) ->
     assert html_out.count('class="rtrack"') == 1, "the two teams must share one axis"
     assert 'class="rband you"' in html_out and 'class="rband rival"' in html_out
     assert "overlap by" in html_out, "the overlap is the reading, not decoration"
+
+
+def test_section_numbers_are_contiguous_on_every_surface(tmp_path: Path) -> None:
+    """The markers are sold as a case file, and a case file does not skip a
+    page. They were hardcoded per section, so merging the two lineup grids into
+    the Tape took 04 and orphaned 03 while last week's result duplicated 02 —
+    the shipped report and the shipped email both read 01, 02, 02, 04. Numbers
+    now come from position, and this pins that they still do, INCLUDING in a
+    week 1 report where the last-week section does not render at all."""
+    from render.email import render_email
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+
+    def markers(html_out: str) -> list[str]:
+        return re.findall(r'<span class="n">(\d+)</span>', html_out)
+
+    for got in (markers(render(report, _template())),
+                re.findall(r'>(\d\d)</span> ·', render_email(report))):
+        assert got, "the numbered sections vanished"
+        assert got == [f"{i:02d}" for i in range(1, len(got) + 1)], got
+
+    without = dict(report)
+    without["last_week"] = None
+    got = markers(render(without, _template()))
+    assert got == [f"{i:02d}" for i in range(1, len(got) + 1)], got
+
+
+def test_your_own_starters_carry_their_availability_flags(tmp_path: Path) -> None:
+    """optimal_lineup deliberately seats an OUT player when nothing eligible
+    remains — a bye-week DEF or the only rostered QB. The Tape read flags on
+    the rival's half only, so we flagged THEIR unavailable starter and rendered
+    yours as a clean projection, tinted as winning the slot. It is the one
+    player the reader can still do something about."""
+    from render.email import render_email
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+    named = next(s for s in report["lineup"] if s.get("player_name"))
+    named["flags"] = [{"kind": "out", "text": "OUT — ruled out (knee)"}]
+    for html_out in (render(report, _template()), render_email(report)):
+        assert "ruled out (knee)" in html_out, \
+            "your own starter's OUT flag never reached the page"

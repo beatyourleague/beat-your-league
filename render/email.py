@@ -31,6 +31,7 @@ from render.report import (
     NO_BETTING_LINE,
     NO_CALL,
     NOT_CALLING_IT,
+    SECTION_MARK,
     SLEEPER_LINE,
     _forward_line,
     _generated_stamp,
@@ -39,6 +40,7 @@ from render.report import (
     edge_phrase,
     esc,
     no_call_explainer,
+    number_sections,
     who_can_cover,
 )
 
@@ -63,8 +65,14 @@ SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
 
 def _sec(number: int, title: str, body: str) -> str:
-    """One report section: numbered case-file title bar, then the body."""
-    marker = f'<span style="color:{SLATE};">{number:02d}</span> · ' if number else ""
+    """One report section: numbered case-file title bar, then the body.
+
+    ``number`` says only WHETHER the section is numbered; the value is filled
+    in positionally by number_sections() once the page is assembled, so the
+    two surfaces cannot disagree and a merged section cannot leave a hole.
+    """
+    marker = (f'<span style="color:{SLATE};">{SECTION_MARK}</span> · '
+              if number else "")
     return (
         f'<tr><td style="padding:26px 28px 0 28px;">'
         f'<div style="font-family:{DISPLAY};font-size:14px;font-weight:bold;'
@@ -281,6 +289,9 @@ def _tape_cells(slot: Mapping[str, Any], mine: bool, tint: str,
     """
     name = slot.get("player_name") or "—"
     proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+    # Both halves — see render.report._tape_side. A bye-week starter of YOUR
+    # own is the flag the reader can still act on.
+    flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
     bits: list[str] = []
     if mine:
         edge = edge_phrase(slot)
@@ -292,13 +303,13 @@ def _tape_cells(slot: Mapping[str, Any], mine: bool, tint: str,
         elif mixed and slot.get("player_name") and slot.get("confidence_gate"):
             # Mixed weeks only — see render.report._tape_side for the reason.
             bits.append(esc(NO_CALL))
-    else:
-        bits += [esc(f["text"]) for f in (slot.get("flags") or [])]
     align = "left" if mine else "right"
     cell = (f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
             f'text-align:{align};background-color:{tint};')
+    flag = (f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
+            f'{" · ".join(flags)}</span>' if flags else "")
     sub = (f'<br><span style="{SMALL}">{" · ".join(bits)}</span>' if bits else "")
-    return (f'<td style="{cell}"><b>{esc(name)}</b>{sub}</td>'
+    return (f'<td style="{cell}"><b>{esc(name)}</b>{flag}{sub}</td>'
             f'<td style="{cell}white-space:nowrap;font-weight:bold;'
             f'text-align:right;">{proj}</td>')
 
@@ -567,6 +578,7 @@ def render_email(report: Mapping[str, Any]) -> str:
         '<tr><td style="padding:12px;"></td></tr>',
         _footer(meta),
     ])
+    sections = number_sections(sections)
     title = f'Beat Your League — Week {esc(meta["week"])} Rival Report'
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'

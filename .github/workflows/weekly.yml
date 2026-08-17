@@ -63,19 +63,25 @@ jobs:
       # export and no human step. A RESTRICTED key with read access to
       # subscriptions + customers is enough — never the full secret key.
       # Without it the run falls back to data/registry/substack-export.csv.
-      # No `if:` guard here on purpose. It used to gate on
-      # hashFiles('data/registry/subscribers.json'), which is a path under the
-      # gitignored data/ — on a fresh runner that file could never exist, so
-      # this step skipped itself on every single run and the cron has never
-      # actually mailed anybody. run.batch already exits 0 with "registry is
-      # empty — nothing to do" when there are no subscribers, which is the
-      # correct place for that decision.
+      # `if: always()` here and on the sync step, for a reason worth stating:
+      # MY OWN report must never be able to hold up a paying subscriber's.
+      # A step with no `if:` defaults to `if: success()`, so any non-zero exit
+      # from `run.week` above — a missing league id, an ingest 5xx on my league,
+      # a corrupt ledger — silently skipped the send for everybody, while the
+      # subscriber batch was perfectly able to run. `always()` keeps the job red
+      # and the failure issue firing; it just stops the blast radius at me.
+      # (The old gate here was hashFiles('data/registry/subscribers.json'), a
+      # path under the gitignored data/ that cannot exist on a fresh runner, so
+      # this step skipped itself on every run and the cron had never mailed
+      # anybody. run.batch already exits 0 with "registry is empty — nothing to
+      # do", which is the correct place for that decision.)
       # Turn payments into a registry BEFORE building anything. With
       # STRIPE_API_KEY unset this is a no-op and the run falls back to whatever
       # registry the cache restored, so enabling it is a secret, not a deploy.
       # continue-on-error: a sync that cannot reach Stripe must not stop last
       # week's known-good registry from being delivered.
       - name: Sync signups from payments
+        if: always()
         continue-on-error: true
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -84,6 +90,7 @@ jobs:
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
         run: .venv/bin/python -m run.sync
       - name: Send subscriber reports
+        if: always()
         env:
           SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}

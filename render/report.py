@@ -105,8 +105,6 @@ CANCEL_BODY = ("Cancel it yourself in your Substack account — it takes about "
                "fifteen seconds and stops the billing immediately. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end.")
-AS_SET_TITLE = "Your Lineup — As Set"
-OPTIMAL_TITLE = "Your Optimal Lineup"
 AS_SET_HEAD = "Your lineup, exactly as set."
 AS_SET_BODY = ("Start-sit calls begin once your league has box scores to "
                "compare against — from next week, this grid shows the lineup "
@@ -345,71 +343,6 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     return _section("The Matchup", 2, board + field + ranges)
 
 
-def _lineup_row(slot: Mapping[str, Any], calls: bool = True) -> str:
-    name = slot.get("player_name") or "(empty)"
-    meta_bits = [b for b in (slot.get("position"),
-                             f'{slot["form_games"]} games of form' if slot.get("form_games") is not None else None)
-                 if b]
-    flags = slot.get("flags") or []
-    flip = ' flip' if flags else ""
-    fliptags = "".join(f'<span class="fliptag">{esc(f["text"])}</span>' for f in flags)
-    projected = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
-    confidence = slot.get("confidence")
-    # The point gap to the named alternative. It does not depend on
-    # availability, so a gated row can carry it honestly — withholding it
-    # withheld nothing that needed withholding, and left nine blank rows.
-    edge = slot.get("edge")
-    # The number goes in the narrow column; the name it beats goes in the 1fr
-    # player column. Put a real name in a 62px cell and every row grows to three
-    # lines and the grid stops reading as a table.
-    edge_lab = f'<span class="cedge">{edge:+.1f}</span>' if edge is not None else ""
-    # Gated on `calls` for the same reason the confidence cell is: on the
-    # rival's grid this restates the flip tag on flagged rows and coaches their
-    # bench on the others.
-    edge_line = (f'<span class="pvs">{edge:+.1f} on our numbers vs '
-                 f'{esc(slot.get("alternative_name"))}</span>'
-                 if calls and edge is not None and slot.get("alternative_name")
-                 else "")
-    if confidence is not None:
-        conf_cell = (f'<span class="cwrap"><span class="cbar">'
-                     f'<i style="width:{_pct(confidence)}%"></i></span>'
-                     f'<span class="clab">{_pct(confidence)}</span>{edge_lab}</span>')
-    elif calls:
-        conf_cell = (f'<span class="cwrap"><span class="clab">{esc(NO_CALL)}</span>'
-                     f'{edge_lab}</span>')
-    else:
-        conf_cell = '<span class="cwrap"></span>'
-    return (
-        f'<div class="lrow{flip}"><span class="slot">{esc(slot["slot"])}</span>'
-        f'<span class="pl"><span class="pname">{esc(name)}</span>'
-        f'<span class="pmeta">{esc(" · ".join(meta_bits))}</span>'
-        f'{edge_line}{fliptags}</span>'
-        f'<span class="proj">{projected}</span>{conf_cell}</div>'
-    )
-
-
-def _lineup_grid(slots: list[Mapping[str, Any]], total: float | None,
-                 total_label: str, note_html: str = "", calls: bool = True) -> str:
-    """``total`` comes from the matchup section so the board and the grid can
-    never disagree (summing per-row rounded values drifts). ``None`` means the
-    engine gated the totals — the row is omitted rather than printing a 0.0
-    that no game produced."""
-    conf_head = "Conf" if calls else ""
-    head = ('<div class="lrow head"><span>Slot</span><span>Player</span>'
-            '<span style="text-align:right">Proj</span>'
-            f'<span style="text-align:right">{conf_head}</span></div>')
-    rows = "".join(_lineup_row(s, calls=calls) for s in slots)
-    total_row = ""
-    if total is not None:
-        total_row = (
-            f'<div class="lrow total"><span class="slot"></span>'
-            f'<span class="pl"><span class="pname">Projected Total</span></span>'
-            f'<span class="proj">{total:.1f}</span>'
-            f'<span class="cwrap"><span class="clab">{esc(total_label)}</span></span></div>'
-        )
-    return f'<div class="lineup">{head}{rows}{total_row}{note_html}</div>'
-
-
 def section_rival_watch(watch: Mapping[str, Any] | None) -> str:
     """The named rival's weekly strip. Empty string when not configured."""
     if watch is None:
@@ -457,6 +390,11 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
     the player is getting, and we were spending it on "8 games of form"."""
     name = slot.get("player_name") or "—"
     proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+    # BOTH halves carry availability flags. optimal_lineup deliberately seats an
+    # OUT player when nothing eligible remains, so reading flags on the rival's
+    # side only meant we flagged their bye-week starter and said nothing about
+    # yours — the one player the reader can still do something about.
+    flags = [f["text"] for f in (slot.get("flags") or [])]
     bits = []
     if mine:
         edge = edge_phrase(slot)
@@ -471,13 +409,12 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
             # row does, nine identical "no call" markers say nothing the note
             # under the table does not say once, properly, with the reason.
             bits.append(NO_CALL)
-    else:
-        for flag in slot.get("flags") or []:
-            bits.append(flag["text"])
+    flag_html = (f'<span class="tflag">{esc(" · ".join(flags))}</span>'
+                 if flags else "")
     sub = (f'<span class="tsub">{esc(" · ".join(bits))}</span>' if bits else "")
     side = "you" if mine else "rival"
     return (f'<td class="tside {side}"><span class="tname">{esc(name)}</span>'
-            f'{sub}</td><td class="tpts {side}">{proj}</td>')
+            f'{flag_html}{sub}</td><td class="tpts {side}">{proj}</td>')
 
 
 def section_tape(report: Mapping[str, Any]) -> str:
@@ -532,44 +469,6 @@ def section_tape(report: Mapping[str, Any]) -> str:
     title = "The Tape — As Set" if as_set else "The Tape"
     return _section(title, 4,
                     f'<table class="tape">{head}{"".join(rows)}{total_row}</table>{note}')
-
-
-def section_lineup(report: Mapping[str, Any]) -> str:
-    slots = report["lineup"]
-    as_set = report["meta"].get("lineup_as_set")
-    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
-    note = ""
-    if as_set:
-        # Week 1: the grid is the subscriber's own lineup, untouched. Claiming
-        # "optimal" for a lineup nobody optimized would be a fabricated
-        # endorsement; nine empty rows would read as broken software. This is
-        # the honest middle: their lineup, plainly labeled, calls dated.
-        note = (f'<div class="benchnote"><b>{esc(AS_SET_HEAD)}</b> '
-                f'{esc(AS_SET_BODY)}</div>')
-    elif gates:
-        listed = " · ".join(sorted(gates))
-        note = (f'<div class="benchnote"><b>Why some slots say "no call":</b> '
-                f'{esc(no_call_explainer(listed))}</div>')
-    matchup = report["matchup"]
-    # When totals are gated (week 1: nothing to project from), the grid total
-    # row is omitted rather than showing a 0.0 that no game produced.
-    you_total = matchup["you"].get("projected_total")
-    rival_total = matchup["rival"].get("projected_total")
-    grid = _lineup_grid(slots, you_total,
-                        f"vs {rival_total:.1f}" if rival_total is not None else "",
-                        note_html=note)
-    title = AS_SET_TITLE if as_set else OPTIMAL_TITLE
-    return _section(title, 3, grid)
-
-
-def section_rival_lineup(report: Mapping[str, Any]) -> str:
-    matchup = report["matchup"]
-    you_total = matchup["you"].get("projected_total")
-    rival_total = matchup["rival"].get("projected_total")
-    grid = _lineup_grid(report["rival_lineup"], rival_total,
-                        f"vs you {you_total:.1f}" if you_total is not None else "",
-                        calls=False)
-    return _section(f'{report["meta"]["rival_label"]} — Lineup As Set', 4, grid)
 
 
 def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
@@ -827,15 +726,43 @@ def footer(meta: Mapping[str, Any]) -> str:
     )
 
 
+# A numbered section emits this instead of a literal number; ``number_sections``
+# fills them in document order once the page is assembled. NUL cannot appear in
+# the rendered HTML, so the substitution can never hit real content.
+SECTION_MARK = "\x00SECTION\x00"
+
+
 def _section(title: str, n: int, body: str) -> str:
     # Zero-padded, not "§n": the section sign is legal/academic citation
     # register. "01" reads like a case file, which is the register the product
-    # actually sells ("the file on Mike").
-    marker = f'<span class="n">{n:02d}</span>' if n else ""
+    # actually sells ("the file on Mike"). ``n`` now says only WHETHER the
+    # section is numbered — see number_sections for why.
+    marker = f'<span class="n">{SECTION_MARK}</span>' if n else ""
     return (
         f'<section><div class="eyebrow"><span class="tag">{esc(title)}</span>'
         f'{marker}</div>{body}</section>'
     )
+
+
+def number_sections(html: str) -> str:
+    """Number the numbered sections by POSITION, once the page is assembled.
+
+    Each section used to carry its own hardcoded number, which meant the
+    sequence was only correct as long as nobody added or merged one. Merging
+    the two lineup grids into the Tape took the rival grid's 04 and orphaned
+    03, and adding last week's result had already duplicated 02 — so the
+    shipped report read 01, 02, 02, 04. A case file that skips a page reads as
+    broken software, on a product sold on numeric discipline. Position is the
+    only source that cannot drift from what is actually on the page.
+    """
+    count = 0
+
+    def fill(_match: "re.Match[str]") -> str:
+        nonlocal count
+        count += 1
+        return f"{count:02d}"
+
+    return re.sub(re.escape(SECTION_MARK), fill, html)
 
 
 # --------------------------------------------------------------------- #
@@ -906,6 +833,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
         section_receipts(report["receipts"]),
         footer(meta),
     ])
+    body = number_sections(body)
     title = (f'Beat Your League — {meta["season"]} Week {meta["week"]} '
              f'Rival Report')
     # Only the public demo gets share meta: it is the one render of this

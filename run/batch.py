@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,8 +31,8 @@ from engine.week_report import (RAW_DIR, WeekReportError, build_week_report,
                                 current_nfl_season)
 from run.registry import (DEFAULT_REGISTRY, RegistryError, Subscriber,
                           league_pass_seats, load_registry)
-from run.delivery import (DRY_OUTBOX, DeliveryError, Message, build_provider,
-                          send_all)
+from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
+                          build_provider, send_all)
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 from run.week import _current_week, text_summary
 
@@ -160,6 +161,11 @@ def main(argv: list[str] | None = None) -> int:
                              "overrides EMAIL_PROVIDER")
     parser.add_argument("--no-send", action="store_true",
                         help="build the reports but skip delivery entirely")
+    parser.add_argument("--allow-dry", action="store_true",
+                        help="preview the emails without sending (what `make "
+                             "dry-send` uses). Without it, falling back to a "
+                             "dry run with real subscribers is an error, not a "
+                             "silent success.")
     parser.add_argument("--resend", action="store_true",
                         help="send again even if this week already went out")
     args = parser.parse_args(argv)
@@ -275,6 +281,22 @@ def main(argv: list[str] | None = None) -> int:
             provider = build_provider(args.email_provider)
         except DeliveryError as exc:
             print(f"Delivery not configured: {exc}", file=sys.stderr)
+            return 1
+        # Dry-run is the right DEFAULT (a misconfigured cron must never mail
+        # people by accident) but it is never the right ACCIDENT. Asked to
+        # deliver to real subscribers with nothing configured, this used to
+        # write drafts to an ephemeral runner, print "N sent", and exit 0 — a
+        # green Tuesday with empty inboxes and no alarm anywhere. Say so and
+        # fail. `--allow-dry` (what `make dry-send` passes) is the deliberate
+        # path, and --no-send skips delivery entirely.
+        implicit_dry = (provider.name == DRY_PROVIDER
+                        and not args.email_provider
+                        and not os.environ.get("EMAIL_PROVIDER"))
+        if implicit_dry and not args.allow_dry:
+            print(f"NOTHING WAS SENT. {len(ok)} subscriber report(s) were built "
+                  f"but EMAIL_PROVIDER is not set, so delivery fell back to a "
+                  f"dry run. Set EMAIL_PROVIDER (and its key) to mail them, or "
+                  f"pass --allow-dry to preview.", file=sys.stderr)
             return 1
         sends = send_all([r.message for r in ok if r.message], provider=provider,
                          resend_anyway=args.resend)

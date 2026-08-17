@@ -28,7 +28,7 @@ sync-preview:
 # Build every subscriber's report and write the emails WITHOUT sending them.
 # Read reports/outbox/*.eml to see exactly what would land in an inbox.
 dry-send:
-	EMAIL_PROVIDER=dry $(PY) -m run.batch
+	EMAIL_PROVIDER=dry $(PY) -m run.batch --allow-dry
 
 # The real thing. Needs EMAIL_PROVIDER + that provider's key in the environment.
 send:

@@ -223,3 +223,39 @@ def test_a_real_provider_records_and_then_skips(tmp_path) -> None:
     assert provider.sent == 1, "the same message was delivered twice"
     assert second[0].skipped
     assert load_sent(log) == {msg.key}
+
+
+def test_an_unconfigured_send_fails_loudly_instead_of_reporting_success(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    """Dry-run is the right DEFAULT and never the right ACCIDENT. With
+    EMAIL_PROVIDER unset the Tuesday cron built every report, wrote drafts to an
+    ephemeral runner, printed "N sent" and exited 0 — a green run with empty
+    inboxes and no alarm anywhere. It must exit non-zero and say NOTHING WAS
+    SENT; `--allow-dry` is the deliberate preview path."""
+    import test_week_report as twr
+    import run.batch as batch
+    from run.registry import Subscriber
+
+    season = twr._season()
+    raw = twr._write_cache(tmp_path, season)
+    monkeypatch.setattr(batch, "RAW_DIR", raw)
+    monkeypatch.setattr(batch, "SUBSCRIBER_REPORTS", tmp_path / "out")
+    monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+    (raw / "league" / season.league_id / "rosters.json").write_text(
+        json.dumps([{"roster_id": 1, "owner_id": "1"}, {"roster_id": 2, "owner_id": "2"}]),
+        encoding="utf-8")
+    registry = tmp_path / "subscribers.json"
+    registry.write_text(json.dumps([{
+        "email": "payer@example.com", "user_id": "1",
+        "league_id": season.league_id, "rival_roster_id": 2,
+        "sleeper_username": "payer",
+    }]), encoding="utf-8")
+
+    argv = ["--registry", str(registry), "--week", str(twr.REPORT_WEEK - 1),
+            "--skip-ingest", "--no-paid-check"]
+    assert batch.main(argv) == 1, "an unconfigured send reported success"
+    assert "NOTHING WAS SENT" in capsys.readouterr().err
+
+    monkeypatch.setattr(batch, "SUBSCRIBER_REPORTS", tmp_path / "out2")
+    assert batch.main([*argv, "--allow-dry"]) == 0, \
+        "the deliberate preview path must still work"
