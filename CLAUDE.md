@@ -286,6 +286,48 @@ the verdict, so no sentence restates the grid**. Rules that travel with it:
   published demo came to be re-rendered from a stale `week_report.json` — engine fixes never
   reached it. The target runs `engine.week_report` first, then `render.report --public`
   (anonymize_for_public), the local pair, and the plain-text summary.
+- **Both halves carry availability flags.** `optimal_lineup` deliberately seats an OUT player when
+  nothing eligible remains (a bye-week DEF is routine), so reading `flags` on the rival branch only
+  meant we flagged THEIR unavailable starter and rendered yours as a clean projection, tinted as
+  winning the slot. After the merge, my-side flags had no render surface at all.
+- **The two halves are the same width, via a `<colgroup>`** whose widths live in the template CSS.
+  `table-layout:fixed` alone reads its widths off the header's `colspan`; inline `<col>` styles beat
+  the mobile media query and clipped "123.2" out of both points columns at 375px.
+
+**A 28-agent adversarial audit (Aug 17 2026) — 16 confirmed, 5 refuted.** Findings worth keeping
+as rules, beyond the Tape items above:
+- **Section numbers come from POSITION** (`number_sections()`, both renderers). Hardcoded per
+  section, the sequence was only correct until one was added or merged: last week's result
+  duplicated 02 and the Tape took 04 and orphaned 03, so the shipped report, the email and the
+  sales page all read 01, 02, 02, 04. Pinned contiguous with and without the last-week section.
+- **My own report must never gate a subscriber's.** A `weekly.yml` step with no `if:` defaults to
+  `if: success()`, so any non-zero exit from `run.week` skipped sync AND send for everyone while
+  `run.batch` was perfectly able to run. `if: always()` on both; the job still goes red and still
+  files the issue.
+- **Dry-run is the right default and never the right accident.** With `EMAIL_PROVIDER` unset,
+  `run.batch` wrote drafts to an ephemeral runner, printed "N sent" and exited 0. It now prints
+  NOTHING WAS SENT and exits 1 unless `--allow-dry` (what `make dry-send` passes).
+- **`STRIPE_PAYMENT_LINKS` is not a filter.** It doubled as the Stripe sweep's query filter, so a
+  tier missing from the map was never swept — that buyer paid, never entered the registry, never
+  got a report, kept being charged. `sweep_stripe` always ends with an unfiltered query;
+  `seen_sessions` dedupes and the plan still comes from the session's own `payment_link`.
+- **Seat timestamps are stamped on receipt, not read from the row.** The seat form is public, so
+  `added_at` is attacker-supplied: "9999-12-31" outranks every later seat for that key forever and
+  a member re-picking their rival silently never takes effect. `event_key` ignores timestamps, so a
+  seat already logged keeps its first-seen stamp and the sweep stays idempotent.
+- **The League Pass seat link appears on the way to Stripe, not at league-pick.** Shown at step 2
+  it was shareable before checkout, so an abandoned payment left eleven managers each told their
+  seat was claimed while every claim is dropped on Tuesday. The seat holder is now told their
+  request is in and depends on the pass.
+- **Every figure a "Real find" card quotes must exist in the published sample** (`test_site.py`).
+  The landing page is hand-written and the report is generated, so they drift: the page advertised
+  "above four of their set starters" for weeks after the engine stopped producing that count.
+- **`reports/backtest.md` may not promise what the gate backtest disproved.** It said "a stated 64%
+  is worth publishing once the engine knows who is playing"; the gate has since been measured on
+  exactly that population (1 of 6 → 2 of 5, rates nearly unchanged). Improvement, not rescue.
+Deliberately NOT fixed: `_assign_alternatives` is greedy, not maximum-weight matching, so it can
+report one fragile spot where an optimal pairing exposes two. It errs toward under-claiming, which
+is the safe direction; revisit post-launch.
 
 **Payment → delivery (Aug 14 2026).** Nothing in the repo actually sent an email until now; that
 was the largest automation gap. Two modules close it, both provider-agnostic so the platform
