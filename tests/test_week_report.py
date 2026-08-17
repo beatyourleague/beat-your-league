@@ -751,3 +751,17 @@ def test_the_gap_never_appears_without_its_swing() -> None:
         assert "week swings" in html_out
         # never a verdict colour on the gap
         assert 'class="gap up"' not in html_out and 'class="gap down"' not in html_out
+
+
+def test_the_rival_grid_carries_no_calls_of_any_kind(tmp_path: Path) -> None:
+    """We read the rival's lineup; we do not coach it. The confidence column is
+    blanked for their grid, and the point-gap line must follow the same rule —
+    left ungated it restated the flip tag on flagged rows and volunteered bench
+    advice about the opponent on the others."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+    html_out = render(report, _template())
+    rival_grid = html_out.split("Lineup As Set")[1].split("Is Fragile")[0]
+    assert 'class="pvs"' not in rival_grid, \
+        "the rival grid is coaching their lineup"

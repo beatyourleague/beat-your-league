@@ -8,14 +8,12 @@ store the product treats as ground truth.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from engine.gate_backtest import apply_gate
-from ingest.injuries import (_normalise, load_weeks, reconstruct_snapshot,
-                             write_reconstructed)
+from ingest.injuries import _normalise, load_weeks
 
 
 class _Call:
@@ -65,21 +63,25 @@ def test_practice_notes_are_not_game_designations() -> None:
     assert _normalise("Full Participation in Practice") is None
 
 
-def test_reconstructed_weeks_never_touch_the_live_snapshot_store(
-        tmp_path: Path) -> None:
-    """data/raw/availability holds snapshots observed live and cannot be
-    rebuilt. Derived rows going in there would destroy that guarantee."""
+def test_no_snapshot_shaped_export_exists(tmp_path: Path) -> None:
+    """engine.availability reads a missing player as UNKNOWN; an injury report
+    means a missing player is FINE. A function emitting report data in snapshot
+    shape would invert that and gate away nearly every call while appearing to
+    work, so it deliberately does not exist."""
+    import ingest.injuries as injuries
+    assert not hasattr(injuries, "reconstruct_snapshot")
+    assert not hasattr(injuries, "write_reconstructed")
+
+
+def test_designations_parse_from_the_archive(tmp_path: Path) -> None:
     csv_path = tmp_path / "injuries_2018.csv"
     csv_path.write_text(
         "season,week,gsis_id,team,report_status,practice_status\n"
-        "2018,3,00-0000001,KC,Out,\n", encoding="utf-8")
+        "2018,3,00-0000001,KC,Out,\n"
+        "2018,3,00-0000002,KC,Questionable,\n"
+        "2018,3,00-0000003,KC,,Limited Participation in Practice\n",
+        encoding="utf-8")
     week = load_weeks(csv_path, "2018")[3]
-    players = {"p1": {"gsis_id": "00-0000001", "position": "WR", "team": "KC"}}
-    snapshot = reconstruct_snapshot(week, players)
-    assert snapshot["reconstructed"] is True
-    assert "nflverse" in snapshot["source"]
-
-    out = tmp_path / "reconstructed"
-    written = write_reconstructed(out, snapshot)
-    assert "availability" not in written.parts
-    assert json.loads(written.read_text())["statuses"]["p1"]["injury_status"] == "Out"
+    assert week.by_gsis == {"00-0000001": "Out", "00-0000002": "Questionable"}
+    # on the report but with no game designation: listed, not in doubt
+    assert "00-0000003" in week.teams and "00-0000003" not in week.by_gsis

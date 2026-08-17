@@ -317,9 +317,13 @@ def _lineup_row(slot: Mapping[str, Any], calls: bool = True) -> str:
     # player column. Put a real name in a 62px cell and every row grows to three
     # lines and the grid stops reading as a table.
     edge_lab = f'<span class="cedge">{edge:+.1f}</span>' if edge is not None else ""
+    # Gated on `calls` for the same reason the confidence cell is: on the
+    # rival's grid this restates the flip tag on flagged rows and coaches their
+    # bench on the others.
     edge_line = (f'<span class="pvs">{edge:+.1f} on our numbers vs '
                  f'{esc(slot.get("alternative_name"))}</span>'
-                 if edge is not None and slot.get("alternative_name") else "")
+                 if calls and edge is not None and slot.get("alternative_name")
+                 else "")
     if confidence is not None:
         conf_cell = (f'<span class="cwrap"><span class="cbar">'
                      f'<i style="width:{_pct(confidence)}%"></i></span>'
@@ -530,22 +534,27 @@ def section_hype(entries: list[Mapping[str, Any]],
     return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
 
 
+def who_can_cover(rivals: int | None, others: int | None) -> str:
+    """Who else can afford the bid. ONE implementation, imported by the email
+    renderer too — this sentence used to exist in three copies and the
+    denominator was only ever added to one of them."""
+    scale = f" of the other {others}" if others else ""
+    if rivals is None:
+        return "we can't tell what anyone has left — see the note below"
+    if rivals == 0:
+        return "nobody else in your league can even cover that"
+    if rivals == 1:
+        return f"one{scale} team can cover that"
+    return f"{rivals}{scale} teams can cover that"
+
+
 def _bid_line(entry: Mapping[str, Any]) -> str:
     """What it takes to win this player HERE — the part rankings can't do."""
     bid = entry.get("bid_to_beat")
     if not bid:
         return ""
-    rivals = entry.get("rivals_who_can_pay")
-    others = entry.get("league_others")
-    scale = f" of the other {others}" if others else ""
-    if rivals is None:
-        who = "we can't tell what anyone has left — see the note below"
-    elif rivals == 0:
-        who = "nobody else in your league can even cover that"
-    elif rivals == 1:
-        who = f"one{scale} team can cover that"
-    else:
-        who = f"{rivals}{scale} teams can cover that"
+    who = who_can_cover(entry.get("rivals_who_can_pay"),
+                        entry.get("league_others"))
 
     if entry.get("affordable") is False:
         left = entry.get("my_remaining")

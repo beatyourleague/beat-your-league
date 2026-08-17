@@ -15,21 +15,23 @@ on it is legitimate. nflverse archives them per season.
   https://github.com/nflverse/nflverse-data — CC-BY-4.0, attribution required.
   injuries_{season}.csv, plain HTTPS, no auth, no key, ~665KB for 2018.
 
-WHAT IT DOES NOT DO. Reconstructed weeks are written to their own directory and
-never into ``data/raw/availability/``. That store holds snapshots captured live
-and is the one dataset the product cannot rebuild; mixing derived rows into it
-would quietly destroy the guarantee that everything in there was observed at the
-time. The reconstruction is for measurement only.
+WHAT THIS DELIBERATELY DOES NOT PROVIDE. There is no function here that emits a
+week in the shape ``engine.availability`` reads. That consumer treats a player
+missing from a snapshot as UNKNOWN, but an injury report lists who is in doubt,
+so a player missing from IT is fine. Handing a report-shaped snapshot to that
+loader would invert the meaning and gate away nearly every call while looking
+like it worked. ``gate_backtest.apply_gate`` carries the correct reading.
+
+Nothing derived here is ever written into ``data/raw/availability/`` either:
+that store holds snapshots captured live and is the one dataset the product
+cannot rebuild.
 """
 
 from __future__ import annotations
 
 import csv
-import io
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
 
 import requests
 
@@ -116,50 +118,3 @@ def load_weeks(path: Path, season: str) -> dict[int, InjuryWeek]:
                          by_gsis=weeks.get(week, {}), teams=teams.get(week, {}))
         for week in sorted(teams)
     }
-
-
-def reconstruct_snapshot(injury_week: InjuryWeek,
-                         players: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a snapshot in the shape ``engine.availability`` already reads.
-
-    Keyed by SLEEPER player id, joined through ``gsis_id`` — which Sleeper
-    carries for every rostered skill player. A player absent from that week's
-    report is active by omission, which is what an injury report means: the
-    league lists who is in doubt, not who is fine.
-    """
-    by_gsis = {
-        record["gsis_id"]: (pid, record)
-        for pid, record in players.items()
-        if isinstance(record, dict) and record.get("gsis_id")
-    }
-    statuses: dict[str, Any] = {}
-    for gsis, team in injury_week.teams.items():
-        found = by_gsis.get(gsis)
-        if not found:
-            continue
-        pid, record = found
-        statuses[pid] = {
-            "team": team or record.get("team"),
-            "position": record.get("position"),
-            "active": True,
-            "injury_status": injury_week.by_gsis.get(gsis),
-        }
-    return {
-        "as_of": f"{injury_week.season}-W{injury_week.week:02d} (reconstructed)",
-        "season": injury_week.season,
-        "week": injury_week.week,
-        "reconstructed": True,
-        "source": ATTRIBUTION,
-        "statuses": statuses,
-    }
-
-
-def write_reconstructed(out_dir: Path, snapshot: dict[str, Any]) -> Path:
-    """Write to the reconstruction directory — never to the live archive."""
-    season = snapshot["season"]
-    week = int(snapshot["week"])
-    target = out_dir / str(season)
-    target.mkdir(parents=True, exist_ok=True)
-    path = target / f"week_{week:02d}.json"
-    path.write_text(json.dumps(snapshot), encoding="utf-8")
-    return path

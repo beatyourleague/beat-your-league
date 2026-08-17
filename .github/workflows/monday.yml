@@ -23,7 +23,13 @@ jobs:
       contents: write
       issues: write
     steps:
+      # fetch-depth: 0 because this job COMMITS BACK. The default is a
+      # shallow clone, and `git pull --rebase` against a shallow history
+      # can fail — which would break the persist step whose whole job is
+      # keeping the record safe.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

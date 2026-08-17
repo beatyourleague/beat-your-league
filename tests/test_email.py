@@ -140,3 +140,24 @@ def test_the_email_gap_never_ships_without_its_swing(tmp_path: Path) -> None:
     if report["matchup"].get("margin") is not None:
         assert "swings" in html_out
         assert "projected ahead" in html_out or "projected behind" in html_out
+
+
+def test_the_email_carries_what_the_browser_report_carries(tmp_path: Path) -> None:
+    """The email IS the product; the browser file is the archive. Usage and the
+    per-row point gap were added to the browser renderer only, so the free demo
+    briefly showed more than the thing subscribers pay for. This pins parity on
+    the fields most likely to be added to one renderer and forgotten in the
+    other."""
+    from render.report import TEMPLATE_PATH, render
+    report = _report(tmp_path)
+    email_html = render_email(report)
+    browser_html = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
+
+    if any(h.get("usage") for h in report.get("hype", [])):
+        assert "targets" in email_html, "email dropped counted usage"
+    if any(s.get("edge") is not None for s in report.get("lineup", [])):
+        assert "on our numbers vs" in email_html, "email dropped the point gap"
+    # the sentence that used to exist in three diverging copies
+    if "of the other" in browser_html:
+        assert "of the other" in email_html, \
+            "the who-can-cover denominator drifted between surfaces"

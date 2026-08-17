@@ -795,7 +795,6 @@ def _stakes_clause(stakes: Mapping[str, Any] | None) -> str:
     if not stakes:
         return ""
     swap = stakes.get("swap_value")
-    as_set, theirs = stakes.get("as_set_total"), stakes.get("rival_total")
     if swap is None or swap <= 0:
         return ""
     return f" worth +{swap:.1f}"
@@ -871,11 +870,9 @@ def checklist(
             action = (f"Skip {who} — it takes {bid} to top the highest bid he's drawn "
                       f"and you have {left} left. Save it for one you can land.")
         elif bid:
-            rivals = top.get("rivals_who_can_pay")
-            cover = ("" if rivals is None else
-                     f" — nobody else can cover that" if rivals == 0 else
-                     f" — {rivals} other team{'s' if rivals != 1 else ''} can cover that")
-            action = f"Bid {bid} or more on {who}{cover}."
+            # No "who else can cover" here: that sentence lives in the waiver
+            # section, and keeping a second copy is what let the two drift.
+            action = f"Bid {bid} or more on {who}."
         else:
             action = (f"Decide on {who} — {top['managers_chasing']} managers chasing, "
                       f"top bid {top['top_bid'] if top['top_bid'] is not None else '—'}.")

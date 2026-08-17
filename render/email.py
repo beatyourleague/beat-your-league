@@ -40,6 +40,7 @@ from render.report import (
     availability_basis,
     esc,
     no_call_explainer,
+    who_can_cover,
 )
 
 # The template's palette (:root in rival-report-template.html), as literals —
@@ -272,13 +273,21 @@ def _lineup_rows(slots: list[Mapping[str, Any]], calls: bool) -> str:
         projected = (f'{slot["projected"]:.1f}'
                      if slot.get("projected") is not None else "—")
         confidence = slot.get("confidence")
+        edge = slot.get("edge")
         if confidence is not None:
-            conf = (f'<b>{_pct(confidence)}</b> · vs '
-                    f'{esc(slot.get("alternative_name") or "bench")}')
+            conf = f'<b>{_pct(confidence)}</b>'
         elif calls:
             conf = f'<span style="color:{SLATE};">{esc(NO_CALL)}</span>'
         else:
             conf = ""
+        if calls and edge is not None:
+            conf += (f'<br><span style="font-size:11px;color:{NAVY};">'
+                     f'{edge:+.1f}</span>')
+        # The name it beats goes in the wide player column, never the narrow
+        # one — and only on your own grid, never the rival's.
+        if calls and edge is not None and slot.get("alternative_name"):
+            flags += (f'<br><span style="{SMALL}color:{NAVY};">{edge:+.1f} on our '
+                      f'numbers vs {esc(slot["alternative_name"])}</span>')
         # The cell always renders (empty for the rival grid) so every row has
         # the same column count as the header and the total row.
         conf_cell = (f'<td style="{BASE}font-size:12px;padding:7px 0 7px 8px;'
@@ -417,15 +426,8 @@ def _bid_line(entry: Mapping[str, Any]) -> str:
     bid = entry.get("bid_to_beat")
     if not bid:
         return ""
-    rivals = entry.get("rivals_who_can_pay")
-    if rivals is None:
-        who = "we can't tell what anyone has left — see the note below"
-    elif rivals == 0:
-        who = "nobody else in your league can even cover that"
-    elif rivals == 1:
-        who = "one other team can cover that"
-    else:
-        who = f"{rivals} other teams can cover that"
+    who = who_can_cover(entry.get("rivals_who_can_pay"),
+                        entry.get("league_others"))
     if entry.get("affordable") is False:
         left = entry.get("my_remaining")
         return (f'<p style="{BASE}color:{BRICK};margin:6px 0 0 0;">→ It takes '
@@ -460,6 +462,8 @@ def _hype(entries: list[Mapping[str, Any]],
             gate_line = ("" if shared_gate else
                          f'<p style="{BASE}margin:6px 0 0 0;">'
                          f'→ {esc(entry["verdict_gate"])}</p>')
+            usage_html = (f'<p style="{BASE}margin:6px 0 0 0;font-weight:bold;">'
+                          f'{esc(entry["usage"])}</p>' if entry.get("usage") else "")
             cards.append(
                 f'<div style="background:{PAPER};padding:12px 14px;'
                 f'margin-top:10px;">'
@@ -470,7 +474,7 @@ def _hype(entries: list[Mapping[str, Any]],
                 f'<p style="{BASE}margin:6px 0 0 0;">{esc(entry["bids"])} claims '
                 f'filed, {esc(entry["completed_adds"])} completed, '
                 f'{esc(bid_text)} ({esc(entry["evidence"])}).</p>'
-                f'{gate_line}{_bid_line(entry)}</div>'
+                f'{usage_html}{gate_line}{_bid_line(entry)}</div>'
             )
         note = _note(esc(shared_gate)) if shared_gate else ""
         body = "".join(cards) + note
