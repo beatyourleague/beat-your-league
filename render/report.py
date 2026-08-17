@@ -278,23 +278,43 @@ def section_matchup(matchup: Mapping[str, Any]) -> str:
     hi = max(you["ceiling"], rival["ceiling"])
     span = (hi - lo) or 1.0
 
-    def band(team: Mapping[str, Any], side: str) -> str:
+    # ONE axis, not two. Scaled to the union of both bands, each team's range
+    # fills 91-96% of its own track, so two separate tracks showed two nearly
+    # identical full-width bars and the comparison the section exists to make
+    # was invisible. Stacked on a shared axis, the thing you actually see is
+    # the OVERLAP — 87% on the sample week — which is the honest reading and
+    # the same one the gap's ±swing gives.
+    def row(team: Mapping[str, Any], side: str) -> str:
         left = _pct((team["floor"] - lo) / span)
         right = 100 - _pct((team["ceiling"] - lo) / span)
         med = _pct((team["projected_total"] - lo) / span)
-        return (
-            f'<div class="range {side}"><div class="rl">'
-            f'<span>{esc(team["label"])} — realistic range</span>'
-            f'<span>proj {team["projected_total"]:.1f}</span></div>'
-            f'<div class="track"><span class="band" style="left:{left}%;right:{right}%"></span>'
-            f'<span class="med" style="left:{med}%"></span></div>'
-            f'<div class="nums"><span>floor {team["floor"]:.0f}</span>'
-            f'<span>ceiling {team["ceiling"]:.0f}</span></div></div>'
-        )
+        return (f'<span class="rband {side}" style="left:{left}%;right:{right}%">'
+                f'</span><span class="rmed {side}" style="left:{med}%"></span>')
+
+    over_lo = max(you["floor"], rival["floor"])
+    over_hi = min(you["ceiling"], rival["ceiling"])
+    over_html, over_share = "", None
+    if over_hi > over_lo:
+        ol = _pct((over_lo - lo) / span)
+        orr = 100 - _pct((over_hi - lo) / span)
+        over_share = round((over_hi - over_lo) / span * 100)
+        over_html = f'<span class="rover" style="left:{ol}%;right:{orr}%"></span>' 
     basis = matchup.get("range_basis")
     basis_html = (f'<div class="yards" style="justify-content:flex-end">'
                   f'{esc(basis)}</div>' if basis else "")
-    ranges = f'<div class="ranges">{band(you, "you")}{band(rival, "rival")}</div>{basis_html}'
+    read = ""
+    if over_share is not None:
+        read = (f'<p class="rread">Their realistic week and yours overlap by '
+                f'<b>{over_share}%</b> — which is why the gap above is small '
+                f'next to the swing.</p>')
+    ranges = (
+        f'<div class="rangeaxis">'
+        f'<div class="rlab"><span class="you">{esc(you["label"])}</span>'
+        f'<span class="rival">{esc(rival["label"])}</span></div>'
+        f'<div class="rtrack">{over_html}{row(you, "you")}{row(rival, "rival")}</div>'
+        f'<div class="rends"><span>{lo:.0f}</span><span>{hi:.0f}</span></div>'
+        f'{read}</div>{basis_html}'
+    )
 
     return _section("The Matchup", 2, board + field + ranges)
 

@@ -127,6 +127,23 @@
   .usage{margin-top:6px;font-size:12.5px;font-weight:700;color:var(--ink2);
     font-variant-numeric:tabular-nums;}
 
+  /* One shared axis. Scaled to the union of both bands each team fills 91-96%
+     of its own track, so two separate tracks showed two near-identical bars and
+     hid the only thing worth seeing: how much the two weeks OVERLAP. */
+  .rangeaxis{margin-top:18px;}
+  .rlab{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
+    letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+  .rlab .you{color:var(--turf);} .rlab .rival{color:var(--brick);}
+  .rtrack{position:relative;height:40px;background:#EAE7DE;border:1px solid var(--line);}
+  .rover{position:absolute;top:0;bottom:0;background:#DCD8CC;}
+  .rband{position:absolute;height:14px;border:1px solid;}
+  .rband.you{top:4px;background:var(--turf-tint);border-color:var(--turf);}
+  .rband.rival{bottom:4px;background:var(--brick-tint);border-color:var(--brick);}
+  .rmed{position:absolute;width:3px;background:var(--navy);}
+  .rmed.you{top:1px;height:20px;} .rmed.rival{bottom:1px;height:20px;}
+  .rends{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+  .rread{margin-top:10px;font-size:13px;line-height:1.55;color:var(--ink2);}
   .ranges{margin-top:18px;display:grid;gap:12px;}
   .range .rl{display:flex;justify-content:space-between;font-size:12px;font-weight:700;
     text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;color:var(--ink2);}

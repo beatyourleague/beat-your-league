@@ -606,7 +606,10 @@ def test_render_shows_numbers_when_available(tmp_path: Path) -> None:
     assert "not putting a win percentage" in report["matchup"]["win_probability_gate"]
     html_out = render(report, _template())
     # Ranges render on their own evidence, independent of the prob gate.
-    assert "realistic range" in html_out
+    # Both teams now share ONE axis, so assert the axis and both bands rather
+    # than the old per-team label.
+    assert 'class="rtrack"' in html_out
+    assert 'class="rband you"' in html_out and 'class="rband rival"' in html_out
     assert "realistic high and low" in html_out.lower()
 
 
@@ -765,3 +768,19 @@ def test_the_rival_grid_carries_no_calls_of_any_kind(tmp_path: Path) -> None:
     rival_grid = html_out.split("Lineup As Set")[1].split("Is Fragile")[0]
     assert 'class="pvs"' not in rival_grid, \
         "the rival grid is coaching their lineup"
+
+
+def test_the_two_ranges_share_one_axis_and_show_their_overlap(tmp_path: Path) -> None:
+    """Scaled to the union of both bands, each team fills 91-96% of its own
+    track — so two separate tracks showed two near-identical full-width bars and
+    hid the only thing worth seeing. On one axis the overlap is the story, and
+    it agrees with the gap's swing rather than contradicting it."""
+    season = _season()
+    raw = _write_cache(tmp_path, season)
+    report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
+    if report["matchup"].get("range_gate"):
+        return  # a gated week draws no bands at all
+    html_out = render(report, _template())
+    assert html_out.count('class="rtrack"') == 1, "the two teams must share one axis"
+    assert 'class="rband you"' in html_out and 'class="rband rival"' in html_out
+    assert "overlap by" in html_out, "the overlap is the reading, not decoration"
