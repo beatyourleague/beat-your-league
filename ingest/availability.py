@@ -14,6 +14,7 @@ so a report can say "injury data as of Tue 9am" (CLAUDE.md principle 3).
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 import re
@@ -29,8 +30,11 @@ _VALID_SEASON_TYPES = ("regular", "pre", "post", "off")
 
 
 def snapshot_path(raw_dir: Path, season: str, season_type: str, week: int) -> Path:
+    """The gzipped snapshot path. ``load_week_availability`` also accepts the
+    older uncompressed ``.json`` name, so snapshots already captured keep
+    working — they can never be recaptured, so nothing may invalidate them."""
     return (Path(raw_dir) / "availability" / str(season)
-            / f"{season_type}_week_{week:02d}.json")
+            / f"{season_type}_week_{week:02d}.json.gz")
 
 
 def build_snapshot(players: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +83,11 @@ def write_snapshot(raw_dir: Path, players: dict[str, Any],
                          snapshot["week"])
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp_path.write_text(json.dumps(snapshot, separators=(",", ":")), encoding="utf-8")
+    payload = json.dumps(snapshot, separators=(",", ":")).encode("utf-8")
+    # mtime=0 so an unchanged week produces an identical file and git records
+    # no diff for a re-run.
+    with gzip.GzipFile(filename="", mode="wb", fileobj=tmp_path.open("wb"),
+                       mtime=0) as fh:
+        fh.write(payload)
     os.replace(tmp_path, path)
     return path, len(snapshot["statuses"])

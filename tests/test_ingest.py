@@ -357,3 +357,34 @@ def test_projections_endpoint_validates_input(tmp_path: Path) -> None:
         client.projections("2018", 0)
     with pytest.raises(ValueError):
         client.projections("2018", 10, season_type="playoffs")
+
+
+def test_availability_snapshots_are_compressed_and_reproducible(tmp_path) -> None:
+    """These are committed to git — an Actions cache expires and a snapshot can
+    never be recaptured — so 312 KB a week compounded into 5.5 MB a season,
+    permanently. gzip is 15x here and changes nothing semantically: every
+    player stays in the file, so classify() is unaffected. Dropping the
+    "uninteresting" ones would make an absent player mean both healthy and
+    unknown, which is the trap deleted from ingest/injuries.py."""
+    import gzip as _gzip
+    import json as _json
+
+    from engine.availability import load_week_availability
+    from ingest.availability import snapshot_path, write_snapshot
+
+    players = {"1": {"position": "WR", "active": True, "team": "KC",
+                     "injury_status": None}}
+    state = {"season": "2026", "season_type": "regular", "week": 3}
+    path, count = write_snapshot(tmp_path, players, state)
+    assert path.suffix == ".gz" and count == 1
+    assert _json.loads(_gzip.decompress(path.read_bytes()))["statuses"]["1"]
+
+    # a re-run of an unchanged week must not show up as a git diff
+    again, _ = write_snapshot(tmp_path, players, state)
+    assert again.read_bytes() == path.read_bytes()
+
+    # and a snapshot captured before compression must keep working forever
+    legacy = snapshot_path(tmp_path, "2026", "regular", 4).with_suffix("")
+    legacy.write_text(_json.dumps({"as_of": "x", "statuses": {"1": {"active": True}}}),
+                      encoding="utf-8")
+    assert load_week_availability(tmp_path, "2026", 4).has_snapshot

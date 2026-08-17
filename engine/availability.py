@@ -17,6 +17,7 @@ honesty contract (CLAUDE.md principles 1 and 3) is enforced here in one place:
 
 from __future__ import annotations
 
+import gzip
 import json
 from dataclasses import dataclass
 from enum import Enum
@@ -185,15 +186,23 @@ def load_week_availability(raw_dir: Path, season: str, week: int) -> WeekAvailab
     byes = bye_teams_for_week(schedule_weeks, week)
 
     path = snapshot_path(raw_dir, season, "regular", week)
+    # Snapshots written before compression keep their plain .json name and can
+    # never be recaptured, so both forms are read.
+    legacy = path.with_suffix("") if path.suffix == ".gz" else path
+    if not path.is_file():
+        path = legacy
     if not path.is_file():
         return WeekAvailability(season=str(season), week=week, snapshot_as_of=None,
                                 statuses=None, bye_teams=byes)
     try:
-        snapshot = json.loads(path.read_text(encoding="utf-8"))
+        raw = (gzip.decompress(path.read_bytes()) if path.suffix == ".gz"
+               else path.read_bytes())
+        snapshot = json.loads(raw.decode("utf-8"))
         statuses = snapshot["statuses"]
         if not isinstance(statuses, dict):
             raise ValueError("statuses is not an object")
-    except (json.JSONDecodeError, OSError, KeyError, ValueError):
+    except (json.JSONDecodeError, OSError, KeyError, ValueError,
+            gzip.BadGzipFile, EOFError):
         return WeekAvailability(season=str(season), week=week, snapshot_as_of=None,
                                 statuses=None, bye_teams=byes)
     return WeekAvailability(
