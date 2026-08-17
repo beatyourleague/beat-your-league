@@ -262,6 +262,31 @@ rejected on a structural ground, not taste — `engine/ledger.py` grades probabi
 records nothing gradeable, so labels would silently destroy the receipts ledger, which is the
 only mechanism that can turn the shipping availability gate into measured evidence.
 
+**The Tape — one grid, not two (Aug 17 2026).** Sections 03 and 04 were your nine slots and then
+their nine slots, stacked, so comparing a slot meant holding your RB in your head while scrolling.
+Sleeper's own matchup screen — the one this buyer already lives in — is a centre spine with no
+prose at all. `section_tape()` in `render/report.py` and `_tape()` in `render/email.py` render one
+row per slot (your player | position | their player) with the leading half tinted; **the tint is
+the verdict, so no sentence restates the grid**. Rules that travel with it:
+- **One bench player is the fix for exactly ONE slot** (`_assign_alternatives`, engine). Picking
+  each rival slot's best alternative independently named the same benched receiver at WR, WR,
+  FLEX and FLEX — four exploitable spots where the roster held one, and he cannot start twice.
+  Greedy by gain, ties broken on ids so a report is byte-identical across runs. This inflated the
+  fragile-spot COUNT, which is why `section_fragility` had been grouping the duplicates back into
+  one sentence. MY side is deliberately unchanged: "confidence = beats the best bench alternative
+  **at that slot**" is the calibrated unit, so per-slot independence is its definition, not a bug.
+- **"no call" renders per row only in a MIXED week.** Where some rows carry a percentage, silence
+  on the others reads as a call we forgot; where NO row does, nine identical markers say nothing
+  the note under the table does not say once, with the reason (the note's head switches too).
+- The rival half may carry a fragility flag — that is the product — but never a confidence, a
+  gate note, or our per-row point gap. Pinned by `test_the_rival_grid_carries_no_calls_of_any_kind`.
+- `edge_phrase()` is shared by both renderers, like `who_can_cover()` before it. They had written
+  the same fact in different words and the email's longer form wrapped every row onto two lines.
+- **`make demo` is the only way to rebuild the sample.** It was ad-hoc commands, which is how the
+  published demo came to be re-rendered from a stale `week_report.json` — engine fixes never
+  reached it. The target runs `engine.week_report` first, then `render.report --public`
+  (anonymize_for_public), the local pair, and the plain-text summary.
+
 **Payment → delivery (Aug 14 2026).** Nothing in the repo actually sent an email until now; that
 was the largest automation gap. Two modules close it, both provider-agnostic so the platform
 choice is a secret, never a rewrite (rationale + cost table in PLAN §4):
