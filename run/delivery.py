@@ -272,6 +272,9 @@ def record_sent(key: str, provider: str, message_id: str,
         fh.write(json.dumps(entry, separators=(",", ":")) + "\n")
 
 
+DRY_PROVIDER = "dry"
+
+
 def send_all(messages: list[Message], provider: Provider | None = None,
              sender: str = DEFAULT_FROM, reply_to: str | None = DEFAULT_REPLY_TO,
              sent_log: Path | None = None,
@@ -293,6 +296,14 @@ def send_all(messages: list[Message], provider: Provider | None = None,
         except Exception as exc:  # noqa: BLE001 — one bad send must not end the run
             results.append(SendResult(message, ok=False, detail=f"unexpected: {exc!r}"))
             continue
-        record_sent(message.key, provider.name, message_id, sent_log)
+        # A dry run delivered NOTHING, so it must not claim a delivery. This
+        # was recording every draft, which meant `make dry-send` — documented
+        # as a safe preview — silently marked every subscriber as already sent,
+        # and the real send afterwards skipped them all: a green run with empty
+        # inboxes. It also applied to the cron itself, which runs dry until
+        # EMAIL_PROVIDER is set, so the first REAL send would have skipped
+        # everyone the dry runs had "sent".
+        if provider.name != DRY_PROVIDER:
+            record_sent(message.key, provider.name, message_id, sent_log)
         results.append(SendResult(message, ok=True, detail=message_id))
     return results

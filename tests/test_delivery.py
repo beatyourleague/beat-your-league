@@ -182,3 +182,44 @@ def test_batch_only_builds_messages_for_paying_subscribers(
     # The two real subject shapes: rivalry weeks keep the vs framing.
     assert ("the file on" in result.message.subject
             or "RIVALRY WEEK vs" in result.message.subject)
+
+
+def test_a_dry_run_never_claims_a_delivery(tmp_path) -> None:
+    """`make dry-send` is documented as a safe preview, and the cron itself runs
+    dry until EMAIL_PROVIDER is set. Recording those drafts as sends meant the
+    first REAL send skipped everyone who had ever been drafted — a green run
+    with empty inboxes, which is the failure this log exists to prevent."""
+    from run.delivery import Message, build_provider, load_sent, send_all
+
+    log = tmp_path / "sent.jsonl"
+    msg = Message(to="a@example.com", subject="s", html="<p>h</p>",
+                  text="t", key="league-2026-w01-someone")
+    for _ in range(2):
+        results = send_all([msg], provider=build_provider("dry"), sent_log=log)
+        assert results[0].ok and not results[0].skipped, \
+            "a dry run must draft every time, never report 'already sent'"
+    assert not log.exists() or load_sent(log) == set(), \
+        "a dry run recorded a delivery that never happened"
+
+
+def test_a_real_provider_records_and_then_skips(tmp_path) -> None:
+    """The other half of the same rule: a provider that actually delivered must
+    be remembered, or a re-run mails the same person twice."""
+    from run.delivery import Message, load_sent, send_all
+
+    class _Fake:
+        name = "fake"
+        def __init__(self): self.sent = 0
+        def send(self, message, sender, reply_to):
+            self.sent += 1
+            return f"fake:{message.key}"
+
+    log = tmp_path / "sent.jsonl"
+    msg = Message(to="a@example.com", subject="s", html="<p>h</p>",
+                  text="t", key="league-2026-w01-someone")
+    provider = _Fake()
+    send_all([msg], provider=provider, sent_log=log)
+    second = send_all([msg], provider=provider, sent_log=log)
+    assert provider.sent == 1, "the same message was delivered twice"
+    assert second[0].skipped
+    assert load_sent(log) == {msg.key}

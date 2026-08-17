@@ -468,6 +468,13 @@ a report and stays invisible until the following Tuesday. Related: `run/sync.py`
 default arguments cannot be redirected by a caller — which is what made that accident possible.
 
 `make dry-send` builds every subscriber email without sending; `make send` is the real thing.
+**A dry run records NOTHING in `data/processed/sent.jsonl`** — found by running the delivery
+path end to end. `send_all` used to log every successful send including the dry provider, so
+`make dry-send` (documented as a safe preview) marked every subscriber as already sent and the
+real send then skipped them all: a green run with empty inboxes. It applied to the cron too,
+which runs dry until `EMAIL_PROVIDER` is set, so the first real send would have skipped
+everyone the dry runs had "sent". Both halves are now tested: dry drafts every time and logs
+nothing; a real provider logs once and skips on re-run.
 `make sync-preview` shows what the next sync would change without writing or stamping anything.
 `weekly.yml` passes `STRIPE_API_KEY`/`EMAIL_*` as secrets and caches `sent.jsonl` across runners
 (without it, an ephemeral runner would forget who it already mailed). Use a **restricted** Stripe
