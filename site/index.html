@@ -542,7 +542,7 @@
              autocomplete="off" spellcheck="false" aria-label="Your Sleeper username">
       <button class="btn go" type="submit">Pull the file on your rival</button>
     </form>
-    <p class="whyfree">$29 USD for the season. The first file lands Tuesday, Sep 8, and
+    <p class="whyfree">$39 USD for the season. The first file lands Tuesday, Sep 8, and
     refunds are no-questions through Week 2 — read two of them, then decide.</p>
     <div class="cta-row">
       <a class="btn ghost" href="sample-report.html">See a real report</a>
@@ -896,14 +896,14 @@
         <div class="plan founder sheet tilt" style="--tilt:rotate(-1.3deg)">
           <span class="stamp50" aria-hidden="true">Founding</span>
           <div class="tag">Founding Season Pass · 2026</div>
-          <div class="price">$29 <small>/ season, USD</small></div>
+          <div class="price">$39 <small>/ season, USD</small></div>
           <ul>
             <li>Every weekly Rival Report, Week 1 through your title game</li>
             <li>Rival Watch on your named nemesis all season</li>
             <li>Every call dated and graded — your receipt for the group chat</li>
             <li>No-questions refund through Week 2 — one per person; if you
             re-subscribe after a refund, that one's final</li>
-            <li>Renews once a year at $29 unless you cancel — charged next August,
+            <li>Renews once a year at $39 unless you cancel — charged next August,
             before the season it covers, never during the offseason. We email you
             first, and you cancel yourself in one click
             (<a href="legal.html#cancel" style="color:var(--turf)">here's exactly
@@ -915,7 +915,7 @@
       <div class="reveal" style="--d:.12s">
         <div class="plan sheet tilt" style="--tilt:rotate(1.2deg)">
           <div class="tag">Or month to month</div>
-          <div class="price">$9.99 <small>/ month, USD</small></div>
+          <div class="price">$12.99 <small>/ month, USD</small></div>
           <ul>
             <li>Same report, same receipts</li>
             <li>Cancel any time</li>
@@ -938,14 +938,14 @@
         <ol>
           <li><b>Today:</b> pick your league and your rival in sixty seconds. Until checkout
           opens, nothing is saved and nothing is charged — and when it opens, the season
-          pass is $29 at the founding rate, locked in for every renewal.</li>
+          pass is $39 at the founding rate, locked in for every renewal.</li>
           <li><b>Before Week 1:</b> checkout opens — you pay on our payment provider's own
           secure page, and card
           details never touch our systems. Reports go only to paid subscribers, from the
           first issue on.</li>
           <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds are no-questions
           through Week 2.</li>
-          <li><b>A year from now:</b> the pass renews at $29 unless you cancel. We email you
+          <li><b>A year from now:</b> the pass renews at $39 unless you cancel. We email you
           before it bills, cancelling is one click in your own account page, and we will
           never make you ask us to stop charging you.</li>
         </ol>
@@ -1017,7 +1017,7 @@ const CHECKOUT_OPEN = false;
 const LEDGER_LIST_ENDPOINT = "";
 // Where the FREE list lives. Must be a page that offers a no-card free option —
 // never the paid checkout URL, or the page would promise "free" and hand over a
-// $29 subscribe form. Empty means fall through to the mailto capture below.
+// $39 subscribe form. Empty means fall through to the mailto capture below.
 const LEDGER_FREE_URL = "";
 // Empty on purpose — no personal address on a public page. Set before launch.
 const CONTACT_EMAIL = "";
@@ -1069,7 +1069,7 @@ if (CHECKOUT_OPEN) {
   const founder = document.querySelector("[data-checkout]");
   if (founder) {
     founder.href = "join/index.html";
-    founder.textContent = "Get the season pass — $29";
+    founder.textContent = "Get the season pass — $39";
   }
   const monthly = document.getElementById("monthly-cta");
   if (monthly) {

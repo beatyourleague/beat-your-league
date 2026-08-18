@@ -35,6 +35,26 @@ def markup_only(page: str) -> str:
 LANDING_PROSE, JOIN_PROSE = prose(LANDING), prose(JOIN)
 
 
+def _price(pattern: str) -> str:
+    """Read a price off the landing page's own pricing card.
+
+    The tests below protect PLACEMENT and COUNT — the price is stated in the
+    hero, it appears only at decision points, every renewal disclosure names an
+    amount. None of that is a claim about the number itself, and hardcoding it
+    meant a price change failed five tests that had nothing to say about the
+    change. The number is checked in exactly one place:
+    test_monthly_price_never_undercuts_the_season_pass, which is the only
+    assertion that is genuinely about the figures.
+    """
+    match = re.search(pattern, markup_only(LANDING))
+    assert match, f"could not read a price off the landing page: {pattern}"
+    return match.group(1)
+
+
+SEASON_PRICE = _price(r'class="price">\$(\d+) <small>/ season')
+MONTHLY_PRICE = _price(r'class="price">\$(\d+\.\d\d) <small>/ month')
+
+
 # --------------------------------------------------------------------- #
 # consumer protections — the anti-dark-pattern contract
 # --------------------------------------------------------------------- #
@@ -77,25 +97,26 @@ def test_paid_from_day_one_is_stated_not_hidden() -> None:
     # been pinned as "no free tier" (sells an absence) and then as "the report
     # is the product from day one" (internal product-strategy register). The
     # strongest form of the disclosure is the PRICE ITSELF, visible in the
-    # hero before any scroll — a page that shows $29 up front cannot be
+    # hero before any scroll — a page that shows the price up front cannot be
     # accused of hiding that it charges.
-    assert re.search(r"\$29 USD for the season", LANDING_PROSE), \
+    assert re.search(rf"\${SEASON_PRICE} USD for the season", LANDING_PROSE), \
         "the landing hero must state the price plainly"
     assert re.search(r"paid product from day one", JOIN_PROSE, re.I)
 
 
 def test_price_appears_only_at_decision_points_and_renewal_terms() -> None:
-    """Four rendered $29s, each load-bearing: the pricing card, the reservation
+    """Five rendered season prices, each load-bearing: the pricing card, the reservation
     step, and the two renewal disclosures (a renewal notice that omits the
     amount is not a disclosure). Anything beyond this is ambient repetition,
     which pushes cost evaluation ahead of value. (A further mention lives in the
     checkout script, which only ever replaces the button's own text.)"""
     rendered = markup_only(LANDING)
-    # Five rendered $29s, each load-bearing: the HERO microcopy (the price is
+    # Five rendered season prices, each load-bearing: the HERO microcopy (the price is
     # the paid-from-day-one disclosure, per the test above), the pricing card,
     # the reservation step, and the two renewal disclosures.
-    assert rendered.count("$29") == 5, "landing page price mentions drifted"
-    renewal_mentions = len(re.findall(r"renews? (?:once a year )?at \$29", rendered, re.I))
+    assert rendered.count(f"${SEASON_PRICE}") == 5, "landing page price mentions drifted"
+    renewal_mentions = len(re.findall(rf"renews? (?:once a year )?at \${SEASON_PRICE}",
+                                      rendered, re.I))
     assert renewal_mentions == 2, "renewal disclosures must state the amount"
 
 
@@ -511,7 +532,7 @@ def test_monthly_price_never_undercuts_the_season_pass() -> None:
 
 
 def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
-    """An unlabelled '$29' is ambiguous to a buyer and a support burden."""
+    """An unlabelled price is ambiguous to a buyer and a support burden."""
     for page, name in ((LANDING, "landing"), (JOIN, "join"),
                        (LEAGUE_PASS, "league pass")):
         assert re.search(r"USD", page), f"{name} page shows a price with no currency"
@@ -750,7 +771,7 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
     assert "Seat already paid by your commissioner" in JOIN
     assert "covers " in JOIN and "every manager in your league" in prose(JOIN)
-    assert "$9.99 USD / month" in JOIN
+    assert f"${MONTHLY_PRICE} USD / month" in JOIN
     # The commissioner's shareable seat link exists only pre-checkout (Stripe
     # confirmation messages are static per link and cannot carry a league id).
     assert 'id="seat-share"' in JOIN
@@ -889,3 +910,25 @@ def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
         "the seat link is no longer tied to the checkout redirect"
     # And no page copy claims an unpaid seat is already entitled.
     assert "Your seat is claimed" not in JOIN
+
+
+def test_the_league_pass_arithmetic_matches_the_actual_season_price() -> None:
+    """`site/league-pass.html` is the ONE page where price is argued rather than
+    just disclosed (PLAN §4: a commissioner justifying spend to eleven
+    leaguemates is a genuinely deliberative buyer). That licence comes with an
+    obligation — the multiple has to be true. It said "twelve individual passes
+    would cost $348" for as long as the season pass was $29, and a stale
+    comparison on our own page is a false claim about our own prices."""
+    match = re.search(r"Twelve individual passes would cost \$(\d+) USD", LEAGUE_PASS)
+    assert match, "the League Pass page lost its comparison"
+    assert int(match.group(1)) == 12 * int(SEASON_PRICE), (
+        f"the page compares against ${match.group(1)} but twelve season passes "
+        f"at ${SEASON_PRICE} is ${12 * int(SEASON_PRICE)}")
+
+
+def test_the_league_pass_is_not_commissioner_only() -> None:
+    """Requiring the commissioner makes every league sale depend on one specific
+    person agreeing (PLAN §4, revised Aug 17 2026). Nothing in the code ever
+    checked who was buying — this was copy alone."""
+    assert re.search(r"any manager in the league can buy it", LEAGUE_PASS, re.I)
+    assert not re.search(r"Why a commissioner buys this", LEAGUE_PASS)

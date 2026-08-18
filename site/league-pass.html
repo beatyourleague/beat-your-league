@@ -84,7 +84,7 @@
     manager has a different roster and a different person they need to beat.</p>
   </header>
 
-  <h2>Why a commissioner buys this</h2>
+  <h2>Why someone buys this for the league</h2>
   <div class="grid">
     <div class="box"><h3>It levels the field</h3>
       <p>One manager buying an edge is an arms race. Everyone having the same tool is just a
@@ -98,7 +98,7 @@
       <p>Each report goes only to the manager it's about. We never tell your league who
       picked whom as their rival, and we never publish your league's names anywhere.</p></div>
     <div class="box"><h3>It's cheaper than one buy-in</h3>
-      <p>Twelve individual passes would cost $348 USD. This is $99 for every manager in your
+      <p>Twelve individual passes would cost $468 USD. This is $99 for every manager in your
       league who signs up — often less than one team's entry fee.</p></div>
   </div>
 
@@ -114,7 +114,8 @@
       cancel yourself any time.</li>
     </ul>
     <div class="soon" id="league-cta">Checkout opens at launch</div>
-    <p class="fine">How it works: you pay once, then share your league's signup link.
+    <p class="fine">How it works: any manager in the league can buy it — you don't have to be
+    the commissioner. You pay once, then share your league's signup link.
     Each manager takes sixty seconds to pick their rival — we can't write anyone's report
     until they do, because we'd be guessing at who they want to beat. Managers who never
     sign up simply don't get a report; there's no charge either way.</p>
@@ -138,10 +139,10 @@
 <script>
 "use strict";
 // Same one-constant wiring as the other pages, and the same rule: the CTA goes
-// to the PICKER, never straight to a payment link. The commissioner has to pick
-// their league before paying, because the payment carries the league it covers
-// — that is what tells us whose seats to honour. They pick a rival too: the
-// pass buys them their own report as well as the league's.
+// to the PICKER, never straight to a payment link. The buyer (any manager, not
+// only the commissioner) has to pick their league before paying, because the
+// payment carries the league it covers — that is what tells us whose seats to
+// honour. They pick a rival too: the pass buys them their own report as well.
 const CHECKOUT_OPEN = false;
 if (CHECKOUT_OPEN) {
   const slot = document.getElementById("league-cta");

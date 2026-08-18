@@ -100,11 +100,11 @@
     <div class="brand"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byljBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byljSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byljVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byljPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byljBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byljPath" fill="url(#byljSpec)" stroke="none"/><use href="#byljPath" fill="url(#byljVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
     <h1>Pick Your Rival</h1>
     <p id="header-pitch">Three taps — username, league, rival — and we pull the file on them while you
-    watch. A paid product from day one: <b>$29 USD for the season</b> — the founding
+    watch. A paid product from day one: <b>$39 USD for the season</b> — the founding
     rate, locked in for every renewal. Checkout runs on our payment provider's own secure page;
     all we ever ask for is your Sleeper <b>username</b> — never a password.</p>
     <div class="beta-chips" id="header-chips">
-      <span>$29 USD / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
+      <span>$39 USD / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
     </div>
   </header>
 
@@ -143,7 +143,7 @@
     <div class="note" id="seat-share" style="display:none"></div>
     <form id="form-email" novalidate>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-      <button id="submit" type="submit">Continue to checkout — $29</button>
+      <button id="submit" type="submit">Continue to checkout — $39</button>
     </form>
     <div class="err" id="err-email"></div>
     <div class="done" id="done">
@@ -156,7 +156,7 @@
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them. Your league and rival picks
         travel with the checkout, so there's nothing else to send us.</li>
-        <li id="renew-note">The season pass is <b>$29 today and renews once a year at $29
+        <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page. We never hold anyone in.</li>
         <li>Your first report — your Week 1 matchup broken down, with the file on
@@ -196,8 +196,8 @@
 // Paste the Payment Link URLs below to switch checkout on. One constant per
 // plan; empty means "not open yet" and the page says so honestly.
 // ---------------------------------------------------------------------------
-const STRIPE_LINK_SEASON = "";    // $29/season, auto-renewing annual
-const STRIPE_LINK_MONTHLY = "";   // $9.99/month
+const STRIPE_LINK_SEASON = "";    // $39/season, auto-renewing annual
+const STRIPE_LINK_MONTHLY = "";   // $12.99/month
 const STRIPE_LINK_PASS = "";      // $99 League Pass, recurring annual
 
 // League Pass SEATS only. A seat holder pays nothing — their commissioner
@@ -341,19 +341,19 @@ function setHeader(segments, chips) {
       "any time from your own account page. Every manager who signs up gets " +
       "their own report aimed at their own rival, including you.";
   } else if (WANTS_MONTHLY) {
-    button.textContent = "Continue to checkout — $9.99/mo";
+    button.textContent = "Continue to checkout — $12.99/mo";
     setHeader([
       "Three taps — username, league, rival — and we pull the file on them while ",
-      "you watch. A paid product from day one: ", ["$9.99 USD a month"], ", and it ",
+      "you watch. A paid product from day one: ", ["$12.99 USD a month"], ", and it ",
       "stops billing on its own when the season ends. Checkout runs on our payment ",
       "provider's own secure page; all we ever ask for is your Sleeper ",
       ["username"], " — never a password.",
-    ], ["$9.99 USD / month", "Cancel any time", "First report Tue Sep 8"]);
+    ], ["$12.99 USD / month", "Cancel any time", "First report Tue Sep 8"]);
     // Monthly has different terms from the pass and must say its own, not the
     // pass's: it recurs monthly, and it stops on its own at season end because
     // there is no product in February to charge for.
     $("renew-note").textContent =
-      "Monthly is $9.99 and bills again each month until you cancel — and billing " +
+      "Monthly is $12.99 and bills again each month until you cancel — and billing " +
       "stops on its own when the season ends, because we don't charge for months " +
       "we don't deliver. Cancel yourself any time from your own account page.";
   }
