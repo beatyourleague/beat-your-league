@@ -932,3 +932,38 @@ def test_the_league_pass_is_not_commissioner_only() -> None:
     checked who was buying — this was copy alone."""
     assert re.search(r"any manager in the league can buy it", LEAGUE_PASS, re.I)
     assert not re.search(r"Why a commissioner buys this", LEAGUE_PASS)
+
+
+def test_checkout_cannot_open_while_the_sleeper_question_is_unresolved() -> None:
+    """The one guard that is about the BUSINESS surviving, not the buyer's
+    experience — though it protects them too.
+
+    Sleeper's Terms of Use (§11.1, §11.3, verbatim in PLAN §0) prohibit a
+    third-party retrieving league data without express written consent, and
+    §11.2's first remedy is terminating the SUBSCRIBER's account. Until that is
+    resolved, taking money means selling a product that can get the buyer's
+    Sleeper account closed without telling them — which is the exact failure
+    this repo's honesty rules exist to prevent.
+
+    So flipping CHECKOUT_OPEN or pasting a payment link is not a config change
+    while PLAN §0 still reads `unresolved`; it is a decision, and it has to be
+    recorded as one. Set the status line to granted / refused /
+    proceeding-with-disclosure — whichever is true — and this test lets you
+    ship."""
+    plan = (SITE.parent / "PLAN.md").read_text(encoding="utf-8")
+    match = re.search(r"\*\*SLEEPER_LICENCE_STATUS: (\w[\w-]*)\*\*", plan)
+    assert match, "PLAN §0 lost its Sleeper licence status line"
+    status = match.group(1)
+    assert status in {"unresolved", "granted", "refused",
+                      "proceeding-with-disclosure"}, f"unknown status {status!r}"
+    if status != "unresolved":
+        return  # a decision was made and written down; the guard steps aside
+
+    assert re.search(r"const CHECKOUT_OPEN = false", LANDING), (
+        "checkout was opened while PLAN §0 still records the Sleeper licence "
+        "question as unresolved — see PLAN §0 before shipping this")
+    for const in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS"):
+        assert re.search(rf'const {const} = ""', JOIN), (
+            f"{const} was set while PLAN §0 records the Sleeper licence question "
+            f"as unresolved — a live payment link takes money for a product whose "
+            f"terms position is undecided")

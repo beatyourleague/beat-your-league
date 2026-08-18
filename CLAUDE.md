@@ -77,14 +77,27 @@ modern, professional product. Nothing ships with default or unstyled HTML.
 
 ## Data sources
 
-- **Sleeper API** — **LICENSED NON-COMMERCIAL ONLY. This is a launch blocker, see PLAN §0.**
-  docs.sleeper.com, verified Aug 17 2026: *"The Sleeper API is a read-only HTTP API that is free to
-  use for non-commercial purposes… For commercial use of the Sleeper API, please reach out to us
-  directly to discuss licensing."* This spec previously recorded only "public, no auth" and the
-  whole build proceeded on that incomplete reading. The product charges money and reads Sleeper for
-  100% of its data, so the licensing conversation has to happen before any money is taken. Nothing
-  technical here changes; the rate limit (1,000/min) is far above our handful of calls per league
-  per week.
+- **Sleeper API** — **PROHIBITED BY SLEEPER'S TERMS OF USE WITHOUT WRITTEN CONSENT. Launch
+  blocker; the full verbatim clauses and the decision live in PLAN §0.** The docs page says
+  non-commercial use only; the *binding* document is Sleeper's General Terms of Use (Blitz Studios,
+  Last Updated Jul 24 2026), verified by raw fetch + exact-string match on Aug 18 2026 — a
+  summarised fetch of that 145k-char page silently drops these clauses, so check it that way:
+  §11.1 bars crawling/scraping and automated access "without the express written consent of
+  Sleeper"; §11.3 says **no third-party is authorized** to retrieve data "whether directly, through
+  automated means, or through any account… belonging to a user," and that a **user's authorization
+  is not Sleeper's authorization**; §11.1 also bars the USER from connecting to a third-party
+  product that uses league/roster/transaction/scoring data "for that third-party's commercial or
+  business purposes," with §11.2's remedy being termination of **their** account.
+  **Engineering consequence: there is no architecture that fixes this.** Browser-side compute, a
+  local CLI, an extension, a BYO-data POST, and a subscriber-forked Actions cron were all researched
+  and all fail §11.3 — do not propose them as a workaround again. What DOES help is reducing
+  surface: move the schedule, weekly stats and projections to nflverse (CC-BY-4.0, commercial use
+  permitted with attribution), which removes all three undocumented feeds and leaves only documented
+  `/v1` league endpoints. Projections move AFTER launch — swapping them invalidates the band's 77.9%
+  coverage evidence until the matchup backtest is re-run.
+  This spec previously recorded only "public, no auth" and the whole build proceeded on that
+  reading. Nothing technical changes; the rate limit (1,000/min) is far above our handful of calls
+  per league per week.
   Public, no auth, JSON: base `https://api.sleeper.app/v1/`. Key endpoints:
   `/league/{id}`, `/league/{id}/rosters`, `/league/{id}/users`, `/league/{id}/matchups/{week}`,
   `/league/{id}/transactions/{week}`, `/state/nfl`, `/players/nfl` (large — cache to disk),

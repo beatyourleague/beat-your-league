@@ -14,22 +14,108 @@ retention/refund policy, and the Stripe+Resend stack. Evidence and its limits ar
 
 ## 0. THE BLOCKER THAT OUTRANKS EVERY DECISION BELOW
 
-**Sleeper's API is licensed for non-commercial use only.** Verified twice against
-[docs.sleeper.com](https://docs.sleeper.com/) on Aug 17 2026, verbatim:
+**SLEEPER_LICENCE_STATUS: unresolved**
 
-> "The Sleeper API is a read-only HTTP API that is free to use for **non-commercial purposes**…
-> For commercial use of the Sleeper API, please reach out to us directly to discuss licensing."
+*(Machine-read by `test_checkout_cannot_open_while_the_sleeper_question_is_unresolved`. Legal
+values: `unresolved` · `granted` · `refused` · `proceeding-with-disclosure`. Checkout cannot be
+opened while this says `unresolved` — the test fails the build, on purpose. Change it only when the
+decision has actually been made, and record the date and what Sleeper said underneath.)*
 
-This product charges $39–$99 and reads Sleeper for 100% of its data. `CLAUDE.md` recorded the API
-as "public, no auth, JSON" and never recorded this clause, so the entire build proceeded on an
-incomplete reading of the terms. The rate limit is a non-issue (1,000/min against our handful of
-calls per league per week); the licence is not.
+**Sleeper's Terms of Use forbid what this product does, and no architecture routes around it.**
 
-**Action: email Sleeper this week, before any money is taken.** One hour. It also gates the best
-distribution surfaces — an official integration or app listing means applying to the company whose
-terms you would otherwise be in breach of. Every item below is conditional on this going well, and
-there is no version of "launch first, ask later" that is honest for a product built on publishing
-what it can and cannot stand behind.
+The docs page is the mild document and it is NOT the binding one. `sleeper.com/terms` redirects to
+Sleeper's General Terms of Use (Blitz Studios, Inc., **Last Updated July 24 2026** — three weeks
+before this was written). Fetched raw and exact-string matched on Aug 18 2026, because a summarised
+fetch of a 145,000-character document silently dropped every clause below. **Verbatim:**
+
+> **§11.1** "Crawl or scrape the Services in any way, shape, or form, for any purpose whatsoever,
+> without the express written consent of Sleeper"
+>
+> **§11.1** "Access, query, extract, or receive any data or content from the Services through any
+> automated means, bot, script, spider, robot, and/or other technology, or through manual means
+> performed at a scale, frequency, or systematic pattern inconsistent with ordinary individual
+> human use, without the express written consent of Sleeper"
+>
+> **§11.1** "**Use, enroll in, or connect your account to any third-party product**, application,
+> platform, or service that accesses, syncs, retrieves, aggregates, stores, or displays data from
+> the Services, **including but not limited to league, roster, transaction, scoring**, and/or other
+> account data, **for that third-party's commercial or business purposes**, without the express
+> written consent of Sleeper"
+>
+> **§11.2** "…we may, in addition to any other remedy available to us, **immediately suspend or
+> terminate your account**, revoke any active sessions or authentication credentials associated
+> with your account, and/or take technical measures to block or restrict access by that
+> third-party, whether or not that third-party is itself a user of the Services."
+>
+> **§11.3** "**No third-party is authorized** to access, use, scrape, crawl, query, or retrieve any
+> data or content from the Services, **whether directly, through automated means, or through any
+> account, credential, or authentication mechanism belonging to a user**, except pursuant to a
+> separate written agreement executed by Sleeper… **A user's provision of credentials, tokens, or
+> authorization to a third-party does not constitute authorization from Sleeper**, and Sleeper's
+> authorization must be obtained independently and directly from Sleeper."
+
+**Two consequences that were not priced.**
+
+**§11.3 forecloses every workaround in advance.** "Is there a way to do this independent of
+Sleeper?" was researched properly (13 agents, four lenses, adversarial verification) and the answer
+is **no**. Moving the fetch into the subscriber's browser, a CLI they install, an extension, a
+BYO-data POST, or a repo they fork in their own GitHub Actions — §11.3 reaches the operator
+directly, covers retrieval "through any account… belonging to a user," and says the user's consent
+is not Sleeper's consent. Every one of those designs costs 40–200+ founder hours, most of them
+delete the Tuesday email (a closed browser cannot mail anyone), and **none of them changes the
+sentence that applies to us.** The full option table is in the workflow output; the short version
+is that the cheapest workaround is forty times the cost of the email and does not work.
+
+**The remedy lands on the CUSTOMER first.** §11.1's third-party bullet binds the subscriber and
+§11.2's first remedy is terminating *their* account — the account their league and its history live
+in — mid-season, because they bought our product. Note the verb is "**Use**": our credential-free,
+league-ID-only design does not escape it, since no account connection is required for that bullet
+to bite.
+
+**That is what makes this un-ignorable for THIS business.** A product that publishes its own
+failing calibration buckets cannot decline to mention that buying it puts the buyer's Sleeper
+account in scope for termination. So there are two doors: don't disclose it — the exact failure
+mode CLAUDE.md's principles exist to prevent — or disclose it, and have just written the worst
+sentence on the sales page. **The email is not a compliance chore; it is the only thing that
+deletes that sentence.**
+
+**What everyone else does is not permission.** No Sleeper tool found claims partner status, Sleeper
+publishes no partner list, and there is no public record of any tool being blocked or sued. That is
+*unenforced so far*, observed three weeks after Sleeper rewrote these very clauses, and a quiet IP
+block or private email leaves no public trace. It is also weaker cover for us than for an anonymous
+scraper: we hold a Sleeper account and accepted these Terms, so the never-assented defence is
+unavailable.
+
+### Actions
+1. **Email Sleeper now** (legal@sleeper.app, cc support@sleeper.app), asking specifically for
+   **§2.9 Approved Integration Partner status, read-only scope** — the thing Sleeper has already
+   defined. Name the product in one sentence, list the endpoints, state the volume honestly (a
+   handful of cached calls per league per week, re-runs cost zero), state what we do NOT do (no
+   resale, no duplication of Sleeper's product, data shown only to the league member entitled to
+   see it), and say we will pay. Ask in the same email whether Minis is the intended route.
+2. **Gate it (§6): if no substantive reply by Sep 1**, decide explicitly and in writing — launch
+   with disclosure, delay, or narrow the product. Not by drift.
+3. **Two minutes you should spend yourself:** open web.archive.org and diff §11 of this document
+   against a pre-July-2026 capture. Our fetches were rate-limited (HTTP 429). If those clauses are
+   NEW, Sleeper just tooled up against this exact product category, the non-enforcement record is
+   worthless as a predictor, and the email is urgent rather than prudent.
+4. **Migrate NFL-wide data to nflverse regardless of the answer** (§3C). CC-BY-4.0 with no
+   NonCommercial term — commercial use permitted with attribution. It removes all three
+   *undocumented* Sleeper feeds (schedule, weekly stats, projections), cuts call volume, and shrinks
+   the ask to documented `/v1` league endpoints. Do projections AFTER launch: swapping them
+   invalidates the band's 77.9% coverage evidence until the matchup backtest is re-run.
+5. **`site/legal.html` needs a second look.** Its Sleeper-dependency clause promises a fair-share
+   refund if access ends, and says nothing about the subscriber's own account being in scope.
+
+**Not legal advice — I am not a lawyer and neither is the owner.** What the documents *say* is not
+in dispute (three independent primary-source fetches, exact-string matched). What they *mean* and
+whether they are enforceable is a one-hour conversation with a real lawyer, and the four narrow
+questions worth asking are: whether §11.3 reaches `api.sleeper.app` (a hostname not named in the
+"Services" definition — the one textual argument in our favour, and a weak one); whether holding a
+Sleeper account weakens us versus an anonymous scraper; what disclosure is owed to subscribers
+about §11.2; and §14's arbitration and class-action waiver. **Do not be reassured by anyone citing
+*hiQ v. LinkedIn*** — the CFAA is not the live question here, and hiQ still LOST on contract, with
+a stipulated $500,000 judgment and a permanent injunction.
 
 ## 1. Thesis & positioning
 
