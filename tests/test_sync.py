@@ -974,3 +974,137 @@ def test_a_seat_cannot_stamp_itself_into_the_future() -> None:
         {LEAGUE: "commish@example.com"}, "2026-09-01T11:00:00+00:00")
     projected = sync.project([*seats, *repick])
     assert [s.rival_owner_id for s in projected] == ["222222222222"]
+
+
+# --------------------------------------------------------------------- #
+# v2 roster refs — the whole league setup, riding on one payment
+# --------------------------------------------------------------------- #
+
+ROSTER_SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
+ROSTER_IDS = ["00-0036900", "00-0035676", "00-0038134", "00-0036963",
+              "00-0033873", "00-0039075", "00-0038542", "00-0034857",
+              "DEF-BAL", "00-0031234", "00-0032111", "00-0033222",
+              "00-0034333", "00-0035444", "DEF-KC"]
+
+
+def test_a_whole_roster_round_trips_through_a_payment() -> None:
+    """PLAN §0: the league half is typed by the subscriber, so the ref carries a
+    roster rather than two Sleeper ids. There is no second list and no form
+    backend, so if this does not survive Stripe the signup does not exist."""
+    from run.refs import decode_roster, encode_roster
+    ref = encode_roster(SEASON, "ppr", ROSTER_SLOTS, ROSTER_IDS)
+    back = decode_roster(ref)
+    assert back.player_ids == tuple(ROSTER_IDS)
+    assert back.slots == tuple(ROSTER_SLOTS)
+    assert back.scoring == "ppr" and back.plan == SEASON
+
+
+def test_the_roster_ref_fits_stripe_with_room_to_spare() -> None:
+    """200 chars, [A-Za-z0-9_-]. Stripe drops anything else SILENTLY while still
+    showing a working payment page, so this is the constraint that decides
+    whether a paid signup is recoverable at all."""
+    from run.refs import MAX_ROSTER, encode_roster
+    import re as _re
+    for plan in (SEASON, MONTHLY, LEAGUE_PASS):
+        ref = encode_roster(plan, "half_ppr", ROSTER_SLOTS, ROSTER_IDS)
+        assert len(ref) <= 200 and _re.fullmatch(r"[A-Za-z0-9_-]+", ref)
+    # and at the documented ceiling
+    big = [f"00-{n:07d}" for n in range(1, MAX_ROSTER + 1)]
+    ref = encode_roster(SEASON, "ppr", ROSTER_SLOTS, big)
+    assert len(ref) <= 200, f"a full {MAX_ROSTER}-player roster needs {len(ref)}"
+
+
+def test_base64_payload_survives_its_own_separator() -> None:
+    """base64url's alphabet INCLUDES "-" and "_". The payload therefore has to
+    be the LAST field and read with maxsplit, or the separator corrupts exactly
+    the data it delimits.
+
+    The fixture is chosen deliberately: 00-0020030 encodes to "AE4-", so this
+    roster's payload really does contain a dash. A fixture that happens to
+    encode without one passes whether or not the split is bounded — which is
+    how the first version of this test let a maxsplit mutation through."""
+    from run.refs import decode_roster, encode_roster
+    dashing = ["00-0020030", "00-0020094", "00-0020158", "DEF-BAL"]
+    ref = encode_roster(SEASON, "ppr", ["QB"], dashing)
+    payload = ref.split("-", 2)[2]
+    assert "-" in payload, f"fixture no longer exercises the dash: {payload!r}"
+    assert decode_roster(ref).player_ids == tuple(dashing)
+
+    # and the underscore half, which comes free with the defense flag
+    underscored = encode_roster(SEASON, "ppr", ["DEF"], ["DEF-KC"])
+    assert "_" in underscored.split("-", 2)[2]
+    assert decode_roster(underscored).player_ids == ("DEF-KC",)
+
+
+def test_a_player_number_can_never_reach_the_defense_flag() -> None:
+    """Defenses live in a reserved high range. If a GSIS number could reach it,
+    a real player would silently decode as a team defense — a wrong lineup with
+    no error anywhere."""
+    from run.refs import _DEFENSE_FLAG, _MAX_PLAYER
+    assert _MAX_PLAYER < _DEFENSE_FLAG
+    assert _MAX_PLAYER == 9_999_999, "the GSIS format is seven digits"
+
+
+def test_defenses_encode_their_letters_not_a_list_position() -> None:
+    """An index into a team list silently repoints the year a franchise moves —
+    the same class of bug that made "Rams" mean St. Louis."""
+    from run.refs import decode_roster, encode_roster
+    for abbr in ("BAL", "KC", "SF", "LA", "LV", "NYG"):
+        ref = encode_roster(SEASON, "ppr", ["DEF"], [f"DEF-{abbr}"])
+        assert decode_roster(ref).player_ids == (f"DEF-{abbr}",)
+
+
+@pytest.mark.parametrize("bad", [
+    "", "nonsense", "s2-pQRRWWTFKD", "x2-pQ-AAAAAA", "s3-pQ-AAAAAA",
+    "s2--AAAAAA", "s2-zQ-AAAAAA", "s2-pX-AAAAAA", "s2-pQ-!!!!",
+    "s2-pQ-AAAAAA",        # 4 bytes: not a whole number of players
+    "s2-pQ-",              # no roster at all
+])
+def test_an_unreadable_roster_ref_is_refused_not_guessed(bad: str) -> None:
+    """A guessed roster is a confident report about players the subscriber does
+    not own. Every failure raises; the caller treats it as "needs a human"."""
+    from run.refs import RefError, decode_roster
+    with pytest.raises(RefError):
+        decode_roster(bad)
+
+
+def test_a_roster_shorter_than_the_lineup_is_refused() -> None:
+    """Nine starting slots and three players is not a roster we can set a
+    lineup from. Accepted, it would render six empty slots as though the
+    subscriber had chosen them."""
+    from run.refs import RefError, decode_roster, encode_roster
+    with pytest.raises(RefError):
+        encode_roster(SEASON, "ppr", ROSTER_SLOTS, ROSTER_IDS[:3])
+    # a well-formed blob carrying too few players is refused on decode too
+    import base64
+    blob = b"".join(int(pid[3:]).to_bytes(3, "big") for pid in ROSTER_IDS[:3])
+    forged = "s2-pQRRWWTFKD-" + base64.urlsafe_b64encode(blob).decode().rstrip("=")
+    with pytest.raises(RefError):
+        decode_roster(forged)
+
+
+def test_a_duplicate_player_is_rejected_at_both_ends() -> None:
+    """One player cannot fill two slots. Left alone it inflates a lineup out of
+    nothing — the same defect _assign_alternatives was fixed for."""
+    from run.refs import RefError, decode_roster, encode_roster
+    dupes = ["00-0036900", "00-0036900", "00-0035676"]
+    with pytest.raises(RefError):
+        encode_roster(SEASON, "ppr", ["QB"], dupes)
+    # and a hand-built ref carrying duplicates is refused on the way back in
+    import base64
+    blob = b"".join(int(pid[3:]).to_bytes(3, "big") for pid in dupes)
+    forged = "s2-pQ-" + base64.urlsafe_b64encode(blob).decode().rstrip("=")
+    with pytest.raises(RefError):
+        decode_roster(forged)
+
+
+def test_v1_and_v2_refs_are_never_mistaken_for_each_other() -> None:
+    from run.refs import (decode, decode_roster, encode_roster, is_roster_ref,
+                          RefError)
+    v1 = encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL)
+    v2 = encode_roster(SEASON, "ppr", ROSTER_SLOTS, ROSTER_IDS)
+    assert is_roster_ref(v2) and not is_roster_ref(v1)
+    with pytest.raises(RefError):
+        decode_roster(v1)
+    with pytest.raises(RefError):
+        decode(v2)
