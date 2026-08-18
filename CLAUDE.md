@@ -77,7 +77,15 @@ modern, professional product. Nothing ships with default or unstyled HTML.
 
 ## Data sources
 
-- **Sleeper API** (public, no auth, JSON): base `https://api.sleeper.app/v1/`. Key endpoints:
+- **Sleeper API** — **LICENSED NON-COMMERCIAL ONLY. This is a launch blocker, see PLAN §0.**
+  docs.sleeper.com, verified Aug 17 2026: *"The Sleeper API is a read-only HTTP API that is free to
+  use for non-commercial purposes… For commercial use of the Sleeper API, please reach out to us
+  directly to discuss licensing."* This spec previously recorded only "public, no auth" and the
+  whole build proceeded on that incomplete reading. The product charges money and reads Sleeper for
+  100% of its data, so the licensing conversation has to happen before any money is taken. Nothing
+  technical here changes; the rate limit (1,000/min) is far above our handful of calls per league
+  per week.
+  Public, no auth, JSON: base `https://api.sleeper.app/v1/`. Key endpoints:
   `/league/{id}`, `/league/{id}/rosters`, `/league/{id}/users`, `/league/{id}/matchups/{week}`,
   `/league/{id}/transactions/{week}`, `/state/nfl`, `/players/nfl` (large — cache to disk),
   `/user/{username-or-id}` and `/user/{user_id}/leagues/nfl/{season}` (onboarding),
