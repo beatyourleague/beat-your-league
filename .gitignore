@@ -43,3 +43,6 @@ __pycache__/
 
 # Local Claude Code session settings
 .claude/settings.local.json
+
+# nflverse CSVs are large and re-fetchable; cached like the rest of data/raw/.
+data/raw/nflverse/

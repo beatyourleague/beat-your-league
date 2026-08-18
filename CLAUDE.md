@@ -77,8 +77,27 @@ modern, professional product. Nothing ships with default or unstyled HTML.
 
 ## Data sources
 
-- **Sleeper API** — **PROHIBITED BY SLEEPER'S TERMS OF USE WITHOUT WRITTEN CONSENT. Launch
-  blocker; the full verbatim clauses and the decision live in PLAN §0.** The docs page says
+- **nflverse** (`ingest/nflverse.py`, `ingest/injuries.py`) — **the licensed source the paid
+  product is being rebuilt on.** CC-BY-4.0: commercial use permitted *in exchange for* attribution,
+  which makes `ATTRIBUTION` a licence term rather than a courtesy (RULE N1 — ship it or the grant
+  does not apply). Releases used: `stats_player` (weekly counted usage — `stats_player_week_{season}.csv`,
+  `player_id` IS the GSIS id, so it joins the injury archive with no mapping table), `schedules`
+  (`games.csv` → byes), `injuries`, `players`. **RULE N2 — first-party outputs only:** snap counts
+  are Pro-Football-Reference-derived and FTN charting is CC-BY-SA, so neither is read; losing snaps
+  is cheap because RULE U2 already made them live-only and unbacktestable. Regular season only
+  (`season_type`/`game_type` = REG — a POST row at week 10 is a different game). An unknown week
+  returns `None` for byes, never an empty set, or the availability gate silently reads "everyone is
+  playing". Completed seasons cache forever, the live season on the 6h window, an outage falls back
+  to cache and only a cold cache is fatal.
+- **Sleeper API** — **BEING REMOVED FROM THE PAID PRODUCT (owner decision, Aug 18 2026).** Rather
+  than ask Sleeper for a commercial licence, the dependency goes: NFL-wide data moves to nflverse
+  above, and league context (scoring, roster slots, players, opponent) comes from the subscriber
+  typing it. `test_no_sleeper_in_the_paid_path` walks the imports reachable from `run/batch.py` and
+  fails if checkout is live while any of them still reaches Sleeper — today that set is exactly
+  `ingest/sleeper.py`. The historical backtest keeps its Sleeper code deliberately: that is research
+  against a public sample league, not a commercial service.
+  **PROHIBITED BY SLEEPER'S TERMS OF USE WITHOUT WRITTEN CONSENT — the full verbatim clauses and
+  the decision live in PLAN §0.** The docs page says
   non-commercial use only; the *binding* document is Sleeper's General Terms of Use (Blitz Studios,
   Last Updated Jul 24 2026), verified by raw fetch + exact-string match on Aug 18 2026 — a
   summarised fetch of that 145k-char page silently drops these clauses, so check it that way:

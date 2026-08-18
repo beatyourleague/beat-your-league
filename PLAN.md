@@ -14,12 +14,14 @@ retention/refund policy, and the Stripe+Resend stack. Evidence and its limits ar
 
 ## 0. THE BLOCKER THAT OUTRANKS EVERY DECISION BELOW
 
-**SLEEPER_LICENCE_STATUS: unresolved**
+**SLEEPER_LICENCE_STATUS: not-required**
 
 *(Machine-read by `test_checkout_cannot_open_while_the_sleeper_question_is_unresolved`. Legal
-values: `unresolved` · `granted` · `refused` · `proceeding-with-disclosure`. Checkout cannot be
-opened while this says `unresolved` — the test fails the build, on purpose. Change it only when the
-decision has actually been made, and record the date and what Sleeper said underneath.)*
+values: `unresolved` · `granted` · `refused` · `proceeding-with-disclosure` · `not-required`.
+Checkout cannot open while this says `unresolved`. Set to **not-required** on Aug 18 2026: the
+owner chose to remove the dependency rather than ask for permission, so there is no licence to
+resolve. This value is only honest once the paid pipeline genuinely stops reading Sleeper — which
+is why `test_no_sleeper_in_the_paid_path` exists and must pass before checkout opens.)*
 
 **Sleeper's Terms of Use forbid what this product does, and no architecture routes around it.**
 
@@ -86,26 +88,73 @@ block or private email leaves no public trace. It is also weaker cover for us th
 scraper: we hold a Sleeper account and accepted these Terms, so the never-assented defence is
 unavailable.
 
+### THE DECISION (owner, Aug 18 2026): NO EMAIL. THE PRODUCT LEAVES SLEEPER.
+
+Asked whether the business could stand without Sleeper's permission, the owner's answer was to
+build the version that needs nobody's — no licence request, no gatekeeper, no waiting on a reply
+that may never come. **That is buildable, and this section is now the plan for it rather than a
+plan to ask.**
+
+What that costs and what it does not is set out below. The one thing it is NOT is a workaround:
+we do not keep reading Sleeper and hope, we stop reading Sleeper. Every design that kept the data
+and dodged the terms was researched and fails §11.3, and all of them leave the *subscriber's*
+account exposed under §11.2 to a risk they were never told about. A product that publishes its own
+failing calibration buckets does not ship that.
+
+**The paid product is rebuilt on data licensed for commercial use.**
+
+| Half of the product | Source | Licence | Status |
+|---|---|---|---|
+| NFL-wide: weekly stats, targets, air yards, schedule/byes, injuries, player table | **nflverse** | **CC-BY-4.0 — commercial use permitted with attribution** | **BUILT** (`ingest/nflverse.py`, `ingest/injuries.py`) |
+| League-specific: your roster, scoring, opponent | **the subscriber tells us** | theirs to give | to build (§3) |
+
+**The league half is not replaceable by any feed.** Sleeper's own support docs confirm there is no
+export, no CSV, no digest — "the only way to get any data is to use our public API." No vendor
+sells another company's private league data. So the league context comes from the only party
+entitled to hand it over: **the subscriber, typing it.** They tell us their scoring format, their
+roster slots, and their players. We never touch Sleeper, from our servers or their browser.
+
+**Precedent that this is a shippable shape, not a consolation prize:** Scoutcast ($49.99/season)
+already asks its users to supply their opponent's lineup by hand, and sells the result as "H2H
+opponent edge". Manual league context is a normal thing to ask a fantasy manager for.
+
+### What survives, what dies, and what gets better
+
+**Survives intact** — everything the differentiator actually rests on: the projection model, the
+calibration machinery, the backtest, the **receipts ledger**, the Tape (your starters against the
+opponent's, from typed rosters), start/sit calls with gated confidence, counted usage, the if/then
+pivot plan, Stripe, delivery, the whole renderer.
+
+**Dies:** the FAAB waiver market (priced from the league's own transaction log — that log is
+Sleeper's), the rival's behavioural profile (built from league history), the automatic
+zero-touch signup that read the league for you, and the live scouting demo in `join/`.
+
+**Gets better, genuinely:** the receipts ledger. Calls are no longer scattered across private
+leagues — they are league-agnostic player calls, so **one public ledger grades every call we make,
+and a stranger can check it.** That is the inclusion handle §1 says the whole discovery strategy
+depends on, and it was previously fragmented across leagues nobody outside can see.
+
 ### Actions
-1. **Email Sleeper now** (legal@sleeper.app, cc support@sleeper.app), asking specifically for
-   **§2.9 Approved Integration Partner status, read-only scope** — the thing Sleeper has already
-   defined. Name the product in one sentence, list the endpoints, state the volume honestly (a
-   handful of cached calls per league per week, re-runs cost zero), state what we do NOT do (no
-   resale, no duplication of Sleeper's product, data shown only to the league member entitled to
-   see it), and say we will pay. Ask in the same email whether Minis is the intended route.
-2. **Gate it (§6): if no substantive reply by Sep 1**, decide explicitly and in writing — launch
-   with disclosure, delay, or narrow the product. Not by drift.
-3. **Two minutes you should spend yourself:** open web.archive.org and diff §11 of this document
-   against a pre-July-2026 capture. Our fetches were rate-limited (HTTP 429). If those clauses are
-   NEW, Sleeper just tooled up against this exact product category, the non-enforcement record is
-   worthless as a predictor, and the email is urgent rather than prudent.
-4. **Migrate NFL-wide data to nflverse regardless of the answer** (§3C). CC-BY-4.0 with no
-   NonCommercial term — commercial use permitted with attribution. It removes all three
-   *undocumented* Sleeper feeds (schedule, weekly stats, projections), cuts call volume, and shrinks
-   the ask to documented `/v1` league endpoints. Do projections AFTER launch: swapping them
-   invalidates the band's 77.9% coverage evidence until the matchup backtest is re-run.
-5. **`site/legal.html` needs a second look.** Its Sleeper-dependency clause promises a fair-share
-   refund if access ends, and says nothing about the subscriber's own account being in scope.
+1. **BUILT: `ingest/nflverse.py`** — weekly counted usage, schedule byes, cached, outage-tolerant,
+   with `ATTRIBUTION` as a shipped licence term (RULE N1) and first-party outputs only (RULE N2:
+   no PFR snap counts, no CC-BY-SA FTN charting). 12 tests, three mutations checked.
+2. **Next: the roster intake.** Replace the Sleeper picker with a paste-your-roster flow — scoring
+   format, roster slots, 15 player names matched to GSIS ids. This is the piece the product now
+   stands on, and its friction is the main product risk (see §6).
+3. **Then: cut the Sleeper path out of the paid pipeline.** `ingest/pull.py`, `run/sync.py`'s
+   verification, `site/join/`'s live calls. Keep the Sleeper code paths only for the historical
+   backtest, which is research on a public sample league, not a commercial service.
+4. **`site/legal.html`:** the Sleeper-dependency clause becomes an nflverse attribution + a
+   data-source note. The subscriber-account risk disappears with the dependency.
+5. **Two minutes still worth spending:** diff §11 on web.archive.org against a pre-July-2026
+   capture. Not to decide anything now — to know whether Sleeper wrote those clauses *at* this
+   product category, which tells you what the rest of the market is walking into.
+
+**The strongest argument against this decision, recorded honestly:** typing a roster is real
+friction against competitors who sync in one tap, and the FAAB market was a genuinely uncopyable
+edge that no rankings site has. This trades a differentiator and some conversion for independence
+from a gatekeeper who can say no at any time. That is a legitimate trade, and it is the owner's to
+make — but §6's gates should now watch intake completion rate as the first thing that can kill it.
 
 **Not legal advice — I am not a lawyer and neither is the owner.** What the documents *say* is not
 in dispute (three independent primary-source fetches, exact-string matched). What they *mean* and

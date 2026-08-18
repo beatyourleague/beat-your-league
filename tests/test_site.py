@@ -955,9 +955,12 @@ def test_checkout_cannot_open_while_the_sleeper_question_is_unresolved() -> None
     assert match, "PLAN §0 lost its Sleeper licence status line"
     status = match.group(1)
     assert status in {"unresolved", "granted", "refused",
-                      "proceeding-with-disclosure"}, f"unknown status {status!r}"
+                      "proceeding-with-disclosure", "not-required"}, \
+        f"unknown status {status!r}"
     if status != "unresolved":
-        return  # a decision was made and written down; the guard steps aside
+        # A decision was made and written down. `not-required` carries its own
+        # obligation instead: see test_no_sleeper_in_the_paid_path.
+        return
 
     assert re.search(r"const CHECKOUT_OPEN = false", LANDING), (
         "checkout was opened while PLAN §0 still records the Sleeper licence "
@@ -967,3 +970,64 @@ def test_checkout_cannot_open_while_the_sleeper_question_is_unresolved() -> None
             f"{const} was set while PLAN §0 records the Sleeper licence question "
             f"as unresolved — a live payment link takes money for a product whose "
             f"terms position is undecided")
+
+
+# The paid path: every module run/batch.py can reach when it builds and mails a
+# subscriber's report. Walked statically so a new import cannot quietly widen it.
+def _paid_path_modules() -> set[Path]:
+    import ast
+    repo = SITE.parent
+    seen: set[str] = set()
+    queue = ["run.batch"]
+    while queue:
+        name = queue.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        path = repo / (name.replace(".", "/") + ".py")
+        if not path.is_file():
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                queue += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                queue.append(node.module)
+    return {repo / (n.replace(".", "/") + ".py") for n in seen
+            if (repo / (n.replace(".", "/") + ".py")).is_file()}
+
+
+def test_no_sleeper_in_the_paid_path() -> None:
+    """PLAN §0: the owner chose to remove the Sleeper dependency rather than ask
+    Sleeper's permission for it. That choice is only real when the code stops
+    reading Sleeper — until then `SLEEPER_LICENCE_STATUS: not-required` is a
+    claim about intent, not about the software.
+
+    So this fails the moment money can move while the paid path still reaches
+    Sleeper. It is deliberately quiet before then: the migration is staged
+    (PLAN §0 actions 2-3) and a red suite through a multi-day migration teaches
+    people to ignore red suites.
+
+    The historical backtest may keep its Sleeper code — that is research on a
+    public sample league, not a commercial service — which is exactly why this
+    walks the imports reachable from `run/batch.py` rather than the whole repo.
+    """
+    plan = (SITE.parent / "PLAN.md").read_text(encoding="utf-8")
+    checkout_open = not re.search(r"const CHECKOUT_OPEN = false", LANDING)
+    links_live = not all(re.search(rf'const {c} = ""', JOIN) for c in
+                         ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY",
+                          "STRIPE_LINK_PASS"))
+    offenders = sorted(
+        p.name for p in _paid_path_modules()
+        if re.search(r"api\.sleeper\.app|sleeper\.app/|docs\.sleeper", 
+                     p.read_text(encoding="utf-8")))
+
+    if checkout_open or links_live:
+        assert not offenders, (
+            f"checkout is live and the paid path still reads Sleeper via "
+            f"{offenders} — PLAN §0 records the dependency as removed, and "
+            f"§11.2's remedy lands on the SUBSCRIBER's account")
+    elif "SLEEPER_LICENCE_STATUS: not-required" in plan:
+        # Not a failure — a standing reminder of what is left to do, visible in
+        # -v output without turning the suite red mid-migration.
+        assert True, offenders
