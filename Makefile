@@ -1,6 +1,7 @@
 PY := .venv/bin/python
+SEASON ?= 2026
 
-.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send
+.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index
 
 week:
 	$(PY) -m run.week
@@ -47,6 +48,13 @@ demo:
 	  r=json.loads(pathlib.Path('data/processed/week_report.json').read_text()); \
 	  m=r['meta']; p=pathlib.Path('reports')/f\"rival-report-{m['season']}-w{int(m['week']):02d}-r{m['my_roster_id']}.txt\"; \
 	  p.write_text(w.text_summary(r), encoding='utf-8'); print(f'summary rewritten to {p}')"
+
+# The player directory the intake page downloads. Regenerate whenever the
+# nflverse cache moves — a stale directory cannot resolve a rookie, and the
+# subscriber who rostered him simply cannot finish signup. `--check` fails if
+# the committed asset has drifted, which is what CI runs.
+index:
+	$(PY) -m render.player_index --season $(SEASON)
 
 receipts:
 	$(PY) -m run.content receipts
