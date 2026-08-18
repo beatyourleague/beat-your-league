@@ -109,8 +109,10 @@ class Match:
         if self.resolved:
             return None
         if not self.candidates:
-            return "we don't have a player by that name"
-        return f"more than one player goes by that name ({len(self.candidates)})"
+            return "we don't have anybody by that name"
+        noun = "team" if all(c.is_defense for c in self.candidates) else "player"
+        return (f"more than one {noun} goes by that name — "
+                f"{', '.join(c.name for c in self.candidates)}")
 
 
 class PlayerDirectory:
@@ -125,11 +127,19 @@ class PlayerDirectory:
         # Defenses are matched separately: a manager writes them a dozen ways
         # ("Ravens", "BAL DEF", "Baltimore Ravens D/ST"), and none of those is
         # the display name of a person.
-        self._defense_alias: dict[str, Player] = {}
+        #
+        # This is a dict of LISTS, and that is not defensive coding. As a plain
+        # dict it was last-writer-wins, and shipped: "Rams" resolved to the ST.
+        # LOUIS Rams, "Chargers" to San Diego, "Raiders" to Oakland — a guess,
+        # silently, which is exactly what RULE R3 forbids. Restricting to the
+        # current 32 teams fixes those three; it does NOT fix "New York" or
+        # "Los Angeles", which are genuinely ambiguous between two live teams
+        # and must come back as a choice.
+        self._defense_alias: dict[str, list[Player]] = {}
         for player in players:
             if player.is_defense and player.team:
                 for alias in _defense_aliases(player):
-                    self._defense_alias[alias] = player
+                    self._defense_alias.setdefault(alias, []).append(player)
 
     def __len__(self) -> int:
         return len(self.players)
@@ -142,9 +152,11 @@ class PlayerDirectory:
         key = normalize(cleaned)
         if not key:
             return Match(typed=typed, player=None)
-        defense = self._defense_alias.get(key)
-        if defense is not None:
-            return Match(typed=typed, player=defense)
+        defenses = self._defense_alias.get(key, [])
+        if len(defenses) == 1:
+            return Match(typed=typed, player=defenses[0])
+        if defenses:
+            return Match(typed=typed, player=None, candidates=tuple(defenses))
         found = self._by_name.get(key, [])
         if len(found) == 1:
             return Match(typed=typed, player=found[0])
@@ -193,14 +205,21 @@ def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
     return text
 
 
-def load_directory(players_csv: Path, teams_csv: Path,
-                   min_last_season: int) -> PlayerDirectory:
+def load_directory(players_csv: Path, teams_csv: Path, min_last_season: int,
+                   eligible_teams: frozenset[str] | set[str]) -> PlayerDirectory:
     """Build the directory from nflverse's players + teams releases.
 
-    ``min_last_season`` is RULE R2 made explicit: it is what keeps exact-name
-    matching safe, so it is a required argument rather than a default somebody
-    can forget. Pass the current season minus one — wide enough for a returning
-    player, narrow enough that the historical Adrian Petersons stay out.
+    Both filters are REQUIRED ARGUMENTS on purpose — each one is load-bearing
+    and each one shipped a real bug the first time it was implicit.
+
+    ``min_last_season`` is RULE R2: exact-name matching is only safe inside a
+    recent window (all-time there are two Adrian Petersons). Pass the current
+    season minus one.
+
+    ``eligible_teams`` is the set that actually plays this season, from
+    ``ingest.nflverse.season_teams``. The teams release keeps relocated
+    franchises forever — 36 rows for 32 teams — so without it a subscriber is
+    offered the St. Louis Rams.
     """
     players: list[Player] = []
     with players_csv.open(encoding="utf-8", newline="") as handle:
@@ -226,6 +245,8 @@ def load_directory(players_csv: Path, teams_csv: Path,
             abbr = (row.get("team_abbr") or "").strip().upper()
             name = (row.get("team_name") or "").strip()
             if not abbr or not name or abbr in seen:
+                continue
+            if abbr not in eligible_teams:
                 continue
             seen.add(abbr)
             players.append(Player(player_id=f"{DEFENSE}-{abbr}", name=name,

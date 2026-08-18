@@ -206,6 +206,31 @@ def bye_teams(cache_dir: Path, season: str, week: int, *, live: bool = False,
     return frozenset(all_teams - playing)
 
 
+def season_teams(cache_dir: Path, season: str, *, live: bool = False,
+                 session: requests.Session | None = None) -> frozenset[str]:
+    """The team abbreviations that actually play this season.
+
+    The teams release carries relocated franchises forever — LAR *and* STL,
+    LAC *and* SD, LV *and* OAK, 36 rows for 32 teams. Anything keyed off that
+    file without this filter offers a subscriber teams that have not existed
+    for a decade. The schedule is the authority on who exists, and it is also
+    the spelling the stats feed uses (the Rams are ``LA``).
+    """
+    path = fetch("schedules", "games.csv", cache_dir, live=live, session=session)
+    teams: set[str] = set()
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            for side in ("home_team", "away_team"):
+                value = (row.get(side) or "").strip()
+                if value:
+                    teams.add(value)
+    return frozenset(teams)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Verification summary — the same shape ingest.pull prints."""
     import argparse

@@ -20,6 +20,7 @@ import pytest
 
 from engine.roster import (DEFENSE, Match, Player, PlayerDirectory,
                            index_payload, load_directory, normalize)
+from ingest.nflverse import season_teams
 
 PLAYERS_CSV = """gsis_id,display_name,position,latest_team,last_season
 00-0036900,Ja'Marr Chase,WR,CIN,2026
@@ -49,7 +50,8 @@ def directory(tmp_path: Path) -> PlayerDirectory:
     teams = tmp_path / "teams.csv"
     players.write_text(PLAYERS_CSV, encoding="utf-8")
     teams.write_text(TEAMS_CSV, encoding="utf-8")
-    return load_directory(players, teams, min_last_season=2024)
+    return load_directory(players, teams, min_last_season=2024,
+                          eligible_teams={"BAL", "KC", "SF"})
 
 
 # --------------------------------------------------------------------- #
@@ -140,7 +142,7 @@ def test_an_unknown_name_is_refused_with_a_plain_reason(
         directory: PlayerDirectory) -> None:
     match = directory.resolve("Nobody McFakename")
     assert not match.resolved and not match.candidates
-    assert match.reason == "we don't have a player by that name"
+    assert match.reason == "we don't have anybody by that name"
     # Buyer vocabulary: no ids, no jargon, no version numbers.
     assert "gsis" not in (match.reason or "").lower()
 
@@ -220,7 +222,8 @@ def test_the_real_directory_has_no_colliding_names() -> None:
     players, teams = raw / "players.csv", raw / "teams_colors_logos.csv"
     if not (players.is_file() and teams.is_file()):
         pytest.skip("nflverse cache not present — run `python -m ingest.nflverse`")
-    directory = load_directory(players, teams, min_last_season=2024)
+    directory = load_directory(players, teams, min_last_season=2024,
+                               eligible_teams=season_teams(raw, "2024"))
     seen: dict[str, str] = {}
     clashes: list[str] = []
     for player in directory.players:
@@ -232,3 +235,83 @@ def test_the_real_directory_has_no_colliding_names() -> None:
         f"real name collisions appeared in the eligible pool: {clashes}. "
         f"Exact matching is no longer safe on its own — resolution must offer "
         f"these as a choice (RULE R3), and the intake copy must expect it.")
+
+
+# --------------------------------------------------------------------- #
+# relocated franchises — a bug that SHIPPED, found by adversarial review
+# --------------------------------------------------------------------- #
+
+RELOCATED_TEAMS = """team_abbr,team_name,team_id,team_nick
+LA,Los Angeles Rams,2510,Rams
+LAR,Los Angeles Rams,2510,Rams
+STL,St. Louis Rams,2510,Rams
+LAC,Los Angeles Chargers,4400,Chargers
+SD,San Diego Chargers,4400,Chargers
+LV,Las Vegas Raiders,2520,Raiders
+OAK,Oakland Raiders,2520,Raiders
+NYG,New York Giants,3410,Giants
+NYJ,New York Jets,3430,Jets
+"""
+
+
+@pytest.fixture()
+def relocated(tmp_path: Path) -> PlayerDirectory:
+    players = tmp_path / "p.csv"
+    teams = tmp_path / "t.csv"
+    players.write_text(PLAYERS_CSV, encoding="utf-8")
+    teams.write_text(RELOCATED_TEAMS, encoding="utf-8")
+    # exactly the shape ingest.nflverse.season_teams returns for a live season
+    return load_directory(players, teams, min_last_season=2024,
+                          eligible_teams={"LA", "LAC", "LV", "NYG", "NYJ"})
+
+
+def test_defunct_franchises_are_not_offered(relocated: PlayerDirectory) -> None:
+    """This SHIPPED. teams_colors_logos.csv keeps relocated franchises forever
+    — 36 rows for 32 teams — and the alias map was last-writer-wins, so
+    "Rams" resolved to the ST. LOUIS Rams, "Chargers" to San Diego and
+    "Raiders" to Oakland. Silently, with resolved=True and no candidates:
+    a guess, which is precisely what RULE R3 forbids.
+
+    The schedule is the authority on which teams exist, and it is also the
+    spelling the stats feed uses (the Rams are LA, not LAR)."""
+    ids = {p.player_id for p in relocated.players if p.is_defense}
+    assert ids == {"DEF-LA", "DEF-LAC", "DEF-LV", "DEF-NYG", "DEF-NYJ"}
+    for gone in ("DEF-STL", "DEF-SD", "DEF-OAK", "DEF-LAR"):
+        assert gone not in ids
+
+    for typed, expected in [("Rams", "DEF-LA"), ("Chargers", "DEF-LAC"),
+                            ("Raiders", "DEF-LV")]:
+        match = relocated.resolve(typed)
+        assert match.resolved, f"{typed!r} stopped resolving"
+        assert match.player is not None and match.player.player_id == expected
+
+
+def test_a_city_shared_by_two_live_teams_is_refused(
+        relocated: PlayerDirectory) -> None:
+    """Restricting to the current 32 does NOT make the alias map unambiguous:
+    "New York" and "Los Angeles" each cover two teams that both exist. Those
+    must come back as a choice, which is why the map holds lists rather than
+    single players."""
+    for typed in ("New York", "Los Angeles"):
+        match = relocated.resolve(typed)
+        assert not match.resolved, f"{typed!r} was guessed"
+        assert len(match.candidates) == 2
+        assert "more than one team" in (match.reason or "")
+        # the reason names them, so the subscriber can pick without a lookup
+        assert all(c.name in (match.reason or "") for c in match.candidates)
+
+
+def test_the_real_directory_offers_exactly_the_teams_that_play() -> None:
+    """The live counterpart of the above: whatever nflverse ships, the
+    directory must expose 32 defenses and no ghosts."""
+    raw = Path(__file__).resolve().parent.parent / "data" / "raw" / "nflverse"
+    players, teams = raw / "players.csv", raw / "teams_colors_logos.csv"
+    games = raw / "games.csv"
+    if not all(p.is_file() for p in (players, teams, games)):
+        pytest.skip("nflverse cache not present — run `python -m ingest.nflverse`")
+    season = season_teams(raw, "2024")
+    assert len(season) == 32, f"the schedule reported {len(season)} teams"
+    directory = load_directory(players, teams, 2024, season)
+    defenses = {p.team for p in directory.players if p.is_defense}
+    assert defenses == set(season)
+    assert directory.resolve("Rams").player.player_id == "DEF-LA"
