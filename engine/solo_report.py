@@ -109,13 +109,19 @@ def build_solo_report(
                            "no opponent lineup, fragility, waiver market, "
                            "league hype or last-week result is computable"})
 
+    # Defenses ARE scored now (RULE S4: from the team week plus the schedule's
+    # own final score). The gap fires on the ones that actually came back with
+    # nothing — an expansion-week team, a season not yet ingested — rather than
+    # on every defense categorically, which claimed a missing feature the run
+    # had in fact just used.
     unscoreable = [p.player_id for p in picks
-                   if p.player_id and p.player_id.startswith(f"{DEFENSE}-")]
+                   if p.player_id and p.player_id.startswith(f"{DEFENSE}-")
+                   and p.projection is None]
     if unscoreable:
         gaps.append({"field": "team_defense",
-                     "reason": "team defenses are not scored yet (points and "
-                               "yards allowed are not ingested), so their slot "
-                               "carries no projection"})
+                     "reason": f"no scored weeks for {', '.join(unscoreable)} "
+                               f"before week {week}, so that slot carries no "
+                               f"projection"})
 
     report: dict[str, Any] = {
         "meta": {

@@ -26,6 +26,7 @@ import render.report as render_report
 from engine.history import HistoryError
 from engine.week_report import PROCESSED_DIR, RAW_DIR, WeekReportError, build_week_report
 from ingest.config import resolve_league_id
+from render.report import source_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPORTS_DIR = REPO_ROOT / "reports"
@@ -75,28 +76,40 @@ def _forward_lines() -> list[str]:
 def text_summary(report: Mapping[str, Any]) -> str:
     """Plain-text digest of the report — the email/Substack body seed."""
     meta = report["meta"]
+    # A solo report has no opponent and never will (PLAN §0). Both renderers
+    # already branch on this; the plain-text half did not, and it is the half
+    # that goes in every email — it printed "Your Team vs None", then raised
+    # KeyError on matchup['rival'] before any of it could be sent.
+    solo = bool(meta.get("solo"))
     lines = [
         f"BEAT YOUR LEAGUE — {meta['league_name']} — "
         f"season {meta['season']} week {meta['week']}",
-        f"{meta['my_label']} vs {meta['rival_label']}",
+        meta['my_label'] if solo else f"{meta['my_label']} vs {meta['rival_label']}",
         "",
         "GAME PLAN",
     ]
     for item in report["checklist"]:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
     matchup = report["matchup"]
+    head = "YOUR WEEK" if solo else "MATCHUP"
     if matchup.get("range_gate"):
-        lines += ["", f"MATCHUP: {matchup['range_gate']}"]
+        lines += ["", f"{head}: {matchup['range_gate']}"]
+    elif solo:
+        you = matchup["you"]
+        lines += ["", f"{head}: {you['projected_total']:.1f} projected "
+                      f"({you['floor']:.1f}–{you['ceiling']:.1f})"]
     else:
         lines += [
             "",
-            f"MATCHUP: you {matchup['you']['projected_total']:.1f} proj vs "
+            f"{head}: you {matchup['you']['projected_total']:.1f} proj vs "
             f"rival {matchup['rival']['projected_total']:.1f} proj",
         ]
     if matchup.get("win_probability") is not None:
         lines.append(f"  win probability: {matchup['win_probability']:.0%}")
-    else:
-        lines.append(f"  {matchup.get('win_probability_gate')}.")
+    elif matchup.get("win_probability_gate"):
+        lines.append(f"  {matchup['win_probability_gate']}.")
+    # A solo report has neither, and `f"  {None}."` printed a literal "None" —
+    # the same class of bug as the inbox preheader that read "the file on None".
     lines += ["", "YOUR BEST LINEUP"]
     # Same rule as the two HTML surfaces: the per-row marker earns its place
     # only in a MIXED week. With nothing published, nine identical "no call"s
@@ -132,8 +145,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     # in plain words, wherever it declined to call something.
     lines += ["", "Projections are analysis, not guarantees — no betting picks, "
                   "no staking advice. Your decisions are yours.",
-              "Built from your league's own record on Sleeper. "
-              "Not affiliated with Sleeper or the NFL.",
+              source_line(meta),
               *_forward_lines(),
               "",
               "DONE WITH THIS? Cancel it yourself in your Substack account — about "

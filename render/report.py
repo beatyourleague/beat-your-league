@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from ingest.nflverse import ATTRIBUTION
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 # What a withheld number says to a BUYER. Version numbers, file paths and cost
@@ -106,6 +108,23 @@ NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
                    "picks, no staking advice. Fantasy decisions are yours to make.")
 SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
                 "Not affiliated with Sleeper or the NFL.")
+# RULE N1: CC-BY-4.0 grants commercial use IN EXCHANGE FOR attribution, so this
+# is a licence term rather than a courtesy — ingest/nflverse.py says it is
+# "rendered on every report and every public page", and until now no report
+# rendered it at all. Both renderers printed the Sleeper line instead, which on
+# a solo report credits a source the run never touched while omitting the one
+# whose grant the product depends on.
+NFLVERSE_LINE = ATTRIBUTION + " Not affiliated with the NFL."
+
+
+def source_line(meta: Mapping[str, Any]) -> str:
+    """Where this report's numbers came from.
+
+    Solo reports are built entirely from nflverse (PLAN §0); the historical
+    demo and the backtest still run on the league record they were always built
+    from, and keep the Sleeper disclaimer that goes with it.
+    """
+    return NFLVERSE_LINE if meta.get("solo") else SLEEPER_LINE
 CANCEL_HEAD = "Done with this?"
 CANCEL_BODY = ("Cancel it yourself in your Substack account — it takes about "
                "fifteen seconds and stops the billing immediately. "
@@ -843,7 +862,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'
-        f'{esc(SLEEPER_LINE)}<br>'
+        f'{esc(source_line(meta))}<br>'
         # Every commercial email needs a working way out. It points at the
         # self-serve cancel because that costs the reader ~15 seconds and the
         # operator nothing — no inbox to watch. The unsubscribe-vs-cancel

@@ -32,7 +32,7 @@ from render.report import (
     NO_CALL,
     NOT_CALLING_IT,
     SECTION_MARK,
-    SLEEPER_LINE,
+    source_line,
     _forward_line,
     _generated_stamp,
     _pct,
@@ -557,7 +557,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'
-        f'{esc(SLEEPER_LINE)}<br>'
+        f'{esc(source_line(meta))}<br>'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}</p></td></tr>'
     )
 
