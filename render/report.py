@@ -165,9 +165,13 @@ def header(meta: Mapping[str, Any]) -> str:
         f'<span class="chip"><b>{esc(meta["league_name"])}</b>'
         f' · {esc(meta["num_teams"])} teams'
         + (f' · {esc(meta["scoring"])}' if meta.get("scoring") else "") + "</span>",
-        f'<span class="chip">This week: <b>{esc(meta["rival_label"])}</b></span>',
         f'<span class="chip">{esc(_generated_stamp(meta))}</span>',
     ]
+    # A solo report has no opponent, so there is no "this week" to name. The
+    # chip printed "This week: None" — an absent value rendered as a word.
+    if not meta.get("solo"):
+        chips.insert(1, f'<span class="chip">This week: '
+                        f'<b>{esc(meta["rival_label"])}</b></span>')
     if meta.get("rivalry_week"):
         chips.insert(1, '<span class="chip" style="border-color:var(--flag);'
                         'color:var(--flag)"><b>RIVALRY WEEK</b></span>')
@@ -190,7 +194,7 @@ def header(meta: Mapping[str, Any]) -> str:
     return (
         f'<header class="bug"><div class="brand">{mark_svg("bylm")}'
         f'<span>Beat Your League</span></div>'
-        f'<h1>Week {esc(meta["week"])} · Rival Report</h1>'
+        f'<h1>Week {esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
         f'<div class="chips">{"".join(chips)}</div></header>{banner}'
     )
 
@@ -418,7 +422,7 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
             bits.append(edge)
         conf = slot.get("confidence")
         if conf is not None:
-            bits.append(f"{_pct(conf)}")
+            bits.append(f"{_pct(conf)}%")
         elif mixed and slot.get("player_name") and slot.get("confidence_gate"):
             # Only in a MIXED week. Where some rows carry a percentage, silence
             # on the others would read as a call we forgot to make. Where NO
@@ -443,6 +447,88 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
 # query, and at 375px the fixed desktop split clipped "123.2" out of the points
 # column on both sides.
 TAPE_COLS = "<colgroup>" + "<col>" * 5 + "</colgroup>"
+
+
+# The solo lineup grid. Same table furniture as the Tape so the two products
+# look like one brand, but three columns instead of five: with no opponent there
+# is no centre spine and no tint, because a tint IS a comparison and there is
+# nothing to compare against. Emphasis comes from the slot order instead, which
+# is the order a manager reads their own lineup in anyway.
+LINEUP_COLS = ('<colgroup><col style="width:9%"><col style="width:58%">'
+               '<col style="width:12%"><col style="width:21%"></colgroup>')
+
+
+def section_your_lineup(report: Mapping[str, Any]) -> str:
+    """The lineup we would set, and what each call is worth.
+
+    GRADE C (reports/nflverse-backtest.md): the confidence numeral is a
+    recorded prediction, not an accuracy claim. Nothing here may describe it as
+    tested, calibrated or accurate — the note under the table says what it is
+    and the receipts section says it gets graded.
+    """
+    slots = report["lineup"]
+    mixed = any(s.get("confidence") is not None for s in slots)
+    rows = []
+    for slot in slots:
+        name = slot.get("player_name") or "—"
+        proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+        bits = []
+        edge = edge_phrase(slot)
+        if edge:
+            bits.append(edge)
+        if slot.get("usage"):
+            bits.append(str(slot["usage"]))
+        flags = [f["text"] for f in (slot.get("flags") or [])]
+        confidence = slot.get("confidence")
+        if confidence is not None:
+            call = f'<b>{_pct(confidence)}%</b>'
+        elif mixed and slot.get("player_name"):
+            call = f'<span class="tsub">{esc(NO_CALL)}</span>'
+        else:
+            call = ""
+        rows.append(
+            f'<tr class="trow"><td class="tslot">{esc(slot["slot"])}</td>'
+            f'<td class="tside you"><span class="tname">{esc(name)}</span>'
+            + (f'<span class="tflag">{esc(" · ".join(flags))}</span>' if flags else "")
+            + (f'<span class="tsub">{esc(" · ".join(bits))}</span>' if bits else "")
+            + f'</td><td class="tpts you">{proj}</td>'
+            f'<td class="tcall">{call}</td></tr>')
+    head = ('<tr class="thead"><td></td><td>Your lineup</td>'
+            '<td style="text-align:right">Proj</td><td>Call</td></tr>')
+    note = ""
+    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
+    if gates:
+        head_text = (f'Why some slots say "{NO_CALL}":' if mixed
+                     else f'{NO_CALL.capitalize()} on any slot this week:')
+        note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
+                f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
+    return _section("The Lineup", 3,
+                    f'<table class="tape">{LINEUP_COLS}{head}'
+                    f'{"".join(rows)}</table>{note}')
+
+
+def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
+    """Your projected week — a total and a band, with no opponent to beat.
+
+    The head-to-head board would be half empty here, and half a scoreboard reads
+    as a broken scoreboard. So this is your number and its range, and one plain
+    sentence saying why there is no other side, stated once.
+    """
+    you = matchup["you"]
+    gate = matchup.get("range_gate")
+    if gate:
+        body = gate_note(gate)
+    else:
+        body = (f'<div class="team"><div class="name">{esc(you["label"])}</div>'
+                f'<div class="pts">{you["projected_total"]:.1f} <small>PROJ</small></div>'
+                f'<div class="yards">{you["floor"]:.0f} – {you["ceiling"]:.0f} '
+                f'realistic range</div></div>')
+        basis = matchup.get("range_basis")
+        if basis:
+            body += f'<div class="yards">{esc(basis)}</div>'
+    if no_opponent:
+        body += f'<p class="withheldline">{esc(no_opponent)}</p>'
+    return _section("Your Week", 2, body)
 
 
 def section_tape(report: Mapping[str, Any]) -> str:
@@ -856,11 +942,29 @@ def anonymize_for_public(report: Mapping[str, Any]) -> dict[str, Any]:
     return scrub(out)
 
 
-def render(report: Mapping[str, Any], template_html: str) -> str:
-    style, links = extract_design(template_html)
-    style += MARK_CSS
+def compose(report: Mapping[str, Any]) -> list[str]:
+    """The sections, in order, for whichever product this report came from.
+
+    A SOLO report has no opponent (PLAN §0), so the sections that describe one
+    are not gated here — they are absent. Rendering an empty Tape half or a
+    permanently withheld fragility list would advertise a feature we removed on
+    purpose, and CLAUDE.md's rule is that a stated omission reads as focus while
+    a silent one reads as unfinished. The site states it; the report just does
+    not carry it.
+    """
     meta = report["meta"]
-    body = "".join([
+    if meta.get("solo"):
+        return [
+            header(meta),
+            section_checklist(report["checklist"]),
+            section_your_week(report["matchup"], report.get("no_opponent")),
+            section_your_lineup(report),
+            section_regret(report["regret"]),
+            section_pivots(report["pivots"]),
+            section_receipts(report["receipts"]),
+            footer(meta),
+        ]
+    return [
         header(meta),
         section_checklist(report["checklist"]),
         section_last_week(report.get("last_week")),
@@ -873,7 +977,14 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
         section_hype(report["hype"], report.get("waiver_market")),
         section_receipts(report["receipts"]),
         footer(meta),
-    ])
+    ]
+
+
+def render(report: Mapping[str, Any], template_html: str) -> str:
+    style, links = extract_design(template_html)
+    style += MARK_CSS
+    meta = report["meta"]
+    body = "".join(compose(report))
     body = number_sections(body)
     title = (f'Beat Your League — {meta["season"]} Week {meta["week"]} '
              f'Rival Report')

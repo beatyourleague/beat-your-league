@@ -143,7 +143,11 @@ def build_solo_report(
             "gaps": gaps,
             "llm_tokens": 0,
         },
-        "checklist": checklist(picks, tuple(), [], players, stakes=None),
+        # None, not (): we have never seen their lineup, and an empty tuple would
+        # read as "they started nobody" and produce a full list of changes — or
+        # worse, "nothing to change", which claims agreement with a lineup we
+        # cannot see.
+        "checklist": checklist(picks, None, [], players, stakes=None),
         "matchup": _matchup(spec, my_range, team_range_gate(picks)),
         "lineup": [_slot(p, players, usage_lookup) for p in picks],
         "regret": regret_call(picks, players),

@@ -197,6 +197,11 @@
   .tpts{font-family:'Barlow Condensed';font-weight:800;font-size:17px;
     font-variant-numeric:tabular-nums;}
   .tside.rival{text-align:right;} .tpts.rival{text-align:right;}
+  /* The solo lineup's call column. No tint anywhere in that grid: a tint is a
+     comparison, and with no opponent there is nothing to compare against. */
+  .tcall{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    text-align:right;font-variant-numeric:tabular-nums;color:var(--turf);}
+  .tcall .tsub{display:inline;font-family:var(--sans);font-weight:600;}
   .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
   .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
   .ttotal td{border-top:2px solid var(--navy);background:#F2F0E8;

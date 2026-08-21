@@ -915,3 +915,30 @@ def test_a_withheld_total_gives_the_reason_that_actually_applies() -> None:
     # everyone seated, nothing to project from yet -> the week-1 reason
     week_one = [pick("QB", 0, True, False), pick("RB", 1, True, False)]
     assert team_range_gate(week_one) == TEAM_RANGE_GATE
+
+
+def test_a_confidence_always_renders_with_its_percent_sign() -> None:
+    """`_pct` returns a bare int, and every other caller appends the % itself.
+    Both tape renderers forgot, so a CALL column two columns from a POINTS
+    column printed "54" — the reader cannot tell a probability from a score.
+
+    It went unnoticed because the published 2018 demo gates every call, so a
+    percentage has never actually rendered there. This asserts on a report that
+    HAS one."""
+    season = _season()
+    known = _availability(ACTIVE_ALL)
+    players = _player_index()
+    model = ProjectionModel(season, players)
+    picks = optimal_lineup(season, season.weeks[REPORT_WEEK][1], model,
+                           players, known)
+    published = [p for p in picks if p.confidence is not None]
+    assert published, "fixture produced no published confidence to check"
+
+    from render.report import _pct, _tape_side
+    for pick in published:
+        slot = {"player_name": "X", "projected": 10.0,
+                "confidence": pick.confidence, "confidence_gate": None,
+                "edge": None, "alternative_name": None, "flags": []}
+        rendered = _tape_side(slot, mine=True, mixed=True)
+        assert f"{_pct(pick.confidence)}%" in rendered, \
+            f"confidence rendered without a percent sign: {rendered}"

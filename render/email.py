@@ -301,7 +301,7 @@ def _tape_cells(slot: Mapping[str, Any], mine: bool, tint: str,
             bits.append(esc(edge))
         confidence = slot.get("confidence")
         if confidence is not None:
-            bits.append(f"{_pct(confidence)}")
+            bits.append(f"{_pct(confidence)}%")
         elif mixed and slot.get("player_name") and slot.get("confidence_gate"):
             # Mixed weeks only — see render.report._tape_side for the reason.
             bits.append(esc(NO_CALL))

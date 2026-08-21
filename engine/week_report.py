@@ -879,18 +879,43 @@ def _behind_sentence(stakes: Mapping[str, Any] | None) -> str:
 
 def checklist(
     my_picks: list[SlotPick],
-    current_starters: tuple[str, ...],
+    current_starters: tuple[str, ...] | None,
     hype: list[dict[str, Any]],
     players: PlayerIndex,
     stakes: Mapping[str, Any] | None = None,
 ) -> list[dict[str, str]]:
+    seated = [p for p in my_picks if p.player_id is not None]
+    items: list[dict[str, str]] = []
+    if current_starters is None:
+        # We do not read the subscriber's league (PLAN §0), so we have never
+        # seen the lineup they set. "Nothing to change" would be a claim about
+        # a lineup we cannot see — the same fabricated endorsement the week-1
+        # branch below exists to avoid. State the lineup instead of comparing
+        # to one.
+        if not seated or not any(p.projection for p in seated):
+            items.append({
+                "action": "No lineup call yet — not enough games on record to "
+                          "project from. Nothing here is a recommendation.",
+                "deadline": "calls start once there is a record",
+                "urgency": "done",
+            })
+        else:
+            listed = ", ".join(f"{players.name(p.player_id or '')} at {p.slot}"
+                               for p in seated)
+            items.append({
+                "action": f"Set this lineup{_stakes_clause(stakes)}: {listed}."
+                          f"{_behind_sentence(stakes)}",
+                "deadline": "before this week's first kickoff",
+                "urgency": "now",
+            })
+        return items
+
     changes = [
         p for p in my_picks
         if p.player_id is not None
         and p.slot_index < len(current_starters)
         and current_starters[p.slot_index] != p.player_id
     ]
-    items = []
     if changes:
         detail = ", ".join(
             f"{players.name(p.player_id or '')} into {p.slot}" for p in changes
