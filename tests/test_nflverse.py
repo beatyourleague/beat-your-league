@@ -192,3 +192,58 @@ def test_a_zero_byte_cache_file_is_refetched(tmp_path: Path) -> None:
     session = _session()
     assert bye_teams(tmp_path, "2024", 10, session=session) is not None
     assert session.calls, "a zero-byte cache file was trusted"
+
+
+# --------------------------------------------------------------------- #
+# whole-season loading, for the backtest
+# --------------------------------------------------------------------- #
+
+SEASON_ROWS = (
+    "player_id,player_display_name,position,team,season,week,season_type,"
+    "receptions,receiving_yards,receiving_air_yards,targets\n"
+    "00-0000001,Alpha WR,WR,KC,2024,1,REG,5,60.0,80.0,7\n"
+    "00-0000002,Bell Cow,RB,BUF,2024,1,REG,2,10.0,12.0,3\n"
+    "00-0000001,Alpha WR,WR,KC,2024,2,REG,7,90.0,110.0,9\n"
+    "00-0000003,Post Guy,WR,KC,2024,1,POST,9,120.0,140.0,12\n"
+    ",Nameless,WR,KC,2024,2,REG,1,5.0,6.0,1\n"
+)
+
+
+def test_a_whole_season_loads_keyed_by_week_and_player(tmp_path: Path) -> None:
+    from ingest.nflverse import season_rows
+    session = _FakeSession({"stats_player_week_2024.csv": SEASON_ROWS})
+    weeks = season_rows(tmp_path, "2024", session=session)
+    assert sorted(weeks) == [1, 2]
+    assert set(weeks[1]) == {"00-0000001", "00-0000002"}
+    assert set(weeks[2]) == {"00-0000001"}, "a row with no id was kept"
+
+
+def test_the_postseason_never_enters_a_regular_season_week(tmp_path: Path) -> None:
+    """A POST row at week 1 is a different game. Mixing them would put a playoff
+    performance in a week-1 bucket and quietly corrupt every projection built
+    from that week."""
+    from ingest.nflverse import season_rows
+    session = _FakeSession({"stats_player_week_2024.csv": SEASON_ROWS})
+    weeks = season_rows(tmp_path, "2024", session=session)
+    assert "00-0000003" not in weeks[1]
+
+
+def test_rows_are_trimmed_to_what_scoring_reads(tmp_path: Path) -> None:
+    """A backtest holds whole seasons in memory. Keeping 150 columns per row
+    when scoring reads 30 is the difference between comfortable and not."""
+    from engine.scoring import preset, score
+    from ingest.nflverse import SCORING_COLUMNS, season_rows
+    session = _FakeSession({"stats_player_week_2024.csv": SEASON_ROWS})
+    weeks = season_rows(tmp_path, "2024", session=session)
+    row = weeks[1]["00-0000001"]
+    assert set(row) <= SCORING_COLUMNS
+    assert "targets" not in row, "a column scoring never reads was kept"
+    # and what survives is still enough to score
+    assert score(row, preset("ppr")) == pytest.approx(11.0)
+
+
+def test_keeping_every_column_is_available_for_exploration(tmp_path: Path) -> None:
+    from ingest.nflverse import season_rows
+    session = _FakeSession({"stats_player_week_2024.csv": SEASON_ROWS})
+    weeks = season_rows(tmp_path, "2024", columns=None, session=session)
+    assert "targets" in weeks[1]["00-0000001"]

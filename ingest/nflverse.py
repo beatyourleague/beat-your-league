@@ -176,6 +176,53 @@ def usage_week(cache_dir: Path, season: str, week: int, *, live: bool = False,
     return out
 
 
+# The fields engine.scoring reads, plus the identity columns. Loading only
+# these turns a 150-column row into a 25-column one, which matters when the
+# backtest holds a whole season in memory at once.
+SCORING_COLUMNS = frozenset({
+    "player_id", "player_display_name", "position", "team", "season", "week",
+    "season_type", "receptions", "passing_yards", "passing_tds",
+    "passing_interceptions", "passing_2pt_conversions", "rushing_yards",
+    "rushing_tds", "rushing_2pt_conversions", "receiving_yards",
+    "receiving_tds", "receiving_2pt_conversions", "special_teams_tds",
+    "sack_fumbles_lost", "rushing_fumbles_lost", "receiving_fumbles_lost",
+    "fg_made_0_19", "fg_made_20_29", "fg_made_30_39", "fg_made_40_49",
+    "fg_made_50_59", "fg_made_60_", "fg_missed", "pat_made",
+})
+
+
+def season_rows(cache_dir: Path, season: str, *, live: bool = False,
+                columns: frozenset[str] | None = SCORING_COLUMNS,
+                session: requests.Session | None = None,
+                ) -> dict[int, dict[str, dict[str, str]]]:
+    """A whole regular season, keyed week -> gsis id -> stat row.
+
+    This is the shape ``engine.subscriber.build_season`` consumes. Regular
+    season only, for the same reason ``usage_week`` filters: a POST row at week
+    10 is a different game, and mixing them would put a playoff performance in a
+    week-10 bucket.
+
+    ``columns`` trims each row to the fields scoring actually reads. Pass None
+    to keep everything — useful for exploration, wasteful for a backtest that
+    holds twenty-six seasons.
+    """
+    path = fetch("stats_player", f"stats_player_week_{season}.csv", cache_dir,
+                 live=live, session=session)
+    weeks: dict[int, dict[str, dict[str, str]]] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if (row.get("season_type") or "REG").upper() != "REG":
+                continue
+            week = _int(row.get("week"))
+            gsis = (row.get("player_id") or "").strip()
+            if not week or not gsis:
+                continue
+            kept = ({k: v for k, v in row.items() if k in columns}
+                    if columns is not None else dict(row))
+            weeks.setdefault(week, {})[gsis] = kept
+    return weeks
+
+
 def bye_teams(cache_dir: Path, season: str, week: int, *, live: bool = False,
               session: requests.Session | None = None) -> frozenset[str] | None:
     """Teams NOT playing in this week — the availability half we can still see.
