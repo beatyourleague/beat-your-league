@@ -856,3 +856,62 @@ def test_your_own_starters_carry_their_availability_flags(tmp_path: Path) -> Non
     for html_out in (render(report, _template()), render_email(report)):
         assert "ruled out (knee)" in html_out, \
             "your own starter's OUT flag never reached the page"
+
+
+def test_an_unfilled_slot_gates_the_team_total_instead_of_shrinking_it() -> None:
+    """A nine-slot lineup missing a kicker and a defense used to publish the sum
+    of seven slots as the team total — an undercount wearing a total's name,
+    under a band whose 77.9% coverage was measured only on team-weeks where
+    every starter had a projection.
+
+    This is the same failure the function's docstring already described for
+    missing PROJECTIONS, one case removed: it gated when a seated player had no
+    number, and silently dropped the slot when nobody was seated at all. A
+    subscriber who cannot fill a slot needs telling, not a quietly smaller
+    number."""
+    from engine.projection import Projection
+    from engine.week_report import SlotPick, _team_range
+
+    def seated(slot: str, index: int) -> SlotPick:
+        projection = Projection(player_id=f"p{index}", as_of_week=5,
+                                active_mean=10.0, active_sd=3.0,
+                                appear_probability=0.9, games=5,
+                                rostered_weeks=5, position=slot)
+        return SlotPick(slot, index, f"p{index}", projection, None, None, None,
+                        None, None, [])
+
+    full = [seated("QB", 0), seated("RB", 1)]
+    assert _team_range(full) is not None
+
+    empty_slot = SlotPick("K", 2, None, None, None, None, "slot left empty",
+                          None, None, [])
+    assert _team_range(full + [empty_slot]) is None, \
+        "a lineup with an empty slot published a partial sum as a team total"
+
+
+def test_a_withheld_total_gives_the_reason_that_actually_applies() -> None:
+    """Two different facts withhold the same number, and telling the subscriber
+    the wrong one is its own principle-3 failure — they go looking for a fix
+    that does not exist. "Your league hasn't played its first games" is simply
+    false in week 10 when the real problem is a lineup slot nobody can fill."""
+    from engine.projection import Projection
+    from engine.week_report import (SlotPick, TEAM_RANGE_GATE,
+                                    TEAM_RANGE_INCOMPLETE, team_range_gate)
+
+    def pick(slot: str, index: int, seated: bool, projected: bool) -> SlotPick:
+        projection = (Projection(player_id=f"p{index}", as_of_week=5,
+                                 active_mean=10.0, active_sd=3.0,
+                                 appear_probability=0.9, games=5,
+                                 rostered_weeks=5, position=slot)
+                      if projected else None)
+        return SlotPick(slot, index, f"p{index}" if seated else None,
+                        projection, None, None, None, None, None, [])
+
+    # nobody to seat at K -> the actionable reason
+    unfillable = [pick("QB", 0, True, True), pick("K", 1, False, False)]
+    assert team_range_gate(unfillable) == TEAM_RANGE_INCOMPLETE
+    assert "hasn't played its first games" not in TEAM_RANGE_INCOMPLETE
+
+    # everyone seated, nothing to project from yet -> the week-1 reason
+    week_one = [pick("QB", 0, True, False), pick("RB", 1, True, False)]
+    assert team_range_gate(week_one) == TEAM_RANGE_GATE

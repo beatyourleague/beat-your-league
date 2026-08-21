@@ -336,6 +336,24 @@ TEAM_RANGE_GATE = (
     "start once box scores exist.")
 
 
+# A DIFFERENT reason for the same withheld number. The week-1 message ("your
+# league hasn't played its first games") is false when the real problem is a
+# lineup slot nobody can fill, and a wrong reason for a withheld number is its
+# own principle-3 failure — the subscriber goes looking for the wrong fix.
+TEAM_RANGE_INCOMPLETE = (
+    "no projected total — your lineup has a slot we can't fill from your "
+    "roster, so any total we showed would be the sum of the slots you CAN "
+    "fill, quietly presented as your team's.")
+
+
+def team_range_gate(picks: list[SlotPick]) -> str:
+    """Which reason applies. Unfillable slots first: it is the more specific
+    fact and the only one the subscriber can act on."""
+    if any(p.player_id is None for p in picks):
+        return TEAM_RANGE_INCOMPLETE
+    return TEAM_RANGE_GATE
+
+
 def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
     """The team total and its 80% band — or None when it cannot be honest.
 
@@ -346,9 +364,18 @@ def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
     projections at all, it rendered "proj 0.0 · floor 0 · ceiling 0" under a
     "78% of the time" basis line. A fabricated zero is still a fabrication
     (principle 3), so the band gates instead.
+
+    An UNFILLED slot gates for the same reason, and used to not: it was dropped
+    from the sum silently, so a nine-slot lineup missing a kicker and a defense
+    published the sum of SEVEN slots as the team total — an undercount wearing a
+    total's name, under a band whose 77.9% coverage was measured only on
+    team-weeks where every starter had a projection. A subscriber who cannot
+    fill a slot needs telling, not a quietly smaller number.
     """
+    if any(p.player_id is None for p in picks):
+        return None
     filled = [p for p in picks if p.player_id is not None]
-    if not filled or any(p.projection is None for p in filled):
+    if any(p.projection is None for p in filled) or not filled:
         return None
     mean = sum(p.projection.mean for p in filled)
     variance = sum(p.projection.sd ** 2 for p in filled)
