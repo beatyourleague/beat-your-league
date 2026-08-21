@@ -108,8 +108,11 @@ def _header(meta: Mapping[str, Any]) -> str:
     scoring = f' · {esc(meta["scoring"])}' if meta.get("scoring") else ""
     lines = [
         f'<b>{esc(meta["league_name"])}</b> · {esc(meta["num_teams"])} teams{scoring}',
-        f'This week: <b>{esc(meta["rival_label"])}</b>',
     ]
+    # A solo report has no opponent, so there is nothing to name here. The line
+    # used to render "This week: None" — an absent value printed as a word.
+    if not meta.get("solo"):
+        lines.append(f'This week: <b>{esc(meta["rival_label"])}</b>')
     if meta.get("rivalry_week"):
         lines.insert(1, f'<span style="color:{FLAG};font-weight:bold;'
                         f'letter-spacing:1px;">RIVALRY WEEK</span>')
@@ -135,7 +138,7 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
         f'letter-spacing:1px;text-transform:uppercase;'
         f'color:{CARD};padding:6px 0 10px 0;">Week {esc(meta["week"])} · '
-        f'Rival Report</div>'
+        f'{"Your Report" if meta.get("solo") else "Rival Report"}</div>'
         f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
         f'{" &nbsp;—&nbsp; ".join(lines)}</div></td></tr>{banner}'
     )
@@ -559,12 +562,96 @@ def _footer(meta: Mapping[str, Any]) -> str:
     )
 
 
-def render_email(report: Mapping[str, Any]) -> str:
-    """The full report as a self-contained, email-safe HTML document."""
+def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
+    """Your projected week. Half a scoreboard reads as a broken scoreboard, so
+    a solo report shows one number and its range rather than an empty VS."""
+    you = matchup["you"]
+    gate = matchup.get("range_gate")
+    if gate:
+        body = _gate(gate)
+    else:
+        body = (
+            f'<div style="{BASE}"><b>{esc(you["label"])}</b></div>'
+            f'<div style="font-family:{DISPLAY};font-size:34px;font-weight:bold;'
+            f'color:{TURF};line-height:1.1;">{you["projected_total"]:.1f}'
+            f'<span style="{SMALL}font-size:12px;color:{SLATE};"> PROJ</span></div>'
+            f'<div style="{SMALL}">{you["floor"]:.0f} – {you["ceiling"]:.0f} '
+            f'realistic range</div>')
+        if matchup.get("range_basis"):
+            body += f'<div style="{SMALL}margin-top:6px;">{esc(matchup["range_basis"])}</div>'
+    if no_opponent:
+        body += f'<p style="{SMALL}margin:12px 0 0 0;">{esc(no_opponent)}</p>'
+    return _sec(2, "Your Week", body)
+
+
+def _your_lineup(report: Mapping[str, Any]) -> str:
+    """The solo lineup: slot, player, projection, call. No tint, because a tint
+    is a comparison and there is no opponent to compare against."""
+    slots = report["lineup"]
+    mixed = any(s.get("confidence") is not None for s in slots)
+    rows = []
+    for slot in slots:
+        name = slot.get("player_name") or "—"
+        proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
+        bits = [b for b in (edge_phrase(slot), slot.get("usage")) if b]
+        flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
+        confidence = slot.get("confidence")
+        if confidence is not None:
+            call = f'<b style="color:{TURF};">{_pct(confidence)}%</b>'
+        elif mixed and slot.get("player_name"):
+            call = f'<span style="{SMALL}">{esc(NO_CALL)}</span>'
+        else:
+            call = ""
+        cell = f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
+        rows.append(
+            f'<tr><td style="{cell}{SMALL}font-weight:bold;white-space:nowrap;">'
+            f'{esc(slot["slot"])}</td>'
+            f'<td style="{cell}"><b>{esc(name)}</b>'
+            + (f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
+               f'{" · ".join(flags)}</span>' if flags else "")
+            + (f'<br><span style="{SMALL}">{esc(" · ".join(str(b) for b in bits))}'
+               f'</span>' if bits else "")
+            + f'</td><td style="{cell}text-align:right;font-weight:bold;'
+            f'white-space:nowrap;">{proj}</td>'
+            f'<td style="{cell}text-align:right;white-space:nowrap;">{call}</td></tr>')
+    th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
+          f'color:{NAVY};padding:0 8px 5px 8px;border-bottom:2px solid {NAVY};')
+    head = (f'<tr><td style="{th}"></td><td style="{th}">Your lineup</td>'
+            f'<td style="{th}text-align:right;">Proj</td>'
+            f'<td style="{th}text-align:right;">Call</td></tr>')
+    note = ""
+    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
+    if gates:
+        head_text = (f'Why some slots say "{NO_CALL}":' if mixed
+                     else f'{NO_CALL.capitalize()} on any slot this week:')
+        note = _note(f'<b>{esc(head_text)}</b> '
+                     f'{esc(no_call_explainer(" · ".join(sorted(gates))))}')
+    table = (f'<table role="presentation" width="100%" cellpadding="0" '
+             f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
+    return _sec(3, "The Lineup", table + note)
+
+
+def _compose(report: Mapping[str, Any]) -> list[str]:
+    """Sections in order, per product — the email twin of render.report.compose.
+
+    Kept as a mirror rather than shared code because the two renderers speak
+    different dialects (one has CSS, the other cannot), but the SECTION LIST
+    must not diverge: a subscriber's email dropping a section the archived HTML
+    carries is the drift `test_the_email_carries_what_the_browser_report_carries`
+    exists to catch.
+    """
     meta = report["meta"]
-    preheader = (f'The file on {meta["rival_label"]}: your lineup, their '
-                 f'fragile spots, and the one call that matters.')
-    sections = "".join([
+    if meta.get("solo"):
+        return [
+            _header(meta),
+            _checklist(report["checklist"]),
+            _your_week(report["matchup"], report.get("no_opponent")),
+            _your_lineup(report),
+            _regret(report["regret"]),
+            _pivots(report["pivots"]),
+            _receipts(report["receipts"]),
+        ]
+    return [
         _header(meta),
         _checklist(report["checklist"]),
         _last_week(report.get("last_week")),
@@ -576,12 +663,31 @@ def render_email(report: Mapping[str, Any]) -> str:
         _pivots(report["pivots"]),
         _hype(report["hype"], report.get("waiver_market")),
         _receipts(report["receipts"]),
+    ]
+
+
+def render_email(report: Mapping[str, Any]) -> str:
+    """The full report as a self-contained, email-safe HTML document."""
+    meta = report["meta"]
+    # The preheader is the preview line an inbox shows BEFORE the mail is
+    # opened, so it is the most-read sentence the product ships. The solo
+    # version used to read "The file on None: your lineup, their fragile
+    # spots..." — an absent value printed as a word, promising two things this
+    # product does not do.
+    preheader = (
+        'Your lineup for the week, the one call worth arguing about, and who is '
+        'actually earning the ball.'
+        if meta.get("solo") else
+        f'The file on {meta["rival_label"]}: your lineup, their fragile spots, '
+        f'and the one call that matters.')
+    sections = "".join(_compose(report) + [
         # breathing room between the last section and the footer band
         '<tr><td style="padding:12px;"></td></tr>',
         _footer(meta),
     ])
     sections = number_sections(sections)
-    title = f'Beat Your League — Week {esc(meta["week"])} Rival Report'
+    title = (f'Beat Your League — Week {esc(meta["week"])} '
+             f'{"Report" if meta.get("solo") else "Rival Report"}')
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'

@@ -170,3 +170,103 @@ def test_the_email_carries_what_the_browser_report_carries(tmp_path: Path) -> No
     if "of the other" in browser_html:
         assert "of the other" in email_html, \
             "the who-can-cover denominator drifted between surfaces"
+
+
+# --------------------------------------------------------------------- #
+# the solo product — no league, no opponent
+# --------------------------------------------------------------------- #
+
+def _solo_report() -> dict:
+    """A minimal solo report, built through the real builders."""
+    from engine.projection import ProjectionModel
+    from engine.availability import WeekAvailability
+    from engine.roster import Player, PlayerDirectory
+    from engine.solo_report import build_solo_report
+    from engine.subscriber import RosterSpec, build_season, player_index
+
+    people = [Player(f"00-000000{i}", n, p, "KC") for i, (n, p) in enumerate(
+        [("Star QB", "QB"), ("Bell Cow", "RB"), ("Committee RB", "RB"),
+         ("Alpha WR", "WR"), ("Slot WR", "WR"), ("Starting TE", "TE"),
+         ("Deep WR", "WR")], start=1)]
+    directory = PlayerDirectory(people)
+    ids = tuple(p.player_id for p in people)
+    weekly = {w: {pid: {"receiving_yards": 80 + 10 * i}
+                  for i, pid in enumerate(ids)} for w in (1, 2, 3, 4)}
+    spec = RosterSpec(player_ids=ids, scoring="ppr", label="Your Team",
+                      slots=("QB", "RB", "WR", "TE", "FLEX"))
+    season = build_season(spec, weekly, directory, "2026", 5, league_size=12)
+    players = player_index(directory)
+    model = ProjectionModel(season, players)
+    statuses = {pid: {"team": "KC", "position": players.position(pid),
+                      "active": True, "injury_status": None} for pid in ids}
+    availability = WeekAvailability(season="2026", week=5,
+                                    snapshot_as_of="2026-w4",
+                                    statuses=statuses, bye_teams=frozenset())
+    return build_solo_report(spec, season, players, model, availability, 5,
+                             Path("/nonexistent"))
+
+
+def test_the_solo_email_names_no_opponent_anywhere() -> None:
+    """The product cannot see one (PLAN §0). The header used to print
+    "This week: None" — an absent value rendered as a word — and the title band
+    still said "Rival Report" on a report with no rival."""
+    report = _solo_report()
+    html_out = render_email(report)
+    assert "This week:" not in html_out
+    assert "None" not in html_out
+    assert "Rival Report" not in html_out
+    assert "Your Report" in html_out
+
+
+def test_the_two_surfaces_carry_the_same_solo_sections() -> None:
+    """The renderers speak different dialects — one has CSS, the other cannot —
+    so they are mirrors rather than shared code. The SECTION LIST is the thing
+    that must not diverge: an email quietly missing a section the archived HTML
+    carries is exactly the drift this file exists to catch."""
+    import re as _re
+    from render.report import TEMPLATE_PATH, render
+    report = _solo_report()
+    browser = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
+    email = render_email(report)
+
+    in_browser = _re.findall(r'<span class="tag">([^<]+)</span>', browser)
+    in_email = _re.findall(
+        r'padding-bottom:6px;">(?:<span[^>]*>\d+</span> · )?([^<]+)</div>', email)
+    assert in_browser == in_email, f"browser {in_browser} vs email {in_email}"
+    # and the sections that need a league are in neither
+    for gone in ("Is Fragile", "Waiver Hype Meter", "How It Ended", "The Tape"):
+        assert gone not in browser and gone not in email, gone
+
+
+def test_the_solo_email_stays_email_safe() -> None:
+    html_out = render_email(_solo_report())
+    for construct in ("display:grid", "display:flex", "var(--", "@media",
+                      "fonts.googleapis", "<link", "<style"):
+        assert construct not in html_out, f"email-unsafe construct: {construct}"
+
+
+def test_the_preheader_is_true_of_the_report_it_previews() -> None:
+    """The preheader is the preview line an inbox shows BEFORE the mail is
+    opened, which makes it the most-read sentence the product ships — and the
+    easiest to forget, because it is invisible in the rendered page.
+
+    The solo version read "The file on None: your lineup, their fragile spots,
+    and the one call that matters": an absent value printed as a word, plus two
+    promises this product does not keep. Caught by a test asserting no report
+    anywhere says "None"."""
+    solo = render_email(_solo_report())
+    preview = solo.split('max-height:0;overflow:hidden;">')[1].split("</div>")[0]
+    assert "None" not in preview
+    for absent in ("fragile", "rival", "opponent"):
+        assert absent not in preview.lower(), \
+            f"the inbox preview promises {absent!r}, which a solo report has not got"
+
+
+def test_the_solo_subject_names_no_rival() -> None:
+    """"the file on None" would be the subject line — the single most visible
+    string the product produces."""
+    from run.batch import _subject
+    report = _solo_report()
+    subject = _subject(report)
+    assert "None" not in subject and "file on" not in subject
+    assert str(report["meta"]["week"]) in subject

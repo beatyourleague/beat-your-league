@@ -59,8 +59,15 @@ class BatchResult:
 
 
 def _subject(report: dict) -> str:
-    """What lands in the inbox. The rival's name is the reason they open it."""
+    """What lands in the inbox.
+
+    A rival's name was the reason they opened it, and a solo report has no
+    rival to name — "the file on None" would be the subject line. The solo
+    subject leads with the one thing the report decides instead.
+    """
     meta = report["meta"]
+    if meta.get("solo"):
+        return f"Week {meta['week']}: your lineup, decided"
     if meta.get("rivalry_week"):
         return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
     return f"Week {meta['week']}: the file on {meta['rival_label']}"

@@ -987,7 +987,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     body = "".join(compose(report))
     body = number_sections(body)
     title = (f'Beat Your League — {meta["season"]} Week {meta["week"]} '
-             f'Rival Report')
+             + ("Report" if meta.get("solo") else "Rival Report"))
     # Only the public demo gets share meta: it is the one render of this
     # template that lives on the open web. Subscriber reports are private —
     # share tags on them would just invite pasting a paid report around.
