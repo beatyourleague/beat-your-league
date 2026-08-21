@@ -174,3 +174,41 @@ def test_a_custom_rule_can_express_a_real_league() -> None:
 def test_scores_are_rounded_so_two_runs_never_disagree_by_float_noise() -> None:
     line = {"receiving_yards": 33, "rushing_yards": 17}
     assert score(line, preset(PPR)) == round(score(line, preset(PPR)), 2)
+
+
+# --------------------------------------------------------------------- #
+# RULE S4 — team defenses
+# --------------------------------------------------------------------- #
+
+def test_a_defense_scores_from_team_counts_and_points_allowed() -> None:
+    from engine.scoring import score_defense
+    dominant = {"def_sacks": 5, "def_interceptions": 2, "def_fumbles": 1,
+                "def_tds": 1}
+    assert score_defense(dominant, 3) == pytest.approx(5 + 4 + 2 + 6 + 7)
+    assert score_defense({"def_sacks": 2}, 0) == pytest.approx(2 + 10)
+
+
+def test_the_points_allowed_ladder_runs_the_right_way() -> None:
+    """Fewer points allowed is worth more, monotonically, and a blowout is
+    NEGATIVE — a defense that gives up 38 cost its manager the week."""
+    from engine.scoring import score_defense
+    values = [score_defense({}, allowed) for allowed in (0, 6, 13, 20, 27, 34, 45)]
+    assert values == sorted(values, reverse=True), values
+    assert values[0] > 0 and values[-1] < 0
+
+
+def test_an_unfinished_game_scores_no_defense_at_all() -> None:
+    """None, never 0.0. A zero here reads as the opposite of what it means: a
+    defense that allowed nothing is the BEST possible week."""
+    from engine.scoring import score_defense
+    assert score_defense({"def_sacks": 3}, None) is None
+    assert score_defense({"def_sacks": 3}, 0) == pytest.approx(13.0)
+
+
+def test_a_defenders_own_line_is_never_a_defense_score() -> None:
+    """RULE S4. score() and score_defense() read disjoint fields, so a
+    linebacker's tackles cannot leak into his team's DST number."""
+    from engine.scoring import score, score_defense
+    linebacker = {"def_sacks": 3, "def_tackles_solo": 11, "receptions": 0}
+    assert score(linebacker, preset(PPR)) == 0.0
+    assert score_defense(linebacker, 17) == pytest.approx(3 + 1)

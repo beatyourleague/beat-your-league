@@ -253,6 +253,55 @@ def bye_teams(cache_dir: Path, season: str, week: int, *, live: bool = False,
     return frozenset(all_teams - playing)
 
 
+def defense_rows(cache_dir: Path, season: str, *, live: bool = False,
+                 session: requests.Session | None = None,
+                 ) -> dict[int, dict[str, dict[str, object]]]:
+    """Team-defense weeks, keyed week -> team abbr -> row.
+
+    Two releases are joined because neither alone is enough (RULE S4): the
+    defensive counts come from ``stats_team``, and POINTS ALLOWED comes from
+    the schedule's own final score, which is the opponent's points. A row is
+    emitted only for a game with a recorded score — an unfinished game yields
+    no row, so ``score_defense`` returns None rather than a 0.0 that would read
+    as a shutout.
+    """
+    stats_path = fetch("stats_team", f"stats_team_week_{season}.csv", cache_dir,
+                       live=live, session=session)
+    games_path = fetch("schedules", "games.csv", cache_dir, live=live,
+                       session=session)
+
+    allowed: dict[tuple[int, str], int] = {}
+    with games_path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            week = _int(row.get("week"))
+            home, away = (row.get("home_team") or ""), (row.get("away_team") or "")
+            home_score, away_score = _int(row.get("home_score")), _int(row.get("away_score"))
+            if not week or home_score is None or away_score is None:
+                continue                      # not played, or not final
+            allowed[(week, home)] = away_score
+            allowed[(week, away)] = home_score
+
+    out: dict[int, dict[str, dict[str, object]]] = {}
+    with stats_path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("season_type") or "REG").upper() != "REG":
+                continue
+            week = _int(row.get("week"))
+            team = (row.get("team") or "").strip()
+            if not week or not team or (week, team) not in allowed:
+                continue
+            entry = dict(row)
+            entry["points_allowed"] = allowed[(week, team)]
+            out.setdefault(week, {})[team] = entry
+    return out
+
+
 def season_teams(cache_dir: Path, season: str, *, live: bool = False,
                  session: requests.Session | None = None) -> frozenset[str]:
     """The team abbreviations that actually play this season.

@@ -25,10 +25,12 @@ contributes nothing. A player with no stat line at all is a different fact — h
 did not play, or nflverse has no row — and that is the caller's business
 (``engine.availability``), not a 0.0 we invent here.
 
-Team defenses are deliberately NOT scored here. DST scoring needs points and
-yards allowed, which live in the team-level release, and inventing a DST score
-from a defender's tackle line would be a fabricated number wearing a real
-column's name.
+**RULE S4 — A TEAM DEFENSE IS SCORED FROM THE TEAM'S OWN WEEK, NEVER FROM A
+DEFENDER'S LINE.** DST needs points allowed (the opponent's final score) and
+counts that only exist team-wide: sacks, takeaways, safeties, defensive and
+return touchdowns. Summing a linebacker's tackles would be a fabricated number
+wearing a real column's name. Points allowed come from the schedule's own
+score, so a defense cannot be scored for a game that has not finished.
 """
 
 from __future__ import annotations
@@ -73,6 +75,30 @@ class ScoringRule:
 
     def with_reception(self, value: float) -> "ScoringRule":
         return ScoringRule(**{**self.__dict__, "reception": value})
+
+
+# The points-allowed ladder every mainstream ruleset uses, as (max_points,
+# value) in ascending order. Expressed as data rather than branches because
+# leagues vary the bands and a league that does is then expressible without
+# touching this module.
+DEFAULT_POINTS_ALLOWED = ((0, 10.0), (6, 7.0), (13, 4.0), (20, 1.0),
+                          (27, 0.0), (34, -1.0), (99, -4.0))
+
+
+@dataclass(frozen=True)
+class DefenseRule:
+    """Points per unit for a team defense."""
+
+    sack: float = 1.0
+    interception: float = 2.0
+    fumble_recovery: float = 2.0
+    safety: float = 2.0
+    defensive_td: float = 6.0
+    return_td: float = 6.0
+    points_allowed: tuple[tuple[int, float], ...] = DEFAULT_POINTS_ALLOWED
+
+
+DEFENSE_RULE = DefenseRule()
 
 
 PRESETS: Mapping[str, ScoringRule] = {
@@ -154,3 +180,29 @@ def _kicking(row: Mapping[str, object], rule: ScoringRule) -> float:
         + _num(row, "fg_missed") * rule.fg_missed
         + _num(row, "pat_made") * rule.extra_point
     )
+
+
+def score_defense(team_week: Mapping[str, object], points_allowed: int | None,
+                  rule: DefenseRule = DEFENSE_RULE) -> float | None:
+    """Fantasy points for one team defense in one week (RULE S4).
+
+    Returns None when ``points_allowed`` is unknown — an unplayed or unfinished
+    game. That is not a zero: a defense that has not played yet has no score,
+    and rendering 0.0 would read as a shutout's opposite, which is the single
+    most misleading number this function could produce.
+    """
+    if points_allowed is None:
+        return None
+    total = (
+        _num(team_week, "def_sacks") * rule.sack
+        + _num(team_week, "def_interceptions") * rule.interception
+        + _num(team_week, "def_fumbles") * rule.fumble_recovery
+        + _num(team_week, "def_safeties") * rule.safety
+        + _num(team_week, "def_tds") * rule.defensive_td
+        + _num(team_week, "special_teams_tds") * rule.return_td
+    )
+    for ceiling, value in rule.points_allowed:
+        if points_allowed <= ceiling:
+            total += value
+            break
+    return round(total, 2)

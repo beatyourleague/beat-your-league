@@ -16,7 +16,7 @@ from engine.roster import Player, PlayerDirectory
 from engine.scoring import preset
 from engine.subscriber import (DID_NOT_PLAY, FIELD_ROSTER_ID,
                                SUBSCRIBER_ROSTER_ID, RosterSpec,
-                               SubscriberError, build_season, is_scoreable,
+                               SubscriberError, build_season, merge_defenses,
                                player_index, rosterable_field)
 
 SLOTS = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")
@@ -202,11 +202,36 @@ def test_a_fullback_can_fill_the_slot_leagues_actually_give_him() -> None:
     assert fullback.eligible_for("FLEX")
 
 
-def test_defenses_are_marked_unscoreable_rather_than_scored_as_zero() -> None:
-    """DST needs points and yards allowed from the team release. A 0.0 would
-    look like a real week of no production."""
-    assert not is_scoreable("DEF-BAL")
-    assert is_scoreable("00-0000001")
+def test_a_rostered_defense_is_scored_from_its_own_team_week() -> None:
+    """RULE S4. A defense used to render as "(empty)" because nothing scored it,
+    which told a subscriber who rosters one that they do not."""
+    directory = _directory()
+    weekly = merge_defenses(
+        {1: dict(_rows(**{"00-0000005": 5.0}))},
+        {1: {"BAL": {"def_sacks": 4, "def_interceptions": 2,
+                     "points_allowed": 6}}})
+    spec = _spec(player_ids=("00-0000005", "DEF-BAL", "00-0000001",
+                             "00-0000003", "00-0000004"),
+                 slots=("WR", "DEF"))
+    week = build_season(spec, weekly, directory, "2026", 2)\
+        .weeks[1][SUBSCRIBER_ROSTER_ID]
+    assert week.players_points["DEF-BAL"] == 15.0    # 4 + 4 + 7 for 6 allowed
+    assert week.did_appear("DEF-BAL")
+
+
+def test_a_defense_with_no_final_score_is_absent_not_a_shutout() -> None:
+    """An unfinished game has no points allowed. Rendering 0.0 there would read
+    as the OPPOSITE of what it means — a defense that gave up nothing."""
+    directory = _directory()
+    weekly = merge_defenses({1: {}},
+                            {1: {"BAL": {"def_sacks": 3, "points_allowed": None}}})
+    spec = _spec(player_ids=("DEF-BAL", "00-0000005", "00-0000001"),
+                 slots=("DEF",))
+    week = build_season(spec, weekly, directory, "2026", 2)\
+        .weeks[1][SUBSCRIBER_ROSTER_ID]
+    assert week.players_points["DEF-BAL"] == 0.0
+    assert not week.did_appear("DEF-BAL"), \
+        "an unplayed defense was recorded as having appeared"
 
 
 def test_positions_survive_into_slot_eligibility() -> None:

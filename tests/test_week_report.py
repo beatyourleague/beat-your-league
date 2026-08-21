@@ -942,3 +942,33 @@ def test_a_confidence_always_renders_with_its_percent_sign() -> None:
         rendered = _tape_side(slot, mine=True, mixed=True)
         assert f"{_pct(pick.confidence)}%" in rendered, \
             f"confidence rendered without a percent sign: {rendered}"
+
+
+def test_an_unfillable_slot_becomes_the_loudest_item_not_a_silent_one() -> None:
+    """The lineup rendered "(empty)" and the checklist said nothing, so a
+    subscriber with no kicker rostered would start the week a slot short and
+    find out on Sunday. It is the single most actionable fact a report can
+    carry: unlike a start/sit call it is not a judgement, it is a hole."""
+    from engine.projection import Projection
+    from engine.week_report import SlotPick, checklist
+
+    def pick(slot: str, index: int, seated: bool) -> SlotPick:
+        projection = (Projection(player_id=f"p{index}", as_of_week=5,
+                                 active_mean=10.0, active_sd=3.0,
+                                 appear_probability=0.9, games=5,
+                                 rostered_weeks=5, position=slot)
+                      if seated else None)
+        return SlotPick(slot, index, f"p{index}" if seated else None,
+                        projection, None, None, None, None, None, [])
+
+    picks = [pick("QB", 0, True), pick("K", 1, False), pick("DEF", 2, False)]
+    items = checklist(picks, None, [], _player_index())
+    holes = [i for i in items if "nobody to start" in i["action"]]
+    assert len(holes) == 1, [i["action"] for i in items]
+    assert "DEF" in holes[0]["action"] and "K" in holes[0]["action"]
+    assert holes[0]["urgency"] == "now"
+
+    # and a full lineup raises nothing
+    full = [pick("QB", 0, True), pick("RB", 1, True)]
+    assert not [i for i in checklist(full, None, [], _player_index())
+                if "nobody to start" in i["action"]]

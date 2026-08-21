@@ -908,6 +908,19 @@ def checklist(
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })
+        # A slot nobody can fill is the most actionable thing in the report and
+        # used to be silent: the lineup simply rendered "(empty)" and the
+        # checklist said nothing, so a subscriber with no kicker rostered would
+        # start the week a slot short without being told.
+        unfillable = [p.slot for p in my_picks if p.player_id is None]
+        if unfillable:
+            spots = ", ".join(sorted(set(unfillable)))
+            items.append({
+                "action": f"You have nobody to start at {spots}. Add someone "
+                          f"off waivers, or that slot scores zero.",
+                "deadline": "before this week's first kickoff",
+                "urgency": "now",
+            })
         return items
 
     changes = [

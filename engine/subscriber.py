@@ -64,7 +64,7 @@ from typing import Iterable, Mapping
 from engine.history import (FLEX_ELIGIBILITY, PlayerIndex, Season, Team,
                             TeamWeek)
 from engine.roster import DEFENSE, PlayerDirectory
-from engine.scoring import ScoringRule, preset, score
+from engine.scoring import ScoringRule, preset, score, score_defense
 
 # Present in ``weeks`` so the model can build a prior; absent from ``teams`` so
 # no buyer-visible count includes it. See RULE B2.
@@ -278,7 +278,17 @@ def _team_week(roster_id: int, week: int, player_ids: Iterable[str],
         if row is None:
             points[player_id] = DID_NOT_PLAY
             continue
-        points[player_id] = score(row, rule)
+        # A team defense is scored from its own team-week, never from a
+        # player's stat line (RULE S4). score_defense returns None for a game
+        # with no final score, which is an absence rather than a shutout.
+        if player_id.startswith(f"{DEFENSE}-"):
+            defense_points = score_defense(row, row.get("points_allowed"))
+            if defense_points is None:
+                points[player_id] = DID_NOT_PLAY
+                continue
+            points[player_id] = defense_points
+        else:
+            points[player_id] = score(row, rule)
         appeared.add(player_id)
     return TeamWeek(
         roster_id=roster_id,
@@ -294,12 +304,17 @@ def _team_week(roster_id: int, week: int, player_ids: Iterable[str],
     )
 
 
-def is_scoreable(player_id: str) -> bool:
-    """Whether weekly points exist for this entity at all.
+def merge_defenses(weekly: dict[int, dict[str, Mapping[str, object]]],
+                   defenses: Mapping[int, Mapping[str, Mapping[str, object]]],
+                   ) -> dict[int, dict[str, Mapping[str, object]]]:
+    """Fold team-defense weeks into the player rows, keyed ``DEF-<abbr>``.
 
-    Team defenses are not scored yet — DST needs points and yards allowed from
-    the team-level release, and a defender's tackle line is not a DST score
-    (engine/scoring.py). Callers gate on this rather than reading a 0.0 that
-    would look like a real week of no production.
+    One dict of weekly rows keeps ``_team_week`` simple and keeps the roster a
+    flat list of ids — a defense is just another thing you can start, which is
+    what it is to the subscriber.
     """
-    return not player_id.startswith(f"{DEFENSE}-")
+    for week, teams in defenses.items():
+        target = weekly.setdefault(week, {})
+        for abbr, row in teams.items():
+            target[f"{DEFENSE}-{abbr}"] = row
+    return weekly
