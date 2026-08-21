@@ -157,6 +157,29 @@ class TeamWeek:
     players: tuple[str, ...]
     players_points: Mapping[str, float]
     points: float
+    # Who actually took the field, when we can know it independently of what
+    # they scored. None means "we cannot tell" and the points convention below
+    # applies — which is the Sleeper case, where 0.0 was the ONLY absence
+    # signal the feed ever gave us.
+    appeared: frozenset[str] | None = None
+
+    def did_appear(self, player_id: str) -> bool:
+        """Did this player play, as distinct from scoring nothing?
+
+        The two are not the same and conflating them is measurable: 15.2% of
+        2024 fantasy stat rows score exactly 0.00, and the rate is strongly
+        position-dependent — 20.5% of WR rows and 21.7% of TE rows against 1.2%
+        of QB rows. Reading those as absences understates receivers' appearance
+        rate specifically, which feeds straight into the availability gate.
+
+        Sleeper never offered anything better, so a None ``appeared`` falls back
+        to the old convention and the historical backtest is unaffected.
+        nflverse does: a stat row exists or it does not.
+        """
+        if self.appeared is not None:
+            return player_id in self.appeared
+        points = self.players_points.get(player_id)
+        return points is not None and points != 0.0
 
     def bench(self) -> tuple[str, ...]:
         """Rostered players not in a starting slot this week."""

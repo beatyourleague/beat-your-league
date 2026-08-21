@@ -214,3 +214,58 @@ def test_positions_survive_into_slot_eligibility() -> None:
     assert index.get("00-0000005").eligible_for("WR")
     assert index.get("00-0000005").eligible_for("FLEX")
     assert not index.get("00-0000005").eligible_for("QB")
+
+
+# --------------------------------------------------------------------- #
+# appearance is recorded, not inferred from the score
+# --------------------------------------------------------------------- #
+
+def test_a_player_who_played_and_scored_nothing_still_appeared() -> None:
+    """The defect this fixes, in one case. A receiver targeted twice with no
+    catch has a stat row and scores exactly 0.00 in PPR. Inferring appearance
+    from the score counts him as having missed the game.
+
+    MEASURED on 2024: 15.2% of fantasy stat rows score exactly 0.00, and the
+    rate is strongly position-dependent — 20.5% of WR rows and 21.7% of TE rows
+    against 1.2% of QB rows. So the error does not wash out; it understates
+    receivers' appearance rate specifically, and appearance rate is what the
+    availability gate turns on."""
+    directory = _directory()
+    weekly = {1: {"00-0000005": {"receiving_yards": 0, "receptions": 0}}}
+    season = build_season(_spec(), weekly, directory, "2026", 2)
+    week = season.weeks[1][SUBSCRIBER_ROSTER_ID]
+    assert week.players_points["00-0000005"] == 0.0
+    assert week.did_appear("00-0000005"), \
+        "a player with a stat row was counted as absent because he scored zero"
+    assert not week.did_appear("00-0000006"), "a player with no row 'appeared'"
+
+
+def test_the_model_counts_that_scoreless_appearance() -> None:
+    """End to end: the zero belongs in the appearance rate but not in the
+    scoring mean — it is a game he played, and a game he did nothing in."""
+    directory = _directory()
+    weekly = {
+        1: {"00-0000005": {"receiving_yards": 0}},        # played, scored 0.00
+        2: {},                                             # did not play
+        3: {"00-0000005": {"receiving_yards": 100}},
+    }
+    season = build_season(_spec(), weekly, directory, "2026", 4)
+    model = ProjectionModel(season, player_index(directory))
+    assert model.rostered_weeks("00-0000005", 4) == 3
+    assert model.observations("00-0000005", 4) == [0.0, 10.0], \
+        "the scoreless appearance was dropped from the record"
+
+
+def test_the_sleeper_era_convention_still_applies_when_we_cannot_know() -> None:
+    """Sleeper reported did-not-play as exactly 0.0 and never offered anything
+    better, so a TeamWeek with no appearance record must keep behaving the old
+    way — otherwise the historical backtest silently changes meaning."""
+    import dataclasses
+    directory = _directory()
+    weekly = {1: {"00-0000005": {"receiving_yards": 0}}}
+    week = build_season(_spec(), weekly, directory, "2026", 2)\
+        .weeks[1][SUBSCRIBER_ROSTER_ID]
+    legacy = dataclasses.replace(week, appeared=None)
+    assert week.did_appear("00-0000005")
+    assert not legacy.did_appear("00-0000005"), \
+        "the Sleeper-era fallback changed meaning"

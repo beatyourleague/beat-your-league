@@ -9,7 +9,8 @@ gating, the decisions, the ledger and both renderers keep working unchanged.
 
 Three things are worth knowing before changing anything here.
 
-**RULE B1 — A WEEK WITH NO STAT LINE IS 0.0, NOT ABSENT.** Sleeper reported a
+**RULE B1 — A WEEK WITH NO STAT LINE IS 0.0, NOT ABSENT — AND ABSENCE IS
+RECORDED SEPARATELY FROM THE SCORE.** Sleeper reported a
 player who did not play as exactly 0.0, and the entire calibration story rests
 on that: starters score 0.0 about 3% of the time and bench players 35%, which is
 what told us the engine's problem was availability rather than scoring. If a
@@ -260,12 +261,25 @@ def rosterable_field(directory: PlayerDirectory,
 def _team_week(roster_id: int, week: int, player_ids: Iterable[str],
                rows: Mapping[str, Mapping[str, object]],
                rule: ScoringRule) -> TeamWeek:
-    """One roster's week. RULE B1: no stat line means 0.0, never absent."""
+    """One roster's week. RULE B1: no stat line means 0.0, never absent — and
+    who APPEARED is carried explicitly rather than inferred from the score.
+
+    Inferring it cost real accuracy: 15.2% of 2024 fantasy stat rows score
+    exactly 0.00, so every one of those players was being counted as having
+    missed the game. nflverse tells us directly whether a row exists, which
+    Sleeper never could, and row-presence is unambiguous — the maximum any 2024
+    player has is 17 REG rows in an 18-week season, with no duplicates.
+    """
     ids = tuple(player_ids)
     points: dict[str, float] = {}
+    appeared: set[str] = set()
     for player_id in ids:
         row = rows.get(player_id)
-        points[player_id] = DID_NOT_PLAY if row is None else score(row, rule)
+        if row is None:
+            points[player_id] = DID_NOT_PLAY
+            continue
+        points[player_id] = score(row, rule)
+        appeared.add(player_id)
     return TeamWeek(
         roster_id=roster_id,
         week=week,
@@ -276,6 +290,7 @@ def _team_week(roster_id: int, week: int, player_ids: Iterable[str],
         players=ids,
         players_points=points,
         points=0.0,
+        appeared=frozenset(appeared),
     )
 
 

@@ -203,7 +203,11 @@ class ProjectionModel:
         for team_week in season.team_weeks():
             for player_id, points in team_week.players_points.items():
                 rostered.setdefault(player_id, set()).add(team_week.week)
-                if points == DID_NOT_PLAY:
+                # Appearance is asked of the TeamWeek rather than inferred from
+                # the score here, because a player who took the field and
+                # scored nothing is not the same fact as one who never played —
+                # see TeamWeek.did_appear for the measurement.
+                if not team_week.did_appear(player_id):
                     continue
                 self._appearances.setdefault(player_id, []).append(
                     (team_week.week, float(points))
