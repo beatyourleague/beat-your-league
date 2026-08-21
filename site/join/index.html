@@ -92,57 +92,100 @@
      terms link directly under the email field. */
   footer a,.note a{color:var(--brick);text-decoration:underline;text-underline-offset:2px;}
   footer a:hover,.note a:hover{color:var(--navy);}
+
+  /* The resolved roster. One row per player, and a row that could not be
+     resolved is visibly UNFINISHED rather than quietly missing — intake cannot
+     complete with a hole in it (RULE R3). */
+  .rows{margin:14px 0 0;border:1px solid var(--line);background:#fff;}
+  .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+    padding:9px 12px;border-top:1px solid #EDEAE1;font-size:14px;}
+  .row:first-child{border-top:none;}
+  .row.bad{background:#FCF3F1;}
+  .row .who{font-weight:700;}
+  .row .meta{font-size:12px;color:var(--slate);font-weight:600;}
+  .row .why{font-size:12.5px;color:var(--brick);font-weight:600;}
+  .row .fix{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .row .fix button{font-size:12px;padding:5px 9px;background:#fff;
+    border:1px solid var(--line);color:var(--ink);font-weight:700;cursor:pointer;}
+  .row .fix button:hover{border-color:var(--navy);}
+  .row .drop{color:var(--slate);border-style:dashed;}
+  .twin{font-size:12px;color:#8A6A10;font-weight:600;}
+  .tally{margin-top:10px;font-size:13px;color:var(--slate);font-weight:600;}
+  .tally.bad{color:var(--brick);}
+  .opts{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 0;}
+  .opts label{font-size:13px;font-weight:700;border:1px solid var(--line);
+    padding:7px 11px;cursor:pointer;background:#fff;}
+  .opts input{margin-right:6px;}
+  textarea{width:100%;min-height:150px;padding:11px 12px;border:1px solid var(--line);
+    font:inherit;font-size:14px;line-height:1.5;background:#fff;resize:vertical;}
 </style>
 </head>
 <body>
 <div class="page">
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byljBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byljSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byljVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byljPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byljBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byljPath" fill="url(#byljSpec)" stroke="none"/><use href="#byljPath" fill="url(#byljVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
-    <h1>Pick Your Rival</h1>
-    <p id="header-pitch">Three taps — username, league, rival — and we pull the file on them while you
-    watch. A paid product from day one: <b>$39 USD for the season</b> — the founding
-    rate, locked in for every renewal. Checkout runs on our payment provider's own secure page;
-    all we ever ask for is your Sleeper <b>username</b> — never a password.</p>
+    <h1>Set Up Your Team</h1>
+    <p id="header-pitch">Paste your roster once and every Tuesday you get the lineup we
+    would set, what each call is worth, and who is actually earning the ball. A paid
+    product from day one: <b>$39 USD for the season</b> — the founding rate, locked in
+    for every renewal. Checkout runs on our payment provider's own secure page. We never
+    ask for a password, and we never connect to your league.</p>
     <div class="beta-chips" id="header-chips">
       <span>$39 USD / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
     </div>
   </header>
 
-  <section id="step-user">
-    <div class="eyebrow">1 · Your Sleeper username</div>
-    <form id="form-user" novalidate>
-      <input type="text" id="username" autocomplete="off" spellcheck="false"
-             placeholder="e.g. ZeroRB_Zealot" maxlength="32">
-      <button id="find-user" type="submit">Find my leagues</button>
+  <section id="step-league">
+    <div class="eyebrow">1 · Your league's settings</div>
+    <div class="note">Two questions we cannot answer for you, because we do not read
+    your league. They decide how every player is scored.</div>
+    <div class="opts" id="opt-scoring">
+      <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
+      <label><input type="radio" name="scoring" value="half_ppr">Half PPR</label>
+      <label><input type="radio" name="scoring" value="standard">Standard</label>
+    </div>
+    <div class="opts" id="opt-size">
+      <label><input type="radio" name="size" value="8">8 teams</label>
+      <label><input type="radio" name="size" value="10">10 teams</label>
+      <label><input type="radio" name="size" value="12" checked>12 teams</label>
+      <label><input type="radio" name="size" value="14">14 teams</label>
+    </div>
+    <div class="opts" id="opt-template">
+      <label><input type="radio" name="template" value="std" checked>QB/RB/RB/WR/WR/TE/FLEX/K/DEF</label>
+      <label><input type="radio" name="template" value="sf">Superflex</label>
+      <label><input type="radio" name="template" value="nokd">No K or DEF</label>
+    </div>
+  </section>
+
+  <section id="step-roster">
+    <div class="eyebrow">2 · Your roster</div>
+    <div class="note">Paste it straight out of your league app, or type one name a line.
+    Position labels, bye weeks and projections are ignored — we only read the names.</div>
+    <form id="form-roster" novalidate>
+    <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
+Bijan Robinson
+Ja'Marr Chase
+Baltimore Ravens
+..."></textarea>
+    <button id="resolve" type="submit">Check my roster</button>
     </form>
-    <div class="err" id="err-user"></div>
-  </section>
-
-  <section id="step-league" class="hidden">
-    <div class="eyebrow">2 · Which league?</div>
-    <div class="cards" id="league-cards"></div>
-    <div class="err" id="err-league"></div>
-  </section>
-
-  <section id="step-rival" class="hidden">
-    <div class="eyebrow">3 · Who's the rival?</div>
-    <div class="note">The one you most need to beat. Every Tuesday breaks down the
-    matchup you're actually playing that week — and keeps the file on your rival running
-    all season, with full Rivalry Week when the schedule pairs you up.</div>
-    <div class="cards" id="rival-cards"></div>
-    <div class="err" id="err-rival"></div>
-  </section>
-
-  <section id="step-scout" class="hidden">
-    <div class="eyebrow">Your rival, already scouted</div>
-    <div class="scout" id="scout-body"></div>
+    <div class="err" id="err-roster"></div>
+    <div id="rows"></div>
+    <div class="tally" id="tally"></div>
   </section>
 
   <section id="step-email" class="hidden">
-    <div class="eyebrow">4 · Where do reports go?</div>
+    <div class="eyebrow">3 · Where do reports go?</div>
     <div class="note" id="seat-share" style="display:none"></div>
     <form id="form-email" novalidate>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <div id="pass-field" style="display:none">
+        <input type="email" id="pass-email" autocomplete="off"
+               placeholder="your commissioner's email">
+        <div class="note">The address they bought the League Pass with. That is how
+        your seat is matched to their pass — we have no other way to know your seat
+        is paid for.</div>
+      </div>
       <button id="submit" type="submit">Continue to checkout — $39</button>
     </form>
     <div class="err" id="err-email"></div>
@@ -152,17 +195,16 @@
         <li id="seat-note" style="display:none">There's nothing for you to pay — the
         seat comes out of your commissioner's League Pass, so your first report lands
         the Tuesday after their pass goes through. You get your <b>own</b> report,
-        aimed at the rival you just picked — not a copy of theirs.</li>
+        built from the roster you just entered.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
-        payment and we never see, transmit or store them. Your league and rival picks
-        travel with the checkout, so there's nothing else to send us.</li>
+        payment and we never see, transmit or store them. Your roster travels with the
+        checkout, so there's nothing else to send us.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page. We never hold anyone in.</li>
-        <li>Your first report — your Week 1 matchup broken down, with the file on
-        <b><span id="success-rival"></span></b> open all season — lands
-        <b>Tuesday, Sep 8</b>. Refunds are no-questions through Week 2 — one per
-        person, and a re-subscription after a refund is final. Changed your mind later?
+        <li>Your first report lands <b>Tuesday, Sep 8</b>. Refunds are no-questions
+        through Week 2 — one per person, and a re-subscription after a refund is final.
+        Changed your mind later?
         <a href="../legal.html#cancel">Cancelling takes about fifteen seconds</a> in your
         own account — you never have to ask us.</li>
       </ol>
@@ -170,574 +212,349 @@
   </section>
 
   <footer>
-    We store the minimum: your email, league, and rival pick. No passwords, no accounts.
+    We store the minimum: your email, your scoring settings and your roster. No
+    passwords, no accounts, and we never connect to your league.
     Analysis, not picks — fantasy decisions are yours to make. Must be 18+.<br>
     <a href="../legal.html">Terms, refunds &amp; privacy</a>
   </footer>
 </div>
-
+<script src="roster.js"></script>
 <script>
 "use strict";
-// ---------------------------------------------------------------------------
-// The payment IS the signup.
+// The intake. Name resolution and reference encoding live in roster.js, which
+// is tested against the Python that must decode them on Tuesday
+// (tests/test_intake.py runs both). This file is the flow around them.
 //
-// This page cannot write to a database, and we deliberately do not run a server.
-// So instead of storing the picks somewhere and reconciling them against Stripe
-// later by email — two lists joined by a string the buyer types twice — the
-// picks ride INTO the payment on the checkout URL:
-//
-//     <payment link>?client_reference_id=<ref>&locked_prefilled_email=<email>
-//
-// Stripe stores client_reference_id on the resulting Checkout Session, and the
-// Tuesday run reads it back. locked_prefilled_email makes the payment email
-// NON-EDITABLE, so the address that pays is the address that picked, by
-// construction — there is no mismatch left to reconcile.
-//
-// Paste the Payment Link URLs below to switch checkout on. One constant per
-// plan; empty means "not open yet" and the page says so honestly.
-// ---------------------------------------------------------------------------
+// Two rules the flow exists to enforce:
+//   RULE R3 — nothing is guessed. An unresolved line blocks checkout; the
+//   subscriber picks, because on Tuesday there is nobody to ask.
+//   Nothing is DROPPED. A line we cannot read is shown back verbatim, as a
+//   text node. Pasting fifteen and silently getting thirteen is the same
+//   failure as guessing, wearing a different hat.
+
+// Payment links. Empty means checkout is not open, and the page says the
+// roster was NOT saved rather than congratulating anyone.
 const STRIPE_LINK_SEASON = "";    // $39/season, auto-renewing annual
 const STRIPE_LINK_MONTHLY = "";   // $12.99/month
-const STRIPE_LINK_PASS = "";      // $99 League Pass, recurring annual
+const STRIPE_LINK_PASS = "";      // $99/season, whole league
 
-// League Pass SEATS only. A seat holder pays nothing — their commissioner
-// already did — so there is no payment to carry their picks, and this is the
-// one path that still needs a form backend (Tally/Fillout/Formspree).
-// Individual buyers never touch it, so an outage here costs seats, not sales.
+// League Pass SEATS only. A seat holder pays nothing, so there is no payment to
+// carry their picks — the one path that still needs a form backend. PLAN §0
+// keeps this EMPTY until seat provenance is fixed: the link is necessarily
+// public, so an unvalidated endpoint is a free-report generator.
 const FORM_ENDPOINT = "";
-// Launch-notify list (same backend as the landing page's ledger list). While
-// checkout is closed, a buyer who typed their email gets remembered — EMAIL
-// ONLY, no league or rival data — instead of being told to come back later.
+// Launch-notify list. While checkout is closed a buyer who typed their email is
+// remembered — EMAIL ONLY, no roster — instead of being told to come back.
 const NOTIFY_LIST_ENDPOINT = "";
-// Product contact address. Deliberately EMPTY: no personal address ships on a
-// public page. Set this to the project's own inbox before launch.
+// Deliberately EMPTY: no personal address ships on a public page.
 const CONTACT_EMAIL = "";
 // Stripe accepts up to 200 chars of [A-Za-z0-9_-] and SILENTLY DROPS anything
-// else while still showing a working payment page — a dropped ref is a payment
-// with no idea who it belongs to. The browser is the only place that failure
-// can be made loud, so it is checked here before we navigate.
-const REF_RE = /^[A-Za-z0-9_-]{1,200}$/;
+// else while still showing a working payment page. The browser is the only
+// place that failure can be made loud, so it is checked before we navigate.
+// Used as R.REF_RE at the call site rather than re-bound here. roster.js is a
+// plain <script>, so its top-level `const` lands in the SAME global lexical
+// scope — declaring the name again is a SyntaxError, and the browser reports it
+// against this file while silently leaving roster.js unloaded. One shared
+// pattern also keeps the check identical to the one the encoder applies.
 
-// Which league season to offer. Defaults to a plausible year but is replaced at
-// load with Sleeper's own answer: a hardcoded season silently shows the wrong
-// year's leagues every September.
-let SEASON = "2026";
-// League Pass seat mode: /join/?pass=<league_id> — the link the commissioner
-// shares. In this mode the buyer picks exactly as normal but never pays.
 const QUERY = new URLSearchParams(location.search);
-const SEAT_FOR_LEAGUE = (QUERY.get("pass") || "").replace(/[^0-9]/g, "");
-// /join/?plan=monthly | ?plan=pass — which card they came from. Anything else
-// is the season pass, so a mangled link can never silently downgrade the sale.
+// ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
+// season pass, so a mangled link can never silently downgrade the sale.
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
 const WANTS_PASS = QUERY.get("plan") === "pass";
-// The plan prefix run/refs.py decodes on Tuesday. A commissioner's "p" ref is
-// BOTH their own signup and the league's coverage — one purchase, two meanings.
-const REF_PREFIX = WANTS_PASS ? "p" : (WANTS_MONTHLY ? "m" : "s");
-const API = "https://api.sleeper.app/v1";
-const USERNAME_RE = /^[A-Za-z0-9_]{1,32}$/;
+const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
 
-const state = { user: null, league: null, myRosterId: null, rival: null,
-                rosters: null, leagueRaw: null };
+const TEMPLATES = {
+  std: ["QB","RB","RB","WR","WR","TE","FLEX","K","DEF"],
+  sf:  ["QB","RB","RB","WR","WR","TE","FLEX","SUPER_FLEX","K","DEF"],
+  nokd:["QB","RB","RB","WR","WR","TE","FLEX"],
+};
 
 const $ = (id) => document.getElementById(id);
-function showError(id, message) { const el = $(id); el.textContent = message; el.style.display = "block"; }
-function clearError(id) { const el = $(id); el.textContent = ""; el.style.display = "none"; }
+const state = { directory: null, matches: [], ready: false };
 
-// Changing an earlier step invalidates everything picked after it — a rival
-// belongs to one league, and must never survive a league change.
-function resetFromLeague() {
-  state.league = null; state.myRosterId = null;
-  $("league-cards").replaceChildren();
-  $("step-league").classList.add("hidden");
-  clearError("err-league");
-  resetFromRival();
+function radio(name) {
+  const picked = document.querySelector(`input[name="${name}"]:checked`);
+  return picked ? picked.value : null;
 }
-function resetFromRival() {
-  state.rival = null;
-  $("rival-cards").replaceChildren();
-  $("step-rival").classList.add("hidden");
-  $("step-scout").classList.add("hidden");
-  $("scout-body").replaceChildren();
-  $("step-email").classList.add("hidden");
-  $("done").style.display = "none";
-  clearError("err-rival");
-  clearError("err-email");
+function template() { return TEMPLATES[radio("template")] || TEMPLATES.std; }
+function showError(id, message) { $(id).textContent = message; }
+
+// Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
+// innerHTML: the roster box is arbitrary typed input and a name is not markup.
+function textCell(className, text) {
+  const node = document.createElement("div");
+  node.className = className;
+  node.textContent = text;
+  return node;
 }
 
-async function getJSON(path) {
-  // A hung request must become a rejection, not a permanent spinner.
-  const res = await fetch(API + path, { signal: AbortSignal.timeout(8000) });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("Sleeper API error " + res.status);
-  return res.json();
-}
+fetch("players.json", { signal: AbortSignal.timeout(15000) })
+  .then((r) => r.json())
+  .then((payload) => { state.directory = R.buildDirectory(payload); })
+  .catch(() => showError("err-roster",
+    "We couldn't load the player list just now — reload and try again."));
 
-// All rendering goes through createElement/textContent — league and team
-// names are other people's data and are never treated as HTML.
-function card(title, subtitle, className, onPick) {
-  const btn = document.createElement("button");
-  btn.className = "cardbtn " + className;
-  btn.type = "button";
-  btn.textContent = title;
-  const small = document.createElement("small");
-  small.textContent = subtitle;
-  btn.appendChild(small);
-  btn.addEventListener("click", onPick);
-  return btn;
-}
-
-// A seat holder is not a buyer — asking them to "continue to checkout" for
-// something already paid for is the fastest way to lose them. A monthly buyer
-// came from a different card and must not see the season price.
-function setHeader(segments, chips) {
-  // segments: strings, or [text] arrays for bold runs — built as nodes so no
-  // stranger-influenced string is ever parsed as HTML.
-  const pitch = $("header-pitch");
-  pitch.replaceChildren();
-  for (const seg of segments) {
-    if (Array.isArray(seg)) {
-      const b = document.createElement("b");
-      b.textContent = seg[0];
-      pitch.appendChild(b);
-    } else {
-      pitch.appendChild(document.createTextNode(seg));
-    }
-  }
-  const wrap = $("header-chips");
-  wrap.replaceChildren();
-  for (const chip of chips) {
-    const el = document.createElement("span");
-    el.textContent = chip;
-    wrap.appendChild(el);
-  }
-}
-
-(function labelTheAsk() {
-  const button = $("submit");
-  if (SEAT_FOR_LEAGUE) {
-    button.textContent = "Claim my seat — already paid";
-    $("renew-note").style.display = "none";
-    setHeader([
-      "Your commissioner already paid for this league, so there's nothing to pay ",
-      "here. Three taps — username, league, rival — and your seat is claimed: you ",
-      "get your ", ["own"], " weekly report, aimed at the rival you pick. All we ",
-      "ever ask for is your Sleeper ", ["username"], " — never a password.",
-    ], ["Seat already paid by your commissioner", "First report Tue Sep 8"]);
-  } else if (WANTS_PASS) {
-    // The commissioner buys for the league AND gets their own report — so they
-    // pick a rival like anyone else. The ref carries both meanings.
-    button.textContent = "Buy the League Pass — $99";
-    setHeader([
-      "Three taps — username, league, rival — and we pull the file on them while ",
-      "you watch. The League Pass is ", ["$99 USD for the season"], " and covers ",
-      "every manager in your league — you pick your own rival like anyone else. ",
-      "Checkout runs on our payment provider's own secure page; all we ever ask ",
-      "for is your Sleeper ", ["username"], " — never a password.",
-    ], ["$99 USD / season · your whole league", "Cancel any time",
-        "First report Tue Sep 8"]);
-    $("renew-note").textContent =
-      "The League Pass is $99 today and renews once a year at $99 unless you " +
-      "cancel — we email you before any renewal, and you can cancel yourself " +
-      "any time from your own account page. Every manager who signs up gets " +
-      "their own report aimed at their own rival, including you.";
-  } else if (WANTS_MONTHLY) {
-    button.textContent = "Continue to checkout — $12.99/mo";
-    setHeader([
-      "Three taps — username, league, rival — and we pull the file on them while ",
-      "you watch. A paid product from day one: ", ["$12.99 USD a month"], ", and it ",
-      "stops billing on its own when the season ends. Checkout runs on our payment ",
-      "provider's own secure page; all we ever ask for is your Sleeper ",
-      ["username"], " — never a password.",
-    ], ["$12.99 USD / month", "Cancel any time", "First report Tue Sep 8"]);
-    // Monthly has different terms from the pass and must say its own, not the
-    // pass's: it recurs monthly, and it stops on its own at season end because
-    // there is no product in February to charge for.
-    $("renew-note").textContent =
-      "Monthly is $12.99 and bills again each month until you cancel — and billing " +
-      "stops on its own when the season ends, because we don't charge for months " +
-      "we don't deliver. Cancel yourself any time from your own account page.";
-  }
-})();
-
-// The landing hero hands its username over as ?u= (GET, nothing stored) so the
-// momentum of typing it carries straight into the league list. Garbage in the
-// param just lands on the same honest error the button produces.
-(function prefillFromHero() {
-  const u = (QUERY.get("u") || "").trim();
-  if (!u || !USERNAME_RE.test(u)) return;
-  $("username").value = u;
-  // Defer one tick so every listener below is bound before the click fires.
-  setTimeout(() => $("find-user").click(), 0);
-})();
-
-// Ask Sleeper what season it is rather than trusting a constant that goes stale
-// every September. A failure here is not fatal — the default stands — but a
-// wrong year would show someone an empty league list and read as "we're broken".
-(async function initSeason() {
-  try {
-    const state = await getJSON("/state/nfl");
-    const season = state && (state.league_season || state.season);
-    if (/^\d{4}$/.test(String(season))) SEASON = String(season);
-  } catch (err) { /* keep the default */ }
-})();
-
-// Enter (and the mobile keyboard's Go) must work in both single-input steps.
-// Routed explicitly instead of trusting implicit submission: the keydown
-// handler intercepts Enter and clicks the button itself, so behavior is
-// identical in every browser. The submit handler catches whatever arrives as
-// a form submission anyway — but never re-clicks a button whose own click
-// produced the submission (e.submitter), which would run the handler twice.
-function wireEnter(formId, buttonId) {
-  const form = $(formId), btn = $(buttonId);
-  form.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.target.tagName !== "INPUT") return;
-    e.preventDefault();
-    if (!btn.disabled) btn.click();
-  });
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (e.submitter !== btn && !btn.disabled) btn.click();
-  });
-}
-wireEnter("form-user", "find-user");
-wireEnter("form-email", "submit");
-$("find-user").addEventListener("click", async () => {
-  clearError("err-user");
-  resetFromLeague();
-  const username = $("username").value.trim();
-  if (!USERNAME_RE.test(username)) {
-    showError("err-user", "That doesn't look like a Sleeper username (letters, numbers, underscores).");
+$("resolve").addEventListener("click", () => {
+  showError("err-roster", "");
+  if (!state.directory) {
+    showError("err-roster", "Still loading the player list — one moment.");
     return;
   }
-  $("find-user").disabled = true;
-  try {
-    const user = await getJSON("/user/" + username);
-    if (!user || !user.user_id) {
-      showError("err-user", "No Sleeper account with that username — check the spelling.");
-      return;
-    }
-    state.user = { user_id: String(user.user_id), username: user.display_name || username };
-    const leagues = await getJSON("/user/" + state.user.user_id + "/leagues/nfl/" + SEASON) || [];
-    const cards = $("league-cards");
-    cards.replaceChildren();
-    if (!leagues.length) {
-      showError("err-user", "That account has no " + SEASON + " NFL leagues yet.");
-      return;
-    }
-    for (const league of leagues) {
-      const teams = league.total_rosters ? league.total_rosters + " teams" : "league";
-      cards.appendChild(card(String(league.name || "Unnamed league"), teams, "", () => pickLeague(league)));
-    }
-    $("step-league").classList.remove("hidden");
-    $("step-league").scrollIntoView({ behavior: "smooth" });
-  } catch (err) {
-    showError("err-user", "Couldn't reach Sleeper — try again in a moment.");
-  } finally {
-    $("find-user").disabled = false;
-  }
+  state.matches = R.resolveAll(state.directory, $("roster-text").value);
+  draw();
 });
 
-async function pickLeague(league) {
-  clearError("err-league");
-  resetFromRival();
-  try {
-    const leagueId = String(league.league_id);
-    const [users, rosters] = await Promise.all([
-      getJSON("/league/" + leagueId + "/users"),
-      getJSON("/league/" + leagueId + "/rosters"),
-    ]);
-    const usersById = new Map((users || []).map(u => [String(u.user_id), u]));
-    const mine = (rosters || []).find(r =>
-      String(r.owner_id) === state.user.user_id ||
-      (r.co_owners || []).map(String).includes(state.user.user_id));
-    if (!mine) {
-      showError("err-league", "You don't own a roster in that league — pick another.");
-      return;
-    }
-    state.league = { league_id: leagueId, name: String(league.name || "") };
-    if (WANTS_PASS) {
-      // The URL is built here but NOT shown yet — see showSeatLink(). Rendered
-      // at this step it was a shareable link two steps before checkout, so a
-      // commissioner could paste it in the group chat and then abandon the
-      // payment, leaving eleven managers each told their seat was claimed
-      // while every claim is dropped for want of a pass covering the league.
-      state.seatUrl = location.href.split(/[?#]/)[0] + "?pass=" + leagueId;
-    }
-    state.myRosterId = mine.roster_id;
-    state.rosters = rosters || [];
-    state.leagueRaw = league;
-    const cards = $("rival-cards");
-    cards.replaceChildren();
-    for (const roster of rosters) {
-      if (roster.roster_id === mine.roster_id) continue;
-      const owner = usersById.get(String(roster.owner_id));
-      const teamName = (owner && owner.metadata && owner.metadata.team_name) ||
-                       (owner && owner.display_name) || "(unclaimed team)";
-      const ownerName = (owner && owner.display_name) || "no owner";
-      cards.appendChild(card(String(teamName), "managed by " + ownerName, "rival", () => {
-        state.rival = {
-          roster_id: roster.roster_id,
-          owner_id: roster.owner_id ? String(roster.owner_id) : null,
-          label: String(teamName),
-        };
-        clearError("err-rival");
-        scoutRival();
-      }));
-    }
-    $("step-rival").classList.remove("hidden");
-    $("step-rival").scrollIntoView({ behavior: "smooth" });
-  } catch (err) {
-    showError("err-league", "Couldn't load that league — try again.");
-  }
-}
+function draw() {
+  const list = $("rows");
+  list.replaceChildren();
+  if (!state.matches.length) { $("tally").textContent = ""; return; }
+  const wrap = document.createElement("div");
+  wrap.className = "rows";
 
-// One real number about THEIR rival, computed live from the public league
-// record, at the moment curiosity peaks. Everything shown here is Sleeper's
-// own season accounting — nothing is modelled, projected, or invented, and
-// every figure names the season it came from.
-let scoutGen = 0;   // rapid re-picks: only the newest run may draw
-
-async function scoutRival() {
-  // Snapshot the selection: everything below must describe the rival that was
-  // tapped, even if a newer tap lands mid-fetch.
-  const gen = ++scoutGen;
-  const rival = state.rival;
-  const leagueRaw = state.leagueRaw;
-  const rosters = state.rosters;
-
-  const body = $("scout-body");
-  body.replaceChildren();
-  $("step-scout").classList.remove("hidden");
-  $("step-scout").scrollIntoView({ behavior: "smooth" });
-
-  const el = (tag, cls, text) => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text !== undefined) n.textContent = text;   // never innerHTML
-    return n;
-  };
-
-  // The scout is a bonus, not a gate: signing up stays reachable the moment a
-  // rival is picked, and the box says what it is doing while it reads.
-  $("step-email").classList.remove("hidden");
-  body.appendChild(el("p", "kicker",
-    "Reading " + rival.label + "'s record from your league's public history…"));
-
-  let roster = (rosters || []).find(r => r.roster_id === rival.roster_id);
-  let s = roster && roster.settings ? roster.settings : null;
-  // The season label MUST come from the league we actually read, never from the
-  // page's default — mislabelling which year a number is from is fabrication,
-  // even when the number itself is right.
-  let season = String((leagueRaw && leagueRaw.season) || SEASON);
-  const games = (x) => ((x && x.wins) || 0) + ((x && x.losses) || 0) + ((x && x.ties) || 0);
-  let unread = false;   // we tried to read prior seasons and came back empty-handed
-
-  // Preseason: this year's record is empty, so scout them from the season
-  // that actually happened, matched by OWNER (roster ids move between years).
-  if (games(s) === 0 && leagueRaw && leagueRaw.previous_league_id) {
-    if (!rival.owner_id) {
-      unread = true;                        // orphan team: nothing to match on
+  const seen = new Map();
+  state.matches.forEach((match, index) => {
+    const row = document.createElement("div");
+    row.className = "row" + (match.player ? "" : " bad");
+    const left = document.createElement("div");
+    if (match.player) {
+      left.appendChild(textCell("who", match.player.name));
+      const bits = [match.player.position, match.player.team].filter(Boolean);
+      left.appendChild(textCell("meta", bits.join(" · ")));
+      // A twin is shown INLINE on a resolved row, not as an error: Bijan and
+      // Brian Robinson are the same position on the same team, which is the one
+      // pair a confirm row cannot separate on sight.
+      (match.twins || []).forEach((twin) => {
+        left.appendChild(textCell("twin", "not " + twin.name + "? tap to swap"));
+      });
+      const duplicate = seen.get(match.player.id);
+      if (duplicate !== undefined) {
+        row.className = "row bad";
+        left.appendChild(textCell("why",
+          "you already listed this player on line " + (duplicate + 1)));
+      } else {
+        seen.set(match.player.id, index);
+      }
     } else {
-      try {
-        const prevId = String(leagueRaw.previous_league_id);
-        const [prevLeague, prevRosters] = await Promise.all([
-          getJSON("/league/" + prevId),
-          getJSON("/league/" + prevId + "/rosters"),
-        ]);
-        const oid = rival.owner_id;
-        const prev = (prevRosters || []).find(r =>
-          String(r.owner_id) === oid || (r.co_owners || []).map(String).includes(oid));
-        if (prev && games(prev.settings) > 0) {
-          s = prev.settings;
-          season = (prevLeague && prevLeague.season) ? String(prevLeague.season) : "last season";
-        } else {
-          unread = true;                    // no record for this manager back there
-        }
-      } catch (err) { unread = true; }      // Sleeper down: unknown, NOT absent
+      // Shown back verbatim — never dropped.
+      left.appendChild(textCell("who", match.typed));
+      left.appendChild(textCell("why", match.reason === "ambiguous"
+        ? "more than one player goes by that name — pick one"
+        : "we don't have anybody by that name"));
     }
-  }
+    row.appendChild(left);
 
-  if (gen !== scoutGen) return;             // a newer pick won this race
-  body.replaceChildren();
-  body.appendChild(el("div", "lead", rival.label + " — from your league's own record"));
+    const fix = document.createElement("div");
+    fix.className = "fix";
+    const options = match.player ? (match.twins || []) : match.candidates;
+    options.forEach((option) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = option.name + " (" + option.position +
+        (option.team ? " " + option.team : "") + ")";
+      button.addEventListener("click", () => {
+        state.matches[index] = { typed: match.typed, player: option,
+                                 candidates: [], twins: [] };
+        draw();
+      });
+      fix.appendChild(button);
+    });
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "drop";
+    drop.textContent = "remove";
+    drop.addEventListener("click", () => {
+      state.matches.splice(index, 1);
+      draw();
+    });
+    fix.appendChild(drop);
+    row.appendChild(fix);
+    wrap.appendChild(row);
+  });
+  list.appendChild(wrap);
 
-  if (games(s) === 0) {
-    body.appendChild(el("p", "kicker", unread
-      ? "We couldn't read this league's earlier seasons for " + rival.label + " just now — " +
-        "either Sleeper didn't answer or this manager has no record in them. We'd rather " +
-        "say that than fake a stat. Their file opens in Week 1 either way."
-      : "No games on this league's record yet — nothing to scout, and we would " +
-        "rather show you nothing than invent something. Their file " +
-        "opens in Week 1: every start they get wrong, every point left on their bench, " +
-        "straight from the league record you can already see."));
-    return;
+  const slots = template();
+  const ids = state.matches.filter((m) => m.player).map((m) => m.player.id);
+  const unresolved = state.matches.length - ids.length;
+  const duplicated = ids.length - new Set(ids).size;
+  const tally = $("tally");
+  let problem = "";
+  if (unresolved) {
+    problem = unresolved + (unresolved === 1 ? " line we couldn't read" :
+      " lines we couldn't read") + " — fix or remove them to continue.";
+  } else if (duplicated) {
+    problem = "The same player is listed twice — remove one.";
+  } else if (ids.length < slots.length) {
+    problem = "Your lineup has " + slots.length + " starting spots and you've " +
+      "listed " + ids.length + " players. Add the rest.";
   }
-
-  const fpts = (s.fpts || 0) + (s.fpts_decimal || 0) / 100;
-  const ppts = (s.ppts || 0) + (s.ppts_decimal || 0) / 100;
-  const bench = ppts - fpts;
-
-  if (ppts > 0 && bench > 0) {
-    const big = el("div", "big", bench.toFixed(1));
-    big.appendChild(el("small", null, "points they left on their bench in " + season));
-    body.appendChild(big);
-  }
-
-  const facts = el("ul");
-  const record = (s.wins || 0) + "-" + (s.losses || 0) + (s.ties ? "-" + s.ties : "");
-  facts.appendChild(el("li", null, "Record in " + season + ": " + record));
-  if (ppts > 0) {
-    facts.appendChild(el("li", null,
-      "Scored " + fpts.toFixed(1) + " of a possible " + ppts.toFixed(1) + " points"));
-  }
-  if (s.waiver_budget_used) {
-    facts.appendChild(el("li", null, "FAAB spent chasing waivers: " + s.waiver_budget_used));
-  }
-  if (s.total_moves) {
-    facts.appendChild(el("li", null, "Roster moves made: " + s.total_moves));
-  }
-  body.appendChild(facts);
-
-  body.appendChild(el("p", "cite",
-    "Season totals straight from your league's record on Sleeper — their roster's " +
-    "potential points minus what they actually started. We did not model or estimate " +
-    "any of it, and we only ever read what every member of your league can already see."));
-  body.appendChild(el("p", "kicker",
-    "That took three seconds. The Tuesday report does this every week, live: which of " +
-    "their starters may not play, where their own bench beats their lineup, and the one " +
-    "call you would have regretted."));
+  state.ready = !problem;
+  tally.className = "tally" + (problem ? " bad" : "");
+  tally.textContent = problem ||
+    (ids.length + " players read, " + slots.length + " starting spots. Looks right.");
+  $("step-email").classList.toggle("hidden", !state.ready);
 }
 
-$("submit").addEventListener("click", async () => {
-  clearError("err-email");
+function wireEnter(formId, buttonId) {
+  const form = $(formId), btn = $(buttonId);
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (e.submitter !== btn) btn.click();
+  });
+}
+wireEnter("form-roster", "resolve");
+
+$("form-email").addEventListener("submit", (event) => {
+  event.preventDefault();
+  showError("err-email", "");
   const email = $("email").value.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     showError("err-email", "That email doesn't look right.");
     return;
   }
-  if (!state.user || !state.league || !state.rival) {
-    showError("err-email", "Finish steps 1-3 first.");
+  if (!state.ready) {
+    showError("err-email", "Check your roster above first.");
     return;
   }
-  // The whole signup, in one 200-char-safe string that rides into the payment.
-  // Sleeper ids are digits and our own prefixes are letters, so the result is
-  // inside Stripe's [A-Za-z0-9_-] set by construction — but it is asserted
-  // below rather than assumed, because Stripe drops a bad one silently.
-  const ref = REF_PREFIX + "-" + state.user.user_id + "-" + state.league.league_id +
-    "-" + (state.rival.owner_id ? state.rival.owner_id : "r" + state.rival.roster_id);
-
-  // The success panel is static HTML; only the rival name is injected, and
-  // only ever via textContent.
-  function showSuccess(headline) {
-    $("success-rival").textContent = state.rival.label;
-    $("done-head").textContent = headline;
-    const done = $("done");
-    done.style.display = "block";
-    done.scrollIntoView({ behavior: "smooth", block: "center" });
+  const ids = state.matches.map((m) => m.player.id);
+  let ref;
+  try {
+    ref = R.encodeRoster(
+      WANTS_PASS ? "league_pass" : (WANTS_MONTHLY ? "monthly" : "season"),
+      radio("scoring"), template(), ids);
+  } catch (err) {
+    showError("err-email", "Something went wrong reading your roster — reload " +
+      "and try again.");
+    return;
   }
-
-  function showSeatLink() {
-    const share = $("seat-share");
-    share.replaceChildren();
-    share.appendChild(document.createTextNode(
-      "Once your payment goes through, the pass covers every manager in " +
-      (state.league.name || "this league") + ". Send them this link then — each " +
-      "picks their own rival and claims their own seat, nothing to pay. Seats " +
-      "only work after the pass is paid for: "));
-    const code = document.createElement("b");
-    code.textContent = state.seatUrl;
-    share.appendChild(code);
-    share.style.display = "block";
-  }
-
-  // --- League Pass seat: the commissioner already paid, so there is no
-  // checkout to carry these picks. This is the only path that needs a form.
-  if (SEAT_FOR_LEAGUE) {
-    if (state.league.league_id !== SEAT_FOR_LEAGUE) {
-      showError("err-email",
-        "That pass covers a different league. Pick the league your commissioner " +
-        "bought the pass for, or ask them to re-send their link.");
-      return;
-    }
-    if (!FORM_ENDPOINT) {
-      showError("err-email",
-        "Seat signups aren't open just yet — we're finishing setup. Your picks " +
-        "aren't saved, so please come back and run this again in a day or two.");
-      return;
-    }
-    try {
-      const res = await fetch(FORM_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email,
-          sleeper_username: state.user.username,
-          user_id: state.user.user_id,
-          league_id: state.league.league_id,
-          rival_owner_id: state.rival.owner_id,
-          rival_roster_id: state.rival.roster_id,
-          plan: "league_pass",
-          added_at: new Date().toISOString().slice(0, 10),
-        }),
-      });
-      if (!res.ok) throw new Error("form backend " + res.status);
-    } catch (err) {
-      showError("err-email",
-        "That didn't save — please try once more. If it keeps failing, your " +
-        "commissioner can pass your Sleeper username along instead.");
-      return;
-    }
-    $("seat-note").style.display = "list-item";
-    $("pay-note").style.display = "none";
-    $("renew-note").style.display = "none";
-    showSuccess("Your seat request is in.");
+  if (!R.REF_RE.test(ref)) {
+    showError("err-email", "Something went wrong reading your roster — reload " +
+      "and try again.");
     return;
   }
 
-  // --- Individual buyer: straight to checkout, picks attached.
+  // A SEAT IS NOT A PAYMENT. Falling through to the season link would have
+  // charged $39 to somebody whose button reads "already paid".
+  if (SEAT_MODE) {
+    submitSeat(email, ref);
+    return;
+  }
+
   const link = WANTS_PASS ? STRIPE_LINK_PASS
              : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
   if (!link) {
-    // Nothing is stored anywhere yet, so saying "reserved" would be a lie —
-    // but the email they just typed is real intent, and with a list backend
-    // configured it is kept (email only, clearly told) instead of discarded.
+    // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
+    // The email they typed is real intent, and with a list backend configured it
+    // is kept — EMAIL ONLY, and they are told exactly that.
     if (NOTIFY_LIST_ENDPOINT) {
-      try {
-        await fetch(NOTIFY_LIST_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email, list: "launch-notify" }),
-        });
-        showError("err-email",
-          "Checkout isn't open just yet — we're finishing setup. Your picks aren't " +
-          "saved (redoing them takes sixty seconds), but we kept your email: " +
-          "you'll get the link the morning checkout opens.");
-        return;
-      } catch (err) { /* fall through to the honest message */ }
+      fetch(NOTIFY_LIST_ENDPOINT, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, list: "launch-notify" }),
+        signal: AbortSignal.timeout(15000),
+      }).then(() => {
+        showError("err-email", "Checkout isn't open just yet — we're finishing " +
+          "setup. Your roster isn't saved (redoing it takes a minute), but we " +
+          "kept your email: you'll get the link the morning checkout opens.");
+      }).catch(() => {
+        showError("err-email", "Checkout isn't open just yet — we're finishing " +
+          "setup. Your roster isn't saved, so please come back in a day or two.");
+      });
+      return;
     }
-    showError("err-email",
-      "Checkout isn't open just yet — we're finishing setup. Your picks aren't " +
-      "saved, so please come back and run this again in a day or two.");
+    showError("err-email", "Checkout isn't open just yet — we're finishing " +
+      "setup. Your roster isn't saved, so please come back in a day or two.");
     return;
   }
-  if (!REF_RE.test(ref)) {
-    // Should be unreachable; if it ever fires, stopping here is much better
-    // than taking someone's money with no idea which team it was for.
-    showError("err-email",
-      "Something went wrong reading your league — please reload and try again.");
-    return;
-  }
-  // The seat link appears only now, on the way to Stripe. Still not proof of
-  // payment — nothing in a static page can be — but it is no longer handed out
-  // two steps before the commissioner has even seen a card form, and the
-  // wording says the seats depend on the payment going through.
-  if (WANTS_PASS && state.seatUrl) showSeatLink();
+  if (WANTS_PASS) showSeatLink();
   window.location.assign(
-    link +
-    (link.indexOf("?") === -1 ? "?" : "&") +
+    link + (link.indexOf("?") === -1 ? "?" : "&") +
     "client_reference_id=" + encodeURIComponent(ref) +
     "&locked_prefilled_email=" + encodeURIComponent(email));
 });
+
+function submitSeat(email, ref) {
+  // A seat naming no payer is an unpaid report waiting to be sent, so the
+  // commissioner's address is required before anything is posted.
+  const payer = $("pass-email").value.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payer)) {
+    showError("err-email", "We need your commissioner's email — the address they " +
+      "bought the League Pass with.");
+    return;
+  }
+  if (payer.toLowerCase() === email.toLowerCase()) {
+    showError("err-email", "That's your own address. We need the one your " +
+      "commissioner paid with.");
+    return;
+  }
+  if (!FORM_ENDPOINT) {
+    showError("err-email", "Seats aren't open just yet — we're finishing setup. " +
+      "Your roster isn't saved, so please come back in a day or two.");
+    return;
+  }
+  fetch(FORM_ENDPOINT, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email, covered_by: payer, ref: ref }),
+    signal: AbortSignal.timeout(15000),
+  }).then(() => {
+    // Claimed, not granted: the seat is honoured only if a pass really covers
+    // it, and that is checked on Tuesday, not here.
+    $("form-email").style.display = "none";
+    $("done-head").textContent = "Your seat request is in.";
+  }).catch(() => {
+    showError("err-email", "That didn't send — check your connection and try " +
+      "again. Nothing was saved.");
+  });
+}
+
+function showSeatLink() {
+  // Only on the way to Stripe. Rendered earlier it is a shareable link before
+  // any payment, so an abandoned checkout leaves a league of people each told
+  // their seat is claimed while every claim is dropped on Tuesday.
+  const share = $("seat-share");
+  share.replaceChildren();
+  share.appendChild(document.createTextNode(
+    "Once your payment goes through, the pass covers every manager in your " +
+    "league. Send them this link then — each enters their own roster and " +
+    "claims their own seat, nothing to pay. They'll be asked for the email you " +
+    "pay with, so send them that too. Seats only work after the pass is paid " +
+    "for: "));
+  const code = document.createElement("b");
+  code.textContent = location.href.split(/[?#]/)[0] + "?pass=1";
+  share.appendChild(code);
+  share.style.display = "block";
+}
+
+if (SEAT_MODE) {
+  $("header-pitch").textContent =
+    "Seat already paid by your commissioner. Enter your own roster and you get " +
+    "your own report — not a copy of theirs. Nothing to pay.";
+  $("header-chips").replaceChildren();
+  ["Seat already paid by your commissioner", "Your own report",
+   "First report Tue Sep 8"].forEach((text) => {
+    const chip = document.createElement("span");
+    chip.textContent = text;
+    $("header-chips").appendChild(chip);
+  });
+  $("submit").textContent = "Claim my seat — already paid";
+  $("pass-field").style.display = "block";
+  $("seat-note").style.display = "list-item";
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+} else if (WANTS_MONTHLY) {
+  $("submit").textContent = "Continue to checkout — $12.99/mo";
+  $("header-chips").replaceChildren();
+  ["$12.99 USD / month", "Cancel any time", "First report Tue Sep 8"]
+    .forEach((text) => {
+      const chip = document.createElement("span");
+      chip.textContent = text;
+      $("header-chips").appendChild(chip);
+    });
+  $("renew-note").textContent = "Monthly is $12.99 and bills again each month " +
+    "until you cancel — and billing stops at the end of the season by itself, " +
+    "because there's no product in the offseason. Cancel yourself any time.";
+} else if (WANTS_PASS) {
+  $("submit").textContent = "Buy the League Pass — $99";
+}
 </script>
 </body>
 </html>

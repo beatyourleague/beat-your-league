@@ -17,6 +17,7 @@ import pytest
 SITE = Path(__file__).resolve().parent.parent / "site"
 LANDING = (SITE / "index.html").read_text(encoding="utf-8")
 JOIN = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+ROSTER_JS = (SITE / "join" / "roster.js").read_text(encoding="utf-8")
 LEDGER = (SITE / "ledger" / "index.html").read_text(encoding="utf-8")
 
 
@@ -145,20 +146,6 @@ def test_price_appears_only_at_decision_points_and_renewal_terms() -> None:
 # honesty of the live scouting demo
 # --------------------------------------------------------------------- #
 
-def test_scout_screen_labels_its_source_and_season() -> None:
-    """A number shown to a buyer must name where and when it came from."""
-    assert "scoutRival" in JOIN
-    assert re.search(r"leagueRaw && leagueRaw\.season", JOIN), \
-        "season label must come from the league actually read, not the page default"
-    assert not re.search(r"let season = String\(SEASON\)", JOIN), \
-        "season must never default to the page constant when data was read"
-    assert re.search(r"straight from your league's record on Sleeper", JOIN_PROSE, re.I)
-    assert re.search(r"did not model or estimate", JOIN_PROSE, re.I)
-
-
-def test_scout_screen_has_an_honest_empty_state() -> None:
-    assert re.search(r"nothing to scout", JOIN_PROSE, re.I)
-    assert re.search(r"rather show you nothing than invent", JOIN_PROSE, re.I)
 
 
 def test_scout_renders_untrusted_names_as_text_only() -> None:
@@ -207,9 +194,11 @@ def test_the_checkout_url_carries_the_signup() -> None:
 def test_the_reference_is_validated_before_we_take_money() -> None:
     """Stripe silently drops an invalid client_reference_id and still shows a
     working payment page, so the browser is the only place this can be loud."""
-    assert re.search(r"const REF_RE = /\^\[A-Za-z0-9_-\]\{1,200\}\$/", JOIN), \
+    # The pattern lives in roster.js and is used by BOTH the encoder and this
+    # check, so they cannot drift into disagreeing about what Stripe accepts.
+    assert re.search(r"const REF_RE = /\^\[A-Za-z0-9_-\]\{1,200\}\$/", ROSTER_JS), \
         "the ref must be checked against Stripe's documented charset and length"
-    assert re.search(r"if \(!REF_RE\.test\(ref\)\)", JOIN), \
+    assert re.search(r"if \(!R\.REF_RE\.test\(ref\)\)", JOIN), \
         "the ref must be tested before navigating to checkout"
 
 
@@ -217,11 +206,20 @@ def test_an_individual_signup_is_never_posted_anywhere() -> None:
     """Individual buyers go browser -> Stripe. Only League Pass seats (who have
     no payment to ride) touch a form backend, so a vendor outage costs seats,
     never sales."""
-    handler = JOIN.split('$("submit").addEventListener')[1]
-    seat_branch, individual_branch = handler.split("--- Individual buyer")
-    assert "FORM_ENDPOINT" not in individual_branch, \
+    handler = JOIN.split('$("form-email").addEventListener')[1].split(
+        "function submitSeat")[0]
+    assert "FORM_ENDPOINT" not in handler, \
         "the individual checkout path must not depend on a form backend"
-    assert "FORM_ENDPOINT" in seat_branch
+    assert "window.location.assign" in handler, "the slice missed the redirect"
+    # The one place the form backend IS reached is seats, and a seat must never
+    # fall through to a payment link: the button says "already paid".
+    seat = JOIN.split("function submitSeat")[1].split("function showSeatLink")[0]
+    assert "FORM_ENDPOINT" in seat
+    assert "STRIPE_LINK" not in seat, "a seat holder was routed to checkout"
+    assert "if (SEAT_MODE) {\n    submitSeat(" in handler, \
+        "seat mode must leave the payment path before it picks a link"
+    assert 'const FORM_ENDPOINT = ""' in JOIN, \
+        "PLAN §0: the seat endpoint stays empty until seat provenance is fixed"
 
 
 def test_no_payment_details_are_collected_by_us() -> None:
@@ -234,8 +232,10 @@ def test_no_payment_details_are_collected_by_us() -> None:
 
 def test_join_collects_only_the_stated_minimum() -> None:
     inputs = re.findall(r'<input[^>]*type="([a-z]+)"', JOIN)
-    assert set(inputs) <= {"text", "email"}, f"unexpected input types: {inputs}"
-    assert re.search(r"never a password", JOIN, re.I)
+    assert set(inputs) <= {"text", "email", "radio"}, \
+        f"unexpected input types: {inputs}"
+    assert re.search(r"never ask for a password", JOIN_PROSE, re.I)
+    assert re.search(r"never connect to your league", JOIN_PROSE, re.I)
 
 
 def test_pass_states_its_renewal_terms() -> None:
@@ -260,21 +260,11 @@ def test_nothing_is_claimed_saved_when_nothing_recorded_it() -> None:
     goes nowhere — so the page must say the picks are NOT saved, rather than
     congratulating someone on a reservation that does not exist."""
     assert 'id="done-head"' in JOIN
-    assert re.search(r"your picks aren't saved", JOIN_PROSE, re.I), \
-        "the not-open path must admit the picks were not stored"
+    assert re.search(r"your roster isn't saved", JOIN_PROSE, re.I), \
+        "the not-open path must admit the roster was not stored"
     assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
 
 
-def test_scout_has_an_in_flight_guard() -> None:
-    """Rapid re-picks must not render stale data under the new rival's name."""
-    assert "scoutGen" in JOIN
-    assert re.search(r"if \(gen !== scoutGen\) return;", JOIN)
-
-
-def test_scout_distinguishes_unread_history_from_no_history() -> None:
-    """A failed lookup must never be rendered as an absence of games."""
-    assert "unread" in JOIN
-    assert re.search(r"couldn't read this league's earlier seasons", JOIN_PROSE, re.I)
 
 
 def test_network_calls_have_a_timeout() -> None:
@@ -675,17 +665,6 @@ def test_the_backtest_generator_refuses_to_drop_a_figure() -> None:
 # the funnel asks and the artifacts recruit
 # --------------------------------------------------------------------- #
 
-def test_hero_form_hands_the_username_to_the_picker() -> None:
-    """The hero IS the product: type a username, land in the picker with your
-    leagues already loading. GET only — nothing is stored from the landing."""
-    assert re.search(r'<form class="hero-scout" action="join/index.html" method="get">',
-                     LANDING)
-    assert re.search(r'name="u"', LANDING)
-    assert 'prefillFromHero' in JOIN
-    # The param is validated against the same rule as the typed field, so
-    # garbage in the URL lands on the picker's honest error, not a crash.
-    assert re.search(r'USERNAME_RE\.test\(u\)', JOIN)
-
 
 def test_every_proof_page_ends_with_an_ask() -> None:
     """The sample report, backtest and ledger are the highest-intent surfaces
@@ -721,14 +700,15 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     """The closed-checkout capture keeps the email ONLY, on the ledger-list
     backend. The seat form endpoint must stay reserved for League Pass seats —
     an individual signup posted there would bypass the payment architecture."""
-    handler = JOIN.split('$("submit").addEventListener')[1]
-    closed = handler.split("if (!link) {")[1].split("if (!REF_RE.test(ref))")[0]
+    handler = JOIN.split('$("form-email").addEventListener')[1]
+    closed = handler.split("if (!link) {")[1].split("if (WANTS_PASS)")[0]
     assert "NOTIFY_LIST_ENDPOINT" in closed
     assert "FORM_ENDPOINT" not in closed
     assert "league_id" not in closed, "launch-notify must carry the email only"
     # The honest-refusal phrases survive in both outcomes.
-    assert closed.count("isn't open just yet") == 2
-    assert closed.count("aren't") == 2
+    assert closed.count("isn't open just yet") == 3, \
+        "every not-open outcome must say so"
+    assert closed.count("isn't saved") == 3
 
 
 def test_backtest_page_carries_no_internal_register() -> None:
@@ -776,12 +756,15 @@ def test_picker_inputs_live_in_real_forms() -> None:
     """Enter (and the mobile keyboard's Go) must submit the username and email
     steps — dead Enter keys read as a broken page. The forms never POST
     anywhere themselves; submit is prevented and routed to the buttons."""
-    for form_id, button_id in (("form-user", "find-user"), ("form-email", "submit")):
+    for form_id, button_id in (("form-roster", "resolve"),):
         assert f'<form id="{form_id}"' in JOIN, f"missing {form_id}"
         assert f'wireEnter("{form_id}", "{button_id}")' in JOIN
     # The router must prevent the default submission (no reload) and never
     # re-click a button whose own click produced the submission (no double run).
     assert "e.preventDefault();" in JOIN and "e.submitter !== btn" in JOIN
+    # The email form is its own handler — submitting IS the action there —
+    # but it must still prevent the reload.
+    assert '$("form-email").addEventListener("submit"' in JOIN
 
 
 def test_seat_and_pass_modes_rewrite_the_ask() -> None:
@@ -796,7 +779,7 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     # The commissioner's shareable seat link exists only pre-checkout (Stripe
     # confirmation messages are static per link and cannot carry a league id).
     assert 'id="seat-share"' in JOIN
-    assert '"?pass=" + leagueId' in JOIN
+    assert '"?pass=1"' in JOIN
 
 
 def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
@@ -916,17 +899,23 @@ def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
     dropped on Tuesday for want of a pass covering that league, visible only in
     a CI log. It is revealed on the way to Stripe, and the seat holder is told
     what actually happened rather than that they are entitled."""
-    pick = JOIN.split("async function pickLeague")[1].split("async function")[0]
-    assert "state.seatUrl" in pick, "the slice missed pickLeague"
+    # The roster step is where a commissioner would be tempted to reveal it,
+    # so that is what must stay clean.
+    pick = JOIN.split("function draw()")[1].split("\n$(")[0]
+    assert "showSeatLink" not in pick, \
+        "the seat link is shown before the commissioner reaches checkout"
     # Comment lines stripped: this function's comment explains where the link
     # IS revealed, and matching that would pass a broken page as fixed.
     code = "\n".join(line for line in pick.splitlines()
                      if not line.lstrip().startswith("//"))
     assert "showSeatLink" not in code, \
         "the seat link is shown before the commissioner reaches checkout"
-    assert "state.seatUrl" in JOIN and "showSeatLink()" in JOIN
-    # It is revealed immediately before the redirect to the payment link.
-    tail = JOIN.split("showSeatLink()")[-1][:600]
+    # It is revealed immediately before the redirect to the payment link, and
+    # nowhere else: exactly one call site, and the next statement navigates.
+    calls = [line for line in JOIN.splitlines()
+             if "showSeatLink()" in line and "function" not in line]
+    assert len(calls) == 1, f"showSeatLink is called {len(calls)} times"
+    tail = JOIN.split(calls[0])[1][:300]
     assert "window.location.assign" in tail, \
         "the seat link is no longer tied to the checkout redirect"
     # And no page copy claims an unpaid seat is already entitled.

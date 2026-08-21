@@ -86,30 +86,31 @@ def test_encode_refuses_to_build_something_stripe_would_drop() -> None:
         encode(SEASON, USER, LEAGUE)          # no rival at all
 
 
-def test_the_browser_and_python_agree_on_the_format() -> None:
-    """The picker builds this string in JavaScript and we decode it in Python;
-    nothing type-checks across that gap, so pin it with the real page."""
+def test_the_page_builds_its_ref_through_the_tested_twin() -> None:
+    """The v1 Sleeper ref is no longer built in a browser — the page collects a
+    roster and encodes it with roster.js, whose agreement with run/refs.py is
+    enforced by RUNNING both (tests/test_intake.py) rather than by pinning source
+    text. What still has to hold here is that the page reaches that twin instead
+    of hand-assembling a reference: a string built inline is a contract with
+    nothing on the other side of it, and the failure is a paid signup Tuesday
+    cannot decode."""
     join = (Path(__file__).resolve().parent.parent / "site" / "join" /
             "index.html").read_text(encoding="utf-8")
-    assert 'REF_PREFIX + "-" + state.user.user_id + "-" + state.league.league_id +' in join
-    assert '"-" + (state.rival.owner_id ? state.rival.owner_id : "r" + state.rival.roster_id)' in join
-    for prefix in ('WANTS_PASS ? "p"', '(WANTS_MONTHLY ? "m" : "s")'):
-        assert prefix in join, f"picker lost the {prefix} plan prefix"
+    assert "R.encodeRoster(" in join, "the page no longer uses the tested encoder"
+    assert 'client_reference_id=" + encodeURIComponent(ref)' in join
+    # No second, hand-rolled reference anywhere on the page.
+    assert "REF_PREFIX + " not in join, "the page assembles a ref by hand"
 
-    # Pinning only the JavaScript leaves the gap open from the other side: if
-    # Python's prefix map changed, the browser would keep emitting refs the
-    # Tuesday run could no longer decode, and every test would still pass. So
-    # extract the prefixes the PAGE actually emits and decode them for real.
+    # And the plans the page can emit are exactly the plans Python decodes —
+    # pinning one side alone leaves the other free to drift silently.
     import re as _re
     from run import refs
-    emitted = set(_re.findall(r'WANTS_PASS \? "(\w)" : \(WANTS_MONTHLY \? "(\w)" : "(\w)"\)',
-                              join)[0])
-    assert emitted == set(refs._PREFIX_TO_PLAN), (
-        f"the picker emits prefixes {sorted(emitted)} but run/refs.py decodes "
-        f"{sorted(refs._PREFIX_TO_PLAN)} — a buyer would pay and be undecodable")
-    for prefix in emitted:
-        ref = f"{prefix}-{USER}-{LEAGUE}-{RIVAL}"
-        assert decode(ref).user_id == USER, f"python cannot decode a {prefix!r} ref"
+    emitted = set(_re.findall(
+        r'WANTS_PASS \? "(\w+)" : \(WANTS_MONTHLY \? "(\w+)" : "(\w+)"\),',
+        join)[0])
+    assert emitted == set(refs._PLAN_TO_PREFIX), (
+        f"the page emits plans {sorted(emitted)} but run/refs.py knows "
+        f"{sorted(refs._PLAN_TO_PREFIX)} — a buyer would pay and be undecodable")
 
 
 # --------------------------------------------------------------------- #

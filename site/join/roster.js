@@ -198,7 +198,15 @@ function encodeRoster(plan, scoring, slots, playerIds) {
   return ref;
 }
 
+// Exposed under ONE name in both worlds. In node the tests require() it; in a
+// browser there is no module system here, so the page needs a global — and the
+// page must not re-declare any of these names, because a plain <script> shares
+// the global scope and a second `const REF_RE` is a SyntaxError that kills the
+// whole file silently from the page's point of view.
+const R = { normalize, stripDecoration, buildDirectory, resolveLine, resolveAll,
+            encodeRoster, packOne, REF_RE, MAX_ROSTER };
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { normalize, stripDecoration, buildDirectory, resolveLine,
-                     resolveAll, encodeRoster, packOne, REF_RE, MAX_ROSTER };
+  module.exports = R;
+} else {
+  globalThis.R = R;
 }
