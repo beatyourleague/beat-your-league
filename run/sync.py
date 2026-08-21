@@ -58,7 +58,11 @@ from ingest.sleeper import (SleeperClient, SleeperError, SleeperNotFound,
                             is_valid_league_id)
 from run.refs import (LEAGUE_PASS, MONTHLY, SEASON, RefError, SignupRef, decode)
 from run.registry import _EMAIL_RE, RegistryError, _parse_entry
-from run.subscriptions import PASS_LEAGUE_KEY, SubscriptionError, _stripe_get
+from run.checkout import (CUSTOMERS_API, SESSIONS_API, WATERMARK_SLACK_SECONDS,
+                         customer_id as _customer_id, is_paid,
+                         parse_link_plans, post as _stripe_post,
+                         session_email as _session_email, sweep_sessions)
+from run.subscriptions import PASS_LEAGUE_KEY, SubscriptionError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_DIR = REPO_ROOT / "data" / "registry"
@@ -67,8 +71,6 @@ SYNC_STATE = REGISTRY_DIR / "sync-state.json"
 REGISTRY = REGISTRY_DIR / "subscribers.json"
 RAW_DIR = REPO_ROOT / "data" / "raw"
 
-SESSIONS_API = "https://api.stripe.com/v1/checkout/sessions"
-CUSTOMERS_API = "https://api.stripe.com/v1/customers"
 
 # Customer-metadata keys. Namespaced to never collide with the operator's own.
 META_USER = "byl_user"
@@ -85,8 +87,6 @@ _PREFIX_PLANS = {"s": SEASON, "m": MONTHLY, "p": LEAGUE_PASS}
 # by creation and we advance the watermark to the newest session we saw, so a
 # little overlap costs one extra page and protects against clock skew and
 # sessions that complete out of order. Re-reading is free: the log is
-# latest-wins keyed on (league, user), so seeing a signup twice is a no-op.
-WATERMARK_SLACK_SECONDS = 3 * 24 * 3600
 
 
 class SyncError(RuntimeError):
@@ -255,74 +255,6 @@ def _write_state(state: dict[str, Any], path: Path = SYNC_STATE) -> None:
 # Stripe: completed checkouts -> signups
 # --------------------------------------------------------------------- #
 
-def _stripe_post(url: str, api_key: str, form: dict[str, str]) -> dict:
-    body = urllib.parse.urlencode(form).encode("utf-8")
-    request = urllib.request.Request(
-        url, data=body, method="POST",
-        headers={"Authorization": f"Bearer {api_key}",
-                 "Stripe-Version": "2024-06-20",
-                 "Content-Type": "application/x-www-form-urlencoded"})
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        # Never echo the request — it carries the secret key.
-        detail = exc.read().decode("utf-8", "replace")[:200]
-        raise SubscriptionError(
-            f"Stripe returned HTTP {exc.code} writing customer metadata. The "
-            f"restricted key needs WRITE access to Customers. Response: {detail}"
-        ) from None
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise SubscriptionError(f"could not reach Stripe: {exc}") from None
-    except json.JSONDecodeError:
-        raise SubscriptionError("Stripe returned a response we could not read") from None
-
-
-def _session_email(session: dict) -> str:
-    """The address to mail. locked_prefilled_email means this equals the address
-    typed into the picker, but we read Stripe's copy because Stripe is the one
-    that actually took the money."""
-    customer = session.get("customer")
-    if isinstance(customer, dict) and not customer.get("deleted"):
-        email = (customer.get("email") or "").strip().lower()
-        if email:
-            return email
-    details = session.get("customer_details")
-    if isinstance(details, dict):
-        return (details.get("email") or "").strip().lower()
-    return ""
-
-
-def _customer_id(session: dict) -> str | None:
-    customer = session.get("customer")
-    if isinstance(customer, dict):
-        cid = customer.get("id")
-        return cid if isinstance(cid, str) and cid else None
-    return customer if isinstance(customer, str) and customer else None
-
-
-def parse_link_plans(raw: str) -> dict[str, str]:
-    """``s:plink_A,m:plink_B,p:plink_C`` -> {link_id: plan}.
-
-    This map is what makes the plan an authenticated fact instead of a claim.
-    A bare ``plink_X`` with no prefix is accepted as a filter with an unknown
-    plan, which is safe: it can never grant a League Pass.
-    """
-    out: dict[str, str] = {}
-    for item in raw.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        prefix, _, link = item.partition(":")
-        if link:
-            plan = _PREFIX_PLANS.get(prefix.strip())
-            if plan:
-                out[link.strip()] = plan
-        else:
-            out[prefix] = ""          # filter only, plan unknown
-    return out
-
-
 def sweep_stripe(api_key: str, since: int | None = None,
                  link_plans: dict[str, str] | None = None,
                  promote: bool = True) -> tuple[list[Signup], int | None, list[str]]:
@@ -333,134 +265,84 @@ def sweep_stripe(api_key: str, since: int | None = None,
     """
     signups: list[Signup] = []
     problems: list[str] = []
-    newest = since
     promoted: set[str] = set()
-    # One query per payment link, so a session could in principle be returned
-    # twice; a duplicate signup is harmless (project() dedupes) but a duplicate
-    # problem line is noise, and cheap insurance is cheaper than reasoning
-    # about Stripe's filter semantics every time this is read.
-    seen_sessions: set[str] = set()
+    # The paging, the per-link-plus-unfiltered query set, the dedupe and the
+    # oldest-first ordering all live in run/checkout.py, because run/intake.py
+    # needs exactly the same walk and two copies of it would drift silently —
+    # invisibly, until somebody who paid got nothing.
+    sessions, newest = sweep_sessions(api_key, since, link_plans or {})
+    for session in sessions:
+        created = session.get("created")
+        if not is_paid(session):
+            continue
+        ref = session.get("client_reference_id")
+        if not ref:
+            # A payment with no reference: either it did not come
+            # through the picker, or Stripe dropped a malformed ref.
+            # Either way somebody paid and we cannot say for what.
+            problems.append(
+                f"PAID-UNATTRIBUTED session {session.get('id')} completed "
+                f"with NO reference — somebody has paid and will receive "
+                f"nothing until this is resolved by hand (look the session "
+                f"up in Stripe for who)")
+            continue
+        try:
+            parsed = decode(ref)
+        except RefError as exc:
+            problems.append(
+                f"PAID-UNATTRIBUTED session {session.get('id')}: unreadable "
+                f"reference {ref!r} ({exc}) — paid, undeliverable, needs "
+                f"a human")
+            continue
+        email = _session_email(session)
+        if not email:
+            problems.append(
+                f"PAID-UNATTRIBUTED session {session.get('id')}: no email "
+                f"on the payment, so there is nowhere to send the report")
+            continue
+        customer_id = _customer_id(session)
 
-    queries: list[dict[str, str]] = []
-    base = {"status": "complete", "limit": "100", "expand[]": "data.customer"}
-    if since is not None:
-        base["created[gte]"] = str(max(0, since - WATERMARK_SLACK_SECONDS))
-    # The per-link queries are an optimisation, NEVER the filter. Ending with an
-    # unfiltered sweep is what makes a missing map entry survivable: configure
-    # only the League Pass link (which is the one the setup message names) and
-    # every season and monthly buyer paid, was never swept, never reached the
-    # registry, never got a report — and kept being charged. Now they arrive as
-    # a visible signup whose plan claim simply grants no coverage, which is the
-    # fail-closed behaviour we already wanted. seen_sessions dedupes the
-    # overlap, and the authoritative plan still comes from the session's own
-    # payment_link, so nothing about the coverage rule changes.
-    for link in [*(link_plans or {}), None]:
-        query = dict(base)
-        if link:
-            query["payment_link"] = link
-        queries.append(query)
-
-    for query in queries:
-        url = f"{SESSIONS_API}?{urllib.parse.urlencode(query)}"
-        while True:
-            page = _stripe_get(url, api_key)
-            data = page.get("data")
-            data = data if isinstance(data, list) else []
-            for session in data:
-                if not isinstance(session, dict):
-                    continue
-                session_id = session.get("id")
-                if isinstance(session_id, str):
-                    if session_id in seen_sessions:
-                        continue
-                    seen_sessions.add(session_id)
-                created = session.get("created")
-                if isinstance(created, int):
-                    newest = created if newest is None else max(newest, created)
-                # A session can be status=complete and still unpaid when the
-                # buyer used a delayed-notification method. Entitlement follows
-                # the money, so an unpaid session is not a signup yet.
-                status = session.get("payment_status")
-                if status not in (None, "paid", "no_payment_required"):
-                    continue
-                ref = session.get("client_reference_id")
-                if not ref:
-                    # A payment with no reference: either it did not come
-                    # through the picker, or Stripe dropped a malformed ref.
-                    # Either way somebody paid and we cannot say for what.
-                    problems.append(
-                        f"PAID-UNATTRIBUTED session {session.get('id')} completed "
-                        f"with NO reference — somebody has paid and will receive "
-                        f"nothing until this is resolved by hand (look the session "
-                        f"up in Stripe for who)")
-                    continue
-                try:
-                    parsed = decode(ref)
-                except RefError as exc:
-                    problems.append(
-                        f"PAID-UNATTRIBUTED session {session.get('id')}: unreadable "
-                        f"reference {ref!r} ({exc}) — paid, undeliverable, needs "
-                        f"a human")
-                    continue
-                email = _session_email(session)
-                if not email:
-                    problems.append(
-                        f"PAID-UNATTRIBUTED session {session.get('id')}: no email "
-                        f"on the payment, so there is nowhere to send the report")
-                    continue
-                customer_id = _customer_id(session)
-
-                # AUTHORITATIVE PLAN. The ref's prefix is a string the buyer's
-                # browser put in a URL, and every payment link is visible in
-                # the page source — so trusting it means anyone can pay $9.99
-                # on the monthly link with a "p-" ref and receive the $99
-                # League Pass, for any league id they care to type. The plan
-                # therefore comes from the link that actually took the money.
-                paid_link = session.get("payment_link")
-                paid_plan = (link_plans or {}).get(paid_link) if isinstance(paid_link, str) else None
-                grants_pass = paid_plan == LEAGUE_PASS
-                if parsed.is_league_pass and not grants_pass:
-                    # Fail closed, and say which case it was: an unconfigured
-                    # map is an operator problem, a mismatch is an attempt.
-                    problems.append(
-                        f"session {session.get('id')} claims a League "
-                        f"Pass but "
-                        + ("no plan map is configured (set STRIPE_PAYMENT_LINKS), "
-                           "so coverage was NOT granted"
-                           if not link_plans else
-                           f"it paid the {paid_plan or 'unknown'} link — coverage "
-                           f"was NOT granted"))
-                signups.append(Signup(
-                    email=email,
-                    user_id=parsed.user_id,
-                    league_id=parsed.league_id,
-                    rival_owner_id=parsed.rival_owner_id,
-                    rival_roster_id=parsed.rival_roster_id,
-                    plan=parsed.registry_plan,
-                    source="stripe",
-                    seen_at=str(created) if isinstance(created, int) else "",
-                    stripe_customer_id=customer_id,
-                    pass_league_id=parsed.league_id if grants_pass else None,
-                ))
-                if promote and customer_id and customer_id not in promoted:
-                    promoted.add(customer_id)
-                    try:
-                        _promote(api_key, customer_id, parsed)
-                    except SubscriptionError as exc:
-                        # Promotion is a durability optimisation, not the
-                        # signup itself — the signup is already in hand.
-                        problems.append(
-                            f"could not stamp customer {customer_id}: {exc}")
-            last_id = data[-1].get("id") if data and isinstance(data[-1], dict) else None
-            if not page.get("has_more") or not last_id:
-                break
-            url = (f"{SESSIONS_API}?{urllib.parse.urlencode(query)}"
-                   f"&starting_after={urllib.parse.quote(str(last_id))}")
-    # Stripe lists newest-first, and project() resolves latest-wins by POSITION.
-    # Returning Stripe's order verbatim therefore lets an older pick beat a newer
-    # one, so somebody who changed their rival twice before Tuesday would be
-    # scouted against the rival they abandoned.
-    signups.sort(key=lambda s: int(s.seen_at) if s.seen_at.isdigit() else 0)
+        # AUTHORITATIVE PLAN. The ref's prefix is a string the buyer's
+        # browser put in a URL, and every payment link is visible in
+        # the page source — so trusting it means anyone can pay $9.99
+        # on the monthly link with a "p-" ref and receive the $99
+        # League Pass, for any league id they care to type. The plan
+        # therefore comes from the link that actually took the money.
+        paid_link = session.get("payment_link")
+        paid_plan = (link_plans or {}).get(paid_link) if isinstance(paid_link, str) else None
+        grants_pass = paid_plan == LEAGUE_PASS
+        if parsed.is_league_pass and not grants_pass:
+            # Fail closed, and say which case it was: an unconfigured
+            # map is an operator problem, a mismatch is an attempt.
+            problems.append(
+                f"session {session.get('id')} claims a League "
+                f"Pass but "
+                + ("no plan map is configured (set STRIPE_PAYMENT_LINKS), "
+                   "so coverage was NOT granted"
+                   if not link_plans else
+                   f"it paid the {paid_plan or 'unknown'} link — coverage "
+                   f"was NOT granted"))
+        signups.append(Signup(
+            email=email,
+            user_id=parsed.user_id,
+            league_id=parsed.league_id,
+            rival_owner_id=parsed.rival_owner_id,
+            rival_roster_id=parsed.rival_roster_id,
+            plan=parsed.registry_plan,
+            source="stripe",
+            seen_at=str(created) if isinstance(created, int) else "",
+            stripe_customer_id=customer_id,
+            pass_league_id=parsed.league_id if grants_pass else None,
+        ))
+        if promote and customer_id and customer_id not in promoted:
+            promoted.add(customer_id)
+            try:
+                _promote(api_key, customer_id, parsed)
+            except SubscriptionError as exc:
+                # Promotion is a durability optimisation, not the
+                # signup itself — the signup is already in hand.
+                problems.append(
+                    f"could not stamp customer {customer_id}: {exc}")
     return signups, newest, problems
 
 

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import run.checkout as checkout
 import run.sync as sync
 from run.refs import (LEAGUE_PASS, MONTHLY, SEASON, RefError, decode, encode)
 from run.registry import RegistryError, Subscriber, load_registry
@@ -180,7 +181,7 @@ def _signup(**over):
 
 def test_a_completed_checkout_becomes_a_signup(monkeypatch: pytest.MonkeyPatch) -> None:
     ref = encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL)
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([_session(ref)]))
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([_session(ref)]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, watermark, problems = sync.sweep_stripe("sk")
     assert not problems
@@ -193,7 +194,7 @@ def test_a_completed_checkout_becomes_a_signup(monkeypatch: pytest.MonkeyPatch) 
 def test_a_payment_we_cannot_attribute_is_reported_never_dropped(
         monkeypatch: pytest.MonkeyPatch) -> None:
     """Somebody paid. Silence here means they get nothing and nobody knows."""
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([
         _session(None, email="noref@example.com", sid="cs_noref"),
         _session("garbage-ref", email="bad@example.com", sid="cs_bad"),
     ]))
@@ -225,7 +226,7 @@ def test_the_sweep_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
         seen["n"] += 1
         return page
 
-    monkeypatch.setattr(sync, "_stripe_get", fake_get)
+    monkeypatch.setattr(checkout, "_stripe_get", fake_get)
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, _ = sync.sweep_stripe("sk")
     assert {s.user_id for s in signups} == {USER, "111111111111"}
@@ -237,7 +238,7 @@ def test_a_failed_promotion_does_not_lose_the_signup(
     because a metadata write 403'd would be absurd."""
     from run.subscriptions import SubscriptionError
     ref = encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL)
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([_session(ref)]))
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([_session(ref)]))
 
     def boom(*a):
         raise SubscriptionError("needs WRITE access to Customers")
@@ -290,7 +291,7 @@ def test_paying_the_cheap_link_cannot_buy_a_league_pass(
     link by hand with a 'p-' ref and would otherwise receive the $99 League
     Pass — for any league id they care to type."""
     # The fake honours the payment_link filter, as Stripe does.
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page(
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page(
         [_pass_session("plink_MONTHLY")] if "plink_MONTHLY" in url else []))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, problems = sync.sweep_stripe(
@@ -302,7 +303,7 @@ def test_paying_the_cheap_link_cannot_buy_a_league_pass(
 
 
 def test_paying_the_pass_link_does_grant_coverage(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page(
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page(
         [_pass_session("plink_PASS")]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, problems = sync.sweep_stripe("sk", link_plans={"plink_PASS": LEAGUE_PASS})
@@ -314,7 +315,7 @@ def test_with_no_plan_map_no_purchase_can_grant_coverage(
         monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail closed: an unconfigured operator must not silently mean 'trust the
     reference'."""
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page(
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page(
         [_pass_session("plink_PASS")]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, problems = sync.sweep_stripe("sk", link_plans=None)
@@ -327,7 +328,7 @@ def test_an_unpaid_session_is_not_a_signup(monkeypatch: pytest.MonkeyPatch) -> N
     Entitlement follows the money."""
     session = _session(encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL))
     session["payment_status"] = "unpaid"
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([session]))
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([session]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, _ = sync.sweep_stripe("sk")
     assert signups == []
@@ -699,7 +700,7 @@ def test_a_newer_pick_wins_even_though_stripe_lists_newest_first(
                    created=1_700_000_000, sid="cs_old")
     new = _session(encode(SEASON, USER, LEAGUE, rival_owner_id="999999999999"),
                    created=1_700_009_999, sid="cs_new")
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([new, old]))
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([new, old]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, _ = sync.sweep_stripe("sk")
     assert sync.project(signups)[0].rival_owner_id == "999999999999"
@@ -730,7 +731,7 @@ def test_main_validates_before_it_writes(tmp_path: Path,
     registry.py cannot parse, the run must drop and report it rather than write
     a file whose first bad line stops every subscriber."""
     ref = encode(SEASON, USER, LEAGUE, rival_owner_id=RIVAL)
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page([_session(ref)]))
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page([_session(ref)]))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     monkeypatch.setenv("STRIPE_API_KEY", "sk")
     monkeypatch.delenv("FORM_ENDPOINT", raising=False)
@@ -778,7 +779,7 @@ def test_a_seat_still_fills_a_key_no_payment_holds() -> None:
 # --------------------------------------------------------------------- #
 
 def _wire(monkeypatch, sessions, seats):
-    monkeypatch.setattr(sync, "_stripe_get", lambda url, key: _page(
+    monkeypatch.setattr(checkout, "_stripe_get", lambda url, key: _page(
         [s for s in sessions if s.get("payment_link", "") in url] if "payment_link" in url
         else sessions))
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
@@ -947,7 +948,7 @@ def test_a_tier_missing_from_the_link_map_is_still_swept(
             return _page([])
         return _page([unmapped])
 
-    monkeypatch.setattr(sync, "_stripe_get", fake_get)
+    monkeypatch.setattr(checkout, "_stripe_get", fake_get)
     monkeypatch.setattr(sync, "_promote", lambda *a: None)
     signups, _, _ = sync.sweep_stripe("sk", link_plans={"plink_PASS": LEAGUE_PASS})
     assert [s.user_id for s in signups] == [USER], \

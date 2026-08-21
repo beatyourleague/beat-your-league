@@ -1,7 +1,8 @@
 PY := .venv/bin/python
 SEASON ?= 2026
 
-.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index
+.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index \
+        intake intake-preview tuesday tuesday-preview
 
 week:
 	$(PY) -m run.week
@@ -26,6 +27,27 @@ sync:
 sync-preview:
 	$(PY) -m run.sync --dry-run --no-promote
 
+# --- the roster product (PLAN §0): no league is ever read ------------------
+#
+# The Tuesday pair. `intake` turns completed payments into data/registry/
+# rosters.json; `tuesday` builds and mails one report per roster in it. Both
+# have a preview that writes nothing, because the first time either is run
+# against real customers should not also be the first time anyone sees its
+# output.
+intake:
+	$(PY) -m run.intake
+
+intake-preview:
+	$(PY) -m run.intake --dry-run
+
+tuesday:
+	$(PY) -m run.tuesday
+
+tuesday-preview:
+	EMAIL_PROVIDER=dry $(PY) -m run.tuesday --allow-dry
+
+# --- the Sleeper-era pair, being retired -----------------------------------
+#
 # Build every subscriber's report and write the emails WITHOUT sending them.
 # Read reports/outbox/*.eml to see exactly what would land in an inbox.
 dry-send:

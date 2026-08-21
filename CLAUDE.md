@@ -218,7 +218,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status:** Phases 1-6 complete on the Sleeper architecture; the nflverse rebuild (PLAN §0) now reaches from the intake page to a rendered email (612 tests passing). The one gap left in that chain is the signup sync — see "Still missing between payment and inbox" below.
+**Status:** Phases 1-6 complete on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — picker → Stripe → registry → report → inbox, with no league read anywhere (628 tests passing). What is left before checkout opens is listed under "Still missing between payment and inbox" below; none of it is in the buyer's path.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -306,17 +306,50 @@ is an incomplete ingest. **Open product question: weeks 1-3 publish no confidenc
 usage with no start/sit call in them. That is honest and it is thin — decide what Week 1 carries
 before Sep 8.
 
+**The signup pipeline for rosters (`python -m run.intake` / `make intake`, Aug 21 2026).** The
+last link: picker → Stripe → registry → report → inbox. `run/sync.py` verifies each v1 signup
+against Sleeper; there is nothing to verify here and nobody to ask, because the roster came from
+the subscriber and was resolved in front of them (RULE R3). So the pipeline is shorter — sweep,
+decode, check servable, promote onto the Customer, project — and the rules that survive are the
+ones that were bought with real failures:
+- **The plan comes from the LINK that took the money, never from the ref.** Every payment link is
+  in the page source and `client_reference_id` is a URL parameter, so a `p` prefix is a claim. No
+  `STRIPE_PAYMENT_LINKS` map means no purchase can grant a pass — fail closed.
+- **A v1 Sleeper ref is skipped in silence, not reported.** Both intakes run against one Stripe
+  account during the migration; each reporting the other's payments as unattributable is a
+  weekly false alarm, which is how you learn to ignore the real one.
+- **A paid roster naming an id the directory has never heard of is BLOCKED, loudly, every run.**
+  The registry loader is whole-file on purpose, so writing that row takes down every subscriber's
+  Tuesday — one person's problem must not become everybody's. The run exits non-zero while it
+  stands.
+- **All servable signups being dropped as unloadable refuses to write.** That is a bug in what we
+  write, not a week in which everybody cancelled, and writing an empty registry over a good one
+  then exiting 0 is the failure nobody notices until Tuesday.
+- **Unattributable payments persist in `roster-sync-state.json`** and are re-reported every run
+  until `--clear-unresolved`: the watermark moves past the session within days, so a once-only
+  message meant the third run forgot a customer who is still being charged.
+- **A registry row is never written with `plan: league_pass`.** On a row that means a SEAT, and a
+  seat needs `covered_by`; a pass PAYER is an ordinary subscriber who also covers other people.
+- `run/checkout.py` holds the session walk ONCE — the per-link-plus-unfiltered query set, the
+  dedupe, the oldest-first ordering (Stripe lists newest-first while every projection is
+  latest-wins, so a subscriber who changed their picks twice was served the pick they abandoned).
+  `run/sync.py` was moved onto it rather than keeping a second copy to drift.
+
+**Known limitation, deliberate: there is no way to CHANGE a roster mid-season.** The key is
+(email, ref), so one purchase is one subscription; re-running the picker builds a new ref, which
+only reaches the registry attached to a new payment. A customer holding several is reported rather
+than silently merged (that would drop a team) or silently split (that would double-bill attention).
+A real fix is a self-serve edit and belongs with the customer portal.
+
 **Still missing between payment and inbox:**
-- **`run/sync.py` does not decode roster refs.** It sweeps Stripe into the SLEEPER registry
-  (`run/refs.py:decode`, v1), so `rosters.json` has to be written by hand today. Until it speaks
-  v2, checkout must not open — a payment would land with nowhere to go.
 - **Ledger GRADING is still Sleeper-shaped.** `engine/ledger.py` grades against
   `load_week_availability` and a cached Sleeper schedule. Recording works and runs on the new
   path (one shared ledger — without a league the calls are league-agnostic, so two subscribers
   who made the same call made ONE call and the ids agree by construction). Recording is the half
   that cannot be done retroactively; grading needs its nflverse port before `monday.yml` means
   anything for roster subscribers.
-- **`weekly.yml` still runs `run.batch`.** It must point at `run.tuesday` when checkout opens.
+- **`weekly.yml` still runs `run.batch` and `run.sync`.** It must point at `run.tuesday` and
+  `run.intake` when checkout opens (`make intake` / `make tuesday`, previews on both).
 
 **A seat holder's "already paid" button was wired to the $39 checkout (Aug 21 2026).** The
 roster-paste intake replaced the Sleeper picker and seat mode came across with its header rewrite
