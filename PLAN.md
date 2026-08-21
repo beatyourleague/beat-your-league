@@ -434,7 +434,7 @@ make the renewal easy to say yes to by having a public ledger that argues for it
 constants and the one that must deliberately stay EMPTY. Each is a one-line edit once the account
 exists: a project contact inbox (never a personal address) into `CONTACT_EMAIL` on both funnel
 pages and into `legal.html`; `STRIPE_LINK_SEASON` / `_MONTHLY` / `_PASS` plus `CHECKOUT_OPEN`;
-`LEDGER_LIST_ENDPOINT` and `LEDGER_FREE_URL` for the watch-the-ledger capture. `SUBSTACK_URL` is
+`NOTIFY_LIST_ENDPOINT` for the launch waitlist (see §5.2) and `LEDGER_FREE_URL`. `SUBSTACK_URL` is
 superseded by the Stripe decision below and is only relevant if Substack takes the money after all.
 Until the inbox exists the signup forms honestly say signups aren't open — correct, but it also
 means zero conversions, so it is the first thing to fix.
@@ -643,6 +643,32 @@ cites Reddit least of all the major engines (~0.1%) while Google's AI surfaces l
 (~18.8% of AI Overview top-10 citations). So "go win Reddit" is ChatGPT/Perplexity advice that
 does little for Gemini. The Gemini-shaped play is YouTube, and **declining it is the right call for
 a solo part-timer — but name the cost:** we are not buying Gemini visibility this season.
+
+### 5.2 The launch waitlist (BUILT Aug 18 2026)
+
+The one asset that works before the product does, and the only thing on the site
+that can honestly ask for anything today — checkout is closed and the product is
+mid-rebuild. Capture is the existing form on the landing page, now retargeted:
+**one email when signups open, nothing between now and then, no card,
+unsubscribe in one click.** That volume promise is test-pinned, because a list
+collected on "one message" and then mailed weekly is an audience burned once and
+permanently.
+
+- **Owner action to start collecting today:** set `NOTIFY_LIST_ENDPOINT` in
+  `site/index.html` to a list backend. **Resend Audiences is the pick** — Resend
+  is already the chosen sender, so it is one vendor rather than two, and the
+  export drops straight into the sender below. Until it is set the page says
+  nothing was recorded rather than thanking somebody for a signup that went in
+  the bin (test-pinned).
+- **The send:** `python -m run.waitlist --list <export.csv> --url <join url>`.
+  Dry by default; `--send` with `EMAIL_PROVIDER` set is the real thing. Keyed
+  through the same `data/processed/sent.jsonl` the weekly batch uses, so a
+  re-run cannot mail anyone twice. An unconfigured `--send` prints NOTHING WAS
+  SENT and exits 1 rather than reporting a success.
+- **The copy may only promise what exists.** `FORBIDDEN_CLAIMS` is enforced by
+  test and currently blocks the waiver market, the rival, the opponent and the
+  self-updating report — the first draft of that email promised two of them,
+  inherited from a `BRAND_LINE` that still described the Sleeper product.
 
 ### 5.1 Channel order, by subscribers per hour of founder time
 

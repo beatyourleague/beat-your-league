@@ -831,15 +831,15 @@
 
     <div class="watch reveal">
       <div>
-        <h3>Rather watch first? Take the Monday grades, free.</h3>
-        <p>Once the season is scoring, every call we sent comes back Monday with the box score
-        next to it. Get that by email, free, for as long as you like. No card, and
-        unsubscribe in one click.</p>
+        <h3>Not open yet. Want to know when it is?</h3>
+        <p>The first reports go out Tuesday, September 8. Leave your email and you get
+        exactly one message when signups open — nothing between now and then. No card,
+        and unsubscribe in one click.</p>
       </div>
       <form class="watchform" id="watch-form" novalidate>
         <input type="email" id="watch-email" placeholder="you@example.com"
-               autocomplete="email" aria-label="Email for the free Monday ledger">
-        <button class="btn ghost" type="submit">Send me the Monday grades</button>
+               autocomplete="email" aria-label="Email me when signups open">
+        <button class="btn ghost" type="submit">Tell me when it opens</button>
         <p class="watchnote" id="watch-note" role="status"></p>
       </form>
     </div>
@@ -1012,9 +1012,11 @@ document.documentElement.classList.add("js");
 // payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
 const CHECKOUT_OPEN = false;
-// Free Monday-ledger list. Point at a form backend to collect directly; with
-// only SUBSTACK_URL set, it hands off to Substack's own free-subscribe page.
-const LEDGER_LIST_ENDPOINT = "";
+// The launch waitlist. One address, one message, when signups open. Point it at
+// a list backend (Resend Audiences is the natural fit — Resend is already the
+// sender) and capture starts working with no other change. Empty means the page
+// says so plainly rather than pretending to have recorded anything.
+const NOTIFY_LIST_ENDPOINT = "";
 // Where the FREE list lives. Must be a page that offers a no-card free option —
 // never the paid checkout URL, or the page would promise "free" and hand over a
 // $39 subscribe form. Empty means fall through to the mailto capture below.
@@ -1032,14 +1034,14 @@ if (watchForm) {
       note.textContent = "That email doesn't look right.";
       return;
     }
-    if (LEDGER_LIST_ENDPOINT) {
+    if (NOTIFY_LIST_ENDPOINT) {
       try {
-        const res = await fetch(LEDGER_LIST_ENDPOINT, {
+        const res = await fetch(NOTIFY_LIST_ENDPOINT, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, list: "ledger-weekly" }),
+          body: JSON.stringify({ email, list: "launch-notify" }),
         });
         if (!res.ok) throw new Error(String(res.status));
-        note.textContent = "You're on the list — first ledger email lands Monday.";
+        note.textContent = "You're on the list. One email when signups open, nothing else.";
         return;
       } catch (err) { /* fall through to the paths below */ }
     }
@@ -1049,14 +1051,14 @@ if (watchForm) {
       return;
     }
     if (!CONTACT_EMAIL) {
-      note.textContent = "The ledger email isn't open for signups yet — the ledger " +
-        "itself is public, so you can read it any time without us.";
+      note.textContent = "The list isn't wired up yet, so nothing was recorded — " +
+        "we'd rather say that than pretend. Check back in a day or two.";
       return;
     }
     note.textContent = "Opening a pre-filled email — send it and you're on the list.";
     window.location.href = "mailto:" + CONTACT_EMAIL +
-      "?subject=" + encodeURIComponent("Follow the ledger") +
-      "&body=" + encodeURIComponent("Add me to the free Monday ledger email: " + email + "\n");
+      "?subject=" + encodeURIComponent("Tell me when it opens") +
+      "&body=" + encodeURIComponent("Email me when signups open: " + email + "\n");
   });
 }
 

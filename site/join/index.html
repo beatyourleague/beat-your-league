@@ -208,7 +208,7 @@ const FORM_ENDPOINT = "";
 // Launch-notify list (same backend as the landing page's ledger list). While
 // checkout is closed, a buyer who typed their email gets remembered — EMAIL
 // ONLY, no league or rival data — instead of being told to come back later.
-const LEDGER_LIST_ENDPOINT = "";
+const NOTIFY_LIST_ENDPOINT = "";
 // Product contact address. Deliberately EMPTY: no personal address ships on a
 // public page. Set this to the project's own inbox before launch.
 const CONTACT_EMAIL = "";
@@ -701,9 +701,9 @@ $("submit").addEventListener("click", async () => {
     // Nothing is stored anywhere yet, so saying "reserved" would be a lie —
     // but the email they just typed is real intent, and with a list backend
     // configured it is kept (email only, clearly told) instead of discarded.
-    if (LEDGER_LIST_ENDPOINT) {
+    if (NOTIFY_LIST_ENDPOINT) {
       try {
-        await fetch(LEDGER_LIST_ENDPOINT, {
+        await fetch(NOTIFY_LIST_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: email, list: "launch-notify" }),

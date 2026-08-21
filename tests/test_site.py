@@ -85,11 +85,32 @@ def test_cancellation_is_promised_and_never_obstructed() -> None:
                              page, re.I)
 
 
-def test_free_watch_list_exists_and_promises_unsubscribe() -> None:
-    """The non-buyer off-ramp: waiting on the record must be possible."""
+def test_the_launch_waitlist_states_exactly_what_it_will_send() -> None:
+    """Checkout is closed and the product is being rebuilt, so the only honest
+    ask on this page is a waitlist. It must say what arrives, how often, and how
+    to leave — a list that promises "updates" and then mails weekly is how a
+    launch burns the audience it spent three weeks collecting."""
     assert 'id="watch-form"' in LANDING
     assert re.search(r"unsubscribe in one click", LANDING, re.I)
     assert re.search(r"no card", LANDING, re.I)
+    # The volume promise is the part that must not go missing.
+    assert re.search(r"exactly one message|one email when signups open",
+                     LANDING_PROSE, re.I), \
+        "the waitlist must state how many emails it will send"
+
+
+def test_the_waitlist_never_claims_to_have_recorded_an_address_it_did_not() -> None:
+    """Same rule the picker follows: with no backend wired, say so. A cheerful
+    confirmation over a discarded address is the worst outcome available — the
+    person believes they will hear from us and never does."""
+    handler = LANDING.split("const watchForm")[1]
+    # ONLY the no-backend block. The mailto fallback below it legitimately says
+    # "you're on the list", because there the address really does reach us —
+    # banning the phrase everywhere tests the wrong thing.
+    closed = handler.split("if (!CONTACT_EMAIL)")[1].split("return;")[0]
+    assert "nothing was recorded" in closed
+    assert not re.search(r"you're on the list|we'll email you", closed, re.I), \
+        "the page claimed a signup that nothing recorded"
 
 
 def test_paid_from_day_one_is_stated_not_hidden() -> None:
@@ -702,7 +723,7 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     an individual signup posted there would bypass the payment architecture."""
     handler = JOIN.split('$("submit").addEventListener')[1]
     closed = handler.split("if (!link) {")[1].split("if (!REF_RE.test(ref))")[0]
-    assert "LEDGER_LIST_ENDPOINT" in closed
+    assert "NOTIFY_LIST_ENDPOINT" in closed
     assert "FORM_ENDPOINT" not in closed
     assert "league_id" not in closed, "launch-notify must carry the email only"
     # The honest-refusal phrases survive in both outcomes.

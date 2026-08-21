@@ -94,8 +94,14 @@ MARK_CSS = (".brand svg.mark{width:22px;height:15px;flex:none;}"
 # Sentences shared verbatim between the browser report (this module) and the
 # email digest (render/email.py). Single-sourced so the pinned consumer
 # protections and the buyer voice cannot drift apart between the two surfaces.
-BRAND_LINE = ("the weekly scouting report built around your rival, "
-              "not just your roster.")
+# Updated Aug 18 2026 with the Sleeper decision (PLAN §0). The old line —
+# "built around your rival, not just your roster" — described a product that
+# read the league and tracked a named opponent. Neither is true any more, and
+# this constant renders in the report footer, the email footer AND the launch
+# announcement, so a stale promise here is a false claim on every surface at
+# once.
+BRAND_LINE = ("the weekly scouting report for your fantasy roster — "
+              "one file, every Tuesday.")
 NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
                    "picks, no staking advice. Fantasy decisions are yours to make.")
 SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
