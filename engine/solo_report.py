@@ -52,7 +52,8 @@ from engine.availability import WeekAvailability
 from engine.history import PlayerIndex, Season
 from engine.projection import ProjectionModel
 from engine.roster import DEFENSE
-from engine.subscriber import SUBSCRIBER_ROSTER_ID, RosterSpec
+from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
+                               _team_week)
 from engine.week_report import (TEAM_RANGE_BASIS, TEAM_RANGE_GATE,
                                 WeekReportError, _team_range, checklist,
                                 team_range_gate,
@@ -83,8 +84,20 @@ def build_solo_report(
             f"season {season.season!r} is not a plausible year")
     team_week = (season.weeks.get(week - 1) or {}).get(SUBSCRIBER_ROSTER_ID)
     if team_week is None:
-        raise WeekReportError(
-            f"no roster record before week {week} — nothing to project from")
+        if season.weeks:
+            # A hole mid-season is a real error: weeks exist, and this one does
+            # not, which means the ingest is incomplete rather than early.
+            raise WeekReportError(
+                f"no roster record before week {week} — nothing to project from")
+        # WEEK 1. Nothing has been played, so there is no form and no record to
+        # be missing — and raising here meant the FIRST report of the season,
+        # the one every launch subscriber is waiting for, could not be built at
+        # all. optimal_lineup already knows this state: with no projections it
+        # renders the lineup exactly as set, and AS_SET_HEAD/AS_SET_BODY are
+        # the copy written for it. The roster is real; only the numbers are not
+        # there yet, and saying so is the product's own rule.
+        team_week = _team_week(SUBSCRIBER_ROSTER_ID, max(week - 1, 0),
+                               spec.player_ids, {}, spec.rule)
 
     picks = optimal_lineup(season, team_week, model, players, availability)
     my_range = _team_range(picks)

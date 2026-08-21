@@ -265,7 +265,7 @@ def test_the_preheader_is_true_of_the_report_it_previews() -> None:
 def test_the_solo_subject_names_no_rival() -> None:
     """"the file on None" would be the subject line — the single most visible
     string the product produces."""
-    from run.batch import _subject
+    from render.email import subject_for as _subject
     report = _solo_report()
     subject = _subject(report)
     assert "None" not in subject and "file on" not in subject

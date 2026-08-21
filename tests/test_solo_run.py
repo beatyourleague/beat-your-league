@@ -299,6 +299,58 @@ def test_a_typed_roster_becomes_a_report(tmp_path) -> None:
         assert absent not in report
 
 
+def test_week_one_is_a_report_rather_than_an_exception(tmp_path) -> None:
+    """The FIRST report of the season is the one every launch subscriber is
+    waiting for, and it could not be built: no games played means no roster
+    record before week 1, and build_solo_report raised.
+
+    Nothing about that is an error — there is no form yet, and the product has
+    copy for exactly this state. What it may never do is invent numbers, so
+    every row publishes a player and no projection.
+    """
+    cache = _cache(tmp_path)
+    report = solo.report_for(_spec(), solo.load_week_data(cache, SEASON, 1,
+                                                          session=OFFLINE),
+                             cache_dir=cache)
+    assert report["meta"]["lineup_as_set"] is True
+    assert len(report["lineup"]) == len(SLOTS)
+    for slot in report["lineup"]:
+        assert slot["player_id"], f"{slot['slot']} rendered empty in week 1"
+        assert slot["projected"] is None and slot["confidence"] is None
+
+
+def test_week_one_never_claims_the_roster_is_empty(tmp_path) -> None:
+    """A solo TeamWeek has no `starters` (RULE B3: we never saw a lineup), and
+    the no-projections branch read them — so every slot rendered empty and the
+    checklist told a subscriber with a full roster "You have nobody to start at
+    QB, RB, TE, WR". A confident false statement about players the report can
+    see is worse than the exception it replaced."""
+    cache = _cache(tmp_path)
+    report = solo.report_for(_spec(), solo.load_week_data(cache, SEASON, 1,
+                                                          session=OFFLINE),
+                             cache_dir=cache)
+    actions = " ".join(item["action"] for item in report["checklist"])
+    assert "nobody to start" not in actions, actions
+    assert "not a recommendation" in actions.lower() or "no lineup call" in actions.lower()
+
+
+def test_a_hole_mid_season_is_still_an_error(tmp_path) -> None:
+    """Week 1 is early; week 6 with weeks on record and none for this roster is
+    an incomplete ingest, and must not quietly render as "no form yet"."""
+    from engine.solo_report import build_solo_report
+    from engine.projection import ProjectionModel
+    from engine.subscriber import build_season, player_index
+    from engine.week_report import WeekReportError
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    season = build_season(_spec(), data.weekly, data.directory, SEASON, WEEK)
+    season.weeks.pop(WEEK - 1)
+    with pytest.raises(WeekReportError, match="nothing to project from"):
+        build_solo_report(_spec(), season, data.players,
+                          ProjectionModel(season, data.players),
+                          data.availability, WEEK, cache)
+
+
 def test_an_id_the_directory_does_not_know_fails_loudly(tmp_path) -> None:
     """A ref decodes to ids, not to players. An unknown id would render as a
     blank row in a report somebody paid for."""

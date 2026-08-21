@@ -26,7 +26,7 @@ import render.report as render_report
 from engine.history import HistoryError
 from engine.week_report import PROCESSED_DIR, RAW_DIR, WeekReportError, build_week_report
 from ingest.config import resolve_league_id
-from render.report import source_line
+from render.email import text_summary  # noqa: F401 - re-exported
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPORTS_DIR = REPO_ROOT / "reports"
@@ -58,102 +58,6 @@ def _current_week(raw_dir: Path) -> int:
             "season — pass --week explicitly to build a historical report."
         )
     return week
-
-
-def _forward_lines() -> list[str]:
-    """The standing acquisition line for the plain-text email, above the
-    cancellation block. A forwarded report reaches the eleven best prospects a
-    subscriber knows; gated on SITE_URL exactly like the HTML footer."""
-    site = os.environ.get("SITE_URL", "").rstrip("/")
-    if not site:
-        return []
-    return ["",
-            f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own file, "
-            f"aimed at their own rival — {site}/join. The record we're graded "
-            f"on is public: {site}/ledger."]
-
-
-def text_summary(report: Mapping[str, Any]) -> str:
-    """Plain-text digest of the report — the email/Substack body seed."""
-    meta = report["meta"]
-    # A solo report has no opponent and never will (PLAN §0). Both renderers
-    # already branch on this; the plain-text half did not, and it is the half
-    # that goes in every email — it printed "Your Team vs None", then raised
-    # KeyError on matchup['rival'] before any of it could be sent.
-    solo = bool(meta.get("solo"))
-    lines = [
-        f"BEAT YOUR LEAGUE — {meta['league_name']} — "
-        f"season {meta['season']} week {meta['week']}",
-        meta['my_label'] if solo else f"{meta['my_label']} vs {meta['rival_label']}",
-        "",
-        "GAME PLAN",
-    ]
-    for item in report["checklist"]:
-        lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
-    matchup = report["matchup"]
-    head = "YOUR WEEK" if solo else "MATCHUP"
-    if matchup.get("range_gate"):
-        lines += ["", f"{head}: {matchup['range_gate']}"]
-    elif solo:
-        you = matchup["you"]
-        lines += ["", f"{head}: {you['projected_total']:.1f} projected "
-                      f"({you['floor']:.1f}–{you['ceiling']:.1f})"]
-    else:
-        lines += [
-            "",
-            f"{head}: you {matchup['you']['projected_total']:.1f} proj vs "
-            f"rival {matchup['rival']['projected_total']:.1f} proj",
-        ]
-    if matchup.get("win_probability") is not None:
-        lines.append(f"  win probability: {matchup['win_probability']:.0%}")
-    elif matchup.get("win_probability_gate"):
-        lines.append(f"  {matchup['win_probability_gate']}.")
-    # A solo report has neither, and `f"  {None}."` printed a literal "None" —
-    # the same class of bug as the inbox preheader that read "the file on None".
-    lines += ["", "YOUR BEST LINEUP"]
-    # Same rule as the two HTML surfaces: the per-row marker earns its place
-    # only in a MIXED week. With nothing published, nine identical "no call"s
-    # said less than one line saying why — and plain text has no note under the
-    # table to carry the reason, so it goes here.
-    mixed = any(s.get("confidence") is not None for s in report["lineup"])
-    for slot in report["lineup"]:
-        name = slot.get("player_name") or "(empty)"
-        projected = f"{slot['projected']:.1f}" if slot.get("projected") is not None else "—"
-        if slot.get("confidence") is not None:
-            confidence = f"{slot['confidence']:.0%} vs {slot.get('alternative_name')}"
-        elif mixed:
-            confidence = "no call"
-        else:
-            confidence = ""
-        lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
-    if not mixed:
-        gates = sorted({s["confidence_gate"] for s in report["lineup"]
-                        if s.get("confidence_gate")})
-        if gates:
-            lines.append(f"  No call on any slot this week: {' · '.join(gates)}.")
-    regret = report["regret"]
-    lines.append("")
-    if "gate" in regret:
-        lines.append(f"REGRET SCORE: {regret['gate']}")
-    else:
-        lines.append(
-            f"REGRET SCORE: start {regret['start_name']} over {regret['over_name']} "
-            f"({regret['confidence']:.0%})")
-    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
-    # The gap list is operator bookkeeping (field names, internal reasons) and
-    # never goes in a subscriber's email — the report already says, in place and
-    # in plain words, wherever it declined to call something.
-    lines += ["", "Projections are analysis, not guarantees — no betting picks, "
-                  "no staking advice. Your decisions are yours.",
-              source_line(meta),
-              *_forward_lines(),
-              "",
-              "DONE WITH THIS? Cancel it yourself in your Substack account — about "
-              "fifteen seconds, and the billing stops immediately. Note that "
-              "unsubscribing from emails alone does NOT stop a subscription; cancel "
-              "there if you want the charges to end. The reports stop on their own "
-              "once you do."]
-    return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:

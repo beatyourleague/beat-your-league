@@ -984,11 +984,11 @@ def test_checkout_cannot_open_while_the_sleeper_question_is_unresolved() -> None
 
 # The paid path: every module run/batch.py can reach when it builds and mails a
 # subscriber's report. Walked statically so a new import cannot quietly widen it.
-def _paid_path_modules() -> set[Path]:
+def _paid_path_modules(root: str = "run.batch") -> set[Path]:
     import ast
     repo = SITE.parent
     seen: set[str] = set()
-    queue = ["run.batch"]
+    queue = [root]
     while queue:
         name = queue.pop()
         if name in seen:
@@ -1005,6 +1005,28 @@ def _paid_path_modules() -> set[Path]:
                 queue.append(node.module)
     return {repo / (n.replace(".", "/") + ".py") for n in seen
             if (repo / (n.replace(".", "/") + ".py")).is_file()}
+
+
+def test_the_roster_runner_cannot_reach_sleeper_at_all() -> None:
+    """``run/tuesday.py`` is the runner PLAN §0's product actually uses, and its
+    whole claim is that no league platform is involved. Unlike the staged check
+    below — quiet until money can move, so a multi-day migration does not teach
+    people to ignore a red suite — this one is unconditional: there is nothing
+    to stage, the module was written after the decision.
+
+    Import reachability rather than a grep of this one file, because the way a
+    dependency comes back is through something it imports.
+    """
+    offenders = sorted(
+        p.name for p in _paid_path_modules("run.tuesday")
+        if re.search(r"api\.sleeper\.app|sleeper\.app/|docs\.sleeper",
+                     p.read_text(encoding="utf-8")))
+    assert not offenders, (
+        f"run/tuesday.py reaches Sleeper through {offenders} — §11.3's remedy "
+        f"lands on the SUBSCRIBER's account, not ours")
+    # And nothing in its graph imports the Sleeper client under any name.
+    modules = {p.stem for p in _paid_path_modules("run.tuesday")}
+    assert "sleeper" not in modules and "pull" not in modules, sorted(modules)
 
 
 def test_no_sleeper_in_the_paid_path() -> None:

@@ -99,6 +99,33 @@ def _slot_restrictiveness(slot: str) -> int:
     return len(allowed) if allowed else 1
 
 
+def _place_without_projections(season: Season, team_week: TeamWeek,
+                               players: PlayerIndex) -> dict[int, str]:
+    """Put each eligible player in a slot when nothing can be ranked.
+
+    Greedy in slot-restrictiveness order, the same order the projected path
+    uses, so a single-position slot claims its player before a flex can take
+    him. Ties break on player id, which makes the output reproducible rather
+    than meaningful — and it is never presented as meaningful: every row built
+    from this carries no projection, no confidence and a reason saying there is
+    no record to compare against yet.
+    """
+    order = sorted(range(len(season.starting_slots)),
+                   key=lambda i: (_slot_restrictiveness(season.starting_slots[i]), i))
+    placed: dict[int, str] = {}
+    used: set[str] = set()
+    for index in order:
+        slot = season.starting_slots[index]
+        candidates = sorted(
+            pid for pid in team_week.players
+            if pid not in used and pid not in EMPTY_SLOT_IDS
+            and (info := players.get(pid)) is not None and info.eligible_for(slot))
+        if candidates:
+            placed[index] = candidates[0]
+            used.add(candidates[0])
+    return placed
+
+
 def optimal_lineup(
     season: Season,
     team_week: TeamWeek,
@@ -129,9 +156,19 @@ def optimal_lineup(
         # the same treatment the rival's grid gets, with calls starting once
         # a record exists to compare against.
         picks: list[SlotPick] = []
+        # A solo roster has no `starters` at all (RULE B3: we never saw a
+        # lineup), so reading them rendered EVERY slot empty and the checklist
+        # then told a subscriber with a full roster that they had "nobody to
+        # start at QB, RB, TE, WR" — a confident false statement about players
+        # the report can see, which is worse than the exception it replaced.
+        # Placement by eligibility instead, deterministic on id so a report is
+        # byte-identical across runs. It is PLACEMENT, not a call: the reason
+        # on every row says so, and no confidence is attached to any of it.
+        placed = _place_without_projections(season, team_week, players) \
+            if not team_week.starters else {}
         for index, slot in enumerate(season.starting_slots):
             pid = (team_week.starters[index]
-                   if index < len(team_week.starters) else None)
+                   if index < len(team_week.starters) else placed.get(index))
             if pid in EMPTY_SLOT_IDS:
                 pid = None
             picks.append(SlotPick(
@@ -1271,10 +1308,16 @@ def build_week_report(
 # --------------------------------------------------------------------- #
 
 def main(argv: list[str] | None = None) -> int:
-    from ingest.config import resolve_league_id
-
+    # --league is REQUIRED rather than resolved from CLAUDE.md. That fallback
+    # was the only line in this module that reached ingest.config, and through
+    # it ingest.sleeper — which put a Sleeper client in the import graph of
+    # every module that reads a cached report, including the roster runner whose
+    # whole claim is that no league platform is involved. Nothing here fetches;
+    # build_week_report reads a cache. The one caller (`make demo`) already
+    # passes the league explicitly.
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--league", help="Sleeper league ID (overrides CLAUDE.md)")
+    parser.add_argument("--league", required=True,
+                        help="the cached league id to build from")
     parser.add_argument("--week", type=int, required=True)
     parser.add_argument("--roster", type=int, required=True,
                         help="my roster_id in the league")
@@ -1285,7 +1328,7 @@ def main(argv: list[str] | None = None) -> int:
                         default=PROCESSED_DIR / "week_report.json")
     args = parser.parse_args(argv)
 
-    league_id = resolve_league_id(args.league, REPO_ROOT)
+    league_id = args.league
     try:
         report = build_week_report(RAW_DIR, league_id, args.week, args.roster,
                                    named_rival_owner_id=args.rival_owner,

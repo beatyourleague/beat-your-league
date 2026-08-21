@@ -25,7 +25,7 @@ from typing import Any
 
 import ingest.pull as ingest_pull
 import render.report as render_report
-from render.email import render_email
+from render.email import render_email, subject_for as _subject, text_summary
 from engine.history import HistoryError
 from engine.week_report import (RAW_DIR, WeekReportError, build_week_report,
                                 current_nfl_season)
@@ -34,7 +34,7 @@ from run.registry import (DEFAULT_REGISTRY, RegistryError, Subscriber,
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
-from run.week import _current_week, text_summary
+from run.week import _current_week
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUBSCRIBER_REPORTS = REPO_ROOT / "reports" / "subscribers"
@@ -56,21 +56,6 @@ class BatchResult:
     detail: str
     html_path: Path | None = None
     message: Message | None = None
-
-
-def _subject(report: dict) -> str:
-    """What lands in the inbox.
-
-    A rival's name was the reason they opened it, and a solo report has no
-    rival to name — "the file on None" would be the subject line. The solo
-    subject leads with the one thing the report decides instead.
-    """
-    meta = report["meta"]
-    if meta.get("solo"):
-        return f"Week {meta['week']}: your lineup, decided"
-    if meta.get("rivalry_week"):
-        return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
-    return f"Week {meta['week']}: the file on {meta['rival_label']}"
 
 
 def _my_roster_id(raw_dir: Path, subscriber: Subscriber) -> int:
