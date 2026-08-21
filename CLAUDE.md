@@ -342,6 +342,15 @@ than silently merged (that would drop a team) or silently split (that would doub
 A real fix is a self-serve edit and belongs with the customer portal.
 
 **Still missing between payment and inbox:**
+- **League Pass SEATS are unimplemented on the roster path.** `run/rosters.py` validates them and
+  `run/tuesday.py` reports them, and nothing writes one: `run/intake.py` reads Stripe only, and
+  seats never transact. So a $99 pass today delivers the commissioner's own report and nothing
+  else. `FORM_ENDPOINT` is empty by PLAN §0 decision (the seat link is necessarily public, so an
+  unvalidated endpoint is a free-report generator) and the picker's seat mode says seats are not
+  open, so nothing is being promised that is not delivered — but the tier cannot ship until a
+  seat backend exists and `run/intake.py` reads it. Under the roster architecture there is no
+  league id to match a seat against; the seat holder types the commissioner's address and
+  entitlement flows through `covered_by`.
 - **Ledger GRADING is still Sleeper-shaped.** `engine/ledger.py` grades against
   `load_week_availability` and a cached Sleeper schedule. Recording works and runs on the new
   path (one shared ledger — without a league the calls are league-agnostic, so two subscribers
