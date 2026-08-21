@@ -218,7 +218,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status:** Phases 1-5 complete + Phase 6 subscriber mechanism built early (172 tests passing).
+**Status:** Phases 1-6 complete on the Sleeper architecture; the nflverse rebuild (PLAN §0) now reaches from the intake page to a rendered email (612 tests passing). The one gap left in that chain is the signup sync — see "Still missing between payment and inbox" below.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -238,6 +238,95 @@ per league, one report per subscriber, failures contained per-subscriber), and t
 strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Remaining for
 launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
 and connect the Substack list. All build phases are now complete.
+
+**The payment can become a report (Aug 21 2026) — the join that did not exist.** The intake
+collected a roster and `engine/solo_report.py` could build a report from one, and NOTHING
+connected them: `build_solo_report` was reachable only from a test while every runnable entry
+point still went through a league. Three modules close it, all Sleeper-free by import
+(`test_the_roster_runner_cannot_reach_sleeper_at_all`, which walks reachability rather than
+grepping one file):
+- **`run/solo.py`** — the week. The calendar comes from the schedule release, not `/v1/state/nfl`
+  (`current_season` / `current_week`: the first week whose last game has not been played; past the
+  last game it answers the last week, never 19). One shared per-week load — directory, stat rows,
+  team defenses, injuries, byes, last season for the positional prior — reused by every
+  subscriber, so a hundred subscribers cost what one does.
+- **`run/rosters.py`** — the registry. `data/registry/rosters.json`, gitignored. The roster is
+  stored BOTH expanded and encoded and the two must agree: one sync writes both from one object,
+  so a disagreement is corruption, and trusting the expanded copy mails somebody a confident
+  report about a roster they do not own. Filenames carry `sha256(ref)[:10]` — there is no
+  username left to fall back on and an address may not reach a CI log or an artifact.
+- **`run/tuesday.py`** — the run. Keeps every rule `run/batch.py` learned the hard way (dry-run
+  is the default and never the accident; a build failure still exits non-zero; everyone failing
+  the paid check at once is an error, not a green cron with an empty inbox). A seat is entitled
+  through its PAYER — `PaidList.entitles` already did this, and checking the seat's own address
+  is what once dropped every seat in the words meant for a cancellation.
+
+**Building it for real found what no test could have.** Nothing was running this path, so these
+were all live from the day the code was written:
+- **A week the injury archive does not cover read as a clean bill of health for the whole
+  league.** The archive holds a row only for players who were LISTED, so "no rows" means both
+  "nobody hurt" and "nobody has published yet". Statuses are built from the directory and
+  overlaid with the week's designations, and **a week with no rows yields NO snapshot at all** —
+  everyone UNKNOWN, no confidence anywhere. Principle 1: unknowable never means cleared.
+- **A defense carried its own offense's usage** ("128 targets (32.0 a game), 115 carries" for the
+  Broncos). `merge_defenses` folds team rows into the same weekly dict and a team row holds the
+  OFFENSE's counts. Usage skips anything not GSIS-shaped.
+- **A quarterback read "0 targets (0.0 a game)".** nflverse writes a real 0 where Sleeper wrote
+  nothing, so a zero WINDOW TOTAL is now absent rather than reported — and when every count is
+  zero the line disappears, which is the honest render of a player who was given nothing.
+- **The gap list said "team defenses are not scored yet" while the same run printed a projection
+  and a confidence for one.** It fires per-defense now, on the ones that really came back empty.
+- **The unknown-player guard never fired once**: `PlayerIndex.position` answers `"UNK"`, not
+  `None`, for an id it has never seen. Checked against the directory instead.
+- **`text_summary` — the text half of EVERY email — had never been run against a solo report.**
+  It printed "Your Team vs None" and then raised `KeyError` on `matchup['rival']`, so a solo
+  report could not be mailed at all. It also lived in `run/week.py`, which imports `ingest.pull`,
+  so every runner that wanted it pulled a Sleeper client through it; it is a pure function of a
+  report and now lives in `render/email.py` beside `subject_for` (moved out of `run/batch.py` for
+  the same reason — a copy per entry point is how two surfaces drift).
+- **RULE N1 was violated on the surfaces it names.** `ingest/nflverse.py` says the CC-BY-4.0
+  attribution is "rendered on every report and every public page"; no report rendered it, and
+  both renderers printed "Built from your league's own record on Sleeper" on a report built
+  entirely from nflverse — crediting a source the run never touched while omitting the one the
+  commercial grant depends on. `source_line(meta)` picks per report; the historical demo keeps
+  the Sleeper disclaimer, which is true of it.
+
+**Week 1 exists (same day).** `build_solo_report` raised "no roster record before week 1" — the
+FIRST report of the season, the one every launch subscriber is waiting for, could not be built.
+Nothing about week 1 is an error: there is no form yet, and `optimal_lineup` already renders a
+lineup as set when the model holds no opinion. But that branch read `team_week.starters`, which a
+solo roster does not have (RULE B3), so the first fix rendered every slot empty and the checklist
+told a subscriber with a full roster "You have nobody to start at QB, RB, TE, WR" — a confident
+false statement about players the report can see, worse than the exception it replaced.
+`_place_without_projections` places by eligibility, greedy in slot-restrictiveness and tie-broken
+on id so a report is byte-identical across runs. It is PLACEMENT, never a call: no projection, no
+confidence, and a reason on every row. **A hole mid-season still raises**, because then it really
+is an incomplete ingest. **Open product question: weeks 1-3 publish no confidences at all**
+(`MIN_GAMES_FOR_CALL = 3`), so the first three paid reports are a lineup, a pivot plan and counted
+usage with no start/sit call in them. That is honest and it is thin — decide what Week 1 carries
+before Sep 8.
+
+**Still missing between payment and inbox:**
+- **`run/sync.py` does not decode roster refs.** It sweeps Stripe into the SLEEPER registry
+  (`run/refs.py:decode`, v1), so `rosters.json` has to be written by hand today. Until it speaks
+  v2, checkout must not open — a payment would land with nowhere to go.
+- **Ledger GRADING is still Sleeper-shaped.** `engine/ledger.py` grades against
+  `load_week_availability` and a cached Sleeper schedule. Recording works and runs on the new
+  path (one shared ledger — without a league the calls are league-agnostic, so two subscribers
+  who made the same call made ONE call and the ids agree by construction). Recording is the half
+  that cannot be done retroactively; grading needs its nflverse port before `monday.yml` means
+  anything for roster subscribers.
+- **`weekly.yml` still runs `run.batch`.** It must point at `run.tuesday` when checkout opens.
+
+**A seat holder's "already paid" button was wired to the $39 checkout (Aug 21 2026).** The
+roster-paste intake replaced the Sleeper picker and seat mode came across with its header rewrite
+and its button label but not its own submit path — the handler picks a payment link from
+`WANTS_PASS`/`WANTS_MONTHLY`, and a seat is neither, so it fell through to `STRIPE_LINK_SEASON`.
+Invisible only because every link is still empty; live, the first League Pass league would have
+charged eleven people for seats their commissioner had bought. Seat submit now leaves the payment
+path before a link is chosen and asks for the commissioner's address (a seat naming no payer is
+an unpaid report waiting to be sent). With `FORM_ENDPOINT` empty per PLAN §0 it says seats are
+not open and that nothing was saved, rather than posting into the void.
 
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
