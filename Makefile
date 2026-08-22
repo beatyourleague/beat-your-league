@@ -2,7 +2,7 @@ PY := .venv/bin/python
 SEASON ?= 2026
 
 .PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview
+        intake intake-preview tuesday tuesday-preview monday monday-preview
 
 week:
 	$(PY) -m run.week
@@ -45,6 +45,14 @@ tuesday:
 
 tuesday-preview:
 	EMAIL_PROVIDER=dry $(PY) -m run.tuesday --allow-dry
+
+# Settle last week's published calls against the real box scores and republish
+# the public record. No secrets, no league — grading reads public data only.
+monday:
+	$(PY) -m run.monday
+
+monday-preview:
+	$(PY) -m run.monday --dry-run
 
 # --- the Sleeper-era pair, being retired -----------------------------------
 #

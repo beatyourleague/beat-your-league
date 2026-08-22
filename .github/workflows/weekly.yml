@@ -1,26 +1,41 @@
 # Tuesday weekly pipeline (PLAN.md season ops: reports generate Tue morning).
-# Activates once this repo is pushed to GitHub with the two secrets set:
-#   SLEEPER_LEAGUE_ID  — the league to report on
-#   SLEEPER_ROSTER_ID  — my roster id in that league
-# The runner starts with an empty cache, so each run is one real pull against
-# Sleeper (~80 throttled requests); reports upload as workflow artifacts.
-# Nothing is committed back — data/ stays out of git by design.
+#
+# This drives the ROSTER product (PLAN §0): payments become subscribers via
+# run.intake, and run.tuesday builds and mails one report per typed roster. No
+# league platform is read anywhere in this job, and that is enforced in the
+# suite by import reachability, not by this comment
+# (test_the_roster_runner_cannot_reach_sleeper_at_all).
+#
+# There is no "my own report" step any more. run.week needs a league id and a
+# roster id; the owner gets a report the same way every subscriber does, by
+# being a row in data/registry/rosters.json.
+#
+# Secrets that matter here:
+#   STRIPE_API_KEY        — restricted, read access to subscriptions+customers
+#   STRIPE_PAYMENT_LINKS  — s:plink_A,m:plink_B,p:plink_C (the plan is a FACT)
+#   EMAIL_PROVIDER + that provider's key — unset means dry-run, which FAILS the
+#                           job rather than silently mailing nobody.
 
 name: weekly-report
 
 on:
   schedule:
-    - cron: "0 11 * * 2" # Tuesdays 11:00 UTC (7am ET)
+    # Tuesdays 11:00 UTC. That is 07:00 ET while US daylight time is in effect
+    # and 06:00 ET from Nov 1 2026, when it ends — cron has no timezone, so the
+    # back half of the season sends an hour earlier than the front half.
+    # Harmless for correctness (week resolution is date-based, never hour-based)
+    # but it is a real change to when a subscriber's inbox lights up.
+    - cron: "0 11 * * 2"
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # commit the record (availability, ledger, send log) back
+  contents: write   # commit the record (ledger, send log, player directory) back
   issues: write     # raise an issue when a run fails, so it is never silent
 
 jobs:
   week:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       # fetch-depth: 0 because this job COMMITS BACK. The default is a
       # shallow clone, and `git pull --rebase` against a shallow history
@@ -36,88 +51,111 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      # Availability snapshots, the ledger and the send log now arrive WITH the
-      # checkout — they are committed to the repo. They used to live only in an
-      # Actions cache, which GitHub evicts after 7 days without access, and the
-      # Tuesday run touched the send log on exactly a 7-day cycle: one delayed
-      # run and the next would have mailed every paying subscriber twice.
-      # The registry holds subscriber emails, so it is gitignored and cannot
-      # arrive with the checkout — it has to be restored, or the send step below
-      # has nothing to send and silently skips itself.
+      # The ledger and the send log arrive WITH the checkout — they are
+      # committed. The registry holds subscriber emails, so it is gitignored and
+      # has to be restored, or the send step has nothing to send and silently
+      # skips itself.
+      #
+      # Losing this cache is only PARTLY self-healing: a missing watermark makes
+      # the next run sweep every session, but run.intake never reads back the
+      # byl_roster_ref it stamps on the Stripe customer, so a subscriber whose
+      # Checkout Session has aged out of Stripe's listing is unrecoverable.
+      # GitHub evicts caches after 7 days without access and this cron touches
+      # it on exactly a 7-day cycle, so one skipped week is the whole margin.
       - name: Restore subscriber registry
         uses: actions/cache/restore@v4
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
           restore-keys: registry-
-      - name: Run weekly pipeline (my own report)
-        env:
-          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
-          SLEEPER_ROSTER_ID: ${{ secrets.SLEEPER_ROSTER_ID }}
-        run: .venv/bin/python -m run.week
-      # Subscriber delivery. EMAIL_PROVIDER is unset until the sending account
-      # exists, and unset means dry-run — so this step is safe to enable now and
-      # starts mailing the day the secret is added, with no code change.
-      # STRIPE_API_KEY is the entitlement source: with it set, the run asks
-      # Stripe who is currently paying and mails exactly those people, with no
-      # export and no human step. A RESTRICTED key with read access to
-      # subscriptions + customers is enough — never the full secret key.
-      # Without it the run falls back to data/registry/substack-export.csv.
-      # `if: always()` here and on the sync step, for a reason worth stating:
-      # MY OWN report must never be able to hold up a paying subscriber's.
-      # A step with no `if:` defaults to `if: success()`, so any non-zero exit
-      # from `run.week` above — a missing league id, an ingest 5xx on my league,
-      # a corrupt ledger — silently skipped the send for everybody, while the
-      # subscriber batch was perfectly able to run. `always()` keeps the job red
-      # and the failure issue firing; it just stops the blast radius at me.
-      # (The old gate here was hashFiles('data/registry/subscribers.json'), a
-      # path under the gitignored data/ that cannot exist on a fresh runner, so
-      # this step skipped itself on every run and the cron had never mailed
-      # anybody. run.batch already exits 0 with "registry is empty — nothing to
-      # do", which is the correct place for that decision.)
-      # Turn payments into a registry BEFORE building anything. With
-      # STRIPE_API_KEY unset this is a no-op and the run falls back to whatever
-      # registry the cache restored, so enabling it is a secret, not a deploy.
-      # continue-on-error: a sync that cannot reach Stripe must not stop last
-      # week's known-good registry from being delivered.
-      - name: Sync signups from payments
+      # The nflverse download cache. Both run.intake and run.tuesday call
+      # load_week_data, so without this one cron run downloads ~30 MB twice.
+      - name: Restore nflverse cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nflverse
+          key: nflverse-${{ github.run_id }}
+          restore-keys: nflverse-
+      # HAZARD, and the reason this step exists: ingest.nflverse.fetch returns
+      # any non-empty cached file unconditionally when live=False, and
+      # load_week_data fetches players.csv and teams_colors_logos.csv that way.
+      # A restored cache therefore FREEZES the player directory at whatever day
+      # it was first written — a rookie signed later never appears, and the
+      # subscriber who rostered him is blocked at intake with a paid,
+      # undeliverable row. The weekly stats files revalidate on their own 6h
+      # window, so only these two need dropping.
+      - name: Drop the frozen directory assets
+        run: rm -f data/raw/nflverse/players.csv data/raw/nflverse/teams_colors_logos.csv
+      # The picker downloads site/join/players.json. Nothing regenerated it, and
+      # a stale copy does not break a build — it breaks one specific customer's
+      # signup, weeks later, surfacing only as a BLOCKED line in the intake log.
+      # The season is derived rather than hardcoded: the Makefile's SEASON goes
+      # stale every September.
+      - name: Refresh the published player directory
+        id: directory
+        run: |
+          SEASON=$(.venv/bin/python -c "from pathlib import Path; \
+            from run.solo import current_season; \
+            print(current_season(Path('data/raw/nflverse')))")
+          echo "season=$SEASON" >> "$GITHUB_OUTPUT"
+          .venv/bin/python -m render.player_index --season "$SEASON"
+      # Turn payments into the registry BEFORE building anything. With
+      # STRIPE_API_KEY unset this exits 1 and changes nothing, so enabling it is
+      # a secret, not a deploy.
+      #
+      # continue-on-error, and its limit: a sync that cannot reach Stripe must
+      # not stop last week's known-good registry from being delivered. But
+      # run.intake also exits 1 when a paid signup is BLOCKED — a customer who
+      # paid and cannot be served — and swallowing that would be a green run
+      # with a buried log line. So the send proceeds either way and the job is
+      # failed afterwards, below, once everybody who COULD be mailed has been.
+      - name: Turn payments into subscribers
+        id: intake
         if: always()
         continue-on-error: true
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
-          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
-          FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
-        run: .venv/bin/python -m run.sync
+        run: .venv/bin/python -m run.intake
+      # `if: always()` so a failed intake cannot hold up a paying subscriber's
+      # report. EMAIL_PROVIDER unset means dry-run, and run.tuesday then prints
+      # NOTHING WAS SENT and exits 1 rather than reporting a green success with
+      # empty inboxes — so this step is safe to enable now and starts mailing
+      # the day the secret is added, with no code change.
       - name: Send subscriber reports
         if: always()
         env:
-          SLEEPER_LEAGUE_ID: ${{ secrets.SLEEPER_LEAGUE_ID }}
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
-        run: .venv/bin/python -m run.batch
+        run: .venv/bin/python -m run.tuesday
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
-      # Persist the three things that cannot be rebuilt. `always()` so a failed
-      # send still records who WAS mailed — the alternative is double-sending
-      # them on the retry. Rebase before pushing: Monday's run commits too.
+      - name: Save nflverse cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nflverse
+          key: nflverse-${{ github.run_id }}
+      # Persist what cannot be rebuilt. `always()` so a failed send still records
+      # who WAS mailed — the alternative is double-sending them on the retry.
+      # Rebase before pushing: Monday's run commits too.
       - name: Persist the record
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/raw/availability data/processed/ledger
+          git add -A data/processed/ledger site/join/players.json
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
-          git commit -m "Weekly run: availability, ledger, send log"
+          git commit -m "Weekly run: ledger, send log, player directory"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push
       - name: Upload reports
@@ -134,10 +172,18 @@ jobs:
             reports/
             !reports/subscribers/
             !reports/outbox/
-            data/processed/week_report.json
-            data/raw/availability/
             data/processed/ledger/
           if-no-files-found: error
+      # AFTER delivery, not before. A blocked signup is somebody who paid and is
+      # getting nothing, so the run must go red — but only once every subscriber
+      # who could be served has been.
+      - name: Fail the run if a paid signup could not be served
+        if: always() && steps.intake.outcome == 'failure'
+        run: |
+          echo "run.intake exited non-zero — a paid signup was blocked, or Stripe"
+          echo "could not be read. Reports were still built and sent for everyone"
+          echo "already in the registry. See the intake step's log."
+          exit 1
       # A silent failure costs a paying subscriber their Tuesday and nobody
       # finds out until they complain. One issue per failed run, free.
       - name: Raise an issue if the run failed
@@ -151,6 +197,8 @@ jobs:
 
           Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          Check in this order: Sleeper reachable, STRIPE_API_KEY valid, email provider
-          credentials, then whether data/processed/sent.jsonl shows a partial send." \
+          Check in this order: nflverse releases reachable, STRIPE_API_KEY valid,
+          any BLOCKED line in the intake log (a paid roster naming a player the
+          directory does not have), email provider credentials, then whether
+          data/processed/sent.jsonl shows a partial send." \
             --label bug || true

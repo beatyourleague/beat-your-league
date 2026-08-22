@@ -351,14 +351,7 @@ A real fix is a self-serve edit and belongs with the customer portal.
   seat backend exists and `run/intake.py` reads it. Under the roster architecture there is no
   league id to match a seat against; the seat holder types the commissioner's address and
   entitlement flows through `covered_by`.
-- **Ledger GRADING is still Sleeper-shaped.** `engine/ledger.py` grades against
-  `load_week_availability` and a cached Sleeper schedule. Recording works and runs on the new
-  path (one shared ledger — without a league the calls are league-agnostic, so two subscribers
-  who made the same call made ONE call and the ids agree by construction). Recording is the half
-  that cannot be done retroactively; grading needs its nflverse port before `monday.yml` means
-  anything for roster subscribers.
-- **`weekly.yml` still runs `run.batch` and `run.sync`.** It must point at `run.tuesday` and
-  `run.intake` when checkout opens (`make intake` / `make tuesday`, previews on both).
+- (Both the ledger-grading port and the cron rewiring are DONE — see below.)
 
 **A seat holder's "already paid" button was wired to the $39 checkout (Aug 21 2026).** The
 roster-paste intake replaced the Sleeper picker and seat mode came across with its header rewrite
@@ -424,6 +417,53 @@ locally, 611 pass / 19 skip / 0 fail in a throwaway clone. **Verify the fresh-ch
 `git clone` to a temp dir — never by moving the live `data/` aside.** Doing that nested the real
 directory inside itself twice; nothing was lost (diffed layer by layer, the innermost was a strict
 superset) but `data/registry` and the unrecoverable availability snapshots were two levels down.
+
+**Ledger grading was Sleeper-shaped, so a roster call could never settle (Aug 22 2026).**
+`run/tuesday.py` records every published probability — the half that cannot be done
+retroactively — and nothing settled them: `grade_ledger` decides finality from a cached Sleeper
+schedule plus the availability snapshots only `ingest.pull` writes. Every `typed-*` call would
+have stayed PENDING forever: green cron, empty public record, principle 2 quietly voided.
+**Rewiring the crons first would have made that permanent and silent**, which is why grading came
+first. RULES L1-L4 are NOT reimplemented — the SOURCES (finality, points) are separated from the
+DECISION (hit/miss/void) so one function serves both data stacks; a second copy is how a public
+record starts grading two ways. Two things had to be decided rather than ported:
+- **A player with no stat row scored 0.0, not "no record".** Sleeper wrote an explicit 0.0 for a
+  rostered player who sat, so a call whose pick sat while the alternative scored was a MISS.
+  nflverse simply has no row. Mapping that to "no scoring record" would VOID every one of those —
+  real misses, removed from the record, flattering it in the one direction nobody should trust us
+  on. Stated in code before a single row was graded.
+- **The SCORING PRESET is part of a call's identity.** Without a league there is one shared ledger
+  and a call id hashes (league_id, season, week, roster_id, slot, pick, over) — all equal for a
+  PPR subscriber and a standard one. Measured on real 2024 week-10 data: **5 of 6 calls collided
+  while publishing DIFFERENT probabilities** (0.647 vs 0.632), so `record_calls` kept whichever
+  ran first and dropped the other, and the FLEX slot even seated a different player. Grading is
+  worse — the answer itself differs by rule. The store is now `typed-{scoring}-{season}`, which
+  splits the ids and is how grading learns which rule to use. `run/monday.py` is the runner
+  (Sleeper-free by import reachability), keeping the fail-closed shrink guard and refusing to
+  publish an empty page over a good one.
+
+**The crons drive the roster product (Aug 22 2026).** `weekly.yml` → `run.intake` + `run.tuesday`,
+`monday.yml` → `run.monday`. Three hazards the map found, each fixed and pinned by
+`tests/test_workflows.py` (which matches only what a step RUNS — the first version read a shell
+comment inside a `run:` block as evidence):
+- **A cached `data/raw/nflverse` FREEZES the player directory.** `fetch` returns any non-empty
+  cached file unconditionally when `live=False`, and `players.csv` / `teams_colors_logos.csv` are
+  read that way — so a rookie signed after the cache was written never appears and the subscriber
+  who rostered him is BLOCKED at intake with a paid, undeliverable row. Both crons delete exactly
+  those two assets before running; the weekly stats revalidate on their own 6h window.
+- **Nothing regenerated `site/join/players.json`.** A stale directory does not break a build, it
+  blocks one customer's signup weeks later. Now refreshed every Tuesday with the season DERIVED
+  (`current_season`), never hardcoded — the Makefile's `SEASON` goes stale every September.
+  It was already stale in the repo: regenerating moved it by 17 players.
+- **`continue-on-error` on intake would swallow a blocked signup.** Tolerating a Stripe outage is
+  right (last week's known-good registry must still be delivered); tolerating "somebody paid and
+  cannot be served" is not. The send proceeds either way and a later step fails the job, so
+  everyone who COULD be mailed is mailed first.
+`monday.yml`'s NAME must stay `monday-receipts`: `pages.yml` triggers the public-ledger republish
+on `workflow_run` matching that literal string. The Monday cron now needs no secrets at all.
+Deliberately NOT ported: `content/` drafts (`run/content.py` is Sleeper-rooted end to end) and
+`data/raw/availability` (only `ingest.pull` writes it — the committed history stays, the path
+stops accumulating).
 
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
