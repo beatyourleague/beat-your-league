@@ -383,3 +383,21 @@ def test_the_append_only_logs_are_union_merged() -> None:
     text = attrs.read_text(encoding="utf-8")
     assert "merge=union" in text
     assert "data/processed/ledger" in text and "sent.jsonl" in text
+
+
+def test_a_lost_duplicate_row_is_still_a_loss(tmp_path) -> None:
+    """The shrink guard counts rows, it does not compare sets of keys.
+
+    Adding scoring and league_size to the key made the collision that was found
+    distinguishable; counting is what makes the guard robust to the NEXT one.
+    Two rows that legitimately share a key, one of which disappears, is a real
+    loss — and a set comparison cannot see it, because the key is still present.
+    """
+    out = tmp_path / "site"
+    out.mkdir()
+    row = {"season": SEASON, "week": 10, "slot": "WR", "pick": "A",
+           "over": "B", "scoring": "ppr", "league_size": 12}
+    (out / "data.json").write_text(json.dumps([row, dict(row)]), encoding="utf-8")
+    with pytest.raises(monday.MondayError, match="would disappear"):
+        monday.guard_shrink([row], out)
+    monday.guard_shrink([row, dict(row)], out)          # unchanged: fine

@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from engine.ledger import (GRADED, PENDING, VOID, grade_ledger_nflverse,
@@ -98,12 +99,17 @@ def guard_shrink(new_entries: list[dict], out_dir: Path) -> None:
                 entry.get("pick"), entry.get("over"), entry.get("scoring"),
                 entry.get("league_size"))
 
-    missing = {key(e) for e in old_entries} - {key(e) for e in new_entries}
+    # MULTISETS, not sets. Adding scoring and league_size to the key made the
+    # collision I found distinguishable, but counting is what makes the guard
+    # robust to the NEXT collision: two rows that legitimately share a key, one
+    # of which disappears, is still a loss — and a set comparison cannot see it.
+    missing = (Counter(key(e) for e in old_entries)
+               - Counter(key(e) for e in new_entries))
     if missing:
         raise MondayError(
-            f"REFUSING to regenerate the public ledger: {len(missing)} "
+            f"REFUSING to regenerate the public ledger: {sum(missing.values())} "
             f"previously published entr(ies) would disappear (e.g. "
-            f"{sorted(str(m) for m in missing)[0]}). The ledger store has lost "
+            f"{sorted(str(m) for m in missing.elements())[0]}). The ledger store has lost "
             f"data — restore data/processed/ledger/ from the artifact backup, "
             f"then re-run.")
 

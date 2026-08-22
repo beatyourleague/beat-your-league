@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections import Counter
 import sys
 from datetime import date as _date
 from pathlib import Path
@@ -83,12 +84,16 @@ def _guard_ledger_shrink(new_entries: list[dict]) -> None:
         return (entry.get("season"), entry.get("week"), entry.get("slot"),
                 entry.get("pick"), entry.get("over"))
 
-    missing = {key(e) for e in old_entries} - {key(e) for e in new_entries}
+    # Multisets, for the same reason as run/monday.py: two rows sharing a key,
+    # one of which disappears, is a loss a set comparison cannot see.
+    missing = (Counter(key(e) for e in old_entries)
+               - Counter(key(e) for e in new_entries))
     if missing:
         raise WeekReportError(
             f"REFUSING to regenerate the public ledger: {len(missing)} "
             "previously published entr(ies) would disappear (e.g. "
-            f"{sorted(missing)[0]}). The ledger store has lost data — restore "
+            f"{sorted(str(m) for m in missing.elements())[0]}). The ledger store "
+            "has lost data — restore "
             "data/processed/ledger/ from the artifact backup, then re-run.")
 
 
