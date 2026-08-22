@@ -1,6 +1,6 @@
 # Confidence, re-measured on nflverse
 
-Generated 2026-08-21 07:58 UTC. Method frozen in advance: `reports/nflverse-backtest-method.md`,
+Generated 2026-08-22 01:15 UTC. Method frozen in advance: `reports/nflverse-backtest-method.md`,
 committed before this harness existed. Reproduce with
 `python -m engine.nflverse_backtest`.
 
@@ -19,17 +19,17 @@ it would otherwise be argued with.
 
 | | |
 |---|---|
-| Calls graded | 9073 |
-| Decided (ties excluded) | 8760 |
-| Ties | 313 |
-| Hit rate | 63.9% |
-| Expected calibration error | 3.2% |
-| Brier score | 0.2208 (0.25 = a constant 50% guess) |
-| Resolution — bottom decile | 50.8% |
-| Resolution — top decile | 84.0% |
-| Resolution spread | 33.2 points |
+| Calls graded | 10041 |
+| Decided (ties excluded) | 9721 |
+| Ties | 320 |
+| Hit rate | 64.6% |
+| Expected calibration error | 3.6% |
+| Brier score | 0.2178 (0.25 = a constant 50% guess) |
+| Resolution — bottom decile | 50.5% |
+| Resolution — top decile | 86.1% |
+| Resolution spread | 35.6 points |
 | Judgeable buckets | 6 |
-| Calibrated | 1 |
+| Calibrated | 2 |
 
 ## Calibration
 
@@ -42,12 +42,12 @@ undecided and counts against the calibrated total.
 
 | Stated | Graded | Decided | Ties | Stated avg | Observed | 95% interval | Verdict |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
-| 50%–55% | 2445 | 2360 | 85 | 52.4% | 51.4% | 49%–54% | calibrated |
-| 55%–60% | 2157 | 2084 | 73 | 57.4% | 59.8% | 58%–62% | **off** |
-| 60%–65% | 1742 | 1683 | 59 | 62.4% | 65.8% | 64%–68% | **off** |
-| 65%–70% | 1299 | 1246 | 53 | 67.4% | 73.2% | 71%–76% | **off** |
-| 70%–80% | 1241 | 1205 | 36 | 74.1% | 79.6% | 77%–82% | **off** |
-| 80%–90% | 185 | 178 | 7 | 82.9% | 90.4% | 85%–95% | **off** |
+| 50%–55% | 2714 | 2627 | 87 | 52.4% | 51.6% | 50%–54% | calibrated |
+| 55%–60% | 2311 | 2233 | 78 | 57.4% | 58.9% | 57%–61% | calibrated |
+| 60%–65% | 1946 | 1887 | 59 | 62.5% | 66.3% | 64%–68% | **off** |
+| 65%–70% | 1407 | 1357 | 50 | 67.3% | 74.1% | 72%–77% | **off** |
+| 70%–80% | 1417 | 1375 | 42 | 74.1% | 82.3% | 80%–84% | **off** |
+| 80%–90% | 244 | 240 | 4 | 82.9% | 91.2% | 88%–95% | **off** |
 
 **The failure is one-directional.** Every bucket above the lowest outperforms
 its stated number. The model is not noisy here — it is systematically
@@ -58,17 +58,17 @@ is strong while calibration is not.
 
 | Season | Calls |
 | --- | ---: |
-| 2014 | 870 |
-| 2015 | 845 |
-| 2016 | 788 |
-| 2017 | 810 |
-| 2018 | 839 |
-| 2019 | 807 |
-| 2020 | 836 |
-| 2021 | 807 |
-| 2022 | 853 |
-| 2023 | 757 |
-| 2024 | 861 |
+| 2014 | 953 |
+| 2015 | 947 |
+| 2016 | 872 |
+| 2017 | 893 |
+| 2018 | 925 |
+| 2019 | 900 |
+| 2020 | 929 |
+| 2021 | 885 |
+| 2022 | 943 |
+| 2023 | 838 |
+| 2024 | 956 |
 
 ## What this is not
 

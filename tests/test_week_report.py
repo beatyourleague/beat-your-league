@@ -202,7 +202,8 @@ def _build(availability: WeekAvailability):
     players = _player_index()
     model = ProjectionModel(season, players)
     mine = season.weeks[REPORT_WEEK][1]
-    return optimal_lineup(season, mine, model, players, availability), season, players, model
+    return (optimal_lineup(season, mine, model, players, availability, REPORT_WEEK),
+            season, players, model)
 
 
 def test_optimal_lineup_no_double_assignment_and_flex_gets_leftover() -> None:
@@ -259,8 +260,8 @@ def test_win_probability_calibration_gate_is_default() -> None:
     mine = season.weeks[REPORT_WEEK][1]
     rival = season.weeks[REPORT_WEEK][2]
     known = _availability(ACTIVE_ALL)
-    my_picks = optimal_lineup(season, mine, model, players, known)
-    rival_picks = rival_lineup(season, rival, model, players, known)
+    my_picks = optimal_lineup(season, mine, model, players, known, REPORT_WEEK)
+    rival_picks = rival_lineup(season, rival, model, players, known, REPORT_WEEK)
     prob, gate = win_probability(my_picks, rival_picks)
     assert prob is None and "no win percentage" in (gate or "").lower()
     # and it must not promise a fix: the gate backtest moved calibrated
@@ -281,14 +282,14 @@ def test_win_probability_gates_on_any_non_active_starter(
     rival = season.weeks[REPORT_WEEK][2]
 
     known = _availability(ACTIVE_ALL)
-    my_picks = optimal_lineup(season, mine, model, players, known)
-    rival_picks = rival_lineup(season, rival, model, players, known)
+    my_picks = optimal_lineup(season, mine, model, players, known, REPORT_WEEK)
+    rival_picks = rival_lineup(season, rival, model, players, known, REPORT_WEEK)
     prob, gate = win_probability(my_picks, rival_picks)
     assert gate is None and prob is not None and 0.5 < prob < 1.0
 
     unknown = _availability(None)
-    my_unknown = optimal_lineup(season, mine, model, players, unknown)
-    rival_unknown = rival_lineup(season, rival, model, players, unknown)
+    my_unknown = optimal_lineup(season, mine, model, players, unknown, REPORT_WEEK)
+    rival_unknown = rival_lineup(season, rival, model, players, unknown, REPORT_WEEK)
     prob2, gate2 = win_probability(my_unknown, rival_unknown)
     assert prob2 is None and "availability not confirmed" in (gate2 or "")
 
@@ -302,8 +303,9 @@ def test_truncated_rival_lineup_gates_win_probability() -> None:
     mine = season.weeks[REPORT_WEEK][1]
     truncated_rival = _team_week(2, REPORT_WEEK, RIVAL_ROSTER, ["qb9"])  # 1 of 4 set
     known = _availability(ACTIVE_ALL)
-    my_picks = optimal_lineup(season, mine, model, players, known)
-    rival_picks = rival_lineup(season, truncated_rival, model, players, known)
+    my_picks = optimal_lineup(season, mine, model, players, known, REPORT_WEEK)
+    rival_picks = rival_lineup(season, truncated_rival, model, players, known,
+                               REPORT_WEEK)
     assert len(rival_picks) == len(season.starting_slots)
     prob, gate = win_probability(my_picks, rival_picks)
     assert prob is None and gate is not None
@@ -344,7 +346,7 @@ def test_rule3_swap_seats_the_probability_winner() -> None:
     target = TeamWeek(roster_id=1, week=week, matchup_id=1, starters=("steady",),
                       starters_points=(0.0,), players=("boom", "steady"),
                       players_points={"boom": 0.0, "steady": 0.0}, points=0.0)
-    picks = optimal_lineup(season, target, model, players, avail)
+    picks = optimal_lineup(season, target, model, players, avail, week)
     pick = picks[0]
     # Precondition that makes this test meaningful: boom leads on mean.
     assert boom_proj.mean > steady_proj.mean
@@ -359,7 +361,8 @@ def test_rival_bench_better_flag() -> None:
     players = _player_index()
     model = ProjectionModel(season, players)
     rival = season.weeks[REPORT_WEEK][2]
-    picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL))
+    picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL),
+                         REPORT_WEEK)
     flagged = [p for p in picks if any(f["kind"] == "bench_better" for f in p.flags)]
     # rb8 (15.2) is RB- and FLEX-eligible; he is worth +2.8 at RB and +8.2 at
     # FLEX, so the exploitable spot is FLEX.
@@ -375,7 +378,8 @@ def test_one_bench_player_is_the_fix_for_only_one_slot() -> None:
     players = _player_index()
     model = ProjectionModel(season, players)
     rival = season.weeks[REPORT_WEEK][2]
-    picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL))
+    picks = rival_lineup(season, rival, model, players, _availability(ACTIVE_ALL),
+                         REPORT_WEEK)
     named = [p.alternative_id for p in picks if p.alternative_id]
     assert len(named) == len(set(named)), f"a bench player was double-booked: {named}"
 
@@ -930,7 +934,7 @@ def test_a_confidence_always_renders_with_its_percent_sign() -> None:
     players = _player_index()
     model = ProjectionModel(season, players)
     picks = optimal_lineup(season, season.weeks[REPORT_WEEK][1], model,
-                           players, known)
+                           players, known, REPORT_WEEK)
     published = [p for p in picks if p.confidence is not None]
     assert published, "fixture produced no published confidence to check"
 

@@ -132,6 +132,7 @@ def optimal_lineup(
     model: ProjectionModel,
     players: PlayerIndex,
     availability: WeekAvailability,
+    week: int,
 ) -> list[SlotPick]:
     """Fill the starting slots with the highest-projected available players.
 
@@ -140,8 +141,16 @@ def optimal_lineup(
     shapes and deterministic everywhere. Players classified OUT are excluded
     unless a slot would otherwise go empty — then the least-bad player is
     seated and flagged, never silently.
+
+    ``week`` is the week being PROJECTED, and it is an explicit argument rather
+    than ``team_week.week`` because deriving it was a trap that cost a week of
+    form on every solo report and every backtest call. ``team_week`` is only a
+    roster carrier here — which is exactly how both callers used it, one of them
+    saying so in a comment — but its ``.week`` silently became the model's
+    ``before_week``, and ``build_season`` stops at W-1, so the report for week W
+    projected from weeks 1..W-2. Week W-1 was loaded into the model and then
+    filtered back out. Passing the week is what makes the two independent.
     """
-    week = team_week.week
     projections = {
         pid: proj
         for pid in team_week.players
@@ -267,13 +276,17 @@ def rival_lineup(
     model: ProjectionModel,
     players: PlayerIndex,
     availability: WeekAvailability,
+    week: int,
 ) -> list[SlotPick]:
     """The rival's lineup **as currently set**, with fragility flags.
 
     We render what they have actually done, not what they should do — the
     product's edge is seeing where the set lineup is fragile.
+
+    ``week`` is explicit for the same reason it is on ``optimal_lineup``: a
+    TeamWeek is a roster carrier and its ``.week`` must never quietly decide
+    which weeks the model may read.
     """
-    week = team_week.week
     picks: list[SlotPick] = []
     started = set(team_week.starters)
     projections: dict[int, Projection] = {}
@@ -881,7 +894,8 @@ def rival_watch(
             (season.team_label(rid) for rid, tw in season.weeks[week].items()
              if rid != named_roster and tw.matchup_id == their_tw.matchup_id), None)
         watch["their_opponent"] = their_opponent
-        their_picks = rival_lineup(season, their_tw, model, players, availability)
+        their_picks = rival_lineup(season, their_tw, model, players, availability,
+                                   week)
         fragile = [f for p in their_picks for f in p.flags]
         watch["fragile_spots"] = len(fragile)
         watch["top_fragility"] = fragile[0]["text"] if fragile else None
@@ -1132,8 +1146,8 @@ def build_week_report(
             f"no opponent shares matchup_id {mine.matchup_id} in week {week}")
 
     availability = load_week_availability(raw_dir, season.season, week)
-    my_picks = optimal_lineup(season, mine, model, players, availability)
-    rival_picks = rival_lineup(season, rival, model, players, availability)
+    my_picks = optimal_lineup(season, mine, model, players, availability, week)
+    rival_picks = rival_lineup(season, rival, model, players, availability, week)
 
     prob, prob_gate = win_probability(my_picks, rival_picks)
     hype = hype_meter(season, week, players, season.waiver_budget)
@@ -1215,7 +1229,8 @@ def build_week_report(
     my_range = _team_range(my_picks)
     rival_range = _team_range(rival_picks)
     # What the lineup they have SET projects, under the identical gate.
-    as_set_range = _team_range(rival_lineup(season, mine, model, players, availability))
+    as_set_range = _team_range(
+        rival_lineup(season, mine, model, players, availability, week))
     if my_range is None or rival_range is None:
         gaps.append({"field": "team_ranges", "reason": TEAM_RANGE_GATE})
     # Operator-facing note only. Deliberately NOT rendered to buyers: an empty

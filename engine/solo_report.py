@@ -99,7 +99,15 @@ def build_solo_report(
         team_week = _team_week(SUBSCRIBER_ROSTER_ID, max(week - 1, 0),
                                spec.player_ids, {}, spec.rule)
 
-    picks = optimal_lineup(season, team_week, model, players, availability)
+    # `week`, not team_week.week. team_week is the roster carrier — build_season
+    # stops at W-1, so the last TeamWeek it holds is week W-1's — and passing it
+    # in as the projection week meant every report projected from weeks 1..W-2,
+    # discarding the most recent completed week. Measured across 2019-2024:
+    # 14.6% of slots seated a different player, 10.8% of publishable calls were
+    # suppressed by keeping players a week short of MIN_GAMES_FOR_CALL, and the
+    # matched head-to-heads the correction reorders go 133-100 in its favour
+    # (two-sided sign test p = 0.036).
+    picks = optimal_lineup(season, team_week, model, players, availability, week)
     my_range = _team_range(picks)
 
     gaps: list[dict[str, str]] = []

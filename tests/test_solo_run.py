@@ -351,6 +351,58 @@ def test_a_hole_mid_season_is_still_an_error(tmp_path) -> None:
                           data.availability, WEEK, cache)
 
 
+def test_the_report_reads_the_most_recent_completed_week(tmp_path) -> None:
+    """Every report projected week W from weeks 1..W-2, silently.
+
+    build_season stops at W-1, so the last TeamWeek it holds is week W-1's — and
+    optimal_lineup took the week it was projecting from that carrier, which made
+    the model's cutoff W-1 and filtered week W-1 straight back out after loading
+    it. The most recent completed week is also the most predictive one.
+
+    Measured across 2019-2024 before fixing it: 14.6% of lineup slots seated a
+    different player, 10.8% of publishable calls were suppressed by holding
+    players one week short of MIN_GAMES_FOR_CALL, and on the matched
+    head-to-heads where only the ordering differs the correction wins 133-100
+    (two-sided sign test p = 0.036).
+    """
+    cache = _cache(tmp_path, weeks=5)          # weeks 1-5 played, report week 6
+    report = solo.report_for(_spec(), solo.load_week_data(cache, SEASON, 6,
+                                                          session=OFFLINE),
+                             cache_dir=cache)
+    games = {slot["player_name"]: slot["form_games"] for slot in report["lineup"]
+             if slot["player_id"]}
+    assert games, "no slot was filled"
+    assert set(games.values()) == {5}, (
+        f"a week-6 report must count all five completed weeks, got {games}")
+
+
+def test_the_projected_week_is_passed_in_not_read_off_the_roster(tmp_path) -> None:
+    """The trap, pinned. A TeamWeek is a roster carrier — both callers used it
+    as one, and one of them says so in a comment — so its `.week` must never be
+    what decides which weeks the model may read. Passing the week explicitly is
+    the whole fix; deriving it again would reintroduce the off-by-one in a form
+    no output makes visible."""
+    import ast
+    import inspect
+    import textwrap
+    from engine.week_report import optimal_lineup, rival_lineup
+    for fn in (optimal_lineup, rival_lineup):
+        assert "week" in inspect.signature(fn).parameters, fn.__name__
+        # The DOCSTRING names the trap on purpose, so match against code only —
+        # otherwise this passes or fails on prose, which is exactly the kind of
+        # test that proves nothing about the thing it is named after.
+        tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+        body = tree.body[0].body
+        if (isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)):
+            body = body[1:]
+        reads = [n for stmt in body for n in ast.walk(stmt)
+                 if isinstance(n, ast.Attribute) and n.attr == "week"
+                 and isinstance(n.value, ast.Name) and n.value.id == "team_week"]
+        assert not reads, (
+            f"{fn.__name__} derives the projected week from its roster carrier")
+
+
 def test_an_id_the_directory_does_not_know_fails_loudly(tmp_path) -> None:
     """A ref decodes to ids, not to players. An unknown id would render as a
     blank row in a report somebody paid for."""

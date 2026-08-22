@@ -269,9 +269,14 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
             if team_week is None:
                 continue
             # The roster is fixed all season, so any week's TeamWeek carries it.
+            # It carries ONLY that: the week being projected is passed
+            # explicitly, because taking it from the carrier is what made this
+            # harness — and the product it measures — project week W from weeks
+            # 1..W-2 and call it 1..W-1.
             available = availability_for(season, week, roster, universe, weekly,
                                           injuries, byes)
-            picks = optimal_lineup(season_obj, team_week, model, players, available)
+            picks = optimal_lineup(season_obj, team_week, model, players,
+                                   available, week)
             for pick in picks:
                 if pick.confidence is None or not pick.alternative_id:
                     continue
