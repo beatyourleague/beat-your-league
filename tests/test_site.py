@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 import pytest
+from conftest import requires_demo_render, requires_sample_league
 
 SITE = Path(__file__).resolve().parent.parent / "site"
 LANDING = (SITE / "index.html").read_text(encoding="utf-8")
@@ -455,6 +456,7 @@ def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
             f"{name} page should link straight to the cancellation steps"
 
 
+@requires_demo_render
 def test_every_report_carries_a_way_out() -> None:
     """A weekly commercial email with no exit is friction and a compliance
     problem; one that stops emails while billing continues is worse."""
@@ -604,6 +606,7 @@ def test_waiver_edge_is_sold_as_a_decision_not_a_stat() -> None:
     assert re.search(r"waiver market in your league", SAMPLE_REPORT, re.I)
 
 
+@requires_sample_league
 def test_bid_advice_never_exceeds_what_the_reader_can_pay() -> None:
     """Telling someone with 10 FAAB to bid 38 would waste their season. The
     unaffordable case must say so instead of recommending it."""

@@ -749,10 +749,8 @@ def test_the_checklist_decides_rather_than_asking() -> None:
     """Section 01 is written for someone who reads nothing else, so it must carry
     the verdict the engine already computed — not hand back the question while
     the answer sits four sections lower in the waiver block."""
-    import json as _json
-    report = _json.loads(
-        (Path(__file__).resolve().parent.parent / "data" / "processed" /
-         "week_report.json").read_text(encoding="utf-8"))
+    from conftest import demo_report
+    report = demo_report()
     waiver = [c["action"] for c in report["checklist"]
               if "waivers clear" in c["deadline"]]
     if not waiver:
@@ -768,10 +766,8 @@ def test_the_gap_never_appears_without_its_swing() -> None:
     probability). Published alone it would claim with a big number what we
     refuse to claim in words — on the sample week it is 5.3 against a swing of
     53. The two travel together or neither is shown."""
-    import json as _json
-    report = _json.loads(
-        (Path(__file__).resolve().parent.parent / "data" / "processed" /
-         "week_report.json").read_text(encoding="utf-8"))
+    from conftest import demo_report
+    report = demo_report()
     matchup = report["matchup"]
     assert ("margin" in matchup) == ("margin_swing" in matchup)
     html_out = render(report, _template())

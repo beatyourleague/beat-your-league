@@ -66,10 +66,8 @@ def test_the_bench_case_cites_what_he_is_given_not_just_our_opinion() -> None:
     """The strongest line in the report is 'their bench beats their starter'.
     A projection is our opinion; a target count is the league's own record, and
     it is what makes the line hard to argue with."""
-    import json as _json
-    report = _json.loads(
-        (Path(__file__).resolve().parent.parent / "data" / "processed" /
-         "week_report.json").read_text(encoding="utf-8"))
+    from conftest import demo_report
+    report = demo_report()
     bench = [f for f in report["fragility"] if "sitting on their bench" in f["title"]]
     if not bench:
         return  # a week with no benched-better player has no line to carry

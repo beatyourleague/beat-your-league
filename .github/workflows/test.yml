@@ -1,0 +1,59 @@
+# The suite, on every push and pull request.
+#
+# It did not run in CI at all, and the omission mattered more than "we have no
+# CI" usually does. Two of these tests are the ONLY mechanical enforcement that
+# PLAN §0's Sleeper migration actually happened in the software rather than in
+# the plan — test_no_sleeper_in_the_paid_path and
+# test_the_roster_runner_cannot_reach_sleeper_at_all. Both walk import
+# reachability, so they fail the moment a convenience import puts a league
+# client back in the path that mails strangers. Enforced only by whoever
+# remembered to run `make test`, they enforced nothing.
+#
+# Deliberately narrow: no secrets, no network, no writes to anything. Every test
+# runs offline against fixtures (tests/conftest.py additionally fails any test
+# that writes to data/registry — a pipeline run once wrote over the real
+# subscriber list), so this job needs nothing but Python and the pinned deps.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      # node is what makes tests/test_intake.py meaningful: it runs the real
+      # site/join/roster.js against the Python that has to decode what the
+      # browser encodes. Without node those tests SKIP, so the JS<->Python
+      # contract would be unenforced here exactly as it was everywhere else.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # -rs lists every SKIP with its reason. data/ and reports/ are gitignored
+      # in full, so ~19 tests that read locally-generated artifacts cannot run
+      # here — and a skip nobody can see is how a suite quietly stops testing
+      # things. Populating those caches in CI is not the answer: the nflverse
+      # pull is ~110 MB a run, and the sample-league one would mean CI calling
+      # Sleeper, which is the dependency PLAN §0 exists to remove.
+      - name: Run the suite
+        run: .venv/bin/python -m pytest tests/ -q -rs
+      # A generated page that drifts from its generator is a published claim
+      # nobody produced. `--check` writes nothing and fails if it has drifted.
+      - name: Check the published backtest page is not stale
+        run: .venv/bin/python -m render.backtest_site --check

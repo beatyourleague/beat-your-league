@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import requires_sample_league
 
 import test_ingest as ti
 import test_week_report as twr
@@ -416,6 +417,7 @@ def _paid(*emails):
     return PaidList(emails=frozenset(emails), source="stripe", status_column="active")
 
 
+@requires_sample_league
 def test_a_league_pass_seat_survives_the_paid_check(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     """The seat holder never paid us a cent — their commissioner did. Checking
@@ -513,6 +515,7 @@ def test_current_nfl_season_reads_state(tmp_path: Path) -> None:
     assert current_nfl_season(tmp_path) is None          # untrusted input
 
 
+@requires_sample_league
 def test_a_subscriber_whose_report_failed_fails_the_run(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     """One subscriber's report failing to build must fail the run even when
