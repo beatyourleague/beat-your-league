@@ -132,8 +132,31 @@ def fetch(release: str, asset: str, cache_dir: Path, *, live: bool = False,
         raise NflverseError(f"could not fetch {url}: {exc}") from exc
     if not response.content:
         raise NflverseError(f"{url} returned an empty body")
+    if asset.endswith(".csv") and not _looks_like_csv(response.content):
+        # A non-empty body is not the same as the CSV we asked for. A proxy
+        # error page or an HTML 404 sails through the emptiness check and is
+        # CACHED — and every reader then parses it as a season with no rows,
+        # which downstream is indistinguishable from "nobody played". Only a
+        # cached copy is trusted on an outage; a poisoned one must never become
+        # that copy.
+        raise NflverseError(
+            f"{url} returned something that is not a CSV "
+            f"(starts {response.content[:40]!r})")
     path.write_bytes(response.content)
     return path
+
+
+def _looks_like_csv(body: bytes) -> bool:
+    """A header line with at least one comma, and no markup.
+
+    Deliberately shallow: this is here to catch an error page served with a 200,
+    not to validate a schema. Every reader already tolerates unexpected columns.
+    """
+    head = body[:4096].lstrip()
+    if head.startswith((b"<", b"{", b"[")):
+        return False
+    first = head.split(b"\n", 1)[0]
+    return b"," in first
 
 
 def usage_week(cache_dir: Path, season: str, week: int, *, live: bool = False,

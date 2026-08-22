@@ -247,3 +247,48 @@ def test_keeping_every_column_is_available_for_exploration(tmp_path: Path) -> No
     session = _FakeSession({"stats_player_week_2024.csv": SEASON_ROWS})
     weeks = season_rows(tmp_path, "2024", columns=None, session=session)
     assert "targets" in weeks[1]["00-0000001"]
+
+
+def test_an_error_page_served_with_200_is_never_cached_as_data(tmp_path) -> None:
+    """A non-empty body is not the same as the CSV we asked for.
+
+    An HTML 404 or a proxy error page sails through the emptiness check and gets
+    CACHED, and every reader then parses it as a season with no rows — which
+    downstream is indistinguishable from "nobody played". That matters because
+    only a cached copy is trusted when the network is down: a poisoned one must
+    never become that copy.
+
+    Surfaced by an adversarial review of the grading path, where a stats file
+    that parses to nothing used to void real calls permanently.
+    """
+    from ingest.nflverse import NflverseError, fetch
+
+    class _Serves:
+        def __init__(self, body: bytes) -> None:
+            self.body = body
+
+        def get(self, _url, **_kwargs):
+            body = self.body
+
+            class _Response:
+                content = body
+
+                def raise_for_status(self) -> None:
+                    return None
+
+            return _Response()
+
+    for bad in (b"<!DOCTYPE html>\n<html><body>404</body></html>",
+                b'{"message":"Not Found"}',
+                b"[]"):
+        cache = tmp_path / f"c{len(bad)}"
+        with pytest.raises(NflverseError, match="not a CSV"):
+            fetch("stats_player", "stats_player_week_2024.csv", cache,
+                  session=_Serves(bad))
+        assert not (cache / "stats_player_week_2024.csv").exists(), \
+            "the bad body was cached anyway"
+
+    good = tmp_path / "good"
+    path = fetch("stats_player", "stats_player_week_2024.csv", good,
+                 session=_Serves(b"player_id,season,week\n00-0036900,2024,10\n"))
+    assert path.is_file()
