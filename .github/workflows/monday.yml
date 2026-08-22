@@ -15,9 +15,9 @@
 # renaming this silently stops the public ledger from redeploying, exactly when
 # it starts having rows worth showing.
 #
-# No secrets are needed at all. If the repo variable PUSH_LEDGER is set to
-# "true", the refreshed site/ledger/ page is committed back so GitHub Pages
-# serves the updated public record.
+# No secrets are needed at all. The refreshed site/ledger/ page is committed
+# back by default so GitHub Pages serves the updated public record; set the repo
+# variable PUSH_LEDGER to "false" to hold it back deliberately.
 
 name: monday-receipts
 
@@ -96,7 +96,14 @@ jobs:
           # path builds availability on the fly from the nflverse injury
           # archive instead.
           git add -A data/processed/ledger
-          if [ "${{ vars.PUSH_LEDGER }}" = "true" ]; then git add site/ledger/; fi
+          # The page is COMMITTED BY DEFAULT. This used to be gated on the
+          # repo variable PUSH_LEDGER being "true" — undocumented and unset —
+          # so every Monday regenerated the public record and threw it away.
+          # Principle 2 is "grade everything publicly"; a record that never
+          # publishes is not a record. Set PUSH_LEDGER to "false" to hold it
+          # back deliberately (e.g. before launch), which is the opposite
+          # default and the safe direction for a promise about honesty.
+          if [ "${{ vars.PUSH_LEDGER }}" != "false" ]; then git add site/ledger/; fi
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Monday grading run: ledger settled"
           git pull --rebase --autostash origin ${{ github.ref_name }}

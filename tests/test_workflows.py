@@ -133,19 +133,39 @@ def test_the_monday_cron_grades_from_nflverse() -> None:
             f"the Monday cron still runs {retired}, which grades through Sleeper")
 
 
-def test_renaming_the_monday_workflow_would_break_the_ledger_republish() -> None:
-    """pages.yml triggers on `workflow_run` matching a LITERAL workflow name.
-    Rename monday.yml and the public ledger silently stops redeploying, exactly
-    when it starts having rows worth showing."""
+def test_both_crons_can_redeploy_the_site() -> None:
+    """pages.yml triggers on `workflow_run` matching LITERAL workflow names, and
+    a push made with GITHUB_TOKEN deliberately does not fire `on: push`.
+
+    So renaming either cron silently stops the site redeploying. And leaving the
+    Tuesday run off the list did the same thing quietly: its refreshed
+    site/join/players.json — the directory the picker downloads — reached the
+    live site only when Monday happened to redeploy, up to six days later, and a
+    stale directory blocks a paying customer's signup.
+    """
     yaml = pytest.importorskip("yaml", reason="pyyaml not installed")
-    monday = yaml.safe_load(_text("monday.yml"))
     pages = yaml.safe_load(_text("pages.yml"))
     # `on` parses as the boolean True in YAML 1.1, which is a real trap here.
     triggers = pages.get("on") or pages.get(True)
     watched = triggers["workflow_run"]["workflows"]
-    assert monday["name"] in watched, (
-        f"pages.yml watches {watched} but the Monday workflow is named "
-        f"{monday['name']!r}")
+    for cron in ("monday.yml", "weekly.yml"):
+        name = yaml.safe_load(_text(cron))["name"]
+        assert name in watched, (
+            f"pages.yml watches {watched}; {cron} is named {name!r}, so its "
+            f"commits never reach the live site")
+
+
+def test_the_public_record_publishes_by_default() -> None:
+    """The page was regenerated every Monday and thrown away: committing it was
+    gated on a repo variable that is undocumented and unset. Principle 2 is
+    "grade everything publicly", and a record that never publishes is not a
+    record — so the gate is now an opt-OUT."""
+    persist = [s for s in _steps("monday.yml")
+               if "Persist" in str(s.get("name", ""))][0]
+    run = str(persist["run"])
+    assert "site/ledger/" in run
+    assert 'PUSH_LEDGER }}" != "false"' in run, (
+        "publishing the public record is opt-in; it must be opt-out")
 
 
 def test_the_monday_cron_needs_no_secrets() -> None:

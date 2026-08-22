@@ -383,7 +383,7 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
         final = data["final"].get(call.week)
         if not final:
             return False                      # week not in the schedule: unknown
-        played = {team for team in final if team != "__all__"}
+        played = set(final)
         if not played or not (played <= data["observed"].get(call.week, set())):
             return False                      # the box scores have not landed
         for player_id in (call.pick_id, call.over_id):
@@ -425,7 +425,7 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
 
 
 def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
-    """week -> teams whose REG game has a final score, plus an `__all__` flag.
+    """week -> the teams whose REG game that week has a final score.
 
     A game with either score missing has not been played (or not been posted),
     and RULE L1 is conservative on every unknown.
@@ -439,8 +439,6 @@ def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
     except NflverseError:
         return {}
     weeks: dict[int, dict[str, bool]] = {}
-    played: dict[int, int] = {}
-    total: dict[int, int] = {}
     with path.open(encoding="utf-8", newline="") as handle:
         for row in _csv.DictReader(handle):
             if str(row.get("season") or "") != str(season):
@@ -453,18 +451,13 @@ def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
                 continue
             if not week:
                 continue
-            total[week] = total.get(week, 0) + 1
             home, away = (row.get("home_team") or ""), (row.get("away_team") or "")
             done = bool((row.get("home_score") or "").strip()
                         and (row.get("away_score") or "").strip())
             if done:
-                played[week] = played.get(week, 0) + 1
                 for team in (home, away):
                     if team:
                         weeks.setdefault(week, {})[team] = True
-    for week, count in total.items():
-        if count and played.get(week, 0) == count:
-            weeks.setdefault(week, {})["__all__"] = True
     return weeks
 
 

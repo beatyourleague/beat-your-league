@@ -18,7 +18,12 @@ on:
     paths: ["site/**"]
   workflow_dispatch: {}
   workflow_run:
-    workflows: [monday-receipts]
+    # BOTH crons, and these are literal strings matched by name. A push made
+    # with GITHUB_TOKEN deliberately does not fire `on: push`, so the Tuesday
+    # run's refreshed site/join/players.json — the directory the picker
+    # downloads — reached the live site only when Monday happened to redeploy,
+    # up to six days later. A stale directory blocks a paying customer's signup.
+    workflows: [monday-receipts, weekly-report]
     types: [completed]
 
 permissions:

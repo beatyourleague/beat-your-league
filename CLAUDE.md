@@ -522,6 +522,22 @@ the number must live in the league_id. It is now `typed-{scoring}-{size}-{season
 The old `typed-{season}` shape deliberately no longer parses, so a store written under it is
 reported rather than silently mixed in.
 
+**The public record was regenerated every Monday and thrown away (Aug 22 2026).** Committing
+`site/ledger/` was gated on the repo variable `PUSH_LEDGER` being `"true"` — undocumented and
+unset — so the whole grading cron ran, wrote the page, and discarded it. Principle 2 is "grade
+everything publicly" and a record that never publishes is not a record, so the gate is now an
+opt-OUT (`PUSH_LEDGER="false"` holds it back deliberately). Related, and found by the same lens:
+**a push made with `GITHUB_TOKEN` does not fire `on: push`**, so `pages.yml` only ever redeployed
+after `monday-receipts`. The Tuesday run's refreshed `site/join/players.json` — the directory the
+picker downloads — therefore reached the live site up to six days late, and a stale directory
+blocks a paying customer's signup. `pages.yml` now watches BOTH crons by name, and a test pins
+that renaming either one would disconnect the site.
+
+**A call that stays pending is now said out loud.** `run/monday.py` reports any call still PENDING
+two or more weeks past its own week. Nothing settles those on their own — a week whose box scores
+never landed, a player whose team cannot be resolved — and the failure mode was pure silence: the
+call simply never appears on the record.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's

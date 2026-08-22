@@ -36,6 +36,16 @@ from run.solo import CACHE_DIR
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 
+# How far past its own week a call may stay pending before the run says so. Two
+# weeks clears the ordinary Monday-night wait with room to spare.
+STALE_AFTER_WEEKS = 2
+
+
+def _weeks_old(call, calls) -> int:
+    """How many weeks the record has moved on past this call's own week."""
+    latest = max((c.week for c in calls if c.season == call.season), default=call.week)
+    return latest - call.week
+
 
 class MondayError(RuntimeError):
     """The grading run refused to proceed."""
@@ -133,6 +143,19 @@ def main(argv: list[str] | None = None) -> int:
               f"({len(before)} recorded)")
 
     calls = load_all_ledgers(args.processed_dir)
+    # A call that stays PENDING long after its games is not "waiting for Monday
+    # Night Football" — it is a call nothing can settle (a player whose team we
+    # cannot resolve, a week whose box scores never landed), and the failure
+    # mode is silence: it simply never appears on the record. Say so.
+    stale = [c for c in calls if c.status == PENDING
+             and _weeks_old(c, calls) >= STALE_AFTER_WEEKS]
+    if stale:
+        by_week = sorted({(c.season, c.week) for c in stale})
+        print(f"  {len(stale)} call(s) still pending {STALE_AFTER_WEEKS}+ weeks "
+              f"on: " + ", ".join(f"{s} w{w}" for s, w in by_week[:6]),
+              file=sys.stderr)
+        print("    Nothing will settle these on its own — check whether that "
+              "week's stat rows ever published.", file=sys.stderr)
     settled = [c for c in calls if c.status != PENDING]
     voided = [c for c in calls if c.status == VOID]
     summary = ledger_summary(calls)
