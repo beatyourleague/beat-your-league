@@ -288,10 +288,17 @@ def test_two_rosters_for_one_customer_are_reported_not_silently_merged(
     assert len(load_rosters(tmp_path / intake.REGISTRY_NAME)) == 2
 
 
-def test_the_run_refuses_without_a_stripe_key(tmp_path, monkeypatch, capsys) -> None:
+def test_an_unconfigured_stripe_is_not_reported_as_a_failure(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Exit 2, not 1. Before checkout opens this is the EXPECTED state, and a
+    cron that files a bug issue every week for it teaches you to ignore bug
+    issues — which is how the real one gets missed. Exit 1 stays reserved for
+    "something is wrong"."""
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
-    assert _run(tmp_path) == 1
-    assert "STRIPE_API_KEY" in capsys.readouterr().err
+    assert _run(tmp_path) == intake.NOT_CONFIGURED
+    assert intake.NOT_CONFIGURED != 1
+    err = capsys.readouterr().err
+    assert "STRIPE_API_KEY" in err and "expected" in err
 
 
 # --------------------------------------------------------------------- #

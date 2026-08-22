@@ -87,13 +87,17 @@ def test_a_blocked_signup_fails_the_run_but_only_after_delivery() -> None:
     """run.intake exits 1 when a paid roster cannot be served. Under
     continue-on-error that becomes a green run with a buried log line — but
     failing immediately would hold up every subscriber already in the registry.
-    So the send happens either way and the job is failed afterwards."""
+    So the send happens either way and the job is failed afterwards.
+
+    On the EXIT CODE specifically: 2 means STRIPE_API_KEY is unset, which is the
+    expected state until checkout opens. Gating on `outcome == failure` caught
+    that too and would have filed a bug issue every week before launch."""
     steps = _steps("weekly.yml")
     names = [s.get("name") or s.get("uses") for s in steps]
     intake = next(s for s in steps if s.get("id") == "intake")
     assert intake.get("continue-on-error") is True
     guard = [s for s in steps
-             if "steps.intake.outcome" in str(s.get("if", ""))]
+             if "steps.intake.outputs.code == '1'" in str(s.get("if", ""))]
     assert guard, "nothing converts a blocked signup into a failed run"
     assert names.index(guard[0].get("name")) > names.index("Send subscriber reports"), \
         "the run is failed before subscribers are mailed"

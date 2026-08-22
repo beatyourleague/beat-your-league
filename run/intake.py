@@ -69,6 +69,10 @@ REGISTRY_NAME = "rosters.json"
 META_REF = "byl_roster_ref"
 META_PLAN = "byl_plan"
 
+# Exit codes. 1 means something is WRONG and a human should look; 2 means the
+# pipeline simply is not switched on yet, which is not a failure to alert about.
+NOT_CONFIGURED = 2
+
 
 class IntakeError(RuntimeError):
     """The sweep could not run at all."""
@@ -458,9 +462,15 @@ def main(argv: list[str] | None = None) -> int:
 
     api_key = os.environ.get("STRIPE_API_KEY", "")
     if not api_key:
-        print("STRIPE_API_KEY is not set — there is nothing to sweep.",
-              file=sys.stderr)
-        return 1
+        # EXIT 2, not 1. Before checkout opens this is the EXPECTED state — the
+        # picker says so too — and a cron that files a bug issue every week for
+        # it teaches you to ignore bug issues, which is how the real one gets
+        # missed. Exit 1 stays reserved for "something is wrong": a paid signup
+        # we cannot serve, or a Stripe read that failed.
+        print("STRIPE_API_KEY is not set — nothing to sweep. That is expected "
+              "until checkout opens; set the secret to start attributing "
+              "payments.", file=sys.stderr)
+        return NOT_CONFIGURED
 
     registry_dir = Path(args.registry_dir)
     log_path = registry_dir / SIGNUP_LOG_NAME

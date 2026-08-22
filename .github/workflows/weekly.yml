@@ -106,7 +106,11 @@ jobs:
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
-        run: .venv/bin/python -m run.intake
+        run: |
+          set +e
+          .venv/bin/python -m run.intake
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
       # `if: always()` so a failed intake cannot hold up a paying subscriber's
       # report. EMAIL_PROVIDER unset means dry-run, and run.tuesday then prints
       # NOTHING WAS SENT and exits 1 rather than reporting a green success with
@@ -172,11 +176,15 @@ jobs:
       # AFTER delivery, not before. A blocked signup is somebody who paid and is
       # getting nothing, so the run must go red — but only once every subscriber
       # who could be served has been.
+      # Exit 1 only: a paid signup that cannot be served, or a Stripe read that
+      # failed. Exit 2 means STRIPE_API_KEY is simply unset, which is the
+      # expected state until checkout opens — failing on that would file a bug
+      # issue every single week and teach us to ignore the real one.
       - name: Fail the run if a paid signup could not be served
-        if: always() && steps.intake.outcome == 'failure'
+        if: always() && steps.intake.outputs.code == '1'
         run: |
-          echo "run.intake exited non-zero — a paid signup was blocked, or Stripe"
-          echo "could not be read. Reports were still built and sent for everyone"
+          echo "run.intake exited 1 — a paid signup was blocked, or Stripe could"
+          echo "not be read. Reports were still built and sent for everyone"
           echo "already in the registry. See the intake step's log."
           exit 1
       # A silent failure costs a paying subscriber their Tuesday and nobody
