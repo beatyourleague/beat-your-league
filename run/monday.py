@@ -85,7 +85,8 @@ def guard_shrink(new_entries: list[dict], out_dir: Path) -> None:
         # see nothing missing. The split that made the ledger correct is exactly
         # what made this key insufficient.
         return (entry.get("season"), entry.get("week"), entry.get("slot"),
-                entry.get("pick"), entry.get("over"), entry.get("scoring"))
+                entry.get("pick"), entry.get("over"), entry.get("scoring"),
+                entry.get("league_size"))
 
     missing = {key(e) for e in old_entries} - {key(e) for e in new_entries}
     if missing:

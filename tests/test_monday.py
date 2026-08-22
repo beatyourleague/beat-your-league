@@ -33,14 +33,14 @@ def _call(week: int, pick: str, over: str, *, scoring: str = "ppr",
           cid: str | None = None, season: str = SEASON) -> LedgerCall:
     return LedgerCall(
         call_id=cid or f"{scoring}-{week}-{pick}-{over}", source="slot",
-        league_id=f"typed-{scoring}-{season}", season=season, week=week,
+        league_id=f"typed-{scoring}-12-{season}", season=season, week=week,
         roster_id=1, slot="WR", pick_id=pick, pick_name=f"pick {pick}",
         over_id=over, over_name=f"over {over}", confidence=0.61,
         is_regret=False, recorded_at="2026-01-01T00:00:00+00:00")
 
 
 def _store(tmp_path: Path, *calls: LedgerCall, scoring: str = "ppr") -> Path:
-    path = ledger_path(tmp_path / "processed", f"typed-{scoring}-{SEASON}")
+    path = ledger_path(tmp_path / "processed", f"typed-{scoring}-12-{SEASON}")
     record_calls(path, list(calls))
     return path
 
@@ -196,9 +196,15 @@ def test_each_scoring_preset_is_graded_under_its_own_rule(tmp_path) -> None:
     """A ledger that cannot tell PPR from standard cannot be graded correctly
     for either: "did the pick outscore the alternative" has a different answer
     under each. The store name carries the preset, which is how grading knows."""
-    assert scoring_of("typed-ppr-2026") == "ppr"
-    assert scoring_of("typed-half_ppr-2026") == "half_ppr"
+    assert scoring_of("typed-ppr-12-2026") == "ppr"
+    assert scoring_of("typed-half_ppr-10-2026") == "half_ppr"
     assert scoring_of("289646328504385536") is None, "a league id is not a preset"
+    # League size is part of the identity too: it sets the positional prior's
+    # depth, so it moves the published probability (measured: 0.022 spread
+    # across sizes 4-32, and 1 call in 3 crossing a calibration bucket).
+    from engine.ledger import league_size_of
+    assert league_size_of("typed-ppr-14-2026") == 14
+    assert league_size_of("typed-ppr-2026") is None, "the old shape must not parse"
 
     cache = _cache(tmp_path)
     scored: dict[str, float] = {}
@@ -238,10 +244,10 @@ def test_a_ledger_that_is_not_a_roster_store_is_left_alone(tmp_path) -> None:
 def test_the_monday_runner_settles_every_roster_store(tmp_path, capsys) -> None:
     processed = tmp_path / "processed"
     for scoring in ("ppr", "standard"):
-        record_calls(ledger_path(processed, f"typed-{scoring}-{SEASON}"),
+        record_calls(ledger_path(processed, f"typed-{scoring}-12-{SEASON}"),
                      [_call(FINAL_WEEK, _pid(5), _pid(2), scoring=scoring)])
     assert monday.typed_stores(processed) == [
-        f"typed-ppr-{SEASON}", f"typed-standard-{SEASON}"]
+        f"typed-ppr-12-{SEASON}", f"typed-standard-12-{SEASON}"]
     code = monday.main(["--processed-dir", str(processed),
                         "--cache", str(_cache(tmp_path)),
                         "--out", str(tmp_path / "site")])
@@ -253,13 +259,13 @@ def test_the_monday_runner_settles_every_roster_store(tmp_path, capsys) -> None:
 
 def test_a_dry_run_grades_nothing(tmp_path, capsys) -> None:
     processed = tmp_path / "processed"
-    record_calls(ledger_path(processed, f"typed-ppr-{SEASON}"),
+    record_calls(ledger_path(processed, f"typed-ppr-12-{SEASON}"),
                  [_call(FINAL_WEEK, _pid(5), _pid(2))])
     monday.main(["--processed-dir", str(processed),
                  "--cache", str(_cache(tmp_path)),
                  "--out", str(tmp_path / "site"), "--dry-run"])
     assert "dry run" in capsys.readouterr().out
-    assert load_ledger(ledger_path(processed, f"typed-ppr-{SEASON}"))[0].status \
+    assert load_ledger(ledger_path(processed, f"typed-ppr-12-{SEASON}"))[0].status \
         == PENDING
     assert not (tmp_path / "site").exists()
 
@@ -274,7 +280,7 @@ def test_the_public_page_is_never_shrunk(tmp_path, capsys) -> None:
         {"season": SEASON, "week": 1, "slot": "WR", "pick": "Someone",
          "over": "Someone Else"}]), encoding="utf-8")
     processed = tmp_path / "processed"
-    record_calls(ledger_path(processed, f"typed-ppr-{SEASON}"),
+    record_calls(ledger_path(processed, f"typed-ppr-12-{SEASON}"),
                  [_call(FINAL_WEEK, _pid(5), _pid(2))])
     code = monday.main(["--processed-dir", str(processed),
                         "--cache", str(_cache(tmp_path)), "--out", str(out)])
@@ -286,7 +292,7 @@ def test_an_empty_record_does_not_publish_an_empty_page(tmp_path, capsys) -> Non
     """Nothing settled yet is a real state in September, and overwriting a good
     page with an empty one is the same failure as shrinking it."""
     processed = tmp_path / "processed"
-    record_calls(ledger_path(processed, f"typed-ppr-{SEASON}"),
+    record_calls(ledger_path(processed, f"typed-ppr-12-{SEASON}"),
                  [_call(UNPLAYED_WEEK, _pid(5), _pid(2))])
     code = monday.main(["--processed-dir", str(processed),
                         "--cache", str(_cache(tmp_path)),

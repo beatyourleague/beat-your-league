@@ -259,13 +259,21 @@ def _call_is_final(call: LedgerCall, raw_dir: Path,
 # graded correctly for either. Measured on real 2024 week-10 data before the id
 # carried the preset: 5 of 6 calls collided across presets while publishing
 # different probabilities.
-TYPED_LEDGER_RE = re.compile(r"^typed-(?P<scoring>[a-z_]+)-(?P<season>\d{4})$")
+TYPED_LEDGER_RE = re.compile(
+    r"^typed-(?P<scoring>[a-z_]+)-(?P<size>\d+)-(?P<season>\d{4})$")
 
 
 def scoring_of(league_id: str) -> str | None:
     """The scoring preset a `typed-*` ledger's calls were made under."""
     match = TYPED_LEDGER_RE.match(league_id or "")
     return match.group("scoring") if match else None
+
+
+def league_size_of(league_id: str) -> int | None:
+    """The league size those calls were made in. Part of the identity because
+    it moves the published probability (see engine/subscriber.py)."""
+    match = TYPED_LEDGER_RE.match(league_id or "")
+    return int(match.group("size")) if match else None
 
 
 def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
@@ -599,6 +607,7 @@ def public_entries(calls: list[LedgerCall]) -> list[dict[str, Any]]:
             "week": call.week,
             "slot": call.slot,
             "scoring": scoring_of(call.league_id),
+            "league_size": league_size_of(call.league_id),
             "pick": call.pick_name,
             "over": call.over_name,
             "confidence": round(call.confidence, 3),

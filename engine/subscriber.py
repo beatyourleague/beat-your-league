@@ -198,7 +198,14 @@ def build_season(
         # alternative" has a different answer under each rule, so a single row
         # cannot be graded correctly for both. Splitting the id splits the
         # store, which is also how grading learns which rule to score with.
-        league_id=f"typed-{spec.scoring}-{season}",
+        # ...and the LEAGUE SIZE, for the same reason. It sets the positional
+        # prior's depth, so it moves the published probability: measured across
+        # sizes 4-32 on real 2024 week-10 data, a spread of 0.022 and 1 call in
+        # 3 crossing a calibration bucket boundary. The graded pair is identical
+        # either way, so this is not a wrong ANSWER like the scoring collision
+        # was — it is a probability recorded in the wrong bucket, which distorts
+        # the exact table the ledger exists to produce.
+        league_id=f"typed-{spec.scoring}-{league_size}-{season}",
         season=str(season),
         name="Your league",
         status="in_season",
