@@ -325,3 +325,61 @@ def test_the_monday_runner_cannot_reach_sleeper_at_all() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
                 queue.append(node.module)
     assert "ingest.sleeper" not in seen, sorted(n for n in seen if "sleeper" in n)
+
+
+# --------------------------------------------------------------------- #
+# two crons write this file
+# --------------------------------------------------------------------- #
+
+def test_a_union_merged_duplicate_collapses_to_one_call(tmp_path) -> None:
+    """The Monday and Tuesday runs each commit and push their own copy of the
+    ledger, so a push race is routine. `git pull --rebase` on a normal text file
+    turns that into a conflict, which fails the persist step and LOSES published
+    probabilities — and a call is recorded at the moment it is published or not
+    at all. .gitattributes marks these logs `merge=union`, which concatenates
+    instead of conflicting; the cost is duplicated lines, which the reader must
+    collapse or the public page shows one call twice and counts it as two pieces
+    of evidence.
+    """
+    path = ledger_path(tmp_path / "processed", f"typed-ppr-12-{SEASON}")
+    call = _call(FINAL_WEEK, _pid(5), _pid(2), cid="dup")
+    record_calls(path, [call])
+    # What union merge leaves behind: the same call from both sides, one graded.
+    graded = LedgerCall(**{**call.__dict__, "status": GRADED, "outcome": "hit",
+                           "pick_points": 20.0, "over_points": 10.0})
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(graded.__dict__, separators=(",", ":")) + "\n")
+
+    calls = load_ledger(path)
+    assert len(calls) == 1, "one call published twice on the public record"
+    assert calls[0].status == GRADED, "the settled copy lost to the pending one"
+
+
+def test_two_different_outcomes_for_one_call_is_corruption_not_a_merge(
+        tmp_path) -> None:
+    """A pending duplicate losing to a graded one is just the other cron having
+    settled it. Two DIFFERENT graded outcomes is real corruption, and "which of
+    these answers did we publish" is exactly the question nobody should answer
+    automatically — the module's rule is that a public record is fixed by hand,
+    never silently repaired."""
+    from engine.ledger import LedgerError
+
+    path = ledger_path(tmp_path / "processed", f"typed-ppr-12-{SEASON}")
+    call = _call(FINAL_WEEK, _pid(5), _pid(2), cid="dup")
+    rows = [LedgerCall(**{**call.__dict__, "status": GRADED, "outcome": out})
+            for out in ("hit", "miss")]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r.__dict__, separators=(",", ":")) + "\n"
+                            for r in rows), encoding="utf-8")
+    with pytest.raises(LedgerError, match="different outcomes"):
+        load_ledger(path)
+
+
+def test_the_append_only_logs_are_union_merged() -> None:
+    """Without this the push race is a rebase conflict, and the fix in
+    engine/ledger.py has nothing to protect against."""
+    attrs = (Path(__file__).resolve().parent.parent / ".gitattributes")
+    assert attrs.is_file(), ".gitattributes is missing"
+    text = attrs.read_text(encoding="utf-8")
+    assert "merge=union" in text
+    assert "data/processed/ledger" in text and "sent.jsonl" in text

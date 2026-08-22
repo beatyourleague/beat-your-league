@@ -164,7 +164,41 @@ def load_ledger(path: Path) -> list[LedgerCall]:
             raise LedgerError(
                 f"ledger {path} line {line_no} is unreadable ({exc}) — "
                 "the public record must be fixed by hand, never skipped") from exc
-    return calls
+    return _collapse(calls, path)
+
+
+def _collapse(calls: list["LedgerCall"], path: Path) -> list["LedgerCall"]:
+    """One row per call_id, because two crons can both append to this file.
+
+    The Monday and Tuesday runs each commit and push their own copy, and an
+    append-only JSONL is merged with git's `union` driver (.gitattributes) so a
+    push race concatenates rather than conflicting — otherwise a rebase failure
+    loses published probabilities, which cannot be recorded retroactively.
+    Union merge duplicates the overlapping lines, so the reader has to collapse
+    them or the public page shows one call twice and the summary counts it as
+    two pieces of evidence.
+
+    A PENDING duplicate loses to a graded one — that is just the other cron
+    having settled it. Two DIFFERENT graded outcomes for one call_id is real
+    corruption and raises: the module's rule is that a public record is fixed by
+    hand, never silently repaired, and "which of these two answers do you want"
+    is exactly the question nobody should answer automatically.
+    """
+    seen: dict[str, LedgerCall] = {}
+    for call in calls:
+        held = seen.get(call.call_id)
+        if held is None:
+            seen[call.call_id] = call
+            continue
+        if held.status == GRADED and call.status == GRADED \
+                and held.outcome != call.outcome:
+            raise LedgerError(
+                f"ledger {path} records call {call.call_id} twice with "
+                f"different outcomes ({held.outcome} and {call.outcome}) — "
+                f"the public record must be fixed by hand, never guessed")
+        if call.status != PENDING and held.status == PENDING:
+            seen[call.call_id] = call
+    return list(seen.values())
 
 
 @contextmanager

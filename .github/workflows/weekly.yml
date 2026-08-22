@@ -163,6 +163,11 @@ jobs:
             !reports/subscribers/
             !reports/outbox/
             data/processed/ledger/
+            # sent.jsonl is committed by the persist step, but that push is its
+            # ONLY copy — and if the push fails after a successful send, the
+            # next run has no record of who was mailed and sends to everyone
+            # again. In the artifact it is at least recoverable by hand.
+            data/processed/sent.jsonl
           if-no-files-found: error
       # AFTER delivery, not before. A blocked signup is somebody who paid and is
       # getting nothing, so the run must go red — but only once every subscriber

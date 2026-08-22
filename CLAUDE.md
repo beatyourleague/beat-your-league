@@ -497,6 +497,31 @@ reproduction before any fix:
   The workflow hack is gone. **A fix that lives in the cron instead of the code is a smell** — the
   test that pinned it was pinning the workaround.
 
+**Two crons write the same append-only files, so a push race loses published calls
+(Aug 22 2026).** The Monday grading run and the Tuesday send run each commit and push
+`data/processed/ledger/**/*.jsonl` and `sent.jsonl`; `git pull --rebase` on a normal text file
+turns that race into a CONFLICT, which fails the persist step. Losing the ledger loses
+probabilities that cannot be recorded retroactively; losing `sent.jsonl` mails every subscriber
+twice on the next run. `.gitattributes` marks both `merge=union` so a race concatenates instead of
+conflicting, and `load_ledger` COLLAPSES by call_id on read — a pending duplicate loses to a
+graded one (the other cron settled it), while **two different graded outcomes for one call_id
+raises**, because "which of these answers did we publish" is exactly the question nobody should
+answer automatically. `sent.jsonl` is in the Tuesday artifact too: the persist push is otherwise
+its only copy, and a push that fails after a successful send is a double-send waiting to happen.
+
+**Ledger identity = everything that determines the published probability.** Two collisions found,
+both by measurement, both the same shape: `_call_id` hashes (league_id, season, week, roster_id,
+slot, pick, over), and for the solo product `roster_id` is always 1, so anything else that moves
+the number must live in the league_id. It is now `typed-{scoring}-{size}-{season}`.
+- **Scoring preset** — 5 of 6 real 2024 w10 calls collided while publishing DIFFERENT
+  probabilities (0.647 vs 0.632); grading is worse, since the graded ANSWER differs by rule.
+- **League size** — sets the positional prior's depth: 0.022 spread across sizes 4-32, and 1 call
+  in 3 crossing a calibration bucket boundary. The graded pair is identical, so nothing is graded
+  wrong; the probability just lands in the wrong bucket, distorting the exact table the ledger
+  exists to produce.
+The old `typed-{season}` shape deliberately no longer parses, so a store written under it is
+reported rather than silently mixed in.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's

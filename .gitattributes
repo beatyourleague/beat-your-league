@@ -1,0 +1,12 @@
+# Append-only records that TWO crons write. The Monday grading run and the
+# Tuesday send run each commit and push their own copy, so a push race is
+# routine — and `git pull --rebase` on a normal text file turns that race into a
+# conflict, which fails the persist step and LOSES published probabilities that
+# cannot be recorded retroactively (a call is recorded at the moment it is
+# published or not at all).
+#
+# `union` concatenates both sides instead of conflicting. It can duplicate the
+# overlapping lines, which is why engine/ledger.py collapses by call_id on read
+# and refuses — loudly — when two rows for one call disagree on the outcome.
+data/processed/ledger/**/*.jsonl merge=union
+data/processed/sent.jsonl        merge=union
