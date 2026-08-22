@@ -334,3 +334,78 @@ Any of these and the run is **void** — not patched and reported, void — requ
 3. The harness **calls** `engine/week_report.py:102 optimal_lineup`, `engine/projection.py ProjectionModel` / `probability_outscores`, `engine/availability.py may_publish_confidence` + `WeekAvailability.classify`, `engine/scoring.py:109 score`, `engine/subscriber.py:219 rosterable_field` / `:260 _team_week`, `engine/decisions.py:109 grade`, and `engine/calibration.py` — none of them reimplemented. **A mutation test per function:** perturb it, the backtest output must move.
 4. Required assertions, each its own test: the no-lookahead equality (L7); `max(rostered_weeks) ≤ graded weeks` (no double-counted field, `engine/subscriber.py:166-174`); REG-and-season on every row (L8, L9); no player in season S's field lacks an S−1 row; the decline table sums to slot-decisions examined.
 5. It is run **once**. Then the §1 table is read off, and the copy changes it dictates are made — in that order.
+---
+
+## 15. CORRECTIONS — appended, never edited into the text above
+
+The method above is frozen (§0: "Nothing below may be changed after the first
+output is read"). A frozen document that turns out to contain a false statement
+cannot be quietly fixed, because then nobody can tell what was actually
+preregistered. So corrections are appended here, dated, and the original wording
+stands untouched.
+
+### C1 — "Team defenses are unscoreable" is false (2026-08-22)
+
+§3 excludes team defenses from the graded set with this justification:
+
+> Team defenses come from `ingest/nflverse.py:256 season_teams(S)` as
+> `DEF-<abbr>`. They are unscoreable (`engine/scoring.py:26-32`,
+> `engine/subscriber.py:282-290`), so they occupy roster spots and produce
+> **zero calls**. This is reported, not hidden.
+
+Both citations now say the opposite of what they are cited for.
+`engine/scoring.py:26-32` is RULE S4 — *a team defense IS scored, from the
+team's own week plus the schedule's final score*. `engine/subscriber.py:282-290`
+is the code that calls `score_defense`. Whether the spans moved under the
+citation or the claim was wrong when written, the effect is the same: an
+operator reading this method concludes the product prints no DEF numeral, and
+the product printed one.
+
+**What follows, and what does not.**
+
+- The exclusion of defenses from the graded set STANDS. Correcting a
+  justification is not licence to change the population after reading an
+  output; that is the one thing §0 exists to prevent. Grading defenses requires
+  a new preregistration and a new commit.
+- The **product** was changed instead, immediately:
+  `TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False` in `engine/week_report.py`
+  withholds the confidence numeral on any DEF slot while still showing the
+  projection — the same shape as the existing win-probability gate. A published
+  probability with zero graded calls behind it is what principle 1 forbids, and
+  the honest response to "no evidence" is to stop publishing, not to go looking
+  for evidence that suits.
+- The data for a future defense arm exists:
+  `stats_team_week_{season}.csv` resolves for every season in this window at
+  roughly 0.2 MB each, and `ingest/nflverse.py defense_rows` already joins it to
+  the schedule's final scores.
+
+**How it was found:** an audit comparing, regime by regime, what the shipping
+product can publish a confidence for against what this harness actually graded.
+The DEF case was reproduced end to end — 0.627 on the Denver defense in a real
+2024 week-10 report, against 0 DEF calls in 10,041.
+
+### C2 — other regimes the audit surfaced, not yet resolved (2026-08-22)
+
+Recorded so they are not rediscovered as if new. Each is a regime the product
+can publish in and this harness never graded. None is fixed by this correction:
+
+- **SUPER_FLEX slots.** The picker offers a Superflex template and the ref
+  encodes it; `TEMPLATE_T1` has no such slot, so zero graded calls. Its defining
+  comparison — a quarterback against a bench skill player — is structurally
+  absent from the graded set (QB-vs-non-QB is 0 of 956 in 2024).
+- **half-PPR and standard scoring.** The intake accepts all three presets; the
+  published run is PPR only, via `main()`'s default, and the report does not say
+  so.
+- **Weeks 17-18.** `GRADED_WEEKS` is `range(4, 17)`, but `run/solo.current_week`
+  returns 17 or 18 at the end of a season.
+- **League sizes other than 12**, and roster templates other than T1.
+- **Rookies**, structurally: the universe for season S is built only from S−1
+  stat rows, so a first-year player cannot enter it — while the live product
+  publishes on him from week 4 once he has three appearances.
+- **The availability information set.** The harness gates on week W−1's injury
+  report; the product gates on week W's, which on a Tuesday is partial.
+
+The cheap ones are harness arguments rather than new code —
+`calls_for_season` already takes `template` and `main()` already takes
+`--scoring` — but each still needs its own preregistered arm before any number
+from it is published.

@@ -403,6 +403,61 @@ def test_the_projected_week_is_passed_in_not_read_off_the_roster(tmp_path) -> No
             f"{fn.__name__} derives the projected week from its roster carrier")
 
 
+def test_a_team_defense_publishes_no_confidence(tmp_path) -> None:
+    """Principle 1: every probability we publish must come from a method we can
+    backtest. Nothing backtests this one.
+
+    The frozen method (reports/nflverse-backtest-method.md §3) excludes defenses
+    from the graded set and justifies it by calling them "unscoreable", citing
+    engine/scoring.py:26-32 and engine/subscriber.py:282-290. Both spans now say
+    the opposite — the first is RULE S4, the second calls score_defense — so the
+    product went on to score defenses and publish a confidence on them (0.627 on
+    the Denver defense in a real 2024 week-10 report) against 0 of 10,041 graded
+    DEF calls.
+
+    The projection still prints: a projection is not a probability claim, and the
+    slot would otherwise read as broken. Only the numeral is withheld, with the
+    reason in the buyer's own words.
+    """
+    cache = _cache(tmp_path)
+    spec = RosterSpec(player_ids=_spec().player_ids + ("DEF-KC", "DEF-SF"),
+                      slots=SLOTS + ("DEF",), scoring="ppr")
+    report = solo.report_for(spec, solo.load_week_data(cache, SEASON, WEEK,
+                                                        session=OFFLINE),
+                             cache_dir=cache)
+    defense = [s for s in report["lineup"] if s["slot"] == "DEF"][0]
+    assert defense["player_id"].startswith("DEF-")
+    assert defense["projected"] is not None, "the projection is not the claim"
+    assert defense["confidence"] is None, \
+        f"a DEF slot published {defense['confidence']} with nothing grading it"
+    assert "defenses" in (defense["confidence_gate"] or "")
+    # And no OTHER slot is collateral damage — the gate is about defenses only.
+    others = [s for s in report["lineup"] if s["slot"] != "DEF"]
+    assert any(s["confidence"] is not None for s in others), \
+        "the defense gate silenced the rest of the lineup"
+
+
+def test_flipping_the_defense_gate_needs_its_own_evidence(tmp_path) -> None:
+    """The flag is the whole gate, so it is pinned like WIN_PROBABILITY_CALIBRATED.
+
+    A note on the guard it controls, learned by mutation testing rather than by
+    reading: the condition also covers the case where the ALTERNATIVE is a
+    defense, and that half is currently UNREACHABLE — a defense is eligible only
+    at DEF, where the seated player is necessarily a defense too. Deleting it
+    breaks no test, and this test does not pretend otherwise. It stays because it
+    costs nothing and becomes load-bearing the moment eligibility changes (a
+    league that lets a DEF fill a FLEX, say), which is exactly the kind of change
+    that would otherwise reopen the hole silently.
+    """
+    from engine.week_report import DEFENSE_GATE, TEAM_DEFENSE_CONFIDENCE_CALIBRATED
+    assert TEAM_DEFENSE_CONFIDENCE_CALIBRATED is False, \
+        "flipping this needs passing evidence for the DEF population itself"
+    assert "defenses" in DEFENSE_GATE
+    # Buyer copy, not operator copy: no version numbers, no module names.
+    for leak in ("backtest", "calibrat", "v0.", "DEF-", "engine"):
+        assert leak not in DEFENSE_GATE, f"{leak!r} leaked into buyer copy"
+
+
 def test_an_id_the_directory_does_not_know_fails_loudly(tmp_path) -> None:
     """A ref decodes to ids, not to players. An unknown id would render as a
     blank row in a report somebody paid for."""

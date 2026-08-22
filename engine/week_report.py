@@ -36,6 +36,7 @@ from engine.history import (
     TeamWeek, load_players, load_season_chain,
 )
 from engine.last_week import headline as last_week_headline
+from engine.roster import DEFENSE
 from engine.last_week import summarise as last_week_summary
 from engine.usage import recent_usage, usage_line
 from engine.projection import (
@@ -58,6 +59,31 @@ Z_80_BAND = 1.2816
 #   64.5% — systematically underconfident, so per principle 1 the number does
 #   NOT ship. Flip this flag only with fresh backtest.md evidence that passes.
 WIN_PROBABILITY_CALIBRATED = False
+
+# Team defenses: SCOREABLE, but not MEASURED. The two are different questions and
+# conflating them is how an unsupported number ships.
+#
+# The frozen backtest method (reports/nflverse-backtest-method.md §3) excludes
+# defenses from the graded set, and justifies it by calling them "unscoreable",
+# citing engine/scoring.py:26-32 and engine/subscriber.py:282-290. Both spans now
+# say the opposite: the first is RULE S4 (a defense IS scored, from the team's own
+# week plus the schedule's final score) and the second is the code that calls
+# score_defense. So the product went on to score defenses, project them and
+# publish a confidence on them — 0.627 on the Denver defense in a real 2024
+# week-10 report — while reports/nflverse-backtest.md graded 0 of 10,041 calls on
+# a DEF slot. A published probability with no graded call behind it is precisely
+# what principle 1 forbids.
+#
+# Gated rather than quietly folded into the existing run, because the method says
+# in terms that nothing in it may change after an output is read: adding defenses
+# to the graded set requires a NEW preregistration and a new commit. Until that
+# measurement exists this behaves exactly like WIN_PROBABILITY_CALIBRATED — the
+# machinery stays, the number does not print, and the reason is stated in the
+# buyer's own words. Flip it only with passing evidence for the DEF population
+# specifically.
+TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False
+DEFENSE_GATE = ("we don't put a number on defenses yet — we haven't tested our "
+                "defense calls against enough real weeks to stand behind one")
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
     "No win percentage. We tested one against two seasons and our favorites "
@@ -240,6 +266,13 @@ def optimal_lineup(
               or alt_projection.games < MIN_GAMES_FOR_CALL):
             gate = (f"not enough games on record yet ({projection.games} and "
                     f"{alt_projection.games}; we want at least {MIN_GAMES_FOR_CALL})")
+        elif not TEAM_DEFENSE_CONFIDENCE_CALIBRATED and (
+                pid.startswith(f"{DEFENSE}-")
+                or alt_id.startswith(f"{DEFENSE}-")):
+            # Either side being a defense is enough: the published unit is
+            # "this player beats that one at this slot", and no such pair has
+            # ever been graded when either half is a team defense.
+            gate = DEFENSE_GATE
         else:
             ok, reason = may_publish_confidence(status, statuses[alt_id])
             if ok:

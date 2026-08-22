@@ -1,6 +1,6 @@
 # Confidence, re-measured on nflverse
 
-Generated 2026-08-22 01:15 UTC. Method frozen in advance: `reports/nflverse-backtest-method.md`,
+Generated 2026-08-22 02:47 UTC. Method frozen in advance: `reports/nflverse-backtest-method.md`,
 committed before this harness existed. Reproduce with
 `python -m engine.nflverse_backtest`.
 
@@ -82,8 +82,26 @@ It says **nothing about win probability**, which stays gated. The published unit
 there is P(your total beats their set lineup), and the product no longer sees
 any rival's lineup, so no source exists to compute it live or to grade it.
 
-Team defenses hold roster spots and produce **zero calls**: DST scoring needs
-points and yards allowed, which this product does not compute.
+Team defenses hold roster spots and produce **zero calls** — and the reason
+printed here was wrong. It said DST scoring "needs points and yards allowed,
+which this product does not compute". The product computes it: `engine/scoring.py`
+RULE S4 scores a defense from the team's own week plus the schedule's final
+score, and `engine/subscriber.py` calls it. What is true is narrower and worse:
+this HARNESS never merges the team rows in, so every `DEF-` id misses, scores as
+an absence, and is gated out before a call exists.
+
+So the live product scored defenses, projected them and published a confidence
+on one — 0.627 on a real 2024 week-10 report — against zero graded DEF calls
+anywhere in this table. That is a published probability with no method behind
+it, which principle 1 forbids, so **the product now withholds the numeral on any
+DEF slot** (`TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False`) while still showing the
+projection, exactly as it already does for win probability.
+
+Folding defenses into the run above was not an option: §3 of the frozen method
+excludes them and says in terms that nothing in it may change once an output has
+been read. Grading them needs a new preregistration and a new commit. The data
+is there when that happens — `stats_team_week_{season}.csv` resolves for every
+season in this window, at about 0.2 MB each.
 
 ## Excluded, and why
 

@@ -370,6 +370,61 @@ path before a link is chosen and asks for the commissioner's address (a seat nam
 an unpaid report waiting to be sent). With `FORM_ENDPOINT` empty per PLAN §0 it says seats are
 not open and that nothing was saved, rather than posting into the void.
 
+**Every report threw away the most recent week of form (Aug 22 2026).** `optimal_lineup` took the
+week it was projecting from `team_week.week`. A TeamWeek is a roster CARRIER — both callers used it
+as one — but `build_season` stops at W-1, so the carrier for a week-W report is week W-1's, and the
+model's cutoff became W-1: week W-1 was loaded in and filtered straight back out. The week-10 report
+projected from weeks 1-8. Not a lookahead guard (the truncation already happened when the Season was
+built) and not deliberate (the frozen method states the window as 1..W-1 and declares week 4 the
+first gradeable week, while week 4 in fact yielded zero calls — the fingerprint). The Sleeper path
+was unaffected: its week-W TeamWeek exists before kickoff, so the two paths silently disagreed.
+Fixed by passing the week explicitly to `optimal_lineup`/`rival_lineup` rather than deriving it,
+which removes the trap instead of patching it; a test matches the AST, not the docstring, because
+the docstring names the trap on purpose. Measured across 2019-2024 before the change: **14.6% of
+slots seated a different player, 10.8% of publishable calls were suppressed** by holding players a
+week short of `MIN_GAMES_FOR_CALL`, and the matched head-to-heads it reorders go 133-100 in its
+favour (sign test p = 0.036). Re-running the backtest is PART of the fix, not a follow-up: calls
+9073 -> 10041, hit rate 63.9% -> 64.6%, Brier 0.2208 -> 0.2178, resolution spread 33.2 -> 35.6,
+calibrated buckets 1 of 6 -> 2 of 6, **ECE 3.2% -> 3.6%** (the model knows more and still says less
+than it could, so the one-directional underconfidence sharpened). Grade C unchanged, on the bucket
+count as before.
+
+**A published probability with nothing grading it: team defenses (Aug 22 2026).** The regenerated
+backtest says "team defenses produce zero calls" while a real 2024 week-10 report published **0.627
+on the Denver defense**. The frozen method excludes defenses and justifies it by calling them
+"unscoreable", citing `engine/scoring.py:26-32` and `engine/subscriber.py:282-290` — both spans now
+say the OPPOSITE (RULE S4, and the code that calls `score_defense`). So the product went on to score
+and publish them against 0 of 10,041 graded DEF calls. **`TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False`
+withholds the numeral on any DEF slot** while still showing the projection — the same shape as the
+win-probability gate. Deliberately NOT fixed by folding defenses into the run: §0 of the method says
+nothing in it may change once an output has been read, so grading them needs a new preregistration
+and a new commit (the data exists — `stats_team_week_*` resolves for every season at ~0.2 MB).
+Corrections go in an APPENDED §15 of the method doc, never edited into the frozen text, or nobody
+can tell what was preregistered.
+
+**Other regimes the audit found and did NOT fix** (recorded in method §15 C2 so they are not
+rediscovered as new): SUPER_FLEX slots (the picker offers the template; `TEMPLATE_T1` has no such
+slot, and QB-vs-non-QB is 0 of 956 graded 2024 calls), half-PPR and standard scoring (the published
+run is PPR only and does not say so), weeks 17-18 (`GRADED_WEEKS` is `range(4,17)` but
+`current_week` returns 17-18), league sizes other than 12, templates other than T1, rookies
+(structurally — season S's universe is built from S-1 rows only), and the availability information
+set (the harness gates on week W-1's injury report, the product on week W's, which on a Tuesday is
+partial). The cheap ones are harness arguments — `calls_for_season` already takes `template`,
+`main()` already takes `--scoring` — but each needs its own preregistered arm first.
+
+**The suite never ran in CI (Aug 22 2026).** Three workflows, none running pytest — so
+`test_no_sleeper_in_the_paid_path` and `test_the_roster_runner_cannot_reach_sleeper_at_all`, the only
+mechanical enforcement that PLAN §0 happened in the software rather than in the plan, were enforced
+by memory. `.github/workflows/test.yml` runs it on every push and PR, with node (without it
+`test_intake.py` skips, and that file is where roster.js is actually run against the Python that
+decodes it). Seven tests FAILED on a fresh checkout because they read `data/` and `reports/`
+artifacts that are gitignored; they skip with reasons now, and `-rs` prints every skip, because a
+skip nobody can see is how a suite quietly stops testing things. Verified both ways: 632 pass
+locally, 611 pass / 19 skip / 0 fail in a throwaway clone. **Verify the fresh-checkout case with
+`git clone` to a temp dir — never by moving the live `data/` aside.** Doing that nested the real
+directory inside itself twice; nothing was lost (diffed layer by layer, the innermost was a strict
+superset) but `data/registry` and the unrecoverable availability snapshots were two levels down.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's
