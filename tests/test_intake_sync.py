@@ -292,3 +292,151 @@ def test_the_run_refuses_without_a_stripe_key(tmp_path, monkeypatch, capsys) -> 
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
     assert _run(tmp_path) == 1
     assert "STRIPE_API_KEY" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------- #
+# League Pass seats — the only signups with no payment behind them
+# --------------------------------------------------------------------- #
+
+SEAT_REF = encode_roster("season", "ppr", list(SLOTS), PLAYERS[::-1])
+
+
+def _seat(**over) -> dict:
+    row = {"email": "member@example.com", "covered_by": "commish@example.com",
+           "ref": SEAT_REF}
+    row.update(over)
+    return row
+
+
+def _seats(monkeypatch, *rows: dict) -> None:
+    monkeypatch.setenv("FORM_ENDPOINT", "https://forms.example/seats")
+    monkeypatch.setattr(intake, "fetch_seats", lambda *a, **k: list(rows))
+
+
+def _pass_session(**over) -> dict:
+    return _session(PASS_REF, sid="cs_pass", email="commish@example.com",
+                    link=PASS_LINK, customer="cus_commish01", **over)
+
+
+def test_a_seat_is_honoured_only_when_a_real_pass_covers_it(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The seat form is public by necessity, so without this check the endpoint
+    is a free-report generator for anyone who finds the URL. The payer set is
+    built from what the LINK took, never from what a seat claims."""
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _seats(monkeypatch, _seat())
+    assert _run(tmp_path) == 0, capsys.readouterr().err
+    rows = {s.email: s for s in load_rosters(tmp_path / intake.REGISTRY_NAME)}
+    assert set(rows) == {"commish@example.com", "member@example.com"}
+    seat = rows["member@example.com"]
+    assert seat.is_league_seat and seat.covered_by == "commish@example.com"
+    # The PAYER is an ordinary subscriber, not a seat: a league_pass row needs
+    # covered_by, and the buyer has nobody covering them.
+    assert not rows["commish@example.com"].is_league_seat
+
+
+def test_a_seat_naming_nobody_who_paid_is_refused(tmp_path, stripe, directory,
+                                                  monkeypatch, capsys) -> None:
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_session(REF)]          # an ordinary season buyer
+    _seats(monkeypatch, _seat(covered_by="stranger@example.com"))
+    _run(tmp_path)
+    assert "no League Pass" in capsys.readouterr().err
+    assert all(r.get("plan") != "league_pass" for r in _registry(tmp_path))
+
+
+def test_an_ordinary_subscriber_does_not_cover_seats(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The check is "did this address buy a LEAGUE PASS", not "did it pay us".
+    Honouring any payer would hand eleven free reports to anyone who found the
+    seat link and knew one $39 subscriber's address — the free-report generator
+    the validation exists to prevent.
+
+    Found by mutation: relaxing the check to `pass_payers = every payer` left
+    the suite green, because the only refusal test named a stranger.
+    """
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_session(REF)]          # a $39 season buyer, no pass
+    _seats(monkeypatch, _seat(covered_by="fan@example.com"))
+    _run(tmp_path)
+    assert "no League Pass" in capsys.readouterr().err
+    assert all(r.get("plan") != "league_pass" for r in _registry(tmp_path)), \
+        "a season subscription was treated as covering seats"
+
+
+def test_a_seat_survives_either_projection_order(monkeypatch) -> None:
+    """The payer wins whether seats or payments are projected first. Pinned
+    because the code comment used to claim the ordering was load-bearing."""
+    from run.rosters import drop_unloadable
+    payer = {"email": "c@example.com", "ref": REF, "player_ids": list(PLAYERS),
+             "slots": list(SLOTS), "scoring": "ppr", "plan": "season"}
+    seat = dict(payer, plan="league_pass", covered_by="other@example.com")
+    for order in ([payer, seat], [seat, payer]):
+        kept, _ = drop_unloadable(order)
+        assert len(kept) == 1 and kept[0].get("plan") == "season"
+
+
+def test_a_stranger_cannot_claim_a_seat_on_a_payers_address(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """A seat must never evict the person who actually paid. drop_unloadable
+    resolves the collision in the payer's favour, and the payer is projected
+    first so it can."""
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _seats(monkeypatch, _seat(email="commish@example.com", ref=PASS_REF))
+    _run(tmp_path)
+    rows = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    payer = [r for r in rows if r.email == "commish@example.com"]
+    assert len(payer) == 1 and not payer[0].is_league_seat, \
+        "a seat claim replaced the subscription that paid for it"
+
+
+def test_a_seat_with_an_unusable_address_cannot_take_the_registry_down(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The loader fails the WHOLE file on one bad row, so a stranger POSTing
+    "not an email" would stop every subscriber's Tuesday."""
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _seats(monkeypatch, _seat(email="not an email"), _seat())
+    assert _run(tmp_path) == 0
+    assert "unusable addresses" in capsys.readouterr().err
+    load_rosters(tmp_path / intake.REGISTRY_NAME)        # still loadable
+
+
+def test_an_unreadable_seat_backend_refuses_rather_than_dropping_seats(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """Writing a Stripe-only registry would silently drop every seat and read
+    as a quiet week."""
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    monkeypatch.setenv("FORM_ENDPOINT", "https://forms.example/seats")
+
+    def _boom(*_a, **_k):
+        raise intake.IntakeError("HTTP 503")
+    monkeypatch.setattr(intake, "fetch_seats", _boom)
+    assert _run(tmp_path) == 1
+    assert "Refusing to write a registry" in capsys.readouterr().err
+
+
+def test_with_no_seat_backend_the_tier_simply_does_not_deliver_seats(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """PLAN §0 keeps FORM_ENDPOINT empty until a validated backend exists, and
+    empty must mean no seats rather than unpaid ones."""
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    assert _run(tmp_path) == 0
+    assert all(r.get("plan") != "league_pass" for r in _registry(tmp_path))
+
+
+def test_a_directory_outage_does_not_reject_every_seat(monkeypatch) -> None:
+    """`known_ids=None` means NOT CHECKED, never "nothing is known" — an empty
+    set would reject every seat with a confident, wrong reason on the one day a
+    data release is unavailable."""
+    rows, problems = intake.seats_to_rows(
+        [_seat()], {"commish@example.com"}, None)
+    assert len(rows) == 1 and not problems
+    rows, problems = intake.seats_to_rows(
+        [_seat()], {"commish@example.com"}, set(PLAYERS))
+    assert len(rows) == 1, problems

@@ -53,8 +53,8 @@ from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
-from run.rosters import (RosterRegistryError, drop_unloadable, load_rosters,
-                         to_json)
+from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
+                         load_rosters)
 from run.solo import CACHE_DIR, SoloError, load_week_data
 from run.subscriptions import SubscriptionError
 
@@ -305,6 +305,111 @@ def unservable(signups: Iterable[RosterSignup],
     return out
 
 
+# --------------------------------------------------------------------- #
+# League Pass seats — the one path with no payment behind it
+# --------------------------------------------------------------------- #
+
+def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
+    """Read seat claims from the form backend.
+
+    Deliberately one small function against a plain JSON endpoint: every hosted
+    form vendor can produce one, and swapping vendors is this function rather
+    than an architecture.
+    """
+    import urllib.error
+    import urllib.request
+
+    request = urllib.request.Request(endpoint, method="GET")
+    if api_key:
+        request.add_header("Authorization", f"Bearer {api_key}")
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise IntakeError(f"seat backend returned HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise IntakeError(f"could not reach the seat backend: {exc}") from None
+    except json.JSONDecodeError:
+        raise IntakeError("seat backend returned something that is not JSON") from None
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        rows = (payload.get("data") or payload.get("submissions")
+                or payload.get("items") or [])
+    else:
+        rows = []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
+                  known_ids: set[str] | None) -> tuple[list[dict], list[str]]:
+    """Validate seat claims into registry rows.
+
+    ``pass_payers`` is the set of addresses that ACTUALLY BOUGHT a League Pass,
+    built from sessions whose own `payment_link` was the pass link — never from
+    what a seat claims. The seat form is public by necessity, so without that
+    check it is a free-report generator for anyone who finds the URL.
+
+    Under the roster architecture there is no league id to match a seat against.
+    The seat holder types their commissioner's address, and entitlement flows
+    through `covered_by` — which is what ``PaidList.entitles`` already reads.
+
+    ``known_ids`` is None when the directory could not be loaded at all. That
+    must mean "not checked", never "nothing is known" — an empty set would
+    reject every seat with a confident, wrong reason on the one day a data
+    release is unavailable.
+    """
+    out: list[dict] = []
+    problems: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        email = str(row.get("email") or "").strip().lower()
+        payer = str(row.get("covered_by") or "").strip().lower()
+        ref = str(row.get("ref") or "").strip()
+        # Validated to run/rosters.py's own standard HERE, because this endpoint
+        # is public and the registry loader fails the WHOLE file on one bad row.
+        # Accepting "not an email" would let any stranger stop every
+        # subscriber's Tuesday.
+        if not _EMAIL_RE.match(email) or not _EMAIL_RE.match(payer):
+            problems.append("a seat claim arrived with unusable addresses")
+            continue
+        if payer not in pass_payers:
+            problems.append(
+                f"seat claim from {_no_email(email)} names a payer with no "
+                f"League Pass — not honoured")
+            continue
+        if email == payer:
+            # The commissioner already has their own paid row; a seat for
+            # themselves would be a second report for one purchase.
+            problems.append(
+                f"seat claim from {_no_email(email)} names ITSELF as the payer "
+                f"— the pass buyer already has their own subscription")
+            continue
+        try:
+            roster = decode_roster(ref)
+        except RefError as exc:
+            problems.append(f"seat claim from {_no_email(email)} carries an "
+                            f"unreadable roster ({exc})")
+            continue
+        missing = ([pid for pid in roster.player_ids if pid not in known_ids]
+                   if known_ids else [])
+        if missing:
+            problems.append(
+                f"seat claim from {_no_email(email)} names {len(missing)} "
+                f"player id(s) the directory does not have")
+            continue
+        if (email, ref) in seen:
+            continue
+        seen.add((email, ref))
+        out.append({
+            "email": email, "ref": ref,
+            "player_ids": list(roster.player_ids), "slots": list(roster.slots),
+            "scoring": roster.scoring, "league_size": 12,
+            "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": payer,
+        })
+    return out, problems
+
+
 def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
     """The on-disk shape run/rosters.py validates."""
     rows: list[dict] = []
@@ -388,6 +493,7 @@ def main(argv: list[str] | None = None) -> int:
     # Can we serve them? The directory is the same one the picker published, so
     # a ref that resolved in the browser resolves here — unless it was hand-made.
     blocked: dict[tuple[str, str], str] = {}
+    known: set[str] = set()
     try:
         data = load_week_data(args.cache)
         known = {player.player_id for player in data.directory.players}
@@ -399,7 +505,38 @@ def main(argv: list[str] | None = None) -> int:
                         f"— rows were written unchecked")
 
     servable = [s for s in projected if s.key not in blocked]
-    rows, dropped = drop_unloadable(to_rows(servable))
+
+    # League Pass SEATS. The only signups with no payment behind them, and the
+    # only external dependency in this pipeline — so a vendor outage costs
+    # seats, never sales. FORM_ENDPOINT is empty by PLAN §0 decision until a
+    # validated backend exists, and empty means the tier simply does not
+    # deliver seats rather than delivering unpaid ones.
+    seat_rows: list[dict] = []
+    seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
+    if seat_endpoint:
+        # Built from what the LINK took, never from what a seat claims.
+        pass_payers = {s.email.lower() for s in servable if s.plan == LEAGUE_PASS}
+        try:
+            claims = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
+        except IntakeError as exc:
+            # Refuse rather than writing a Stripe-only registry: that would
+            # silently drop every seat and read as a quiet week.
+            print(f"could not read the seat backend: {exc}", file=sys.stderr)
+            print("  Refusing to write a registry that would drop every League "
+                  "Pass seat. Fix the backend, or unset FORM_ENDPOINT to run "
+                  "without seats deliberately.", file=sys.stderr)
+            return 1
+        seat_rows, seat_problems = seats_to_rows(claims, pass_payers,
+                                                 known or None)
+        problems.extend(seat_problems)
+        print(f"Seats: {len(seat_rows)} honoured of {len(claims)} claim(s)")
+
+    # A PAYMENT ALWAYS BEATS AN UNPAID CLAIM. Someone who bought their own
+    # subscription must not have it replaced by a seat row naming them.
+    # drop_unloadable resolves that collision in the payer's favour in EITHER
+    # order — verified by mutation, because the first version of this comment
+    # claimed the ordering was load-bearing and it is not.
+    rows, dropped = drop_unloadable(to_rows(servable) + seat_rows)
     # Every servable signup being dropped is a bug in what we write, not a
     # business that lost all its customers — and writing an empty registry over
     # a good one, then exiting 0, is the failure nobody notices until Tuesday.

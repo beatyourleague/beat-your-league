@@ -342,15 +342,16 @@ than silently merged (that would drop a team) or silently split (that would doub
 A real fix is a self-serve edit and belongs with the customer portal.
 
 **Still missing between payment and inbox:**
-- **League Pass SEATS are unimplemented on the roster path.** `run/rosters.py` validates them and
-  `run/tuesday.py` reports them, and nothing writes one: `run/intake.py` reads Stripe only, and
-  seats never transact. So a $99 pass today delivers the commissioner's own report and nothing
-  else. `FORM_ENDPOINT` is empty by PLAN §0 decision (the seat link is necessarily public, so an
-  unvalidated endpoint is a free-report generator) and the picker's seat mode says seats are not
-  open, so nothing is being promised that is not delivered — but the tier cannot ship until a
-  seat backend exists and `run/intake.py` reads it. Under the roster architecture there is no
-  league id to match a seat against; the seat holder types the commissioner's address and
-  entitlement flows through `covered_by`.
+- **League Pass seats: the CODE is done, the BACKEND is an owner decision.** `run/intake.py` now
+  reads `FORM_ENDPOINT`, validates each claim and writes seat rows. The validation that matters:
+  a seat is honoured only when its `covered_by` address actually bought a PASS — the payer set is
+  built from sessions whose own `payment_link` was the pass link, never from what a seat claims.
+  Relaxing that to "any payer" leaves the suite green unless a test names a season buyer
+  specifically (found by mutation), and it would hand eleven free reports to anyone who found the
+  seat link and knew one $39 subscriber's address. An unreadable backend REFUSES rather than
+  writing a Stripe-only registry that silently drops every seat. `FORM_ENDPOINT` stays empty per
+  PLAN §0, and empty means the tier delivers no seats rather than unpaid ones — so the remaining
+  work is choosing and wiring a validated form backend, not code.
 - (Both the ledger-grading port and the cron rewiring are DONE — see below.)
 
 **A seat holder's "already paid" button was wired to the $39 checkout (Aug 21 2026).** The
