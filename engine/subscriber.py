@@ -187,7 +187,18 @@ def build_season(
         }
 
     result = Season(
-        league_id=f"typed-{season}",
+        # The SCORING PRESET is part of the identity, not decoration. Without a
+        # league there is one shared ledger, and engine/ledger.py hashes a call
+        # id from (league_id, season, week, roster_id, slot, pick, over) — all
+        # of which are equal for a PPR subscriber and a standard-scoring one
+        # making the "same" call. Measured on real 2024 week-10 data: 5 of 6
+        # calls collided while publishing DIFFERENT probabilities (0.647 vs
+        # 0.632, 0.616 vs 0.591), so record_calls kept whichever ran first and
+        # dropped the other. Grading is worse: "did the pick outscore the
+        # alternative" has a different answer under each rule, so a single row
+        # cannot be graded correctly for both. Splitting the id splits the
+        # store, which is also how grading learns which rule to score with.
+        league_id=f"typed-{spec.scoring}-{season}",
         season=str(season),
         name="Your league",
         status="in_season",

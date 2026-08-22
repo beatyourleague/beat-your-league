@@ -30,6 +30,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
 from engine.availability import load_week_availability
+from engine.roster import DEFENSE
 
 
 class LedgerError(ValueError):
@@ -250,47 +252,223 @@ def _call_is_final(call: LedgerCall, raw_dir: Path,
     return True
 
 
+# The roster product's ledger store is named for the rule its calls were made
+# under: `typed-{scoring}-{season}` (engine/subscriber.py). That is not
+# decoration — "did the pick outscore the alternative" has a DIFFERENT answer
+# under PPR and standard, so a ledger that cannot tell them apart cannot be
+# graded correctly for either. Measured on real 2024 week-10 data before the id
+# carried the preset: 5 of 6 calls collided across presets while publishing
+# different probabilities.
+TYPED_LEDGER_RE = re.compile(r"^typed-(?P<scoring>[a-z_]+)-(?P<season>\d{4})$")
+
+
+def scoring_of(league_id: str) -> str | None:
+    """The scoring preset a `typed-*` ledger's calls were made under."""
+    match = TYPED_LEDGER_RE.match(league_id or "")
+    return match.group("scoring") if match else None
+
+
+def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
+    """Grade a roster-product ledger against nflverse. No league is read.
+
+    RULES L1-L4 are unchanged and are not reimplemented here — this supplies
+    only where finality and points come from, and `_grade_locked` applies the
+    same decision it applies to the league path.
+
+    **The one grading rule this data source forces us to state, stated before a
+    single row is graded (principle 2).** A rostered player with no stat row for
+    a final week scored **0.0**, not "no record". Sleeper wrote an explicit 0.0
+    for exactly that player, so this keeps the two stacks identical: 0.0-vs-0.0
+    is still VOID by RULE L3 (the absence signal, not a result), and
+    0.0-vs-12.3 is still a MISS. Mapping absence to "no record" instead would
+    VOID every call whose pick did not play while the alternative scored —
+    which is a real miss, and voiding it would flatter the published record in
+    precisely the direction nobody should trust us on.
+    """
+    from engine.scoring import preset, score, score_defense
+    from ingest.nflverse import NflverseError, defense_rows, season_rows
+
+    seasons: dict[str, dict] = {}
+
+    def load(season: str) -> dict:
+        if season not in seasons:
+            try:
+                weekly = season_rows(cache_dir, season, live=True)
+            except NflverseError:
+                weekly = {}
+            try:
+                defenses = defense_rows(cache_dir, season, live=True)
+            except NflverseError:
+                defenses = {}
+            seasons[season] = {"weekly": weekly, "defenses": defenses,
+                               "final": _final_teams(cache_dir, season)}
+        return seasons[season]
+
+    def team_of(call: LedgerCall, player_id: str, data: dict) -> str | None:
+        if player_id.startswith(f"{DEFENSE}-"):
+            return player_id[len(DEFENSE) + 1:]
+        row = (data["weekly"].get(call.week) or {}).get(player_id)
+        team = (row or {}).get("team")
+        return str(team).strip() if team else None
+
+    def is_final(call: LedgerCall) -> bool:
+        data = load(call.season)
+        final = data["final"].get(call.week)
+        if not final:
+            return False                      # week not in the schedule: unknown
+        for player_id in (call.pick_id, call.over_id):
+            team = team_of(call, player_id, data)
+            if team is None:
+                # He has no row, so we cannot name his game. Fall back to the
+                # whole week being done — strictly more conservative than
+                # guessing a team, and it settles by the following Tuesday.
+                if not final.get("__all__"):
+                    return False
+            elif team not in final:
+                return False
+        return True
+
+    def points_of(call: LedgerCall, player_id: str, data: dict, rule) -> float:
+        if player_id.startswith(f"{DEFENSE}-"):
+            row = (data["defenses"].get(call.week) or {}).get(
+                player_id[len(DEFENSE) + 1:])
+            if row is None:
+                return 0.0
+            scored = score_defense(row, row.get("points_allowed"))
+            return 0.0 if scored is None else float(scored)
+        row = (data["weekly"].get(call.week) or {}).get(player_id)
+        # See the docstring: no row means he produced nothing, not that we have
+        # no record of him.
+        return 0.0 if row is None else float(score(row, rule))
+
+    def points_for(call: LedgerCall) -> tuple[Any, Any] | None:
+        scoring = scoring_of(call.league_id)
+        if scoring is None:
+            return None       # not a roster-product ledger; leave it alone
+        try:
+            rule = preset(scoring)
+        except Exception:     # noqa: BLE001 - an unknown preset is not gradeable
+            return None
+        data = load(call.season)
+        return (points_of(call, call.pick_id, data, rule),
+                points_of(call, call.over_id, data, rule))
+
+    with _ledger_lock(path):
+        return _grade_locked(path, _Sources(is_final=is_final,
+                                            points_for=points_for))
+
+
+def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
+    """week -> teams whose REG game has a final score, plus an `__all__` flag.
+
+    A game with either score missing has not been played (or not been posted),
+    and RULE L1 is conservative on every unknown.
+    """
+    import csv as _csv
+
+    from ingest.nflverse import NflverseError, fetch
+
+    try:
+        path = fetch("schedules", "games.csv", cache_dir, live=True)
+    except NflverseError:
+        return {}
+    weeks: dict[int, dict[str, bool]] = {}
+    played: dict[int, int] = {}
+    total: dict[int, int] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in _csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            try:
+                week = int(row.get("week") or 0)
+            except ValueError:
+                continue
+            if not week:
+                continue
+            total[week] = total.get(week, 0) + 1
+            home, away = (row.get("home_team") or ""), (row.get("away_team") or "")
+            done = bool((row.get("home_score") or "").strip()
+                        and (row.get("away_score") or "").strip())
+            if done:
+                played[week] = played.get(week, 0) + 1
+                for team in (home, away):
+                    if team:
+                        weeks.setdefault(week, {})[team] = True
+    for week, count in total.items():
+        if count and played.get(week, 0) == count:
+            weeks.setdefault(week, {})["__all__"] = True
+    return weeks
+
+
 def grade_ledger(path: Path, raw_dir: Path) -> tuple[int, int]:
-    """Grade every pending call whose games are final.
+    """Grade every pending call whose games are final, from the LEAGUE cache.
 
     Returns (graded_count, still_pending_count). Already-graded entries are
     never touched (RULE L4).
     """
     with _ledger_lock(path):
-        return _grade_locked(path, raw_dir)
+        return _grade_locked(path, _sleeper_sources(raw_dir))
 
 
-def _grade_locked(path: Path, raw_dir: Path) -> tuple[int, int]:
-    calls = load_ledger(path)
-    if not calls:
-        return 0, 0
-    graded_now = 0
+def _sleeper_sources(raw_dir: Path) -> "_Sources":
+    """Finality and points as read from a cached league. The original path."""
     games_by_season: dict[str, dict[int, dict[str, str]]] = {}
     complete_by_league: dict[str, bool] = {}
 
-    for call in calls:
-        if call.status != PENDING:
-            continue
+    def is_final(call: LedgerCall) -> bool:
         if call.season not in games_by_season:
             games_by_season[call.season] = _week_game_status(raw_dir, call.season)
         if call.league_id not in complete_by_league:
             complete_by_league[call.league_id] = _league_complete(raw_dir, call.league_id)
-        if not _call_is_final(call, raw_dir, games_by_season[call.season],
-                              complete_by_league[call.league_id]):
-            continue
+        return _call_is_final(call, raw_dir, games_by_season[call.season],
+                              complete_by_league[call.league_id])
 
+    def points_for(call: LedgerCall) -> tuple[Any, Any] | None:
         matchups = _load_json(Path(raw_dir) / "league" / call.league_id
                               / "matchups" / f"week_{call.week:02d}.json")
-        points: Mapping[str, Any] | None = None
         for record in matchups if isinstance(matchups, list) else []:
             if isinstance(record, dict) and record.get("roster_id") == call.roster_id:
                 points = record.get("players_points") or {}
-                break
-        if points is None:
-            continue  # matchup record missing entirely: stay pending, retry later
+                return points.get(call.pick_id), points.get(call.over_id)
+        # Matchup record missing entirely: stay pending and retry later, which
+        # is not the same as "he did not score" and must not grade as one.
+        return None
 
-        pick_points = points.get(call.pick_id)
-        over_points = points.get(call.over_id)
+    return _Sources(is_final=is_final, points_for=points_for)
+
+
+@dataclass(frozen=True)
+class _Sources:
+    """Where finality and points come from. The RULES do not live here.
+
+    Two data stacks now feed the same grader — a cached league, and nflverse for
+    the roster product — and RULES L1-L4 must be identical under both. A second
+    copy of the hit/miss/void decision is exactly how a public record starts
+    grading two ways.
+    """
+
+    is_final: Any            # (LedgerCall) -> bool
+    points_for: Any          # (LedgerCall) -> tuple[float | None, float | None] | None
+
+
+def _grade_locked(path: Path, sources: "_Sources") -> tuple[int, int]:
+    calls = load_ledger(path)
+    if not calls:
+        return 0, 0
+    graded_now = 0
+
+    for call in calls:
+        if call.status != PENDING:
+            continue
+        if not sources.is_final(call):
+            continue
+
+        got = sources.points_for(call)
+        if got is None:
+            continue  # scoring record missing entirely: stay pending, retry later
+        pick_points, over_points = got
         call.graded_at = _now_iso()
         if not isinstance(pick_points, (int, float)) or not isinstance(over_points, (int, float)):
             call.status = VOID
