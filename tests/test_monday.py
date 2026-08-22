@@ -75,6 +75,58 @@ def test_an_unknown_week_is_not_final(tmp_path) -> None:
     assert grade_ledger_nflverse(path, cache) == (0, 1)
 
 
+def test_a_stats_outage_leaves_calls_pending_rather_than_voiding_them(
+        tmp_path, monkeypatch) -> None:
+    """The worst bug this module could have, reproduced before it was fixed.
+
+    Finality comes from the schedule and points come from the weekly stat
+    release — two files, fetched independently. Checking only the schedule meant
+    that with the stats download failed, BOTH players scored "absent" = 0.0,
+    RULE L3 voided the call as a non-event, and RULE L4 made that permanent. One
+    outage silently erased every real hit and miss in the season from the public
+    record, which is the exact failure a receipts product cannot survive.
+    """
+    import ingest.nflverse as nflv
+    cache = _cache(tmp_path)
+
+    def outage(*_a, **_k):
+        raise nflv.NflverseError("simulated outage")
+    monkeypatch.setattr(nflv, "season_rows", outage)
+    monkeypatch.setattr(nflv, "defense_rows", outage)
+
+    path = _store(tmp_path, _call(FINAL_WEEK, _pid(5), _pid(2)))
+    assert grade_ledger_nflverse(path, cache) == (0, 1)
+    call = load_ledger(path)[0]
+    assert call.status == PENDING, "an outage was recorded as a result"
+    assert call.void_reason is None
+
+
+def test_a_week_whose_box_scores_have_not_landed_is_not_gradeable(
+        tmp_path) -> None:
+    """The subtler half: the stats file EXISTS but lags the schedule. Every
+    player then looks absent, and a real miss publishes as a void — or worse, a
+    partially-published week makes one player look absent against another's real
+    points, fabricating an outcome.
+
+    So a week is gradeable only when every team the schedule calls final
+    actually appears in that week's stat rows. Then "no row" unambiguously means
+    "did not play", which is what makes scoring him 0.0 honest.
+    """
+    import csv as _csv
+    cache = _cache(tmp_path)
+    stats = cache / f"stats_player_week_{SEASON}.csv"
+    rows = [r for r in _csv.DictReader(stats.open(encoding="utf-8"))
+            if int(r["week"] or 0) != FINAL_WEEK]
+    with stats.open("w", encoding="utf-8", newline="") as handle:
+        writer = _csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    path = _store(tmp_path, _call(FINAL_WEEK, _pid(5), _pid(2)))
+    assert grade_ledger_nflverse(path, cache) == (0, 1)
+    assert load_ledger(path)[0].status == PENDING
+
+
 # --------------------------------------------------------------------- #
 # RULES L2/L3 — the outcome, and the rule this data source forced
 # --------------------------------------------------------------------- #

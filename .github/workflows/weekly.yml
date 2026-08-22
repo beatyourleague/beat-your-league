@@ -76,16 +76,6 @@ jobs:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
           restore-keys: nflverse-
-      # HAZARD, and the reason this step exists: ingest.nflverse.fetch returns
-      # any non-empty cached file unconditionally when live=False, and
-      # load_week_data fetches players.csv and teams_colors_logos.csv that way.
-      # A restored cache therefore FREEZES the player directory at whatever day
-      # it was first written — a rookie signed later never appears, and the
-      # subscriber who rostered him is blocked at intake with a paid,
-      # undeliverable row. The weekly stats files revalidate on their own 6h
-      # window, so only these two need dropping.
-      - name: Drop the frozen directory assets
-        run: rm -f data/raw/nflverse/players.csv data/raw/nflverse/teams_colors_logos.csv
       # The picker downloads site/join/players.json. Nothing regenerated it, and
       # a stale copy does not break a build — it breaks one specific customer's
       # signup, weeks later, surfacing only as a BLOCKED line in the intake log.

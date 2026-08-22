@@ -79,8 +79,13 @@ def guard_shrink(new_entries: list[dict], out_dir: Path) -> None:
         return
 
     def key(entry: dict) -> tuple:
+        # `scoring` is part of the key. Without it, the same head-to-head
+        # published under two presets collapses to ONE key — measured: three
+        # rows, one key — so two whole stores could vanish and this guard would
+        # see nothing missing. The split that made the ledger correct is exactly
+        # what made this key insufficient.
         return (entry.get("season"), entry.get("week"), entry.get("slot"),
-                entry.get("pick"), entry.get("over"))
+                entry.get("pick"), entry.get("over"), entry.get("scoring"))
 
     missing = {key(e) for e in old_entries} - {key(e) for e in new_entries}
     if missing:

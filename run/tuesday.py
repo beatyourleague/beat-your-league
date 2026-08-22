@@ -78,8 +78,16 @@ class RunResult:
 
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    template_html: str, out_dir: Path = SUBSCRIBER_REPORTS,
-                   processed_dir: Path = PROCESSED_DIR) -> RunResult:
-    """One roster's week: build, write the archive, prepare the email."""
+                   processed_dir: Path = PROCESSED_DIR,
+                   record: bool = True) -> RunResult:
+    """One roster's week: build, write the archive, prepare the email.
+
+    ``record`` is False when nothing is being mailed. A call is PUBLISHED when
+    it reaches a subscriber, and the ledger is the record of what was published
+    — so a preview that writes rows claims we published calls nobody received,
+    permanently, because RULE L4 makes a graded entry immutable. Reproduced:
+    `--no-send` on an arbitrary week wrote 4 rows into the real store.
+    """
     try:
         report = report_for(subscriber.spec(), data,
                             league_size=subscriber.league_size)
@@ -118,18 +126,24 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     # moment it is published — a call not recorded now cannot be recovered
     # later. Guarded separately: the report above is already built, and a
     # corrupt shared ledger must not sink this or anybody else's Tuesday.
-    ledger_note = ""
-    try:
-        from engine.ledger import extract_published_calls, ledger_path, record_calls
-        # One shared ledger, not one per subscriber. Without a league the calls
-        # ARE league-agnostic — "this player beat that one at this slot" — so
-        # two subscribers who made the same call made ONE call, and the ids
-        # agree by construction (see engine/ledger.py _call_id).
-        added = record_calls(ledger_path(Path(processed_dir), report["meta"]["league_id"]),
-                             extract_published_calls(report))
-        ledger_note = f" · {added} new ledger row(s)" if added else ""
-    except Exception as exc:  # noqa: BLE001 — batch contract
-        ledger_note = f" · LEDGER RECORD FAILED: {exc!r}"
+    if not record:
+        ledger_note = " · nothing recorded (not sending)"
+    else:
+        try:
+            from engine.ledger import (extract_published_calls, ledger_path,
+                                       record_calls)
+            # One store per SCORING PRESET, not one per subscriber. Two
+            # subscribers on the same preset who make the same call made ONE
+            # call and their ids agree by construction; two on different presets
+            # did NOT — the probabilities differ and so does the answer — which
+            # is why the store name carries the preset (engine/ledger.py
+            # _call_id, engine/subscriber.py build_season).
+            added = record_calls(
+                ledger_path(Path(processed_dir), report["meta"]["league_id"]),
+                extract_published_calls(report))
+            ledger_note = f" · {added} new ledger row(s)" if added else ""
+        except Exception as exc:  # noqa: BLE001 — batch contract
+            ledger_note = f" · LEDGER RECORD FAILED: {exc!r}"
 
     published = sum(1 for slot in report["lineup"]
                     if slot.get("confidence") is not None)
@@ -214,9 +228,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"could not load this week's data: {exc}", file=sys.stderr)
         return 1
 
+    # Is anything actually going to be mailed? Decided BEFORE the reports are
+    # built, because it decides whether their calls enter the public record.
+    # A preview must leave no trace: RULE L4 makes a recorded call immutable,
+    # so a dry run that records claims we published calls nobody received.
+    sending = not args.no_send
+    if sending:
+        try:
+            sending = build_provider(args.email_provider).name != DRY_PROVIDER
+        except DeliveryError:
+            sending = False
+
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
-                              processed_dir=args.processed_dir)
+                              processed_dir=args.processed_dir, record=sending)
                for s in subscribers]
 
     line = "=" * 62

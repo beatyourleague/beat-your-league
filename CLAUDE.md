@@ -466,6 +466,37 @@ Deliberately NOT ported: `content/` drafts (`run/content.py` is Sleeper-rooted e
 `data/raw/availability` (only `ingest.pull` writes it — the committed history stays, the path
 stops accumulating).
 
+**An adversarial review of the grading + cron work found four real defects, three of them in
+code written the same day (Aug 22 2026).** Four independent lenses; findings verified by
+reproduction before any fix:
+- **One failed download permanently VOIDED every call in a season.** Finality came from
+  `games.csv` and points from `stats_player_week_*.csv` — two files fetched independently. With
+  the stats download failed, BOTH players scored "absent" = 0.0, RULE L3 voided the call as a
+  non-event, and RULE L4 made it immutable. Reproduced: a real 65% HIT (Chase 55.4 vs Sutton 19.0)
+  became a permanent void. Three of the four reviewers found this independently. **A week is now
+  gradeable only when its BOX SCORES ARE IN** — every team the schedule calls final must appear in
+  that week's stat rows. Only then does "no row" unambiguously mean "did not play", which is what
+  makes scoring him 0.0 honest instead of a guess about missing data. The lagging-file variant
+  (stats stop at W-1 while the schedule says W is final) is covered by the same check.
+- **The scoring split blinded the shrink guard.** Its key was (season, week, slot, pick, over) —
+  no preset — so the same head-to-head under three presets collapsed to ONE key: two whole stores
+  could vanish with nothing missing. `public_entries` now carries `scoring` (buyer vocabulary, and
+  a fact a reader of the record is entitled to) and the guard keys on it. **Known limitation
+  recorded, not hidden:** those rows are CORRELATED — one game decides all of them — and the
+  public summary counts them as independent, which is the dependence the backtest handles with a
+  cluster bootstrap. Revisit before the ledger is promoted back into the funnel.
+- **A PREVIEW wrote permanent rows into the public ledger.** `--no-send` and `make tuesday-preview`
+  both recorded calls; RULE L4 makes them immutable, so the record claimed we published calls
+  nobody received. Reproduced: 4 rows from an arbitrary week. Recording is now gated on whether
+  anything is actually being mailed, decided BEFORE the reports are built.
+- **Deleting the cached directory assets in the cron turned an nflverse outage into total delivery
+  failure.** That was my own fix for the freezing hazard, and it threw away `fetch`'s deliberate
+  "a cached copy beats an outage" fallback — one bad Tuesday would have meant NO REPORTS FOR
+  ANYONE. The real fix is `live=True` on `players.csv` and `teams_colors_logos.csv` in
+  `run/solo.py` and `render/player_index.py`: it revalidates on the 6h window AND still falls back.
+  The workflow hack is gone. **A fix that lives in the cron instead of the code is a smell** — the
+  test that pinned it was pinning the workaround.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's

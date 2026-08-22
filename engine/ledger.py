@@ -300,7 +300,17 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
                 defenses = defense_rows(cache_dir, season, live=True)
             except NflverseError:
                 defenses = {}
+            # Which teams we have actually OBSERVED a box score for, per week.
+            # This is the presence check `is_final` needs; it is not the same
+            # question as "did the schedule say the game finished".
+            observed: dict[int, set[str]] = {}
+            for week, rows in weekly.items():
+                for row in rows.values():
+                    team = (row.get("team") or "").strip()
+                    if team:
+                        observed.setdefault(week, set()).add(team)
             seasons[season] = {"weekly": weekly, "defenses": defenses,
+                               "observed": observed,
                                "final": _final_teams(cache_dir, season)}
         return seasons[season]
 
@@ -312,19 +322,33 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
         return str(team).strip() if team else None
 
     def is_final(call: LedgerCall) -> bool:
+        """RULE L1, against TWO sources that can disagree about freshness.
+
+        Finality comes from the schedule and points come from the weekly stat
+        release — different files, fetched independently. Checking only the
+        schedule was a reproduced record-corrupting bug: with the stats
+        download failed or merely lagging, both players scored "absent" = 0.0,
+        RULE L3 voided the call as a non-event, and RULE L4 made that permanent.
+        One outage silently erased real hits and misses from the public record.
+
+        So a week is gradeable only when its BOX SCORES ARE IN: every team whose
+        game the schedule calls final must actually appear in the week's stat
+        rows. Then, and only then, does "this player has no row" unambiguously
+        mean he did not play — which is what makes scoring him 0.0 honest
+        rather than a guess about missing data.
+        """
         data = load(call.season)
         final = data["final"].get(call.week)
         if not final:
             return False                      # week not in the schedule: unknown
+        played = {team for team in final if team != "__all__"}
+        if not played or not (played <= data["observed"].get(call.week, set())):
+            return False                      # the box scores have not landed
         for player_id in (call.pick_id, call.over_id):
             team = team_of(call, player_id, data)
-            if team is None:
-                # He has no row, so we cannot name his game. Fall back to the
-                # whole week being done — strictly more conservative than
-                # guessing a team, and it settles by the following Tuesday.
-                if not final.get("__all__"):
-                    return False
-            elif team not in final:
+            # A player with no row is a player who did not play, now that the
+            # week's box scores are known to be complete.
+            if team is not None and team not in final:
                 return False
         return True
 
@@ -549,6 +573,22 @@ def public_entries(calls: list[LedgerCall]) -> list[dict[str, Any]]:
 
     Player names and results are public NFL facts; which league the call was
     made in is a subscriber's business and stays private.
+
+    ``scoring`` IS published, and it is not decoration. The same head-to-head
+    published to a PPR subscriber and a standard-scoring one is two different
+    probabilities resolved by one real game; without the preset the two render
+    as identical duplicate rows, and the shrink guard — which keys on what it
+    can see here — cannot tell a whole store disappearing from a coincidence.
+    It is buyer vocabulary, not implementation: "we called this in a PPR league"
+    is a fact a reader of the record is entitled to.
+
+    KNOWN LIMITATION, stated rather than hidden: those rows are CORRELATED —
+    one game decides all of them — so the aggregate below counts them as
+    separate evidence when they are not fully independent. That is the same
+    dependence reports/nflverse-backtest.md handles with a cluster bootstrap
+    over (season, week), and the public summary does not. Revisit before the
+    ledger is promoted back into the funnel; it cannot mislead much while the
+    subscriber base is small enough that duplicate head-to-heads are rare.
     """
     rows = []
     for call in sorted(calls, key=lambda c: (c.season, c.week, c.slot)):
@@ -558,6 +598,7 @@ def public_entries(calls: list[LedgerCall]) -> list[dict[str, Any]]:
             "season": call.season,
             "week": call.week,
             "slot": call.slot,
+            "scoring": scoring_of(call.league_id),
             "pick": call.pick_name,
             "over": call.over_name,
             "confidence": round(call.confidence, 3),

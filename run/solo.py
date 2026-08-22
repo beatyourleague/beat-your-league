@@ -271,9 +271,22 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         raise SoloError(f"week {week} is not a week")
 
     try:
-        players_csv = fetch("players", "players.csv", cache_dir, session=session)
+        # live=True on BOTH. The directory is not static — players sign, get
+        # cut and get traded every week — and a subscriber who rosters someone
+        # the directory has never heard of is BLOCKED at intake with a paid,
+        # undeliverable row. Fetched with live=False these froze at whatever day
+        # the cache was first written.
+        #
+        # This is why the fix belongs here and not in the cron. Deleting the
+        # cached copies before each run also forced a refresh, but it threw away
+        # `fetch`'s deliberate "a cached copy beats an outage" fallback — so one
+        # nflverse outage on a Tuesday meant a cold cache and NO REPORTS FOR
+        # ANYONE. live=True revalidates on the 6h window and still falls back to
+        # the cache when the download fails, which is both halves at once.
+        players_csv = fetch("players", "players.csv", cache_dir, live=True,
+                            session=session)
         teams_csv = fetch("teams", "teams_colors_logos.csv", cache_dir,
-                          session=session)
+                          live=True, session=session)
         teams = season_teams(cache_dir, season, live=live, session=session)
     except NflverseError as exc:
         raise SoloError(f"could not load the player directory: {exc}") from exc

@@ -458,6 +458,62 @@ def test_flipping_the_defense_gate_needs_its_own_evidence(tmp_path) -> None:
         assert leak not in DEFENSE_GATE, f"{leak!r} leaked into buyer copy"
 
 
+def test_the_player_directory_is_never_served_frozen(tmp_path) -> None:
+    """players.csv and teams_colors_logos.csv must be fetched with live=True.
+
+    Fetched with live=False, ``ingest.nflverse.fetch`` returns any non-empty
+    cached copy unconditionally — so a long-lived cache (an Actions cache, a
+    developer's laptop) pins the directory to whatever day it was written. A
+    player who signed this week never appears, and the subscriber who rosters
+    him is BLOCKED at intake with a paid, undeliverable row. Measured on the
+    real asset: one refresh moved it by 17 players.
+
+    The first fix for this deleted the cached files in the cron before each run.
+    That worked and was wrong — see the next test.
+    """
+    import inspect
+    import run.solo as solo_module
+    from render import player_index
+
+    for module, name in ((solo_module, "load_week_data"),
+                         (player_index, "main")):
+        source = inspect.getsource(getattr(module, name))
+        for asset in ('"players.csv"', '"teams_colors_logos.csv"'):
+            call = source.split(asset)[1].split(")")[0]
+            assert "live=True" in call, (
+                f"{module.__name__}.{name} fetches {asset} without live=True — "
+                f"the directory would freeze")
+
+
+def test_an_nflverse_outage_falls_back_to_cache_rather_than_failing(
+        tmp_path) -> None:
+    """`fetch` deliberately prefers a stale cached copy to an outage: "stale
+    counted data is still a real record of games that were actually played".
+
+    Deleting the cached directory assets before each cron run — the first fix
+    for the freezing above — threw exactly that away, so one nflverse outage on
+    a Tuesday meant a cold cache and NO REPORTS FOR ANYONE. live=True keeps both
+    halves: it revalidates on the 6h window AND still falls back.
+    """
+    import requests
+
+    from ingest.nflverse import fetch
+
+    cache = _cache(tmp_path)
+    stale = cache / "players.csv"
+    assert stale.is_file(), "the fixture has no directory asset to fall back to"
+    before = stale.read_bytes()
+
+    class _Down:
+        def get(self, url, **_kwargs):
+            raise requests.ConnectionError("simulated nflverse outage")
+
+    import os
+    os.utime(stale, (0, 0))          # force live=True past its 6h window
+    got = fetch("players", "players.csv", cache, live=True, session=_Down())
+    assert got.read_bytes() == before, "an outage lost the cached directory"
+
+
 def test_an_id_the_directory_does_not_know_fails_loudly(tmp_path) -> None:
     """A ref decodes to ids, not to players. An unknown id would render as a
     blank row in a report somebody paid for."""

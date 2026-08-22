@@ -138,8 +138,11 @@ def main(argv: list[str] | None = None) -> int:
     # published year-round — the weekly stats file for an unstarted season is a
     # 404, which used to make `make index` impossible before kickoff.
     try:
-        players_csv = fetch("players", "players.csv", args.raw)
-        teams_csv = fetch("teams", "teams_colors_logos.csv", args.raw)
+        # live=True: same reason as run/solo.py. A frozen directory cannot
+        # resolve a player who signed this week, and this asset IS the thing the
+        # picker downloads.
+        players_csv = fetch("players", "players.csv", args.raw, live=True)
+        teams_csv = fetch("teams", "teams_colors_logos.csv", args.raw, live=True)
         fetch("schedules", "games.csv", args.raw, live=True)
     except NflverseError as exc:
         print(f"could not fetch the player directory's inputs: {exc}",

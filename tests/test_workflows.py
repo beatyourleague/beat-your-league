@@ -111,28 +111,6 @@ def test_the_send_step_cannot_be_skipped_by_an_earlier_failure() -> None:
 # the caches, and the hazard in them
 # --------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("workflow", ["weekly.yml", "monday.yml"])
-def test_the_frozen_directory_assets_are_dropped_before_every_run(workflow) -> None:
-    """ingest.nflverse.fetch returns any non-empty cached file unconditionally
-    when live=False, and load_week_data reads players.csv and
-    teams_colors_logos.csv that way. A restored Actions cache therefore pins the
-    player directory to whatever day it was written — a rookie signed later
-    never appears, and the subscriber who rostered him is blocked at intake with
-    a paid, undeliverable row. Measured on the real asset: one refresh moved it
-    by 17 players.
-
-    The weekly stats files revalidate on their own 6h window, so exactly these
-    two need dropping.
-    """
-    commands = _commands(workflow)
-    if "data/raw/nflverse" not in _text(workflow):
-        pytest.skip(f"{workflow} does not cache nflverse")
-    for asset in ("players.csv", "teams_colors_logos.csv"):
-        assert asset in commands, (
-            f"{workflow} caches data/raw/nflverse without dropping {asset} — "
-            f"the player directory would freeze")
-
-
 def test_the_published_player_directory_is_refreshed_weekly() -> None:
     """Nothing regenerated site/join/players.json. A stale copy does not break a
     build — it blocks one specific customer's signup, weeks later, surfacing

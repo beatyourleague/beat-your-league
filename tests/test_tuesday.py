@@ -316,3 +316,40 @@ def test_everyone_failing_the_paid_check_at_once_is_an_error(tmp_path,
                          "--processed-dir", str(tmp_path / "processed")])
     assert code == 1
     assert "NOTHING TO SEND" in capsys.readouterr().err
+
+
+def test_a_preview_never_writes_to_the_public_record(tmp_path, capsys,
+                                                     monkeypatch) -> None:
+    """A call is PUBLISHED when it reaches a subscriber. The ledger is the
+    record of what was published, and RULE L4 makes a graded entry immutable —
+    so a preview that records claims we published calls nobody received, and
+    there is no way to take it back.
+
+    Reproduced before the fix: `--no-send` on an arbitrary week wrote 4 rows
+    into the real store. Both preview paths are covered because they are
+    different code paths: --no-send skips delivery, `make tuesday-preview` runs
+    the dry PROVIDER.
+    """
+    processed = tmp_path / "processed"
+    for extra in (["--no-send"], ["--allow-dry"]):
+        monkeypatch.setenv("EMAIL_PROVIDER", "dry")
+        code = tuesday.main(["--registry", str(_registry(tmp_path, _row())),
+                             "--season", SEASON, "--week", str(WEEK),
+                             "--cache", str(_cache(tmp_path)), "--no-paid-check",
+                             "--out", str(tmp_path / "out"),
+                             "--processed-dir", str(processed), *extra])
+        assert code == 0, capsys.readouterr().err
+        assert "nothing recorded" in capsys.readouterr().out
+    assert not list(processed.rglob("calls.jsonl")), \
+        "a preview wrote permanent rows into the public record"
+
+
+def test_a_real_send_still_records_every_published_call(tmp_path) -> None:
+    """The other half — the gate must not silence the record itself."""
+    processed = tmp_path / "processed"
+    result = tuesday.run_subscriber(
+        _subscriber(), _week_data(tmp_path),
+        Path("rival-report-template.html").read_text(encoding="utf-8"),
+        out_dir=tmp_path / "out", processed_dir=processed, record=True)
+    assert result.ok and "new ledger row" in result.detail
+    assert list(processed.rglob("calls.jsonl"))
