@@ -402,13 +402,58 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                   league_size=league_size, field=field)
     model = ProjectionModel(season, data.players)
 
+    # Last season's per-game scoring, under THIS subscriber's rule. Used for two
+    # things in week 1 and nothing else: which of two eligible players takes a
+    # slot, and a line saying so. It is a record of what happened, never a
+    # projection for this week — see _place_without_projections.
+    prior_form = _prior_form(data.prior, spec.rule)
+
     def usage_lookup(player_id: str) -> str | None:
         line = data.usage.get(player_id)
-        return usage_line(line) if line else None
+        if line:
+            return usage_line(line)
+        # Week 1: no counted usage exists yet, and an empty row leaves the
+        # reader no way to check why this player is starting over that one.
+        return _prior_form_line(player_id, data.prior, spec.rule)
 
     return build_solo_report(spec, season, data.players, model,
                              data.availability, data.week, Path(cache_dir),
-                             usage_lookup=usage_lookup)
+                             usage_lookup=usage_lookup, prior_form=prior_form)
+
+
+def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
+                rule) -> dict[str, float]:
+    """player -> last season's points per APPEARANCE, under this rule.
+
+    Per appearance rather than per week on purpose: a player who missed half a
+    season should not be ranked below a worse player who played every week, for
+    the same reason engine/usage.py refuses to dilute a rate with weeks the
+    player did not play.
+    """
+    from engine.scoring import score
+
+    totals: dict[str, float] = {}
+    games: dict[str, int] = {}
+    for rows in prior.values():
+        for player_id, row in rows.items():
+            totals[player_id] = totals.get(player_id, 0.0) + score(row, rule)
+            games[player_id] = games.get(player_id, 0) + 1
+    return {pid: totals[pid] / games[pid] for pid in totals if games[pid]}
+
+
+def _prior_form_line(player_id: str,
+                     prior: Mapping[int, Mapping[str, Mapping[str, str]]],
+                     rule) -> str | None:
+    """The one-line basis a week-1 reader needs to check the ordering."""
+    from engine.scoring import score
+
+    points = [score(rows[player_id], rule)
+              for rows in prior.values() if player_id in rows]
+    if not points:
+        return None
+    per_game = sum(points) / len(points)
+    return (f"last season: {per_game:.1f} a game over {len(points)} "
+            f"game{'s' if len(points) != 1 else ''}")
 
 
 # --------------------------------------------------------------------- #

@@ -126,26 +126,40 @@ def _slot_restrictiveness(slot: str) -> int:
 
 
 def _place_without_projections(season: Season, team_week: TeamWeek,
-                               players: PlayerIndex) -> dict[int, str]:
-    """Put each eligible player in a slot when nothing can be ranked.
+                               players: PlayerIndex,
+                               ranking: Mapping[str, float] | None = None,
+                               ) -> dict[int, str]:
+    """Put each eligible player in a slot when this season has no form yet.
 
     Greedy in slot-restrictiveness order, the same order the projected path
     uses, so a single-position slot claims its player before a flex can take
-    him. Ties break on player id, which makes the output reproducible rather
-    than meaningful — and it is never presented as meaningful: every row built
-    from this carries no projection, no confidence and a reason saying there is
-    no record to compare against yet.
+    him.
+
+    ``ranking`` decides WHICH eligible player takes a slot when more than one
+    could. Without it the order came off the player id, which is reproducible
+    and meaningless — and in week 1 that is not a harmless default: with three
+    running backs and two RB slots, an arbitrary two of them start. Ranked on
+    last season's points per game, the same three-back roster seats the two who
+    actually produced.
+
+    That is an ORDERING, never a projection. Last season is a record of what
+    happened, not a claim about this week, so nothing built from it carries a
+    number: every row still has no projection, no confidence, and a reason.
+    Ties, and players with no prior season at all, fall back to the id so a
+    report stays byte-identical across runs.
     """
     order = sorted(range(len(season.starting_slots)),
                    key=lambda i: (_slot_restrictiveness(season.starting_slots[i]), i))
+    rank = ranking or {}
     placed: dict[int, str] = {}
     used: set[str] = set()
     for index in order:
         slot = season.starting_slots[index]
         candidates = sorted(
-            pid for pid in team_week.players
-            if pid not in used and pid not in EMPTY_SLOT_IDS
-            and (info := players.get(pid)) is not None and info.eligible_for(slot))
+            (pid for pid in team_week.players
+             if pid not in used and pid not in EMPTY_SLOT_IDS
+             and (info := players.get(pid)) is not None and info.eligible_for(slot)),
+            key=lambda pid: (-rank.get(pid, 0.0), pid))
         if candidates:
             placed[index] = candidates[0]
             used.add(candidates[0])
@@ -159,6 +173,7 @@ def optimal_lineup(
     players: PlayerIndex,
     availability: WeekAvailability,
     week: int,
+    prior_form: Mapping[str, float] | None = None,
 ) -> list[SlotPick]:
     """Fill the starting slots with the highest-projected available players.
 
@@ -199,7 +214,8 @@ def optimal_lineup(
         # Placement by eligibility instead, deterministic on id so a report is
         # byte-identical across runs. It is PLACEMENT, not a call: the reason
         # on every row says so, and no confidence is attached to any of it.
-        placed = _place_without_projections(season, team_week, players) \
+        placed = _place_without_projections(season, team_week, players,
+                                            prior_form) \
             if not team_week.starters else {}
         for index, slot in enumerate(season.starting_slots):
             pid = (team_week.starters[index]
@@ -977,9 +993,18 @@ def checklist(
         # branch below exists to avoid. State the lineup instead of comparing
         # to one.
         if not seated or not any(p.projection for p in seated):
+            # State the BASIS, not just the absence. The slots are filled, so a
+            # reader who is told only "this is not a recommendation" is left to
+            # guess why these players are in them — and the honest answer is
+            # concrete: they are ordered on last season's per-game scoring,
+            # which is a record of what happened rather than a claim about this
+            # week. Each row carries its own figure so the order can be checked.
             items.append({
-                "action": "No lineup call yet — not enough games on record to "
-                          "project from. Nothing here is a recommendation.",
+                "action": "No start-sit calls yet — nobody has played a game "
+                          "this season, so there is nothing to project from. "
+                          "Your slots are filled in last season's scoring order, "
+                          "shown on each line. That's a record of what happened, "
+                          "not a forecast for this week.",
                 "deadline": "calls start once there is a record",
                 "urgency": "done",
             })

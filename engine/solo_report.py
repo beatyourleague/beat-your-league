@@ -77,6 +77,7 @@ def build_solo_report(
     week: int,
     raw_dir: Path,
     usage_lookup=None,
+    prior_form: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data."""
     if not re.fullmatch(r"\d{4}", str(season.season)):
@@ -107,7 +108,8 @@ def build_solo_report(
     # suppressed by keeping players a week short of MIN_GAMES_FOR_CALL, and the
     # matched head-to-heads the correction reorders go 133-100 in its favour
     # (two-sided sign test p = 0.036).
-    picks = optimal_lineup(season, team_week, model, players, availability, week)
+    picks = optimal_lineup(season, team_week, model, players, availability, week,
+                           prior_form=prior_form)
     my_range = _team_range(picks)
 
     gaps: list[dict[str, str]] = []

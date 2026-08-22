@@ -301,10 +301,23 @@ false statement about players the report can see, worse than the exception it re
 `_place_without_projections` places by eligibility, greedy in slot-restrictiveness and tie-broken
 on id so a report is byte-identical across runs. It is PLACEMENT, never a call: no projection, no
 confidence, and a reason on every row. **A hole mid-season still raises**, because then it really
-is an incomplete ingest. **Open product question: weeks 1-3 publish no confidences at all**
-(`MIN_GAMES_FOR_CALL = 3`), so the first three paid reports are a lineup, a pivot plan and counted
-usage with no start/sit call in them. That is honest and it is thin — decide what Week 1 carries
-before Sep 8.
+is an incomplete ingest. **What Week 1 carries, decided (Aug 22 2026) — an ORDERING, never a projection.** Weeks 1-3 still
+publish no confidences (`MIN_GAMES_FOR_CALL = 3`); that is not the part that was broken. The real
+defect was that `_place_without_projections` sorted candidates BY PLAYER ID, so with three running
+backs and two RB slots, an arbitrary two of them started — reproducible and meaningless, presented
+to a subscriber as their lineup. Placement now ranks on **last season's points per APPEARANCE**
+under that subscriber's own scoring rule (per appearance, not per week, for the same reason
+`engine/usage.py` refuses to dilute a rate with games the player missed). Every row carries its own
+figure so the order can be CHECKED, and the checklist states the basis in the buyer's words: *"Your
+slots are filled in last season's scoring order, shown on each line. That's a record of what
+happened, not a forecast for this week."* Still no projection and no confidence anywhere — last
+season is a record, and dressing it as a number for this week would be exactly the unbacked claim
+principle 1 forbids. Week-1 only: the branch fires only when the model has an opinion about nobody,
+so weeks 5 and 10 are byte-identical to before. Ties and players with no prior season fall back to
+the id, which keeps a report reproducible.
+**Assumption, not a confirmed decision:** the owner was asked three times what Week 1 should carry
+and did not answer; this is the honest reading of "seed from last season, no confidence attached"
+and is cheap to change.
 
 **The signup pipeline for rosters (`python -m run.intake` / `make intake`, Aug 21 2026).** The
 last link: picker → Stripe → registry → report → inbox. `run/sync.py` verifies each v1 signup

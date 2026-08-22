@@ -622,6 +622,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
             confidence = f"{slot['confidence']:.0%} vs {slot.get('alternative_name')}"
         elif mixed:
             confidence = "no call"
+        elif slot.get("projected") is None and slot.get("usage"):
+            # Week 1. The checklist says the slots are filled in last season's
+            # scoring order and that the figure is "shown on each line" — true
+            # of both HTML surfaces, and it was NOT true here, which made that
+            # sentence a false statement in the half that goes in every email.
+            confidence = slot["usage"]
         else:
             confidence = ""
         lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())

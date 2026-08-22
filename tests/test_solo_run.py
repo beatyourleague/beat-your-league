@@ -331,7 +331,105 @@ def test_week_one_never_claims_the_roster_is_empty(tmp_path) -> None:
                              cache_dir=cache)
     actions = " ".join(item["action"] for item in report["checklist"])
     assert "nobody to start" not in actions, actions
-    assert "not a recommendation" in actions.lower() or "no lineup call" in actions.lower()
+    assert "no start-sit calls yet" in actions.lower()
+    # And it states the BASIS, not just the absence: the slots ARE filled, so a
+    # reader told only "this is not a recommendation" is left guessing why these
+    # players are in them.
+    assert "last season" in actions.lower()
+    assert "not a forecast" in actions.lower()
+
+
+def test_week_one_seats_the_better_player_rather_than_the_lower_id(
+        tmp_path) -> None:
+    """Week 1's placement used to sort candidates BY PLAYER ID.
+
+    That is reproducible and meaningless, and it is not a harmless default: with
+    three running backs and two RB slots, an arbitrary two of them start. The
+    ordering is last season's points per APPEARANCE — a record of what happened,
+    never a projection for this week — so the same roster now seats the two who
+    actually produced.
+    """
+    cache = _cache(tmp_path, weeks=5)
+    data = solo.load_week_data(cache, SEASON, 1, session=OFFLINE)
+    # The fixture's prior season pays receiving yards that RISE with player
+    # index, so the higher-numbered back is the better one — the opposite of
+    # what sorting by id would seat.
+    backs = [_pid(2), _pid(3)]                       # both RB in the fixture
+    spec = RosterSpec(player_ids=(_pid(1), *backs, _pid(4), _pid(5), _pid(6)),
+                      slots=("QB", "RB", "WR", "WR", "TE"), scoring="ppr")
+    report = solo.report_for(spec, data, cache_dir=cache)
+    rb = [s for s in report["lineup"] if s["slot"] == "RB"][0]
+    assert rb["player_id"] == max(backs), (
+        f"week 1 seated {rb['player_id']}, the lower id, not the better back")
+    # Still no numbers anywhere: an ordering is not a projection.
+    assert all(s["projected"] is None and s["confidence"] is None
+               for s in report["lineup"])
+    # And the basis is on the row, so the order can be checked.
+    assert "last season" in (rb.get("usage") or "")
+
+
+def test_the_week_one_ordering_is_deterministic_without_a_prior_season(
+        tmp_path) -> None:
+    """A rookie has no prior season at all, and two players can tie. Falling
+    back to the id keeps a report byte-identical across runs — which is the
+    property the id-sort was there for in the first place."""
+    from engine.week_report import _place_without_projections
+    from engine.history import TeamWeek
+
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, 1, session=OFFLINE)
+    spec = _spec()
+    season = build_season_for(spec, data)
+    carrier = TeamWeek(roster_id=1, week=0, matchup_id=None, starters=(),
+                       starters_points=(), players=spec.player_ids,
+                       players_points={p: 0.0 for p in spec.player_ids},
+                       points=0.0, appeared=frozenset())
+    first = _place_without_projections(season, carrier, data.players, {})
+    second = _place_without_projections(season, carrier, data.players, {})
+    assert first == second and first, "placement is not deterministic"
+
+
+def build_season_for(spec, data):
+    from engine.subscriber import build_season
+    return build_season(spec, data.weekly, data.directory, SEASON, 1,
+                        league_size=12)
+
+
+def test_all_three_surfaces_show_the_week_one_ordering_basis(tmp_path) -> None:
+    """The checklist says the figure is "shown on each line". That was true of
+    the two HTML surfaces and NOT of the plain-text one — which is the half that
+    goes in every email, so the sentence was a false statement exactly where it
+    was least visible."""
+    from render.email import render_email, text_summary
+    from render.report import TEMPLATE_PATH, render
+
+    cache = _cache(tmp_path, weeks=5)
+    report = solo.report_for(_spec(), solo.load_week_data(cache, SEASON, 1,
+                                                          session=OFFLINE),
+                             cache_dir=cache)
+    seated = [s for s in report["lineup"] if s["player_id"]]
+    assert seated, "the fixture produced no filled slots"
+
+    # PER ROW, not anywhere in the document. The first version of this asserted
+    # `"last season" in doc`, which passed from the CHECKLIST sentence alone —
+    # so deleting the per-row rendering left it green. A test that reads the
+    # claim as evidence for the claim proves nothing.
+    text = text_summary(report)
+    rows = [line for line in text.splitlines()
+            if line.startswith("  ") and any(
+                f" {s['slot']:<6} " in line + " " for s in seated)]
+    assert len(rows) >= len(seated), f"text lineup rows not found in:\n{text}"
+    for line in rows:
+        assert "last season" in line, f"text row has no basis: {line!r}"
+
+    # The HTML surfaces carry one per seated player, plus the checklist's own.
+    for name, doc in (("browser", render(report, TEMPLATE_PATH.read_text(
+                                          encoding="utf-8"))),
+                      ("email", render_email(report))):
+        assert doc.count("last season") >= len(seated), (
+            f"{name} shows the basis {doc.count('last season')} times for "
+            f"{len(seated)} seated players")
+        assert "shown on each line" in doc, name
 
 
 def test_a_hole_mid_season_is_still_an_error(tmp_path) -> None:
