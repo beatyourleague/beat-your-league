@@ -1167,16 +1167,28 @@ def test_the_backtest_draws_its_own_calibration_claim() -> None:
     availability-controlled one conditions on an outcome unknowable at call
     time and may never be drawn as if it were accuracy."""
     page = (SITE / "backtest.html").read_text(encoding="utf-8")
-    assert 'class="calfig"' in page, "the calibration chart is missing"
-    figure = page.split('class="calfig"')[1].split("</figure>")[0]
+    figures = [block.split("</figure>")[0]
+               for block in page.split('class="calfig"')[1:]]
+    assert figures, "the calibration chart is missing"
+    # EXACTLY one. This assertion is the bug: the page carried a second chart
+    # drawn from the availability-controlled table — the most flattering
+    # possible picture of the one table that may never be shown as accuracy —
+    # and the old test read `split(...)[1]` only, so it inspected the innocent
+    # figure and passed while the forbidden one shipped beside it.
+    assert len(figures) == 1, (
+        f"{len(figures)} calibration charts on the page; a second chart can "
+        f"only be a diagnostic table drawn as accuracy")
+    figure = figures[0]
     assert figure.count("<circle") == 6, "one dot per unconditional bucket"
     assert "perfect calibration" in figure
     # the failure the chart exists to show must stay in words too
     assert "barely sorts" in figure
-    # the diagnostic table's giveaway values must not appear in the drawing
-    for forbidden in ("77.2", "63.6", "78.3"):
-        assert forbidden not in figure, \
-            f"availability-controlled figure {forbidden} was drawn as accuracy"
+    # the diagnostic table's giveaway values may not appear in ANY drawing
+    for forbidden in ("77.2", "63.6", "78.3", "62.1", "69.1", "73.9"):
+        for n, drawn in enumerate(figures, 1):
+            assert forbidden not in drawn, \
+                f"availability-controlled figure {forbidden} was drawn as " \
+                f"accuracy in chart {n}"
 
 
 def test_the_who_can_cover_sentence_reads_like_a_person() -> None:

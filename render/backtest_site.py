@@ -137,6 +137,23 @@ def _inline(text: str) -> str:
     return out
 
 
+# The first column of a calibration table, across both report generators —
+# `engine.backtest` writes "Stated confidence", `engine.nflverse_backtest`
+# writes "Stated".
+CALIBRATION_HEADERS = frozenset({"Stated confidence", "Stated"})
+
+
+def _is_diagnostic(section: str) -> bool:
+    """Is this section's table a diagnostic rather than a result?
+
+    Matched on the heading, which is where both reports say so in words:
+    "Calibration, availability controlled (diagnostic)". A diagnostic
+    conditions on something unknowable when the call is made, so it may be
+    tabulated with its caveat and never drawn as if it were accuracy.
+    """
+    return bool(re.search(r"diagnostic|availability[- ]controlled", section, re.I))
+
+
 def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
     """Draw the page's own claim.
 
@@ -207,12 +224,41 @@ def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
                      f'<title>stated {stated}% \u2192 observed {obs}% '
                      f'({n} decided calls, {label})</title></circle>')
 
+    # The caption is DERIVED, never asserted. It used to be hardcoded prose
+    # about a flat line — true of the Sleeper-era study it was written for and
+    # false of any other, which is the same failure as a stale figure: a
+    # sentence the page states about a picture it is drawing from other data.
+    observed = [p[1] for p in points]
+    sorts = max(observed) - min(observed)
+    drift = sum(p[1] - p[0] for p in points) / len(points)
+    if sorts < 8.0:
+        verdict = (f"Ours run flat near {sum(observed) / len(observed):.0f}% while "
+                   f"stated climbs to {max(p[0] for p in points):.0f}% \u2014 the "
+                   f"number barely sorts")
+        aria = (f"Observed stays near {sum(observed) / len(observed):.0f}% while "
+                f"stated climbs, so the number barely sorts.")
+    elif drift > 2.0:
+        verdict = (f"Ours sit ABOVE the diagonal \u2014 the calls land more often "
+                   f"than the number says, by {drift:.0f} points on average, and "
+                   f"the spread from the least to the most confident bucket is "
+                   f"{sorts:.0f} points")
+        aria = (f"Observed sits above stated by about {drift:.0f} points at every "
+                f"bucket: the number is systematically low.")
+    elif drift < -2.0:
+        verdict = (f"Ours sit BELOW the diagonal \u2014 the calls land less often "
+                   f"than the number claims, by {abs(drift):.0f} points on average")
+        aria = (f"Observed sits below stated by about {abs(drift):.0f} points: the "
+                f"number claims more than it delivers.")
+    else:
+        verdict = (f"Ours track the diagonal within {max(abs(drift), 0.5):.0f} "
+                   f"point, across a {sorts:.0f}-point spread")
+        aria = "Observed tracks stated closely across the buckets."
+
     return (
         f'<figure class="calfig">'
         f'<svg viewBox="0 0 {W} {H}" role="img" '
         f'aria-label="Stated confidence against observed hit rate. Perfect '
-        f'calibration is the diagonal. Observed stays near 54% while stated '
-        f'climbs to 84%, so the number barely sorts.">'
+        f'calibration is the diagonal. {aria}">'
         f'<rect width="{W}" height="{H}" fill="#FFFFFF"/>'
         f'{"".join(grid)}'
         f'<line x1="{x(lo):.1f}" y1="{y(lo):.1f}" x2="{x(hi):.1f}" y2="{y(hi):.1f}" '
@@ -228,10 +274,8 @@ def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
         f'</svg>'
         f'<figcaption>Each dot is a confidence bucket, sized by how many calls it '
         f'holds; the bar is its 95% interval. On the diagonal, stated equals '
-        f'observed. Ours run flat near 54% while stated climbs to 84% \u2014 the '
-        f'number barely sorts, and that gap is the availability blind spot '
-        f'described above, which is why the shipping report only prints a '
-        f'confidence once both players are confirmed active.</figcaption>'
+        f'observed. {verdict}. What the report does about it is stated in the '
+        f'text above, not softened here.</figcaption>'
         f'</figure>'
     )
 
@@ -258,6 +302,8 @@ def to_html(markdown: str) -> str:
     lines = markdown.splitlines()
     out: list[str] = []
     i = 0
+    section = ""
+    charted = False
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
@@ -269,6 +315,7 @@ def to_html(markdown: str) -> str:
         heading = re.match(r"^(#{1,6})\s+(.*)$", stripped)
         if heading:
             level = min(len(heading.group(1)), 3)
+            section = heading.group(2)
             out.append(f"<h{level}>{_inline(heading.group(2))}</h{level}>")
             i += 1
             continue
@@ -302,8 +349,19 @@ def to_html(markdown: str) -> str:
                     out.append("<tr>" + "".join(f"<td{_style(n)}>{_inline(c)}</td>"
                                                 for n, c in enumerate(row)) + "</tr>")
                 out.append("</table></div>")
-                if head and head[0] == "Stated confidence":
-                    out.append(_calibration_chart(head, body))
+                # The chart draws the page's own claim — and ONLY the
+                # publishable table. The availability-controlled table
+                # conditions on an outcome unknowable at call time, so drawing
+                # it plots the most flattering possible picture of the one
+                # table CLAUDE.md's standing order says may never be shown as
+                # accuracy. This module's docstring always said so; the code
+                # keyed on the header row alone, both tables carry that header,
+                # and the page shipped the diagnostic as a second chart.
+                if (head and head[0] in CALIBRATION_HEADERS
+                        and not _is_diagnostic(section) and not charted):
+                    chart = _calibration_chart(head, body)
+                    out.append(chart)
+                    charted = bool(chart)
             continue
 
         bullet = re.match(r"^\s*[-*]\s+(.*)$", line)
