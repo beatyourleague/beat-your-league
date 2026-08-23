@@ -645,6 +645,20 @@ def test_sample_report_explains_what_to_do_with_it() -> None:
 # the comparison page stays honest, or it stops being useful
 # --------------------------------------------------------------------- #
 
+def test_the_published_sample_is_the_solo_product() -> None:
+    """`make demo` used to write the league demo over site/sample-report.html —
+    a page full of features the paid product does not have. The published
+    sample must always be the solo render: its title says Report (not Rival
+    Report), and it carries the solo banner."""
+    assert "Week 10 Report" in SAMPLE_REPORT
+    assert "Rival Report" not in SAMPLE_REPORT
+    assert "built from the real 2024 NFL season" in SAMPLE_REPORT
+    makefile = (SITE.parent / "Makefile").read_text(encoding="utf-8")
+    demo_block = makefile.split("\ndemo:")[1].split("\n\n")[0]
+    assert "site/" not in demo_block, \
+        "the legacy demo target writes into site/ again"
+
+
 def test_compare_discloses_its_author_before_anything_else() -> None:
     """The whole trick of a founder-written comparison is the disclosure: a
     reader who finds out later that a "neutral" roundup was written by one of

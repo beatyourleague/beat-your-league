@@ -70,9 +70,14 @@ send:
 # the launch proof — a hand-edit would drift the sales page away from the
 # product. --public runs anonymize_for_public(); nothing under reports/ is
 # tracked because those renders name real league members.
+# NOTE: `demo` no longer writes into site/ — the published sample belongs to
+# `make sample` (the solo product). This pair is the LOCAL legacy league demo
+# only; the day this target wrote site/sample-report.html again it silently
+# replaced the solo sample with a league report full of features the paid
+# product does not have.
 demo:
 	$(PY) -m engine.week_report --league 289646328504385536 --week 10 --roster 1
-	$(PY) -m render.report --public --output site/sample-report.html
+	$(PY) -m render.report --public --output reports/league-demo-public.html
 	$(PY) -m render.report
 	$(PY) -c "import json,pathlib,run.week as w; \
 	  r=json.loads(pathlib.Path('data/processed/week_report.json').read_text()); \
