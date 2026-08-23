@@ -1058,7 +1058,9 @@ def checklist(
                           "this season, so there is nothing to project from. "
                           "Your slots are filled in last season's scoring order, "
                           "shown on each line. That's a record of what happened, "
-                          "not a forecast for this week.",
+                          "not a forecast for this week. Projections start next "
+                          "week; the number on each call starts in Week 4, once "
+                          "both players in it have three games of record.",
                 "deadline": "calls start once there is a record",
                 "urgency": "done",
             })

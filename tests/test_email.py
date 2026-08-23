@@ -313,3 +313,19 @@ def test_the_solo_subject_names_no_rival() -> None:
     subject = _subject(report)
     assert "None" not in subject and "file on" not in subject
     assert str(report["meta"]["week"]) in subject
+
+
+def test_the_week_one_subject_does_not_call_an_ordering_a_decision() -> None:
+    """Week 1 seats players in last season's scoring order and says in its own
+    body that this is 'not a forecast'. A subject reading 'your lineup,
+    decided' on that body is the product overselling itself in the one line
+    everybody reads — and the buyer who bought off a week-10 sample with
+    percentages on it reads the gap as a broken product."""
+    from render.email import subject_for as _subject
+    report = _solo_report()
+    for slot in report["lineup"]:
+        slot["projected"] = None
+        slot["confidence"] = None
+    assert _subject(report) == f"Week {report['meta']['week']}: your opening lineup"
+    report["lineup"][0]["projected"] = 12.3
+    assert "your lineup, decided" in _subject(report)

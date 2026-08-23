@@ -679,6 +679,11 @@ def subject_for(report: Mapping[str, Any]) -> str:
     """
     meta = report["meta"]
     if meta.get("solo"):
+        # Week 1 carries an ORDERING, not a decision (CLAUDE.md: placement by
+        # last season's scoring, no projection, no confidence). "Decided" on
+        # that body oversells it by the body's own words.
+        if not any(s.get("projected") is not None for s in report.get("lineup", [])):
+            return f"Week {meta['week']}: your opening lineup"
         return f"Week {meta['week']}: your lineup, decided"
     if meta.get("rivalry_week"):
         return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
