@@ -598,7 +598,7 @@ def test_unset_legal_placeholders_are_visible_not_invented() -> None:
 def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
     """A gated slot must say we chose not to call it — never a version number."""
     assert "no call" in SAMPLE_REPORT.lower()
-    assert re.search(r"not calling it", SAMPLE_REPORT, re.I)
+    assert not re.search(r"\bv0\.\d", SAMPLE_REPORT)
 
 
 LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
@@ -1225,7 +1225,7 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     The page said "above four of their set starters" for a rival whose bench
     player is now correctly named against the ONE slot he can fill. Whenever
     render/engine wording changes, regenerate the demo and update this quote."""
-    quoted = "Start Tony Pollard over Chase Brown"
+    quoted = "Start Amon-Ra St. Brown over Courtland Sutton"
     def flat(page: str) -> str:
         return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
     assert quoted in flat(SAMPLE_REPORT).replace("  ", " "), \
@@ -1233,7 +1233,16 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     assert quoted in flat(LANDING).replace("  ", " "), \
         "the landing page's coin-flip card drifted from the report it cites"
     # And the figures the card attaches to that claim.
-    assert "11.2 vs 11.2" in flat(SAMPLE_REPORT) and "11.2 vs 11.2" in flat(LANDING)
+    assert "12.7 vs 10.3" in flat(SAMPLE_REPORT) and "12.7 vs 10.3" in flat(LANDING)
+    # The lineup card's rows, too — a row quoting a confidence the sample no
+    # longer publishes is a number the product did not compute.
+    import html as _html
+    sample_rows = _html.unescape(flat(SAMPLE_REPORT))
+    for name, pct in (("Ja'Marr Chase", "65%"), ("Amon-Ra St. Brown", "58%"),
+                      ("George Kittle", "66%")):
+        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", sample_rows), \
+            f"the sample no longer publishes {pct} on {name}"
+        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))
 
 
 def test_the_seat_link_is_not_handed_out_before_checkout() -> None:

@@ -220,6 +220,46 @@ def test_a_week_with_no_injury_report_yields_no_snapshot(tmp_path) -> None:
     assert availability.classify(_pid(1)).status is Status.UNKNOWN
 
 
+def test_the_gate_reads_last_weeks_report_never_this_weeks(tmp_path) -> None:
+    """The single most consequential rule in the frozen method (§6): the
+    designation used is week W-1's. The product ships Tuesday; week W's
+    report is published Wednesday-Friday. Measured on the real 2024 archive,
+    by the Tuesday send week W held 0-2 of its 200-385 rows in every week but
+    one, and week W-1 was complete in every week. Reading week W meant either
+    no snapshot (no confidence anywhere) or a two-row file read as a clean
+    bill of health. Both halves pinned: W-1 rows alone yield a snapshot; W
+    rows alone yield none."""
+    cache = _cache(tmp_path, injuries=False)
+    path = cache / f"injuries_{SEASON}.csv"
+    columns = ["season", "week", "gsis_id", "team", "report_status"]
+    listed = {"season": SEASON, "gsis_id": _pid(7), "team": "DEN",
+              "report_status": "Questionable"}
+    # Only week W-1 is published — the Tuesday state.
+    _write(path, [dict(listed, week=WEEK - 1)], columns)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    assert data.availability.has_snapshot
+    assert data.availability.classify(_pid(7)).status is Status.QUESTIONABLE
+    assert "week 5" in (data.availability.snapshot_as_of or "")
+    # Only week W is published (impossible on a Tuesday, and lookahead if it
+    # were) — the gate must not read it.
+    _write(path, [dict(listed, week=WEEK)], columns)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    assert not data.availability.has_snapshot, \
+        "the live gate read week W's report — lookahead relative to the Tuesday send"
+
+
+def test_a_player_with_no_season_row_is_unknown_not_active(tmp_path) -> None:
+    """Carry-forward team, as the harness does it: a player with no stat row
+    strictly before the week cannot be placed on a team and is omitted, which
+    classifies UNKNOWN. The directory's team is NOT a fallback — that is
+    wherever he is today, and the measured gate never used it."""
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    ghost = "00-0099999"
+    assert ghost not in (data.availability.statuses or {})
+    assert data.availability.classify(ghost).status is Status.UNKNOWN
+
+
 def test_a_healthy_player_is_active_without_being_in_the_archive(tmp_path) -> None:
     """The mirror of the rule above. A player nobody listed is a player nobody
     had a concern about — reading the archive alone would leave every healthy

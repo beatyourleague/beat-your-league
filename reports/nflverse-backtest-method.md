@@ -409,3 +409,26 @@ The cheap ones are harness arguments rather than new code —
 `calls_for_season` already takes `template` and `main()` already takes
 `--scoring` — but each still needs its own preregistered arm before any number
 from it is published.
+
+### C3 — the live gate now reads week W−1, as §6 requires (2026-08-23)
+
+C2's last item is resolved in code, and the measurement that forced it belongs
+on the record. `run/solo.py` read week W's injury rows. On the real 2024
+archive, counting rows by `date_modified` against the Tuesday before each
+week's first game:
+
+| week | rows in W's report | of which existed by Tuesday | W−1 rows complete by Tuesday |
+|---:|---:|---:|---|
+| 1–18 | 206–385 | 0–2 (44 in week 17) | 206/206 … 385/385, every week |
+
+So a Tuesday send on week W's report meant one of two wrong things: no snapshot
+at all (no confidence anywhere in the product) or a two-row file read as a
+complete clean bill of health for everyone else. The product now builds the gate
+the way `engine/nflverse_backtest.py:availability_for` does — week W−1's
+designations, carry-forward team from the most recent stat row strictly before
+W, a player with no such row omitted and therefore UNKNOWN — so the shipping
+gate is the measured gate. One deliberate difference, in the conservative
+direction only: where W−1's report is absent entirely (week 1, or an archive
+outage), the product yields no snapshot rather than treating everyone as
+ACTIVE. The headline numbers above are unaffected; nothing in the frozen text
+changes.

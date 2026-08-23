@@ -183,14 +183,15 @@ def build_solo_report(
         # read as "they started nobody" and produce a full list of changes — or
         # worse, "nothing to change", which claims agreement with a lineup we
         # cannot see.
-        "checklist": checklist(picks, None, [], players, stakes=None),
+        "checklist": checklist(picks, None, [], players, stakes=None,
+                               availability=availability),
         "matchup": _matchup(spec, my_range, team_range_gate(picks)),
         "lineup": [_slot(p, players, usage_lookup) for p in picks],
         "regret": regret_call(picks, players),
         # An empty rival list is correct rather than a placeholder: pivots reads
         # only MY picks' questionable statuses and their alternatives, and the
         # rival half was never used for anything the subscriber acts on.
-        "pivots": pivots(picks, [], players),
+        "pivots": pivots(picks, [], players, availability),
         "receipts": receipts(season, week, model, players,
                              SUBSCRIBER_ROSTER_ID, raw_dir),
         "no_opponent": NO_OPPONENT_NOTE,

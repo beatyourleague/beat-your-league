@@ -803,19 +803,72 @@ def fragility(
     return items[:4]
 
 
+def late_news(my_picks: list[SlotPick], players: PlayerIndex,
+              availability: WeekAvailability | None = None,
+              ) -> list[tuple[str, SlotPick, bool]]:
+    """The players whose Sunday news decides a slot: (name, pick, is_starter).
+
+    Two kinds. A QUESTIONABLE starter, whose alternative steps in if he is
+    ruled out. And — new, and the one the product used to miss — a
+    QUESTIONABLE bench player whose doubt is the reason a slot carries no
+    number: on the Tuesday information set he is the single most consequential
+    piece of late news on the roster, and the report named him nowhere. Found
+    on the real 2024 week-10 sample, where Tony Pollard's week-9 designation
+    gated three slots and the pivot plan read "no starter is listed
+    questionable". One bench player can gate several slots; he is named once,
+    at the slot he comes closest to taking.
+    """
+    out: list[tuple[str, SlotPick, bool]] = []
+    for pick in my_picks:
+        if pick.status and pick.status.status is Status.QUESTIONABLE and pick.player_id:
+            out.append((players.name(pick.player_id), pick, True))
+    if availability is None:
+        return out
+    closest: dict[str, SlotPick] = {}
+    for pick in my_picks:
+        alt = pick.alternative_id
+        if not alt or pick.confidence is not None or pick.projection is None:
+            continue
+        if availability.classify(alt).status is not Status.QUESTIONABLE:
+            continue
+        if any(name == players.name(alt) for name, _, _ in out):
+            continue
+        held = closest.get(alt)
+        gap = pick.projection.mean - (pick.alternative_projection.mean
+                                      if pick.alternative_projection else 0.0)
+        held_gap = (held.projection.mean - (held.alternative_projection.mean
+                                            if held.alternative_projection else 0.0)
+                    if held and held.projection else None)
+        if held is None or held_gap is None or gap < held_gap:
+            closest[alt] = pick
+    for alt, pick in closest.items():
+        out.append((players.name(alt), pick, False))
+    return out
+
+
 def pivots(
-    my_picks: list[SlotPick], rival_picks: list[SlotPick], players: PlayerIndex
+    my_picks: list[SlotPick], rival_picks: list[SlotPick], players: PlayerIndex,
+    availability: WeekAvailability | None = None,
 ) -> list[dict[str, str]]:
     """If/then plan for late news, from questionable statuses + alternatives."""
     plans: list[dict[str, str]] = []
-    for pick in my_picks:
-        if pick.status and pick.status.status is Status.QUESTIONABLE and pick.alternative_id:
+    for name, pick, is_starter in late_news(my_picks, players, availability):
+        if is_starter and pick.alternative_id:
             plans.append({
-                "condition": f"{players.name(pick.player_id or '')} "
-                             f"({pick.slot}) is ruled out",
+                "condition": f"{name} ({pick.slot}) is ruled out",
                 "action": f"Move {players.name(pick.alternative_id)} into {pick.slot}"
                           + (f" (projects {pick.alternative_projection.mean:.1f})"
                              if pick.alternative_projection else ""),
+            })
+        elif not is_starter and pick.player_id and pick.projection:
+            starter = players.name(pick.player_id)
+            alt_proj = (f"{pick.alternative_projection.mean:.1f}"
+                        if pick.alternative_projection else "—")
+            plans.append({
+                "condition": f"{name} (bench) is cleared to play",
+                "action": f"Look again at {pick.slot}: he projects {alt_proj} against "
+                          f"{starter}'s {pick.projection.mean:.1f}, and that slot has "
+                          f"no number until his status is known",
             })
     for pick in rival_picks:
         if pick.status and pick.status.status is Status.QUESTIONABLE:
@@ -983,6 +1036,7 @@ def checklist(
     hype: list[dict[str, Any]],
     players: PlayerIndex,
     stakes: Mapping[str, Any] | None = None,
+    availability: WeekAvailability | None = None,
 ) -> list[dict[str, str]]:
     seated = [p for p in my_picks if p.player_id is not None]
     items: list[dict[str, str]] = []
@@ -1030,6 +1084,10 @@ def checklist(
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })
+        # The late-news item used to live only below this return, so the solo
+        # product — the one that ships — never printed it, while the landing
+        # page promised "the one player whose news you need to check".
+        items.extend(_late_news_item(my_picks, players, availability))
         return items
 
     changes = [
@@ -1093,16 +1151,22 @@ def checklist(
             "deadline": "before waivers clear (league waiver day)",
             "urgency": "deadline",
         })
-    watch = [p for p in my_picks
-             if p.status and p.status.status is Status.QUESTIONABLE]
-    if watch:
-        names = ", ".join(players.name(p.player_id or "") for p in watch)
-        items.append({
-            "action": f"Check late news on: {names} — your pivot plan below covers both outcomes.",
-            "deadline": "gameday morning",
-            "urgency": "deadline",
-        })
+    items.extend(_late_news_item(my_picks, players, availability))
     return items
+
+
+def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
+                    availability: WeekAvailability | None) -> list[dict[str, str]]:
+    watch = late_news(my_picks, players, availability)
+    if not watch:
+        return []
+    names = ", ".join(name for name, _, _ in watch)
+    return [{
+        "action": f"Check late news on: {names} — your pivot plan below covers "
+                  f"both outcomes.",
+        "deadline": "gameday morning",
+        "urgency": "deadline",
+    }]
 
 
 # --------------------------------------------------------------------- #

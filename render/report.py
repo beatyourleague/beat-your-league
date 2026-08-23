@@ -176,17 +176,14 @@ def short_gate(gate: str | None, slot: str) -> str:
 def availability_basis(meta: Mapping[str, Any]) -> str:
     """The data-age sentence (principle 3), shared by both renderers.
 
-    A replayed season (the published sample) is built from that week's own
-    archived injury report, so the honest basis is the week, not the moment
-    the archive was downloaded: a 2026 timestamp on a 2024 report reads as a
-    contradiction. A live report states the fetch time, in words rather than
-    as a raw ISO stamp — log output on a buyer surface made a cold reader
-    doubt what year they were looking at.
+    The engine names the information set itself ("the week 9 injury report,
+    the last complete one before this file goes out"), which is true of a
+    live Tuesday file and of a replayed sample alike. A bare timestamp is
+    humanised if one ever arrives: a raw ISO stamp on a buyer surface — a 2026
+    download time on a 2024 report — made a cold reader doubt what year they
+    were looking at.
     """
     availability = meta.get("availability_as_of")
-    if availability and meta.get("historical_demo"):
-        return (f"Injury and inactive data as of the {meta.get('season')} week "
-                f"{meta.get('week')} report, as it stood that week.")
     if availability:
         try:
             stamp = datetime.fromisoformat(str(availability)).astimezone(timezone.utc)

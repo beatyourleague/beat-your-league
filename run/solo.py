@@ -161,31 +161,59 @@ class WeekData:
 
 
 def _statuses(directory: PlayerDirectory,
-              injury: injuries_feed.InjuryWeek | None) -> dict[str, dict[str, Any]] | None:
-    """One record per player the directory knows, or None for no report.
+              injury: injuries_feed.InjuryWeek | None,
+              weekly: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
+              week: int | None = None) -> dict[str, dict[str, Any]] | None:
+    """One record per player whose team is known, or None for no report.
 
     None is the whole point. The archive holds rows only for players who were
     listed, so "not in the file" means "nothing was wrong with him" — but only
-    if the week's report EXISTS. Before it is published, the same emptiness
-    means we have not looked yet, and calling that a clean bill of health for
-    every player in the league is precisely the bypass principle 1 forbids.
+    if the report EXISTS. Before it is published, the same emptiness means we
+    have not looked yet, and calling that a clean bill of health for every
+    player in the league is precisely the bypass principle 1 forbids.
+
+    The team is the CARRY-FORWARD team — the one on his most recent stat row
+    strictly before the report week, within this season — exactly as the
+    frozen method reconstructs it (reports/nflverse-backtest-method.md §6). A
+    player with no such row is omitted, which classifies him UNKNOWN and gates
+    the call: fail closed. That costs nothing on the publishable population,
+    because three prior appearances are required for a call and an appearance
+    is a row with a team. When no season rows are supplied at all (a unit test
+    of the report alone), the report's own team column stands in.
     """
     if injury is None or not injury.teams:
         return None
     out: dict[str, dict[str, Any]] = {}
     for player in directory.players:
-        # The archive's team is the team he was on THAT week; the directory's is
-        # wherever he is today. Prefer the week's, which is right during a
-        # season in which somebody gets traded.
-        team = injury.teams.get(player.player_id) or player.team
+        if weekly is not None and week is not None:
+            team = _team_before(player.player_id, week, weekly)
+            if team is None:
+                team = injury.teams.get(player.player_id)
+        else:
+            team = injury.teams.get(player.player_id) or player.team
+        if not team:
+            continue                      # -> UNKNOWN -> gated
         out[player.player_id] = {
             "team": team,
             "position": player.position,
-            # No team at all means no NFL roster, which classify() reads as OUT.
-            "active": bool(team),
+            "active": True,
             "injury_status": injury.by_gsis.get(player.player_id),
         }
     return out
+
+
+def _team_before(player_id: str, week: int,
+                 weekly: Mapping[int, Mapping[str, Mapping[str, Any]]]) -> str | None:
+    """The team on the player's most recent stat row strictly before ``week``
+    — the same lookup the backtest harness uses, so the live gate and the
+    measured gate agree on who is even classifiable."""
+    for earlier in range(week - 1, 0, -1):
+        row = (weekly.get(earlier) or {}).get(player_id)
+        if row:
+            team = str(row.get("team") or "").strip()
+            if team:
+                return team
+    return None
 
 
 def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
@@ -329,7 +357,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         weekly=weekly,
         prior=prior,
         availability=_availability(cache_dir, season, week, directory,
-                                   live=live, session=session),
+                                   live=live, session=session, weekly=weekly),
         # Read off the rows already parsed above rather than re-reading the
         # whole season: the counted-usage columns are in SEASON_COLUMNS for
         # exactly this reason.
@@ -339,8 +367,27 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
 
 def _availability(cache_dir: Path, season: str, week: int,
                   directory: PlayerDirectory, *, live: bool = True,
-                  session: requests.Session | None = None) -> WeekAvailability:
-    """The week's injury report and byes, in the shape the gate reads."""
+                  session: requests.Session | None = None,
+                  weekly: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
+                  ) -> WeekAvailability:
+    """The injury report and byes, in the shape the gate reads — on the
+    information set that exists when the report goes out.
+
+    THE DESIGNATION USED IS WEEK W-1's, NOT WEEK W's. The product ships on
+    Tuesday and week W's injury report is published Wednesday through Friday.
+    Measured on the real 2024 archive: by the Tuesday send, week W held 0-2
+    rows out of 200-385 in every week but one, while week W-1's report was
+    100% complete every single week. Reading week W on a Tuesday therefore
+    meant one of two wrong things — no snapshot at all, so no confidence
+    anywhere in the product, or a two-row file treated as a complete clean
+    bill of health. The frozen method (reports/nflverse-backtest-method.md
+    §6) calls the W-1 rule "the single most consequential rule in this
+    section", and it is what the Grade-C numbers were measured under; a live
+    gate on any other information set is a gate nothing has measured.
+
+    Week 1 has no W-1 report and yields no snapshot: everyone UNKNOWN, no
+    number anywhere, which is already true of week 1 for evidence reasons.
+    """
     from ingest.nflverse import bye_teams
 
     try:
@@ -349,7 +396,6 @@ def _availability(cache_dir: Path, season: str, week: int,
         byes = None                      # unknowable, which classify() honours
 
     injury: injuries_feed.InjuryWeek | None = None
-    as_of: str | None = None
     try:
         # Through nflverse.fetch rather than injuries.fetch: the latter caches
         # forever, which is right for a finished season and wrong for the one
@@ -357,15 +403,14 @@ def _availability(cache_dir: Path, season: str, week: int,
         # in week 2 and find no week-5 rows at all.
         path = fetch("injuries", f"injuries_{season}.csv", cache_dir, live=live,
                      session=session)
-        injury = injuries_feed.load_weeks(path, season).get(week)
-        as_of = datetime.fromtimestamp(
-            path.stat().st_mtime, timezone.utc).isoformat(timespec="minutes")
+        injury = injuries_feed.load_weeks(path, season).get(week - 1)
     except (NflverseError, OSError):
         pass
 
-    statuses = _statuses(directory, injury)
-    return WeekAvailability(season=season, week=week,
-                            snapshot_as_of=as_of if statuses else None,
+    statuses = _statuses(directory, injury, weekly, week)
+    basis = (f"the week {week - 1} injury report, the last complete one before "
+             f"this file goes out") if statuses else None
+    return WeekAvailability(season=season, week=week, snapshot_as_of=basis,
                             statuses=statuses, bye_teams=byes)
 
 
