@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fantasy football tools compared, honestly — Beat Your League</title>
+<meta name="description" content="Every major paid fantasy football tool with real checked prices, what each is best at, where each falls short — including us, and including the free options.">
+<meta property="og:title" content="Fantasy football tools compared, honestly">
+<meta property="og:description" content="Every major paid fantasy football tool with real checked prices, what each is best at, where each falls short — including us, and including the free options.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F9F6EE; --card:#FFFFFF; --navy:#16314A; --ink:#33445C;
+    --slate:#5A6B80; --gold:#C9922A; --gold-bright:#F2C230;
+    --turf:#1E7A46; --turf-tint:#E8F2EA; --brick:#B3402F; --line:#DDD6C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--navy);
+    font-family:'Barlow',-apple-system,sans-serif;font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:920px;margin:0 auto;padding:38px 20px 80px;}
+  a{color:var(--brick);}
+  a:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:14px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--gold);text-decoration:none;}
+  .brand svg{width:24px;height:16px;flex:none;}
+  h1{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(34px,6.5vw,52px);
+    line-height:.98;text-transform:uppercase;margin-top:18px;max-width:16ch;}
+  .byline{margin-top:14px;padding:12px 16px;background:var(--card);
+    border-left:4px solid var(--gold-bright);border-top:1px solid var(--line);
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-size:14.5px;color:var(--ink);max-width:68ch;}
+  .checked{display:inline-block;margin-top:14px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+    border:3px double var(--brick);color:var(--brick);padding:6px 12px;
+    transform:rotate(-1.4deg);border-radius:3px;}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(24px,4vw,32px);
+    text-transform:uppercase;line-height:1.02;margin:44px 0 10px;}
+  p{max-width:68ch;color:var(--ink);}
+  p + p{margin-top:10px;}
+  .tablewrap{overflow-x:auto;margin-top:18px;border:2px solid var(--navy);
+    background:var(--card);}
+  table{width:100%;min-width:780px;border-collapse:collapse;font-size:14px;}
+  th{background:var(--navy);color:#DCE4EE;font-family:'Barlow Condensed';font-weight:700;
+    font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;text-align:left;
+    padding:10px 12px;white-space:nowrap;}
+  td{padding:12px;border-top:1px solid #EDEAE1;vertical-align:top;color:var(--ink);}
+  td:first-child{font-weight:700;color:var(--navy);white-space:nowrap;}
+  td:first-child small{display:block;font-weight:500;color:var(--slate);font-size:12px;}
+  .price{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:var(--navy);
+    font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .price small{display:block;font-family:'Barlow';font-weight:500;font-size:11.5px;
+    color:var(--slate);white-space:normal;}
+  tr.us{background:var(--turf-tint);}
+  tr.us td{border-top:2px solid var(--turf);}
+  tr.free td{background:#FBF9F3;}
+  .short{color:var(--brick);}
+  .pick{margin-top:14px;display:grid;gap:12px;}
+  .pick > div{background:var(--card);border:1px solid var(--line);
+    border-left:4px solid var(--navy);padding:14px 16px;font-size:14.5px;color:var(--ink);}
+  .pick b{font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    letter-spacing:.03em;text-transform:uppercase;color:var(--navy);display:block;
+    margin-bottom:3px;}
+  .pick > div.usrec{border-left-color:var(--turf);}
+  .cta{margin-top:40px;padding:20px 22px;background:var(--card);
+    border:2px solid var(--navy);text-align:left;}
+  .cta .btn{display:inline-block;margin-top:12px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;
+    text-decoration:none;color:var(--navy);padding:12px 24px;
+    background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);
+    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  footer{margin-top:52px;border-top:1px solid var(--line);padding-top:16px;
+    font-size:12.5px;color:var(--slate);line-height:1.7;}
+  @media (max-width:680px){ .wrap{padding-top:26px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="../index.html"><svg viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylcBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylcSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylcVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylcPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylcBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylcPath" fill="url(#bylcSpec)" stroke="none"/><use href="#bylcPath" fill="url(#bylcVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><span>Beat Your League</span></a>
+
+  <h1>Fantasy football tools, compared honestly</h1>
+
+  <p class="byline"><b>Who wrote this:</b> the person who makes Beat Your League — one of the
+  products below. I put my own product's weaknesses in the same column as everyone else's,
+  and I included the free options that beat all of us for some people. Every price was
+  checked by hand on the date stamped; prices move, so check theirs before you quote me.</p>
+
+  <span class="checked">Prices checked Aug 22, 2026</span>
+
+  <div class="tablewrap">
+  <table>
+    <tr><th>Product</th><th>Price</th><th>Best at</th><th>Falls short</th></tr>
+
+    <tr><td>FantasyPros<small>fantasypros.com</small></td>
+      <td class="price">$3.99–$22.99/mo USD<small>three tiers · free tier and 3-day trials exist</small></td>
+      <td>Running many leagues at once. Consensus rankings across every expert, sync with
+      your league apps, draft assistant. The default answer if fantasy is a part-time job.</td>
+      <td class="short">Consensus is the same answer everyone else has. Reviewers love it and
+      still call the subscription pricey, and the free tier nags upward.</td></tr>
+
+    <tr><td>Establish The Run<small>establishtherun.com</small></td>
+      <td class="price">$54.99 USD draft kit<small>$274.99 in-season · $299.99 bundle</small></td>
+      <td>Deep written analysis from a respected staff. The draft kit is the flagship, and
+      their subscriber results are their pitch.</td>
+      <td class="short">Premium price, and the in-season product is a lot of reading. No
+      refunds on one-time products.</td></tr>
+
+    <tr><td>4for4<small>4for4.com</small></td>
+      <td class="price">$39–$99 USD/season<small>three subscription tiers</small></td>
+      <td>Projection accuracy — their public record on it is the brand. Strong tools
+      underneath (lineup optimizer, matchup data).</td>
+      <td class="short">All sales final, no guarantee, by their own terms. Projections for
+      everyone, not decisions for your roster.</td></tr>
+
+    <tr><td>Footballguys<small>footballguys.com</small></td>
+      <td class="price">$59.99–$199.99 USD/yr<small>30-day money-back, stated on their homepage</small></td>
+      <td>Volume and pedigree — huge staff, decades running, and a real no-questions
+      guarantee they put up front.</td>
+      <td class="short">A firehose. You do the filtering, and the top tier costs more than
+      most league buy-ins.</td></tr>
+
+    <tr><td>Draft Sharks<small>draftsharks.com</small></td>
+      <td class="price">$6–$44 USD/mo<small>three tiers · money-back through Dec 31</small></td>
+      <td>The strongest guarantee in the market — full refund any time to Dec 31 — plus
+      award-cited draft rankings and injury-risk data.</td>
+      <td class="short">Best known for draft season — if you're buying for
+      week-to-week lineup help, check what's actually in the tier first.</td></tr>
+
+    <tr><td>Fantasy Life+<small>fantasylife.com</small></td>
+      <td class="price">$39.99 or $99.99 USD/yr<small>two tiers · all sales final</small></td>
+      <td>Matthew Berry's newsletter machine: entertainment-grade daily content plus tools,
+      at a fair price for the volume.</td>
+      <td class="short">Personality-led. If you want your numbers without the show, the show
+      is most of the product.</td></tr>
+
+    <tr><td>Fantasy Footballers UDK<small>thefantasyfootballers.com</small></td>
+      <td class="price">$34.99–$59.99 USD/season<small>FootClan membership $11.99/mo</small></td>
+      <td>The best draft-day companion for podcast listeners — the Ultimate Draft Kit is a
+      genuine August institution.</td>
+      <td class="short">Built around the draft. No stated refund terms anywhere we could
+      find, which is worth knowing before you buy.</td></tr>
+
+    <tr><td>Scoutcast<small>scoutcast.ai</small></td>
+      <td class="price">$49.99 USD/season<small>Plus tier $5.99/mo · auto-renews each August</small></td>
+      <td>Indie briefings a few times a week, honest auto-renewal disclosure right on the
+      page. Cheap for the cadence.</td>
+      <td class="short">Young product, small public track record — the same thing you could
+      say about us, so it's in the same column.</td></tr>
+
+    <tr><td>STACKED<small>stackedfantasy.com</small></td>
+      <td class="price">Not published<small>price appears only after account signup</small></td>
+      <td>A slick app with investor backing and a modern feel; league hosting plus tools in
+      one place.</td>
+      <td class="short">You have to create an account to learn the price. We think you
+      should know the price first, everywhere.</td></tr>
+
+    <tr class="us"><td>Beat Your League<small>this site</small></td>
+      <td class="price">$39 USD/season<small>or $12.99/mo · refund no-questions through Week 2</small></td>
+      <td>One league, decided weekly: the lineup we'd set for your exact roster under your
+      exact scoring, the odds on every call, and every published call graded against the
+      box score on a public page — wins and misses both.</td>
+      <td class="short">No draft kit, no app, no rankings — one email a week. One roster per
+      pass. And we're new: our public graded record only starts filling in October, so
+      until then the proof is a backtest and a sample, not a season of receipts.</td></tr>
+
+    <tr class="free"><td>The free stack<small>no purchase</small></td>
+      <td class="price">$0<small>genuinely fine for casual leagues</small></td>
+      <td>Your league app's own projections, BeerSheets for draft day, and the daily
+      question threads on r/fantasyfootball — crowd answers within the hour.</td>
+      <td class="short">Generic numbers, nobody accountable for them, and you do all the
+      work. But if your league is for fun and bragging, start here and pay nobody.</td></tr>
+  </table>
+  </div>
+
+  <h2>Which one, honestly</h2>
+  <div class="pick">
+    <div><b>You run four or more leagues</b>FantasyPros. Nothing else manages volume as
+    well, and none of the rest of us are trying to.</div>
+    <div><b>You mostly care about draft day</b>The Ultimate Draft Kit if you listen to the
+    podcast, Establish The Run if you'd rather read, BeerSheets if you'd rather pay
+    nothing. Our product doesn't even start until your draft is over.</div>
+    <div><b>You want a guarantee before you spend</b>Draft Sharks (to Dec 31) or
+    Footballguys (30 days) put real money-back terms in writing. Ours is narrower:
+    no-questions through Week 2.</div>
+    <div><b>You want the deepest projections operation</b>4for4 — they've built the
+    brand on a public accuracy record, which is the right thing to build one on.</div>
+    <div class="usrec"><b>You have one league and want the weekly calls made</b>That's us:
+    a file about your roster under your scoring, a number on every call, and public
+    grading you can throw at your group chat. If that's not what you want, one of the
+    rows above is — that's why they're all here.</div>
+  </div>
+
+  <div class="cta">
+    <b>If the last row sounded like your league:</b> the sample report is real 2024 output —
+    read it before you spend anything.
+    <br><a class="btn" href="../sample-report.html">Read a real report</a>
+    <a class="btn" style="background:none;border:2px solid var(--navy);clip-path:none" href="../index.html">What it costs</a>
+  </div>
+
+  <footer>
+    Prices and terms checked by hand on Aug 22, 2026 from each product's own public pages;
+    they change, and their pages are the source of truth. Product names belong to their
+    owners; nobody listed here endorses us. Analysis, not picks — no betting content
+    anywhere on this site. Must be 18+ to subscribe.<br>
+    <a href="../index.html">Beat Your League</a> ·
+    <a href="../sample-report.html">A real report</a> ·
+    <a href="../backtest.html">Our full backtest, failures included</a> ·
+    <a href="../legal.html">Terms, refunds &amp; privacy</a>
+  </footer>
+</div>
+</body>
+</html>

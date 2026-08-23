@@ -578,6 +578,20 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The comparison page (`site/compare/`, Aug 23 2026) — PLAN §3 item 15, and the honesty
+principle applied to marketing.** Real prices for nine competitors plus the free stack, checked
+by hand Aug 22 2026 (each verified against the vendor's own live page during the launch research;
+RotoBaller and RotoViz omitted because they could not be verified). Founder authorship disclosed
+in the first paragraph, our own weaknesses in the same column as everyone else's — including "our
+public graded record only starts filling in October" — and the guidance section recommends
+competitors BY NAME for the needs we don't serve. Every one of those properties is pinned by a
+test, because they are the first things conversion pressure removes, and each test is
+mutation-checked. Two of my own competitor claims were softened before shipping because the
+research had not verified them (an opinion about Draft Sharks' in-season depth, a "strongest in
+the field" superlative about 4for4) — the page may only say what was checked. New `site/` pages
+join the `_DEV_SPEAK` and no-betting parametrized sweeps by hand; the personal-contact and
+social-meta guards glob the whole directory and caught it automatically.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's

@@ -20,6 +20,7 @@ LANDING = (SITE / "index.html").read_text(encoding="utf-8")
 JOIN = (SITE / "join" / "index.html").read_text(encoding="utf-8")
 ROSTER_JS = (SITE / "join" / "roster.js").read_text(encoding="utf-8")
 LEDGER = (SITE / "ledger" / "index.html").read_text(encoding="utf-8")
+COMPARE = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
 
 
 def prose(page: str) -> str:
@@ -348,12 +349,14 @@ def _demo_report_html() -> str:
     return path.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("name", ["sample report", "landing", "join", "live report"])
+@pytest.mark.parametrize("name", ["sample report", "landing", "join", "compare",
+                                  "live report"])
 def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
     if name == "live report":
         page = _demo_report_html()
     else:
-        page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN}[name]
+        page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN,
+                "compare": COMPARE}[name]
     text = prose(markup_only(page))
     for pattern in _DEV_SPEAK:
         assert not re.search(pattern, text, re.I), \
@@ -636,10 +639,70 @@ def test_sample_report_explains_what_to_do_with_it() -> None:
 
 
 # --------------------------------------------------------------------- #
+# the comparison page stays honest, or it stops being useful
+# --------------------------------------------------------------------- #
+
+def test_compare_discloses_its_author_before_anything_else() -> None:
+    """The whole trick of a founder-written comparison is the disclosure: a
+    reader who finds out later that a "neutral" roundup was written by one of
+    the products reads everything else on the domain as marketing. It has to be
+    the first thing after the headline, not a footer credit."""
+    body = prose(COMPARE.split("<h1")[1])
+    first_block = body.split("</p>")[0]
+    assert re.search(r"the person who makes Beat Your League", first_block), \
+        "authorship must be disclosed in the first paragraph"
+    assert re.search(r"one of the products below", first_block)
+
+
+def test_compare_carries_a_dated_price_stamp() -> None:
+    """An undated price table rots into misinformation. The date is the claim's
+    boundary, and it must be a real date — not "recently"."""
+    assert re.search(r"Prices checked [A-Z][a-z]{2} \d{1,2}, 20\d{2}", COMPARE), \
+        "the price-checked stamp lost its date"
+    assert re.search(r"prices move|they change", COMPARE, re.I), \
+        "the page must say prices drift, so a stale read fails soft"
+
+
+def test_compare_lists_our_own_weaknesses_like_everyone_elses() -> None:
+    """The complete honest comparison is the marketing strategy (PLAN §5) — a
+    version that goes soft on its own row is just a longer ad. The row must
+    name real product gaps, including the one that matters most to a buyer
+    right now: no track record until October."""
+    our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
+    for admission in ("No draft kit", "no app", "we're new",
+                      "October", "backtest and a sample"):
+        assert admission in our_row, \
+            f"our own weaknesses column lost {admission!r}"
+
+
+def test_compare_includes_the_free_answer() -> None:
+    """Recommending "pay nobody" where it's true is what separates this page
+    from every self-ranking listicle in the niche — it is the honesty principle
+    applied to marketing, and the first thing to vanish under conversion
+    pressure."""
+    assert 'class="free"' in COMPARE
+    free_row = COMPARE.split('class="free"')[1].split("</tr>")[0]
+    assert re.search(r"\$0", free_row)
+    assert re.search(r"pay nobody|start here", free_row, re.I)
+    # And at least three competitors are recommended BY NAME for needs we
+    # don't serve — a "which one" section that always answers "us" is an ad.
+    picks = COMPARE.split("Which one, honestly")[1]
+    named = sum(1 for p in ("FantasyPros", "Draft Sharks", "4for4",
+                            "Establish The Run") if p in picks)
+    assert named >= 3, "the guidance section stopped recommending competitors"
+
+
+def test_compare_tables_scroll_on_a_phone() -> None:
+    assert COMPARE.count("<table>") <= COMPARE.count("overflow-x:auto"), \
+        "the comparison table would scroll the whole page sideways on mobile"
+
+
+# --------------------------------------------------------------------- #
 # no betting positioning anywhere buyer-facing (principle 4)
 # --------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("page,name", [(LANDING, "landing"), (JOIN, "join"), (LEDGER, "ledger")])
+@pytest.mark.parametrize("page,name", [(LANDING, "landing"), (JOIN, "join"),
+                                       (LEDGER, "ledger"), (COMPARE, "compare")])
 def test_no_betting_language(page: str, name: str) -> None:
     banned = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager)\b"
     assert not re.search(banned, page, re.I), f"betting language crept into {name}"
