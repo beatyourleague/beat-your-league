@@ -70,7 +70,22 @@ def _num(value: float | None, digits: int = 1) -> str:
 def _header(seasons: Sequence[Season]) -> list[str]:
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     lines = [
-        "# Backtest & calibration report",
+        "# Backtest & calibration report — a data stack the product no longer runs",
+        "",
+        # The frozen method's per-surface mapping (nflverse-backtest-method.md
+        # §1) requires this header at every grade. This study measured the
+        # Sleeper-era model against human managers in one league; the product
+        # was rebuilt on nflverse and re-measured (reports/nflverse-backtest.md),
+        # and the two estimands are different questions whose numbers may never
+        # be placed side by side. Kept, generated and unedited, because a
+        # retired measurement is part of the record — not deleted, and not
+        # presented as the live one.
+        "**This document describes a data stack the product no longer runs.** "
+        "It graded the Sleeper-era model against the actual lineups human "
+        "managers set, in one twelve-team league. The shipping product reads no "
+        "league at all; its own grading is `reports/nflverse-backtest.md`, which "
+        "asks a different question — the model's first choice against its own "
+        "second — and the two numbers must never be placed side by side.",
         "",
         f"Generated {generated} from cached Sleeper data in `data/raw/`. "
         "No network calls, no generated text, no estimates: every number below is "

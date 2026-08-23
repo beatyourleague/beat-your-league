@@ -311,13 +311,32 @@ def test_the_landing_quotes_no_backtest_figure_in_either_direction() -> None:
 
 
 def test_published_backtest_exists_and_keeps_its_failures() -> None:
-    """'published here' must resolve, and must not be a laundered version."""
+    """'published here' must resolve, and must not be a laundered version.
+
+    The page publishes the LIVE product's grading now, not the retired
+    Sleeper-era study — the frozen method's per-surface mapping requires that
+    at every grade, because a buyer sent to 'our backtest' was reading a
+    measurement of a stack we no longer run. What must survive the repoint is
+    the property, not the old figures: the source's own grade, its refusal to
+    claim more, and every failing band it recorded."""
     published = SITE / "backtest.html"
     assert published.is_file(), "landing page links a backtest that isn't published"
     text = published.read_text(encoding="utf-8")
-    assert "53.5%" in text
-    assert re.search(r">off<", text), "published backtest lost its failing buckets"
+    source = (REPORTS / "nflverse-backtest.md").read_text(encoding="utf-8")
+    grade = re.search(r"^## Grade ([A-D])$", source, re.M)
+    assert grade, "the source report lost its grade"
+    assert f"Grade {grade.group(1)}" in text, "the published page lost its grade"
+    failing = len(re.findall(r"\|\s*\*{0,2}off\*{0,2}\s*\|", source))
+    assert failing, "the source report has no failing band to keep"
+    published_off = len(re.findall(r">\s*(?:<b>)?off(?:</b>)?\s*<", text))
+    assert published_off >= failing, (
+        f"source records {failing} failing band(s), page shows {published_off}")
     assert 'href="backtest.html"' in LANDING
+    # And the retired study stays in the record rather than being deleted —
+    # generated, unedited, and saying what it is in its own first line.
+    retired = (REPORTS / "backtest.md").read_text(encoding="utf-8")
+    assert "a data stack the product no longer runs" in retired.split("\n")[0]
+    assert "53.5%" in retired, "the retired study lost its own headline"
 
 
 # --------------------------------------------------------------------- #
@@ -1006,13 +1025,22 @@ def test_the_backtest_generator_refuses_to_drop_a_figure() -> None:
     """The whole point of the page is faithful publication, so a conversion
     that silently lost a row — especially a FAILING row — must fail loudly
     rather than publish a laundered record."""
-    from render.backtest_site import verify
-    md = (Path(__file__).resolve().parent.parent / "reports" / "backtest.md"
-          ).read_text(encoding="utf-8")
+    from render.backtest_site import SOURCE, verify
+    md = SOURCE.read_text(encoding="utf-8")
     assert verify(md, "<p>nothing here</p>"), "verify() passed an empty page"
-    # A page missing only the failing buckets must still be rejected.
-    stripped = (SITE / "backtest.html").read_text(encoding="utf-8").replace(">off<", ">ok<")
-    assert any("failing calibration" in p for p in verify(md, stripped))
+    page = (SITE / "backtest.html").read_text(encoding="utf-8")
+    assert not verify(md, page), "the published page is not faithful to its source"
+    # A page missing only the failing bands must still be rejected — and
+    # dropping SOME of them counts: the check used to match the substring
+    # ">off<", which also matches inside "<b>off</b>", so it double-counted
+    # and a page that lost half its failures would have cleared it.
+    stripped = page.replace("<b>off</b>", "<b>ok</b>", 1)
+    assert any("did not survive" in p for p in verify(md, stripped)), \
+        "dropping one failing band was accepted"
+    # The source's own grade is required content, read from the source rather
+    # than hardcoded, so this holds whichever report the page publishes.
+    graded_out = re.sub(r"Grade [A-D]", "Grade &nbsp;", page)
+    assert any("grade" in p for p in verify(md, graded_out))
 
 
 # --------------------------------------------------------------------- #
@@ -1179,16 +1207,70 @@ def test_the_backtest_draws_its_own_calibration_claim() -> None:
         f"{len(figures)} calibration charts on the page; a second chart can "
         f"only be a diagnostic table drawn as accuracy")
     figure = figures[0]
-    assert figure.count("<circle") == 6, "one dot per unconditional bucket"
+    source = (REPORTS / "nflverse-backtest.md").read_text(encoding="utf-8")
+    bands = len(re.findall(r"^\| \d+%–\d+%", source, re.M))
+    assert bands, "the source report lost its calibration table"
+    assert figure.count("<circle") == bands, "one dot per published band"
     assert "perfect calibration" in figure
-    # the failure the chart exists to show must stay in words too
-    assert "barely sorts" in figure
+    # The caption must describe the picture actually drawn. It used to be
+    # hardcoded prose about a flat line — true of the study it was written
+    # for, false of any other — so this recomputes the verdict from the
+    # source's own table and requires the words to match it.
+    rows = re.findall(r"^\| \d+%–\d+% \|[^|]*\|[^|]*\|[^|]*\| ([\d.]+)% \| ([\d.]+)% \|",
+                      source, re.M)
+    assert rows, "could not read the source's stated/observed columns"
+    stated = [float(a) for a, _ in rows]
+    observed = [float(b) for _, b in rows]
+    drift = sum(o - s for s, o in zip(stated, observed)) / len(rows)
+    spread = max(observed) - min(observed)
+    if spread < 8.0:
+        assert "barely sorts" in figure
+    elif drift > 2.0:
+        assert "ABOVE the diagonal" in figure, \
+            "the calls land more often than stated and the caption does not say so"
+    elif drift < -2.0:
+        assert "BELOW the diagonal" in figure
+    assert "flat" not in figure or spread < 8.0, \
+        "the caption calls a sorting chart flat"
     # the diagnostic table's giveaway values may not appear in ANY drawing
     for forbidden in ("77.2", "63.6", "78.3", "62.1", "69.1", "73.9"):
         for n, drawn in enumerate(figures, 1):
             assert forbidden not in drawn, \
                 f"availability-controlled figure {forbidden} was drawn as " \
                 f"accuracy in chart {n}"
+
+
+def test_the_diagnostic_table_is_never_charted_whatever_its_position() -> None:
+    """The rule is the SECTION, not the position. A naive "chart the first
+    calibration table" fix would pass today (the publishable table happens to
+    come first) and silently invert the moment a report put the diagnostic
+    above it — charting the forbidden table and suppressing the real one."""
+    from render.backtest_site import to_html
+
+    def table(rows: str) -> str:
+        return ("| Stated confidence | Graded | Decided | Ties | Stated avg "
+                "| Observed | 95% interval | Verdict |\n"
+                "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |\n" + rows)
+
+    diagnostic = table(
+        "| 50-55% | 375 | 373 | 2 | 52.4% | 57.4% | 52% - 62% | calibrated |\n"
+        "| 55-60% | 310 | 302 | 8 | 57.4% | 58.6% | 53% - 64% | calibrated |\n"
+        "| 60-65% | 215 | 209 | 6 | 62.1% | 63.6% | 57% - 70% | calibrated |\n")
+    publishable = table(
+        "| 50-55% | 617 | 608 | 9 | 52.4% | 53.3% | 49% - 57% | calibrated |\n"
+        "| 55-60% | 539 | 525 | 14 | 57.4% | 53.0% | 49% - 57% | off |\n"
+        "| 60-65% | 399 | 390 | 9 | 62.2% | 52.6% | 48% - 57% | off |\n")
+    for order in (
+        f"## Calibration\n\n{publishable}\n"
+        f"## Calibration, availability controlled (diagnostic)\n\n{diagnostic}",
+        f"## Calibration, availability controlled (diagnostic)\n\n{diagnostic}\n"
+        f"## Calibration\n\n{publishable}",
+    ):
+        figures = to_html(order).split('class="calfig"')[1:]
+        assert len(figures) == 1, "one chart, whatever the order of the tables"
+        drawn = figures[0].split("</figure>")[0]
+        assert "63.6" not in drawn, "the diagnostic table was charted"
+        assert "53.3" in drawn, "the publishable table was not charted"
 
 
 def test_the_who_can_cover_sentence_reads_like_a_person() -> None:

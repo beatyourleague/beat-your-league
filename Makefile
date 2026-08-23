@@ -1,7 +1,9 @@
 PY := .venv/bin/python
 SEASON ?= 2026
+# The public sample league the retired Sleeper-era study was measured on.
+RETIRED_LEAGUE ?= 289646328504385536
 
-.PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index \
+.PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview monday monday-preview sample
 
 week:
@@ -10,11 +12,23 @@ week:
 ingest:
 	$(PY) -m ingest.pull
 
-# Regenerate the record AND republish it. The published page claims to be
-# generated, so the two must never be run apart.
+# Regenerate the LIVE product's grading AND republish it. The published page
+# claims to be generated, so the two must never be run apart.
 backtest:
-	$(PY) -m engine.backtest
+	$(PY) -m engine.nflverse_backtest
 	$(PY) -m render.backtest_site
+
+# The early-season arm (weeks 2-3, prior-season seeded). Separate target: it
+# is a preregistered arm with its own frozen method, not part of the headline
+# run, and its report is read by site/confidence.html.
+backtest-early:
+	$(PY) -m engine.early_season_backtest
+
+# The RETIRED Sleeper-era study. Kept generated and unedited because a past
+# measurement is part of the record; it publishes to no page. Needs the sample
+# league it was measured on, which is why it takes an explicit --league.
+backtest-retired:
+	$(PY) -m engine.backtest --league $(RETIRED_LEAGUE)
 
 content:
 	$(PY) -m run.content all

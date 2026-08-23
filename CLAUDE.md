@@ -578,6 +578,38 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The proof page published the one table that may never be shown as accuracy (Aug 23 2026).**
+`render/backtest_site.py` drew its calibration chart for every table whose header row matched —
+and the source has TWO, so `site/backtest.html`, linked from the landing and four evidence
+pages, carried a second chart plotting the **availability-controlled diagnostic** (62.1→63.6,
+73.9→78.3) as dots hugging the diagonal: the most flattering possible picture of exactly the
+table CLAUDE.md's standing order, the source report's own text, the module's own docstring and
+an adversarial review each say may never be published as accuracy. The guard read
+`page.split('class="calfig"')[1]` — the FIRST figure — so it inspected the innocent chart and
+passed while the forbidden one shipped beneath it. **A guard that samples one instance of a
+repeatable element is not a guard**; it now requires exactly one figure and sweeps every figure.
+The caption was hardcoded prose about a flat line (true of the study it was written for, false
+of any other) and is derived from the plotted points now — spread, and whether the dots sit
+above or below the diagonal — so a page built from other data cannot describe the wrong picture.
+Same commit fixed the failing-band count, which matched the substring `>off<` and so also
+matched inside `<b>off</b>`, double-counting: a page that dropped half its failures cleared it.
+
+**`site/backtest.html` now publishes the LIVE grading, per the frozen method (Aug 23 2026).**
+The parent method §1's per-surface mapping requires it at every grade, and it had never been
+executed: a buyer clicking "the full backtest" got the Sleeper-era study of a stack the product
+no longer runs, complete with a "Pick your rival" CTA, dev memos ("next build phase", "Ship an
+availability feed") and a header claiming it was the document the landing cites. `SOURCE` is
+`reports/nflverse-backtest.md`; the page leads with **Grade C and its refusal**, and carries the
+source's own "What this is not", which names the earlier study and says the two numbers may
+never be placed side by side — so the retired result is acknowledged on the new page rather than
+buried. The retired study stays generated and unedited in `reports/backtest.md` with its own
+first-line header saying it describes a data stack the product no longer runs (added in
+`engine/backtest.py`'s generator, not by hand, or the next regeneration would erase it). Every
+requirement in `verify()` is now read FROM the source (grade, failing-band count, figures);
+hardcoding `"53.5%"` is how a generator quietly stops applying to the document it publishes.
+`make backtest` runs the live grading + publish, `make backtest-early` the preregistered arm,
+`make backtest-retired` the historical study.
+
 **The early-season arm (Aug 23 2026) — preregistered, reviewed, frozen, run: Grade B, and
 weeks 2–3 ship numbers.** `reports/early-season-method.md` (frozen by commit before the first
 run) admits a player's own prior-season record at half weight (λ=0.5; sensitivity arms 0.25/1.0
@@ -1129,15 +1161,16 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   "renews once a year at $29 unless you cancel" and promise a pre-billing email. An undisclosed
   annual renewal is the forget-to-cancel pattern wearing a suit — `test_pass_states_its_renewal_terms`
   fails the build if the disclosure goes missing.
-- **`site/backtest.html` is GENERATED from `reports/backtest.md`** by
-  `render/backtest_site.py` (`make backtest` runs both; `python -m render.backtest_site --check`
-  fails if the page is stale, and a test asserts generator output == published page). It used to
-  be hand-maintained under a header claiming "never hand-edited", and it drifted — the published
-  page carried a generation timestamp older than its own source. `verify()` refuses to publish if
-  any figure in the source is missing from the page, if the failing `off` buckets vanish, or if an
-  ordered list would be silently renumbered by `<ol>`. It publishes `reports/backtest.md` whole — failing buckets, 53.5%
-  headline, 7.2% ECE, the -5670.6 cost line. Regenerate it whenever backtest.md changes; the
-  landing page links it and a test asserts the failures survive publication.
+- **`site/backtest.html` is GENERATED from `reports/nflverse-backtest.md`** — the LIVE
+  product's grading — by `render/backtest_site.py` (`make backtest` runs the grading and the
+  publish together; `python -m render.backtest_site --check` fails if the page is stale, and a
+  test asserts generator output == published page). It used to be hand-maintained under a header
+  claiming "never hand-edited", and it drifted — the published page carried a generation
+  timestamp older than its own source. `verify()` refuses to publish if any figure in the source
+  is missing from the page, if the source's failing bands or its own grade vanish, or if an
+  ordered list would be silently renumbered by `<ol>`; **everything it requires is read FROM the
+  source**, because hardcoding one study's figures (it required "53.5%" literally) is how a
+  generator quietly stops applying to the document it publishes.
 - **Delivery (`run/delivery.py`) is provider-agnostic and dry by default.** Until this existed
   the pipeline produced files a human had to mail — the largest automation gap in the product.
   `EMAIL_PROVIDER` picks the backend (`dry` | `resend` | `postmark` | `ses` | `smtp`); unset
