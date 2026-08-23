@@ -578,6 +578,18 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The evidence pages (`site/projections.html`, `site/no-call.html`, Aug 23 2026) — PLAN §3
+item 14.** Hand-written buyer translations of `reports/projections-eval.md` and
+`reports/gate-backtest.md`, with fidelity ENFORCED rather than hoped:
+`test_every_figure_on_an_evidence_page_exists_in_its_source` requires every decimal on a page to
+appear in the report it translates, and the load-bearing caveats are pinned — the 68.8-vs-64.4 gap
+may never render without its p-value (the source report's own rule), the projections page must
+LEAD with the unflattering half (Sleeper's free feed beat our numbers), and the no-call page must
+keep "an improvement, not a rescue", the failing buckets, and "declines more calls than it makes".
+All mutation-checked. The projections page is the pitch-email proof link (§5.1 item 6 — the
+question has no other published answer anywhere); the no-call page is where the FAQ's
+win-probability answer now lands. Both enrolled in the `_DEV_SPEAK` and no-betting sweeps.
+
 **The comparison page (`site/compare/`, Aug 23 2026) — PLAN §3 item 15, and the honesty
 principle applied to marketing.** Real prices for nine competitors plus the free stack, checked
 by hand Aug 22 2026 (each verified against the vendor's own live page during the launch research;

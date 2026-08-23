@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How accurate are Sleeper's own projections? — Beat Your League</title>
+<meta name="description" content="We graded Sleeper's free Rotowire-sourced projections against real box scores on a frozen set of start-sit decisions — and against our own numbers. They beat us. Here's the whole table.">
+<meta property="og:title" content="How accurate are Sleeper's own projections?">
+<meta property="og:description" content="We graded Sleeper's free projections against real box scores on a frozen set of start-sit decisions — and against our own numbers. They beat us. Here's the whole table.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F9F6EE; --card:#FFFFFF; --navy:#16314A; --ink:#33445C;
+    --slate:#5A6B80; --gold:#C9922A; --gold-bright:#F2C230;
+    --turf:#1E7A46; --turf-tint:#E8F2EA; --brick:#B3402F; --line:#DDD6C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--navy);
+    font-family:'Barlow',-apple-system,sans-serif;font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:38px 20px 80px;}
+  a{color:var(--brick);}
+  a:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:14px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--gold);text-decoration:none;}
+  .brand svg{width:24px;height:16px;flex:none;}
+  h1{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(32px,6vw,48px);
+    line-height:1;text-transform:uppercase;margin-top:18px;max-width:18ch;}
+  .standfirst{margin-top:14px;font-size:17px;color:var(--ink);max-width:64ch;}
+  .standfirst b{color:var(--navy);}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(22px,3.6vw,30px);
+    text-transform:uppercase;line-height:1.04;margin:40px 0 8px;}
+  p{max-width:66ch;color:var(--ink);}
+  p + p{margin-top:10px;}
+  .tablewrap{overflow-x:auto;margin-top:14px;border:2px solid var(--navy);background:var(--card);}
+  table{width:100%;min-width:560px;border-collapse:collapse;font-size:14.5px;
+    font-variant-numeric:tabular-nums;}
+  th{background:var(--navy);color:#DCE4EE;font-family:'Barlow Condensed';font-weight:700;
+    font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;text-align:right;
+    padding:10px 12px;}
+  th:first-child{text-align:left;}
+  td{padding:11px 12px;border-top:1px solid #EDEAE1;text-align:right;color:var(--ink);}
+  td:first-child{text-align:left;font-weight:700;color:var(--navy);}
+  .win{color:var(--turf);font-weight:700;}
+  .caveat{margin-top:16px;padding:13px 16px;background:var(--card);
+    border-left:4px solid var(--brick);border-top:1px solid var(--line);
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-size:14px;color:var(--ink);max-width:66ch;}
+  .caveat b{color:var(--brick);}
+  .cta{margin-top:44px;padding:20px 22px;background:var(--card);border:2px solid var(--navy);}
+  .cta .btn{display:inline-block;margin-top:12px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;
+    text-decoration:none;color:var(--navy);padding:12px 24px;
+    background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);
+    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  footer{margin-top:52px;border-top:1px solid var(--line);padding-top:16px;
+    font-size:12.5px;color:var(--slate);line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="index.html"><svg viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylpjBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylpjSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylpjVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylpjPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylpjBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylpjPath" fill="url(#bylpjSpec)" stroke="none"/><use href="#bylpjPath" fill="url(#bylpjVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><span>Beat Your League</span></a>
+
+  <h1>How accurate are Sleeper's own projections?</h1>
+  <p class="standfirst">Nobody had published an answer, so we measured one — and we'll
+  lead with the part that stings: on the decisions both sides could call,
+  <b>Sleeper's free projections beat our own numbers, 68.8% to 64.4%</b>. Here's the
+  whole test, including why we still couldn't just use theirs.</p>
+
+  <h2>How we tested it</h2>
+  <p>We took a frozen set of real start-sit decisions from a full 2018 league season —
+  the same set our own numbers were graded on, decided before this test existed — and
+  asked Sleeper's projection feed (which is Rotowire-sourced and free) to make the same
+  calls. Same head-to-heads, same real box scores, same decision rule. No cherry-picking
+  is possible because the question set was locked first.</p>
+
+  <h2>The head-to-head</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Season</th><th>Decisions both could call</th><th>Our hit rate</th>
+        <th>Sleeper's hit rate</th><th>They were right, we were wrong</th>
+        <th>We were right, they were wrong</th></tr>
+    <tr><td>2018</td><td>368</td><td>64.4%</td><td class="win">68.8%</td>
+        <td>47</td><td>31</td></tr>
+  </table>
+  </div>
+  <p class="caveat"><b>Read the gap with its uncertainty:</b> 47 to 31 on disagreements
+  gives a two-sided p-value of 0.089 — suggestive, not conclusive, on one season of one
+  league. We don't quote the 68.8-vs-64.4 gap without that number, and neither should
+  you. Also honest: the archive has no usable records for 2017, and whether archived
+  projections were ever revised after the fact is unknowable from outside — we graded
+  what the archive holds.</p>
+
+  <h2>They also missed less</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Season</th><th>Player-weeks</th><th>Our average miss</th>
+        <th>Sleeper's average miss</th></tr>
+    <tr><td>2018</td><td>1494</td><td>6.61 points</td><td class="win">6.39 points</td></tr>
+  </table>
+  </div>
+
+  <h2>So why not just use Sleeper's numbers?</h2>
+  <p>Because of what the feed can't see. It carries roughly 400–520 players in any given
+  week — every era we checked — and real bench decisions constantly involve players
+  outside that list. On our frozen decision set it simply <b>had no opinion on 626 of
+  994 head-to-heads</b>: nearly two out of three real decisions, unanswerable from the
+  feed alone.</p>
+  <p>Its one unambiguous win is Week 1, where it projects most starters while any
+  history-based approach is still waiting for a game to be played. Its structural loss
+  is depth, which is exactly where start-sit decisions live.</p>
+
+  <h2>What we did about it</h2>
+  <p>Nothing quietly. Our reports keep publishing our own numbers, with the calls graded
+  in public — and this page stays up, including the table where the free feed beats us,
+  because one league-season of evidence is enough to decide what to test next, not
+  enough to bury. If we ever blend the feed in, the ranges and confidence rules get
+  re-tested first; until then, what you see in a report is what has been measured.</p>
+
+  <div class="cta">
+    <b>The same honesty applies to the product:</b> every call we publish is graded
+    against the real box score on a public page — wins and misses both.
+    <br><a class="btn" href="join/index.html">Set up your team</a>
+    <a class="btn" style="background:none;border:2px solid var(--navy);clip-path:none" href="sample-report.html">Read a real report</a>
+  </div>
+
+  <footer>
+    Method and figures from our published evaluation, reproducible from cached public
+    data; the decision set was frozen before the feed was graded. One league, one usable
+    season — enough to decide direction, not to claim a universal number, and we say so
+    wherever this is quoted. Sleeper and Rotowire are their owners' marks; neither
+    endorses us. Analysis, not picks.<br>
+    <a href="index.html">Beat Your League</a> ·
+    <a href="backtest.html">Our own full backtest, failures included</a> ·
+    <a href="compare/index.html">Every tool compared honestly</a> ·
+    <a href="legal.html">Terms &amp; privacy</a>
+  </footer>
+</div>
+</body>
+</html>

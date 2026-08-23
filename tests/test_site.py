@@ -21,6 +21,8 @@ JOIN = (SITE / "join" / "index.html").read_text(encoding="utf-8")
 ROSTER_JS = (SITE / "join" / "roster.js").read_text(encoding="utf-8")
 LEDGER = (SITE / "ledger" / "index.html").read_text(encoding="utf-8")
 COMPARE = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
+PROJECTIONS = (SITE / "projections.html").read_text(encoding="utf-8")
+NO_CALL = (SITE / "no-call.html").read_text(encoding="utf-8")
 
 
 def prose(page: str) -> str:
@@ -350,13 +352,14 @@ def _demo_report_html() -> str:
 
 
 @pytest.mark.parametrize("name", ["sample report", "landing", "join", "compare",
-                                  "live report"])
+                                  "projections", "no-call", "live report"])
 def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
     if name == "live report":
         page = _demo_report_html()
     else:
         page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN,
-                "compare": COMPARE}[name]
+                "compare": COMPARE, "projections": PROJECTIONS,
+                "no-call": NO_CALL}[name]
     text = prose(markup_only(page))
     for pattern in _DEV_SPEAK:
         assert not re.search(pattern, text, re.I), \
@@ -698,11 +701,68 @@ def test_compare_tables_scroll_on_a_phone() -> None:
 
 
 # --------------------------------------------------------------------- #
+# the evidence pages may only say what their source reports measured
+# --------------------------------------------------------------------- #
+
+REPORTS = SITE.parent / "reports"
+
+
+@pytest.mark.parametrize("page,source", [
+    (PROJECTIONS, "projections-eval.md"),
+    (NO_CALL, "gate-backtest.md"),
+])
+def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
+    """These pages are hand-written translations of operator reports into buyer
+    language, which is exactly the seam where numbers drift: the landing page
+    once kept citing a count the product had stopped producing. Every decimal
+    and percentage on the page must appear in the report it translates."""
+    report = (REPORTS / source).read_text(encoding="utf-8")
+    body = re.sub(r"<style\b.*?</style>|<script\b.*?</script>", "", page,
+                  flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", body)
+    for figure in sorted(set(re.findall(r"\d+\.\d+", text))):
+        assert figure in report, (
+            f"{source[:-3]} page cites {figure}, which is not in the report it "
+            f"translates — regenerate or fix the page")
+
+
+def test_the_projections_page_never_quotes_the_gap_without_its_uncertainty() -> None:
+    """The source report's own rule: 'do not quote the gap without the p-value'.
+    47-31 on one season is suggestive, not conclusive, and quoting 68.8% vs
+    64.4% bare would claim more than was measured."""
+    text = re.sub(r"<[^>]+>", " ", prose(PROJECTIONS))
+    assert "68.8%" in text and "64.4%" in text
+    assert re.search(r"0\.089", text), "the p-value no longer travels with the gap"
+    assert re.search(r"suggestive, not conclusive", text, re.I)
+    assert re.search(r"one league|one season", text, re.I), \
+        "the single-league scope disclosure went missing"
+    # And the page leads with the unflattering half, which is the whole point.
+    first_screen = prose(PROJECTIONS.split("</h1>")[1].split("<h2")[0])
+    assert re.search(r"beat our own numbers|beat us", first_screen, re.I)
+
+
+def test_the_no_call_page_claims_improvement_never_rescue() -> None:
+    """The measurement's conclusion is deliberately uncomfortable: the filter
+    helps and does not earn an accuracy claim. The page exists to publish that,
+    and the first thing conversion pressure will do is soften it."""
+    text = re.sub(r"<[^>]+>", " ", prose(NO_CALL))
+    assert re.search(r"an improvement, not a\s*rescue", text, re.I)
+    assert re.search(r"1 of 6 to 2 of 5", text)
+    assert re.search(r"does not,? by itself,? earn a published accuracy claim"
+                     r"|not enough to brag about", text, re.I)
+    assert re.search(r"declines\s+more calls than it makes", text, re.I)
+    # The failing buckets stay on the page.
+    assert NO_CALL.count('class="off"') >= 3, "the off buckets were laundered"
+
+
+# --------------------------------------------------------------------- #
 # no betting positioning anywhere buyer-facing (principle 4)
 # --------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("page,name", [(LANDING, "landing"), (JOIN, "join"),
-                                       (LEDGER, "ledger"), (COMPARE, "compare")])
+                                       (LEDGER, "ledger"), (COMPARE, "compare"),
+                                       (PROJECTIONS, "projections"),
+                                       (NO_CALL, "no-call")])
 def test_no_betting_language(page: str, name: str) -> None:
     banned = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager)\b"
     assert not re.search(banned, page, re.I), f"betting language crept into {name}"
