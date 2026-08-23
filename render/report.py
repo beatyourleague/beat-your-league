@@ -126,8 +126,9 @@ def source_line(meta: Mapping[str, Any]) -> str:
     """
     return NFLVERSE_LINE if meta.get("solo") else SLEEPER_LINE
 CANCEL_HEAD = "Done with this?"
-CANCEL_BODY = ("Cancel it yourself in your Substack account — it takes about "
-               "fifteen seconds and stops the billing immediately. "
+CANCEL_BODY = ("Cancel it yourself from your own billing page — it takes about "
+               "fifteen seconds and stops the billing immediately; the exact "
+               "steps are on our legal page. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end.")
 AS_SET_HEAD = "Your lineup, exactly as set."

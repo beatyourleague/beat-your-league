@@ -95,27 +95,30 @@
       monthly from the week your reports start until the fantasy season ends, and then
       billing stops on its own. We do not charge monthly through the offseason, because we
       are not sending you anything during it.</li>
-      <li>You can <b>cancel yourself at any time</b> from your own Substack account. We will
+      <li>You can <b>cancel yourself at any time</b> from your own billing page. We will
       never require you to contact us to stop a subscription, and we will never add steps to
       make leaving harder.</li>
-      <li>Payments and cancellation are handled by Substack and its payment processor. We
-      never see or store your card details. Their terms apply to the payment itself.</li>
+      <li>Payments and cancellation are handled by Stripe. We never see or store your card
+      details. Stripe's terms apply to the payment itself.</li>
       <li>We may change prices for future terms. A price change never applies to a term you
       have already paid for, and we'll tell you before a renewal at a new price.</li>
     </ul>
 
     <h2 id="cancel">4. How to cancel — the actual steps</h2>
-    <p><b>You cancel yourself, instantly, without us.</b> Open
-    <a href="https://substack.com/account">substack.com/account</a> signed in with the email
-    you subscribed with, find Beat Your League in your subscriptions, and choose cancel. It
-    takes about fifteen seconds, billing stops immediately, and nobody has to approve it.
-    The reports stop on their own after that — we check who is still subscribed before every
-    send.</p>
+    <p><b>You cancel yourself, instantly, without us.</b> Open your billing page — the
+    direct link is at the bottom of every report we send and in your welcome email (it looks
+    like billing.stripe.com/p/login/&hellip;). Enter the email you pay with, Stripe sends you
+    a sign-in code, and you choose cancel. It takes about fifteen seconds, billing stops
+    immediately, and nobody has to approve it. The reports stop on their own after that — we
+    check who is still subscribed before every send.</p>
+    <!-- LAUNCH: once the Stripe customer portal is enabled (Dashboard → Settings →
+         Billing → Customer portal), paste its permanent login link here as a real
+         <a href> so this page carries the destination directly. -->
     <div class="note"><b>One thing worth knowing:</b> clicking "unsubscribe" at the bottom of
     an email stops the <i>emails</i>, but on its own it does not always stop a
     <i>subscription</i> — that is true of most paid newsletters, not just ours. If you want
-    the charges to stop, cancel in Substack. If you ever find you were charged after
-    intending to cancel, email us and we'll refund it.</div>
+    the charges to stop, cancel from your billing page. If you ever find you were charged
+    after intending to cancel, email us and we'll refund it.</div>
     <p>Cancelling stops future charges. You keep access for the rest of the period you've
     already paid for, and you keep every report we already sent. If anything about
     cancelling doesn't work, email us (section 15) and we'll sort it out.</p>
@@ -188,11 +191,12 @@
       <li><b>Where league data comes from:</b> Sleeper's public API — the same league record
       every member of your league can already see. We don't access private messages,
       accounts, or anything hidden from your leaguemates.</li>
-      <li><b>Your leaguemates:</b> your report discusses other managers in your league,
-      because that is the product. It goes only to you. We never publish your league's
-      identities — the public ledger and the sample report use neutral labels.</li>
-      <li><b>Sharing:</b> we don't sell your data or give it to advertisers. Email delivery
-      and payment run through Substack, which has its own terms and privacy policy.</li>
+      <li><b>Your report is yours alone:</b> it is built from the roster you gave us and
+      public NFL data, and it goes only to you. We never publish your name, your email, or
+      your roster anywhere — the public ledger names NFL players, never subscribers.</li>
+      <li><b>Sharing:</b> we don't sell your data or give it to advertisers. Payment runs
+      through Stripe and email delivery through our sending provider; each has its own
+      terms and privacy policy.</li>
       <li><b>How long:</b> we keep your entry while you're subscribed and for a short period
       afterwards for accounting, then delete it. Ask us and we'll delete it sooner.</li>
       <li><b>Deletion and access:</b> email us to see or delete what we hold. Cancelling stops
@@ -227,8 +231,8 @@
          deletion requests. -->
     <p>Beat Your League is an independent solo project. Contact:
     <b>[contact address — added before launch]</b> — for questions, refunds, deletion
-    requests, or anything that looks wrong on the ledger. Subscription and billing questions
-    can also go through Substack, which handles payments and cancellation.</p>
+    requests, or anything that looks wrong on the ledger. Billing itself is handled by
+    Stripe, and cancellation is self-serve from your billing page (section 4).</p>
 
   </main>
   <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language

@@ -573,7 +573,7 @@ def _forward_lines() -> list[str]:
 
 
 def text_summary(report: Mapping[str, Any]) -> str:
-    """Plain-text digest of the report — the email/Substack body seed."""
+    """Plain-text digest of the report — the text half of every email."""
     meta = report["meta"]
     # A solo report has no opponent and never will (PLAN §0). Both renderers
     # already branch on this; the plain-text half did not, and it is the half
@@ -653,7 +653,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
               source_line(meta),
               *_forward_lines(),
               "",
-              "DONE WITH THIS? Cancel it yourself in your Substack account — about "
+              "DONE WITH THIS? Cancel it yourself from your own billing page — about "
               "fifteen seconds, and the billing stops immediately. Note that "
               "unsubscribing from emails alone does NOT stop a subscription; cancel "
               "there if you want the charges to end. The reports stop on their own "
