@@ -447,3 +447,89 @@ def test_a_directory_outage_does_not_reject_every_seat(monkeypatch) -> None:
     rows, problems = intake.seats_to_rows(
         [_seat()], {"commish@example.com"}, set(PLAYERS))
     assert len(rows) == 1, problems
+
+
+# --------------------------------------------------------------------- #
+# the welcome email rides the sweep
+# --------------------------------------------------------------------- #
+
+def _capture_sends(monkeypatch, tmp_path):
+    """A real provider double: send_all runs for real against a tmp sent log,
+    so idempotency is the actual mechanism under test, not a mock of one."""
+    import run.delivery as delivery
+
+    sent: list = []
+
+    class _Provider:
+        name = "test"
+
+        def send(self, message, sender, reply_to):
+            sent.append(message)
+            return "mid-1"
+
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")   # explicit, not implicit-dry
+    monkeypatch.setattr(intake, "build_provider", lambda _n=None: _Provider())
+    real_send_all = delivery.send_all
+    monkeypatch.setattr(
+        intake, "send_all",
+        lambda messages, provider: real_send_all(
+            messages, provider=provider, sent_log=tmp_path / "sent.jsonl"))
+    return sent
+
+
+def test_a_new_subscriber_is_welcomed_once_and_only_once(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """The acknowledgment is legally owed on purchase — and owed exactly once.
+    Re-running the sweep (which happens weekly forever) must not re-send it."""
+    sent = _capture_sends(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    assert _run(tmp_path) == 0
+    assert len(sent) == 1
+    assert sent[0].to == "fan@example.com"
+    assert "You're in" in sent[0].subject
+    assert "@" not in sent[0].key
+
+    _run(tmp_path)                                    # the next weekly sweep
+    assert len(sent) == 1, "a re-run welcomed the same subscriber twice"
+
+
+def test_a_pass_payer_is_welcomed_with_pass_terms_not_season_terms(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """The registry flattens a pass payer to a season row on purpose; the
+    welcome must be built from the SIGNUP, whose plan is the purchase that
+    actually happened. $39 renewal terms on a $99 purchase is a wrong legal
+    disclosure."""
+    sent = _capture_sends(monkeypatch, tmp_path)
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _run(tmp_path)
+    assert len(sent) == 1
+    assert "$99 USD" in sent[0].text
+    assert "$39 USD" not in sent[0].text
+
+
+def test_a_seat_is_welcomed_without_billing_terms(tmp_path, stripe, directory,
+                                                  monkeypatch) -> None:
+    sent = _capture_sends(monkeypatch, tmp_path)
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _seats(monkeypatch, _seat())
+    _run(tmp_path)
+    by_to = {m.to: m for m in sent}
+    assert set(by_to) == {"commish@example.com", "member@example.com"}
+    seat_msg = by_to["member@example.com"]
+    assert "Nothing bills you" in seat_msg.text
+    assert "$" not in seat_msg.text
+
+
+def test_with_no_provider_welcomes_are_reported_pending_not_sent(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """Unlike the Tuesday send, an unconfigured welcome must NOT fail the run —
+    the registry is intake's contract — but it must say what is pending, and
+    record nothing, so the first configured run sends them all exactly once."""
+    monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+    stripe["sessions"] = [_session(REF)]
+    assert _run(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "Welcomes: 1 pending" in out
+    assert "none were sent and none were recorded" in out

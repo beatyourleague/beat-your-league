@@ -604,6 +604,24 @@ the field" superlative about 4for4) — the page may only say what was checked. 
 join the `_DEV_SPEAK` and no-betting parametrized sweeps by hand; the personal-contact and
 social-meta guards glob the whole directory and caught it automatically.
 
+**The welcome email (`render/welcome.py`, Aug 23 2026) — the acknowledgment a subscription
+legally owes its buyer.** California's ARL requires a retainable post-purchase notice carrying the
+renewal terms and the cancel method; Stripe's receipt states the charge but not our cancel route.
+Plan-aware because the disclosures differ by purchase: season ($39/yr renewal), monthly ($12.99
+until season's end, no annual clause), League Pass payer ($99/yr, refund one per league, seats
+note), and SEAT — no billing terms at all, because renewal language for money never spent reads as
+a charge waiting to happen. **Built from the SIGNUP, never the registry row**: the registry
+deliberately flattens a pass payer to a season row, and $39 renewal terms on a $99 purchase is a
+wrong legal disclosure (mutation-tested). Rides `run/intake.py` through the same idempotent
+delivery layer as reports (`welcome-{season}-{slug}`, no address in the key — sent.jsonl is
+committed); a failed send retries next run because only successes are logged; unconfigured email
+reports "N pending" without failing, since the registry is intake's contract. `daily.yml` sweeps
+every day at 14:00 UTC so the acknowledgment and the BLOCKED-signup alarm arrive within a day, not
+six; Tuesday's intake step carries the same env as belt over braces. Prices are constants tied to
+the live pages by test. NOTE the cancel destination is env-driven: `BILLING_PORTAL_URL` (Stripe
+customer portal — owner enables in Dashboard → Settings → Billing) with `SITE_URL/legal.html#cancel`
+as the fallback; with neither set the email still names the legal page in prose, never a dead link.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's

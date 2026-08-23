@@ -55,6 +55,8 @@ from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
 from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
                          load_rosters)
+from render.welcome import welcome_message
+from run.delivery import DRY_PROVIDER, build_provider, send_all
 from run.solo import CACHE_DIR, SoloError, load_week_data
 from run.subscriptions import SubscriptionError
 
@@ -444,6 +446,49 @@ def write_registry(rows: list[dict], path: Path) -> None:
 
 
 # --------------------------------------------------------------------- #
+# the welcome email
+# --------------------------------------------------------------------- #
+
+def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
+                   season: str) -> None:
+    """One acknowledgment per subscription, idempotent forever.
+
+    Built from the SIGNUPS rather than the registry rows, because the registry
+    deliberately flattens a League Pass payer to a season row — and the renewal
+    terms in the email must describe the purchase that actually happened. A
+    $99 payer welcomed with $39 renewal terms is a wrong legal disclosure.
+    """
+    import hashlib
+
+    messages = [welcome_message(s.email, s.plan, s.slug, season)
+                for s in servable]
+    for row in seat_rows:
+        slug = hashlib.sha256(row["ref"].encode("utf-8")).hexdigest()[:10]
+        messages.append(welcome_message(row["email"], "seat", slug, season))
+    if not messages:
+        return
+
+    provider = build_provider(None)
+    implicit_dry = (provider.name == DRY_PROVIDER
+                    and not os.environ.get("EMAIL_PROVIDER"))
+    if implicit_dry:
+        print(f"Welcomes: {len(messages)} pending — EMAIL_PROVIDER is not set, "
+              f"so none were sent and none were recorded. They send on the "
+              f"first configured run; nobody is welcomed twice.")
+        return
+    sends = send_all(messages, provider=provider)
+    delivered = [r for r in sends if r.ok and not r.skipped]
+    failures = [r for r in sends if not r.ok]
+    skipped = len(sends) - len(delivered) - len(failures)
+    print(f"Welcomes via {provider.name}: {len(delivered)} sent, "
+          f"{skipped} already sent, {len(failures)} failed")
+    for result in failures:
+        # Retries next run: only successes reach the sent log.
+        print(f"    WELCOME FAILED {result.message.key}: {result.detail}",
+              file=sys.stderr)
+
+
+# --------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------- #
 
@@ -504,9 +549,11 @@ def main(argv: list[str] | None = None) -> int:
     # a ref that resolved in the browser resolves here — unless it was hand-made.
     blocked: dict[tuple[str, str], str] = {}
     known: set[str] = set()
+    known_season = str(datetime.now(timezone.utc).year)
     try:
         data = load_week_data(args.cache)
         known = {player.player_id for player in data.directory.players}
+        known_season = str(getattr(data, "season", known_season))
         blocked = unservable(projected, known)
     except SoloError as exc:
         # Not fatal: refusing to write a registry because a data release is
@@ -596,6 +643,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if blocked else 0
 
     write_registry(rows, registry_path)
+
+    # The welcome / acknowledgment email (render/welcome.py). Legally owed:
+    # renewal terms and the cancel method, in a form the buyer keeps. Sent
+    # through the same idempotent delivery layer as the reports, so a re-run
+    # can never welcome anyone twice, and a failed send retries next run
+    # because only successes are logged. With no provider configured this
+    # reports what is pending rather than failing — the registry is this run's
+    # contract; the weekly and daily crons set EMAIL_PROVIDER.
+    _send_welcomes(servable, seat_rows, known_season)
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered

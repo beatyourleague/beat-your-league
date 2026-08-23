@@ -1,0 +1,116 @@
+# Daily signup sweep. Two jobs the weekly cadence is too slow for:
+#
+#   1. The welcome email. It is the legally-owed acknowledgment (renewal terms
+#      + how to cancel), and a buyer who purchases Wednesday must not wait six
+#      days for it. Idempotent through data/processed/sent.jsonl, so the
+#      Tuesday run re-attempting the same welcomes sends nothing twice.
+#   2. The BLOCKED alarm. A paid roster naming a player the directory does not
+#      have is somebody paying for nothing; discovering that within a day
+#      instead of a week is the difference between a quick fix and a refund.
+#
+# No reports are built here and nothing is mailed except welcomes. The name is
+# load-bearing the same way monday-receipts is NOT: pages.yml does not watch
+# this workflow, because it never touches site/.
+
+name: daily-intake
+
+on:
+  schedule:
+    # 14:00 UTC daily — mid-morning US either side of the DST change.
+    - cron: "0 14 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # persist sent.jsonl — losing it double-welcomes everyone
+  issues: write
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      - name: Restore subscriber registry
+        uses: actions/cache/restore@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+          restore-keys: registry-
+      - name: Restore nflverse cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nflverse
+          key: nflverse-${{ github.run_id }}
+          restore-keys: nflverse-
+      # Exit 2 = STRIPE_API_KEY unset, the expected state until checkout opens;
+      # exit 1 = a paid signup is blocked or Stripe unreadable. Same contract
+      # as the weekly cron, for the same reason: a bug issue filed every day
+      # for an unopened checkout teaches you to ignore bug issues.
+      - name: Sweep signups and send welcomes
+        id: intake
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+        run: |
+          set +e
+          .venv/bin/python -m run.intake
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Save subscriber registry
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+      - name: Save nflverse cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw/nflverse
+          key: nflverse-${{ github.run_id }}
+      # sent.jsonl is the only record of who was welcomed. Losing it means
+      # double-welcoming everyone; merge=union (.gitattributes) keeps the
+      # push race with the other crons a concatenation, not a conflict.
+      - name: Persist the send log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Daily sweep: welcome send log"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push
+      - name: Fail the run if a paid signup could not be served
+        if: always() && steps.intake.outputs.code == '1'
+        run: |
+          echo "run.intake exited 1 — a paid signup is blocked, or Stripe could"
+          echo "not be read. See the sweep step's log."
+          exit 1
+      - name: Raise an issue if the sweep failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Daily signup sweep failed: $(date -u +%Y-%m-%d)" \
+            --body "A paid signup may be blocked, or Stripe was unreadable.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label bug || true

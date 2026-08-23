@@ -196,3 +196,51 @@ def test_ci_runs_the_test_suite() -> None:
     assert "node" in _text("test.yml").lower(), (
         "without node, test_intake.py skips — and that is the file where "
         "roster.js is actually run against the Python that decodes it")
+
+
+# --------------------------------------------------------------------- #
+# the daily sweep
+# --------------------------------------------------------------------- #
+
+def test_the_daily_sweep_runs_intake_and_only_intake() -> None:
+    """Its two jobs are the welcome email and the blocked-signup alarm, both of
+    which the weekly cadence serves six days late. It must never build or send
+    reports — that is Tuesday's job, with Tuesday's guards."""
+    commands = _commands("daily.yml")
+    assert "run.intake" in commands
+    for heavy in ("run.tuesday", "run.monday", "run.batch", "run.week",
+                  "render.player_index"):
+        assert heavy not in commands, f"the daily sweep runs {heavy}"
+
+
+def test_the_daily_sweep_persists_the_send_log() -> None:
+    """sent.jsonl is the only record of who was welcomed; losing it
+    double-welcomes everyone on the next run."""
+    persist = [s for s in _steps("daily.yml")
+               if "Persist" in str(s.get("name", ""))]
+    assert persist, "the daily sweep never persists sent.jsonl"
+    assert "sent.jsonl" in str(persist[0]["run"])
+    assert "git push" in str(persist[0]["run"])
+
+
+def test_the_daily_sweep_carries_the_welcome_env() -> None:
+    """Without EMAIL_PROVIDER the sweep reports welcomes as pending forever —
+    a legally-owed acknowledgment that silently never sends."""
+    sweep = next(s for s in _steps("daily.yml") if s.get("id") == "intake")
+    env = sweep.get("env") or {}
+    for needed in ("STRIPE_API_KEY", "EMAIL_PROVIDER", "SITE_URL",
+                   "BILLING_PORTAL_URL"):
+        assert needed in env, f"daily sweep is missing {needed}"
+    # And the same not-configured-is-not-a-failure contract as Tuesday.
+    guard = [s for s in _steps("daily.yml")
+             if "steps.intake.outputs.code == '1'" in str(s.get("if", ""))]
+    assert guard, "a blocked paid signup would not fail the daily sweep"
+
+
+def test_the_weekly_intake_step_can_send_welcomes_too() -> None:
+    """Belt over the daily braces: if the daily cron is ever disabled, Tuesday
+    still delivers the acknowledgment (idempotently)."""
+    steps = _steps("weekly.yml")
+    intake = next(s for s in steps if s.get("id") == "intake")
+    env = intake.get("env") or {}
+    assert "EMAIL_PROVIDER" in env and "BILLING_PORTAL_URL" in env
