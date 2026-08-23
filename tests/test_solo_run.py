@@ -101,6 +101,12 @@ def _cache(tmp_path: Path, *, weeks: int = 5, injuries: bool = True,
         players.append({"gsis_id": _pid(i), "display_name": f"Extra {i}",
                         "position": position, "last_season": str(int(season) - 1),
                         "latest_team": teams[i % len(teams)]})
+    # One kicker, appended (never inserted — the cycling above is index-based
+    # and an insertion would shift every extra's position). Exists so a true
+    # T1 roster (K and DEF slots) can be specced against this fixture.
+    players.append({"gsis_id": _pid(60), "display_name": "Kai Bootman",
+                    "position": "K", "last_season": str(int(season) - 1),
+                    "latest_team": "KC"})
     _write(cache / "players.csv", players,
            ["gsis_id", "display_name", "position", "last_season", "latest_team"])
     _write(cache / "teams_colors_logos.csv",
@@ -754,3 +760,85 @@ def test_a_league_report_keeps_the_sleeper_disclaimer() -> None:
     assert source_line({"solo": True}) != SLEEPER_LINE
     assert source_line({}) == SLEEPER_LINE
     assert source_line({"solo": False}) == SLEEPER_LINE
+
+
+# --------------------------------------------------------------------- #
+# the early-season seed (reports/early-season-method.md, Grade B)
+# --------------------------------------------------------------------- #
+
+T1_SLOTS = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
+
+
+def _t1_spec(scoring: str = "ppr") -> RosterSpec:
+    return RosterSpec(
+        player_ids=tuple(_pid(i) for i in range(1, 9)) + (_pid(60), "DEF-KC"),
+        slots=T1_SLOTS, scoring=scoring, label="Your Team")
+
+
+def test_week_two_publishes_seeded_calls_under_the_measured_scope(tmp_path) -> None:
+    """The arm's Grade-B decision, wired: a PPR/12/T1 roster in week 2 gets
+    confidences seeded from last season — with the row-level disclosure on
+    every seeded call and the section-level line on the lineup, because the
+    seed moves every number there, not only the calls."""
+    from render.email import render_email
+    from render.report import SEEDED_SECTION_LINE, TEMPLATE_PATH, render
+
+    cache = _cache(tmp_path)
+    report = solo.report_for(_t1_spec(), solo.load_week_data(cache, SEASON, 2,
+                                                             session=OFFLINE),
+                             cache_dir=cache)
+    assert report["meta"].get("seeded") is True
+    called = [s for s in report["lineup"] if s.get("confidence") is not None]
+    assert called, "the measured scope produced no seeded call in week 2"
+    for slot in called:
+        texts = [f["text"] for f in (slot.get("flags") or [])]
+        assert any("last season counted in" in t for t in texts), \
+            f"seeded call at {slot['slot']} hides its seeding: {texts}"
+    html_out = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
+    email_out = render_email(report)
+    for surface, name in ((html_out, "browser"), (email_out, "email")):
+        assert SEEDED_SECTION_LINE.split(";")[0] in surface, \
+            f"the {name} lineup section carries no seeded line"
+
+
+def test_outside_the_measured_scope_week_two_stays_bare(tmp_path) -> None:
+    """Half-PPR, other sizes and other lineup shapes were not graded, so they
+    ship no week-2 number — the parent's per-preset scoping."""
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, 2, session=OFFLINE)
+    for spec, size in ((_t1_spec("half_ppr"), 12), (_t1_spec(), 10),
+                       (_spec(), 12)):
+        report = solo.report_for(spec, data, league_size=size, cache_dir=cache)
+        assert not report["meta"].get("seeded")
+        assert all(s.get("confidence") is None for s in report["lineup"]), \
+            "an unmeasured setup published a week-2 number"
+
+
+def test_week_four_reports_are_untouched_by_the_seed_wiring(tmp_path) -> None:
+    """§6.3: seeding may not leak outside weeks 2-3. The measured scope's
+    report in week 4+ carries no seeded meta, no seeded flags, and no seeded
+    games on any projection-bearing row."""
+    cache = _cache(tmp_path)
+    report = solo.report_for(_t1_spec(), solo.load_week_data(cache, SEASON, 4,
+                                                             session=OFFLINE),
+                             cache_dir=cache)
+    assert not report["meta"].get("seeded")
+    for slot in report["lineup"]:
+        texts = [f["text"] for f in (slot.get("flags") or [])]
+        assert not any("last season" in t for t in texts)
+
+
+def test_the_week_one_ramp_names_next_week_for_the_measured_scope(tmp_path) -> None:
+    """Week 1 still prints no number under any model (no W-1 report). But its
+    checklist may not promise Week 4 to a subscriber whose numbers start next
+    Tuesday — and may not promise next week to one whose setup was never
+    graded."""
+    cache = _cache(tmp_path, weeks=0, injuries=False)
+    data = solo.load_week_data(cache, SEASON, 1, session=OFFLINE)
+    measured = solo.report_for(_t1_spec(), data, cache_dir=cache)
+    actions = " ".join(item["action"] for item in measured["checklist"])
+    assert "start next week — leaning on last season at first" in actions
+    assert "Week 4" not in actions
+    other = solo.report_for(_spec(), data, cache_dir=cache)
+    actions = " ".join(item["action"] for item in other["checklist"])
+    assert "starts in Week 4" in actions

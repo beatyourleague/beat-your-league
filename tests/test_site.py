@@ -859,14 +859,19 @@ REPORTS = SITE.parent / "reports"
 @pytest.mark.parametrize("page,source", [
     (PROJECTIONS, "projections-eval.md"),
     (NO_CALL, "gate-backtest.md"),
-    (CONFIDENCE, "nflverse-backtest.md"),
+    # Two sources: the parent grading and the early-season arm — the page
+    # translates both, and a figure must exist in at least one of them.
+    (CONFIDENCE, ("nflverse-backtest.md", "early-season-backtest.md")),
 ])
 def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
     """These pages are hand-written translations of operator reports into buyer
     language, which is exactly the seam where numbers drift: the landing page
     once kept citing a count the product had stopped producing. Every decimal
     and percentage on the page must appear in the report it translates."""
-    report = (REPORTS / source).read_text(encoding="utf-8")
+    sources = (source,) if isinstance(source, str) else source
+    report = "\n".join((REPORTS / one).read_text(encoding="utf-8")
+                       for one in sources)
+    source = " + ".join(sources)
     body = re.sub(r"<style\b.*?</style>|<script\b.*?</script>", "", page,
                   flags=re.S | re.I)
     text = re.sub(r"<[^>]+>", " ", body)
@@ -875,7 +880,7 @@ def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> 
     text = text.replace("CC-BY-4.0", "")
     for figure in sorted(set(re.findall(r"\d+\.\d+", text))):
         assert figure in report, (
-            f"{source[:-3]} page cites {figure}, which is not in the report it "
+            f"{source} page cites {figure}, which is not in the report it "
             f"translates — regenerate or fix the page")
 
 
@@ -936,6 +941,15 @@ def test_the_confidence_page_leads_with_what_it_may_not_claim() -> None:
             "the two studies measure different questions and may not sit side by side"
     assert 'href="ledger/index.html"' in CONFIDENCE
     assert "join/index.html" in CONFIDENCE, "proof page is a dead end"
+    # The early-season arm's section keeps its own load-bearing caveats: the
+    # failing band beside the passing count, the measured scope, the row-level
+    # disclosure promise, and week 1 staying numberless for everyone.
+    assert re.search(r"four of five judgeable bands passed", text)
+    assert re.search(r"failed high again", text), \
+        "the arm's failure direction was laundered off the page"
+    assert re.search(r"full PPR, 12 teams, the standard lineup", text)
+    assert re.search(r"last season\s+counted in", text)
+    assert re.search(r"week 1 stays numberless", text, re.I)
 
 
 def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:

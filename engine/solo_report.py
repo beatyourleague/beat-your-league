@@ -85,6 +85,7 @@ def build_solo_report(
     raw_dir: Path,
     usage_lookup=None,
     prior_form: Mapping[str, float] | None = None,
+    early_calls: bool = False,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data."""
     if not re.fullmatch(r"\d{4}", str(season.season)):
@@ -184,7 +185,8 @@ def build_solo_report(
         # worse, "nothing to change", which claims agreement with a lineup we
         # cannot see.
         "checklist": checklist(picks, None, [], players, stakes=None,
-                               availability=availability),
+                               availability=availability,
+                               early_calls=early_calls),
         "matchup": _matchup(spec, my_range, team_range_gate(picks)),
         "lineup": [_slot(p, players, usage_lookup) for p in picks],
         "regret": regret_call(picks, players),

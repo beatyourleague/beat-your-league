@@ -35,6 +35,7 @@ from render.report import (
     SECTION_MARK,
     source_line,
     _forward_line,
+    SEEDED_SECTION_LINE,
     UPDATE_BODY,
     UPDATE_HEAD,
     update_line,
@@ -772,7 +773,9 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
                      f'{esc(no_call_explainer(" · ".join(sorted(gates))))}')
     table = (f'<table role="presentation" width="100%" cellpadding="0" '
              f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
-    return _sec(3, "The Lineup", table + note)
+    seeded_note = (_note(esc(SEEDED_SECTION_LINE))
+                   if report["meta"].get("seeded") else "")
+    return _sec(3, "The Lineup", table + seeded_note + note)
 
 
 def _compose(report: Mapping[str, Any]) -> list[str]:

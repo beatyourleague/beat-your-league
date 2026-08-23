@@ -578,6 +578,28 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The early-season arm (Aug 23 2026) — preregistered, reviewed, frozen, run: Grade B, and
+weeks 2–3 ship numbers.** `reports/early-season-method.md` (frozen by commit before the first
+run) admits a player's own prior-season record at half weight (λ=0.5; sensitivity arms 0.25/1.0
+report but never substitute) for weeks 2–3 only — **structurally**: `SEEDED_WEEKS` lives inside
+`project()`, so a seeded model still answers week 1 and week 4+ exactly as the frozen model
+(parent 2024 reproduces call-for-call, 956 calls, identical hash). The draft preregistration was
+adversarially reviewed against the code BEFORE freezing (4 lenses, 26 findings — a week-1 leak
+through `project()`'s None-check, a doc/code formula mismatch, the harness gate reading a missing
+W−1 report as league-wide health, a "verified" row count the data contradicted, two tunable
+knobs, a reachable hollow Grade B) — all fixed pre-freeze, which is the only cheap moment.
+Result (`reports/early-season-backtest.md`): 1,692 calls, weeks 2–3 of 2014–2024, hit rate
+61.2%, ECE 2.5%, **4 of 5 judgeable bands pass** under a 15pp interval-width clause that makes a
+hollow pass impossible; the failing band fails HIGH again (stated 73.2, landed 84.5). Frozen
+decision: **the seeded model ships for weeks 2–3 under the measured scope only** (PPR, 12
+teams, template T1 — `seeded_scope` in `run/solo.py`); every seeded call carries "last season
+counted in" on its row, the lineup section carries one seeded line (`SEEDED_SECTION_LINE`),
+rookies stay gated (m=0), and week 1 stays numberless for everyone (no W−0 report exists). The
+ramp copy moved with it: landing FAQ/JSON-LD, ledger page, week-1 checklist (which now names
+next week for measured setups and Week 4 for the rest), and `site/confidence.html` gained the
+arm's section with a two-source fidelity test. The banned words stay banned at Grade B; figures
+are stated as facts beside the failures, never as claims.
+
 **Self-serve roster updates (`run/updates.py`, Aug 23 2026) — the audit's #1 product gap.**
 Rosters churn from the week-1 waiver run, so by the SECOND report — inside the refund window —
 a file built from the signup roster recommends dropped players and is blind to the pickups.

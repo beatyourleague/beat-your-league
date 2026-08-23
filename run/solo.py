@@ -418,6 +418,25 @@ def _availability(cache_dir: Path, season: str, week: int,
 # one subscriber
 # --------------------------------------------------------------------- #
 
+# The early-season regime (reports/early-season-method.md §5, Grade B). The
+# arm measured PPR, 12 teams, template T1 across weeks 2-3 of 2014-2024; the
+# product seeds ONLY that. Other presets, sizes and lineup shapes ship no
+# week-2-3 number until their own arms run.
+EARLY_SEASON_LAMBDA = 0.5
+MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
+
+
+def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:
+    """May this report use the prior-season seed? Every clause is the frozen
+    method's, and the model's own SEEDED_WEEKS restriction backstops the week
+    clause structurally."""
+    from engine.projection import SEEDED_WEEKS
+    return (week in SEEDED_WEEKS
+            and spec.scoring == "ppr"
+            and int(league_size) == 12
+            and tuple(spec.slots) == MEASURED_TEMPLATE)
+
+
 def spec_from_ref(ref: RosterRef, label: str = "Your Team") -> RosterSpec:
     return RosterSpec(player_ids=tuple(ref.player_ids), slots=tuple(ref.slots),
                       scoring=ref.scoring, label=label)
@@ -445,7 +464,20 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     season: Season = build_season(spec, data.weekly, data.directory,
                                   data.season, data.week,
                                   league_size=league_size, field=field)
-    model = ProjectionModel(season, data.players)
+    # The early-season seed (reports/early-season-method.md, Grade B): in
+    # weeks 2-3, under exactly the settings the arm measured, a player's own
+    # prior-season record enters at half weight so a call can exist before
+    # three real games do. The model itself refuses to seed any other week,
+    # so this wiring can only ever narrow the regime, never widen it.
+    seeded = seeded_scope(spec, league_size, data.week)
+    if seeded:
+        from engine.nflverse_backtest import prior_self_observations
+        model = ProjectionModel(season, data.players,
+                                prior_self=prior_self_observations(
+                                    data.prior, spec.rule),
+                                prior_self_weight=EARLY_SEASON_LAMBDA)
+    else:
+        model = ProjectionModel(season, data.players)
 
     # Last season's per-game scoring, under THIS subscriber's rule. Used for two
     # things in week 1 and nothing else: which of two eligible players takes a
@@ -461,9 +493,17 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # reader no way to check why this player is starting over that one.
         return _prior_form_line(player_id, data.prior, spec.rule)
 
-    return build_solo_report(spec, season, data.players, model,
-                             data.availability, data.week, Path(cache_dir),
-                             usage_lookup=usage_lookup, prior_form=prior_form)
+    report = build_solo_report(spec, season, data.players, model,
+                               data.availability, data.week, Path(cache_dir),
+                               usage_lookup=usage_lookup, prior_form=prior_form,
+                               early_calls=seeded_scope(spec, league_size,
+                                                        data.week + 1))
+    if seeded:
+        # §5's section-level disclosure: the seed moves every number in the
+        # lineup (seating, projections, edges), not only the calls that carry
+        # a row-level flag, so the section says so once.
+        report["meta"]["seeded"] = True
+    return report
 
 
 def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],

@@ -152,6 +152,15 @@ def no_call_explainer(listed: str) -> str:
             f"public record and gets graded.")
 
 
+# §5 of the early-season method (Grade B): the seed moves every number in the
+# lineup — seating, projections, edges — not only the calls that carry a
+# row-level flag, so the section says so once, in the buyer's words.
+SEEDED_SECTION_LINE = ("This early in the season, last season is counted into "
+                       "every number here; each call that leans on it says so "
+                       "on its row. Three weeks in, the numbers stand on this "
+                       "season alone.")
+
+
 def short_gate(gate: str | None, slot: str) -> str:
     """The per-row reason a slot carries no number, short enough for the call
     column. The note under the table used to lump every reason into one
@@ -582,9 +591,11 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
                      else f'{NO_CALL.capitalize()} on any slot this week:')
         note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
                 f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
+    seeded_note = (f'<div class="withheld">{esc(SEEDED_SECTION_LINE)}</div>'
+                   if report["meta"].get("seeded") else "")
     return _section("The Lineup", 3,
                     f'<table class="tape">{LINEUP_COLS}{head}'
-                    f'{"".join(rows)}</table>{note}')
+                    f'{"".join(rows)}</table>{seeded_note}{note}')
 
 
 def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:

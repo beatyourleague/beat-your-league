@@ -247,9 +247,21 @@ preregistration forbids).
 
 ## Per season
 
+Method §1 stated an expectation of roughly 1,000–1,500 calls before the run;
+the arm produced {summary.graded}, slightly above it — the gates took less
+than the sizing allowed for, not more.
+
 | Season | Calls |
 | --- | ---: |
 {seasons_table}
+## The bias this arm carries (§7)
+
+The recommended side of every call is the argmax over the seed — the same
+statistic that built the rosters — and its noise persists across both graded
+weeks rather than regressing as real games accumulate. The winner's-curse
+inflation the parent describes does not average out between weeks 2 and 3.
+This disclosure travels with the result at every grade.
+
 ## Scope, stated
 
 Week 1 is out of reach for any model: there is no week-0 injury report, so the

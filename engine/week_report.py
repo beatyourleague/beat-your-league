@@ -1050,6 +1050,7 @@ def checklist(
     players: PlayerIndex,
     stakes: Mapping[str, Any] | None = None,
     availability: WeekAvailability | None = None,
+    early_calls: bool = False,
 ) -> list[dict[str, str]]:
     seated = [p for p in my_picks if p.player_id is not None]
     items: list[dict[str, str]] = []
@@ -1071,9 +1072,14 @@ def checklist(
                           "this season, so there is nothing to project from. "
                           "Your slots are filled in last season's scoring order, "
                           "shown on each line. That's a record of what happened, "
-                          "not a forecast for this week. Projections start next "
-                          "week; the number on each call starts in Week 4, once "
-                          "both players in it have three games of record.",
+                          "not a forecast for this week. "
+                          + ("Projections and the number on each call start "
+                             "next week — leaning on last season at first, and "
+                             "saying so on each row."
+                             if early_calls else
+                             "Projections start next week; the number on each "
+                             "call starts in Week 4, once both players in it "
+                             "have three games of record."),
                 "deadline": "calls start once there is a record",
                 "urgency": "done",
             })
