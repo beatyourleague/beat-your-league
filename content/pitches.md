@@ -18,14 +18,13 @@ are a channel.
 
 ## The template
 
+*(The product sentence below is deliberately ONE unwrapped line — it gets copy-pasted, and a hard-wrapped quote pastes with broken line breaks. The build fails if it drifts from PLAN §1.)*
+
 > Subject: A one-line addition for [their page title]
 >
 > Hey [name] — I make a small fantasy football tool and I'll keep this to four sentences.
 >
-> Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails
-> one decided file — the lineup it would set for your exact roster under your league's
-> scoring, with the odds on every call worth making and the week's coin flip decided — and it
-> publishes its own accuracy test, including the buckets it failed.
+> Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails one decided file — the lineup it would set for your exact roster under your league's scoring, with the odds on every call worth making and the week's coin flip decided — and it publishes its own accuracy test, including the buckets it failed.
 >
 > Two things you can check in under a minute: our full backtest with the failing buckets left
 > in ([site]/backtest.html), and the only published answer I know of to "how accurate are
