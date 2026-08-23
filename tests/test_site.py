@@ -715,6 +715,44 @@ def test_compare_tables_scroll_on_a_phone() -> None:
 
 
 # --------------------------------------------------------------------- #
+# the entity sentence is one string, everywhere, forever
+# --------------------------------------------------------------------- #
+
+def test_the_entity_sentence_is_identical_everywhere() -> None:
+    """PLAN §1's whole mechanism: identical phrasing across independent surfaces
+    is the co-occurrence signal that forms an entity, and varying it destroys
+    the only channel available. So the sentence is one string — PLAN.md is the
+    source of truth, and every surface that carries it must match verbatim.
+    The first version of the sentence described the retired product, which is
+    why this is a test and not a convention."""
+    plan = (SITE.parent / "PLAN.md").read_text(encoding="utf-8")
+    match = re.search(r"^> (Beat Your League is a weekly .+?failed\.)$", plan,
+                      re.S | re.M)
+    assert match, "PLAN §1 lost the blockquoted entity sentence"
+    sentence = re.sub(r"\s+", " ", match.group(1).replace("> ", ""))
+
+    surfaces = {
+        "landing meta description":
+            re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1),
+        "landing og:description":
+            re.search(r'property="og:description" content="([^"]+)"', LANDING).group(1),
+        "landing JSON-LD":
+            re.search(r'"description": "([^"]+)"', LANDING).group(1),
+    }
+    pitches = SITE.parent / "content" / "pitches.md"
+    if pitches.is_file():
+        text = re.sub(r"\s+", " ", pitches.read_text(encoding="utf-8"))
+        assert sentence in text, "the pitch template's sentence drifted from PLAN §1"
+    for name, found in surfaces.items():
+        assert re.sub(r"\s+", " ", found) == sentence, (
+            f"{name} differs from PLAN §1's entity sentence — the co-occurrence "
+            f"signal only works verbatim")
+    # And the sentence may only promise what the product ships.
+    for dead in ("rival", "opponent", "waiver", "Sleeper league"):
+        assert dead not in sentence, f"the entity sentence promises {dead!r}"
+
+
+# --------------------------------------------------------------------- #
 # structured data stays true to the page it annotates
 # --------------------------------------------------------------------- #
 

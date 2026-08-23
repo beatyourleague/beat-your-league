@@ -185,13 +185,17 @@ inclusion in a roundup or an AI answer is one sentence a stranger can copy.
 pitch email, README, directory submission). Identical phrasing across independent domains is the
 co-occurrence signal that forms an entity; varying it destroys the only mechanism available:
 
-> Beat Your League is a weekly start/sit and waiver tool for Sleeper leagues: every Tuesday it
-> emails one decided file — your nine starters against your opponent's nine, what a waiver claim
-> actually costs in your league, and the week's coin-flip call — and it publishes its own accuracy
-> test, including the buckets it failed.
+> Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails one decided file — the lineup it would set for your exact roster under your league's scoring, with the odds on every call worth making and the week's coin flip decided — and it publishes its own accuracy test, including the buckets it failed.
 
-Directory listing name: **Beat Your League — weekly Sleeper league report**. File under the
-conventional category (*fantasy football tools / league-sync tools*).
+*(Rewritten Aug 23 2026: the original sentence described the Sleeper product — opponent's nine,
+waiver costs, "for Sleeper leagues" — all features §0's rebuild removed. Pasting THAT across
+twelve independent domains would have durably co-occurred the wrong product, in the one place
+stale claims can never be recalled. The published-test differentiator survives unchanged; the
+category widens from Sleeper-only to app-agnostic, which is a positioning gain, not a loss.
+`test_the_entity_sentence_is_identical_everywhere` now enforces the verbatim rule in code.)*
+
+Directory listing name: **Beat Your League — weekly fantasy football report**. File under the
+conventional category (*fantasy football tools*).
 
 **On the "AI" label — decided, not open.** Accept it on third-party surfaces (roundups, directory
 listings, meta description); the highest-value listicle in the vertical is titled "Fantasy Football
