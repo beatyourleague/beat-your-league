@@ -210,7 +210,18 @@ def availability_for(season: str, week: int, roster: Sequence[str],
     omitted, which classifies him UNKNOWN and gates the call. Fail closed.
     """
     report = injuries.get(week - 1)
-    designations = getattr(report, "by_gsis", {}) if report is not None else {}
+    if report is None or not getattr(report, "teams", None):
+        # C3's fail-closed branch, mirrored from the product (run/solo.py):
+        # a missing W-1 report is "we have not looked", never "nobody is
+        # hurt". An empty statuses map classifies everyone UNKNOWN and gates
+        # every call in the week — the conservative direction, and the only
+        # honest one. Unreachable in the frozen 2014-2024 window (every W-1
+        # report exists, asserted by the arm's runner) so the parent's
+        # outputs cannot move; pinned by the §6.4 identity check.
+        return WeekAvailability(season=str(season), week=week,
+                                snapshot_as_of=None, statuses=None,
+                                bye_teams=byes)
+    designations = report.by_gsis
     statuses: dict[str, dict[str, object]] = {}
     for player_id in roster:
         if player_id.startswith(f"{DEFENSE}-"):
@@ -242,12 +253,33 @@ def _team_before(player_id: str, week: int,
     return None
 
 
+def prior_self_observations(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
+                            rule: ScoringRule) -> dict[str, list[float]]:
+    """Each player's own prior-season per-appearance points, under this rule.
+
+    The early-season arm's seed (reports/early-season-method.md §2). Reads the
+    SAME S-1 rows the universe is built from — an nflverse row exists only for
+    a player who took the field, so every row is an appearance — and nothing
+    from season S."""
+    out: dict[str, list[float]] = defaultdict(list)
+    for week in sorted(prior):
+        for player_id, row in prior[week].items():
+            if (row.get("position") or "").strip().upper() in FANTASY_POSITIONS:
+                out[player_id].append(score(row, rule))
+    return dict(out)
+
+
 def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
                      rule: ScoringRule, template: Sequence[str] = TEMPLATE_T1,
                      league_size: int = LEAGUE_SIZE, seed: int = HEADLINE_SEED,
                      weeks: Sequence[int] = GRADED_WEEKS,
-                     depth_multiplier: float = 2.0) -> list[StartSitCall]:
-    """Every graded call for one season."""
+                     depth_multiplier: float = 2.0,
+                     prior_self_weight: float = 0.0) -> list[StartSitCall]:
+    """Every graded call for one season.
+
+    ``prior_self_weight`` enables the preregistered early-season seed and is
+    0.0 — inert, headline unchanged — everywhere except that arm's runner.
+    """
     prior = season_rows(raw_dir, str(int(season) - 1))
     if not prior:
         raise BacktestError(f"no {int(season) - 1} stats to build {season}'s field")
@@ -256,12 +288,15 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     rosters = allocate(universe, template, league_size, seed, depth_multiplier)
     players = player_index_for(universe)
     injuries = load_weeks(fetch_injuries(season, injury_dir), season)
+    prior_self = (prior_self_observations(prior, rule)
+                  if prior_self_weight > 0 else None)
 
     out: list[StartSitCall] = []
     for week in weeks:
         season_obj = build_backtest_season(universe, rosters, weekly, season,
                                            template, rule, through_week=week)
-        model = ProjectionModel(season_obj, players)
+        model = ProjectionModel(season_obj, players, prior_self=prior_self,
+                                prior_self_weight=prior_self_weight)
         byes = bye_teams(raw_dir, season, week)
         rows = weekly.get(week) or {}
         for roster_id, roster in enumerate(rosters, start=1):
@@ -389,21 +424,44 @@ GRADE_MEANING = {
 }
 
 
-def report(calls: Sequence[StartSitCall], per_season: Mapping[str, int]) -> str:
-    """reports/nflverse-backtest.md. Whatever the numbers say, good or bad."""
+@dataclass
+class Evaluation:
+    """Everything §1's grade rule and the report tables need, computed once —
+    shared by the parent report and the early-season arm so the two can never
+    grade the same shape of call two different ways."""
+
+    rows: list[str]
+    judgeable: int
+    calibrated: int
+    ece: float | None
+    resolution: float
+    low_decile: float
+    high_decile: float
+    worst_upper: float
+    grade: str
+    # Per judgeable bucket: low, high, graded, decided, ties, stated, observed,
+    # interval, clusters contributing, verdict. The arm's report renders from
+    # this; the parent keeps its frozen ``rows`` strings.
+    bucket_meta: list[dict] = None
+
+
+def evaluate(calls: Sequence[StartSitCall],
+             max_interval_width: float | None = None) -> Evaluation:
+    """§1's grade inputs. ``max_interval_width`` is the early-season arm's
+    precision clause (its method §4): a bucket whose clustered 95% interval
+    spans more than this many percentage points is recorded undecided rather
+    than calibrated — agreement inside an enormous interval is not evidence.
+    None (the parent's setting) preserves the frozen behavior exactly."""
     from engine.calibration import (MIN_DECIDED_TO_JUDGE, bucket_calls,
-                                    brier_score, expected_calibration_error,
+                                    expected_calibration_error,
                                     resolution_check)
-    from engine.decisions import summarize
-    from datetime import datetime, timezone
 
     reports = bucket_calls(calls)
-    summary = summarize(calls)
     ece = expected_calibration_error(reports)
     low_decile, high_decile = resolution_check(calls)
     resolution = (high_decile - low_decile) * 100
 
-    rows, judgeable, calibrated, worst_upper = [], 0, 0, 1.0
+    rows, meta, judgeable, calibrated, worst_upper = [], [], 0, 0, 1.0
     for entry in reports:
         bucket = entry.bucket
         decided = bucket.hits + bucket.misses
@@ -415,14 +473,44 @@ def report(calls: Sequence[StartSitCall], per_season: Mapping[str, int]) -> str:
         cluster_in = interval is not None and interval[0] <= entry.stated_mean <= interval[1]
         verdict = ("calibrated" if wilson_in and cluster_in
                    else "undecided" if wilson_in != cluster_in else "**off**")
+        width = (interval[1] - interval[0]) if interval else 1.0
+        if (max_interval_width is not None and verdict == "calibrated"
+                and width * 100 > max_interval_width):
+            verdict = "undecided (interval too wide)"
         calibrated += verdict == "calibrated"
         worst_upper = min(worst_upper, interval[1] if interval else 1.0)
+        clusters = len({(c.season, c.week) for c in calls
+                        if bucket.low <= c.confidence < bucket.high
+                        and c.outcome in ("hit", "miss")})
+        meta.append({"low": bucket.low, "high": bucket.high,
+                     "graded": bucket.graded, "decided": decided,
+                     "ties": bucket.ties, "stated": entry.stated_mean,
+                     "observed": bucket.hits / decided, "interval": interval,
+                     "clusters": clusters, "verdict": verdict})
         rows.append(
             f"| {bucket.low:.0%}–{bucket.high:.0%} | {bucket.graded} | {decided} "
             f"| {bucket.ties} | {entry.stated_mean:.1%} | {bucket.hits / decided:.1%} "
             f"| {interval[0]:.0%}–{interval[1]:.0%} | {verdict} |")
 
-    grade = _grade(judgeable, calibrated, ece, resolution, worst_upper)
+    return Evaluation(rows=rows, judgeable=judgeable, calibrated=calibrated,
+                      ece=ece, resolution=resolution, low_decile=low_decile,
+                      high_decile=high_decile, worst_upper=worst_upper,
+                      grade=_grade(judgeable, calibrated, ece, resolution,
+                                   worst_upper), bucket_meta=meta)
+
+
+def report(calls: Sequence[StartSitCall], per_season: Mapping[str, int]) -> str:
+    """reports/nflverse-backtest.md. Whatever the numbers say, good or bad."""
+    from engine.calibration import brier_score
+    from engine.decisions import summarize
+    from datetime import datetime, timezone
+
+    summary = summarize(calls)
+    ev = evaluate(calls)
+    rows, judgeable, calibrated = ev.rows, ev.judgeable, ev.calibrated
+    ece, resolution = ev.ece, ev.resolution
+    low_decile, high_decile = ev.low_decile, ev.high_decile
+    grade = ev.grade
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     seasons = "".join(f"| {s} | {n} |\n" for s, n in sorted(per_season.items()))
 

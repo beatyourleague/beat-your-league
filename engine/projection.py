@@ -45,6 +45,12 @@ DEFAULT_SHRINKAGE_K = 4.0
 # declines to make a call rather than dressing up a guess as a probability.
 MIN_GAMES_FOR_CALL = 3
 
+# The ONLY weeks the prior-season seed may touch (reports/early-season-method.md
+# §2). Enforced structurally in project() rather than by caller discipline: a
+# model constructed with a seed still answers week 1 and weeks 4+ exactly as
+# the frozen model would, so no wiring mistake can leak last season into them.
+SEEDED_WEEKS = frozenset({2, 3})
+
 # Floor on the standard deviation so a freak low-variance sample can't produce
 # a 99.9% confidence out of three data points.
 MIN_SD = 2.0
@@ -84,6 +90,11 @@ class Projection:
     games: int
     rostered_weeks: int
     position: str
+    # Prior-season evidence admitted at a discount (reports/early-season-method.md
+    # §2): w = λ·m pseudo-games. Zero everywhere except the preregistered
+    # weeks-2-3 regime, so ``games`` keeps meaning REAL current-season
+    # appearances and no surface can mistake last season for this one.
+    seeded_games: float = 0.0
 
     @property
     def mean(self) -> float:
@@ -104,8 +115,14 @@ class Projection:
         return max(math.sqrt(max(within + between, 0.0)), MIN_SD)
 
     @property
+    def evidence(self) -> float:
+        """What the publish gate weighs: real appearances plus the discounted
+        prior-season weight. Equal to ``games`` whenever seeding is off."""
+        return self.games + self.seeded_games
+
+    @property
     def confident_enough(self) -> bool:
-        return self.games >= MIN_GAMES_FOR_CALL
+        return self.evidence >= MIN_GAMES_FOR_CALL
 
 
 @dataclass(frozen=True)
@@ -183,10 +200,19 @@ class ProjectionModel:
         season: Season,
         players: PlayerIndex,
         shrinkage_k: float = DEFAULT_SHRINKAGE_K,
+        prior_self: Mapping[str, list[float]] | None = None,
+        prior_self_weight: float = 0.0,
     ) -> None:
         self.season = season
         self.players = players
         self.shrinkage_k = shrinkage_k
+        # The early-season seed (reports/early-season-method.md): a player's
+        # OWN prior-season per-appearance points, admitted at weight λ per
+        # appearance. Inert unless both are supplied — with the defaults the
+        # model is byte-identical to the frozen one, which §6.4 of that method
+        # requires and a test verifies.
+        self._prior_self = dict(prior_self or {})
+        self._prior_self_weight = float(prior_self_weight)
         # player_id -> [(week, points), ...] ascending, appearances only.
         self._appearances: dict[str, list[tuple[int, float]]] = {}
         # player_id -> sorted weeks the player was on someone's roster. A week
@@ -281,16 +307,33 @@ class ProjectionModel:
         values = self.observations(player_id, week)
         prior = self.position_prior(position, week)
         n = len(values)
-        if n == 0 and prior.samples == 0:
+        # Prior-season self-evidence, discounted (early-season method §2):
+        # w = λ·m, entering the same weighted blend as everything else — and
+        # ONLY in the preregistered weeks, no matter how the model was built.
+        self_vals = (self._prior_self.get(player_id, [])
+                     if self._prior_self_weight > 0 and week in SEEDED_WEEKS
+                     else [])
+        w = self._prior_self_weight * len(self_vals)
+        if n == 0 and prior.samples == 0 and w == 0:
             return None
 
         player_mean, player_variance = _mean_and_variance(values)
+        self_mean, self_variance = _mean_and_variance(self_vals)
         k = self.shrinkage_k
-        if prior.samples == 0:
+        # The positional prior carries blend weight K only when it EXISTS; with
+        # no samples its mean is a placeholder 0.0, and giving that weight
+        # would shrink a seeded projection toward zero rather than toward the
+        # field. (``k`` itself stays as-is for the availability line below,
+        # whose prior falls back to a real default rate.)
+        k_blend = k if prior.samples else 0.0
+        total = n + w + k_blend
+        if total == 0:
             mean, variance = player_mean, player_variance
         else:
-            mean = (n * player_mean + k * prior.mean) / (n + k)
-            variance = (n * player_variance + k * prior.variance) / (n + k)
+            mean = ((n * player_mean + w * self_mean + k_blend * prior.mean)
+                    / total)
+            variance = ((n * player_variance + w * self_variance
+                         + k_blend * prior.variance) / total)
         sd = max(math.sqrt(max(variance, 0.0)), MIN_SD)
 
         # Availability: beta-binomial appearance rate, shrunk toward the
@@ -307,6 +350,7 @@ class ProjectionModel:
             games=n,
             rostered_weeks=opportunities,
             position=position,
+            seeded_games=w,
         )
 
     def project_many(

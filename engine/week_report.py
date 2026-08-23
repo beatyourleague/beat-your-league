@@ -278,8 +278,11 @@ def optimal_lineup(
         alt_projection = projections.get(alt_id) if alt_id else None
         if alt_id is None or alt_projection is None:
             gate = "nobody on your bench is eligible here"
-        elif (projection.games < MIN_GAMES_FOR_CALL
-              or alt_projection.games < MIN_GAMES_FOR_CALL):
+        elif (projection.evidence < MIN_GAMES_FOR_CALL
+              or alt_projection.evidence < MIN_GAMES_FOR_CALL):
+            # ``evidence`` = real games plus any preregistered prior-season
+            # seed (reports/early-season-method.md §2). With no seed active it
+            # IS the game count, so weeks 4+ behave exactly as before.
             gate = (f"not enough games on record yet ({projection.games} and "
                     f"{alt_projection.games}; we want at least {MIN_GAMES_FOR_CALL})")
         elif not TEAM_DEFENSE_CONFIDENCE_CALIBRATED and (
@@ -313,6 +316,13 @@ def optimal_lineup(
             flags.append({"kind": "out", "text": f"OUT — {status.reason}"})
         elif status.status is Status.QUESTIONABLE:
             flags.append({"kind": "questionable", "text": status.reason})
+        if confidence is not None and (
+                projection.seeded_games
+                or (alt_projection is not None and alt_projection.seeded_games)):
+            # The preregistered disclosure (reports/early-season-method.md §5):
+            # a call whose evidence includes the prior-season seed says so on
+            # the row it prints on, every surface.
+            flags.append({"kind": "seeded", "text": "last season counted in"})
         picks_by_index[index] = SlotPick(slot, index, pid, projection, status,
                                          confidence, gate, alt_id, alt_projection,
                                          flags)
@@ -569,6 +579,9 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex,
                                        f"{closest.alternative_projection.mean:.1f}"},
             {"label": "form games", "value": f"{closest.projection.games} vs "
                                              f"{closest.alternative_projection.games}"},
+        ] + ([{"label": "seeded", "value": "last season counted in"}]
+             if (closest.projection.seeded_games
+                 or closest.alternative_projection.seeded_games) else []) + [
             {"label": "suits up", "value": f"{closest.projection.appear_probability:.0%} vs "
                                               f"{closest.alternative_projection.appear_probability:.0%}"},
         ] + _usage_driver(raw_dir, season, week, closest.player_id,
