@@ -31,6 +31,8 @@ reports/outbox/
 # render.report.anonymize_for_public(); these raw renders must not be tracked.
 reports/rival-report-*.html
 reports/rival-report-*.txt
+# The legacy league demo pair (`make demo`) — same reason, same names.
+reports/league-demo-public.html
 
 # Python
 .venv/

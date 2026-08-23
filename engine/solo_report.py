@@ -54,7 +54,7 @@ from engine.projection import ProjectionModel
 from engine.roster import DEFENSE
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
                                _team_week)
-from engine.week_report import (TEAM_RANGE_BASIS, TEAM_RANGE_GATE,
+from engine.week_report import (TEAM_RANGE_GATE,
                                 WeekReportError, _team_range, checklist,
                                 team_range_gate,
                                 _slot_json, optimal_lineup, pivots, receipts,
@@ -63,9 +63,16 @@ from engine.week_report import (TEAM_RANGE_BASIS, TEAM_RANGE_GATE,
 # What the report says where an opponent used to be. Stated once, plainly, in
 # the buyer's register — not a gate note, because nothing is being withheld.
 NO_OPPONENT_NOTE = (
-    "This report is about your roster. We don't read your league, so we can't "
-    "see who you're playing or what they've started — that's the trade for not "
-    "needing your league's permission to exist.")
+    "This file is about your roster: every call is your player against your own "
+    "bench, decided on its own and graded on its own. We never connect to your "
+    "league, so who you're playing isn't part of it — every point of edge here "
+    "comes from starting the right players.")
+
+# The band renders with NO coverage claim. The frozen method (§10.8) gates
+# the "about 78%" sentence until the nflverse band table exists: that figure
+# was measured on the Sleeper stack over real set lineups, and the solo
+# product's totals have never been measured the same way.
+SOLO_RANGE_BASIS = "Your realistic high and low for the week — a range, not a promise."
 
 
 def build_solo_report(
@@ -211,7 +218,7 @@ def _matchup(spec: RosterSpec, my_range: Mapping[str, Any] | None,
     if my_range is None:
         out["range_gate"] = gate
     else:
-        out["range_basis"] = TEAM_RANGE_BASIS
+        out["range_basis"] = SOLO_RANGE_BASIS
     return out
 
 

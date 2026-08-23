@@ -578,6 +578,53 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The sell audit (Aug 23 2026) — confession → strength, and three frozen-method violations
+that were live.** Six-lens audit (two cold-buyer reads, legal floor, positioning, product gaps,
+test-pin map) against the owner's directive: a direct why-buy message, and nothing on the site
+that undermines the sale unless the law mandates it. What it found and what changed:
+- **The landing's "Why trust the numbers" block was the sale-killer** — it led with the DEAD
+  Sleeper product's 53.5%/"five of six buckets wrong" and the diagnostic table, in words a cold
+  reader cannot parse. It is gone. The landing now quotes NO backtest figure in either
+  direction (`test_the_landing_quotes_no_backtest_figure_in_either_direction`) and LINKS every
+  proof; the hero is "We set your lineup. Then we grade ourselves in public." The field graphic's
+  "Their territory" label promised head-to-head coverage the solo product does not have.
+- **`site/confidence.html`** is the buyer translation of `reports/nflverse-backtest.md` — the
+  LIVE product's own grading — fidelity-tested like the other evidence pages. It closes the
+  diligent buyer's "the number I'd pay for has no published test" and leads with the refusal:
+  **Grade C means no claim that the number is right, anywhere.**
+- **The frozen method's §1 publication rule is binding on the SITE, and three of its terms were
+  being violated:** at Grade C the words *calibrated, tested, proven, accurate, "we hit X%"* are
+  banned on every surface (the landing carried a "Tested on two full seasons" chip; the
+  rewrite nearly shipped "Tested" three more times — `test_selling_surfaces_carry_no_grade_c_
+  banned_words`); the 5-row availability-controlled table leaves the landing regardless of
+  grade; the no-call explainer drops "you can guess for free"; and §10.8 gates the band's
+  "about 78%" coverage sentence until an nflverse band table exists (`SOLO_RANGE_BASIS`
+  carries no figure). Evidence pages keep a table's verdict vocabulary — that is the report's
+  own language beside its failures, not a claim.
+- **Legal:** `legal.html` §§1/7/9/10 still described the Sleeper product under a "this page
+  wins" clause (the operative contract did not cover the service sold; the privacy list was
+  wrong under CalOPPA) — rewritten and pinned. The join page's renewal terms lived only in the
+  post-submit block the paid flow never shows (ROSCA/CA ARL want them at the point of
+  consent) — now a plan-aware `#terms-line` above the button, seat mode hidden. Legal §3 now
+  backs the "founding rate locked for every renewal" pitch. **Still owed, not built:** the
+  pre-renewal reminder email promised on five surfaces (CA B&P §17602(b), 15–45 days before an
+  annual renewal) — needed before Aug 2027, not before launch.
+- **Sample report polish found by the cold read:** `-0.0 over` (dead heat now says "even
+  with"), per-row no-call reasons (`short_gate`: "no call · no bench QB" instead of one pooled
+  line), replay-aware provenance ("Rebuilt … from the 2024 season archive" and the injury line
+  names the replayed week, not a 2026 download time).
+- **Owner decisions surfaced, not taken:** extend the refund window to "through the first
+  graded week" (the Week-2 window closes before any confidence or grade exists — a diligent
+  buyer assembles that in four minutes; the FAQ now states it plainly); the form-backend
+  vendor, which unblocks BOTH League Pass seats and self-serve roster updates.
+- **Product gaps, ranked by the audit:** P1 self-serve roster updates (by the second report
+  rosters have churned through week-1 waivers, so reports go from thin to WRONG); P2 the
+  launch bundle (wire the waitlist endpoint — every CTA on the site is dead until it is; a
+  week-1 sample variant; bye-conflict scan; honest week-1 subject); P3 a preregistered
+  early-season confidence arm (prior-season-seeded projections, weeks 1–3, 2019–2024 — the
+  only compliant way to put a number in the refund-window reports; a failing result becomes an
+  evidence page).
+
 **The evidence pages (`site/projections.html`, `site/no-call.html`, Aug 23 2026) — PLAN §3
 item 14.** Hand-written buyer translations of `reports/projections-eval.md` and
 `reports/gate-backtest.md`, with fidelity ENFORCED rather than hoped:

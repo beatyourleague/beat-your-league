@@ -79,6 +79,9 @@
   .beta-chips span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
     border:1px solid rgba(246,244,238,.35);color:#F2C230;padding:4px 9px;border-radius:2px;}
   .note{margin-top:12px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+  /* The renewal terms, in sight of the button that leads to payment. They used
+     to live only in the post-submit block, which the paid flow never shows. */
+  .terms-line{margin:14px 0 10px;font-size:13px;color:var(--ink2);line-height:1.55;}
   .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px 16px;margin-top:8px;
     font-size:14px;line-height:1.6;display:none;}
   .done > b{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
@@ -141,8 +144,8 @@
 
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
-    <div class="note">Two things only you know, because we don't read
-    your league. They decide how every player is scored.</div>
+    <div class="note">Scoring and league size decide how every player in your
+    file is scored — a call under the wrong scoring is somebody else's call.</div>
     <div class="opts" id="opt-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
       <label><input type="radio" name="scoring" value="half_ppr">Half PPR</label>
@@ -164,7 +167,7 @@
   <section id="step-roster">
     <div class="eyebrow">2 · Your roster</div>
     <div class="note">Paste it straight out of your league app, or type one name a line.
-    Position labels, bye weeks and projections are ignored — we only read the names.</div>
+    Position labels, bye weeks and app clutter are fine — paste it as it comes.</div>
     <form id="form-roster" novalidate>
     <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
 Bijan Robinson
@@ -186,10 +189,13 @@ Baltimore Ravens
       <div id="pass-field" style="display:none">
         <input type="email" id="pass-email" autocomplete="off"
                placeholder="your commissioner's email">
-        <div class="note">The address they bought the League Pass with. That is how
-        your seat is matched to their pass — we have no other way to know your seat
-        is paid for.</div>
+        <div class="note">The address they bought the League Pass with — that is how
+        your seat is matched to their pass.</div>
       </div>
+      <p class="terms-line" id="terms-line">The season pass is <b>$39 USD and renews once
+      a year at $39 unless you cancel</b>. We email you before it bills, and you cancel
+      yourself any time from your own billing page. Refunds are no-questions through
+      Week 2 — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
     </form>
     <div class="err" id="err-email"></div>
@@ -201,8 +207,7 @@ Baltimore Ravens
         the Tuesday after their pass goes through. You get your <b>own</b> report,
         built from the roster you just entered.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
-        payment and we never see, transmit or store them. Your roster travels with the
-        checkout, so there's nothing else to send us.</li>
+        payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
@@ -553,6 +558,9 @@ if (SEAT_MODE) {
   $("seat-note").style.display = "list-item";
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
+  // A seat holder pays nothing, so billing terms would read as a charge
+  // waiting to happen.
+  $("terms-line").style.display = "none";
 } else if (WANTS_MONTHLY) {
   $("submit").textContent = "Continue to checkout — $12.99/mo";
   $("header-chips").replaceChildren();
@@ -562,11 +570,21 @@ if (SEAT_MODE) {
       chip.textContent = text;
       $("header-chips").appendChild(chip);
     });
-  $("renew-note").textContent = "Monthly is $12.99 and bills again each month " +
+  const monthlyTerms = "Monthly is $12.99 USD and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time.";
+  $("renew-note").textContent = monthlyTerms;
+  $("terms-line").textContent = monthlyTerms;
 } else if (WANTS_PASS) {
   $("submit").textContent = "Buy the League Pass — $99";
+  // The pass is $99, and the renewal disclosure must name the amount that
+  // actually renews — the season-pass sentence would be a wrong disclosure.
+  const passTerms = "The League Pass is $99 USD and renews once a year at $99 " +
+    "unless you cancel. We email you before it bills, and you cancel yourself any " +
+    "time from your own billing page. Refunds are no-questions through Week 2 — " +
+    "one per league.";
+  $("renew-note").textContent = passTerms;
+  $("terms-line").textContent = passTerms;
 }
 </script>
 </body>

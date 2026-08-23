@@ -19,6 +19,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import re
 
 import run.solo as solo
 from engine.availability import Status
@@ -503,6 +504,27 @@ def test_the_projected_week_is_passed_in_not_read_off_the_roster(tmp_path) -> No
                  and isinstance(n.value, ast.Name) and n.value.id == "team_week"]
         assert not reads, (
             f"{fn.__name__} derives the projected week from its roster carrier")
+
+
+def test_the_solo_band_makes_no_coverage_claim(tmp_path) -> None:
+    """The frozen method (reports/nflverse-backtest-method.md §10.8) gates the
+    band's coverage sentence — "landed inside this range about 78% of the
+    time" — until the nflverse band table exists: that figure was measured on
+    the Sleeper stack over real set lineups, and solo totals have never been
+    measured the same way. The published sample carried it anyway. The range
+    still renders; the claim does not, and neither does any Grade-C banned
+    word."""
+    cache = _cache(tmp_path)
+    report = solo.report_for(_spec(), solo.load_week_data(cache, SEASON, WEEK,
+                                                          session=OFFLINE),
+                             cache_dir=cache)
+    basis = report["matchup"].get("range_basis")
+    if basis is None:
+        pytest.skip("no band this week — the gate fired, nothing to caption")
+    assert "%" not in basis, f"the band caption quotes a coverage figure: {basis!r}"
+    assert not re.search(r"\b(tested|testing|calibrated|proven|accurate)\b", basis, re.I)
+    assert report["matchup"]["you"].get("floor") is not None, \
+        "the range itself must still print — only the claim is withheld"
 
 
 def test_a_team_defense_publishes_no_confidence(tmp_path) -> None:

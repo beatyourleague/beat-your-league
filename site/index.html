@@ -339,19 +339,13 @@
   .exhibit{max-width:740px;margin-top:44px;padding:18px 18px 16px;}
   .exhibit-cap{font-family:'Barlow Condensed';font-weight:800;font-size:13px;
     letter-spacing:.14em;text-transform:uppercase;color:var(--brick);margin-bottom:9px;}
-  .caltable{width:100%;border-collapse:collapse;background:var(--card);
-    border:2px solid var(--navy);font-variant-numeric:tabular-nums;}
-  .caltable th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-size:13px;
-    font-weight:800;letter-spacing:.14em;text-transform:uppercase;padding:10px 14px;text-align:right;}
-  .caltable th:first-child{text-align:left;}
-  .caltable td{padding:11px 14px;border-top:1px solid #EDEAE1;font-size:15px;text-align:right;
-    color:var(--ink2);}
-  .caltable td:first-child{text-align:left;font-weight:700;color:var(--navy);}
-  .caltable td:nth-child(3){font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:19px;color:var(--navy);}
-  .caltable .ok{color:var(--turf);font-weight:800;letter-spacing:.04em;}
-  .caltable tr{transition:background .15s ease;}
-  .caltable tbody tr:hover td, .caltable tr:hover td{background:var(--turf-tint);}
+  .proof-links{list-style:none;margin:0;padding:0;background:var(--card);
+    border:2px solid var(--navy);}
+  .proof-links li{padding:13px 16px;border-top:1px solid #EDEAE1;font-size:15px;
+    line-height:1.55;color:var(--ink2);}
+  .proof-links li:first-child{border-top:0;}
+  .proof-links a{color:var(--navy);text-decoration:none;border-bottom:2px solid var(--flag);}
+  .proof-links a:hover{background:var(--turf-tint);}
   .honest{margin-top:20px;font-size:13px;color:var(--dusk);line-height:1.7;max-width:680px;}
   .stamp{display:inline-block;margin-top:22px;border:3px double var(--turf-glow);color:var(--turf-glow);
     font-family:'Barlow Condensed';font-weight:900;letter-spacing:.22em;font-size:14px;
@@ -541,11 +535,12 @@
       </div>
       <span class="livepill"><i></i>First file: Tuesday, Sep 8</span>
     </div>
-    <h1>Beat your league, <em><span>not the books.</span></em></h1>
-    <p class="sub">Every Tuesday: a scouting file on your team — the lineup we'd set
-    under your league's scoring, a number on every call worth making, and a straight
-    answer on the week's toughest one. Built from your roster and the real
-    NFL record.</p>
+    <h1>We set your lineup. <em><span>Then we grade ourselves in public.</span></em></h1>
+    <p class="sub">Every Tuesday: the lineup we'd set for your exact roster under your
+    league's scoring, with a number on every call worth making — the coin flip included.
+    Every Monday: those calls come back against the real box score, on a page your
+    league can check. Built from your roster and the real NFL record — we never
+    connect to your league.</p>
     <p class="whyfree">$39 USD for the season. The first file lands Tuesday, Sep 8, and
     refunds are no-questions through Week 2 — read two of them, then decide.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
@@ -566,13 +561,13 @@
       <a class="btn ghost" href="sample-report.html">Read a real report</a>
     </div>
     <div class="proof-chips">
-      <span class="chip">Tested on <b>two full seasons</b> before launch</span>
+      <span class="chip">Graded on <b>eleven NFL seasons</b> before launch</span>
       <span class="chip">Set up in <b>90 seconds</b> — no login, no password</span>
       <span class="chip">Every call <b>dated &amp; graded</b> in public</span>
     </div>
     <div class="fieldwrap reveal">
       <svg class="pitch" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg"
-           role="img" aria-label="A night stadium field under the lights: your territory on the left, the other half on the right, and the ball driven deep downfield.">
+           role="img" aria-label="A night stadium field under the lights, the ball driven deep downfield: Tuesday's plan on the left, Monday's grade on the right.">
         <defs>
           <linearGradient id="turfSide" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0" stop-color="#1C7345"/><stop offset="1" stop-color="#0C3721"/>
@@ -736,7 +731,7 @@
           </g>
         </g>
       </svg>
-      <div class="fieldlabel"><span>Your territory</span><span>Their territory</span></div>
+      <div class="fieldlabel"><span>Tuesday: the plan</span><span>Monday: the grade</span></div>
     </div>
   </div>
 </header>
@@ -748,7 +743,7 @@
       <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
       <li>the week's coin flip · <b>50% and we say so</b></li>
       <li><b>111.5</b> projected · a real range, not a promise</li>
-      <li>a defense with no number · <b>because none is earned yet</b></li>
+      <li>kittle <b>66% over the bench option</b> · called in writing</li>
       <li>your lineup, decided · <b>every tuesday</b></li>
       <li>last week's calls · <b>graded against the box score</b></li>
     </ul>
@@ -756,7 +751,7 @@
       <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
       <li>the week's coin flip · <b>50% and we say so</b></li>
       <li><b>111.5</b> projected · a real range, not a promise</li>
-      <li>a defense with no number · <b>because none is earned yet</b></li>
+      <li>kittle <b>66% over the bench option</b> · called in writing</li>
       <li>your lineup, decided · <b>every tuesday</b></li>
       <li>last week's calls · <b>graded against the box score</b></li>
     </ul>
@@ -788,13 +783,13 @@
       <div class="reveal" style="--d:.12s">
         <div class="fcard sheet tilt" style="--tilt:rotate(1.7deg)">
           <h3>The coin flip, called</h3>
-          <p>Every week has one start-sit call that's genuinely close. We make it, we put
-          the number on it, and when it's 50/50 we say that too — then Monday it comes
-          back graded either way.</p>
+          <p>Every week has one start-sit call that's genuinely close — the one the
+          rankings leave you alone with. We pick a side in writing, put the number on it,
+          and Monday it comes back graded either way.</p>
           <div class="mini">
             <div class="srow"><div class="x">?</div><div class="why"><b>Start Tony Pollard
-            over Chase Brown</b> — 50%, proj 11.2 vs 11.2. The closest call of the week,
-            decided, with the reasoning attached.</div></div>
+            over Chase Brown</b> — 50%, proj 11.2 vs 11.2. Dead even by the numbers, and
+            it says so — then picks anyway, so Monday has a verdict.</div></div>
           </div>
           <span class="real">Real output · 2024 NFL season, week 10</span>
         </div>
@@ -859,33 +854,32 @@
 <section id="honesty">
   <div class="wrap">
     <div class="eyebrow">Why trust the numbers</div>
-    <h2>We found our own blind spot before you did.</h2>
-    <p class="lede">Before launch, we re-played two full seasons of a real league and graded
-    every one of our own start/sit calls against the actual box scores — 2,056 of them. Across all
-    of them we hit <b>53.5%</b>, and five of six confidence buckets came in wrong. The reason is the
-    most useful thing we learned: we couldn't see who was inactive. That single failure is
-    why the live report refuses to print a confidence number until it has verified both players are
-    active — and why win probability is still withheld entirely.</p>
+    <h2>Graded before we sold a single file.<br>Graded in public every Monday after.</h2>
+    <p class="lede">Before asking anyone for money, we replayed eleven NFL seasons and graded
+    thousands of our own start/sit calls against the real box scores — then published every
+    result, the misses included, with the grading rules frozen in code before Week 1. A number
+    next to a player who turns out to be inactive isn't analysis, it's a guess wearing one. So
+    when a call hasn't earned its number, your report says <b>"no call"</b> — and every number
+    that does print lands on a public page, dated, where it gets graded hit or miss.</p>
     <div class="reveal">
       <div class="exhibit sheet tilt" style="--tilt:rotate(1.1deg)">
-        <div class="exhibit-cap">Diagnostic — is the math sound once availability is known?</div>
-        <table class="caltable">
-          <tr><th>When we said…</th><th>Calls</th><th>We hit</th><th>Verdict</th></tr>
-          <tr><td>50–55%</td><td>373</td><td>57.4%</td><td class="ok">math sound</td></tr>
-          <tr><td>55–60%</td><td>302</td><td>58.6%</td><td class="ok">math sound</td></tr>
-          <tr><td>60–65%</td><td>209</td><td>63.6%</td><td class="ok">math sound</td></tr>
-          <tr><td>65–70%</td><td>123</td><td>69.1%</td><td class="ok">math sound</td></tr>
-          <tr><td>70–80%</td><td>120</td><td>78.3%</td><td class="ok">math sound</td></tr>
-        </table>
+        <div class="exhibit-cap">Read it all before you decide</div>
+        <ul class="proof-links">
+          <li><a href="confidence.html"><b>The number next to a player, graded</b></a> —
+          eleven seasons of box scores, every percentage we print, and the rule that
+          decides what we're allowed to claim.</li>
+          <li><a href="projections.html"><b>Us vs. the free projections in your app</b></a> —
+          where they beat us, where they go silent, and what that's worth to you.</li>
+          <li><a href="no-call.html"><b>The rule behind "no call"</b></a> — measured against
+          two seasons of real injury reports, result published whole.</li>
+          <li><a href="backtest.html"><b>The original league study</b></a> — every miss
+          left in, nothing removed.</li>
+        </ul>
       </div>
     </div>
-    <p class="honest">Read that table for what it is: a <b>hindsight filter</b>, keeping
-    only the head-to-heads where both players ended up scoring. It shows the probability math is
-    sound — it is <b>not</b> a measurement of the shipping product, whose known-active gate is
-    different and has no track record yet, because we only start recording who was hurt or
-    inactive each week from this season on.
-    You can read the whole thing today — the failing buckets, the 7.2% calibration error,
-    the calls that cost points — <a href="backtest.html">published here</a>, nothing removed.</p>
+    <p class="honest">The numbers you'll see in a report are the ones we're prepared to be
+    graded on, <a href="ledger/index.html">in public</a>. The record starts filling in
+    October, and it never gets edited.</p>
     <span class="stamp">Graded on real box scores</span>
   </div>
 </section>
@@ -990,8 +984,15 @@
       <details>
         <summary>What if my roster changes mid-season?</summary>
         <div class="a">Trades and pickups happen — reply to any report with your
-        updated roster and your file follows it from the next Tuesday. Self-serve roster
-        editing is on the way.</div>
+        updated roster and your file follows it from the next Tuesday.</div>
+      </details>
+      <details>
+        <summary>When does the public record start?</summary>
+        <div class="a">A call needs three games of record behind both players, so the
+        first ones print in Week 4 and get graded in early October — that's the NFL
+        calendar, not a design choice. It's exactly why our full grading results and a
+        complete sample report are published now: they're what you can check before your
+        refund window closes.</div>
       </details>
       <details>
         <summary>Why is there no win probability on my matchup?</summary>
@@ -1080,6 +1081,8 @@
          "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season — after Monday night's box score has been graded, before your lineup decisions are due."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?",
          "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and your file follows it from the next Tuesday."}},
+        {"@type": "Question", "name": "When does the public record start?",
+         "acceptedAnswer": {"@type": "Answer", "text": "A call needs three games of record behind both players, so the first ones print in Week 4 and get graded in early October — that's the NFL calendar, not a design choice. It's exactly why our full grading results and a complete sample report are published now: they're what you can check before your refund window closes."}},
         {"@type": "Question", "name": "Why is there no win probability on my matchup?",
          "acceptedAnswer": {"@type": "Answer", "text": "We only publish a number when our own testing says it holds up, and matchup win odds aren't there yet. The numbers you do see are the ones we're prepared to be graded on, in public."}}
       ]

@@ -23,6 +23,7 @@ LEDGER = (SITE / "ledger" / "index.html").read_text(encoding="utf-8")
 COMPARE = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
 PROJECTIONS = (SITE / "projections.html").read_text(encoding="utf-8")
 NO_CALL = (SITE / "no-call.html").read_text(encoding="utf-8")
+CONFIDENCE = (SITE / "confidence.html").read_text(encoding="utf-8")
 
 
 def prose(page: str) -> str:
@@ -279,19 +280,34 @@ def test_network_calls_have_a_timeout() -> None:
 # the backtest exhibit must not overstate the shipping product
 # --------------------------------------------------------------------- #
 
-def test_landing_never_calls_the_diagnostic_table_calibrated() -> None:
-    """reports/backtest.md forbids publishing the availability-controlled table
-    as an accuracy result; it may appear only labelled as a diagnostic."""
-    assert re.search(r"diagnostic", LANDING_PROSE, re.I)
-    assert not re.search(r"78\.3%</td><td[^>]*>calibrated", LANDING), \
-        "diagnostic bucket presented as a calibrated accuracy claim"
-    assert re.search(r"hindsight filter", LANDING_PROSE, re.I)
-
-
-def test_landing_states_the_unconditional_hit_rate_beside_the_2056() -> None:
-    assert "2,056" in LANDING_PROSE
-    assert "53.5%" in LANDING_PROSE, \
-        "the headline sample size must travel with the honest overall hit rate"
+def test_the_landing_quotes_no_backtest_figure_in_either_direction() -> None:
+    """The landing page used to carry the league study's exhibit — the 53.5%
+    headline, the diagnostic table, the 'hindsight filter' qualifier — and two
+    tests pinned that the qualifiers travelled with the figures. A cold-buyer
+    read scored that block as the sale-killer on the page: to someone who has
+    never heard the word calibration, '53.5% and five of six buckets wrong'
+    reads as a coin flip that is wrong most of the time, and the dense
+    recovery never lands. The qualifiers were only ever required IF the table
+    was shown; so the exhibit moved off the landing entirely, and the page now
+    LINKS every proof instead of quoting any of it. This guard holds both
+    directions: no unflattering figure stripped of its context, and no
+    flattering diagnostic column laundered back in as accuracy — the exact
+    thing an adversarial review once caught."""
+    # Visible copy only: the entity sentence in <head>/JSON-LD legitimately says
+    # "the buckets it failed", and that sentence is pinned verbatim elsewhere.
+    visible = re.sub(r"<head>.*?</head>|<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->",
+                     " ", LANDING, flags=re.S | re.I)
+    visible = re.sub(r"\s+", " ", visible)
+    for figure in ("53.5%", "2,056", "57.4%", "62.5%", "63.6%", "78.3%", "77.2%",
+                   "7.2%", "64.6%", "10,041"):
+        assert figure not in visible, \
+            f"backtest figure {figure} is quoted on the landing page; it belongs on " \
+            "the evidence page that carries its context"
+    assert not re.search(r"hindsight filter|calibration error|buckets?\b", visible,
+                         re.I), "calibration vocabulary leaked back onto the sales page"
+    # Every proof is one click away, never zero clicks.
+    for href in ("confidence.html", "projections.html", "no-call.html", "backtest.html"):
+        assert f'href="{href}"' in LANDING, f"the landing no longer links {href}"
 
 
 def test_published_backtest_exists_and_keeps_its_failures() -> None:
@@ -352,14 +368,14 @@ def _demo_report_html() -> str:
 
 
 @pytest.mark.parametrize("name", ["sample report", "landing", "join", "compare",
-                                  "projections", "no-call", "live report"])
+                                  "projections", "no-call", "confidence", "live report"])
 def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
     if name == "live report":
         page = _demo_report_html()
     else:
         page = {"sample report": SAMPLE_REPORT, "landing": LANDING, "join": JOIN,
                 "compare": COMPARE, "projections": PROJECTIONS,
-                "no-call": NO_CALL}[name]
+                "no-call": NO_CALL, "confidence": CONFIDENCE}[name]
     text = prose(markup_only(page))
     for pattern in _DEV_SPEAK:
         assert not re.search(pattern, text, re.I), \
@@ -500,7 +516,7 @@ def test_legal_page_actually_protects_the_business() -> None:
         "implied warranty disclaimer": r"merchantability",
         "refund is the exclusive remedy": r"only remedy we offer",
         "no redistribution (protects League Pass)": r"may <b>not</b> forward the full report",
-        "third-party data dependency": r"depend on Sleeper's public data",
+        "third-party data dependency": r"depend on public NFL data",
         "force majeure": r"beyond our reasonable control",
         "right to discontinue": r"change, pause, or discontinue",
         "changes to terms": r"we may update these terms",
@@ -512,6 +528,60 @@ def test_legal_page_actually_protects_the_business() -> None:
     # Protective clauses must not be used to strip consumer rights.
     assert re.search(r"doesn't remove protections you have|"
                      r"nothing here takes away consumer rights", legal, re.I)
+
+
+def test_the_contract_describes_the_product_actually_sold() -> None:
+    """legal.html carries a 'this page wins' clause — so when §1, §7, §9 and
+    §10 still described the discontinued Sleeper product (a Rival Report built
+    from the league's record, a privacy list of 'your Sleeper user ID and which
+    manager you named as your rival'), the operative contract did not cover
+    the service being sold, and the privacy policy was inaccurate under
+    CalOPPA. Found by a compliance read three weeks before launch."""
+    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    for stale in (r"Rival Report", r"Sleeper user ID", r"named as your rival",
+                  r"league's own publicly readable record", r"Sleeper's public API",
+                  r"depend on Sleeper"):
+        assert not re.search(stale, legal, re.I), \
+            f"legal.html still describes the Sleeper product: {stale!r}"
+    # ...and it describes what is actually collected and depended on.
+    assert re.search(r"the roster you entered", legal, re.I)
+    assert re.search(r"scoring settings", legal, re.I)
+    assert re.search(r"never connect to your league", legal, re.I)
+    assert re.search(r"public NFL data", legal, re.I)
+    # The pitch says the founding rate is locked for every renewal; the
+    # contract has to say it too, or the 'legal wins' clause makes the pitch
+    # a deceptive-pricing pattern.
+    assert re.search(r"Founding subscribers renew at their founding price", legal)
+    assert re.search(r"locked in for every renewal", prose(JOIN), re.I)
+
+
+def test_renewal_terms_are_in_sight_of_the_checkout_button() -> None:
+    """ROSCA and California's ARL attach the renewal disclosure to the point of
+    consent, in visual proximity to it. The join page's renewal sentence lived
+    only in the post-submit block — which the paid flow never shows, because
+    submit navigates to Stripe. A buyer could reach the payment page having
+    seen '$39 · Cancel any time' and nothing else. The terms line now renders
+    inside the email step, above the button, and the mode script rewrites it
+    per plan: the monthly buyer sees monthly terms, the pass buyer sees $99
+    (not the season pass's $39), and a seat holder — who pays nothing — sees
+    no billing terms at all."""
+    form = re.search(r'<form id="form-email".*?</form>', JOIN, re.S).group(0)
+    terms = re.search(r'<p class="terms-line" id="terms-line">(.*?)</p>', form, re.S)
+    assert terms, "the renewal terms are not inside the email step's form"
+    assert form.index('id="terms-line"') < form.index('id="submit"'), \
+        "the terms must come before the button, not after it"
+    text = prose(terms.group(1))
+    assert re.search(r"renews once a year at \$39", text, re.I)
+    assert re.search(r"email you before it bills", text, re.I)
+    assert re.search(r"cancel yourself", text, re.I)
+    assert re.search(r"one per person", text, re.I)
+    script = prose(JOIN)
+    # Plan-aware rewrites, each naming its own amount.
+    assert re.search(r'\$\("terms-line"\)\.textContent = monthlyTerms', script)
+    assert re.search(r'\$\("terms-line"\)\.textContent = passTerms', script)
+    assert re.search(r"renews once a year at \$99", script)
+    assert re.search(r'\$\("terms-line"\)\.style\.display = "none"', script), \
+        "a seat holder must not be shown billing terms"
 
 
 def test_unset_legal_placeholders_are_visible_not_invented() -> None:
@@ -575,7 +645,7 @@ def test_league_pass_states_its_own_terms() -> None:
                      r"no-questions refund", r"18\+", r"not affiliated"):
         assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
     # It must not promise a report to managers who never signed up.
-    assert re.search(r"can't write anyone's report until they do", prose_page, re.I)
+    assert re.search(r"Managers who never sign up simply don't get a report", prose_page, re.I)
     assert re.search(r'href="legal\.html"', LEAGUE_PASS)
 
 
@@ -789,6 +859,7 @@ REPORTS = SITE.parent / "reports"
 @pytest.mark.parametrize("page,source", [
     (PROJECTIONS, "projections-eval.md"),
     (NO_CALL, "gate-backtest.md"),
+    (CONFIDENCE, "nflverse-backtest.md"),
 ])
 def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
     """These pages are hand-written translations of operator reports into buyer
@@ -799,6 +870,9 @@ def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> 
     body = re.sub(r"<style\b.*?</style>|<script\b.*?</script>", "", page,
                   flags=re.S | re.I)
     text = re.sub(r"<[^>]+>", " ", body)
+    # The licence version in the nflverse attribution (RULE N1, a licence term
+    # that must appear on every public page) is not a measured figure.
+    text = text.replace("CC-BY-4.0", "")
     for figure in sorted(set(re.findall(r"\d+\.\d+", text))):
         assert figure in report, (
             f"{source[:-3]} page cites {figure}, which is not in the report it "
@@ -834,6 +908,60 @@ def test_the_no_call_page_claims_improvement_never_rescue() -> None:
     assert NO_CALL.count('class="off"') >= 3, "the off buckets were laundered"
 
 
+def test_the_confidence_page_leads_with_what_it_may_not_claim() -> None:
+    """The buyer translation of reports/nflverse-backtest.md — the live
+    product's own grading. Its preregistered rule landed on Grade C, whose
+    terms are: the numeral prints as a recorded prediction only, and no claim
+    that it is right appears on any surface. The page exists to close the
+    chain of evidence a diligent buyer found open ('the number I'd pay for has
+    no published test behind it') WITHOUT becoming that claim. So the refusal
+    leads, the four failing bands stay, the flattering direction of the
+    failure is stated beside the verdict that it still fails, the scope the
+    run actually covered is named, and the older league study's headline is
+    never quoted beside this one (the report's own rule)."""
+    text = re.sub(r"<[^>]+>", " ", prose(CONFIDENCE))
+    first_screen = prose(CONFIDENCE.split("</h1>")[1].split("<h2")[0])
+    assert re.search(r"does not let us tell you the number is right", first_screen), \
+        "the refusal must lead, before any figure"
+    assert CONFIDENCE.count('class="off"') == 4, "the failing bands were laundered"
+    assert CONFIDENCE.count('class="ok"') == 2
+    assert re.search(r"Two of six pass", text)
+    assert re.search(r"wrong in a flattering direction is still wrong", text, re.I)
+    assert re.search(r"no claim that the number\s+is right", text, re.I)
+    assert re.search(r"PPR scoring, 12-team\s+leagues and the standard lineup", text), \
+        "the scope the run covered must travel with the number"
+    assert re.search(r"team defense never carries a\s+percentage", text, re.I)
+    for other_study in ("53.5%", "2,056", "62.5% to", "77.2%"):
+        assert other_study not in text, \
+            "the two studies measure different questions and may not sit side by side"
+    assert 'href="ledger/index.html"' in CONFIDENCE
+    assert "join/index.html" in CONFIDENCE, "proof page is a dead end"
+
+
+def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
+    """reports/nflverse-backtest-method.md §1, frozen before the run: at Grade
+    C the words 'calibrated', 'tested', 'proven', 'accurate' and 'we hit X%'
+    are banned on every surface, and the 5-row availability-controlled table
+    leaves the landing regardless of grade. The landing carried that table and
+    a 'Tested on two full seasons' chip for a day after the grade was
+    computed, and the rewrite that removed them nearly shipped 'Tested' three
+    more times. The evidence pages are exempt in one narrow way: a table's own
+    verdict column and a sentence describing that a grading happened, beside
+    its failures, are the report's vocabulary, not a claim."""
+    banned = r"\b(calibrated|tested|proven|accurate)\b|we hit \d"
+    surfaces = {"landing": LANDING, "join": JOIN,
+                "league-pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
+                "compare": COMPARE}
+    for name, page in surfaces.items():
+        visible = re.sub(r"<head>.*?</head>|<script\b.*?</script>|<style\b.*?</style>|"
+                         r"<!--.*?-->", " ", page, flags=re.S | re.I)
+        visible = re.sub(r"<[^>]+>", " ", visible)
+        hit = re.search(banned, visible, re.I)
+        assert not hit, f"{name} carries a Grade-C banned word: {hit.group(0)!r}"
+    assert 'class="caltable"' not in LANDING, \
+        "the availability-controlled table is deleted from the landing at every grade"
+
+
 # --------------------------------------------------------------------- #
 # no betting positioning anywhere buyer-facing (principle 4)
 # --------------------------------------------------------------------- #
@@ -841,7 +969,7 @@ def test_the_no_call_page_claims_improvement_never_rescue() -> None:
 @pytest.mark.parametrize("page,name", [(LANDING, "landing"), (JOIN, "join"),
                                        (LEDGER, "ledger"), (COMPARE, "compare"),
                                        (PROJECTIONS, "projections"),
-                                       (NO_CALL, "no-call")])
+                                       (NO_CALL, "no-call"), (CONFIDENCE, "confidence")])
 def test_no_betting_language(page: str, name: str) -> None:
     banned = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager)\b"
     assert not re.search(banned, page, re.I), f"betting language crept into {name}"

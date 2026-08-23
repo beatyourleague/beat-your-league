@@ -148,6 +148,49 @@ def test_the_email_gap_never_ships_without_its_swing(tmp_path: Path) -> None:
         assert "projected ahead" in html_out or "projected behind" in html_out
 
 
+def test_a_dead_heat_edge_never_prints_as_negative_zero() -> None:
+    """A hair-thin gap rounds to 0.0, and "+.1f" formatting turns the negative
+    side of it into "-0.0 over" — found in the published sample report, where
+    the one artifact meant to prove polish carried what reads as a bug. A gap
+    inside rounding distance of zero is a dead heat and says so."""
+    slot = {"edge": -0.04, "alternative_name": "Chase Brown"}
+    assert edge_phrase(slot) == "even with Chase Brown on your bench"
+    slot["edge"] = 0.04
+    assert edge_phrase(slot) == "even with Chase Brown on your bench"
+    slot["edge"] = -0.6
+    assert edge_phrase(slot) == "-0.6 over Chase Brown on your bench"
+    slot["edge"] = 1.55
+    assert "+1.5" in edge_phrase(slot) or "+1.6" in edge_phrase(slot)
+
+
+def test_a_gated_row_says_why_in_its_own_cell() -> None:
+    """Three of nine rows in the published sample read "no call" with every
+    reason pooled into one line under the table, so a reader could not tell
+    which applied to their QB. The call column now carries the reason, short:
+    the only QB on a roster is not a defect."""
+    from render.report import short_gate
+    assert short_gate("nobody on your bench is eligible here", "QB") == "no call · no bench QB"
+    assert short_gate("not enough games on record yet (1 and 2; we want at least 3)",
+                      "RB") == "no call · too few games yet"
+    assert short_gate("we don't put a number on defenses yet — we haven't tested our "
+                      "defense calls against enough real weeks", "DEF") \
+        == "no call · defenses not graded yet"
+    assert short_gate("availability in doubt (questionable)", "WR") \
+        == "no call · status unconfirmed"
+    assert short_gate(None, "K") == "no call"
+
+
+def test_the_explainer_makes_no_claim_a_shown_number_is_not_a_guess() -> None:
+    """Grade C of the frozen method deletes 'otherwise we'd be guessing, and
+    you can guess for free' from the no-call explainer — it asserts that a
+    printed number is not a guess, which is the claim the grade withholds —
+    and keeps the public-record sentence."""
+    from render.report import no_call_explainer
+    text = no_call_explainer("nobody on your bench is eligible here")
+    assert "guess for free" not in text
+    assert "public record and gets graded" in text
+
+
 def test_the_email_carries_what_the_browser_report_carries(tmp_path: Path) -> None:
     """The email IS the product; the browser file is the archive. Usage and the
     per-row point gap were added to the browser renderer only, so the free demo

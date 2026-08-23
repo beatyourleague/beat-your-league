@@ -138,19 +138,64 @@ AS_SET_BODY = ("Start-sit calls begin once your league has box scores to "
 
 
 def no_call_explainer(listed: str) -> str:
-    """Why gated slots say "no call" — one definition, both renderers."""
+    """Why gated slots say "no call" — one definition, both renderers.
+
+    Grade C of the frozen method (reports/nflverse-backtest-method.md §1):
+    the definition stays, "every one goes on the public record and gets
+    graded" stays, and the old closing clause — "otherwise we'd be guessing,
+    and you can guess for free" — is gone, because it asserted that a shown
+    number is not a guess, which is exactly the claim the grade withholds.
+    """
     return (f"{listed}. When we do put a number on a slot, it means: the odds "
             f"this guy outscores the best option on your bench. We only show it once "
-            f"we've confirmed both players are active — otherwise we'd be guessing, "
-            f"and you can guess for free.")
+            f"we've confirmed both players are active — and every one goes on the "
+            f"public record and gets graded.")
+
+
+def short_gate(gate: str | None, slot: str) -> str:
+    """The per-row reason a slot carries no number, short enough for the call
+    column. The note under the table used to lump every reason into one
+    "·"-separated line, so a reader could not tell which applied to which row
+    — three of nine rows in the published sample read "no call" with the
+    reasons pooled underneath. A bare "no call" on the only QB on the roster
+    reads as a defect; "no bench QB" reads as what it is.
+    """
+    if not gate:
+        return NO_CALL
+    if gate.startswith("nobody on your bench"):
+        return f"{NO_CALL} · no bench {slot}"
+    if gate.startswith("not enough games"):
+        return f"{NO_CALL} · too few games yet"
+    if gate.startswith("we don't put a number on defenses"):
+        return f"{NO_CALL} · defenses not graded yet"
+    if gate.startswith("no eligible player"):
+        return NO_CALL
+    return f"{NO_CALL} · status unconfirmed"
 
 
 def availability_basis(meta: Mapping[str, Any]) -> str:
-    """The data-age sentence (principle 3), shared by both renderers."""
+    """The data-age sentence (principle 3), shared by both renderers.
+
+    A replayed season (the published sample) is built from that week's own
+    archived injury report, so the honest basis is the week, not the moment
+    the archive was downloaded: a 2026 timestamp on a 2024 report reads as a
+    contradiction. A live report states the fetch time, in words rather than
+    as a raw ISO stamp — log output on a buyer surface made a cold reader
+    doubt what year they were looking at.
+    """
     availability = meta.get("availability_as_of")
-    return (f"Injury and inactive data as of {availability}." if availability
-            else "We couldn't confirm injuries or inactives for this week, so "
-                 "some calls are left unmade rather than guessed.")
+    if availability and meta.get("historical_demo"):
+        return (f"Injury and inactive data as of the {meta.get('season')} week "
+                f"{meta.get('week')} report, as it stood that week.")
+    if availability:
+        try:
+            stamp = datetime.fromisoformat(str(availability)).astimezone(timezone.utc)
+            availability = stamp.strftime("%a %b %d, %H:%M UTC")
+        except (TypeError, ValueError):
+            pass
+        return f"Injury and inactive data as of {availability}."
+    return ("We couldn't confirm injuries or inactives for this week, so "
+            "some calls are left unmade rather than guessed.")
 
 
 def esc(value: Any) -> str:
@@ -235,9 +280,14 @@ def _generated_stamp(meta: Mapping[str, Any]) -> str:
     raw = meta.get("generated_at", "")
     try:
         stamp = datetime.fromisoformat(raw).astimezone(timezone.utc)
-        return stamp.strftime("Generated %a %b %d · %H:%M UTC")
     except (TypeError, ValueError):
         return "Generated (timestamp unavailable)"
+    if meta.get("historical_demo"):
+        # The sample is a replay: say so in the stamp itself, or the build
+        # date and the season it replays look like a contradiction.
+        return stamp.strftime(f"Rebuilt %b %d, %Y from the {meta.get('season')} "
+                              f"season archive")
+    return stamp.strftime("Generated %a %b %d · %H:%M UTC")
 
 
 def section_checklist(items: list[Mapping[str, Any]]) -> str:
@@ -515,7 +565,8 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
         if confidence is not None:
             call = f'<b>{_pct(confidence)}%</b>'
         elif mixed and slot.get("player_name"):
-            call = f'<span class="tsub">{esc(NO_CALL)}</span>'
+            call = (f'<span class="tsub">'
+                    f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
         else:
             call = ""
         rows.append(
@@ -726,6 +777,11 @@ def edge_phrase(slot: Mapping[str, Any]) -> str:
     name = slot.get("alternative_name")
     if edge is None or not name:
         return ""
+    # A gap inside rounding distance of zero must not print "-0.0 over" — the
+    # sign of a hair's difference reads as a bug, and the honest fact is a
+    # dead heat.
+    if round(edge, 1) == 0:
+        return f"even with {name} on your bench"
     return f"{edge:+.1f} over {name} on your bench"
 
 

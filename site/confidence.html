@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The number next to a player — Beat Your League</title>
+<meta name="description" content="Every percentage in your report was graded against eleven NFL seasons of real box scores before we sold one. Our own rule says we may not tell you the number is right. Here is everything it found anyway.">
+<meta property="og:title" content="The number next to a player">
+<meta property="og:description" content="Every percentage in your report was graded against eleven NFL seasons of real box scores before we sold one. Our own rule says we may not tell you the number is right. Here is everything it found anyway.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F9F6EE; --card:#FFFFFF; --navy:#16314A; --ink:#33445C;
+    --slate:#5A6B80; --gold:#C9922A; --gold-bright:#F2C230;
+    --turf:#1E7A46; --brick:#B3402F; --line:#DDD6C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--paper);color:var(--navy);
+    font-family:'Barlow',-apple-system,sans-serif;font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:780px;margin:0 auto;padding:38px 20px 80px;}
+  a{color:var(--brick);}
+  a:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:14px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--gold);text-decoration:none;}
+  .brand svg{width:24px;height:16px;flex:none;}
+  h1{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(32px,6vw,48px);
+    line-height:1;text-transform:uppercase;margin-top:18px;max-width:18ch;}
+  .standfirst{margin-top:14px;font-size:17px;color:var(--ink);max-width:64ch;}
+  .standfirst b{color:var(--navy);}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(22px,3.6vw,30px);
+    text-transform:uppercase;line-height:1.04;margin:40px 0 8px;}
+  p{max-width:66ch;color:var(--ink);}
+  p + p{margin-top:10px;}
+  .unit{margin-top:14px;padding:14px 18px;background:var(--card);border:2px solid var(--navy);
+    font-size:16px;color:var(--navy);max-width:66ch;}
+  .unit b{font-family:'Barlow Condensed';font-weight:800;letter-spacing:.06em;
+    text-transform:uppercase;font-size:14px;color:var(--brick);display:block;margin-bottom:4px;}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;
+    margin-top:14px;}
+  .fact{background:var(--card);border:1px solid var(--line);padding:12px 14px;}
+  .fact b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:28px;
+    line-height:1;color:var(--navy);font-variant-numeric:tabular-nums;}
+  .fact span{display:block;margin-top:5px;font-size:12.5px;color:var(--slate);line-height:1.4;}
+  .tablewrap{overflow-x:auto;margin-top:14px;border:2px solid var(--navy);background:var(--card);}
+  table{width:100%;min-width:560px;border-collapse:collapse;font-size:14.5px;
+    font-variant-numeric:tabular-nums;}
+  th{background:var(--navy);color:#DCE4EE;font-family:'Barlow Condensed';font-weight:700;
+    font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;text-align:right;
+    padding:10px 12px;}
+  th:first-child{text-align:left;}
+  td{padding:11px 12px;border-top:1px solid #EDEAE1;text-align:right;color:var(--ink);}
+  td:first-child{text-align:left;font-weight:700;color:var(--navy);}
+  .ok{color:var(--turf);font-weight:700;}
+  .off{color:var(--brick);font-weight:700;}
+  .verdict{margin-top:16px;padding:13px 16px;background:var(--card);
+    border-left:4px solid var(--gold-bright);border-top:1px solid var(--line);
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    font-size:15px;color:var(--ink);max-width:66ch;}
+  .verdict b{color:var(--navy);}
+  .cta{margin-top:44px;padding:20px 22px;background:var(--card);border:2px solid var(--navy);}
+  .cta .btn{display:inline-block;margin-top:12px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;
+    text-decoration:none;color:var(--navy);padding:12px 24px;
+    background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);
+    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  footer{margin-top:52px;border-top:1px solid var(--line);padding-top:16px;
+    font-size:12.5px;color:var(--slate);line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="brand" href="index.html"><svg viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylcfBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylcfSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylcfVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylcfPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylcfBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylcfPath" fill="url(#bylcfSpec)" stroke="none"/><use href="#bylcfPath" fill="url(#bylcfVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><span>Beat Your League</span></a>
+
+  <h1>The number next to a player</h1>
+  <p class="standfirst">Every start in your report that carries a percentage is a prediction
+  we record and grade. Before we sold one, we replayed <b>eleven NFL seasons</b> and graded
+  <b>10,041</b> of those predictions against the real box scores. Our own grading rule —
+  written down before the run, so it couldn't be argued with afterwards — says the result
+  <b>does not let us tell you the number is right</b>. Here is everything it found anyway,
+  including where it fails.</p>
+
+  <h2>What the number means</h2>
+  <div class="unit"><b>The unit, exactly</b>
+  A percentage on a slot is the probability that the player we seat there outscores the best
+  eligible alternative left on your bench at that slot — under our model, under your league's
+  scoring, if the two don't both sit out. It is never "a good start" in general. It's this
+  player over that player, in your lineup.</div>
+
+  <h2>What was graded</h2>
+  <p>Seasons 2014 through 2024. Each call is the model's first choice at a slot against its
+  own second choice, graded on what the two actually scored. Weeks 1–3 are out (a call needs
+  three games of record behind both players), weeks 17–18 are out (fantasy seasons are over),
+  and ties are set aside rather than counted either way.</p>
+  <div class="facts">
+    <div class="fact"><b>10,041</b><span>calls graded</span></div>
+    <div class="fact"><b>9,721</b><span>decided — 320 ties set aside</span></div>
+    <div class="fact"><b>11</b><span>seasons, 838 to 956 calls each</span></div>
+    <div class="fact"><b>64.6%</b><span>of decided calls landed</span></div>
+  </div>
+  <p style="margin-top:12px">That last figure is the one most products would put in a headline.
+  Read on for why ours doesn't.</p>
+
+  <h2>Bucket by bucket</h2>
+  <p>The question that matters isn't how often we were right overall — it's whether the
+  number on each call meant what it said. When we put 60–65% on a call, those calls should
+  land about that often. Here is every band, with what we said and what happened. Intervals
+  are wide on purpose: inside one week the same benched player is the alternative at several
+  slots, and one real game moves many calls at once, so the calls are not independent and the
+  math doesn't pretend they are.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>When we said…</th><th>Calls</th><th>Decided</th><th>We said, on average</th>
+        <th>They landed</th><th>95% interval</th><th>Verdict</th></tr>
+    <tr><td>50–55%</td><td>2,714</td><td>2,627</td><td>52.4%</td><td>51.6%</td><td>50–54%</td><td class="ok">passes</td></tr>
+    <tr><td>55–60%</td><td>2,311</td><td>2,233</td><td>57.4%</td><td>58.9%</td><td>57–61%</td><td class="ok">passes</td></tr>
+    <tr><td>60–65%</td><td>1,946</td><td>1,887</td><td>62.5%</td><td>66.3%</td><td>64–68%</td><td class="off">off</td></tr>
+    <tr><td>65–70%</td><td>1,407</td><td>1,357</td><td>67.3%</td><td>74.1%</td><td>72–77%</td><td class="off">off</td></tr>
+    <tr><td>70–80%</td><td>1,417</td><td>1,375</td><td>74.1%</td><td>82.3%</td><td>80–84%</td><td class="off">off</td></tr>
+    <tr><td>80–90%</td><td>244</td><td>240</td><td>82.9%</td><td>91.2%</td><td>88–95%</td><td class="off">off</td></tr>
+  </table>
+  </div>
+
+  <div class="verdict"><b>Two of six pass. The four that fail all fail the same way:</b> the
+  calls landed <em>more</em> often than the number said. Where we wrote 67.3% the calls landed
+  74.1% of the time; where we wrote 74.1% they landed 82.3%. The rule counts that as a
+  failure, and it should — a number that is wrong in a flattering direction is still wrong,
+  and we are not allowed to round it in our own favour. What it does tell you is that the
+  number is shy, not noisy: the most confident tenth of calls landed 86.1% of the time and
+  the least confident tenth 50.5%, a 35.6-point spread, so the order the numbers put calls in
+  is real even where the numbers themselves run low.</div>
+
+  <h2>What the rule lets us say — and what it doesn't</h2>
+  <p>The grading rule was written before a single number was computed, and its clauses are
+  all required rather than weighed against each other. This run cleared the error threshold
+  (3.6% expected calibration error) and the spread threshold for a stronger grade, and failed
+  on the count of passing bands. So, on every page of this site: <b>no claim that the number
+  is right.</b> The percentage in your report prints as a recorded prediction, and the
+  <a href="ledger/index.html">public record</a> is where it gets settled — one graded call
+  at a time, from October, never edited after the fact.</p>
+  <p>Two more limits that travel with the number. It was graded for PPR scoring, 12-team
+  leagues and the standard lineup; half-PPR, standard scoring, superflex and other league
+  sizes are on the list to be graded on their own, and until they are, the same number
+  prints for those setups without a grading behind it. And a team defense never carries a
+  percentage at all: no defense was graded here, so that slot shows a projection and no
+  number.</p>
+
+  <div class="cta">
+    <b>Every number we print gets graded in public</b> — wins and misses, dated, against
+    the real box score.
+    <br><a class="btn" href="join/index.html">Set up your team</a>
+    <a class="btn" style="background:none;border:2px solid var(--navy);clip-path:none" href="sample-report.html">Read a real report</a>
+  </div>
+
+  <footer>
+    Figures from our published grading of the confidence number, reproducible from public
+    data; the method was frozen and committed before the run. This grading measures the
+    model's first choice against its own second — it is a different question from the older
+    league study linked below, and the two are never placed side by side. NFL data:
+    nflverse (nflverse-data), CC-BY-4.0. Analysis, not picks.<br>
+    <a href="index.html">Beat Your League</a> ·
+    <a href="no-call.html">Why some slots say "no call"</a> ·
+    <a href="projections.html">How accurate are Sleeper's projections?</a> ·
+    <a href="backtest.html">The older league study</a> ·
+    <a href="legal.html">Terms &amp; privacy</a>
+  </footer>
+</div>
+</body>
+</html>

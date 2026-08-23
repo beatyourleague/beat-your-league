@@ -42,6 +42,7 @@ from render.report import (
     esc,
     no_call_explainer,
     number_sections,
+    short_gate,
     who_can_cover,
 )
 
@@ -730,7 +731,8 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
         if confidence is not None:
             call = f'<b style="color:{TURF};">{_pct(confidence)}%</b>'
         elif mixed and slot.get("player_name"):
-            call = f'<span style="{SMALL}">{esc(NO_CALL)}</span>'
+            call = (f'<span style="{SMALL}">'
+                    f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
         else:
             call = ""
         cell = f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
