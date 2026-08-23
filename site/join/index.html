@@ -206,12 +206,16 @@ Baltimore Ravens
         seat comes out of your commissioner's League Pass, so your first report lands
         the Tuesday after their pass goes through. You get your <b>own</b> report,
         built from the roster you just entered.</li>
+        <li id="update-note" style="display:none">Your next file is built from the
+        roster you just entered. It changes only the subscription your report came
+        from — if the address above isn't the one your reports go to, nothing
+        changes.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
-        <li>Your first report lands <b>Tuesday, Sep 8</b>. Refunds are no-questions
+        <li id="first-note">Your first report lands <b>Tuesday, Sep 8</b>. Refunds are no-questions
         through Week 2 — one per person, and a re-subscription after a refund is final.
         Changed your mind later?
         <a href="../legal.html#cancel">Cancelling takes about fifteen seconds</a> in your
@@ -281,6 +285,14 @@ if (!STRIPE_LINK_SEASON && !STRIPE_LINK_MONTHLY && !STRIPE_LINK_PASS) {
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
 const WANTS_PASS = QUERY.get("plan") === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
+// ?update=<slug>&token=<token> — the link inside every report. The slug names
+// the subscription being changed and the token is the subscriber's own
+// credential (an HMAC the intake verifies); a malformed pair is not an update,
+// it is an ordinary visit, so nothing here can be talked into a free change.
+const UPDATE_SLUG = QUERY.get("update") || "";
+const UPDATE_TOKEN = QUERY.get("token") || "";
+const UPDATE_MODE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
+                    /^[0-9a-f]{20}$/.test(UPDATE_TOKEN);
 
 const TEMPLATES = {
   std: ["QB","RB","RB","WR","WR","TE","FLEX","K","DEF"],
@@ -457,6 +469,12 @@ $("form-email").addEventListener("submit", (event) => {
     submitSeat(email, ref);
     return;
   }
+  // AN UPDATE IS NOT A PAYMENT EITHER. It changes the roster on a subscription
+  // that already exists; the payment path is never reached from here.
+  if (UPDATE_MODE) {
+    submitUpdate(email, ref);
+    return;
+  }
 
   const link = WANTS_PASS ? STRIPE_LINK_PASS
              : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
@@ -524,6 +542,30 @@ function submitSeat(email, ref) {
   });
 }
 
+function submitUpdate(email, ref) {
+  if (!FORM_ENDPOINT) {
+    showError("err-email", "Roster updates aren't open just yet — we're finishing " +
+      "setup. Your roster isn't saved here; reply to any report with it and " +
+      "your file follows it from the next Tuesday.");
+    return;
+  }
+  fetch(FORM_ENDPOINT, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "update", email: email, ref: ref,
+                           replaces: UPDATE_SLUG, token: UPDATE_TOKEN }),
+    signal: AbortSignal.timeout(15000),
+  }).then(() => {
+    // Received, not yet applied: the intake checks the token against the
+    // address and the slug against the subscription before anything changes.
+    $("form-email").style.display = "none";
+    $("done-head").textContent = "Your roster update is in.";
+    $("done").style.display = "block";
+  }).catch(() => {
+    showError("err-email", "That didn't send — check your connection and try " +
+      "again. Nothing was saved.");
+  });
+}
+
 function showSeatLink() {
   // Only on the way to Stripe. Rendered earlier it is a shareable link before
   // any payment, so an abandoned checkout leaves a league of people each told
@@ -542,7 +584,26 @@ function showSeatLink() {
   share.style.display = "block";
 }
 
-if (SEAT_MODE) {
+if (UPDATE_MODE) {
+  $("header-pitch").textContent =
+    "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
+    "and your next file is built from it. Nothing to pay; this changes the " +
+    "roster on the subscription your report came from.";
+  $("header-chips").replaceChildren();
+  ["Roster update", "Nothing to pay", "Applies from the next Tuesday"]
+    .forEach((text) => {
+      const chip = document.createElement("span");
+      chip.textContent = text;
+      $("header-chips").appendChild(chip);
+    });
+  $("submit").textContent = "Update my roster";
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+  $("terms-line").style.display = "none";
+  $("closed-note").style.display = "none";
+  $("first-note").style.display = "none";
+  $("update-note").style.display = "list-item";
+} else if (SEAT_MODE) {
   $("header-pitch").textContent =
     "Seat already paid by your commissioner. Enter your own roster and you get " +
     "your own report — not a copy of theirs. Nothing to pay.";

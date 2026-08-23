@@ -73,6 +73,11 @@ class RosterSubscriber:
     plan: str = SEASON
     covered_by: str | None = None       # payer's email, for League Pass seats
     stripe_customer_id: str | None = None
+    # The slug this subscription was FIRST written under. A self-serve roster
+    # update replaces ``ref`` (run/updates.py), and everything keyed on the
+    # slug — send-log keys, report filenames, the update link itself — must
+    # not move when the roster does, or a changed roster is a second send.
+    origin: str | None = None
 
     @property
     def is_league_seat(self) -> bool:
@@ -87,7 +92,7 @@ class RosterSubscriber:
         stable week to week, unique per subscription, and meaningless to anyone
         who finds it.
         """
-        return hashlib.sha256(self.ref.encode("utf-8")).hexdigest()[:10]
+        return self.origin or hashlib.sha256(self.ref.encode("utf-8")).hexdigest()[:10]
 
     @property
     def key(self) -> tuple[str, str]:
@@ -166,10 +171,14 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
             f"{where}: stripe_customer_id must look like 'cus_...', got {customer!r}")
 
     label = str(raw.get("label") or "Your Team").strip() or "Your Team"
+    origin_raw = raw.get("origin")
+    origin = str(origin_raw).strip() if origin_raw else None
+    if origin is not None and not re.fullmatch(r"[0-9a-f]{10}", origin):
+        raise RosterRegistryError(f"{where}: origin must be a 10-hex slug, got {origin_raw!r}")
     subscriber = RosterSubscriber(
         email=email, ref=ref, player_ids=players, slots=slots, scoring=scoring,
         league_size=size, label=label, plan=plan, covered_by=covered_by,
-        stripe_customer_id=stripe_customer_id)
+        stripe_customer_id=stripe_customer_id, origin=origin)
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that

@@ -924,6 +924,24 @@ def _forward_line() -> str:
             f'is public: {esc(site)}/ledger.<br>')
 
 
+UPDATE_HEAD = "Roster changed?"
+UPDATE_BODY = ("Trades and pickups happen — update your roster here and your file "
+               "follows it from the next Tuesday:")
+
+
+def update_line(meta: Mapping[str, Any]) -> str:
+    """The self-serve roster update link, shared by both renderers. Rendered
+    only when the run produced one (run/updates.update_url gates it on the
+    site and the secret), so a report never carries a dead link — and the
+    link is the ONLY place the subscriber's token travels, which is what
+    makes the public form safe to post to."""
+    url = meta.get("update_url")
+    if not url:
+        return ""
+    return (f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_BODY)} '
+            f'<a href="{esc(url)}">{esc(url)}</a><br>')
+
+
 def footer(meta: Mapping[str, Any]) -> str:
     basis = availability_basis(meta)
     demo = ("Sample report built from a real past season, to show what you get. "
@@ -936,6 +954,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{_forward_line()}'
+        f'{update_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         # Every commercial email needs a working way out. It points at the

@@ -53,6 +53,8 @@ from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
+from run.updates import (UPDATE_LOG_NAME, append_update_log, apply_updates,
+                         latest_per_target, load_update_log, validate_updates)
 from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
                          load_rosters)
 from render.welcome import welcome_message
@@ -569,12 +571,13 @@ def main(argv: list[str] | None = None) -> int:
     # validated backend exists, and empty means the tier simply does not
     # deliver seats rather than delivering unpaid ones.
     seat_rows: list[dict] = []
+    update_rows: list[dict] = []
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
     if seat_endpoint:
         # Built from what the LINK took, never from what a seat claims.
         pass_payers = {s.email.lower() for s in servable if s.plan == LEAGUE_PASS}
         try:
-            claims = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
+            form_rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
         except IntakeError as exc:
             # Refuse rather than writing a Stripe-only registry: that would
             # silently drop every seat and read as a quiet week.
@@ -583,17 +586,41 @@ def main(argv: list[str] | None = None) -> int:
                   "Pass seat. Fix the backend, or unset FORM_ENDPOINT to run "
                   "without seats deliberately.", file=sys.stderr)
             return 1
+        # One backend, two kinds of row: a seat claim (the default, for rows
+        # written before updates existed) and a roster update.
+        claims = [r for r in form_rows if str(r.get("kind") or "seat") == "seat"]
+        update_rows = [r for r in form_rows if str(r.get("kind") or "") == "update"]
         seat_rows, seat_problems = seats_to_rows(claims, pass_payers,
                                                  known or None)
         problems.extend(seat_problems)
         print(f"Seats: {len(seat_rows)} honoured of {len(claims)} claim(s)")
+
+    candidate = to_rows(servable) + seat_rows
+
+    # Self-serve roster UPDATES (run/updates.py). Validated against the rows
+    # about to be written — a subscriber can only change a roster they hold —
+    # and authenticated by the token that reaches them inside their own
+    # reports. Logged on first sight so the order is ours, not the form's.
+    update_log_path = registry_dir / UPDATE_LOG_NAME
+    validated, update_problems = validate_updates(
+        update_rows, candidate, known or None, os.environ.get("UPDATE_SECRET", ""))
+    problems.extend(update_problems)
+    if not args.dry_run:
+        append_update_log(validated, update_log_path)
+        update_log = load_update_log(update_log_path)
+    else:
+        update_log = [*load_update_log(update_log_path), *validated]
+    candidate, applied = apply_updates(candidate, latest_per_target(update_log))
+    if update_rows or applied:
+        print(f"Updates: {applied} roster(s) changed from {len(update_rows)} "
+              f"update row(s)")
 
     # A PAYMENT ALWAYS BEATS AN UNPAID CLAIM. Someone who bought their own
     # subscription must not have it replaced by a seat row naming them.
     # drop_unloadable resolves that collision in the payer's favour in EITHER
     # order — verified by mutation, because the first version of this comment
     # claimed the ordering was load-bearing and it is not.
-    rows, dropped = drop_unloadable(to_rows(servable) + seat_rows)
+    rows, dropped = drop_unloadable(candidate)
     # Every servable signup being dropped is a bug in what we write, not a
     # business that lost all its customers — and writing an empty registry over
     # a good one, then exiting 0, is the failure nobody notices until Tuesday.

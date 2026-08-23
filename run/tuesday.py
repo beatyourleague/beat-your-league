@@ -43,6 +43,7 @@ from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
 from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
 from run.solo import CACHE_DIR, SoloError, WeekData, load_week_data, report_for
+from run.updates import update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -91,6 +92,12 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     try:
         report = report_for(subscriber.spec(), data,
                             league_size=subscriber.league_size)
+        # The self-serve roster update link: the only place the subscriber's
+        # token travels. None (and so nothing rendered) until SITE_URL and
+        # UPDATE_SECRET exist — a dead link is worse than no link.
+        report["meta"]["update_url"] = update_url(
+            os.environ.get("SITE_URL", ""), subscriber.email, subscriber.slug,
+            os.environ.get("UPDATE_SECRET", ""))
     except SoloError as exc:
         return RunResult(subscriber, ok=False, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — batch contract: one subscriber's

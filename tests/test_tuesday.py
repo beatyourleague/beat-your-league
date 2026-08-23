@@ -175,6 +175,38 @@ def test_a_paid_roster_becomes_an_email(tmp_path) -> None:
     assert "@" not in result.message.key
 
 
+def test_every_report_carries_its_roster_update_link_only_when_it_resolves(
+        tmp_path, monkeypatch) -> None:
+    """The update link is the one place the subscriber's token travels, so it
+    must reach all three surfaces (browser, HTML email, plain text) — and
+    with no site or no secret there must be no link at all, never a dead one.
+    The slug in it is the origin slug, so a roster that has already been
+    changed once still links to the same place."""
+    from run.updates import update_token
+    template = Path("rival-report-template.html").read_text(encoding="utf-8")
+    monkeypatch.delenv("SITE_URL", raising=False)
+    monkeypatch.delenv("UPDATE_SECRET", raising=False)
+    result = tuesday.run_subscriber(_subscriber(), _week_data(tmp_path), template,
+                                    out_dir=tmp_path / "out",
+                                    processed_dir=tmp_path / "processed")
+    assert result.ok and "Roster changed" not in result.message.html
+    assert "join/?update=" not in result.message.text
+
+    monkeypatch.setenv("SITE_URL", "https://x.test")
+    monkeypatch.setenv("UPDATE_SECRET", "s3")
+    sub = _subscriber(origin="abc123def0")
+    result = tuesday.run_subscriber(sub, _week_data(tmp_path), template,
+                                    out_dir=tmp_path / "out2",
+                                    processed_dir=tmp_path / "processed2")
+    assert result.ok, result.detail
+    link = f"https://x.test/join/?update=abc123def0&token={update_token('fan@example.com', 's3')}"
+    import html as _html
+    assert _html.escape(link) in result.message.html
+    assert link in result.message.text
+    assert _html.escape(link) in result.html_path.read_text(encoding="utf-8")
+    assert "Roster changed?" in result.message.html
+
+
 def test_published_calls_are_recorded_the_week_they_are_published(tmp_path) -> None:
     """Principle 2. A call not recorded at publication cannot be recovered
     later — there is no record of what the subscriber was shown."""

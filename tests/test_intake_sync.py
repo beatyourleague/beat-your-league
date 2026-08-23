@@ -12,6 +12,7 @@ swept and forgotten, a row that loads for nobody.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -533,3 +534,165 @@ def test_with_no_provider_welcomes_are_reported_pending_not_sent(
     out = capsys.readouterr().out
     assert "Welcomes: 1 pending" in out
     assert "none were sent and none were recorded" in out
+
+
+# --------------------------------------------------------------------- #
+# self-serve roster updates — authenticated, targeted, stamped on receipt
+# --------------------------------------------------------------------- #
+
+from run.updates import slug_of, update_token, update_url  # noqa: E402
+
+NEW_REF = encode_roster("season", "half_ppr", list(SLOTS), PLAYERS[::-1])
+SECRET = "test-secret-do-not-ship"
+
+
+def _update(**over) -> dict:
+    row = {"kind": "update", "email": "fan@example.com", "ref": NEW_REF,
+           "replaces": slug_of(REF), "token": update_token("fan@example.com", SECRET)}
+    row.update(over)
+    return row
+
+
+def _updates(monkeypatch, *rows: dict, secret: str | None = SECRET) -> None:
+    _seats(monkeypatch, *rows)
+    if secret is None:
+        monkeypatch.delenv("UPDATE_SECRET", raising=False)
+    else:
+        monkeypatch.setenv("UPDATE_SECRET", secret)
+
+
+def test_a_subscriber_can_change_their_own_roster(tmp_path, stripe, directory,
+                                                  monkeypatch, capsys) -> None:
+    """Rosters churn from the first waiver run; by the second report a file
+    built from the signup roster recommends dropped players. An update from
+    the subscriber, carrying their token, replaces the roster — both copies,
+    from one object — and nothing else about the row."""
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _update())
+    assert _run(tmp_path) == 0, capsys.readouterr().err
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == NEW_REF
+    assert row.scoring == "half_ppr"
+    assert row.player_ids == tuple(PLAYERS[::-1])
+    assert row.stripe_customer_id == "cus_abcd1234" and row.plan == "season"
+    # The identity everything is keyed on did not move with the roster.
+    assert row.origin == slug_of(REF) and row.slug == slug_of(REF)
+
+
+def test_an_update_without_the_subscribers_token_is_refused(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The form is public. Without the token, anyone who knows a leaguemate's
+    address could set their lineup for them."""
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _update(token="0" * 20))
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == REF, "an unauthenticated update changed a paid roster"
+    assert "does not match" in capsys.readouterr().err
+
+
+def test_an_update_cannot_target_a_subscription_the_address_does_not_hold(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    stripe["sessions"] = [_session(REF),
+                          _session(PASS_REF, sid="cs_2", email="other@example.com",
+                                   customer="cus_other0001")]
+    # A valid token for fan@, aimed at other@'s row.
+    _updates(monkeypatch, _update(replaces=slug_of(PASS_REF)))
+    assert _run(tmp_path) == 0
+    rows = {s.email: s for s in load_rosters(tmp_path / intake.REGISTRY_NAME)}
+    assert rows["other@example.com"].ref == PASS_REF
+    assert rows["fan@example.com"].ref == REF
+    assert "does not hold" in capsys.readouterr().err
+
+
+def test_with_no_secret_configured_no_update_is_applied(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """An update that cannot be authenticated is anyone's to forge, so the
+    absence of the secret fails closed and says so."""
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _update(), secret=None)
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == REF
+    assert "UPDATE_SECRET" in capsys.readouterr().err
+
+
+def test_the_newest_update_wins_by_when_we_first_saw_it(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """Two runs, two updates to the same row: the later-seen one stands, and
+    a re-run with the same backend contents changes nothing."""
+    stripe["sessions"] = [_session(REF)]
+    second = encode_roster("season", "standard", list(SLOTS), PLAYERS)
+    _updates(monkeypatch, _update())
+    assert _run(tmp_path) == 0
+    _updates(monkeypatch, _update(), _update(ref=second))
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == second and row.scoring == "standard"
+    before = (tmp_path / intake.REGISTRY_NAME).read_text(encoding="utf-8")
+    log_before = (tmp_path / intake.UPDATE_LOG_NAME).read_text(encoding="utf-8")
+    assert _run(tmp_path) == 0
+    assert (tmp_path / intake.REGISTRY_NAME).read_text(encoding="utf-8") == before
+    assert (tmp_path / intake.UPDATE_LOG_NAME).read_text(encoding="utf-8") == log_before
+
+
+def test_an_update_never_triggers_a_second_welcome(tmp_path, stripe, directory,
+                                                   monkeypatch) -> None:
+    """The welcome is keyed on the signup, and an update touches only the
+    registry row — so a changed roster is never a second acknowledgment."""
+    sends = _capture_sends(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    assert _run(tmp_path) == 0
+    _updates(monkeypatch, _update())
+    assert _run(tmp_path) == 0
+    welcomes = [m for m in sends if m.key.startswith("welcome-")]
+    assert len(welcomes) == 1, [m.key for m in sends]
+
+
+def test_an_update_naming_an_unknown_player_is_refused_not_written(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The registry loader fails the whole file on one bad row; an update is
+    checked against the directory before it can take every subscriber down."""
+    stripe["sessions"] = [_session(REF)]
+    ghost = encode_roster("season", "ppr", list(SLOTS), PLAYERS[:-1] + ["00-0099999"])
+    _updates(monkeypatch, _update(ref=ghost))
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == REF
+    assert "directory does not have" in capsys.readouterr().err
+
+
+def test_the_update_link_is_stable_and_never_dead() -> None:
+    """Every report a subscriber receives carries the same link (the origin
+    slug, not the current ref), and with no site or no secret there is no
+    link at all rather than a dead one."""
+    assert update_url("", "fan@example.com", "abc123def0", SECRET) is None
+    assert update_url("https://x.test", "fan@example.com", "abc123def0", "") is None
+    url = update_url("https://x.test/", "fan@example.com", "abc123def0", SECRET)
+    assert url == ("https://x.test/join/?update=abc123def0&token="
+                   + update_token("fan@example.com", SECRET))
+    assert update_token("Fan@Example.com ", SECRET) == update_token("fan@example.com", SECRET)
+    assert update_token("fan@example.com", SECRET) != update_token("fan@example.com", "other")
+
+
+def test_the_worker_the_picker_and_the_intake_agree_on_the_update_contract() -> None:
+    """Three files, three languages, nothing type-checking across them: the
+    Worker's sanitiser (infra/form-worker.js), the picker's UPDATE_MODE gate
+    (site/join/index.html) and run/updates.py must agree on what a slug and a
+    token look like, or a valid update is dropped at one of the three doors
+    with no error anyone sees."""
+    root = Path(__file__).resolve().parent.parent
+    worker = (root / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    picker = (root / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    from run.updates import TOKEN_LENGTH
+    slug_re = r"\^\[0-9a-f\]\{10\}\$"
+    token_re = rf"\^\[0-9a-f\]\{{{TOKEN_LENGTH}\}}\$"
+    for name, page in (("worker", worker), ("picker", picker)):
+        assert re.search(slug_re, page), f"{name} does not gate the slug shape"
+        assert re.search(token_re, page), f"{name} does not gate the token shape"
+    assert len(slug_of(REF)) == 10 and len(update_token("a@b.co", SECRET)) == TOKEN_LENGTH
+    # The Worker stores exactly the fields the intake reads, by name.
+    for field in ('kind === "update"', "covered_by", "replaces", "token"):
+        assert field in worker
+    # And it never accepts an unauthenticated read.
+    assert "Bearer ${env.FORM_API_KEY}" in worker and "401" in worker

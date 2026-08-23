@@ -1416,3 +1416,35 @@ def test_no_sleeper_in_the_paid_path() -> None:
         # Not a failure — a standing reminder of what is left to do, visible in
         # -v output without turning the suite red mid-migration.
         assert True, offenders
+
+
+# --------------------------------------------------------------------- #
+# self-serve roster updates — the picker's third mode
+# --------------------------------------------------------------------- #
+
+def test_update_mode_never_reaches_a_payment_and_posts_the_contract() -> None:
+    """The link inside every report opens the picker in update mode. Two
+    things must hold in the browser: the payment path is never reached (an
+    update is not a purchase), and the row posted carries exactly what
+    run/updates.py verifies — kind, the subscription's slug, the token. The
+    Python side is pinned in tests/test_intake_sync.py; this pins the JS half
+    of the contract."""
+    handler = JOIN.split('$("form-email").addEventListener')[1]
+    before_link = handler.split("const link = ")[0]
+    assert "if (UPDATE_MODE)" in before_link and "submitUpdate(email, ref)" in before_link, \
+        "update mode must leave the handler before a payment link is chosen"
+    post = JOIN.split("function submitUpdate")[1].split("function showSeatLink")[0]
+    assert 'kind: "update"' in post
+    assert "replaces: UPDATE_SLUG" in post and "token: UPDATE_TOKEN" in post
+    assert "STRIPE_LINK" not in post
+    # A malformed pair is an ordinary visit, never an update.
+    assert re.search(r'UPDATE_MODE = /\^\[0-9a-f\]\{10\}\$/\.test\(UPDATE_SLUG\)', JOIN)
+    assert re.search(r'/\^\[0-9a-f\]\{20\}\$/\.test\(UPDATE_TOKEN\)', JOIN)
+    # With no backend it says the roster is NOT saved and names the fallback.
+    assert "isn't saved" in post and "reply to any report" in post
+    # A subscriber changing their roster is shown no billing terms.
+    mode = JOIN.rsplit("if (UPDATE_MODE) {", 1)[1].split("} else if (SEAT_MODE)")[0]
+    for hidden in ("terms-line", "renew-note", "pay-note", "first-note"):
+        assert f'$("{hidden}").style.display = "none"' in mode, \
+            f"update mode leaves {hidden} visible"
+    assert "Nothing to pay" in mode

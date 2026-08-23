@@ -578,6 +578,41 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**Self-serve roster updates (`run/updates.py`, Aug 23 2026) — the audit's #1 product gap.**
+Rosters churn from the week-1 waiver run, so by the SECOND report — inside the refund window —
+a file built from the signup roster recommends dropped players and is blind to the pickups.
+The mechanism reuses the seat pattern (picker posts a row to `FORM_ENDPOINT`, the intake
+validates before a byte reaches the registry) with three rules: **an update is AUTHENTICATED**
+by a token (HMAC of the address under `UPDATE_SECRET`) that travels only inside the
+subscriber's own reports — the form is public, so without it anyone who knew a leaguemate's
+email could set their lineup; **an update names the row it replaces** (the subscription's
+`origin` slug, which never moves when the roster does, so send keys, filenames and the link
+stay constant); **order is stamped on first sight**, never read from the row. Welcomes key on
+the signup, so a changed roster is never a second welcome. Every piece fails closed without
+the secret or the endpoint (no link renders; nothing applies). The backend is one pasteable
+Cloudflare Worker (`infra/form-worker.js`, LAUNCH.md step 5b) — it holds nothing secret and
+decides nothing — and the same paste unblocks League Pass seats. The three-way slug/token
+contract (Worker ↔ picker ↔ Python) is pinned by test. The landing FAQ keeps the
+"reply to any report" answer until the owner wires the endpoint, because the link does not
+render before that and the FAQ may only describe what ships.
+
+**The live gate read a report that does not exist on a Tuesday (Aug 23 2026).** `run/solo.py`
+built availability from week W's injury rows. Measured on the real 2024 archive by
+`date_modified`: by the Tuesday send, week W held **0–2 of its 200–385 rows in every week but
+one**, while week W−1's report was complete in every week. So the shipping product would have
+printed either NO confidence anywhere (no snapshot) or confidences against a two-row file read
+as a clean bill of health. The frozen method §6 already said the gate must use **week W−1's
+designations** ("the single most consequential rule in this section") and the Grade-C numbers
+were measured under that gate; the live gate now mirrors `nflverse_backtest.availability_for`
+exactly (carry-forward team from the most recent stat row strictly before W; no prior row →
+UNKNOWN, fail closed; a missing W−1 report → no snapshot, never "everyone active"). Recorded as
+method §15 C3. Consequence worth knowing: **week 1 has no W−1 report and prints no numbers
+under any model**, so an early-season confidence arm can only ever reach weeks 2–3.
+Following the honest Tuesday information set through the sample found the next hole: a
+questionable BENCH player whose doubt gates a slot (Pollard, week 9) was named nowhere — the
+pivot plan looked only at questionable starters and the solo checklist returned before its
+late-news item. `late_news()` feeds both now.
+
 **The sell audit (Aug 23 2026) — confession → strength, and three frozen-method violations
 that were live.** Six-lens audit (two cold-buyer reads, legal floor, positioning, product gaps,
 test-pin map) against the owner's directive: a direct why-buy message, and nothing on the site

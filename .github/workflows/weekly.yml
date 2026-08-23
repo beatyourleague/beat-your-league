@@ -115,6 +115,12 @@ jobs:
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          # The form backend (League Pass seats + self-serve roster updates)
+          # and the secret that authenticates an update. All three unset means
+          # neither feature delivers — never that either delivers unverified.
+          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
+          FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
+          UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
         run: |
           set +e
           .venv/bin/python -m run.intake
@@ -134,6 +140,10 @@ jobs:
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          # The roster-update link in every report needs both; with either
+          # missing no link renders, which beats a dead one.
+          SITE_URL: ${{ secrets.SITE_URL }}
+          UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
         run: .venv/bin/python -m run.tuesday
       - name: Save subscriber registry
         if: always()

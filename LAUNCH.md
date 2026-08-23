@@ -50,6 +50,9 @@ file is the hands-on-keyboard half.
    | `RESEND_API_KEY` | 4 | |
    | `SITE_URL` | 1 | `https://<domain>` |
    | `BILLING_PORTAL_URL` | 5 | Stripe customer-portal login link |
+   | `FORM_ENDPOINT` | 5b | the Worker URL (seats + roster updates) |
+   | `FORM_API_KEY` | 5b | the Worker's read key, same value as in the Worker |
+   | `UPDATE_SECRET` | 5b | `openssl rand -hex 32` — authenticates roster updates |
 
 ## 3. Loops — the waitlist (~30 min)
 
@@ -104,6 +107,34 @@ file is the hands-on-keyboard half.
 7. **Tell me the three full payment-link URLs.** I paste them into `site/join/index.html`,
    flip `CHECKOUT_OPEN`, and the funnel goes live on the next push.
 
+## 5b. The form backend (~20 min) — one paste, unblocks two features
+
+League Pass seats and self-serve roster updates both need somewhere for the
+page to post a row and for the intake to read it back. Free form vendors cap
+at ~50 submissions a month or can't be read by a program, so the backend is a
+~60-line Cloudflare Worker in the same account as the DNS — the whole thing is
+[infra/form-worker.js](infra/form-worker.js), and it decides nothing: every
+row is validated by the intake before it reaches the registry.
+
+1. Cloudflare → Workers & Pages → Create → Worker → paste `infra/form-worker.js`
+   → Deploy.
+2. Storage & Databases → KV → create a namespace (any name). Worker → Settings →
+   Bindings → KV namespace, **variable name `ROWS`**.
+3. Worker → Settings → Variables: `SITE_ORIGIN` = `https://<domain>`;
+   `FORM_API_KEY` = a random string (mark it secret).
+4. Generate the update secret once:
+   ```bash
+   openssl rand -hex 32
+   ```
+5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's
+   value, `UPDATE_SECRET` = step 4's value.
+6. **Tell me the Worker URL.** I set `FORM_ENDPOINT` in `site/join/index.html`
+   and flip the FAQ's roster-change answer from "reply to any report" to the
+   link every report then carries.
+
+Until this is done, both features fail closed: seats are refused with a
+reason, and the update link simply does not render in reports.
+
 ## 6. The proving run (~2 h, after 5) — non-negotiable
 
 This repo's own history includes a cron that could never have mailed anybody and looked
@@ -117,6 +148,9 @@ green. Money does not move for strangers until each of these has been watched ha
    Apple Mail. Check the images, the footer links, and that the billing-portal link works.
 3. **Welcome check:** the purchase in (1) should also have produced the welcome email —
    confirm its renewal terms match what you bought.
+4. **Roster update:** tap "Roster changed?" in the report from (2), change one player,
+   run `make intake`, and confirm `rosters.json` shows the new roster under the same
+   `origin` slug.
 
 ## 7. The sell window (Aug 25 – Sep 3) — where season one's subscribers actually come from
 

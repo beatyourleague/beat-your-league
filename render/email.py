@@ -35,6 +35,9 @@ from render.report import (
     SECTION_MARK,
     source_line,
     _forward_line,
+    UPDATE_BODY,
+    UPDATE_HEAD,
+    update_line,
     _generated_stamp,
     _pct,
     availability_basis,
@@ -653,6 +656,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
                   "no staking advice. Your decisions are yours.",
               source_line(meta),
               *_forward_lines(),
+              *([f"", f"{UPDATE_HEAD.upper()} {UPDATE_BODY} {meta['update_url']}"]
+                if meta.get("update_url") else []),
               "",
               "DONE WITH THIS? Cancel it yourself from your own billing page — about "
               "fifteen seconds, and the billing stops immediately. Note that "
@@ -688,6 +693,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
         f'{_forward_line()}'
+        f'{update_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}</p></td></tr>'
