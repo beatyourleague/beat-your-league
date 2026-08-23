@@ -195,9 +195,13 @@ def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
     every defense a subscriber enters by abbreviation.
 
     Note "K" is deliberately NOT in the slot-label list: it would eat the K of
-    a name like "K. Walker", and a kicker's line is identifiable without it.
+    a name like "K. Walker". But a NON-LEADING bare K is a position tag —
+    "Jake Bates K DET" is how a kicker's row pastes out of every league app,
+    and refusing it made every pasted kicker an unresolved line. An initial
+    only ever leads a name, so position matters more than the letter.
     """
     text = re.sub(r"\s+", " ", _DECORATION.sub(" ", line or "")).strip()
+    text = re.sub(r"(?<=[^\s.]) K(?= |$)", "", text, flags=re.I).strip()
     if teams:
         kept = [w for w in text.split() if w.upper() not in teams]
         if kept:

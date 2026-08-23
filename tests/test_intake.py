@@ -78,6 +78,10 @@ PASTED = [
     "Patrick Mahomes QB KC - BYE 10", "Patrick Mahomes (KC) 21.4",
     "QB  Patrick Mahomes  KC", "Patrick Mahomes • KC • BYE 6",
     "Justin Jefferson  WR  MIN", "BAL DEF", "Ravens D/ST", "KC",
+    # The kicker cases: a NON-LEADING bare K is a position tag and strips;
+    # a leading K is an initial and must survive. "Jake Bates K DET" is how
+    # every league app pastes a kicker, and it used to fail resolution.
+    "Jake Bates K DET", "Harrison Butker K", "K. Walker", "K Walker",
 ]
 
 

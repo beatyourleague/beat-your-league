@@ -42,10 +42,14 @@ WEEK = 6
 
 # One roster's worth of players plus enough of a field that the positional
 # prior has somebody to rank. Ids are GSIS-shaped because RULE R1 requires it.
-ROSTER = [("Star QB", "QB", "KC"), ("Bell Cow", "RB", "SF"),
-          ("Committee RB", "RB", "DET"), ("Alpha WR", "WR", "CIN"),
-          ("Slot WR", "WR", "DET"), ("Starting TE", "TE", "SF"),
-          ("Deep WR", "WR", "DEN"), ("Bench RB", "RB", "KC")]
+# Display names deliberately contain NO position tokens (QB, WR, K…): the trial
+# path resolves these through the real decoration-stripper, which eats position
+# tags — a fixture named "Star QB" would strip to "Star" and resolve nowhere.
+# Real players are not named after their positions; the fixture shouldn't be.
+ROSTER = [("Aaron Armstrong", "QB", "KC"), ("Bell Cow", "RB", "SF"),
+          ("Cade Carter", "RB", "DET"), ("Dre Wideout", "WR", "CIN"),
+          ("Eli Slotside", "WR", "DET"), ("Frank Tighten", "TE", "SF"),
+          ("Gabe Fielder", "WR", "DEN"), ("Hank Benchman", "RB", "KC")]
 SLOTS = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")
 
 
@@ -204,7 +208,7 @@ def test_a_week_with_no_injury_report_yields_no_snapshot(tmp_path) -> None:
     statuses from the directory alone resolves that ambiguity the dangerous
     way — a clean bill of health for every player in the league, and a
     confidence on every slot."""
-    directory = PlayerDirectory([Player(_pid(1), "Star QB", "QB", "KC")])
+    directory = PlayerDirectory([Player(_pid(1), "Aaron Armstrong", "QB", "KC")])
     assert solo._statuses(directory, None) is None
     empty = InjuryWeek(season=SEASON, week=9, by_gsis={}, teams={})
     assert solo._statuses(directory, empty) is None

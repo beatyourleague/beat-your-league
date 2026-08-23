@@ -40,6 +40,9 @@ const DECORATION =
 
 function stripDecoration(line, teams) {
   let text = (line || "").replace(DECORATION, " ").replace(/\s+/g, " ").trim();
+  // A NON-LEADING bare K is the kicker position tag ("Jake Bates K DET");
+  // a leading K is an initial ("K. Walker", "K Walker") and stays.
+  text = text.replace(/(?<=[^\s.]) K(?= |$)/gi, "").trim();
   if (teams && teams.size) {
     const kept = text.split(" ").filter((w) => !teams.has(w.toUpperCase()));
     // Only if something survives: "KC" alone IS the Chiefs defense, while the
