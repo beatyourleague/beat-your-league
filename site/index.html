@@ -1054,6 +1054,39 @@
   </div>
 </footer>
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Product",
+      "name": "Beat Your League",
+      "description": "A weekly scouting file for your fantasy football roster: the lineup we'd set under your league's scoring, a number on every call worth making, and every published call graded in public.",
+      "offers": [
+        {"@type": "Offer", "price": "39", "priceCurrency": "USD",
+         "description": "Season pass — every weekly report, Week 1 through your title game. No-questions refund through Week 2."},
+        {"@type": "Offer", "price": "12.99", "priceCurrency": "USD",
+         "description": "Monthly — same report, cancel any time, billing stops when the season does."}
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {"@type": "Question", "name": "Does it work with my league app?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Any of them. We never connect to a league — you paste your roster as plain names, from Sleeper, ESPN, Yahoo, or a napkin. If you can copy it, we can read it."}},
+        {"@type": "Question", "name": "Does it match my league's scoring?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes — you pick PPR, half-PPR, or standard, plus your league size and lineup shape (superflex included). Every number is computed under your settings."}},
+        {"@type": "Question", "name": "When does it arrive?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season — after Monday night's box score has been graded, before your lineup decisions are due."}},
+        {"@type": "Question", "name": "What if my roster changes mid-season?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and your file follows it from the next Tuesday."}},
+        {"@type": "Question", "name": "Why is there no win probability on my matchup?",
+         "acceptedAnswer": {"@type": "Answer", "text": "We only publish a number when our own testing says it holds up, and matchup win odds aren't there yet. The numbers you do see are the ones we're prepared to be graded on, in public."}}
+      ]
+    }
+  ]
+}
+</script>
 <script>
 "use strict";
 document.documentElement.classList.add("js");

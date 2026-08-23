@@ -701,6 +701,33 @@ def test_compare_tables_scroll_on_a_phone() -> None:
 
 
 # --------------------------------------------------------------------- #
+# structured data stays true to the page it annotates
+# --------------------------------------------------------------------- #
+
+def test_structured_data_parses_and_matches_the_page() -> None:
+    """Search hygiene is one hour of work and zero ongoing claims — unless the
+    JSON-LD drifts from the page, at which point it is a machine-readable lie
+    served to every crawler. The prices must be the page's own, and every FAQ
+    question in the markup must exist on the page."""
+    import json as _json
+    blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>',
+                        LANDING, re.S)
+    assert blocks, "landing page lost its structured data"
+    data = _json.loads(blocks[0])
+    graph = data["@graph"]
+    product = next(node for node in graph if node["@type"] == "Product")
+    prices = {offer["price"] for offer in product["offers"]}
+    assert prices == {SEASON_PRICE, MONTHLY_PRICE}, (
+        f"structured-data prices {prices} drifted from the page's "
+        f"{{{SEASON_PRICE}, {MONTHLY_PRICE}}}")
+    faq = next(node for node in graph if node["@type"] == "FAQPage")
+    page_text = prose(LANDING)
+    for question in faq["mainEntity"]:
+        assert question["name"] in page_text, (
+            f"structured data asks {question['name']!r}, which is not on the page")
+
+
+# --------------------------------------------------------------------- #
 # the evidence pages may only say what their source reports measured
 # --------------------------------------------------------------------- #
 
