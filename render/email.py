@@ -568,7 +568,7 @@ def _forward_lines() -> list[str]:
         return []
     return ["",
             f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own file, "
-            f"aimed at their own rival — {site}/join. The record we're graded "
+            f"built from their own roster — {site}/join. The record we're graded "
             f"on is public: {site}/ledger."]
 
 

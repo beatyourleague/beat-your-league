@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — the weekly Rival Report</title>
-<meta name="description" content="A weekly report built from your Sleeper league's real data, aimed at one goal: beating your rival. Every call graded in public.">
-<meta property="og:title" content="Beat Your League — the weekly Rival Report">
-<meta property="og:description" content="A weekly report built from your Sleeper league's real data, aimed at one goal: beating your rival. Every call graded in public.">
+<title>Beat Your League — your lineup, decided every Tuesday</title>
+<meta name="description" content="A weekly scouting file for your fantasy roster: the lineup we'd set, a number on every call worth making, and every call graded in public.">
+<meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
+<meta property="og:description" content="A weekly scouting file for your fantasy roster: the lineup we'd set, a number on every call worth making, and every call graded in public.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary">
@@ -76,8 +76,7 @@
     text-transform:uppercase;margin-top:20px;max-width:920px;
     /* stacked hard offsets extrude the letters off the page; the wide soft
        shadow underneath sits them in the scene */
-    text-shadow:0 3px 0 rgba(0,0,0,.55), 0 6px 0 rgba(0,0,0,.22),
-      0 24px 54px rgba(0,0,0,.62);}
+    text-shadow:0 20px 48px rgba(0,0,0,.62);}
   /* grafted from concept C: the second line slams onto a gold broadcast plate */
   .hero h1 em{display:inline-block;font-style:italic;color:var(--navy);
     background:linear-gradient(180deg,#FFD75E 0%,var(--flag) 60%,var(--flag-deep) 100%);
@@ -139,12 +138,11 @@
   .chip b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(32px,4.4vw,54px);line-height:.95;letter-spacing:.01em;color:var(--flag);
     font-variant-numeric:tabular-nums;
-    text-shadow:0 0 22px rgba(242,194,48,.38), 0 3px 0 rgba(0,0,0,.55),
-      0 6px 0 rgba(0,0,0,.22);}
+    text-shadow:0 0 22px rgba(242,194,48,.32);}
 
   /* field graphic — broadcast-angle night pitch: perspective yard lines that
      converge toward the far sideline, floodlight beams and light pools, the
-     drive trail ending where the ball sits in rival territory. Pure SVG. */
+     drive trail ending where the ball sits in the other half. Pure SVG. */
   .fieldwrap{margin-top:48px;max-width:660px;}
   /* the shadow grounds the TURF only — applying it to the whole svg turned
      the light beams into grey wedges */
@@ -211,8 +209,7 @@
     border-top:1px solid rgba(46,169,104,.25);border-right:1px solid rgba(46,169,104,.15);
     border-bottom:1px solid rgba(46,169,104,.15);max-width:760px;}
   .ritual h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:26px;
-    text-transform:uppercase;line-height:1.05;
-    text-shadow:0 3px 0 rgba(0,0,0,.5), 0 6px 0 rgba(0,0,0,.2);}
+    text-transform:uppercase;line-height:1.05;}
   .ritual p{margin-top:12px;font-size:15px;line-height:1.68;color:var(--dusk2);}
   .ritual b{color:var(--paper);}
 
@@ -223,8 +220,7 @@
     margin-top:30px;padding:22px 24px;border:1px solid var(--gold-edge);
     background:linear-gradient(120deg,rgba(242,194,48,.07),rgba(10,20,32,.4) 60%);}
   .watch h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:27px;
-    text-transform:uppercase;line-height:1.05;
-    text-shadow:0 3px 0 rgba(0,0,0,.5), 0 6px 0 rgba(0,0,0,.2);}
+    text-transform:uppercase;line-height:1.05;}
   .watch p{margin-top:9px;font-size:14.5px;line-height:1.6;color:var(--dusk2);}
   .watchform{display:flex;flex-wrap:wrap;gap:10px;}
   .watchform input{flex:1 1 190px;min-width:0;padding:14px 15px;font:inherit;font-size:16px;
@@ -233,6 +229,22 @@
   .watchform input:focus{outline:none;border-color:var(--flag);}
   .watchform .btn{flex:0 0 auto;font-size:16px;padding:14px 22px;}
   .watchnote{flex:1 0 100%;margin-top:2px;font-size:13px;color:var(--flag);min-height:1em;}
+  .hero .watchform{margin-top:30px;max-width:620px;}
+  .heronote{margin-top:10px;font-size:13px;color:#9DB0C6;max-width:560px;}
+
+  /* ---------- FAQ ---------- */
+  .faq{margin-top:44px;max-width:760px;}
+  .faq details{border:1px solid rgba(143,163,188,.2);border-left:3px solid var(--gold-edge);
+    background:linear-gradient(180deg,rgba(24,42,69,.6),rgba(12,23,39,.8));margin-top:12px;}
+  .faq details[open]{border-left-color:var(--flag);}
+  .faq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;
+    align-items:center;gap:14px;padding:16px 18px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:19px;letter-spacing:.03em;text-transform:uppercase;color:var(--paper);}
+  .faq summary::-webkit-details-marker{display:none;}
+  .faq summary::after{content:"+";font-size:22px;color:var(--flag);flex:none;}
+  .faq details[open] summary::after{content:"–";}
+  .faq .a{padding:0 18px 16px;font-size:14.5px;line-height:1.65;color:#A9B9CC;max-width:66ch;}
+  .faq .a b{color:var(--paper);}
 
   /* ---------- receipts ticker ---------- */
   .ticker{position:relative;border-top:1px solid var(--gold-edge);border-bottom:1px solid var(--gold-edge);
@@ -263,8 +275,7 @@
     background:linear-gradient(90deg,rgba(242,194,48,.45),transparent);}
   h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(34px,5.8vw,66px);line-height:.95;text-transform:uppercase;margin-top:16px;
-    text-shadow:0 3px 0 rgba(0,0,0,.5), 0 6px 0 rgba(0,0,0,.2),
-      0 18px 42px rgba(0,0,0,.55);}
+    text-shadow:0 16px 38px rgba(0,0,0,.55);}
   .lede{margin-top:16px;font-size:17px;line-height:1.7;color:var(--dusk2);max-width:660px;}
 
   /* ---------- floating paper (the signature) ---------- */
@@ -531,30 +542,37 @@
       <span class="livepill"><i></i>First file: Tuesday, Sep 8</span>
     </div>
     <h1>Beat your league, <em><span>not the books.</span></em></h1>
-    <p class="sub">Every Tuesday: a scouting file on the one manager you have to beat —
-    where their lineup is soft, your best start-sit calls, and the week's coin flip,
-    decided. Built from your fantasy football league's own record on Sleeper.</p>
-    <!-- The hero IS the product (the KeepTradeCut move): type a username, get
-         a real number about your rival in seconds. GET only — the username
-         rides to the picker as ?u= and nothing is stored from this page. -->
-    <form class="hero-scout" action="join/index.html" method="get">
-      <input type="text" name="u" placeholder="Your Sleeper username" maxlength="32"
-             autocomplete="off" spellcheck="false" aria-label="Your Sleeper username">
-      <button class="btn go" type="submit">Pull the file on your rival</button>
-    </form>
+    <p class="sub">Every Tuesday: a scouting file on your team — the lineup we'd set
+    under your league's scoring, a number on every call worth making, and a straight
+    answer on the week's toughest one. Built from your roster and the real
+    NFL record.</p>
     <p class="whyfree">$39 USD for the season. The first file lands Tuesday, Sep 8, and
     refunds are no-questions through Week 2 — read two of them, then decide.</p>
+    <!-- While checkout is closed, the one action a visitor can complete lives
+         right here — not three screens down. The paid CTA unhides the day
+         CHECKOUT_OPEN flips. -->
+    <form class="watchform" id="watch-form" novalidate>
+      <input type="email" id="watch-email" placeholder="you@example.com"
+             autocomplete="email" aria-label="Email me when signups open">
+      <button class="btn go" type="submit">Tell me when it opens</button>
+      <p class="watchnote" id="watch-note" role="status"></p>
+    </form>
+    <p class="heronote">Signups open before Week 1. Leave your email and you get
+    exactly one message when they do — nothing between now and then.
+    No card, and unsubscribe in one click.</p>
     <div class="cta-row">
-      <a class="btn ghost" href="sample-report.html">See a real report</a>
+      <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up your team
+        <span class="arrow">→</span></a>
+      <a class="btn ghost" href="sample-report.html">Read a real report</a>
     </div>
     <div class="proof-chips">
-      <span class="chip">Tested on <b>two full seasons</b></span>
-      <span class="chip">One real number on your rival <b>before you pay</b></span>
-      <span class="chip">Starts with <b>your Sleeper username</b></span>
+      <span class="chip">Tested on <b>two full seasons</b> before launch</span>
+      <span class="chip">Set up in <b>90 seconds</b> — no login, no password</span>
+      <span class="chip">Every call <b>dated &amp; graded</b> in public</span>
     </div>
     <div class="fieldwrap reveal">
       <svg class="pitch" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg"
-           role="img" aria-label="A night stadium field under the lights: your territory on the left, your rival's on the right, and the ball driven deep into their half.">
+           role="img" aria-label="A night stadium field under the lights: your territory on the left, the other half on the right, and the ball driven deep downfield.">
         <defs>
           <linearGradient id="turfSide" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0" stop-color="#1C7345"/><stop offset="1" stop-color="#0C3721"/>
@@ -727,19 +745,19 @@
 <div class="ticker" aria-label="What the report tracks, from real league records">
   <div class="track">
     <ul class="reel">
-      <li><b>318</b> points left on one bench · 2017</li>
-      <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
-      <li>their bench beats their starter · <b>flagged before kickoff</b></li>
-      <li>what a waiver claim <b>actually costs</b> in your league</li>
-      <li>the file on your rival · <b>every tuesday</b></li>
+      <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
+      <li>the week's coin flip · <b>50% and we say so</b></li>
+      <li><b>111.5</b> projected · a real range, not a promise</li>
+      <li>a defense with no number · <b>because none is earned yet</b></li>
+      <li>your lineup, decided · <b>every tuesday</b></li>
       <li>last week's calls · <b>graded against the box score</b></li>
     </ul>
     <ul class="reel dup" aria-hidden="true">
-      <li><b>318</b> points left on one bench · 2017</li>
-      <li>hopkins <b>17.8</b> projected · left on a rival bench · wk 10</li>
-      <li>their bench beats their starter · <b>flagged before kickoff</b></li>
-      <li>what a waiver claim <b>actually costs</b> in your league</li>
-      <li>the file on your rival · <b>every tuesday</b></li>
+      <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
+      <li>the week's coin flip · <b>50% and we say so</b></li>
+      <li><b>111.5</b> projected · a real range, not a promise</li>
+      <li>a defense with no number · <b>because none is earned yet</b></li>
+      <li>your lineup, decided · <b>every tuesday</b></li>
       <li>last week's calls · <b>graded against the box score</b></li>
     </ul>
   </div>
@@ -748,56 +766,97 @@
 <section>
   <div class="wrap">
     <div class="eyebrow">What you get every Tuesday</div>
-    <h2>Aimed at the one manager you have to beat.</h2>
-    <p class="lede">Rankings tell everyone the same thing. Your league isn't everyone — it's eleven
-    specific people, one of whom you need to beat this week and one of whom you need to beat
-    forever. The Rival Report is built from your league's own record on Sleeper. You don't
-    have to become the spreadsheet guy in your league — you just have to beat him.</p>
+    <h2>Your lineup, decided. With a number on it.</h2>
+    <p class="lede">Rankings talk to your whole league at once. This is a file about your
+    team: the lineup we'd set under your own scoring, the odds behind every call worth
+    making, and who's actually getting the ball. You don't have to become the
+    spreadsheet guy in your league — you just have to outscore him.</p>
     <div class="grid3">
       <div class="reveal">
         <div class="fcard sheet tilt" style="--tilt:rotate(-2.2deg)">
-          <h3>Your optimal lineup</h3>
-          <p>Every slot set from your league's scoring, with the reasoning attached — and when a
-          call is too close or a status is unknown, the slot prints "no call" instead of a guess.</p>
+          <h3>The lineup</h3>
+          <p>Every slot set from your league's scoring, with the reasoning attached — and
+          when a call isn't earned, the slot says "no call" instead of guessing.</p>
           <div class="mini">
-            <div class="mrow"><span class="slot">QB</span><span class="p">Ryan Fitzpatrick<small>4 games of form</small></span><span class="pts">23.7</span></div>
-            <div class="mrow"><span class="slot">RB</span><span class="p">Alvin Kamara<small>8 games of form</small></span><span class="pts">19.2</span></div>
-            <div class="mrow"><span class="slot">WR</span><span class="p">Davante Adams<small>8 games of form</small></span><span class="pts">16.3</span></div>
+            <div class="mrow"><span class="slot">WR</span><span class="p">Ja'Marr Chase<small>65% over the bench option</small></span><span class="pts">15.3</span></div>
+            <div class="mrow"><span class="slot">RB</span><span class="p">Bijan Robinson<small>62% over the bench option</small></span><span class="pts">14.3</span></div>
+            <div class="mrow"><span class="slot">TE</span><span class="p">George Kittle<small>66% over the bench option</small></span><span class="pts">10.7</span></div>
           </div>
-          <span class="real">Real output · Sleeper's public sample league, 2018</span>
+          <span class="real">Real output · 2024 NFL season, week 10</span>
         </div>
       </div>
       <div class="reveal" style="--d:.12s">
         <div class="fcard sheet tilt" style="--tilt:rotate(1.7deg)">
-          <h3>Where your rival is fragile</h3>
-          <p>Their lineup, scouted. We read their bench and their habits, then tell you
-          which weak spot matters this week.</p>
+          <h3>The coin flip, called</h3>
+          <p>Every week has one start-sit call that's genuinely close. We make it, we put
+          the number on it, and when it's 50/50 we say that too — then Monday it comes
+          back graded either way.</p>
           <div class="mini">
-            <div class="srow"><div class="x">1</div><div class="why"><b>DeAndre Hopkins is sitting on their bench</b> —
-            he projects 17.8 against Peyton Barber at FLEX (8.0). They never noticed. You did.</div></div>
+            <div class="srow"><div class="x">?</div><div class="why"><b>Start Tony Pollard
+            over Chase Brown</b> — 50%, proj 11.2 vs 11.2. The closest call of the week,
+            decided, with the reasoning attached.</div></div>
           </div>
-          <span class="real">Real find · sample-league rival, week 10, 2018</span>
+          <span class="real">Real output · 2024 NFL season, week 10</span>
         </div>
       </div>
       <div class="reveal" style="--d:.24s">
         <div class="fcard sheet tilt" style="--tilt:rotate(-1.4deg)">
           <h3>The receipts</h3>
-          <p>Monday morning, last week's calls come back with the box score sitting next to them.
-          When one lands you are holding a dated receipt for the group chat — and because the
-          page is public, your leaguemates can check it themselves.</p>
+          <p>Monday morning, last week's calls come back with the box score sitting next
+          to them — wins and misses both, on a public page your leaguemates can check
+          themselves. When one lands, you're holding a dated receipt for the group chat.</p>
           <div class="mini">
             <div class="srow"><div class="x" style="color:var(--turf);border-color:var(--turf)">✓</div>
-            <div class="why"><b>One sample-league manager left 318 points on his bench in a single
-            season.</b> That's the gap this report exists to close.</div></div>
+            <div class="why"><b>Every published call gets graded against the real box
+            score</b>, hit or miss — the rules froze before Week 1, so the bar can't move
+            after a result.</div></div>
           </div>
-          <span class="real">Real number · sample league, 2017 season log</span>
+          <span class="real">The grading rules are written in code, in public</span>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="alt" id="honesty">
+<section class="alt">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Setup is ninety seconds and a paste.</h2>
+    <div class="steps">
+      <div class="step reveal"><div class="n">1</div><h3>Paste your roster</h3>
+        <p>Straight out of whatever app your league lives in — Sleeper, ESPN, Yahoo,
+        anything you can copy names from. Positions, bye weeks and junk are fine;
+        we read the names. No login, no password, no league connection.</p></div>
+      <div class="step reveal" style="--d:.12s"><div class="n">2</div><h3>Pick your scoring</h3>
+        <p>PPR, half, or standard, plus your league size and lineup shape. Two taps —
+        it's what makes every number in your file worth reading, because a call under
+        the wrong scoring is somebody else's call.</p></div>
+      <div class="step reveal" style="--d:.24s"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
+        <p>Your lineup decided with the odds on each call, who's actually getting the
+        ball, a plan for late news — and last week's calls back with the box score.</p></div>
+    </div>
+
+    <div class="ritual reveal">
+      <h3>What the season actually looks like</h3>
+      <p><b>Tuesday morning, ninety seconds.</b> You open one email. At the top is a
+      three-box checklist — the lineup calls worth making, and the one player whose news
+      you need to check before Sunday. Tick the boxes and you're done.</p>
+      <p><b>Everything under the checklist is the evidence for it</b>, there for the weeks
+      you want to argue with us: the odds behind each call, what each starter has actually
+      been given — targets, carries, the ball in his hands — and the week's coin flip
+      decided with the reasoning attached.</p>
+      <p><b>Then Monday, last week's calls come back graded</b> against the real box
+      score, with the date they were made still on them. That's the whole routine.
+      It's one email. There's nothing to check, install, or babysit.</p>
+    </div>
+
+    <div class="cta-row" style="margin-top:36px">
+      <a class="btn go" href="join/index.html">Set up your team <span class="arrow">→</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="honesty">
   <div class="wrap">
     <div class="eyebrow">Why trust the numbers</div>
     <h2>We found our own blind spot before you did.</h2>
@@ -828,59 +887,6 @@
     You can read the whole thing today — the failing buckets, the 7.2% calibration error,
     the calls that cost points — <a href="backtest.html">published here</a>, nothing removed.</p>
     <span class="stamp">Graded on real box scores</span>
-
-    <div class="watch reveal">
-      <div>
-        <h3>Not open yet. Want to know when it is?</h3>
-        <p>The first reports go out Tuesday, September 8. Leave your email and you get
-        exactly one message when signups open — nothing between now and then. No card,
-        and unsubscribe in one click.</p>
-      </div>
-      <form class="watchform" id="watch-form" novalidate>
-        <input type="email" id="watch-email" placeholder="you@example.com"
-               autocomplete="email" aria-label="Email me when signups open">
-        <button class="btn ghost" type="submit">Tell me when it opens</button>
-        <p class="watchnote" id="watch-note" role="status"></p>
-      </form>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <div class="eyebrow">How it works</div>
-    <h2>Setup is a username and two taps.</h2>
-    <div class="steps">
-      <div class="step reveal"><div class="n">1</div><h3>Type your Sleeper username</h3>
-        <p>Sleeper league data is public, so your username is all it takes — passwords
-        and cards stay where they belong.</p></div>
-      <div class="step reveal" style="--d:.12s"><div class="n">2</div><h3>Tap your league, tap your rival</h3>
-        <p>Your leagues appear; pick one. Then pick the one manager you most need to beat.
-        We find your roster automatically.</p></div>
-      <div class="step reveal" style="--d:.24s"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
-        <p>That week's matchup broken down, your rival watched all season, waiver hype
-        rated, pivot plan for late news — and last week's calls back with the box score.</p></div>
-    </div>
-
-    <div class="ritual reveal">
-      <h3>What the season actually looks like</h3>
-      <p><b>Tuesday morning, ninety seconds.</b> You open one email. At the top is a
-      three-box checklist — the lineup changes worth making, what to bid on the waiver
-      everyone's chasing, and the one player whose news you need to check later in the week.
-      Tick the boxes and you're done; you've made the calls that matter before your
-      coffee's cold.</p>
-      <p><b>Everything under the checklist is the evidence for it</b>, there for the weeks you
-      want to argue with us: your rival's lineup beside yours with their weak spots flagged,
-      what a waiver claim actually costs in your league and who can afford to outbid you, and
-      the one coin-flip call decided with the reasoning attached.</p>
-      <p><b>Then Monday, last week's calls come back graded</b> against the real box score, with
-      the date they were made still on them. That's the whole routine. No app to check, no
-      dashboard to babysit.</p>
-    </div>
-
-    <div class="cta-row" style="margin-top:36px">
-      <a class="btn go" href="join/index.html">Pick your rival <span class="arrow">→</span></a>
-    </div>
   </div>
 </section>
 
@@ -888,9 +894,8 @@
   <div class="wrap">
     <div class="eyebrow">Pricing</div>
     <h2>Your buy-in bought you a seat.<br>This buys the scouting file.</h2>
-    <p class="lede">The pot, the trophy, or just the right to run the group chat: whatever your
-    league plays for, one flat season price covers every weekly report, refundable
-    no-questions through Week 2.</p>
+    <p class="lede">One flat price for the season, every report through your title game,
+    refundable no-questions through Week 2. Read the first two, then decide.</p>
     <div class="plans">
       <div class="reveal">
         <div class="plan founder sheet tilt" style="--tilt:rotate(-1.3deg)">
@@ -898,8 +903,8 @@
           <div class="tag">Founding Season Pass · 2026</div>
           <div class="price">$39 <small>/ season, USD</small></div>
           <ul>
-            <li>Every weekly Rival Report, Week 1 through your title game</li>
-            <li>Rival Watch on your named nemesis all season</li>
+            <li>Every weekly report, Week 1 through your title game</li>
+            <li>Usage on every starter — targets, carries, the ball in his hands</li>
             <li>Every call dated and graded — your receipt for the group chat</li>
             <li>No-questions refund through Week 2 — one per person; if you
             re-subscribe after a refund, that one's final</li>
@@ -909,7 +914,7 @@
             (<a href="legal.html#cancel" style="color:var(--turf)">here's exactly
             how</a>)</li>
           </ul>
-          <a class="btn gold" href="join/index.html" data-checkout>Pick your rival — lock the founding rate</a>
+          <a class="btn gold" href="join/index.html" data-checkout>Set up your team — lock the founding rate</a>
         </div>
       </div>
       <div class="reveal" style="--d:.12s">
@@ -936,14 +941,14 @@
       <div class="funnel sheet tilt" style="--tilt:rotate(-.6deg)">
         <b>How buying works, in the open:</b>
         <ol>
-          <li><b>Today:</b> pick your league and your rival in sixty seconds. Until checkout
-          opens, nothing is saved and nothing is charged — and when it opens, the season
-          pass is $39 at the founding rate, locked in for every renewal.</li>
-          <li><b>Before Week 1:</b> checkout opens — you pay on our payment provider's own
-          secure page, and card
-          details never touch our systems. Reports go only to paid subscribers, from the
-          first issue on.</li>
-          <li><b>Tue Sep 8:</b> your first Rival Report lands. Refunds are no-questions
+          <li><b>Today:</b> paste your roster and pick your scoring in ninety seconds.
+          Until checkout opens, nothing is saved and nothing is charged — and when it
+          opens, the season pass is $39 at the founding rate, locked in for every
+          renewal.</li>
+          <li><b>Before Week 1:</b> checkout opens — you pay on Stripe's own secure page,
+          and card details never touch our systems. Reports go only to paid subscribers,
+          from the first issue on.</li>
+          <li><b>Tue Sep 8:</b> your first report lands. Refunds are no-questions
           through Week 2.</li>
           <li><b>A year from now:</b> the pass renews at $39 unless you cancel. We email you
           before it bills, cancelling is one click in your own account page, and we will
@@ -951,25 +956,69 @@
         </ol>
       </div>
     </div>
-    <!-- When Substack goes live: set SUBSTACK_URL in the script below — the
-         founder button becomes real checkout and the monthly note becomes a
-         link. Keep exactly one decision visible (pass + monthly anchor). -->
+    <!-- When the Stripe links are pasted into site/join/, flip CHECKOUT_OPEN
+         below — the founder button becomes a live CTA and the monthly note
+         becomes a link. Keep exactly one decision visible (pass + monthly
+         anchor). -->
   </div>
 </section>
 
-<section>
+<section id="faq">
+  <div class="wrap">
+    <div class="eyebrow">Fair questions</div>
+    <h2>Before you ask the group chat</h2>
+    <div class="faq reveal">
+      <details>
+        <summary>Does it work with my league app?</summary>
+        <div class="a">Any of them. We never connect to a league — you paste your roster
+        as plain names, from Sleeper, ESPN, Yahoo, or a napkin. If you can copy it, we
+        can read it.</div>
+      </details>
+      <details>
+        <summary>Does it match my league's scoring?</summary>
+        <div class="a">Yes — you pick PPR, half-PPR, or standard, plus your league size
+        and lineup shape (superflex included). Every number in your file is computed
+        under <b>your</b> settings, because a call under the wrong scoring is somebody
+        else's call.</div>
+      </details>
+      <details>
+        <summary>When does it arrive?</summary>
+        <div class="a">Tuesday morning, every week of the season — after Monday
+        night's box score has been graded, before your lineup decisions are due. The
+        first one lands Tuesday, Sep 8.</div>
+      </details>
+      <details>
+        <summary>What if my roster changes mid-season?</summary>
+        <div class="a">Trades and pickups happen — reply to any report with your
+        updated roster and your file follows it from the next Tuesday. Self-serve roster
+        editing is on the way.</div>
+      </details>
+      <details>
+        <summary>Why is there no win probability on my matchup?</summary>
+        <div class="a">Because we haven't earned it. We only publish a number when our own
+        testing says it holds up, and matchup win odds aren't there yet — same reason a
+        too-close call prints "no call" instead of a guess. The numbers you do see are
+        the ones we're prepared to be graded on, <a href="ledger/index.html"
+        style="color:var(--flag)">in public</a>.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
   <div class="wrap">
     <div class="eyebrow">The fine print, up front</div>
     <h2>What we will never do</h2>
     <div class="trust">
-      <div><b>No betting, no picks</b>Straight analysis for your fantasy lineup. No spreads,
-      no props, no staking advice. Decisions stay yours — that's the fun part.</div>
-      <div><b>No passwords, no cards</b>We ask for a Sleeper username, an email, and a rival.
-      Payments live with Substack/Stripe. There is no account to breach because there is no account.</div>
-      <div><b>No moving the goalposts</b>The rules that decide hit or miss were written into the
-      code and frozen before a single game, so the bar cannot be softened after a result.
-      Every call we send you lands on <a href="ledger/index.html" style="color:var(--flag);
-      text-decoration:underline">the receipts page</a>, dated.</div>
+      <div><b>We don't touch betting</b>Straight analysis for your fantasy lineup — no
+      spreads, no props, no staking advice. Decisions stay yours; that's the fun part.</div>
+      <div><b>We can't lose what we never hold</b>We keep a roster, an email, and your
+      scoring settings. No password, no league login, and payments live with Stripe —
+      there's no account to breach because there's no account.</div>
+      <div><b>The grading rules froze before Week 1</b>Hit or miss is decided by rules
+      written into code before a single game, so the bar can't be softened after a
+      result. Every call we send you lands on <a href="ledger/index.html"
+      style="color:var(--flag);text-decoration:underline">the receipts page</a>, dated.</div>
     </div>
   </div>
 </section>
@@ -979,23 +1028,23 @@
 <section class="closer">
   <div class="wrap" style="text-align:center">
     <h2 style="margin-bottom:6px">The first file goes out Tuesday, Sep 8.</h2>
-    <p style="margin:0 auto 22px;max-width:520px">A season of scouting the one opponent
-    who actually matters, and the receipts to prove you called it.</p>
+    <p style="margin:0 auto 22px;max-width:520px">A season of calls you can check,
+    and the receipts to prove you made them.</p>
     <div class="cta-row" style="justify-content:center">
-      <a class="btn gold" href="join/index.html">Pick your rival</a>
-      <a class="btn ghost" href="sample-report.html">See a real report</a>
+      <a class="btn gold" href="join/index.html">Set up your team</a>
+      <a class="btn ghost" href="sample-report.html">Read a real report</a>
     </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <b>Beat Your League</b> — the weekly scouting report built around your
-    rival, not just your roster.<br>
-    Sample visuals above are real output from a real 2017–2018 Sleeper league, labeled where
-    shown; manager names in anything public are replaced with neutral labels. Projections are
-    analysis, not guarantees. Must be 18+ to subscribe. Not affiliated with Sleeper or the NFL.
-    Fantasy decisions are yours to make.<br>
+    <b>Beat Your League</b> — the weekly scouting report for your fantasy roster —
+    one file, every Tuesday.<br>
+    Sample visuals above are real output from the 2024 NFL season, labeled where shown.
+    NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
+    settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
+    Not affiliated with the NFL. Fantasy decisions are yours to make.<br>
     <a href="legal.html" style="color:var(--flag)">Terms, refunds &amp; privacy</a> ·
     <a href="ledger/index.html" style="color:var(--flag)">The receipts</a> ·
     <a href="backtest.html" style="color:var(--flag)">The full backtest</a>
@@ -1008,13 +1057,14 @@ document.documentElement.classList.add("js");
 
 // Flip to true the day the Stripe Payment Links are pasted into site/join/.
 // It turns the pricing cards into live CTAs — both of which point at join/,
-// because the picker is what attaches the buyer's league and rival to the
-// payment. Checkout itself is hosted by Stripe; card data never touches this
+// because the intake page is what attaches the buyer's roster and scoring to
+// the payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
 const CHECKOUT_OPEN = false;
 // The launch waitlist. One address, one message, when signups open. Point it at
-// a list backend (Resend Audiences is the natural fit — Resend is already the
-// sender) and capture starts working with no other change. Empty means the page
+// a list backend and capture starts working with no other change. The pick is
+// Loops (free tier; documented keyless form endpoint a static page can POST
+// to): https://app.loops.so/api/newsletter-form/<FORM_ID>. Empty means the page
 // says so plainly rather than pretending to have recorded anything.
 const NOTIFY_LIST_ENDPOINT = "";
 // Where the FREE list lives. Must be a page that offers a no-card free option —
@@ -1063,11 +1113,15 @@ if (watchForm) {
 }
 
 // Every pricing CTA routes through join/, never straight to a payment link.
-// This is load-bearing, not a preference: the picker is what attaches the
-// buyer's league and rival to the payment (it puts them in the checkout URL as
-// Stripe's client_reference_id). A CTA that jumps a buyer to checkout directly
-// takes their money and leaves us with no idea whose team to report on.
+// This is load-bearing, not a preference: the intake page is what attaches the
+// buyer's roster and scoring to the payment (it puts them in the checkout URL
+// as Stripe's client_reference_id). A CTA that jumps a buyer to checkout
+// directly takes their money and leaves us with no idea whose team to report on.
 if (CHECKOUT_OPEN) {
+  // The hero's paid CTA exists in the markup and unhides here, so a closed
+  // checkout never dangles a button that dead-ends after a full roster paste.
+  const heroOpen = document.getElementById("hero-open");
+  if (heroOpen) heroOpen.hidden = false;
   const founder = document.querySelector("[data-checkout]");
   if (founder) {
     founder.href = "join/index.html";

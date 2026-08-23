@@ -587,23 +587,30 @@ def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     assert re.search(r"tick the boxes|three-box checklist", LANDING_PROSE, re.I)
 
 
-def test_waiver_edge_is_sold_as_a_decision_not_a_stat() -> None:
-    """The FAAB read is the thing rankings can't do — it has to reach the buyer
-    as an action ('bid X, N teams can answer'), not a raw number."""
-    assert re.search(r"what a waiver claim actually costs", LANDING_PROSE, re.I)
-    assert re.search(r"who can afford to outbid you", LANDING_PROSE, re.I)
-    # Numbers sit inside <b> tags, so match the phrasing that carries the action.
-    assert re.search(r"or more to top the highest bid|to top the highest bid he's drawn",
-                     SAMPLE_REPORT, re.I)
-    # The count must carry SCALE: usually a denominator ("8 of the other 11
-    # teams"), and when everyone can afford it, "every other team in your
-    # league", because "11 of the other 11" is the machine counting out loud.
-    # A bare "8 teams" has no scale and is the thing this guards against.
-    assert re.search(r"of the other \d+ teams can cover that"
-                     r"|every other team in your league can cover that"
-                     r"|nobody else in your league can even cover",
-                     SAMPLE_REPORT, re.I), "the count lost its scale"
-    assert re.search(r"waiver market in your league", SAMPLE_REPORT, re.I)
+def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
+    """The successor to the waiver-edge test, whose subject died with the
+    league read (PLAN §0). The product now sees one roster and public NFL
+    data — no rival, no opponent lineup, no league transaction log — so the
+    landing page and the published sample may not promise any of it. This is
+    the page-level twin of the waitlist email's FORBIDDEN_CLAIMS: the landing
+    page sold "Pick your rival" for four days while the signup page had no
+    rival on it, which is a broken promise at the moment of highest intent.
+
+    Prose only: the sample's CSS still carries .rival class names from the
+    shared template, and a class name is not a promise."""
+    def visible(page: str) -> str:
+        stripped = re.sub(r"<style\b.*?</style>", "", markup_only(page),
+                          flags=re.S | re.I)
+        return re.sub(r"<[^>]+>", " ", prose(stripped))
+
+    for page, name in ((visible(LANDING), "landing"),
+                       (visible(SAMPLE_REPORT), "sample report")):
+        text = page
+        for dead in (r"\brivals?\b", r"\bwaivers?\b", r"\bopponents?\b",
+                     r"league's own record", r"\bFAAB\b"):
+            assert not re.search(dead, text, re.I), (
+                f"the {name} still promises {dead!r}, which the product "
+                f"cannot see any more")
 
 
 @requires_sample_league
@@ -625,7 +632,7 @@ def test_bid_advice_never_exceeds_what_the_reader_can_pay() -> None:
 def test_sample_report_explains_what_to_do_with_it() -> None:
     """The buyer's decisive question is 'what do I actually do on Tuesday?'"""
     assert re.search(r"30-second game plan", SAMPLE_REPORT, re.I)
-    assert re.search(r"set (the|your) lineup", SAMPLE_REPORT, re.I)
+    assert re.search(r"set (the|your|this) lineup", SAMPLE_REPORT, re.I)
 
 
 # --------------------------------------------------------------------- #
@@ -888,11 +895,15 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     The page said "above four of their set starters" for a rival whose bench
     player is now correctly named against the ONE slot he can fill. Whenever
     render/engine wording changes, regenerate the demo and update this quote."""
-    quoted = "projects 17.8 against Peyton Barber at FLEX (8.0)"
-    assert quoted in SAMPLE_REPORT, \
-        "the demo no longer says this — regenerate with `make demo` and re-check"
-    assert quoted in LANDING.replace("he projects", "projects"), \
-        "the landing page's fragility card drifted from the report it cites"
+    quoted = "Start Tony Pollard over Chase Brown"
+    def flat(page: str) -> str:
+        return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
+    assert quoted in flat(SAMPLE_REPORT).replace("  ", " "), \
+        "the sample no longer says this — regenerate with `make sample` and re-check"
+    assert quoted in flat(LANDING).replace("  ", " "), \
+        "the landing page's coin-flip card drifted from the report it cites"
+    # And the figures the card attaches to that claim.
+    assert "11.2 vs 11.2" in flat(SAMPLE_REPORT) and "11.2 vs 11.2" in flat(LANDING)
 
 
 def test_the_seat_link_is_not_handed_out_before_checkout() -> None:

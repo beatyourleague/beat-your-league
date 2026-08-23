@@ -551,6 +551,33 @@ two or more weeks past its own week. Nothing settles those on their own — a we
 never landed, a player whose team cannot be resolved — and the failure mode was pure silence: the
 call simply never appears on the record.
 
+**The funnel sold a product that no longer exists, and now it doesn't (Aug 23 2026).** The
+landing page still sold the Sleeper product — a hero username input the signup page silently
+discarded, "Pick your rival" CTAs landing on a page with no rival on it, how-it-works steps
+describing a dead flow, and a trust card promising "a Sleeper username, an email, and a rival".
+The full rewrite, grounded in the six-lens launch research:
+- **The published sample is now the SOLO product** (`make sample` → `render/sample.py`), built
+  through the real pipeline (`run/solo.py` → the subscriber template) from a pinned 2024 week-10
+  roster. No number can appear on the page unless the product computed it. The old league demo's
+  claims (waiver market, rival tape) showed buyers sections the paid product does not have.
+- **`test_the_funnel_never_promises_what_the_product_cannot_see`** is the page-level twin of the
+  waitlist's `FORBIDDEN_CLAIMS`: landing + sample may not say rival/waiver/opponent/FAAB in
+  rendered prose. It caught my own FAQ twice before it ever shipped ("beat waivers", "waiver
+  moves") — reworded rather than allowlisted.
+- **Structure per the teardown:** capture moved into the hero (the only completable action while
+  checkout is closed was buried mid-page), how-it-works before the honesty section, a 5-question
+  FAQ (every answer already existed on the site), display-heading shadow stacks cut to one, the
+  named AI-tell sentences rewritten. `join/` now says checkout is closed BEFORE someone pastes
+  fifteen names, not after; its title said "Pick Your Rival" until today.
+- **Render layer is solo-aware where it faced the public:** the demo banner claimed "confidence
+  numbers are left off" (false for the nflverse sample — the 2024 injury archive covers it),
+  `demo_band`/`og:title` said Rival Report, and `_forward_line` — on the LIVE email surface —
+  still said "aimed at their own rival". All branch on `meta["solo"]` now.
+- Pinned counts survived intact: five rendered `$39`s (hero disclosure, price card, two renewal
+  disclosures, funnel), two renewal-amount mentions, waitlist volume promise, ledger + backtest
+  links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
+  ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
+
 **The shipping gate, measured (`engine/gate_backtest.py`, Aug 16 2026) — an honest negative
 result.** The product publishes a confidence only when both players are confirmed active, and
 that rule had never been tested because live availability snapshots start this season. nflverse's
@@ -634,7 +661,8 @@ the verdict, so no sentence restates the grid**. Rules that travel with it:
   gate note, or our per-row point gap. Pinned by `test_the_rival_grid_carries_no_calls_of_any_kind`.
 - `edge_phrase()` is shared by both renderers, like `who_can_cover()` before it. They had written
   the same fact in different words and the email's longer form wrapped every row onto two lines.
-- **`make demo` is the only way to rebuild the sample.** It was ad-hoc commands, which is how the
+- **`make sample` rebuilds the published sample (solo, 2024 w10); `make demo` keeps the
+  legacy league pair.** It was ad-hoc commands, which is how the
   published demo came to be re-rendered from a stale `week_report.json` — engine fixes never
   reached it. The target runs `engine.week_report` first, then `render.report --public`
   (anonymize_for_public), the local pair, and the plain-text summary.

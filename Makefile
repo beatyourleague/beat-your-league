@@ -2,7 +2,7 @@ PY := .venv/bin/python
 SEASON ?= 2026
 
 .PHONY: week ingest backtest test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview monday monday-preview
+        intake intake-preview tuesday tuesday-preview monday monday-preview sample
 
 week:
 	$(PY) -m run.week
@@ -78,6 +78,14 @@ demo:
 	  r=json.loads(pathlib.Path('data/processed/week_report.json').read_text()); \
 	  m=r['meta']; p=pathlib.Path('reports')/f\"rival-report-{m['season']}-w{int(m['week']):02d}-r{m['my_roster_id']}.txt\"; \
 	  p.write_text(w.text_summary(r), encoding='utf-8'); print(f'summary rewritten to {p}')"
+
+# The published sample report — the funnel's proof asset. `make sample` is the
+# only way to rebuild it: it runs the REAL pipeline (run/solo.py -> the same
+# template a subscriber's report uses), so no number can appear on the page
+# unless the product computed it. The roster and week are pinned in
+# render/sample.py.
+sample:
+	$(PY) -m render.sample
 
 # The player directory the intake page downloads. Regenerate whenever the
 # nflverse cache moves — a stale directory cannot resolve a rookie, and the

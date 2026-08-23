@@ -198,7 +198,19 @@ def header(meta: Mapping[str, Any]) -> str:
         chips.insert(2, f'<span class="chip">Rival: '
                         f'<b>{esc(meta["named_rival_label"])}</b></span>')
     banner = ""
-    if meta.get("historical_demo"):
+    if meta.get("historical_demo") and meta.get("solo"):
+        # The solo sample is built from the nflverse record, where past-season
+        # injury reports ARE available — so confidences print, and the old
+        # "numbers are left off" sentence would be false of the page it sits on.
+        banner = (
+            '<div class="regret-note" style="margin:0;border-left:none;">'
+            f'SAMPLE REPORT — built from the real {esc(meta["season"])} NFL season to '
+            f'show exactly what lands in your inbox on a Tuesday. Every number comes '
+            f'from actual box scores and public injury reports for that week; nothing '
+            f'is invented, and anything we could not back is left off, same as a live '
+            f'week.</div>'
+        )
+    elif meta.get("historical_demo"):
         banner = (
             '<div class="regret-note" style="margin:0;border-left:none;">'
             f'SAMPLE REPORT — real data from the {esc(meta["season"])} season of '
@@ -826,6 +838,15 @@ def demo_band(meta: Mapping[str, Any]) -> str:
     """
     if not meta.get("anonymized_demo"):
         return ""
+    if meta.get("solo"):
+        season = esc(str(meta.get("season", "a past")))
+        return (
+            '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
+            f'This file is from the {season} season. Yours is built from your own '
+            'roster, scored your league\'s way — '
+            '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
+            'set it up</a> and the first one lands Tuesday.</div>'
+        )
     return (
         '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
         'This file is from a 2018 sample league. Yours is about <b>your</b> rival — '
@@ -844,8 +865,8 @@ def _forward_line() -> str:
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if not site:
         return ""
-    return (f'Got this from a leaguemate? Every manager gets their own file, aimed '
-            f'at their own rival — {esc(site)}/join. The record we\'re graded on '
+    return (f'Got this from a leaguemate? Every manager gets their own file, built '
+            f'from their own roster — {esc(site)}/join. The record we\'re graded on '
             f'is public: {esc(site)}/ledger.<br>')
 
 
@@ -1012,12 +1033,17 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     # share tags on them would just invite pasting a paid report around.
     social = ""
     if meta.get("anonymized_demo"):
-        desc = ("A complete Rival Report built from a real league's season — "
-                "every number from actual box scores, nothing invented.")
+        desc = (("A complete weekly report built from a real NFL season — every "
+                 "number from actual box scores, nothing invented.")
+                if meta.get("solo") else
+                ("A complete Rival Report built from a real league's season — "
+                 "every number from actual box scores, nothing invented."))
         social = (
             f'<meta name="description" content="{desc}">\n'
-            '<meta property="og:title" content="Beat Your League — a real Rival Report">\n'
-            f'<meta property="og:description" content="{desc}">\n'
+            + ('<meta property="og:title" content="Beat Your League — a real weekly report">\n'
+               if meta.get("solo") else
+               '<meta property="og:title" content="Beat Your League — a real Rival Report">\n')
+            + f'<meta property="og:description" content="{desc}">\n'
             '<meta property="og:type" content="website">\n'
             '<meta property="og:site_name" content="Beat Your League">\n'
             '<meta name="twitter:card" content="summary">\n'
