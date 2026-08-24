@@ -137,13 +137,41 @@ def test_the_announcement_cannot_be_sent_twice(tmp_path: Path) -> None:
     assert len(load_sent(log)) == 2
 
 
-def test_the_key_is_per_campaign_so_a_later_send_is_still_possible() -> None:
-    """This prevents DUPLICATES, not future sends. A second campaign — should
+def test_the_key_is_per_campaign_and_carries_no_address() -> None:
+    """This prevents DUPLICATES, not future sends: a second campaign — should
     one ever be promised and collected for — must not be silently swallowed by
-    the first one's log entries."""
-    keys = {m.key for m in messages(["a@example.com"], "https://x/join/")}
-    assert keys == {f"{CAMPAIGN}-a@example.com"}
-    assert CAMPAIGN in next(iter(keys))
+    the first one's log entries. And the key is a DIGEST of the address, never
+    the address: sent.jsonl is committed by the crons, and a committed log
+    must not hold the list itself."""
+    [message] = messages(["a@example.com"], "https://x/join/")
+    assert message.key.startswith(f"{CAMPAIGN}-")
+    assert "@" not in message.key and "a@" not in message.key
+    # Deterministic per address, distinct across addresses.
+    assert messages(["a@example.com"], "https://x/join/")[0].key == message.key
+    assert messages(["b@example.com"], "https://x/join/")[0].key != message.key
+
+
+def test_the_worker_list_takes_only_waitlist_rows() -> None:
+    """The Worker is the same mailbox the seats and roster updates use. A seat
+    or update row carries a roster and a token; broadcasting to those
+    addresses would email people who never asked for this message."""
+    import run.waitlist as wl
+    rows = [
+        {"kind": "waitlist", "email": "a@example.com"},
+        {"kind": "waitlist", "email": "A@Example.com"},   # dupe, case
+        {"kind": "seat", "email": "b@example.com", "ref": "x",
+         "covered_by": "c@example.com"},
+        {"kind": "update", "email": "d@example.com", "ref": "y"},
+        {"kind": "waitlist", "email": "not-an-email"},
+        {"kind": "waitlist", "email": "e@example.com"},
+    ]
+    original = wl.fetch_seats
+    wl.fetch_seats = lambda *a, **k: rows
+    try:
+        assert wl.load_worker_list("https://w.test", None) == [
+            "a@example.com", "e@example.com"]
+    finally:
+        wl.fetch_seats = original
 
 
 # --------------------------------------------------------------------- #
@@ -173,3 +201,24 @@ def test_an_empty_list_refuses_rather_than_reporting_success(
     path.write_text("email,when\n", encoding="utf-8")
     assert main(["--list", str(path), "--url", "https://x/join/"]) == 1
     assert "empty" in capsys.readouterr().err
+
+
+def test_the_url_defaults_from_site_url_so_the_runbook_command_works(
+        export: Path, monkeypatch, capsys) -> None:
+    """LAUNCH.md step 8 says `python -m run.waitlist` with no --url. That works
+    only because the link defaults from the SITE_URL secret that already
+    exists — and with neither set, the run refuses rather than announcing a
+    signup page at no address."""
+    monkeypatch.delenv("SITE_URL", raising=False)
+    assert main(["--list", str(export)]) == 1
+    assert "SITE_URL" in capsys.readouterr().err
+    monkeypatch.setenv("SITE_URL", "https://example.com/")
+    sent: list = []
+    import run.waitlist as wl
+    original = wl.send_all
+    wl.send_all = lambda msgs, provider: sent.extend(msgs) or []
+    try:
+        assert main(["--list", str(export)]) == 0
+    finally:
+        wl.send_all = original
+    assert sent and all("https://example.com/join/" in m.text for m in sent)

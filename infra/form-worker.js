@@ -1,12 +1,14 @@
 /**
  * The form backend — one Cloudflare Worker, pasted into the dashboard.
  *
- * It exists for exactly two kinds of row the static site cannot store itself:
- * League Pass SEAT claims and self-serve roster UPDATES. Both are posted from
- * site/join/ and read back by run/intake.py, which validates every row before
- * anything reaches the registry — a seat is honoured only if its payer bought
- * a pass, an update only if it carries the subscriber's token. This Worker
- * therefore holds nothing secret and decides nothing: it is a mailbox.
+ * It exists for the three kinds of row the static site cannot store itself:
+ * League Pass SEAT claims, self-serve roster UPDATES, and the launch WAITLIST.
+ * All three post from the site and are read back by their own runners —
+ * run/intake.py validates seats and updates before anything reaches the
+ * registry (a seat is honoured only if its payer bought a pass, an update only
+ * if it carries the subscriber's token), and run/waitlist.py sends the single
+ * promised launch email. This Worker therefore holds nothing secret and
+ * decides nothing: it is a mailbox.
  *
  * Why a Worker and not a form vendor: free-tier form products cap at ~50
  * submissions a month or offer no machine-readable read-back, and this is the
@@ -21,8 +23,9 @@
  * Then FORM_ENDPOINT = the Worker URL, in both the page and the GitHub secret.
  *
  * Contract (matches run/intake.py fetch_seats + run/updates.py):
- *   POST JSON  {kind:"seat",   email, covered_by, ref}
- *   POST JSON  {kind:"update", email, ref, replaces, token}
+ *   POST JSON  {kind:"seat",     email, covered_by, ref}
+ *   POST JSON  {kind:"update",   email, ref, replaces, token}
+ *   POST JSON  {kind:"waitlist", email}
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
  */
 
@@ -34,10 +37,16 @@ const MAX_BODY = 2048;
 
 function sanitize(body) {
   if (!body || typeof body !== "object") return null;
-  const kind = body.kind === "update" ? "update" : "seat";
+  const kind = body.kind === "update" ? "update"
+             : body.kind === "waitlist" ? "waitlist" : "seat";
   const email = String(body.email || "").trim().toLowerCase();
+  if (!EMAIL.test(email) || email.length > 254) return null;
+  if (kind === "waitlist") {
+    // The launch list holds the address and nothing else.
+    return { kind, email };
+  }
   const ref = String(body.ref || "").trim();
-  if (!EMAIL.test(email) || email.length > 254 || !REF.test(ref)) return null;
+  if (!REF.test(ref)) return null;
   if (kind === "seat") {
     const payer = String(body.covered_by || "").trim().toLowerCase();
     if (!EMAIL.test(payer) || payer.length > 254) return null;

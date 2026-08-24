@@ -54,14 +54,21 @@ file is the hands-on-keyboard half.
    | `FORM_API_KEY` | 5b | the Worker's read key, same value as in the Worker |
    | `UPDATE_SECRET` | 5b | `openssl rand -hex 32` — authenticates roster updates |
 
-## 3. Loops — the waitlist (~30 min)
+## 3. The waitlist — no new vendor (rides step 5b's Worker)
 
-1. Free account at loops.so → Settings → Domain: add the DNS records it shows (DKIM/SPF —
-   required even on free).
-2. Create a Form (Audience → Forms). Copy the **form ID** from its endpoint
-   (`https://app.loops.so/api/newsletter-form/<FORM_ID>`).
-3. **Tell me the form ID.** I wire `NOTIFY_LIST_ENDPOINT` on both pages and verify the
-   capture end to end in a browser.
+The email capture on the landing page and the join page posts
+`{kind:"waitlist", email}` to the same Cloudflare Worker that takes seats and
+roster updates, and `python -m run.waitlist` reads it back and sends the one
+promised launch email through Resend. So there is no separate list vendor to
+set up — **do step 5b**, then tell me the Worker URL and I wire
+`WAITLIST_ENDPOINT` (landing) and `NOTIFY_LIST_ENDPOINT` (join) to it and
+verify the capture end to end in a browser. Until then both pages say plainly
+that nothing was recorded, rather than pretending.
+
+One legal note for the broadcast itself: CAN-SPAM requires a valid physical
+postal address in the message. A UPS-store box or a registered-agent address
+works — have one ready before Sep 7 and tell me; I add it to the launch email
+footer (only there — reports to paying subscribers are transactional).
 
 ## 4. Resend — the report sender (~20 min)
 
@@ -69,6 +76,7 @@ file is the hands-on-keyboard half.
    (Keep Loops and Resend on the same domain; both publish their own DKIM selectors, so
    they don't collide.)
 2. API key → create. Set `RESEND_API_KEY` and `EMAIL_PROVIDER=resend` secrets.
+   (Resend also carries the waitlist launch email — one sender for everything.)
 3. Free tier is 3,000/month but **100/day** — the Tuesday batch breaks at ~100 subscribers.
    The $20/mo upgrade triggers at >$500 MRR, so it self-funds; a conditional line for it
    belongs in PLAN §2's budget table when it happens.
@@ -168,14 +176,22 @@ green. Money does not move for strangers until each of these has been watched ha
 ## 8. Launch week
 
 - **Thu Sep 4:** code freeze.
-- **Mon Sep 7:** waitlist broadcast from Loops' editor — one email, as promised on the page:
-  checkout is open, first file lands tomorrow.
+- **Mon Sep 7:** the waitlist broadcast — one email, as promised on the page: checkout is
+  open, first file lands tomorrow. Preview first, then send:
+  ```bash
+  .venv/bin/python -m run.waitlist
+  ```
+  ```bash
+  .venv/bin/python -m run.waitlist --send
+  ```
+  (Reads the Worker's waitlist rows; `--list export.csv` if you ever hold a CSV instead.
+  Idempotent — a re-run sends nothing twice, and a second campaign would need its own key.)
 - **Tue Sep 8, ~7:00 ET:** the cron fires on its own. QA one report before opening the
   group chats.
 
 ---
 
-*Kept out on purpose: the League Pass seat form backend (`FORM_ENDPOINT` stays empty until a
-validated backend is chosen — pass buyers get their own report meanwhile, and seats are
-refused loudly, never silently) and There's An AI For That's $49 listing (needs a PLAN §2
-budget line first).*
+*Kept out on purpose: There's An AI For That's $49 listing (needs a PLAN §2 budget line
+first). The form backend is no longer kept out — step 5b is the chosen design, and until the
+owner pastes it, seats are refused loudly, the update link does not render, and the waitlist
+says nothing was recorded. Everything fails closed, never silently.*

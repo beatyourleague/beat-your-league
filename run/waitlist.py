@@ -1,8 +1,9 @@
 """The launch announcement: one message, once, to everyone who waited.
 
 Usage:
-    python -m run.waitlist --list data/registry/waitlist.csv --dry-run
-    EMAIL_PROVIDER=resend python -m run.waitlist --list <csv> --send
+    python -m run.waitlist                                   # dry run, Worker list
+    EMAIL_PROVIDER=resend python -m run.waitlist --send      # the real thing
+    python -m run.waitlist --list export.csv                 # a CSV instead
 
 The waitlist is the one asset that can start working before the product does,
 which is exactly why it is easy to ruin. Three failures are available and all
@@ -21,16 +22,18 @@ three are permanent, because a list can only be burned once:
    repo: with no ``EMAIL_PROVIDER`` set and no ``--send``, this writes drafts
    and mails nobody. `run/batch.py` learned that the hard way.
 
-The list itself lives with whatever backend the capture posts to (Resend
-Audiences is the natural fit — Resend is already the sender). This reads a CSV
-export, tolerantly, the same way ``run/subscriptions.py`` reads a platform
-export: a launch is not the moment to discover a column was renamed.
+The list itself lives in the form Worker (``infra/form-worker.js``) — the same
+mailbox the seats and roster updates use, read back here with the ``waitlist``
+kind filter. A CSV export is still accepted via ``--list``, read tolerantly the
+same way ``run/subscriptions.py`` reads a platform export: a launch is not the
+moment to discover a column was renamed.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import os
 import re
 import sys
@@ -39,6 +42,7 @@ from pathlib import Path
 from render.report import BRAND_LINE
 from run.delivery import (DRY_PROVIDER, DeliveryError, Message, build_provider,
                           send_all)
+from run.intake import IntakeError, fetch_seats
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -111,11 +115,38 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
     return addresses, problems
 
 
+def load_worker_list(endpoint: str, api_key: str | None) -> list[str]:
+    """The launch list straight from the form Worker (kind "waitlist").
+
+    The Worker is the same mailbox the seats and roster updates use, so the
+    kind filter is load-bearing: a seat or update row carries a roster and a
+    token, and a broadcast to those addresses would email people who never
+    asked for this message.
+    """
+    addresses: list[str] = []
+    seen: set[str] = set()
+    for row in fetch_seats(endpoint, api_key):
+        if str(row.get("kind") or "") != "waitlist":
+            continue
+        value = str(row.get("email") or "").strip().lower()
+        if EMAIL_RE.match(value) and value not in seen:
+            seen.add(value)
+            addresses.append(value)
+    return addresses
+
+
 def messages(addresses: list[str], signup_url: str) -> list[Message]:
-    """One Message per address, keyed so it can only ever be sent once."""
+    """One Message per address, keyed so it can only ever be sent once.
+
+    The key carries a DIGEST of the address, not the address: sent.jsonl is
+    committed (the crons persist it, merge=union), and a committed log must
+    never hold the list itself.
+    """
     body = BODY.format(brand=BRAND_LINE.capitalize(), url=signup_url)
     return [Message(to=address, subject=SUBJECT, html=_html(body, signup_url),
-                    text=body, key=f"{CAMPAIGN}-{address}")
+                    text=body,
+                    key=f"{CAMPAIGN}-"
+                        f"{hashlib.sha256(address.encode()).hexdigest()[:10]}")
             for address in addresses]
 
 
@@ -136,19 +167,44 @@ def _html(body: str, signup_url: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--list", type=Path, required=True,
-                        help="CSV export from the waitlist backend")
-    parser.add_argument("--url", required=True,
-                        help="where signups actually open (the join page)")
+    parser.add_argument("--list", type=Path,
+                        help="CSV export; omit to read the form Worker "
+                             "(FORM_ENDPOINT + FORM_API_KEY)")
+    parser.add_argument("--url",
+                        help="where signups actually open; defaults to "
+                             "SITE_URL + /join/")
     parser.add_argument("--send", action="store_true",
                         help="actually send; without it this is a dry run")
     args = parser.parse_args(argv)
 
-    try:
-        addresses, problems = load_list(args.list)
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Could not read the waitlist: {exc}", file=sys.stderr)
-        return 1
+    if not args.url:
+        site = os.environ.get("SITE_URL", "").rstrip("/")
+        if not site:
+            print("No --url and SITE_URL is not set — the announcement's one "
+                  "job is that link, so there is nothing to send.",
+                  file=sys.stderr)
+            return 1
+        args.url = f"{site}/join/"
+
+    problems: list[str] = []
+    if args.list is not None:
+        try:
+            addresses, problems = load_list(args.list)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Could not read the waitlist: {exc}", file=sys.stderr)
+            return 1
+    else:
+        endpoint = os.environ.get("FORM_ENDPOINT", "")
+        if not endpoint:
+            print("No --list export and FORM_ENDPOINT is not set — there is "
+                  "no waitlist to read.", file=sys.stderr)
+            return 1
+        try:
+            addresses = load_worker_list(endpoint,
+                                         os.environ.get("FORM_API_KEY"))
+        except IntakeError as exc:
+            print(f"Could not read the waitlist: {exc}", file=sys.stderr)
+            return 1
 
     for problem in problems:
         print(f"  skipped {problem}", file=sys.stderr)
