@@ -814,6 +814,37 @@ def test_compare_includes_the_free_answer() -> None:
     assert named >= 3, "the guidance section stopped recommending competitors"
 
 
+def test_compare_never_denies_a_rival_feature_we_verified_they_have() -> None:
+    """Aug 24 2026: the 4for4 row read "Projections for everyone, not decisions
+    for your roster." Their own plans page sells a "Start/Sit Tool" and
+    "Unlimited LeagueSync Access" at the $59 Pro tier, so the page's single
+    most load-bearing property — that a founder-written comparison tells the
+    truth about rivals — was false about a named company.
+
+    Per-roster start/sit is a COMMODITY (FantasyPros ships it in every tier
+    from $3.99/mo, 4for4 at $59/season, Yahoo's Assistant GM in-app). A page
+    that implies otherwise is not merely flattering, it is checkable in one
+    click, and the reader who checks stops believing the rest of the domain.
+
+    The paired rule is symmetry: if a rival's strength column advertises "no
+    typing", our own weakness column has to admit the typing. Removing a false
+    claim about them and leaving the matching omission about us would be the
+    same asymmetry wearing a different hat."""
+    row = COMPARE.split(">4for4<")[1].split("</tr>")[0]
+    assert "not decisions for your roster" not in row, \
+        "the 4for4 row denies a start/sit tool their own plans page sells"
+    assert re.search(r"start/sit", row, re.I), \
+        "their per-roster tool must be acknowledged, not quietly dropped"
+    # Our own row carries the mirror admission.
+    our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
+    assert re.search(r"you enter it yourself|type or past", our_row, re.I), \
+        "we advertise a rival's one-tap sync without admitting our own typing"
+    # And the guidance section still sends the sync-wanters to them by name.
+    picks = COMPARE.split("Which one, honestly")[1]
+    assert re.search(r"rather not enter your roster by hand", picks), \
+        "the guidance stopped naming who to use if you won't type a roster"
+
+
 def test_compare_tables_scroll_on_a_phone() -> None:
     assert COMPARE.count("<table>") <= COMPARE.count("overflow-x:auto"), \
         "the comparison table would scroll the whole page sideways on mobile"
