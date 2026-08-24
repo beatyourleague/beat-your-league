@@ -94,7 +94,8 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
     )
 
 
-def welcome_message(email: str, plan: str, slug: str, season: str) -> Message:
+def welcome_message(email: str, plan: str, slug: str, season: str,
+                    purchased_at: str = "") -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat."""
     bought, terms = _plan_terms(plan)
     href, label = _cancel_destination()
@@ -147,5 +148,18 @@ def welcome_message(email: str, plan: str, slug: str, season: str) -> Message:
     subject = ("Your seat is in — first file lands Tuesday morning"
                if plan == "seat" else
                "You're in — first file lands Tuesday morning")
+    # Keyed on the PURCHASE, not the calendar. `season` moved every August,
+    # so the key moved with it and `servable` — the projection of an
+    # append-only signup log that is never pruned and never entitlement-checked
+    # — re-welcomed every subscriber the product ever had, cancelled ones
+    # included, with renewal terms about money they do not owe. This email is
+    # the legally-owed ARL acknowledgment; sending it to somebody with no
+    # subscription is a false statement about their money, which is the exact
+    # thing it exists to get right. Found Aug 24 2026.
+    #
+    # `bought` is Stripe's own created timestamp, so a genuine re-subscription
+    # next season is a new purchase with a new key and IS acknowledged. It
+    # falls back to the season only when the timestamp is missing, which is the
+    # old behaviour for the one case that has no purchase clock.
     return Message(to=email, subject=subject, html=html, text=text,
-                   key=f"welcome-{season}-{slug}")
+                   key=f"welcome-{purchased_at or season}-{slug}")

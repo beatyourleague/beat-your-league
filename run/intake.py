@@ -480,7 +480,8 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
     """
     import hashlib
 
-    messages = [welcome_message(s.email, s.plan, s.slug, season)
+    messages = [welcome_message(s.email, s.plan, s.slug, season,
+                                purchased_at=str(s.seen_at or ""))
                 for s in servable]
     for row in seat_rows:
         slug = hashlib.sha256(row["ref"].encode("utf-8")).hexdigest()[:10]

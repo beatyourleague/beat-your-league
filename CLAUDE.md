@@ -781,6 +781,60 @@ questionable BENCH player whose doubt gates a slot (Pollard, week 9) was named n
 pivot plan looked only at questionable starters and the solo checklist returned before its
 late-news item. `late_news()` feeds both now.
 
+**The dry proving run (Aug 24 2026) — six launch paths executed for real, 15 confirmed
+defects, two of them blockers.** Nothing had ever run `run/tuesday.py` against a registry,
+because none existed. Building a synthetic one and sending to it confirmed the standing
+pattern: every serious bug in this repo has been a path nobody had executed.
+- **BLOCKER: bye-week starters were confidently recommended.** `optimal_lineup` seats a
+  player who cannot play when nothing eligible remains — right, you must field somebody —
+  but everything downstream of that seat was not. On a real 2024 w10 roster whose TE, K and
+  DEF were all on bye, the file said "Set this lineup: … Daniel Carlson at K" with no
+  warning, and folded 23.6 certain-zero points into a stated 115.0 with the band drawn
+  around it. `_team_range` already refused an UNDERCOUNT dressed as a total
+  (`TEAM_RANGE_INCOMPLETE`); `TEAM_RANGE_ABSENT_STARTER` now refuses the OVERCOUNT, naming
+  the slots, and the checklist names the players. **`text_summary` never read
+  `slot["flags"]`** — the HTML grid has printed "OUT — LV on bye" since the Tape merge — so
+  the plain-text alternative dropped availability entirely. Flags travel on every surface
+  or none.
+- **BLOCKER: section 06 could never fill in.** `receipts()` reconstructs calls from a
+  season's own history and gates them on availability snapshots read out of `raw_dir`; the
+  solo product has no season history for a roster typed in last week, and that snapshot
+  subtree only ever existed under `data/raw/availability` (retired `ingest.pull`). So The
+  Receipts read "Ledger opens this week" in week 1 and week 17 alike, forever — principle
+  2's public half, structurally dead. `solo_receipts()` reads the real ledger instead.
+- **The picker asked for league size, said it mattered, and discarded it.** `radio()` was
+  never called for `size`, the ref had no field, intake hardcoded 12 — so every subscriber
+  got 12-team numbers AND had them recorded in the 12-team bucket, the split CLAUDE.md made
+  *because* size moves the probability. **v3 refs** carry it (`s3-pc…`); v2 still decodes as
+  12. Safe because checkout has never opened and no v2 ref was ever issued.
+- **Every report promised a way out and shipped without one.** A delivered draft's headers
+  were From/To/Subject/MIME only — no `List-Unsubscribe` — and "the exact steps are on our
+  legal page" was never a link on either half. `cancel_destination()` moved from
+  `render/welcome.py` (one email a season) to `render/report.py` (all of them); for a PAID
+  subscription unsubscribing and cancelling are the same act, so it points at the billing
+  portal. No `List-Unsubscribe-Post`: one-click promises a POST endpoint a Stripe link is not.
+- **The public record counted one game as twelve.** `public_entries` has carried `scoring`
+  and `league_size` since the store split — its docstring says "without the preset the two
+  render as identical duplicate rows" — and the renderer displayed neither. There is a Setup
+  column now. The page also still sold "Pick your rival"; a prose sweep pins it out.
+- **One unreadable ledger store aborted the whole Monday run** — and a duplicate call_id is
+  an ANTICIPATED state, since `.gitattributes` sets `merge=union` precisely so a push race
+  concatenates. Contained per store, in both the grading loop and `load_all_ledgers`, and
+  the run still goes red. **The stuck-call alarm** measured staleness against the ledger's
+  own newest week, so a broken cron or the end of a season silenced it permanently; it reads
+  the calendar now.
+- **Fail-closed promises that failed open:** a non-ASCII token killed the entire intake
+  (`hmac.compare_digest` RAISES rather than returning False, on a value from a public form);
+  `fetch_seats` read an unrecognised JSON shape as an empty list, so `{"records": […]}` would
+  have written a Stripe-only registry and exited 0; a PAID-UNATTRIBUTED session printed
+  "somebody has paid and will receive nothing" and then exited 0, past a cron that files its
+  issue only on failure; and a mid-season stats outage rendered as "the season hasn't played
+  its first games" — confident, complete, exit 0. Each refuses now.
+- **A season roll re-welcomed everyone, cancelled subscribers included**: the ARL
+  acknowledgment keyed on `{season}`, which moves every August, over an append-only signup
+  log that is never pruned or entitlement-checked. Keyed on the purchase now.
+Every fix is mutation-tested; the reproduction is in each test's docstring.
+
 **The redesign directive (Aug 24 2026) — owner decisions, each pinned by test where a test
 can hold it.** The owner benchmarked the site against netprophet.pro and ruled: too many words
 per section; the stadium-field hero is tacky and is GONE; public grading may support but never

@@ -332,6 +332,20 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
             cache_dir, season, live=live, columns=SEASON_COLUMNS,
             session=session)
     except NflverseError:
+        # Pre-kickoff this is a real state. MID-SEASON it is an outage wearing
+        # week 1's clothes: an empty dict sends build_solo_report down the
+        # week-1 branch, which tells the subscriber in their own words that the
+        # season has not played its first games — a confident false statement,
+        # exit 0, with the same report contradicting itself two lines later
+        # ("no scored weeks for DEF-BAL before week 10"). One asset failing is
+        # enough: a renamed release, a placeholder file, an actions/cache miss
+        # on the eviction cycle the weekly cron sits on. Found Aug 24 2026.
+        if week > 1:
+            raise SoloError(
+                f"the {season} weekly stat rows could not be loaded, and it is "
+                f"week {week} — without them every number in this report would "
+                f"be missing and the report would say the season has not "
+                f"started, which is false. Refusing to build it.") from None
         weekly = {}
     if weekly:
         try:

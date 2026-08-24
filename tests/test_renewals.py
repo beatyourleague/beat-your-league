@@ -198,3 +198,40 @@ def test_the_runner_sends_nothing_without_an_explicit_flag(stripe, capsys,
     assert renewals.main(["--today", "2027-07-01"]) == 0
     assert sent == []
     assert "dry run" in capsys.readouterr().out
+
+
+def test_a_new_season_does_not_re_welcome_everyone_who_ever_subscribed() -> None:
+    """The key was welcome-{season}-{slug}, and `season` moves every August.
+    The message set is `servable` — the projection of an append-only signup log
+    that is never pruned and never entitlement-checked — so in Aug 2027 every
+    2026 subscriber, INCLUDING people who cancelled, refunded, or were seats
+    whose pass lapsed, would receive a fresh "here's what you bought and how to
+    cancel" carrying $39/yr renewal terms.
+
+    That email is the legally-owed ARL acknowledgment. Sending it to somebody
+    with no subscription is a false statement about their money — the exact
+    failure it exists to prevent. Keyed on the purchase now, so the same
+    purchase is acknowledged once, ever. Found Aug 24 2026."""
+    from render.welcome import welcome_message
+
+    slug = "abcdef0123"
+    first = welcome_message("fan@example.com", "season", slug, "2026",
+                            purchased_at="1756000000")
+    # The SAME purchase, a season later: same key, so the idempotent delivery
+    # layer skips it rather than re-welcoming.
+    next_year = welcome_message("fan@example.com", "season", slug, "2027",
+                                purchased_at="1756000000")
+    assert first.key == next_year.key, \
+        "a new season re-welcomes every subscriber the product ever had"
+
+    # A genuine RE-purchase is a different purchase and is acknowledged.
+    resubscribed = welcome_message("fan@example.com", "season", slug, "2027",
+                                   purchased_at="1788000000")
+    assert resubscribed.key != first.key, \
+        "a real second purchase must still get its acknowledgment"
+
+    # With no purchase clock it falls back to the old behaviour rather than
+    # collapsing every seat onto one key.
+    seat_a = welcome_message("a@example.com", "seat", "1111111111", "2026")
+    seat_b = welcome_message("b@example.com", "seat", "2222222222", "2026")
+    assert seat_a.key != seat_b.key

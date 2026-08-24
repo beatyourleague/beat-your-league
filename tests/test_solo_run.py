@@ -894,3 +894,40 @@ def test_section_six_reports_the_record_the_product_actually_publishes(tmp_path)
     # A different cohort's store is a different record — the scoring preset and
     # league size are part of a call's identity, so they must not pool.
     assert solo_receipts("typed-standard-12-2024", tmp_path)["record"] is None
+
+
+def test_a_mid_season_stats_outage_refuses_instead_of_claiming_week_one(
+        tmp_path, monkeypatch) -> None:
+    """load_week_data swallowed NflverseError into an empty weekly dict. That
+    is correct BEFORE kickoff — there is genuinely no form to project from —
+    but mid-season the same empty dict sends build_solo_report down the week-1
+    branch, which tells the subscriber in their own words that the season has
+    not played its first games. Complete report, confident, exit 0, and the
+    same file contradicts itself two lines later ("no scored weeks for DEF-BAL
+    before week 10").
+
+    One asset failing is enough to trigger it: a renamed nflverse release, a
+    placeholder file early in a season, or an actions/cache miss on the
+    seven-day eviction cycle the weekly cron sits exactly on. This is the paid
+    path — run/tuesday.py calls the same loader. Found Aug 24 2026."""
+    import pytest
+    import run.solo as solo
+    from ingest.nflverse import NflverseError
+
+    def boom(*args, **kwargs):
+        raise NflverseError("stats_player_week_2024.csv: 404")
+
+    monkeypatch.setattr(solo, "season_rows", boom)
+
+    # Week 1: an absent release is a real state and still builds.
+    try:
+        solo.load_week_data(solo.CACHE_DIR, "2024", 1, live=False)
+    except solo.SoloError as exc:
+        assert "could not be loaded" not in str(exc), \
+            "week 1 must still tolerate an absent stats release"
+    except Exception:
+        pass                                # any other cold-cache failure
+
+    # Week 10: refuse, loudly, rather than publish "the season hasn't started".
+    with pytest.raises(solo.SoloError, match="week 10"):
+        solo.load_week_data(solo.CACHE_DIR, "2024", 10, live=False)
