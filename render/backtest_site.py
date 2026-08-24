@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import math
 import re
 import sys
 from pathlib import Path
@@ -66,9 +67,9 @@ HEAD = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — The Full Grading Record</title>
+<title>@@TITLE@@</title>
 <meta name="description" content="Eleven seasons of graded calls — hits, misses, and the bands that failed, published whole. The complete record behind the number in your report.">
-<meta property="og:title" content="Beat Your League — The Full Grading Record">
+<meta property="og:title" content="@@TITLE@@">
 <meta property="og:description" content="Eleven seasons of graded calls — hits, misses, and the bands that failed, published whole. The complete record behind the number in your report.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
@@ -117,11 +118,8 @@ HEAD = """<!DOCTYPE html>
 <div class="sheet">
   <header>
     <div class="brand">""" + mark_svg("bylb") + """<a href="index.html">Beat Your League</a></div>
-    <h1>The Full Grading Record</h1>
-    <p>This page is produced by the same code that grades our calls, so it cannot be
-    edited by hand — the failing bands and the refusal to claim more are in it because
-    the program put them there. Published whole, exactly as the run wrote it
-    (<code>python -m engine.nflverse_backtest</code>).</p>
+    <h1>@@HEADING@@</h1>
+    <p>@@LEDE@@</p>
   </header>
 """
 
@@ -135,7 +133,7 @@ TAIL = """</main>
   </div>
   <footer><b>Beat Your League</b> — analysis, not picks. Every number here is reproducible
   from public NFL data; the live record is on the public ledger.
-  NFL data: nflverse (nflverse-data), CC-BY-4.0.</footer>
+  NFL data: nflverse (nflverse-data), CC-BY-4.0.@@SIBLING@@</footer>
 </div>
 </body>
 </html>
@@ -162,29 +160,77 @@ def _inline(text: str) -> str:
 CALIBRATION_HEADERS = frozenset({"Stated confidence", "Stated"})
 
 
-def _is_diagnostic(section: str) -> bool:
-    """Is this section's table a diagnostic rather than a result?
+# The ONLY section whose calibration table may be charted. An allowlist, not a
+# denylist, because the two are not symmetric here: guessing "not a diagnostic"
+# from prose fails OPEN — a diagnostic worded in a way the pattern misses gets
+# drawn as accuracy, and if it also comes first it takes the chart and
+# suppresses the real one (reproduced in review). An unrecognised heading now
+# means NO chart, which is visible (a test requires the chart to exist) instead
+# of silently wrong. Both report generators head this section "Calibration".
+PUBLISHABLE_SECTION = "Calibration"
 
-    Matched on the heading, which is where both reports say so in words:
-    "Calibration, availability controlled (diagnostic)". A diagnostic
-    conditions on something unknowable when the call is made, so it may be
-    tabulated with its caveat and never drawn as if it were accuracy.
+# The RETIRED study, published at its own URL. It is here because the repoint
+# would otherwise leave its unflattering headline on no buyer-reachable
+# surface, and "the number got harder to find" is the one charge this project
+# cannot answer with a shrug. It predates the grade rule, so it is named as an
+# exception rather than letting a missing grade silently skip the check.
+RETIRED_SOURCE = REPO_ROOT / "reports" / "backtest.md"
+RETIRED_OUTPUT = REPO_ROOT / "site" / "retired-backtest.html"
+UNGRADED_SOURCES = frozenset({RETIRED_SOURCE.name})
+
+
+def _shell(source: Path) -> tuple[str, str, str]:
+    """(title, masthead heading, masthead lede) for the document being
+    published. Two documents, two honest descriptions — a shared masthead
+    would describe one of them wrongly."""
+    if source.name in UNGRADED_SOURCES:
+        return (
+            "Beat Your League — The Retired League Study",
+            "The Retired League Study",
+            "A measurement of a data stack this product no longer runs, kept "
+            "because a past result is part of the record. It graded an earlier "
+            "model against the lineups human managers actually set, in one "
+            "twelve-team league — a different question from "
+            "<a href=\"backtest.html\" style=\"color:#F2C230\">the grading "
+            "record behind today's numbers</a>, and the two sets of figures are "
+            "never placed side by side.",
+        )
+    return (
+        "Beat Your League — The Full Grading Record",
+        "The Full Grading Record",
+        "Regenerated from the grading run's own output, never hand-edited: the "
+        "failing bands and the refusal to claim more are in it because the run "
+        "wrote them there. Reproduce it with "
+        "<code>python -m engine.nflverse_backtest</code>.",
+    )
+
+
+def _is_publishable_section(section: str) -> bool:
+    """May this section's calibration table be charted?
+
+    Only the section that IS the published calibration result. Anything else —
+    the availability-controlled diagnostic, a per-position split, a section
+    this module has never seen — is tabulated with its own caveat and never
+    drawn as if it were accuracy.
     """
-    return bool(re.search(r"diagnostic|availability[- ]controlled", section, re.I))
+    return section.strip() == PUBLISHABLE_SECTION
 
 
 def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
     """Draw the page's own claim.
 
     The whole argument of this document is "when we say 64%, roughly 64% of
-    those calls hit" — and it was only ever tabulated. Six rows of percentages
-    do not show a reader that stated confidence climbs from 52% to 84% while
-    observed sits flat near 54%; one picture does, and that flat line IS the
-    availability finding that made the shipping product gate on who is playing.
+    those calls hit" — and it was only ever tabulated. Rows of percentages do
+    not show a reader how far from the diagonal the numbers sit; one picture
+    does.
 
-    Plots the UNCONDITIONAL table only. The availability-controlled table is a
-    diagnostic (it conditions on an outcome unknowable at call time) and must
-    never be drawn as if it were accuracy.
+    Two invariants, both learned the hard way. The caller charts only the
+    PUBLISHED calibration table: the availability-controlled one conditions on
+    an outcome unknowable at call time and may never be drawn as if it were
+    accuracy. And everything this function says in words — the caption, the
+    aria-label, the axis window — is DERIVED from the points it is drawing,
+    because hardcoded prose about one study's picture is a false statement the
+    moment the page is pointed at another.
     """
     try:
         i_stated = head.index("Stated avg")
@@ -211,15 +257,20 @@ def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
     if len(points) < 3:
         return ""
 
-    # Fixed 45-90% window on both axes so the diagonal is a true 45 degrees and
-    # the eye can read distance from it directly.
-    lo, hi = 45.0, 90.0
+    # The window is DERIVED, not fixed. It used to be a hardcoded 45-90% sized
+    # for one study, and repointing the page at another drew the top band's dot
+    # and its whole error bar outside the frame — a chart silently omitting its
+    # most extreme result. Both axes share it so the diagonal stays a true 45
+    # degrees and distance from it reads directly.
+    edges = [v for p in points for v in (p[0], p[1], p[2], p[3])]
+    lo = min(45.0, math.floor(min(edges) / 5.0) * 5.0)
+    hi = max(90.0, math.ceil(max(edges) / 5.0) * 5.0)
     W, H, PAD = 560, 300, 42
     def x(v: float) -> float: return PAD + (v - lo) / (hi - lo) * (W - PAD - 14)
     def y(v: float) -> float: return H - PAD - (v - lo) / (hi - lo) * (H - PAD - 16)
 
     grid = []
-    for tick in (50, 60, 70, 80, 90):
+    for tick in range(int(lo) + (10 - int(lo) % 10) % 10, int(hi) + 1, 10):
         grid.append(f'<line x1="{x(tick):.1f}" y1="{y(lo):.1f}" x2="{x(tick):.1f}" '
                     f'y2="{y(hi):.1f}" stroke="#D8D3C6" stroke-width="1"/>')
         grid.append(f'<line x1="{x(lo):.1f}" y1="{y(tick):.1f}" x2="{x(hi):.1f}" '
@@ -247,31 +298,48 @@ def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
     # about a flat line — true of the Sleeper-era study it was written for and
     # false of any other, which is the same failure as a stale figure: a
     # sentence the page states about a picture it is drawing from other data.
+    # Branch on the PER-BAND residuals, never on their mean. A mean cancels:
+    # errors of +12,+11,+8,-7,-12,-13 average to nearly zero and would have
+    # described a wildly miscalibrated chart as tracking the diagonal, and a
+    # positive mean with one band below it published "above at every bucket"
+    # about a picture whose LARGEST band sat below. Both were reproduced
+    # against this function before this rewrite.
     observed = [p[1] for p in points]
+    residuals = [p[1] - p[0] for p in points]
     sorts = max(observed) - min(observed)
-    drift = sum(p[1] - p[0] for p in points) / len(points)
+    above = [r for r in residuals if r > 0.5]
+    below = [r for r in residuals if r < -0.5]
+    worst = max(abs(r) for r in residuals)
+    n = len(residuals)
+
     if sorts < 8.0:
         verdict = (f"Ours run flat near {sum(observed) / len(observed):.0f}% while "
                    f"stated climbs to {max(p[0] for p in points):.0f}% \u2014 the "
                    f"number barely sorts")
         aria = (f"Observed stays near {sum(observed) / len(observed):.0f}% while "
                 f"stated climbs, so the number barely sorts.")
-    elif drift > 2.0:
-        verdict = (f"Ours sit ABOVE the diagonal \u2014 the calls land more often "
-                   f"than the number says, by {drift:.0f} points on average, and "
-                   f"the spread from the least to the most confident bucket is "
-                   f"{sorts:.0f} points")
-        aria = (f"Observed sits above stated by about {drift:.0f} points at every "
-                f"bucket: the number is systematically low.")
-    elif drift < -2.0:
-        verdict = (f"Ours sit BELOW the diagonal \u2014 the calls land less often "
-                   f"than the number claims, by {abs(drift):.0f} points on average")
-        aria = (f"Observed sits below stated by about {abs(drift):.0f} points: the "
-                f"number claims more than it delivers.")
+    elif worst < 2.0:
+        verdict = (f"Ours track the diagonal \u2014 no band is off by more than "
+                   f"{worst:.0f} points \u2014 across a {sorts:.0f}-point spread")
+        aria = "Observed tracks stated closely at every band."
+    elif not below:
+        verdict = (f"Ours sit ABOVE the diagonal at all {n} bands \u2014 the calls "
+                   f"land more often than the number says, by as much as "
+                   f"{max(above):.0f} points, across a {sorts:.0f}-point spread")
+        aria = (f"Observed sits above stated at all {n} bands: the number is "
+                f"systematically low.")
+    elif not above:
+        verdict = (f"Ours sit BELOW the diagonal at all {n} bands \u2014 the calls "
+                   f"land less often than the number claims, by as much as "
+                   f"{abs(min(below)):.0f} points")
+        aria = (f"Observed sits below stated at all {n} bands: the number claims "
+                f"more than it delivers.")
     else:
-        verdict = (f"Ours track the diagonal within {max(abs(drift), 0.5):.0f} "
-                   f"point, across a {sorts:.0f}-point spread")
-        aria = "Observed tracks stated closely across the buckets."
+        verdict = (f"Ours sit above the diagonal at {len(above)} of {n} bands and "
+                   f"below it at {len(below)} \u2014 the largest gap either way is "
+                   f"{worst:.0f} points")
+        aria = (f"Observed sits above stated at {len(above)} of {n} bands and below "
+                f"it at {len(below)}.")
 
     return (
         f'<figure class="calfig">'
@@ -297,6 +365,70 @@ def _calibration_chart(head: list[str], body: list[list[str]]) -> str:
         f'text above, not softened here.</figcaption>'
         f'</figure>'
     )
+
+
+# A line that continues the list item above it, rather than starting anything
+# new. Markdown hard-wraps: `engine.backtest` emits one bullet per line so this
+# never mattered, and `engine.nflverse_backtest` wraps at ~78 columns, so
+# repointing the page split every wrapped bullet into a one-line <li> plus an
+# orphaned <p> — publishing "week-18 resting is a different" and "population."
+# as separate blocks. verify() could not see it: every FIGURE was still
+# present, which is why the check below counts items too.
+_STARTS_A_BLOCK = re.compile(r"^\s*(?:[-*]\s+|\d+\.\s+|#{1,6}\s+|\|)")
+
+
+def _verdict_counts(markdown: str) -> dict[str, int]:
+    """How many bands the source records under each verdict.
+
+    Read from the last column of every calibration table, so the check follows
+    whatever vocabulary the report generator uses rather than one hardcoded
+    word. `**off**` and `off` are the same verdict.
+    """
+    counts: dict[str, int] = {}
+    in_table = False
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            in_table = False
+            continue
+        cells = _split_row(line)
+        if _is_divider(cells):
+            continue
+        if cells and cells[0] in CALIBRATION_HEADERS:
+            in_table = True
+            continue
+        if in_table and len(cells) >= 2:
+            verdict = cells[-1].strip().strip("*").strip()
+            if verdict:
+                counts[verdict] = counts.get(verdict, 0) + 1
+    return counts
+
+
+def _source_items(markdown: str) -> list[str]:
+    """Every list item in the source, continuations joined, markers stripped —
+    the text that must appear on the page for the item to have survived."""
+    lines = markdown.splitlines()
+    items: list[str] = []
+    i = 0
+    while i < len(lines):
+        match = re.match(r"^\s*(?:[-*]|\d+\.)\s+(.*)$", lines[i])
+        if not match:
+            i += 1
+            continue
+        i, item = _continued(lines, i + 1, match.group(1))
+        # The inline markers become tags, which the page comparison strips.
+        item = re.sub(r"[*`]", "", item)
+        items.append(re.sub(r"\s+", " ", item).strip())
+    return items
+
+
+def _continued(lines: list[str], i: int, item: str) -> tuple[int, str]:
+    """Absorb wrapped continuation lines into the item that owns them."""
+    while (i < len(lines) and lines[i].strip()
+           and not _STARTS_A_BLOCK.match(lines[i])):
+        item = f"{item} {lines[i].strip()}"
+        i += 1
+    return i, item
 
 
 def _alignment(cell: str) -> str:
@@ -377,7 +509,7 @@ def to_html(markdown: str) -> str:
                 # keyed on the header row alone, both tables carry that header,
                 # and the page shipped the diagnostic as a second chart.
                 if (head and head[0] in CALIBRATION_HEADERS
-                        and not _is_diagnostic(section) and not charted):
+                        and _is_publishable_section(section) and not charted):
                     chart = _calibration_chart(head, body)
                     out.append(chart)
                     charted = bool(chart)
@@ -388,8 +520,9 @@ def to_html(markdown: str) -> str:
             out.append("<ul>")
             while i < len(lines) and re.match(r"^\s*[-*]\s+", lines[i]):
                 item = re.sub(r"^\s*[-*]\s+", "", lines[i])
-                out.append(f"<li>{_inline(item)}</li>")
                 i += 1
+                i, item = _continued(lines, i, item)
+                out.append(f"<li>{_inline(item)}</li>")
             out.append("</ul>")
             continue
 
@@ -397,8 +530,9 @@ def to_html(markdown: str) -> str:
             out.append("<ol>")
             while i < len(lines) and re.match(r"^\s*\d+\.\s+", lines[i]):
                 item = re.sub(r"^\s*\d+\.\s+", "", lines[i])
-                out.append(f"<li>{_inline(item)}</li>")
                 i += 1
+                i, item = _continued(lines, i, item)
+                out.append(f"<li>{_inline(item)}</li>")
             out.append("</ol>")
             continue
 
@@ -413,7 +547,7 @@ def to_html(markdown: str) -> str:
     return "\n".join(out)
 
 
-def verify(markdown: str, page: str) -> list[str]:
+def verify(markdown: str, page: str, require_grade: bool = True) -> list[str]:
     """Every figure in the source must survive into the page.
 
     This is the whole point of the module: the page claims to be a faithful
@@ -431,21 +565,54 @@ def verify(markdown: str, page: str) -> list[str]:
     # writes "off", `engine.nflverse_backtest` writes "**off**" — and the count
     # must survive, not merely the word: a conversion that dropped three of
     # four failing rows would still contain ">off<".
-    failing = len(re.findall(r"\|\s*\*{0,2}off\*{0,2}\s*\|", markdown))
-    # Counted as CELLS, not as substrings: `>off<` also matches inside
-    # `<b>off</b>`, so a naive count doubles and a page that dropped half its
-    # failing rows would still clear the bar.
-    published = len(re.findall(r">\s*(?:<b>)?off(?:</b>)?\s*<", page))
-    if failing and published < failing:
-        problems.append(
-            f"{failing} failing band(s) in the source, {published} on the page "
-            f"— the failures did not survive conversion")
+    # Anchored on the verdict COLUMN, not on the literal word "off": keying on
+    # one word means a source that reworded its verdicts silently disables the
+    # guard, and this is the check that stops a laundered publication. Every
+    # verdict the source records must appear as a cell on the page, counted.
+    for verdict, wanted in _verdict_counts(markdown).items():
+        # Escaped as the page escapes it: a verdict like "too few (< 30)"
+        # renders as "too few (&lt; 30)", and comparing the raw string would
+        # report a faithful page as broken.
+        published = len(re.findall(
+            r">\s*(?:<b>)?" + re.escape(html.escape(verdict, quote=False))
+            + r"(?:</b>)?\s*<", page))
+        if published < wanted:
+            problems.append(
+                f"{wanted} band(s) recorded {verdict!r} in the source, "
+                f"{published} on the page — verdicts did not survive conversion")
+    # Structure, not only figures. A conversion that split every wrapped bullet
+    # into an <li> plus an orphaned <p> kept every NUMBER and passed the sweep
+    # above while publishing sentences cut in half ("week-18 resting is a
+    # different" / "population."). Counting items does not catch it either —
+    # the halves land in <p>, so the <li> count still matches. The item's TEXT
+    # has to survive intact, so that is what is checked.
+    # Compared against the <li> CONTENTS, not against the page's flattened
+    # text: flattening rejoins the halves ("...is a different" + "population.")
+    # into a string that reads correct while the markup is broken.
+    published_items = {
+        html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", block))).strip()
+        for block in re.findall(r"<li>(.*?)</li>", page, re.S)
+    }
+    for item in _source_items(markdown):
+        if item not in published_items:
+            problems.append(
+                f"a list item did not survive whole: {item[:70]!r}")
+            break
+
     # The grade and its refusal are the source's own verdict on itself and the
     # thing a laundered publication would quietly lose. Required whenever the
     # source states one, checked against the source rather than hardcoded, so
     # this holds for whichever report the page is pointed at.
-    grade = re.search(r"^## Grade ([A-D])$", markdown, re.M)
-    if grade and f"Grade {grade.group(1)}" not in text:
+    grade = re.search(r"^#{1,3}\s+Grade\s+([A-D])\b", markdown, re.M)
+    if grade is None and not require_grade:
+        pass                      # a document that predates the grade rule
+    elif grade is None:
+        # The source is contractually required to carry one (the frozen
+        # method's grade table). A missing heading used to SKIP the check,
+        # which meant renaming the heading disabled the guard rather than
+        # failing it.
+        problems.append("the source states no grade, which the method requires")
+    elif f"Grade {grade.group(1)}" not in text:
         problems.append(f"the source's own grade ({grade.group(1)}) is not on the page")
     # <ol> draws its own numbers, so a source list that does not start at 1 and
     # run consecutively would be silently RENUMBERED on the published page —
@@ -469,8 +636,26 @@ def verify(markdown: str, page: str) -> list[str]:
 
 def build(source: Path = SOURCE) -> str:
     markdown = source.read_text(encoding="utf-8")
-    page = HEAD + "  <main>\n" + to_html(markdown) + "\n" + TAIL
-    problems = verify(markdown, page)
+    title, heading, lede = _shell(source)
+    # Token substitution rather than str.format: the shell carries a CSS block
+    # full of braces, and formatting it raises on the first `{--navy...}`.
+    shell = (HEAD.replace("@@TITLE@@", html.escape(title, quote=True))
+                 .replace("@@HEADING@@", html.escape(heading, quote=False))
+                 .replace("@@LEDE@@", lede))
+    # Each page names the other. The retired study is reachable from the live
+    # record rather than from nowhere: a repoint that leaves an unflattering
+    # measurement on no page anybody can reach is the one thing this change
+    # could fairly be accused of, and one link answers it.
+    sibling = (
+        ' <a href="backtest.html" style="color:var(--flag)">The grading record '
+        'behind today\'s numbers</a>.'
+        if source.name in UNGRADED_SOURCES else
+        ' <a href="retired-backtest.html" style="color:var(--flag)">The earlier, '
+        'retired study</a> is kept here too.')
+    page = shell + "  <main>\n" + to_html(markdown) + "\n" + TAIL.replace(
+        "@@SIBLING@@", sibling)
+    problems = verify(markdown, page,
+                      require_grade=source.name not in UNGRADED_SOURCES)
     if problems:
         raise SystemExit("refusing to publish an unfaithful backtest page:\n  "
                          + "\n  ".join(problems))
@@ -480,11 +665,14 @@ def build(source: Path = SOURCE) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=SOURCE)
-    parser.add_argument("--output", type=Path, default=OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true",
                         help="fail if the published page is stale, without writing")
     args = parser.parse_args(argv)
 
+    if args.output is None:
+        args.output = (RETIRED_OUTPUT if args.source.name in UNGRADED_SOURCES
+                       else OUTPUT)
     if not args.source.is_file():
         print(f"{args.source} not found — run `python -m engine.nflverse_backtest` first",
               file=sys.stderr)

@@ -633,8 +633,17 @@ def main(argv: list[str] | None = None) -> int:
         try:
             got = calls_for_season(season, args.raw, args.injuries, rule)
         except (BacktestError, OSError) as exc:
-            print(f"  {season}: skipped — {exc}", file=sys.stderr)
-            continue
+            # FATAL, not skipped. The frozen method (§3) fixes the season
+            # window, so a run that quietly grades fewer seasons publishes a
+            # different measurement under the same name — and with `make
+            # backtest` now regenerating the report the published page and an
+            # evidence page both read, a partial cache would silently shrink
+            # the record rather than fail.
+            print(f"  {season}: FAILED — {exc}", file=sys.stderr)
+            print("  The method freezes the season window; refusing to publish "
+                  "a run that grades fewer seasons than it claims.",
+                  file=sys.stderr)
+            return 1
         per_season[season] = len(got)
         calls.extend(got)
         print(f"  {season}: {len(got)} calls", file=sys.stderr)

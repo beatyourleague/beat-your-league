@@ -905,9 +905,25 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         return ""
     if meta.get("solo"):
         season = esc(str(meta.get("season", "a past")))
+        # The two published samples point at each other on purpose. A buyer
+        # decides on a mid-season file and then receives a WEEK ONE file, which
+        # carries no number anywhere by design — and a gap between what was
+        # sold and what arrives is a refund with a stamp on it. Each page says
+        # what the other one shows.
+        companion = (
+            'A mid-season file, once the season has a record to read, looks '
+            'like <a href="sample-report.html" style="color:var(--brick);'
+            'font-weight:700;">this</a>. '
+            if meta.get("first_week_demo") else
+            'The first file of a season is thinner than this one — no games '
+            'have been played yet — and it looks like '
+            '<a href="sample-first-week.html" style="color:var(--brick);'
+            'font-weight:700;">this</a>. '
+        )
         return (
             '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
-            f'This file is from the {season} season. Yours is built from your own '
+            f'This file is from the {season} season. {companion}'
+            'Yours is built from your own '
             'roster, scored your league\'s way — '
             '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
             'set it up</a> and the first one lands Tuesday.</div>'

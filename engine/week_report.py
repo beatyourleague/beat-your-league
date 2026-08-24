@@ -439,14 +439,17 @@ def _assign_alternatives(
 
 # Buyer-facing reason when the totals/band cannot be published. Week 1 is the
 # common case: no games have been played, so there is no record to project from.
+# "Your league hasn't played" was written for the retired product, which read
+# a league; this one never does, and a sentence implying we can see their
+# league is the same wrong-reason failure the constant below exists to avoid.
 TEAM_RANGE_GATE = (
-    "no projected totals yet — your league hasn't played its first games, and "
+    "no projected totals yet — the season hasn't played its first games, and "
     "we don't publish a number without a record behind it. Totals and ranges "
     "start once box scores exist.")
 
 
-# A DIFFERENT reason for the same withheld number. The week-1 message ("your
-# league hasn't played its first games") is false when the real problem is a
+# A DIFFERENT reason for the same withheld number. The week-1 message ("the
+# season hasn't played its first games") is false when the real problem is a
 # lineup slot nobody can fill, and a wrong reason for a withheld number is its
 # own principle-3 failure — the subscriber goes looking for the wrong fix.
 TEAM_RANGE_INCOMPLETE = (

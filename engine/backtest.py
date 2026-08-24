@@ -89,7 +89,8 @@ def _header(seasons: Sequence[Season]) -> list[str]:
         "",
         f"Generated {generated} from cached Sleeper data in `data/raw/`. "
         "No network calls, no generated text, no estimates: every number below is "
-        "reproducible by re-running `python -m engine.backtest`.",
+        "reproducible by re-running `make backtest-retired` (the bare command "
+        "needs the league it graded, which is why the target passes it).",
         "",
         "## Leagues graded",
         "",

@@ -1,7 +1,8 @@
 """Build the public sample report — the funnel's proof asset.
 
 Usage:
-    python -m render.sample            # writes site/sample-report.html
+    python -m render.sample                     # site/sample-report.html (week 10)
+    python -m render.sample --week 1 --out ...  # the first-week companion
 
 ``make sample`` is the only way to rebuild this page, for the same reason
 ``make demo`` was the only way to rebuild the old one: the published sample is
@@ -34,8 +35,15 @@ from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO_ROOT / "site" / "sample-report.html"
+FIRST_WEEK_OUT = REPO_ROOT / "site" / "sample-first-week.html"
 
 SEASON, WEEK = "2024", 10
+# The companion page. A buyer decides on a mid-season file and then receives a
+# WEEK ONE file, which by design carries no number anywhere — no week-0 injury
+# report exists, so nothing is confirmable and nothing prints. That gap between
+# what was sold and what arrives is a Week-2 refund with a stamp on it, and the
+# honest fix is to publish the first file too, through the same pipeline.
+FIRST_WEEK = 1
 
 # GSIS ids, resolved once from the directory and pinned. Names in comments so a
 # reader can check the page against this list.
@@ -59,20 +67,28 @@ SAMPLE_ROSTER = (
 SLOTS = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 
 
-def build() -> dict:
-    data = load_week_data(CACHE_DIR, SEASON, WEEK)
+def build(week: int = WEEK) -> dict:
+    data = load_week_data(CACHE_DIR, SEASON, week)
     spec = RosterSpec(player_ids=SAMPLE_ROSTER, slots=SLOTS, scoring="ppr",
                       label="Your Team")
     report = report_for(spec, data, league_size=12)
     report["meta"]["historical_demo"] = True
     report["meta"]["anonymized_demo"] = True
+    # Which of the two published samples this is, so each page points at the
+    # other rather than at itself.
+    report["meta"]["first_week_demo"] = week == FIRST_WEEK
     return report
 
 
 def main(argv: list[str] | None = None) -> int:
-    out = Path(argv[0]) if argv else DEFAULT_OUT
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--week", type=int, default=WEEK)
+    parser.add_argument("--out", type=Path)
+    args = parser.parse_args(argv)
+    out = args.out or (FIRST_WEEK_OUT if args.week == FIRST_WEEK else DEFAULT_OUT)
     try:
-        report = build()
+        report = build(args.week)
     except SoloError as exc:
         print(f"could not build the sample: {exc}", file=sys.stderr)
         return 1

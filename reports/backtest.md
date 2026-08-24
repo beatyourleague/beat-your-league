@@ -2,7 +2,7 @@
 
 **This document describes a data stack the product no longer runs.** It graded the Sleeper-era model against the actual lineups human managers set, in one twelve-team league. The shipping product reads no league at all; its own grading is `reports/nflverse-backtest.md`, which asks a different question — the model's first choice against its own second — and the two numbers must never be placed side by side.
 
-Generated 2026-08-23 20:52 UTC from cached Sleeper data in `data/raw/`. No network calls, no generated text, no estimates: every number below is reproducible by re-running `python -m engine.backtest`.
+Generated 2026-08-24 00:00 UTC from cached Sleeper data in `data/raw/`. No network calls, no generated text, no estimates: every number below is reproducible by re-running `make backtest-retired` (the bare command needs the league it graded, which is why the target passes it).
 
 ## Leagues graded
 

@@ -17,6 +17,7 @@ ingest:
 backtest:
 	$(PY) -m engine.nflverse_backtest
 	$(PY) -m render.backtest_site
+	$(PY) -m render.backtest_site --source $(PWD)/reports/backtest.md
 
 # The early-season arm (weeks 2-3, prior-season seeded). Separate target: it
 # is a preregistered arm with its own frozen method, not part of the headline
@@ -103,8 +104,12 @@ demo:
 # template a subscriber's report uses), so no number can appear on the page
 # unless the product computed it. The roster and week are pinned in
 # render/sample.py.
+# Both published samples: the mid-season file a buyer decides on, and the
+# WEEK ONE file they actually receive first. They link to each other, so
+# rebuilding one without the other is how the pair drifts.
 sample:
 	$(PY) -m render.sample
+	$(PY) -m render.sample --week 1
 
 # The player directory the intake page downloads. Regenerate whenever the
 # nflverse cache moves — a stale directory cannot resolve a rookie, and the
