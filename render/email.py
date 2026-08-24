@@ -28,6 +28,7 @@ from render.report import (
     AS_SET_HEAD,
     BRAND_LINE,
     CANCEL_BODY,
+    cancel_destination,
     CANCEL_HEAD,
     NO_BETTING_LINE,
     NO_CALL,
@@ -684,6 +685,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
               *([f"", f"{UPDATE_HEAD.upper()} {UPDATE_BODY} {meta['update_url']}"]
                 if meta.get("update_url") else []),
               "",
+              *_cancel_lines(),
               "DONE WITH THIS? Cancel it yourself from your own billing page — about "
               "fifteen seconds, and the billing stops immediately. Note that "
               "unsubscribing from emails alone does NOT stop a subscription; cancel "
@@ -717,6 +719,7 @@ def subject_for(report: Mapping[str, Any]) -> str:
 
 def _footer(meta: Mapping[str, Any]) -> str:
     basis = availability_basis(meta)
+    _cancel_href, _cancel_label = cancel_destination()
     return (
         f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;'
         f'margin-top:24px;">'
@@ -726,8 +729,24 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'{update_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}</p></td></tr>'
+        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
+        + (f' <a href="{esc(_cancel_href)}" style="color:{NAVY};">'
+           f'{esc(_cancel_label)}</a>.' if _cancel_href else "")
+        + '</p></td></tr>'
     )
+
+
+def _cancel_lines() -> list[str]:
+    """The cancel route as a URL, for the half that cannot carry an anchor.
+
+    The footer told every subscriber the steps were "on our legal page" and
+    linked nothing, on either half — ~18 emails a season, each promising a
+    fifteen-second cancel with no way to reach it (found Aug 24 2026 by
+    reading a delivered draft: the HTML carried exactly one href, the roster
+    update link).
+    """
+    href, label = cancel_destination()
+    return [f"CANCEL: {label} — {href}", ""] if href else []
 
 
 def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:

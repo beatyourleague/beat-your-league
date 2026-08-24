@@ -131,6 +131,25 @@ CANCEL_BODY = ("Cancel it yourself from your own billing page — it takes about
                "steps are on our legal page. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end.")
+def cancel_destination() -> tuple[str, str]:
+    """(href, label) for the self-serve cancel route — one route, every surface.
+
+    Lived in render/welcome.py, so the WEEKLY report — ~18 emails a season
+    against the welcome's one — told every subscriber the steps were "on our
+    legal page" and never linked it, on either half. Found Aug 24 2026 by
+    reading a delivered draft: the HTML carried exactly one href, the roster
+    update link. A promise to make cancelling easy, made eighteen times, with
+    no way to act on it.
+    """
+    portal = os.environ.get("BILLING_PORTAL_URL", "").strip()
+    if portal:
+        return portal, "your billing page"
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    if site:
+        return f"{site}/legal.html#cancel", "the exact steps, on our legal page"
+    return "", ""
+
+
 AS_SET_HEAD = "Your lineup, exactly as set."
 AS_SET_BODY = ("Start-sit calls begin once your league has box scores to "
                "compare against — from next week, this grid shows the lineup "
@@ -1023,6 +1042,7 @@ def footer(meta: Mapping[str, Any]) -> str:
     # The gap COUNT is operator bookkeeping; a buyer only needs to know that
     # anything unproven was withheld, which the report already says in place.
     gap_line = ""
+    _cancel_href, _cancel_label = cancel_destination()
     return (
         f'{demo_band(meta)}'
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
@@ -1036,7 +1056,10 @@ def footer(meta: Mapping[str, Any]) -> str:
         # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
         # distinction stays: stopping emails while billing continues is how you
         # earn a chargeback and deserve it.
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}</footer>'
+        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
+        + (f' <a href="{esc(_cancel_href)}">{esc(_cancel_label)}</a>.'
+           if _cancel_href else "")
+        + '</footer>'
     )
 
 

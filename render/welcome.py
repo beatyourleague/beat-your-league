@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 
-from render.report import CANCEL_HEAD, esc
+from render.report import CANCEL_HEAD, cancel_destination, esc
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
@@ -38,21 +38,8 @@ UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — 
               "cancel from your billing page if you want the charges to end.")
 
 
-def _cancel_destination() -> tuple[str, str]:
-    """(href, label) for the self-serve cancel route.
-
-    The Stripe customer portal link is owner-configured (BILLING_PORTAL_URL);
-    until it exists, the legal page carries the concrete steps. One of the two
-    always resolves — a welcome email whose cancel link goes nowhere would be
-    the exact broken promise this email exists to prevent.
-    """
-    portal = os.environ.get("BILLING_PORTAL_URL", "").strip()
-    if portal:
-        return portal, "your billing page"
-    site = os.environ.get("SITE_URL", "").rstrip("/")
-    if site:
-        return f"{site}/legal.html#cancel", "the exact steps, on our legal page"
-    return "", ""
+# One route, defined in render/report.py so every surface agrees.
+_cancel_destination = cancel_destination
 
 
 def _plan_terms(plan: str) -> tuple[str, list[str]]:

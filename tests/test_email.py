@@ -393,3 +393,54 @@ def test_the_week_one_subject_does_not_call_an_ordering_a_decision() -> None:
     assert _subject(report) == f"Week {report['meta']['week']}: your opening lineup"
     report["lineup"][0]["projected"] = 12.3
     assert "your lineup, decided" in _subject(report)
+
+
+def test_every_report_carries_a_machine_readable_way_out(tmp_path, monkeypatch) -> None:
+    """A delivered draft's headers were From, To, Subject, MIME-Version and
+    Content-Type — nothing else. No List-Unsubscribe, and the footer's own
+    sentence ("the exact steps are on our legal page") was never a link on
+    either half: the HTML carried exactly one href, the roster-update link.
+    ~18 emails a season, each promising a fifteen-second cancel with no way to
+    reach it (found Aug 24 2026 by reading a draft the dry provider wrote).
+
+    For a PAID subscription there is no free list to leave — unsubscribing and
+    cancelling are the same act — so the target is where the money stops. No
+    List-Unsubscribe-Post: one-click (RFC 8058) promises an endpoint that
+    consumes a POST, and a Stripe portal link is not one; claiming it would be
+    worse than omitting it."""
+    from render.report import cancel_destination
+    from run.delivery import DryRunProvider, Message
+
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/x")
+    href, label = cancel_destination()
+    assert href and label
+
+    message = Message(to="fan@example.com", subject="s", html="<p>h</p>",
+                      text="t", key="k", unsubscribe=href)
+    DryRunProvider(outbox=tmp_path).send(message, "r@example.com", None)
+    raw = (tmp_path / "k.eml").read_text(encoding="utf-8")
+    assert f"List-Unsubscribe: <{href}>" in raw, \
+        "the delivered message has no unsubscribe mechanism"
+    assert "List-Unsubscribe-Post" not in raw, \
+        "one-click promises a POST endpoint the billing portal is not"
+
+    # And the route falls back rather than rendering a dead link.
+    monkeypatch.delenv("BILLING_PORTAL_URL", raising=False)
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    assert cancel_destination()[0] == "https://example.com/legal.html#cancel"
+    monkeypatch.delenv("SITE_URL", raising=False)
+    assert cancel_destination() == ("", ""), \
+        "with nothing configured the footer must render prose, never a dead link"
+
+
+def test_the_cancel_route_is_reachable_on_both_halves(tmp_path, monkeypatch) -> None:
+    """The promise is made in the footer of every report; it has to be
+    actionable in the HTML AND in the plain-text alternative, which cannot
+    carry an anchor and so needs the URL spelled out."""
+    from render.email import render_email, text_summary
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/x")
+    report = _report(tmp_path)
+    assert "https://billing.stripe.com/p/login/x" in render_email(report), \
+        "the email footer promises a cancel route and does not link it"
+    assert "CANCEL:" in text_summary(report), \
+        "the plain-text half has no way to reach the cancel route"

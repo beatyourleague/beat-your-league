@@ -257,3 +257,77 @@ def test_league_size_survives_the_browser_to_tuesday_trip() -> None:
     # And an unknown size code is refused rather than guessed.
     with pytest.raises(Exception):
         decode_roster(v3.replace("s3-pd", "s3-pz", 1))
+
+
+# --------------------------------------------------------------------- #
+# what a public form backend can do to a run (found Aug 24 2026)
+# --------------------------------------------------------------------- #
+
+def test_a_non_ascii_token_cannot_kill_the_whole_intake() -> None:
+    """hmac.compare_digest RAISES TypeError, not False, when either str
+    argument is non-ASCII — and the token comes straight off a public form
+    backend with no character validation. validate_updates is called with no
+    try/except, so one anonymous row took down the entire run: no registry
+    written, no welcomes sent, no watermark advanced, repeating every run
+    until somebody deleted the row by hand. The attacker can re-post it.
+
+    This module's governing rule is that one person's problem must not become
+    everybody's; an anonymous stranger's certainly must not."""
+    from run.updates import update_token, validate_updates
+
+    secret = "s" * 32
+    good = update_token("fan@example.com", secret)
+    from run.refs import encode_roster
+    ids = ("00-0034796", "00-0032764", "00-0037840", "00-0036322",
+           "00-0038543", "00-0039338", "DEF-CLE")
+    slots = ("QB", "RB", "WR", "TE", "FLEX", "K", "DEF")
+    ref = encode_roster("season", "ppr", slots, ids)
+    registry_rows = [{"email": "fan@example.com", "ref": ref,
+                      "origin": "abcdef0123"}]
+    rows = [
+        {"kind": "update", "email": "fan@example.com", "ref": ref,
+         "replaces": "abcdef0123", "token": "caf\u00e9" + "0" * 16},  # non-ASCII
+    ]
+    # The call must RETURN rather than raise: one anonymous row must not be
+    # able to take down every subscriber's Tuesday.
+    applied, problems = validate_updates(rows, registry_rows, set(ids), secret)
+    assert any("token" in p for p in problems), \
+        "the non-ASCII token was not reported"
+    assert applied == []
+    assert good.isascii()
+
+
+def test_an_unrecognised_seat_payload_refuses_instead_of_reading_it_as_empty() -> None:
+    """fetch_seats mined a dict for "data"/"submissions"/"items" and returned
+    [] for anything else — indistinguishable from "nobody claimed a seat". A
+    backend answering {"records":[...]} (Airtable's own key) therefore wrote a
+    Stripe-only registry and exited 0, silently dropping every League Pass
+    seat: the exact outcome the "Refusing to write a registry that would drop
+    every seat" guard exists to prevent, reached through the one door it did
+    not cover. Fail closed on an unknown SHAPE, not just an unreachable host."""
+    import json as _json
+    import pytest as _pytest
+    import run.intake as intake
+
+    class _Resp:
+        def __init__(self, body): self._b = body.encode()
+        def read(self): return self._b
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake(body):
+        return lambda *a, **k: _Resp(body)
+
+    # A recognised key still works, including the newly-added ones.
+    for key in ("data", "submissions", "items", "records"):
+        intake.urllib.request.urlopen = fake(_json.dumps({key: [{"email": "a@b.co"}]}))
+        assert intake.fetch_seats("https://x.test", None) == [{"email": "a@b.co"}]
+
+    # An unrecognised shape REFUSES rather than reporting a quiet week.
+    intake.urllib.request.urlopen = fake(_json.dumps({"mystery": [{"email": "a@b.co"}]}))
+    with _pytest.raises(intake.IntakeError, match="no recognisable row list"):
+        intake.fetch_seats("https://x.test", None)
+
+    intake.urllib.request.urlopen = fake(_json.dumps("a string"))
+    with _pytest.raises(intake.IntakeError, match="not a row list"):
+        intake.fetch_seats("https://x.test", None)

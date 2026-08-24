@@ -342,10 +342,25 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
     if isinstance(payload, list):
         rows = payload
     elif isinstance(payload, dict):
-        rows = (payload.get("data") or payload.get("submissions")
-                or payload.get("items") or [])
+        rows = None
+        for key in ("data", "submissions", "items", "records", "results", "rows"):
+            if isinstance(payload.get(key), list):
+                rows = payload[key]
+                break
+        if rows is None:
+            # FAIL CLOSED. An unrecognised SHAPE used to yield [] — identical to
+            # "nobody claimed a seat" — so a backend answering {"records":[...]}
+            # (Airtable's own key, among others) wrote a Stripe-only registry
+            # and exited 0, silently dropping every League Pass seat. That is
+            # the exact outcome the refusal above exists to prevent, reached
+            # through the one door it did not cover. Found Aug 24 2026.
+            raise IntakeError(
+                f"seat backend returned a JSON object with no recognisable row "
+                f"list (keys: {sorted(payload)[:6]}) — refusing to read it as "
+                f"an empty week")
     else:
-        rows = []
+        raise IntakeError(
+            f"seat backend returned {type(payload).__name__}, not a row list")
     return [row for row in rows if isinstance(row, dict)]
 
 
@@ -628,6 +643,18 @@ def main(argv: list[str] | None = None) -> int:
     # business that lost all its customers — and writing an empty registry over
     # a good one, then exiting 0, is the failure nobody notices until Tuesday.
     wiped = bool(servable) and not rows
+    # The module contract says exit 1 means "a paid signup we cannot serve, or
+    # a Stripe read that failed". `blocked` covered only unservable ROSTERS, so
+    # every PAID-UNATTRIBUTED payment — a completed, paid session with no
+    # reference, an unreadable ref, or no address to send to — printed its own
+    # sentence saying "somebody has paid and will receive nothing" and then
+    # exited 0. Both crons gate their failure step on code == 1, and daily.yml
+    # files the issue only on failure, so the customer was charged, undeliverable
+    # and invisible: green cron, no alarm. Found Aug 24 2026.
+    # `remembered` counts too — an unresolved payment stays unresolved until a
+    # human clears it, and a re-run that goes green is how it gets forgotten.
+    unattributed = [p for p in list(problems) + list(remembered)
+                    if str(p).startswith("PAID-UNATTRIBUTED")]
 
     line = "=" * 62
     print(f"\n{line}\nROSTER INTAKE{' (dry run)' if args.dry_run else ''}\n{line}")
@@ -670,7 +697,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
-        return 1 if blocked else 0
+        return 1 if (blocked or unattributed) else 0
 
     write_registry(rows, registry_path)
 
@@ -695,8 +722,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"WROTE AN UNLOADABLE REGISTRY: {exc}", file=sys.stderr)
         return 1
     print(f"Registry written: {registry_path}")
+    if unattributed:
+        print(f"{len(unattributed)} PAID payment(s) could not be attributed — "
+              f"exiting non-zero so this is not a green cron.", file=sys.stderr)
     print(line)
-    return 1 if blocked else 0
+    return 1 if (blocked or unattributed) else 0
 
 
 if __name__ == "__main__":

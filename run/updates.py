@@ -158,7 +158,16 @@ def validate_updates(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
         if not _EMAIL_RE.match(email):
             problems.append("a roster update arrived with an unusable address")
             continue
-        if not hmac.compare_digest(token, update_token(email, secret)):
+        # ASCII-only BEFORE compare_digest: it raises TypeError rather than
+        # returning False when either str argument is non-ASCII, and this value
+        # came straight off a public form backend with no character validation.
+        # One anonymous row killed the whole intake — no registry written, no
+        # welcomes sent, no watermark advanced — and repeated every run until
+        # somebody deleted it by hand. The governing rule here is that one
+        # person's problem must not become everybody's; an attacker's problem
+        # certainly must not. Found Aug 24 2026.
+        if not token.isascii() or not hmac.compare_digest(
+                token, update_token(email, secret)):
             # Said without the address: the summary lands in a CI log.
             problems.append("a roster update carried a token that does not match "
                             "its address — not applied")

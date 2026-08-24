@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import render.report as render_report
+from render.report import cancel_destination
 from render.email import render_email, subject_for, text_summary
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
@@ -128,6 +129,12 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # Idempotent per (season, week, subscription), so a re-run, a resumed
         # workflow or a double-fired cron cannot mail the same week twice.
         key=f"{data.season}-w{week:02d}-{subscriber.slug}",
+        # Every commercial email needs a machine-readable way out, and this
+        # product had none: a delivered draft carried only From/To/Subject/MIME.
+        # For a PAID subscription there is no free list to leave — unsubscribing
+        # and cancelling are the same act — so it points at where the money
+        # actually stops.
+        unsubscribe=cancel_destination()[0] or None,
     )
 
     # Every published probability lands on the ledger (principle 2) at the

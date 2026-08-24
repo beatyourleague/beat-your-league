@@ -58,6 +58,17 @@ class Message:
     html: str
     text: str
     key: str          # idempotency key: subscriber + season + week
+    # Where "stop sending me this" points. For a PAID subscription there is no
+    # free list to leave — unsubscribing and cancelling are the same act — so
+    # this is the billing portal where the money actually stops, falling back
+    # to the legal page's cancel section. Emitted as List-Unsubscribe on every
+    # provider: a weekly report went out with no unsubscribe mechanism of any
+    # kind and no cancel link in either half, while its own footer said the
+    # steps were "on our legal page" (found Aug 24 2026, by reading a
+    # delivered draft's headers). No List-Unsubscribe-Post: one-click POST
+    # (RFC 8058) promises an endpoint that consumes the request, and a Stripe
+    # portal link is not one. Claiming it would be worse than omitting it.
+    unsubscribe: str | None = None
 
 
 @dataclass
@@ -97,6 +108,8 @@ class DryRunProvider:
         mail["Subject"] = message.subject
         if reply_to:
             mail["Reply-To"] = reply_to
+        if message.unsubscribe:
+            mail["List-Unsubscribe"] = f"<{message.unsubscribe}>"
         mail.set_content(message.text)
         mail.add_alternative(message.html, subtype="html")
         path = self.outbox / f"{message.key}.eml"
@@ -133,6 +146,8 @@ class ResendProvider:
                    "html": message.html, "text": message.text}
         if reply_to:
             payload["reply_to"] = reply_to
+        if message.unsubscribe:
+            payload["headers"] = {"List-Unsubscribe": f"<{message.unsubscribe}>"}
         data = _post_json("https://api.resend.com/emails", payload,
                           {"Authorization": f"Bearer {self.api_key}"})
         return str(data.get("id") or "resend:accepted")
@@ -150,6 +165,9 @@ class PostmarkProvider:
                    "MessageStream": os.environ.get("POSTMARK_STREAM", "outbound")}
         if reply_to:
             payload["ReplyTo"] = reply_to
+        if message.unsubscribe:
+            payload["Headers"] = [{"Name": "List-Unsubscribe",
+                                   "Value": f"<{message.unsubscribe}>"}]
         data = _post_json("https://api.postmarkapp.com/email", payload,
                           {"X-Postmark-Server-Token": self.token,
                            "Accept": "application/json"})
@@ -170,10 +188,17 @@ class SESProvider:
         import boto3
         from botocore.exceptions import BotoCoreError, ClientError
         client = boto3.client("sesv2")
-        body = {"Simple": {
+        simple = {
             "Subject": {"Data": message.subject},
             "Body": {"Html": {"Data": message.html}, "Text": {"Data": message.text}},
-        }}
+        }
+        if message.unsubscribe:
+            # SESv2 Simple content gained Headers in 2023; older boto3 rejects
+            # the key, and a send that fails is worse than a missing header on
+            # a fallback provider, so it degrades rather than raising.
+            simple["Headers"] = [{"Name": "List-Unsubscribe",
+                                  "Value": f"<{message.unsubscribe}>"}]
+        body = {"Simple": simple}
         try:
             response = client.send_email(
                 FromEmailAddress=sender,
@@ -182,6 +207,17 @@ class SESProvider:
                 **({"ReplyToAddresses": [reply_to]} if reply_to else {}),
             )
         except (BotoCoreError, ClientError) as exc:
+            if message.unsubscribe and "Headers" in simple:
+                simple.pop("Headers")
+                try:
+                    response = client.send_email(
+                        FromEmailAddress=sender,
+                        Destination={"ToAddresses": [message.to]},
+                        Content={"Simple": simple},
+                        **({"ReplyToAddresses": [reply_to]} if reply_to else {}))
+                    return str(response.get("MessageId") or "ses:accepted")
+                except (BotoCoreError, ClientError):
+                    pass
             raise DeliveryError(f"SES rejected the send: {exc}") from None
         return str(response.get("MessageId") or "ses:accepted")
 
@@ -207,6 +243,8 @@ class SMTPProvider:
         mail["Subject"] = message.subject
         if reply_to:
             mail["Reply-To"] = reply_to
+        if message.unsubscribe:
+            mail["List-Unsubscribe"] = f"<{message.unsubscribe}>"
         mail.set_content(message.text)
         mail.add_alternative(message.html, subtype="html")
         try:
