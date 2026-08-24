@@ -443,7 +443,8 @@ def spec_from_ref(ref: RosterRef, label: str = "Your Team") -> RosterSpec:
 
 
 def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
-               cache_dir: Path = CACHE_DIR) -> dict[str, Any]:
+               cache_dir: Path = CACHE_DIR,
+               processed_dir: Path | None = None) -> dict[str, Any]:
     """Build one subscriber's report from the shared week load."""
     # Against the DIRECTORY, not the PlayerIndex: `position()` answers "UNK"
     # for an id it has never seen rather than None, so the guard it was written
@@ -497,7 +498,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                data.availability, data.week, Path(cache_dir),
                                usage_lookup=usage_lookup, prior_form=prior_form,
                                early_calls=seeded_scope(spec, league_size,
-                                                        data.week + 1))
+                                                        data.week + 1),
+                               processed_dir=processed_dir)
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry

@@ -641,7 +641,18 @@ def text_summary(report: Mapping[str, Any]) -> str:
             confidence = slot["usage"]
         else:
             confidence = ""
-        lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
+        # Availability flags travel on EVERY surface or none. The HTML grid has
+        # printed "OUT — LV on bye (NFL schedule)" per row since the Tape
+        # merge; this half never read slot["flags"], so the plain-text
+        # alternative — what Apple Mail's plain-text mode and every screen
+        # reader show — dropped the one field a wrong answer is unrecoverable
+        # from. An HTML/text disagreement on availability is the drift the
+        # shared-constant rule exists to prevent.
+        flags = " · ".join(f["text"] for f in (slot.get("flags") or []))
+        lines.append(
+            f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
+        if flags:
+            lines.append(f"  {'':<6} {flags}")
     # Plain text has no note under the table, so every reason a slot carries no
     # number has to arrive here — including the structural ones whose per-row
     # markers were dropped above. Printing them only in the all-gated case left

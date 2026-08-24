@@ -157,6 +157,24 @@ def decode(ref: str) -> SignupRef:
 # tight and does not need revisiting for decades.
 
 ROSTER_MARKER = "2"
+# v3 adds the LEAGUE SIZE, which the picker had been asking for and throwing
+# away: the page says "scoring and league size decide how every player in your
+# roster is valued", the radios were never read, and RosterSignup.league_size
+# defaulted to 12 for everyone. Size sets the positional prior's depth, so it
+# moves every published probability, and it is part of the ledger store id
+# (typed-{scoring}-{size}-{season}) — so a 14-team subscriber was both getting
+# 12-team numbers and having them recorded in the 12-team bucket, corrupting
+# the calibration table the ledger exists to produce. Found Aug 24 2026.
+# Safe to change the format because checkout has never opened: no v2 ref has
+# ever been issued to anybody. v2 still decodes, as 12, so nothing that exists
+# breaks.
+ROSTER_MARKER_V3 = "3"
+
+# One char, at a FIXED position (settings[1]), so slots stay unambiguous:
+# scoring codes are lowercase, slot codes uppercase, size codes lowercase.
+SIZES = {"a": 8, "b": 10, "c": 12, "d": 14}
+_SIZE_TO_CODE = {v: k for k, v in SIZES.items()}
+DEFAULT_LEAGUE_SIZE = 12
 
 # Scoring only has to distinguish what changes a projection's ranking. Anything
 # finer belongs in a settings object the subscriber confirms, not in a URL.
@@ -191,6 +209,7 @@ class RosterRef:
     scoring: str                 # ppr | half_ppr | standard
     slots: tuple[str, ...]       # starting slots, in lineup order
     player_ids: tuple[str, ...]  # GSIS ids and DEF-<abbr>, roster order
+    league_size: int = DEFAULT_LEAGUE_SIZE
 
     @property
     def is_league_pass(self) -> bool:
@@ -233,12 +252,15 @@ def _unpack_one(value: int) -> str:
 
 
 def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
-                  player_ids: list[str] | tuple[str, ...]) -> str:
-    """Build the v2 ref the intake page puts on the checkout URL."""
+                  player_ids: list[str] | tuple[str, ...],
+                  league_size: int = DEFAULT_LEAGUE_SIZE) -> str:
+    """Build the v3 ref the intake page puts on the checkout URL."""
     if plan not in _PLAN_TO_PREFIX:
         raise RefError(f"unknown plan {plan!r}")
     if scoring not in _SCORING_TO_CODE:
         raise RefError(f"unknown scoring {scoring!r}")
+    if league_size not in _SIZE_TO_CODE:
+        raise RefError(f"unsupported league size {league_size!r}")
     slot_codes = ""
     reverse = {v: k for k, v in SLOTS.items()}
     for slot in slots:
@@ -260,15 +282,17 @@ def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
                        f"{len(player_ids)} players")
     blob = b"".join(_pack_one(pid).to_bytes(3, "big") for pid in player_ids)
     packed = base64.urlsafe_b64encode(blob).decode("ascii").rstrip("=")
-    ref = f"{_PLAN_TO_PREFIX[plan]}{ROSTER_MARKER}-{_SCORING_TO_CODE[scoring]}{slot_codes}-{packed}"
+    ref = (f"{_PLAN_TO_PREFIX[plan]}{ROSTER_MARKER_V3}-"
+           f"{_SCORING_TO_CODE[scoring]}{_SIZE_TO_CODE[league_size]}{slot_codes}"
+           f"-{packed}")
     if not STRIPE_REF_RE.match(ref):
         raise RefError(f"encoded ref is not Stripe-safe: {ref!r}")
     return ref
 
 
 def is_roster_ref(ref: str) -> bool:
-    """v1 and v2 are told apart on the marker, never on shape."""
-    return bool(isinstance(ref, str) and re.match(r"^[a-z]2-", ref))
+    """v1 and the roster refs are told apart on the marker, never on shape."""
+    return bool(isinstance(ref, str) and re.match(r"^[a-z][23]-", ref))
 
 
 def decode_roster(ref: str) -> RosterRef:
@@ -286,15 +310,25 @@ def decode_roster(ref: str) -> RosterRef:
     if len(parts) != 3:
         raise RefError(f"expected 3 fields, got {len(parts)}: {ref!r}")
     head, settings, packed = parts
-    if len(head) != 2 or head[1] != ROSTER_MARKER:
+    if len(head) != 2 or head[1] not in (ROSTER_MARKER, ROSTER_MARKER_V3):
         raise RefError(f"not a roster reference: {ref!r}")
+    version = head[1]
     if head[0] not in _PREFIX_TO_PLAN:
         raise RefError(f"unknown plan prefix {head[0]!r} in {ref!r}")
     if not settings:
         raise RefError(f"no scoring or slots in {ref!r}")
-    scoring_code, slot_codes = settings[0], settings[1:]
+    scoring_code = settings[0]
     if scoring_code not in SCORING:
         raise RefError(f"unknown scoring code {scoring_code!r} in {ref!r}")
+    if version == ROSTER_MARKER_V3:
+        if len(settings) < 2 or settings[1] not in SIZES:
+            raise RefError(f"unknown league-size code in {ref!r}")
+        league_size, slot_codes = SIZES[settings[1]], settings[2:]
+    else:
+        # A v2 ref predates the size field. It decodes as 12 — the value the
+        # engine used for every subscriber while the question was discarded —
+        # so an old ref means exactly what it always meant.
+        league_size, slot_codes = DEFAULT_LEAGUE_SIZE, settings[1:]
     if not slot_codes or any(c not in SLOTS for c in slot_codes):
         raise RefError(f"bad slot template in {ref!r}")
     try:
@@ -317,4 +351,5 @@ def decode_roster(ref: str) -> RosterRef:
         scoring=SCORING[scoring_code],
         slots=tuple(SLOTS[c] for c in slot_codes),
         player_ids=ids,
+        league_size=league_size,
     )

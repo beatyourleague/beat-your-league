@@ -972,3 +972,94 @@ def test_an_unfillable_slot_becomes_the_loudest_item_not_a_silent_one() -> None:
     full = [pick("QB", 0, True), pick("RB", 1, True)]
     assert not [i for i in checklist(full, None, [], _player_index())
                 if "nobody to start" in i["action"]]
+
+
+# --------------------------------------------------------------------- #
+# a starter who cannot play (found by running the Tuesday path, Aug 24 2026)
+# --------------------------------------------------------------------- #
+
+def _pick(slot, pid, mean, status=None, index=0):
+    """One seated slot, with an optional availability status."""
+    from engine.availability import PlayerStatus, Status
+    from engine.projection import Projection
+    from engine.week_report import SlotPick
+    st = None
+    if status is not None:
+        st = PlayerStatus(status=status, reason=f"{slot} reason", as_of=None)
+    flags = ([{"kind": "out", "text": f"OUT — {st.reason}"}]
+             if st and st.status is Status.OUT else [])
+    proj = Projection(player_id=pid, as_of_week=10, active_mean=mean,
+                      active_sd=4.0, appear_probability=1.0, games=5,
+                      rostered_weeks=5, position=slot)
+    return SlotPick(slot, index, pid, proj, st, None, None, None, None, flags)
+
+
+def test_a_starter_who_cannot_play_never_lands_in_the_projected_total() -> None:
+    """optimal_lineup deliberately seats a player who is not playing when
+    nothing eligible remains — a bye-week DEF is routine, and you must field
+    somebody. What shipped was everything DOWNSTREAM of that seat: his
+    trailing-form projection went into the team total.
+
+    Measured on a real 2024 week-10 roster whose TE, K and DEF were all on
+    bye: 23.6 points of a stated 115.0 belonged to three players who would
+    score exactly 0.0 — the headline overstated by a fifth, with the 80% band
+    drawn around it. _team_range already refuses to publish an UNDERCOUNT
+    dressed as a total (the unfilled-slot rule); this is the same failure in
+    the direction that flatters us.
+
+    Every roster hits byes in roughly four weeks a season, so this fired for
+    essentially every subscriber, inside the refund window."""
+    from engine.availability import Status
+    from engine.week_report import (TEAM_RANGE_ABSENT_STARTER, _team_range,
+                                    team_range_gate)
+
+    healthy = [_pick("QB", "p1", 20.0, index=0), _pick("RB", "p2", 15.0, index=1)]
+    assert _team_range(healthy) is not None, "a healthy lineup still publishes"
+    assert _team_range(healthy)["projected_total"] == 35.0
+
+    with_bye = healthy + [_pick("K", "p3", 7.9, Status.OUT, index=2)]
+    assert _team_range(with_bye) is None, \
+        "a certain-zero starter was summed into the team total"
+    gate = team_range_gate(with_bye)
+    assert gate == TEAM_RANGE_ABSENT_STARTER.format(slots="K", them="him")
+    assert "K" in gate and "cannot score" in gate
+
+    # The gate names every affected slot, and reads as English for each count.
+    three = healthy + [_pick("K", "p3", 7.9, Status.OUT, index=2),
+                       _pick("TE", "p4", 11.1, Status.OUT, index=3),
+                       _pick("DEF", "p5", 4.6, Status.OUT, index=4)]
+    assert "DEF, K and TE" in team_range_gate(three)
+    assert "replace them" in team_range_gate(three)
+
+    # QUESTIONABLE is doubt, not certainty — it must NOT gate the total.
+    doubtful = healthy + [_pick("WR", "p6", 9.0, Status.QUESTIONABLE, index=2)]
+    assert _team_range(doubtful) is not None, \
+        "a questionable starter is doubt, not a certain zero — the band stays"
+
+
+def test_the_plain_text_half_carries_availability_flags() -> None:
+    """The HTML grid has printed "OUT — LV on bye" per row since the Tape
+    merge; text_summary never read slot["flags"], so the plain-text
+    alternative — Apple Mail's plain-text mode, every screen reader, and the
+    archived .txt — dropped the one field a wrong answer cannot be recovered
+    from. An HTML/text disagreement about who is playing is exactly the drift
+    the shared-constant rule exists to prevent."""
+    from render.email import text_summary
+    report = {
+        "meta": {"week": 10, "season": "2024", "solo": True, "my_label": "Your Team",
+                 "league_name": "Your Team", "num_teams": 12, "scoring": "PPR",
+                 "generated_at": "2024-11-05T12:00:00+00:00"},
+        "matchup": {"you": {"label": "Your Team"}, "range_gate": "no projected total — test"},
+        "checklist": [], "lineup": [
+            {"slot": "K", "player_name": "Daniel Carlson", "projected": 7.9,
+             "flags": [{"kind": "out", "text": "OUT — LV on bye (NFL schedule)"}]},
+            {"slot": "QB", "player_name": "Lamar Jackson", "projected": 20.6,
+             "flags": []},
+        ],
+        "regret": {"gate": "none this week"},
+        "receipts": {"note": "test"}, "hype": [], "pivots": [],
+    }
+    text = text_summary(report)
+    assert "OUT — LV on bye (NFL schedule)" in text, \
+        "the text half dropped an availability flag the HTML half prints"
+    assert "Daniel Carlson" in text

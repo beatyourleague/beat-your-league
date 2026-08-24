@@ -210,3 +210,50 @@ def test_the_browser_refuses_what_python_would_refuse() -> None:
             f"the browser rejected the {why} roster for the wrong reason: {got}"
         with pytest.raises(Exception):
             encode_roster("season", "ppr", SLOTS, bad)
+
+
+def test_league_size_survives_the_browser_to_tuesday_trip() -> None:
+    """The picker rendered four league-size radios under the note "Scoring and
+    league size decide how every player in your roster is valued" — and never
+    read them. `radio()` was called for scoring and template, never for size;
+    encodeRoster had no size field; the ref could not carry one; and both
+    to_rows() and seats_to_rows() hardcoded 12. So every subscriber, whatever
+    they picked, got a 12-team report AND had their calls recorded in the
+    12-team ledger bucket.
+
+    That second half is the expensive one. CLAUDE.md put league size into the
+    ledger store id (typed-{scoring}-{size}-{season}) precisely because it sets
+    the positional prior's depth and moves the published probability — so a
+    14-team subscriber's calls landed in the wrong bucket, distorting the exact
+    calibration table the ledger exists to produce.
+
+    v3 carries the size at a fixed position. Safe to change the format because
+    checkout has never opened: no v2 ref was ever issued. This pins the whole
+    three-way contract — browser, ref, Python — byte for byte."""
+    from run.refs import DEFAULT_LEAGUE_SIZE, decode_roster, encode_roster
+
+    ids = ["00-0034796", "00-0032764", "00-0037840", "00-0036322",
+           "00-0038543", "00-0039338", "DEF-CLE"]
+    slots = ["QB", "RB", "WR", "TE", "FLEX", "K", "DEF"]
+
+    for size in (8, 10, 12, 14):
+        in_browser = run_js(
+            f'console.log(JSON.stringify(R.encodeRoster('
+            f'"season", "ppr", {json.dumps(slots)}, {json.dumps(ids)}, {size})));')
+        in_python = encode_roster("season", "ppr", tuple(slots), tuple(ids),
+                                  league_size=size)
+        assert in_browser == in_python, (
+            f"browser and Python disagree on a size-{size} ref: "
+            f"{in_browser!r} vs {in_python!r}")
+        assert decode_roster(in_python).league_size == size, \
+            "the size the buyer picked did not survive the round trip"
+
+    # A v2 ref predates the field and still decodes — as 12, which is exactly
+    # what the engine used for everyone while the question was discarded.
+    v3 = encode_roster("season", "ppr", tuple(slots), tuple(ids), league_size=14)
+    v2 = v3.replace("s3-pd", "s2-p", 1)
+    assert decode_roster(v2).league_size == DEFAULT_LEAGUE_SIZE
+
+    # And an unknown size code is refused rather than guessed.
+    with pytest.raises(Exception):
+        decode_roster(v3.replace("s3-pd", "s3-pz", 1))

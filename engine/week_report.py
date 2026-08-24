@@ -461,12 +461,49 @@ TEAM_RANGE_INCOMPLETE = (
     "fill, quietly presented as your team's.")
 
 
+# The mirror of TEAM_RANGE_INCOMPLETE, and the one that shipped. That constant
+# refuses to publish an UNDERCOUNT dressed as a total; this refuses an
+# OVERCOUNT. optimal_lineup deliberately seats a player who is not playing when
+# nothing eligible remains (a bye-week DEF is routine), but his trailing-form
+# projection then went into the sum: measured on a real 2024 week-10 roster
+# whose TE, K and DEF were all on bye, 23.6 of a stated 115.0 belonged to three
+# players who would score exactly 0.0 — a headline overstated by a fifth, with
+# the band drawn around it. Found by running the Tuesday path for real
+# (Aug 24 2026); no test could have caught it, because nothing ran it.
+TEAM_RANGE_ABSENT_STARTER = (
+    "no projected total — your {slots} can't play this week and your roster "
+    "had nobody eligible to replace {them}. Any total we showed would count "
+    "points they cannot score. The lineup below flags who.")
+
+
+def _absent_starters(picks: list[SlotPick]) -> list[SlotPick]:
+    """Seated starters who are certainly not playing (bye, or ruled out)."""
+    return [p for p in picks
+            if p.player_id is not None
+            and p.status is not None and p.status.status is Status.OUT]
+
+
 def team_range_gate(picks: list[SlotPick]) -> str:
     """Which reason applies. Unfillable slots first: it is the more specific
-    fact and the only one the subscriber can act on."""
+    fact and the only one the subscriber can act on. An absent starter comes
+    next, for the same reason — it names players and a slot to go fix."""
     if any(p.player_id is None for p in picks):
         return TEAM_RANGE_INCOMPLETE
+    absent = _absent_starters(picks)
+    if absent:
+        slots = _join_words(sorted({p.slot for p in absent}))
+        return TEAM_RANGE_ABSENT_STARTER.format(
+            slots=slots, them="them" if len(absent) > 1 else "him")
     return TEAM_RANGE_GATE
+
+
+def _join_words(words: list[str]) -> str:
+    """"K" / "K and DEF" / "TE, K and DEF" — the buyer's own punctuation."""
+    if len(words) <= 1:
+        return words[0] if words else ""
+    if len(words) == 2:
+        return f"{words[0]} and {words[1]}"
+    return ", ".join(words[:-1]) + f" and {words[-1]}"
 
 
 def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
@@ -488,6 +525,13 @@ def _team_range(picks: list[SlotPick]) -> dict[str, float] | None:
     fill a slot needs telling, not a quietly smaller number.
     """
     if any(p.player_id is None for p in picks):
+        return None
+    # A starter who is certainly not playing scores 0.0, and his trailing-form
+    # projection is a number about a game he is not in — see
+    # TEAM_RANGE_ABSENT_STARTER. Summing it publishes an OVERCOUNT wearing a
+    # total's name, which is the same failure as the undercount above, in the
+    # direction that flatters us.
+    if _absent_starters(picks):
         return None
     filled = [p for p in picks if p.player_id is not None]
     if any(p.projection is None for p in filled) or not filled:
@@ -1108,6 +1152,25 @@ def checklist(
             items.append({
                 "action": f"You have nobody to start at {spots}. Add someone "
                           f"off waivers, or that slot scores zero.",
+                "deadline": "before this week's first kickoff",
+                "urgency": "now",
+            })
+        # A SEATED player who cannot play. optimal_lineup puts him there
+        # because nothing eligible remains, which is right — you must field
+        # somebody — but the instruction above then read "Set this lineup:
+        # ... Daniel Carlson at K" for a kicker on bye, with no warning on
+        # either surface. Every roster hits this in roughly four weeks of a
+        # season; it is the most actionable line in the report and it was
+        # silent. Found by running the Tuesday path for real, Aug 24 2026.
+        absent = _absent_starters(my_picks)
+        if absent:
+            named = ", ".join(
+                f"{players.name(p.player_id or '')} ({p.slot})" for p in absent)
+            verb = "isn't" if len(absent) == 1 else "aren't"
+            items.append({
+                "action": f"{named} {verb} playing this week — we had nobody "
+                          f"eligible to put in, so that's a zero unless you add "
+                          f"someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })

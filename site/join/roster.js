@@ -167,11 +167,18 @@ function base64url(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function encodeRoster(plan, scoring, slots, playerIds) {
+// v3 adds the league SIZE at a fixed position. It must match run/refs.py
+// exactly — the two are a contract with nothing type-checking across it, and
+// test_the_browser_and_python_agree_on_the_format pins this literal source.
+const SIZE_CODE = { 8: "a", 10: "b", 12: "c", 14: "d" };
+
+function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
   const prefix = { season: "s", monthly: "m", league_pass: "p" }[plan];
   if (!prefix) throw new Error("unknown plan " + plan);
   const scoringCode = SCORING_CODE[scoring];
   if (!scoringCode) throw new Error("unknown scoring " + scoring);
+  const sizeCode = SIZE_CODE[leagueSize === undefined ? 12 : leagueSize];
+  if (!sizeCode) throw new Error("unsupported league size " + leagueSize);
   if (!slots.length) throw new Error("a ref needs at least one starting slot");
   if (!playerIds.length) throw new Error("a ref needs at least one player");
   if (playerIds.length > MAX_ROSTER) throw new Error("roster too long");
@@ -193,7 +200,8 @@ function encodeRoster(plan, scoring, slots, playerIds) {
     const value = packOne(id);
     bytes.push((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
   }
-  const ref = prefix + "2-" + scoringCode + slotCodes + "-" + base64url(bytes);
+  const ref = prefix + "3-" + scoringCode + sizeCode + slotCodes + "-" +
+              base64url(bytes);
   // Stripe SILENTLY drops an invalid client_reference_id while still showing a
   // working payment page, so this is the only place the failure can be made
   // loud. Asserted before anything navigates.
@@ -207,7 +215,7 @@ function encodeRoster(plan, scoring, slots, playerIds) {
 // the global scope and a second `const REF_RE` is a SyntaxError that kills the
 // whole file silently from the page's point of view.
 const R = { normalize, stripDecoration, buildDirectory, resolveLine, resolveAll,
-            encodeRoster, packOne, REF_RE, MAX_ROSTER };
+            encodeRoster, packOne, REF_RE, MAX_ROSTER, SIZE_CODE };
 if (typeof module !== "undefined" && module.exports) {
   module.exports = R;
 } else {

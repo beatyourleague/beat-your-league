@@ -91,7 +91,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     """
     try:
         report = report_for(subscriber.spec(), data,
-                            league_size=subscriber.league_size)
+                            league_size=subscriber.league_size,
+                            processed_dir=processed_dir)
         # The self-serve roster update link: the only place the subscriber's
         # token travels. None (and so nothing rendered) until SITE_URL and
         # UPDATE_SECRET exist — a dead link is worse than no link.

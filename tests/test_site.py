@@ -845,6 +845,36 @@ def test_compare_never_denies_a_rival_feature_we_verified_they_have() -> None:
         "the guidance stopped naming who to use if you won't type a roster"
 
 
+def test_the_picker_uses_every_setting_it_asks_for() -> None:
+    """The page rendered four league-size radios under "Scoring and league
+    size decide how every player in your roster is valued" and never read
+    them: radio() was called for scoring and template, never for size. Every
+    subscriber got a 12-team report and a 12-team ledger bucket whatever they
+    picked (found Aug 24 2026, by running the intake path for real).
+
+    The JS/Python contract test cannot catch this — it exercises roster.js
+    directly, so the page can stop PASSING a value while the encoder still
+    accepts one. This pins the other half of the seam: every radio group the
+    page renders has to reach the ref.
+
+    A question we ask and discard is worse than one we never ask: it tells the
+    buyer their answer matters, and it is checkable in one click."""
+    groups = set(re.findall(r'<input type="radio" name="(\w+)"', JOIN))
+    assert groups == {"scoring", "size", "template"}, \
+        f"the picker's question set changed: {groups}"
+    call = re.search(r"R\.encodeRoster\((.*?)\);", JOIN, re.S)
+    assert call, "the picker no longer builds a ref"
+    args = call.group(1)
+    for reader, group in (("radio(\"scoring\")", "scoring"),
+                          ("template()", "template"),
+                          ("leagueSize()", "size")):
+        assert reader in args, (
+            f"the {group} answer is collected but never reaches the ref — "
+            f"the page says it matters, so it has to")
+    assert re.search(r'function leagueSize\(\)[^}]*radio\("size"\)', JOIN), \
+        "leagueSize() stopped reading the size radio"
+
+
 def test_compare_tables_scroll_on_a_phone() -> None:
     assert COMPARE.count("<table>") <= COMPARE.count("overflow-x:auto"), \
         "the comparison table would scroll the whole page sideways on mobile"

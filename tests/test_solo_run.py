@@ -842,3 +842,55 @@ def test_the_week_one_ramp_names_next_week_for_the_measured_scope(tmp_path) -> N
     other = solo.report_for(_spec(), data, cache_dir=cache)
     actions = " ".join(item["action"] for item in other["checklist"])
     assert "starts in Week 4" in actions
+
+
+def test_section_six_reports_the_record_the_product_actually_publishes(tmp_path) -> None:
+    """Section 06 called engine.week_report.receipts(), which reconstructs
+    calls from a SEASON'S history for one roster id and decides which were
+    publishable by reading availability snapshots out of raw_dir. Both halves
+    are wrong for this product: there is no season history for a roster
+    somebody typed in last week, and the snapshot subtree lives under
+    data/raw/availability — written only by the retired ingest.pull — so the
+    nflverse cache dir passed as raw_dir could never contain it.
+
+    Result: no call ever qualified, and section 06 read "Ledger opens this
+    week" in week 1 and week 17 alike, every season, forever. Principle 2 is
+    "grade everything publicly", and the public half was structurally dead.
+    Found by running the Tuesday path for real (Aug 24 2026).
+
+    The real published record is the ledger — recorded at send time, settled
+    by run/monday.py. GRADED only: a pending call is a claim about a game that
+    has not finished."""
+    from engine.ledger import GRADED, PENDING, LedgerCall, ledger_path, record_calls
+    from engine.solo_report import solo_receipts
+
+    store = "typed-ppr-12-2024"
+
+    def call(i, week, outcome, status=GRADED):
+        return LedgerCall(
+            call_id=f"c{i}", source="slot", league_id=store, season="2024",
+            week=week, roster_id=1, slot="WR", pick_id=f"p{i}",
+            pick_name=f"Pick {i}", over_id=f"o{i}", over_name=f"Over {i}",
+            confidence=0.65, recorded_at="2024-10-01T00:00:00+00:00",
+            status=status, outcome=outcome,
+            pick_points=20.0 if outcome else None,
+            over_points=5.0 if outcome else None,
+            graded_at="2024-10-08T00:00:00+00:00" if outcome else None)
+
+    # An empty store is the launch state, and it still says so honestly.
+    assert solo_receipts(store, tmp_path)["record"] is None
+    assert "Ledger opens this week" in solo_receipts(store, tmp_path)["note"]
+
+    record_calls(ledger_path(tmp_path, store), [
+        call(1, 4, "hit"), call(2, 4, "hit"), call(3, 5, "miss"),
+        call(9, 6, None, PENDING)])          # pending must not be counted
+    out = solo_receipts(store, tmp_path)
+    assert out["record"] == {"graded": 3, "hits": 2,
+                             "first_week": 4, "last_week": 5}, \
+        "section 06 still cannot see the record the product publishes"
+    assert "2 of 3" in out["note"] and "weeks 4-5" in out["note"]
+    assert "misses included" in out["note"]
+
+    # A different cohort's store is a different record — the scoring preset and
+    # league size are part of a call's identity, so they must not pool.
+    assert solo_receipts("typed-standard-12-2024", tmp_path)["record"] is None

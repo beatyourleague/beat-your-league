@@ -54,11 +54,63 @@ from engine.projection import ProjectionModel
 from engine.roster import DEFENSE
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
                                _team_week)
+from engine.ledger import GRADED, ledger_path, load_ledger
 from engine.week_report import (TEAM_RANGE_GATE,
                                 WeekReportError, _team_range, checklist,
                                 team_range_gate,
-                                _slot_json, optimal_lineup, pivots, receipts,
+                                _slot_json, optimal_lineup, pivots,
                                 regret_call)
+
+
+# The record section 06 reports on.
+#
+# It used to call engine.week_report.receipts(), which reconstructs calls from
+# the SEASON'S OWN history for one roster id and decides which were publishable
+# by reading availability snapshots out of ``raw_dir``. Both halves are wrong
+# here: the solo product has no season history for a roster somebody typed in
+# last week, and the snapshot subtree lives under data/raw/availability, which
+# only the retired ingest.pull ever wrote — so raw_dir (the nflverse cache) can
+# never contain it. has_snapshot was therefore False for every week of every
+# season, no call ever qualified, and section 06 read "Ledger opens this week"
+# in week 1 and in week 17 alike, forever. Found by running the Tuesday path
+# for real (Aug 24 2026); no test caught it because nothing ran it.
+#
+# The real published record is the LEDGER — written at send time by
+# run/tuesday.py, settled by run/monday.py, and published by
+# render/ledger_site.py. That is what principle 2 means by "grade everything
+# publicly", so that is what this section reports. It reads the store this
+# report belongs to (typed-{scoring}-{size}-{season}), which is the cohort
+# whose calls were decided under the subscriber's own scoring rule.
+#
+# GRADED only: a pending call is a claim about a game that has not finished.
+def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
+    """Section 06 — what the public record says so far."""
+    empty = {"record": None,
+             "note": "Ledger opens this week — every published call gets "
+                     "graded against the real box score, hit or miss."}
+    if processed_dir is None:
+        return empty
+    try:
+        calls = load_ledger(ledger_path(Path(processed_dir), league_id))
+    except Exception:
+        # A record we cannot read is not a record we may describe. The report
+        # still ships; principle 3 forbids inventing the alternative.
+        return empty
+    graded = [c for c in calls if c.status == GRADED and c.outcome in ("hit", "miss")]
+    if not graded:
+        return empty
+    hits = sum(1 for c in graded if c.outcome == "hit")
+    weeks = sorted({c.week for c in graded})
+    note = (f"{hits} of {len(graded)} calls have come in right so far, "
+            f"weeks {weeks[0]}-{weeks[-1]}. Every one of them was written down "
+            f"before kickoff and is on the public page, misses included.")
+    if len(weeks) == 1:
+        note = (f"{hits} of {len(graded)} calls have come in right so far, "
+                f"from week {weeks[0]}. Every one was written down before "
+                f"kickoff and is on the public page, misses included.")
+    return {"record": {"graded": len(graded), "hits": hits,
+                       "first_week": weeks[0], "last_week": weeks[-1]},
+            "note": note}
 
 # What the report says where an opponent used to be. Stated once, plainly, in
 # the buyer's register — not a gate note, because nothing is being withheld.
@@ -86,6 +138,7 @@ def build_solo_report(
     usage_lookup=None,
     prior_form: Mapping[str, float] | None = None,
     early_calls: bool = False,
+    processed_dir: Path | None = None,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data."""
     if not re.fullmatch(r"\d{4}", str(season.season)):
@@ -194,8 +247,7 @@ def build_solo_report(
         # only MY picks' questionable statuses and their alternatives, and the
         # rival half was never used for anything the subscriber acts on.
         "pivots": pivots(picks, [], players, availability),
-        "receipts": receipts(season, week, model, players,
-                             SUBSCRIBER_ROSTER_ID, raw_dir),
+        "receipts": solo_receipts(season.league_id, processed_dir),
         "no_opponent": NO_OPPONENT_NOTE,
     }
     return report

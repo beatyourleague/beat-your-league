@@ -331,6 +331,10 @@ function radio(name) {
   return picked ? picked.value : null;
 }
 function template() { return TEMPLATES[radio("template")] || TEMPLATES.std; }
+// The size radios were rendered, labelled as mattering, and never read: every
+// subscriber got a 12-team report and a 12-team ledger bucket regardless of
+// what they picked. Found Aug 24 2026 by running the intake path for real.
+function leagueSize() { return Number(radio("size")) || 12; }
 function showError(id, message) { $(id).textContent = message; }
 
 // Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
@@ -547,7 +551,7 @@ $("form-email").addEventListener("submit", (event) => {
   try {
     ref = R.encodeRoster(
       WANTS_PASS ? "league_pass" : (WANTS_MONTHLY ? "monthly" : "season"),
-      radio("scoring"), template(), ids);
+      radio("scoring"), template(), ids, leagueSize());
   } catch (err) {
     showError("err-email", "Something went wrong reading your roster — reload " +
       "and try again.");

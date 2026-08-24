@@ -412,7 +412,7 @@ def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
         out.append({
             "email": email, "ref": ref,
             "player_ids": list(roster.player_ids), "slots": list(roster.slots),
-            "scoring": roster.scoring, "league_size": 12,
+            "scoring": roster.scoring, "league_size": roster.league_size,
             "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": payer,
         })
     return out, problems
@@ -429,7 +429,10 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
             "player_ids": list(roster.player_ids),
             "slots": list(roster.slots),
             "scoring": roster.scoring,
-            "league_size": signup.league_size,
+            # From the REF, not the dataclass default: the picker collects the
+            # size and the ref now carries it, and reading the default here
+            # would silently re-impose 12 on everybody (the bug this fixed).
+            "league_size": roster.league_size,
             "label": signup.label,
             # LEAGUE_PASS on a registry row means a SEAT, not a payer: a pass
             # payer is an ordinary subscriber who also covers other people, and
