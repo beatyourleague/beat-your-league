@@ -120,31 +120,34 @@ def test_the_waitlist_never_claims_to_have_recorded_an_address_it_did_not() -> N
 
 
 def test_paid_from_day_one_is_stated_not_hidden() -> None:
-    # The protection is that paid-from-day-one is STATED, not hidden. It has
-    # been pinned as "no free tier" (sells an absence) and then as "the report
-    # is the product from day one" (internal product-strategy register). The
-    # strongest form of the disclosure is the PRICE ITSELF, visible in the
-    # hero before any scroll — a page that shows the price up front cannot be
-    # accused of hiding that it charges.
-    assert re.search(rf"\${SEASON_PRICE} USD for the season", LANDING_PROSE), \
-        "the landing hero must state the price plainly"
+    # The protection is that paid-from-day-one is STATED, not hidden. The pin
+    # has moved twice with owner decisions, and both moves are recorded so the
+    # next reader knows which is current: price-in-hero was chosen Aug 13 as
+    # the strongest disclosure form; on Aug 24 the owner revised it — value
+    # before cost, price at the decision point — so the disclosure now lives
+    # in the pricing section (plainly, with currency and renewal terms) and on
+    # the join page. What may never come back: a page that hides that it
+    # charges until after someone invests effort.
+    assert 'class="price">$' + SEASON_PRICE in markup_only(LANDING), \
+        "the pricing section must state the season price plainly"
     assert re.search(r"paid product from day one", JOIN_PROSE, re.I)
+    # And no free-tier implication anywhere: the only free thing is the
+    # waitlist email, which says exactly what it is.
+    assert not re.search(r"\bfree trial\b|\bfor free\b", LANDING_PROSE, re.I)
 
 
 def test_price_appears_only_at_decision_points_and_renewal_terms() -> None:
-    """Five rendered season prices, each load-bearing: the pricing card, the reservation
-    step, and the two renewal disclosures (a renewal notice that omits the
-    amount is not a disclosure). Anything beyond this is ambient repetition,
-    which pushes cost evaluation ahead of value. (A further mention lives in the
-    checkout script, which only ever replaces the button's own text.)"""
+    """TWO rendered season prices, each load-bearing: the pricing card and its
+    renewal disclosure (a renewal notice that omits the amount is not a
+    disclosure). Anything beyond this is ambient repetition, which pushes cost
+    evaluation ahead of value — the owner's Aug 24 revision moved the price
+    out of the hero entirely for exactly that reason. (A further mention lives
+    in the checkout script, which only ever replaces the button's own text.)"""
     rendered = markup_only(LANDING)
-    # Five rendered season prices, each load-bearing: the HERO microcopy (the price is
-    # the paid-from-day-one disclosure, per the test above), the pricing card,
-    # the reservation step, and the two renewal disclosures.
-    assert rendered.count(f"${SEASON_PRICE}") == 5, "landing page price mentions drifted"
+    assert rendered.count(f"${SEASON_PRICE}") == 2, "landing page price mentions drifted"
     renewal_mentions = len(re.findall(rf"renews? (?:once a year )?at \${SEASON_PRICE}",
                                       rendered, re.I))
-    assert renewal_mentions == 2, "renewal disclosures must state the amount"
+    assert renewal_mentions == 1, "the renewal disclosure must state the amount"
 
 
 # --------------------------------------------------------------------- #
@@ -273,7 +276,16 @@ def test_nothing_is_claimed_saved_when_nothing_recorded_it() -> None:
 
 
 def test_network_calls_have_a_timeout() -> None:
+    """Both pages: the landing's hero capture is 'the one action a visitor can
+    complete' while checkout is closed, and it once awaited a hung Worker
+    forever with no feedback (review, Aug 24). Every fetch on either page
+    carries the same 15s abort the join page always had."""
     assert "AbortSignal.timeout" in JOIN
+    starts = [m.start() for m in re.finditer(r"\bfetch\(", LANDING)]
+    assert starts, "the landing lost its capture fetch"
+    for start in starts:
+        assert "AbortSignal.timeout" in LANDING[start:start + 400], \
+            f"a landing fetch has no timeout: {LANDING[start:start + 80]!r}"
 
 
 # --------------------------------------------------------------------- #
@@ -986,9 +998,17 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
     verdict column and a sentence describing that a grading happened, beside
     its failures, are the report's vocabulary, not a claim."""
     banned = r"\b(calibrated|tested|proven|accurate)\b|we hit \d"
+    # The samples are here because the review sweep (Aug 24) found "tested" in
+    # the published sample's own DEF-gate prose — product copy renders onto
+    # these pages, so a leak in engine wording ships here first. legal.html is
+    # here because its warranty disclaimer said "accurate" (a negation, but
+    # the frozen ban is on the word, and reword-not-allowlist is the precedent).
     surfaces = {"landing": LANDING, "join": JOIN,
                 "league-pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
-                "compare": COMPARE}
+                "compare": COMPARE,
+                "sample": SAMPLE_REPORT,
+                "sample-first-week": (SITE / "sample-first-week.html").read_text(encoding="utf-8"),
+                "legal": (SITE / "legal.html").read_text(encoding="utf-8")}
     for name, page in surfaces.items():
         visible = re.sub(r"<head>.*?</head>|<script\b.*?</script>|<style\b.*?</style>|"
                          r"<!--.*?-->", " ", page, flags=re.S | re.I)
@@ -1382,33 +1402,34 @@ def test_the_diagnostic_table_is_never_charted_whatever_its_position() -> None:
         assert "53.3" in drawn, "the publishable table was not charted"
 
 
-def test_the_retired_study_stays_reachable_and_says_what_it_is() -> None:
-    """Repointing the published page at the live grading moved an unflattering
-    headline — 53.5%, and the -5670.6 cost line — off every buyer-reachable
-    surface. The repoint was preregistered before any result existed, so it is
-    not laundering; but "the bad number got harder to find" is a charge worth
-    having no answer to give, so the retired study is published at its own
-    URL, generated by the same code, saying in its masthead exactly what it
-    is. The two pages name each other and their figures never appear
-    together."""
-    retired = (SITE / "retired-backtest.html").read_text(encoding="utf-8")
-    live = (SITE / "backtest.html").read_text(encoding="utf-8")
-    text = re.sub(r"<[^>]+>", " ", retired)
-    assert "53.5%" in text and "-5670.6" in text, \
+def test_the_retired_study_stays_in_the_repo_not_on_the_site() -> None:
+    """Owner decision, Aug 24 2026: archival deep pages confuse buyers and
+    invite scrutiny of a product that no longer exists, so the retired
+    Sleeper-era study is NOT published as a page. What the honesty
+    architecture still requires — and this pins — is that the record itself
+    survives: reports/backtest.md stays generated and unedited with its own
+    first-line header, its unflattering figures intact, and the live page's
+    "What this is not" section still names it and the non-comparability rule.
+    Acknowledged in the record, not sold on the site."""
+    assert not (SITE / "retired-backtest.html").exists(), \
+        "the retired study is back on the site against the owner decision"
+    retired = (REPORTS / "backtest.md").read_text(encoding="utf-8")
+    assert "a data stack the product no longer runs" in retired.split("\n")[0]
+    assert "53.5%" in retired and "-5670.6" in retired, \
         "the retired study lost its own unflattering figures"
-    assert "Retired League Study" in retired
-    assert "no longer runs" in text
-    # Reachable, and the pair points both ways.
-    assert 'href="retired-backtest.html"' in live
-    assert 'href="backtest.html"' in retired
-    # The report's own rule: the two numbers are never placed side by side.
-    assert "53.5" not in re.sub(r"<[^>]+>", " ", live)
-    assert "64.6" not in text
-    # It is generated, not hand-written — same contract as the live page.
-    from render.backtest_site import RETIRED_SOURCE, build
-    assert build(RETIRED_SOURCE) == retired, \
-        "site/retired-backtest.html is out of date — run `make backtest`"
-
+    live = re.sub(r"<[^>]+>", " ", (SITE / "backtest.html").read_text(encoding="utf-8"))
+    assert "not comparable to" in live and "backtest.md" in live, \
+        "the live page no longer acknowledges the earlier study"
+    assert "53.5" not in live, "the two figures may not share a surface"
+    # And the generator REFUSES the retired source outright (review, Aug 24:
+    # when this was a mere grade exemption, the Makefile's old invocation
+    # `--source reports/backtest.md` still built the retired figures under the
+    # live masthead and wrote them over site/backtest.html — one shell-history
+    # recall from publishing 53.5% as the record behind today's numbers).
+    import pytest as _pytest
+    from render.backtest_site import build
+    with _pytest.raises(SystemExit, match="retired study"):
+        build(REPORTS / "backtest.md")
 
 def test_verify_cannot_be_disabled_by_rewording_the_source() -> None:
     """Two of verify()'s checks keyed on literal strings — the word "off" and
@@ -1466,22 +1487,36 @@ def test_last_weeks_opponent_is_anonymised_on_the_public_demo() -> None:
 
 
 def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
-    """A card stamped "Real find" is a factual claim about our own output, and
-    the landing page is hand-written while the report is generated — so the two
-    drift silently. They did: the page kept advertising a bench player "above
-    four of their set starters" for weeks after the engine stopped producing
-    that count and started naming the single slot instead. Every number a
-    "real"-stamped card quotes has to appear in the published sample report."""
+    """A card stamped "Real output" is a factual claim about our own output,
+    and the landing page is hand-written while the report is generated — so
+    the two drift silently. They did, twice: the page once advertised "above
+    four of their set starters" after the engine stopped producing that count,
+    and after the Aug 24 redesign THIS TEST matched zero cards (its regex was
+    anchored on the old markup) and passed while checking nothing. So: the
+    guard sweeps every `.filecard`, requires that it found the cards it
+    expects to exist, and pins every figure — integers and decimals — to the
+    published sample."""
     import html as _html
-    for match in re.finditer(
-            r'<div class="mini">(.*?)</div>\s*</div>\s*<span class="real">([^<]*)</span>',
-            LANDING, re.S):
-        body = _html.unescape(re.sub(r"<[^>]+>", " ", match.group(1)))
-        stamp = match.group(2).strip()
-        for number in sorted(set(re.findall(r"\d+\.\d+", body))):
-            assert number in SAMPLE_REPORT, (
-                f'the landing page cites {number} under "{stamp}", but no such '
-                f"number is in the report it points at")
+    cards = re.findall(r'<div class="filecard[^"]*">(.*?)<span class="real">',
+                       LANDING, re.S)
+    assert len(cards) >= 3, (
+        "the landing lost its Real-output cards, or the markup moved and this "
+        "guard went blind again — re-anchor it, never delete it")
+    flat_sample = _html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
+                                                            SAMPLE_REPORT)))
+    for card in cards:
+        body = _html.unescape(re.sub(r"<!--.*?-->", " ", card, flags=re.S))
+        body = re.sub(r"<[^>]+>", " ", body)
+        figures = set(re.findall(r"\d+\.\d+", body))
+        figures |= {m for m in re.findall(r"\d+%", body)}
+        figures |= {m for m in re.findall(r"\d+ targets \([\d.]+ a game\)", body)}
+        figures |= {m for m in re.findall(r"last \d games", body)}
+        assert figures, "a Real-output card with no figures is not this guard's card"
+        for figure in sorted(figures):
+            assert figure in flat_sample or figure in SAMPLE_REPORT, (
+                f"the landing page cites {figure!r} on a Real-output card, but "
+                f"no such figure is in the sample report it points at — "
+                f"regenerate with `make sample` and re-check")
 
 
 def test_the_scouting_cards_quote_the_report_verbatim() -> None:
@@ -1759,3 +1794,109 @@ def test_the_two_samples_point_at_each_other() -> None:
     # rather than leaving a buyer to discover it on Sep 8.
     assert re.search(r"first file of a season is thinner",
                      re.sub(r"<[^>]+>", " ", prose(SAMPLE_REPORT)))
+
+
+def test_closed_checkout_shows_no_live_paid_cta_anywhere() -> None:
+    """Adversarial review, Aug 24: the hero's paid CTA was correctly gated
+    behind CHECKOUT_OPEN while three identical gold "Set up my team" buttons
+    (nav, season card, closer) shipped live — the biggest buttons on the page
+    led to a closed checkout, beside a monthly card honestly saying "Checkout
+    opens at launch". The resting state in static markup must be the CLOSED
+    state, because that is what renders if the script never runs; the open
+    state is what JS builds the day the constant flips."""
+    static = LANDING.split("<script>")[0]
+    for anchor in re.findall(r"<a\b[^>]*>", static):
+        if "join/index.html" not in anchor or "btn gold" not in anchor:
+            continue
+        assert "hidden" in anchor, (
+            "a live gold CTA points at join/ while checkout is closed — gate "
+            f"it behind CHECKOUT_OPEN like hero-open: {anchor}")
+    # The open state still routes every paid CTA through the picker.
+    rewrites = LANDING.split("if (CHECKOUT_OPEN)")[1]
+    for cta in ("nav-cta", "season-cta", "closer-cta", "monthly-cta"):
+        assert cta in rewrites, f"the open state forgot to enable {cta}"
+    # And the CLOSED-state copy must not survive the flip (review, Aug 24):
+    # "setting up today saves nothing yet" under a live $39 button, and a
+    # capture promising "one email when signups open" after that email has
+    # gone out, are false statements on launch morning.
+    for stale in ("watch-form", "finance-note", "heroline"):
+        assert stale in rewrites, (
+            f"the open state leaves closed-state copy live: {stale} — the "
+            f"flip must retire the capture and rewrite the finance line")
+
+
+def test_join_errors_are_visible_and_backend_rejections_are_not_success() -> None:
+    """Two review reproductions, Aug 24. (1) `.err` was display:none and
+    showError only set textContent, so EVERY error on the page — including
+    "checkout isn't open" after full setup — was invisible; visibility now
+    follows content (`:empty`). (2) fetch resolves on HTTP 400 too, so a row
+    the Worker rejected was answered with "Your seat request is in" — every
+    POST must check response.ok before claiming success."""
+    assert ".err:empty{display:none;}" in JOIN
+    err_rule = JOIN.split(".err{")[1].split("}")[0]
+    assert "display:none" not in err_rule, \
+        "a fixed display:none on .err makes every error invisible again"
+    assert JOIN.count("if (!response.ok) throw") >= 3, \
+        "all three POSTs (waitlist, seat, update) must treat a rejected row " \
+        "as failure, not success"
+    # And a successful seat claim actually shows its confirmation block.
+    seat = JOIN.split("function submitSeat")[1].split("function submitUpdate")[0]
+    assert '$("done").style.display = "block"' in seat
+
+
+def test_a_roster_edited_after_the_check_forces_a_recheck() -> None:
+    """Review reproduction, Aug 24: with no input listener on the paste box, a
+    player typed AFTER "Check my roster" was silently dropped at checkout —
+    the ref encoded the stale checked list, which is RULE R3's failure
+    (nothing is dropped) wearing a different hat."""
+    assert '$("roster-text").addEventListener("input"' in JOIN
+    listener = JOIN.split('$("roster-text").addEventListener("input"')[1] \
+                   .split("});")[0]
+    assert "state.ready = false" in listener
+    assert "hit" in listener and "again" in listener, \
+        "the stale state must tell the buyer to re-check, not just block"
+
+
+def test_each_purchase_mode_prices_its_own_header() -> None:
+    """Review, Aug 24 (verified live): the League Pass page showed a "$39 USD
+    for the season" pitch and a "$39 / season" chip above a "Buy the League
+    Pass — $99" button. Every price a mode shows must be the price that mode
+    charges."""
+    pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
+    assert "header-pitch" in pass_branch and "$99" in pass_branch
+    assert "header-chips" in pass_branch
+    monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
+                         .split("else if (WANTS_PASS)")[0]
+    assert "header-pitch" in monthly_branch and "12.99" in monthly_branch
+
+
+def test_seat_mode_carries_no_billing_promises_and_warns_up_front() -> None:
+    """A seat holder paid nothing: the refund/cancel-from-your-account sentence
+    is about money they never spent, and learning "seats aren't open" only
+    after pasting fifteen names is the disappointment the closed-note exists
+    to prevent."""
+    seat_branch = JOIN.split("else if (SEAT_MODE)")[1] \
+                      .split("else if (WANTS_MONTHLY)")[0]
+    assert '$("first-note").style.display = "none"' in seat_branch
+    assert "Seats aren't open" in seat_branch and "closed-note" in seat_branch
+
+
+def test_the_picker_offers_type_to_add_beside_the_paste_box() -> None:
+    """People fix a roster one player at a time, and a typeahead beats
+    retyping into a paste box (owner direction, Aug 24: reduce the pain of
+    the typing flow). The suggestions come from the same published directory
+    the resolver uses — so anything added this way resolves by construction —
+    and every rendered string is a TEXT node, because a player name from a
+    downloaded file is still not markup."""
+    assert 'id="player-search"' in JOIN
+    typeahead = JOIN.split("function suggestions")[1].split('$("resolve")')[0]
+    assert "state.directory" in typeahead, \
+        "suggestions must come from the resolver's own directory"
+    assert "textContent" in typeahead and ".innerHTML" not in typeahead
+    # Adding re-checks the roster so the tally follows without extra taps.
+    assert "R.resolveAll(state.directory, box.value)" in typeahead
+    # Enter picks the first suggestion rather than submitting the form.
+    assert "event.preventDefault()" in typeahead
+    # The input lives inside the roster form like every other picker input.
+    form = JOIN.split('<form id="form-roster"')[1].split("</form>")[0]
+    assert 'id="player-search"' in form

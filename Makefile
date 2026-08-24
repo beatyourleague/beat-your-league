@@ -17,7 +17,6 @@ ingest:
 backtest:
 	$(PY) -m engine.nflverse_backtest
 	$(PY) -m render.backtest_site
-	$(PY) -m render.backtest_site --source $(PWD)/reports/backtest.md
 
 # The early-season arm (weeks 2-3, prior-season seeded). Separate target: it
 # is a preregistered arm with its own frozen method, not part of the headline

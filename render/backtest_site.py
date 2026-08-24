@@ -169,32 +169,23 @@ CALIBRATION_HEADERS = frozenset({"Stated confidence", "Stated"})
 # of silently wrong. Both report generators head this section "Calibration".
 PUBLISHABLE_SECTION = "Calibration"
 
-# The RETIRED study, published at its own URL. It is here because the repoint
-# would otherwise leave its unflattering headline on no buyer-reachable
-# surface, and "the number got harder to find" is the one charge this project
-# cannot answer with a shrug. It predates the grade rule, so it is named as an
-# exception rather than letting a missing grade silently skip the check.
-RETIRED_SOURCE = REPO_ROOT / "reports" / "backtest.md"
-RETIRED_OUTPUT = REPO_ROOT / "site" / "retired-backtest.html"
-UNGRADED_SOURCES = frozenset({RETIRED_SOURCE.name})
+# The retired Sleeper-era study lives in the REPO (reports/backtest.md,
+# generated, with a first-line header saying what it is) and is NOT published
+# as a page. Owner decision, Aug 24 2026: archival deep pages confuse buyers
+# and invite scrutiny of a product that no longer exists; the live page's own
+# "What this is not" section names the study and its non-comparability, which
+# keeps the acknowledgment without keeping the destination. The record
+# survives — in the repository, where the diligent can still find it.
+# REFUSED, not exempted: when this was merely a grade exemption, the old
+# invocation `--source reports/backtest.md` (the Makefile's own, until the
+# unpublish) still built the retired study's figures under the live masthead
+# and wrote them over site/backtest.html — one shell-history recall from
+# publishing 53.5% as the record behind today's numbers.
+RETIRED_SOURCES = frozenset({"backtest.md"})
 
 
 def _shell(source: Path) -> tuple[str, str, str]:
-    """(title, masthead heading, masthead lede) for the document being
-    published. Two documents, two honest descriptions — a shared masthead
-    would describe one of them wrongly."""
-    if source.name in UNGRADED_SOURCES:
-        return (
-            "Beat Your League — The Retired League Study",
-            "The Retired League Study",
-            "A measurement of a data stack this product no longer runs, kept "
-            "because a past result is part of the record. It graded an earlier "
-            "model against the lineups human managers actually set, in one "
-            "twelve-team league — a different question from "
-            "<a href=\"backtest.html\" style=\"color:#F2C230\">the grading "
-            "record behind today's numbers</a>, and the two sets of figures are "
-            "never placed side by side.",
-        )
+    """(title, masthead heading, masthead lede) for the published page."""
     return (
         "Beat Your League — The Full Grading Record",
         "The Full Grading Record",
@@ -547,7 +538,7 @@ def to_html(markdown: str) -> str:
     return "\n".join(out)
 
 
-def verify(markdown: str, page: str, require_grade: bool = True) -> list[str]:
+def verify(markdown: str, page: str) -> list[str]:
     """Every figure in the source must survive into the page.
 
     This is the whole point of the module: the page claims to be a faithful
@@ -604,9 +595,7 @@ def verify(markdown: str, page: str, require_grade: bool = True) -> list[str]:
     # source states one, checked against the source rather than hardcoded, so
     # this holds for whichever report the page is pointed at.
     grade = re.search(r"^#{1,3}\s+Grade\s+([A-D])\b", markdown, re.M)
-    if grade is None and not require_grade:
-        pass                      # a document that predates the grade rule
-    elif grade is None:
+    if grade is None:
         # The source is contractually required to carry one (the frozen
         # method's grade table). A missing heading used to SKIP the check,
         # which meant renaming the heading disabled the guard rather than
@@ -635,6 +624,12 @@ def verify(markdown: str, page: str, require_grade: bool = True) -> list[str]:
 
 
 def build(source: Path = SOURCE) -> str:
+    if source.name in RETIRED_SOURCES:
+        raise SystemExit(
+            f"{source.name} is the retired study and is never published as a "
+            f"page (owner decision, Aug 24 2026). The record stays in the "
+            f"repository; the live page's 'What this is not' section carries "
+            f"the acknowledgment.")
     markdown = source.read_text(encoding="utf-8")
     title, heading, lede = _shell(source)
     # Token substitution rather than str.format: the shell carries a CSS block
@@ -642,20 +637,9 @@ def build(source: Path = SOURCE) -> str:
     shell = (HEAD.replace("@@TITLE@@", html.escape(title, quote=True))
                  .replace("@@HEADING@@", html.escape(heading, quote=False))
                  .replace("@@LEDE@@", lede))
-    # Each page names the other. The retired study is reachable from the live
-    # record rather than from nowhere: a repoint that leaves an unflattering
-    # measurement on no page anybody can reach is the one thing this change
-    # could fairly be accused of, and one link answers it.
-    sibling = (
-        ' <a href="backtest.html" style="color:var(--flag)">The grading record '
-        'behind today\'s numbers</a>.'
-        if source.name in UNGRADED_SOURCES else
-        ' <a href="retired-backtest.html" style="color:var(--flag)">The earlier, '
-        'retired study</a> is kept here too.')
     page = shell + "  <main>\n" + to_html(markdown) + "\n" + TAIL.replace(
-        "@@SIBLING@@", sibling)
-    problems = verify(markdown, page,
-                      require_grade=source.name not in UNGRADED_SOURCES)
+        "@@SIBLING@@", "")
+    problems = verify(markdown, page)
     if problems:
         raise SystemExit("refusing to publish an unfaithful backtest page:\n  "
                          + "\n  ".join(problems))
@@ -671,8 +655,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.output is None:
-        args.output = (RETIRED_OUTPUT if args.source.name in UNGRADED_SOURCES
-                       else OUTPUT)
+        args.output = OUTPUT
     if not args.source.is_file():
         print(f"{args.source} not found — run `python -m engine.nflverse_backtest` first",
               file=sys.stderr)

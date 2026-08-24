@@ -70,6 +70,25 @@ def test_the_pass_payer_is_welcomed_at_the_price_they_paid() -> None:
         assert re.search(r"claims a seat", doc, re.I)
 
 
+def test_the_pass_welcome_hands_over_the_seat_link(monkeypatch) -> None:
+    """The join page cannot deliver the seat link — it renders it in the
+    instant before navigating to Stripe (deliberately: any earlier and an
+    abandoned checkout leaves a shareable claim link) — so the welcome email
+    is the commissioner's only reliable copy. With no SITE_URL there is no
+    link to give, and the email must say something true instead of printing a
+    dead href."""
+    monkeypatch.setenv("SITE_URL", "https://example.com/")
+    msg = _msg("league_pass")
+    for doc in (msg.html, msg.text):
+        assert "https://example.com/join/?pass=1" in doc
+        assert re.search(r"email you paid with", doc, re.I), \
+            "members must be told the payer address that matches their seat"
+    monkeypatch.delenv("SITE_URL", raising=False)
+    bare = _msg("league_pass")
+    assert "/join/?pass=1" not in bare.text
+    assert "None" not in bare.text
+
+
 def test_a_seat_holder_is_never_shown_billing_terms() -> None:
     """A seat holder paid nothing. Renewal terms for money they never spent
     would read as a charge waiting to happen."""

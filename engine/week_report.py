@@ -82,11 +82,14 @@ WIN_PROBABILITY_CALIBRATED = False
 # buyer's own words. Flip it only with passing evidence for the DEF population
 # specifically.
 TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False
-DEFENSE_GATE = ("we don't put a number on defenses yet — we haven't tested our "
+# "checked", never "tested": the frozen method bans the word at Grade C on
+# every surface, and this sentence renders in every report and the published
+# sample (found on the sample by review sweep, Aug 24 2026).
+DEFENSE_GATE = ("we don't put a number on defenses yet — we haven't checked our "
                 "defense calls against enough real weeks to stand behind one")
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
-    "No win percentage. We tested one against two seasons and our favorites "
+    "No win percentage. We checked one against two seasons and our favorites "
     "won more often than it said, so the number would mislead you")
 # "Your" was wrong once both bands shared one axis: this captions the rival's
 # range as much as yours, and it sat directly above a pair of numerals that

@@ -760,6 +760,85 @@ questionable BENCH player whose doubt gates a slot (Pollard, week 9) was named n
 pivot plan looked only at questionable starters and the solo checklist returned before its
 late-news item. `late_news()` feeds both now.
 
+**The redesign directive (Aug 24 2026) — owner decisions, each pinned by test where a test
+can hold it.** The owner benchmarked the site against netprophet.pro and ruled: too many words
+per section; the stadium-field hero is tacky and is GONE; public grading may support but never
+lead ("then we grade ourselves in public" was the hero — it is now one truststrip line); the
+sell is "what's in it for me", direct; **no price in the hero** (anchor psychology — the $39
+figure now first appears in the pricing section, monthly card first so the season card reads
+as the upgrade); no-account/no-password talk demoted to the footer (buyers assume accounts
+exist; they care about the edge); the no-betting line demoted likewise (we are not a betting
+product, so leading with betting invites the association). The rebuilt landing is
+netprophet-shaped: near-black, one accent, numbered sections, product-as-hero — the hero
+visual is a REAL file card whose rows quote the published sample verbatim (65/58/66 bars),
+so the landing's proof figures stay pinned to `make sample` output. **The retired backtest
+page is unpublished** (`site/retired-backtest.html` deleted; the study itself stays generated
+and unedited in `reports/backtest.md`, and the live page still names it in "What this is
+not" — the record survives in the repo, it just isn't a buyer surface). The join page grew a
+**typeahead** (`#player-search`, filters the same directory the paste box resolves against,
+textContent only) because typing fifteen names raw was the flow's worst pain; the paste box
+stays for people who copy their roster out of their platform. **The waitlist rides the form
+Worker** — the landing and join capture post `{kind:"waitlist", email}` to
+`infra/form-worker.js` (no Loops, no second vendor), and `run/waitlist.py` reads the Worker
+back (CSV export still accepted via `--list`) and sends the one promised launch email with
+digest keys, never addresses, in the committed send log. The report's lineup grid now draws
+each confidence as a **bar beside the numeral** (`.cbar`, template CSS) — same visual
+language as the Regret Score's bar, fill = the percentage itself, no rescaling.
+
+**The redesign's adversarial review (Aug 24 2026) — 17 confirmed, and the two worst were
+invisible in every test because they lived in browser behaviour.** Two cold-buyer lenses read
+the new pages as buyers and reproduced findings live before reporting:
+- **Every error message on the join page was invisible** — `.err{display:none}` while
+  `showError` only ever set textContent, so "checkout isn't open", "that email doesn't look
+  right" and every other message rendered to nobody. Visibility now follows content
+  (`.err:empty`), the same pattern the suggestion box already used two rules above.
+- **A roster edited after "Check my roster" was silently dropped at checkout** — no input
+  listener, so the ref encoded the stale checked list: RULE R3's failure wearing a different
+  hat. Typing in the box now takes the flow back a step until it is re-checked.
+- **The landing's three ungated gold CTAs were dead ends** — nav, season card and closer all
+  read "Set up my team" while checkout is closed, beside a monthly card honestly saying
+  "Checkout opens at launch". The static markup is now the CLOSED state (fail closed — it is
+  what renders if the script never runs) and `CHECKOUT_OPEN` builds the live CTAs.
+- **Every mode priced someone else's purchase**: League Pass showed a $39 pitch and chip above
+  a $99 button; monthly left the $39 pitch too; the seat flow kept refund/cancel language about
+  money a seat holder never spent, gave no up-front "seats aren't open", and its success
+  handler never unhid the confirmation block. All fetches treated HTTP 400 as success
+  ("Your seat request is in" on a rejected row) — `response.ok` everywhere now.
+- **The commissioner had no path to the seat link at all**: the page renders it in the instant
+  before navigating to Stripe (deliberate — earlier is a shareable claim link before payment),
+  and the welcome email said "share your league's signup link" without giving it. The pass
+  welcome now carries `SITE_URL/join/?pass=1` and the match-by-payer-email instruction.
+- Landing honesty: "after Monday night is graded" promised grades the Monday-9am cron cannot
+  have (MNF calls settle the following week); "three-box checklist" against a two-task sample;
+  "odds behind every slot" against six no-call rows; usage bars scaled on raw totals across
+  unequal windows (now per-game rate, windows carried); the refund-window/Week-4 connection
+  the sell audit had added was dropped in a rewrite and is restored in the FAQ and JSON-LD;
+  the truststrip now names what each link actually is (method grading vs running record).
+Each fix is pinned in `tests/test_site.py`/`tests/test_welcome.py` with the reproduction in
+its docstring. Refuted and kept: "accuracy test" in meta/og copy (not a banned word, and it
+is the exempted grading-happened-beside-its-failures shape).
+A second round over the fixed state confirmed nine more:
+- **The `CHECKOUT_OPEN` flip left false copy live on launch morning** — the capture still
+  promised "one email when signups open" after that email went out, and the finance line still
+  said "setting up today saves nothing yet" under a live $39 button. The flip now retires the
+  capture and rewrites both lines; the closed state stays the static default (fail closed).
+- **`--source reports/backtest.md` overwrote the live page with the retired study** under the
+  live masthead — the unpublish had left it a mere grade exemption. `build()` now REFUSES a
+  retired source outright (`RETIRED_SOURCES`), pinned by test.
+- **The figure-drift guard had gone vacuous**: its regex anchored on the old landing's card
+  markup, matched zero cards on the rebuilt page, and passed while checking nothing — the
+  one-instance-guard rule again, "doubly for one that samples none". Re-anchored on
+  `.filecard`, it now REQUIRES ≥3 cards and pins every integer/percent/usage figure to the
+  sample (mutation-checked with an injected 43%).
+- The flip widget printed **42%** — the arithmetic complement of the published 58%, which the
+  product never printed — on a "Real output" card; the sit-side numeral is gone. The
+  truststrip said "how the method scored on 2024" about the 2014–2024 record. The landing
+  capture fetch had no timeout and explained a mere network failure as "the list isn't wired
+  up". **`DEFENSE_GATE`/`WIN_PROBABILITY_GATE` said "tested"** — a Grade-C banned word
+  rendering in every report and the published sample ("checked" now), and legal.html's
+  warranty said "accurate" ("right" now); the banned-word sweep now covers both samples and
+  legal.html, so product-copy leaks onto generated pages get caught at the page.
+
 **The sell audit (Aug 23 2026) — confession → strength, and three frozen-method violations
 that were live.** Six-lens audit (two cold-buyer reads, legal floor, positioning, product gaps,
 test-pin map) against the owner's directive: a direct why-buy message, and nothing on the site

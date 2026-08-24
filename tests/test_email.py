@@ -172,7 +172,7 @@ def test_a_gated_row_says_why_in_its_own_cell() -> None:
     assert short_gate("nobody on your bench is eligible here", "QB") == "no call · no bench QB"
     assert short_gate("not enough games on record yet (1 and 2; we want at least 3)",
                       "RB") == "no call · too few games yet"
-    assert short_gate("we don't put a number on defenses yet — we haven't tested our "
+    assert short_gate("we don't put a number on defenses yet — we haven't checked our "
                       "defense calls against enough real weeks", "DEF") \
         == "no call · defenses not graded yet"
     assert short_gate("availability in doubt (questionable)", "WR") \

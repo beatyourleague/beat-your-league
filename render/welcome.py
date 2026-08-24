@@ -67,15 +67,28 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
              "re-subscription after a refund is final."],
         )
     if plan == "league_pass":
+        # The seat link ships HERE because the page cannot deliver it: the
+        # browser renders it in the instant before navigating to Stripe, and
+        # rendering it any earlier would leave a shareable claim link before any
+        # payment exists. The welcome only sends after the payment, so this is
+        # the first moment the link is safe to hand over.
+        site = os.environ.get("SITE_URL", "").rstrip("/")
+        seat_line = (
+            f"Every manager who claims a seat gets their own report at no "
+            f"charge to them. Send them this link — each enters their own "
+            f"roster: {site}/join/?pass=1 — and tell them the email you paid "
+            f"with, which is how their seat is matched to your pass."
+            if site else
+            "Every manager who claims a seat gets their own report at no "
+            "charge to them; share your league's signup link whenever you're "
+            "ready.")
         return (
             f"the League Pass — {PASS_PRICE} USD for your whole league's season",
             [f"It renews once a year at {PASS_PRICE} USD unless you cancel — "
              "charged before the season it covers, never during the offseason. "
              "We email you before it bills.",
              "Refunds are no-questions through Week 2 — one per league.",
-             "Every manager who claims a seat gets their own report at no "
-             "charge to them; share your league's signup link whenever you're "
-             "ready."],
+             seat_line],
         )
     if plan == "seat":
         return (

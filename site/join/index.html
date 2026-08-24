@@ -57,8 +57,12 @@
   @media (prefers-reduced-motion: reduce){
     .cardbtn,button{transition:none !important;transform:none !important;}
   }
+  /* Visible whenever it holds text — showError() only sets textContent, so the
+     empty state is the hidden state. A fixed display:none here once made every
+     error on this page invisible, including "checkout isn't open". */
   .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
-    font-size:13.5px;color:#7A2C1F;display:none;}
+    font-size:13.5px;color:#7A2C1F;}
+  .err:empty{display:none;}
   .scout{background:var(--card);border:2px solid var(--navy);padding:16px 18px;margin-top:6px;}
   .scout .lead{font-family:'Barlow Condensed';font-weight:800;font-size:21px;
     text-transform:uppercase;line-height:1.12;}
@@ -82,6 +86,17 @@
   /* The renewal terms, in sight of the button that leads to payment. They used
      to live only in the post-submit block, which the paid flow never shows. */
   .terms-line{margin:14px 0 10px;font-size:13px;color:var(--ink2);line-height:1.55;}
+  .addwrap{position:relative;margin-bottom:10px;}
+  .suggest{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--card);
+    border:1px solid var(--navy);border-top:0;box-shadow:0 14px 30px rgba(16,30,51,.18);}
+  .suggest:empty{display:none;}
+  .sugrow{display:block;width:100%;text-align:left;background:none;border:none;
+    border-bottom:1px solid var(--line);padding:10px 12px;margin:0;cursor:pointer;
+    font-family:'Barlow';font-size:15px;color:var(--navy);text-transform:none;
+    letter-spacing:0;font-weight:600;}
+  .sugrow:last-child{border-bottom:0;}
+  .sugrow:hover,.sugrow:focus{background:var(--turf-tint);}
+  .sugrow small{color:var(--slate);font-weight:500;}
   .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px 16px;margin-top:8px;
     font-size:14px;line-height:1.6;display:none;}
   .done > b{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
@@ -128,11 +143,9 @@
   <header>
     <div class="brand"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byljBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byljSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byljVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byljPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byljBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byljPath" fill="url(#byljSpec)" stroke="none"/><use href="#byljPath" fill="url(#byljVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><a href="../index.html" style="color:inherit;text-decoration:none">Beat Your League</a></div>
     <h1>Set Up Your Team</h1>
-    <p id="header-pitch">Paste your roster once and every Tuesday you get the lineup we
-    would set, what each call is worth, and who is actually earning the ball. A paid
-    product from day one: <b>$39 USD for the season</b> — the founding rate, locked in
-    for every renewal. Checkout runs on our payment provider's own secure page. We never
-    ask for a password, and we never connect to your league.</p>
+    <p id="header-pitch">Set up once, and every Tuesday you get your team's file: the
+    lineup we'd set, with the odds on the calls we can stand behind. A paid product from
+    day one — <b>$39 USD for the season</b>, founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet — it opens before Week 1. You're welcome to set up now to see how it works, but
     nothing is saved until it does; leave your email on the
@@ -167,8 +180,15 @@
   <section id="step-roster">
     <div class="eyebrow">2 · Your roster</div>
     <div class="note">Paste it straight out of your league app, or type one name a line.
-    Position labels, bye weeks and app clutter are fine — paste it as it comes.</div>
+    Type a name and tap to add, or paste your whole roster — position labels, bye
+    weeks and app clutter are fine.</div>
     <form id="form-roster" novalidate>
+      <div class="addwrap">
+        <input type="text" id="player-search" autocomplete="off"
+               placeholder="Add a player — start typing a name"
+               aria-label="Add a player by name">
+        <div class="suggest" id="suggest" role="listbox" aria-label="Matching players"></div>
+      </div>
     <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
 Bijan Robinson
 Ja'Marr Chase
@@ -225,9 +245,9 @@ Baltimore Ravens
   </section>
 
   <footer>
-    We store the minimum: your email, your scoring settings and your roster. No
-    passwords, no accounts, and we never connect to your league.
-    Analysis, not picks — fantasy decisions are yours to make. Must be 18+.<br>
+    We store the minimum: your email, your scoring settings and your roster. We never
+    ask for a password, and we never connect to your league — checkout runs on Stripe's
+    own secure page. Analysis, not picks — fantasy decisions are yours to make. Must be 18+.<br>
     <a href="../legal.html">Terms, refunds &amp; privacy</a>
   </footer>
 </div>
@@ -257,7 +277,10 @@ const STRIPE_LINK_PASS = "";      // $99/season, whole league
 // public, so an unvalidated endpoint is a free-report generator.
 const FORM_ENDPOINT = "";
 // Launch-notify list. While checkout is closed a buyer who typed their email is
-// remembered — EMAIL ONLY, no roster — instead of being told to come back.
+// remembered — EMAIL ONLY, no roster — instead of being told to come back. It
+// posts kind "waitlist" to the same Worker as everything else (FORM_ENDPOINT
+// above); set both to the same URL. Separate constants on purpose: the seat
+// path must keep working even if the owner ever splits the backends.
 const NOTIFY_LIST_ENDPOINT = "";
 // Deliberately EMPTY: no personal address ships on a public page.
 const CONTACT_EMAIL = "";
@@ -325,6 +348,59 @@ fetch("players.json", { signal: AbortSignal.timeout(15000) })
   .catch(() => showError("err-roster",
     "We couldn't load the player list just now — reload and try again."));
 
+// Type-to-add: most people fix a roster one player at a time, and a typeahead
+// beats retyping into a paste box. Suggestions come from the same published
+// directory the resolver uses, so anything added this way resolves by
+// construction. Every rendered string is a TEXT node — names are not markup.
+const searchBox = $("player-search");
+const suggestBox = $("suggest");
+
+function suggestions(query) {
+  const q = R.normalize(query);
+  if (!state.directory || !q || q.length < 2) return [];
+  const starts = [], contains = [];
+  for (const player of state.directory.byId.values()) {
+    const n = R.normalize(player.name);
+    if (n.startsWith(q)) starts.push(player);
+    else if (n.includes(q)) contains.push(player);
+    if (starts.length >= 8) return starts.slice(0, 8);
+  }
+  return starts.concat(contains).slice(0, 8);
+}
+
+function addPlayer(player) {
+  const box = $("roster-text");
+  box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + player.name + "\n";
+  searchBox.value = "";
+  suggestBox.replaceChildren();
+  // Re-check immediately so the tally follows every add without extra taps.
+  state.matches = R.resolveAll(state.directory, box.value);
+  draw();
+}
+
+function renderSuggestions() {
+  suggestBox.replaceChildren();
+  for (const player of suggestions(searchBox.value)) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sugrow";
+    row.textContent = player.name + "  ·  " + player.position
+      + (player.team ? "  ·  " + player.team : "");
+    row.addEventListener("click", () => addPlayer(player));
+    suggestBox.appendChild(row);
+  }
+}
+if (searchBox) {
+  searchBox.addEventListener("input", renderSuggestions);
+  searchBox.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const first = suggestions(searchBox.value)[0];
+      if (first) addPlayer(first);
+    }
+  });
+}
+
 $("resolve").addEventListener("click", () => {
   showError("err-roster", "");
   if (!state.directory) {
@@ -333,6 +409,20 @@ $("resolve").addEventListener("click", () => {
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
   draw();
+});
+
+// An edit AFTER "Check my roster" makes the checked list stale, and encoding
+// the stale list would silently drop the edit — RULE R3's failure wearing a
+// different hat. Typing in the box therefore takes the flow back a step until
+// it is re-checked. (addPlayer sets the value programmatically, which fires no
+// input event — it re-checks itself on the next line.)
+$("roster-text").addEventListener("input", () => {
+  if (!state.matches.length) return;
+  state.ready = false;
+  $("step-email").classList.add("hidden");
+  const tally = $("tally");
+  tally.className = "tally bad";
+  tally.textContent = 'Your roster changed — hit "Check my roster" again.';
 });
 
 function draw() {
@@ -416,7 +506,13 @@ function draw() {
     problem = "The same player is listed twice — remove one.";
   } else if (ids.length < slots.length) {
     problem = "Your lineup has " + slots.length + " starting spots and you've " +
-      "listed " + ids.length + " players. Add the rest.";
+      "listed " + ids.length + (ids.length === 1 ? " player" : " players") +
+      ". Add the rest.";
+  } else if (ids.length > R.MAX_ROSTER) {
+    // The encoder refuses above this, so saying "looks right" here and dying at
+    // submit with generic advice would be the tally lying about its own limit.
+    problem = "That's " + ids.length + " players — we can take up to " +
+      R.MAX_ROSTER + ". Trim it to your active roster (drop IR and taxi stashes).";
   }
   state.ready = !problem;
   tally.className = "tally" + (problem ? " bad" : "");
@@ -485,9 +581,12 @@ $("form-email").addEventListener("submit", (event) => {
     if (NOTIFY_LIST_ENDPOINT) {
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, list: "launch-notify" }),
+        body: JSON.stringify({ kind: "waitlist", email: email }),
         signal: AbortSignal.timeout(15000),
-      }).then(() => {
+      // fetch resolves on a 400 too — "we kept your email" after the backend
+      // rejected the row would be this page claiming a save that didn't happen.
+      }).then((response) => {
+        if (!response.ok) throw new Error("rejected");
         showError("err-email", "Checkout isn't open just yet — we're finishing " +
           "setup. Your roster isn't saved (redoing it takes a minute), but we " +
           "kept your email: you'll get the link the morning checkout opens.");
@@ -531,11 +630,13 @@ function submitSeat(email, ref) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email, covered_by: payer, ref: ref }),
     signal: AbortSignal.timeout(15000),
-  }).then(() => {
+  }).then((response) => {
+    if (!response.ok) throw new Error("rejected");
     // Claimed, not granted: the seat is honoured only if a pass really covers
     // it, and that is checked on Tuesday, not here.
     $("form-email").style.display = "none";
     $("done-head").textContent = "Your seat request is in.";
+    $("done").style.display = "block";
   }).catch(() => {
     showError("err-email", "That didn't send — check your connection and try " +
       "again. Nothing was saved.");
@@ -554,7 +655,8 @@ function submitUpdate(email, ref) {
     body: JSON.stringify({ kind: "update", email: email, ref: ref,
                            replaces: UPDATE_SLUG, token: UPDATE_TOKEN }),
     signal: AbortSignal.timeout(15000),
-  }).then(() => {
+  }).then((response) => {
+    if (!response.ok) throw new Error("rejected");
     // Received, not yet applied: the intake checks the token against the
     // address and the slug against the subscription before anything changes.
     $("form-email").style.display = "none";
@@ -620,10 +722,24 @@ if (UPDATE_MODE) {
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
   // A seat holder pays nothing, so billing terms would read as a charge
-  // waiting to happen.
+  // waiting to happen — and the refund/cancel-from-your-account sentence is
+  // about money they never spent and an account they don't have.
   $("terms-line").style.display = "none";
+  $("first-note").style.display = "none";
+  // Say seats aren't open BEFORE they paste fifteen names, same as checkout.
+  if (!FORM_ENDPOINT) {
+    const note = $("closed-note");
+    note.textContent = "Seats aren't open just yet — we're finishing setup. " +
+      "You're welcome to set up now to see how it works, but nothing is saved " +
+      "until they open.";
+    note.style.display = "block";
+  }
 } else if (WANTS_MONTHLY) {
   $("submit").textContent = "Continue to checkout — $12.99/mo";
+  $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
+    "team's file: the lineup we'd set, with the odds on the calls we can stand " +
+    "behind. A paid product from day one — $12.99 USD a month, and billing " +
+    "stops on its own when the season ends.";
   $("header-chips").replaceChildren();
   ["$12.99 USD / month", "Cancel any time", "First report Tue Sep 8"]
     .forEach((text) => {
@@ -638,6 +754,19 @@ if (UPDATE_MODE) {
   $("terms-line").textContent = monthlyTerms;
 } else if (WANTS_PASS) {
   $("submit").textContent = "Buy the League Pass — $99";
+  // The pass buyer must never read a $39 pitch above a $99 button — every
+  // price on the page has to be the one this purchase actually costs.
+  $("header-pitch").textContent = "Set up once, and every Tuesday every manager " +
+    "in your league gets their own file: the lineup we'd set, with the odds on " +
+    "the calls we can stand behind. One League Pass covers all of it — $99 USD " +
+    "for the whole league's season.";
+  $("header-chips").replaceChildren();
+  ["$99 USD / league / season", "Covers every manager", "First report Tue Sep 8"]
+    .forEach((text) => {
+      const chip = document.createElement("span");
+      chip.textContent = text;
+      $("header-chips").appendChild(chip);
+    });
   // The pass is $99, and the renewal disclosure must name the amount that
   // actually renews — the season-pass sentence would be a wrong disclosure.
   const passTerms = "The League Pass is $99 USD and renews once a year at $99 " +

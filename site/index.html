@@ -14,1051 +14,444 @@
      <meta property="og:image" content="https://YOUR-DOMAIN/og.png"> -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;0,900;1,700;1,800;1,900&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,800;0,900;1,800;1,900&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  /* =====================================================================
-     BEAT YOUR LEAGUE — "FLOATING RECEIPTS" concept
-     Dark gallery lighting. The product's own paper pinned under the lamps.
-     ===================================================================== */
   :root{
-    --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
+    --navy:#101E33; --paper:#F6F4EE; --card:#FFFFFF;
     --turf:#1E7A46; --turf-glow:#2EA968; --turf-tint:#DFF0E4;
-    --flag:#F2C230; --flag-deep:#D9A81B; --flag-tint:#FBF3D9;
-    --brick:#B3402F; --brick-glow:#E0654F; --brick-tint:#F7E3DE;
+    --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
     --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
     --abyss:#05090F; --pitch:#0A1420; --dusk:#8FA3BC; --dusk2:#BCC9DB;
-    --gold-edge:rgba(242,194,48,.20);
+    --gold-edge:rgba(242,194,48,.22);
   }
   *{margin:0;padding:0;box-sizing:border-box;}
-  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:hidden;overflow-x:clip;}
-  body{
-    /* gradient mesh: navy stadium dusk into deep-teal turf shadow into black */
-    background:
-      radial-gradient(1100px 720px at 88% -6%,  rgba(30,122,70,.26), transparent 62%),
-      radial-gradient(950px 640px at -12% 22%,  rgba(24,42,69,.85),  transparent 64%),
-      radial-gradient(1300px 860px at 112% 68%, rgba(13,56,46,.38),  transparent 60%),
-      radial-gradient(760px 540px at 14% 104%,  rgba(179,64,47,.15), transparent 66%),
-      linear-gradient(180deg,#0C1930 0%, var(--pitch) 34%, var(--abyss) 100%);
+  [hidden]{display:none!important;}
+  html{scroll-behavior:smooth;overflow-x:hidden;}
+  body{background:
+      radial-gradient(1100px 700px at 78% -10%, rgba(242,194,48,.07), transparent 55%),
+      radial-gradient(900px 640px at 12% 8%, rgba(30,122,70,.14), transparent 60%),
+      linear-gradient(180deg,#0C1930 0%, var(--pitch) 44%, var(--abyss) 100%);
     background-color:var(--abyss);
     font-family:'Barlow',-apple-system,sans-serif;color:var(--paper);
-    -webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip;
-  }
-  /* fixed noise + faint yard lines over the mesh, under the content */
-  body::before{
-    content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-    background:
-      repeating-linear-gradient(90deg, transparent 0 138px, rgba(246,244,238,.035) 138px 140px),
-      repeating-linear-gradient(45deg,  rgba(246,244,238,.013) 0 2px, transparent 2px 11px),
-      repeating-linear-gradient(-45deg, rgba(0,0,0,.16) 0 1px, transparent 1px 7px);
-  }
-  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;position:relative;}
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px;}
   a{color:inherit;}
-  a:focus-visible,button:focus-visible{outline:3px solid var(--flag);outline-offset:3px;}
-  ::selection{background:var(--flag);color:var(--navy);}
-  img,svg{max-width:100%;}
+  a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
 
-  /* ---------- hero ---------- */
-  .hero{position:relative;padding:88px 0 76px;overflow:hidden;}
-  .hero::after{ /* stadium lamp from above */
-    content:"";position:absolute;inset:0;pointer-events:none;
-    background:radial-gradient(720px 340px at 50% -120px, rgba(246,244,238,.10), transparent 70%);
-  }
-  .herofb{position:absolute;right:-70px;top:16px;width:min(46vw,560px);opacity:.14;
-    transform:rotate(-14deg);pointer-events:none;
-    filter:drop-shadow(0 0 44px rgba(242,194,48,.35));animation:hover-fb 9s ease-in-out infinite alternate;}
-  @keyframes hover-fb{from{transform:rotate(-14deg) translateY(0);}to{transform:rotate(-12deg) translateY(14px);}}
-  .brand{display:inline-flex;align-items:center;gap:10px;font-family:'Barlow Condensed';
-    font-weight:800;font-size:15px;letter-spacing:.3em;text-transform:uppercase;color:var(--flag);
-    text-shadow:0 0 18px rgba(242,194,48,.35);}
-  .brand svg{width:26px;height:17px;flex:none;}
-  .hero h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:clamp(46px,11.5vw,120px);line-height:.88;letter-spacing:-.01em;
-    text-transform:uppercase;margin-top:20px;max-width:920px;
-    /* stacked hard offsets extrude the letters off the page; the wide soft
-       shadow underneath sits them in the scene */
-    text-shadow:0 20px 48px rgba(0,0,0,.62);}
-  /* grafted from concept C: the second line slams onto a gold broadcast plate */
-  .hero h1 em{display:inline-block;font-style:italic;color:var(--navy);
-    background:linear-gradient(180deg,#FFD75E 0%,var(--flag) 60%,var(--flag-deep) 100%);
-    transform:skewX(-6deg);padding:2px 26px 8px 18px;margin-top:14px;
-    text-shadow:none;box-shadow:0 14px 44px rgba(242,194,48,.30), 0 3px 0 rgba(0,0,0,.35);}
-  .hero h1 em > span{display:inline-block;transform:skewX(6deg);}
-  .topline{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
-  .livepill{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
-    font-weight:800;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
-    color:var(--flag);border:1.5px solid rgba(242,194,48,.55);padding:6px 13px;
-    border-radius:2px;background:rgba(242,194,48,.07);}
-  .livepill i{width:9px;height:9px;border-radius:50%;background:#E5484D;
-    box-shadow:0 0 10px rgba(229,72,77,.9);animation:pillpulse 1.6s ease-in-out infinite;}
-  @keyframes pillpulse{0%,100%{opacity:1;}50%{opacity:.35;}}
-  .hero .sub{margin-top:24px;font-size:18.5px;line-height:1.65;color:var(--dusk2);max-width:640px;}
-  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px;}
-  .hero-scout{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px;max-width:620px;}
-  .hero-scout input{flex:1 1 240px;padding:15px 18px;font:inherit;font-size:16px;
-    background:rgba(246,244,238,.06);border:2px solid rgba(246,244,238,.35);
-    color:var(--paper);min-width:0;}
-  .hero-scout input::placeholder{color:#8FA2BA;}
-  .hero-scout input:focus{outline:none;border-color:var(--flag);}
-  .hero-scout .btn{flex:0 0 auto;border:none;cursor:pointer;}
-  .btn{position:relative;display:inline-block;font-family:'Barlow Condensed';font-weight:800;
-    font-size:19px;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;
-    padding:16px 30px;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
-    overflow:hidden;transition:transform .18s ease, filter .18s ease;}
-  .btn::after{ /* engineered sheen sweep */
-    content:"";position:absolute;top:-4px;bottom:-4px;left:-45%;width:34%;
-    background:linear-gradient(105deg,transparent,rgba(255,255,255,.55),transparent);
-    transform:skewX(-18deg);transition:left .5s cubic-bezier(.2,.7,.3,1);pointer-events:none;}
-  .btn:hover{transform:translateY(-3px);}
-  .btn:hover::after{left:118%;}
-  .btn.go,.btn.gold{background:linear-gradient(180deg,#FFDA5E 0%,var(--flag) 55%,var(--flag-deep) 100%);
-    color:var(--navy);
-    filter:drop-shadow(0 12px 26px rgba(242,194,48,.38)) drop-shadow(0 3px 8px rgba(0,0,0,.5));}
-  .btn.go:hover,.btn.gold:hover{filter:drop-shadow(0 16px 34px rgba(242,194,48,.55)) drop-shadow(0 3px 8px rgba(0,0,0,.5));}
-  /* The .btn clip-path shears both vertical edges, so a border here is cut
-     away and the button renders as a top rule and a bottom rule ending in bare
-     diagonals. An outline cannot survive that clip — carry the silhouette with
-     a low-contrast fill instead. */
-  .btn.ghost{border:none;color:var(--paper);
-    background:linear-gradient(180deg,rgba(246,244,238,.17),rgba(246,244,238,.07));
-    box-shadow:0 10px 24px -14px rgba(0,0,0,.8);}
-  .btn.ghost:hover{color:var(--flag);
-    background:linear-gradient(180deg,rgba(242,194,48,.26),rgba(242,194,48,.12));
-    filter:drop-shadow(0 10px 22px rgba(242,194,48,.22));}
-  .btn .arrow{display:inline-block;transition:transform .18s ease;}
-  .btn:hover .arrow{transform:translateX(5px);}
-  .whyfree{margin-top:22px;font-size:13.5px;line-height:1.65;color:#9DB0C6;max-width:580px;
-    border-left:3px solid var(--flag);padding:10px 0 10px 16px;
-    background:linear-gradient(90deg,rgba(242,194,48,.07),transparent 70%);}
+  /* ------------------------------------------------ nav */
+  nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0 0;}
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:15px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--flag);text-decoration:none;}
+  .brand svg.mark{width:24px;height:16px;flex:none;}
+  .navlinks{display:flex;align-items:center;gap:18px;font-size:14px;color:var(--dusk2);}
+  .navlinks a{text-decoration:none;}
+  .navlinks a:hover{color:var(--paper);}
+  .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
+    padding:12px 22px;border:none;transition:transform .15s ease;}
+  .btn:hover{transform:translateY(-2px);}
+  .btn.gold{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
+    color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  .btn.ghost{border:2px solid rgba(246,244,238,.4);color:var(--paper);padding:10px 20px;}
+  @media (prefers-reduced-motion: reduce){.btn{transition:none!important;transform:none!important;}}
 
-  /* proof chips → oversized gold stat tiles */
-  .proof-chips{display:flex;flex-wrap:wrap;gap:34px 44px;margin-top:44px;}
-  .chip{display:flex;flex-direction:column;gap:4px;font-weight:600;font-size:12.5px;
-    letter-spacing:.16em;text-transform:uppercase;color:var(--dusk);
-    border-left:3px solid var(--gold-edge);padding-left:16px;}
-  .chip b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:clamp(32px,4.4vw,54px);line-height:.95;letter-spacing:.01em;color:var(--flag);
-    font-variant-numeric:tabular-nums;
-    text-shadow:0 0 22px rgba(242,194,48,.32);}
+  /* ------------------------------------------------ hero */
+  .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center;
+    padding:64px 0 54px;}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.3em;text-transform:uppercase;color:var(--flag);}
+  h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    font-size:clamp(52px,7.4vw,92px);line-height:.92;text-transform:uppercase;
+    margin:14px 0 16px;text-shadow:0 3px 0 rgba(0,0,0,.5),0 20px 46px rgba(0,0,0,.55);}
+  h1 em{font-style:italic;color:var(--navy);
+    background:linear-gradient(180deg,#FFD75E,var(--flag) 60%,var(--flag-deep));
+    padding:0 14px 4px;display:inline-block;transform:skewX(-6deg);}
+  h1 em span{display:inline-block;transform:skewX(6deg);}
+  .sub{font-size:18.5px;line-height:1.6;color:var(--dusk2);max-width:46ch;}
+  .watchform{display:flex;gap:10px;margin-top:26px;max-width:460px;}
+  .watchform input{flex:1;min-width:0;padding:13px 14px;font:inherit;font-size:15.5px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(246,244,238,.28);
+    color:var(--paper);border-radius:2px;}
+  .watchform input::placeholder{color:var(--dusk);}
+  .watchnote{margin-top:10px;font-size:13px;color:var(--dusk);line-height:1.55;max-width:46ch;}
+  .heroline{margin-top:14px;font-size:13.5px;color:var(--dusk);}
+  .heroline b{color:var(--dusk2);}
+  .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
 
-  /* field graphic — broadcast-angle night pitch: perspective yard lines that
-     converge toward the far sideline, floodlight beams and light pools, the
-     drive trail ending where the ball sits in the other half. Pure SVG. */
-  .fieldwrap{margin-top:48px;max-width:660px;}
-  /* the shadow grounds the TURF only — applying it to the whole svg turned
-     the light beams into grey wedges */
-  .pitch{display:block;width:100%;height:auto;}
-  .pitch .turf{filter:drop-shadow(0 22px 40px rgba(0,0,0,.8));}
-  .pitch .ln{stroke:rgba(246,244,238,.30);stroke-width:1.3;}
-  .pitch .ln.goal{stroke:rgba(246,244,238,.62);stroke-width:2.2;}
-  .pitch .ln.fifty{stroke:rgba(242,194,48,.5);stroke-width:2.4;}
-  .pitch .hash{stroke:rgba(246,244,238,.22);stroke-width:1.1;}
-  .pitch .num{fill:rgba(246,244,238,.40);font-family:'Barlow Condensed',sans-serif;
-    font-weight:800;font-size:15px;text-anchor:middle;letter-spacing:.06em;}
-  .pitch .split{stroke:var(--flag);stroke-width:2;stroke-dasharray:6 6;opacity:.8;}
-  /* final states declared here, so no-JS and reduced-motion see the finished
-     picture; the keyframes animate FROM the hidden state. */
-  /* The ball rides the SAME quadratic the trail is drawn from (sampled below),
-     so the two can never disagree, and it only ever moves downfield — the old
-     overshoot-and-bounce was a possession-meter behaviour, not a football's.
-     Deceleration lives in the keyframe spacing (timing stays linear) so the
-     trail tip and the ball stay locked together. */
-  /* The trail is DOTTED and lands one dot at a time in the ball's wake: a
-     solid line that draws itself reads as a graphic being constructed, while
-     dots read as a path being travelled. Each dot's delay is the exact moment
-     the ball reaches it, so the wake can never run ahead of the carrier. */
-  .pitch-dot{fill:var(--flag);opacity:.5;transform-box:fill-box;
-    transform-origin:center;animation:dotdrop .42s cubic-bezier(.2,.8,.3,1) 1 both;}
-  /* The drive sits below the fold, so it must play when it is LOOKED at, not
-     on page load — otherwise it is always over by the time you scroll down.
-     No-JS visitors keep the default running state. */
-  html.js .pitch-ball,html.js .pitch-dot,html.js .pitch-adv{animation-play-state:paused;}
-  html.js .fieldwrap.in .pitch-ball,html.js .fieldwrap.in .pitch-dot,
-  html.js .fieldwrap.in .pitch-adv{animation-play-state:running;}
-  /* The field reacts to the drive: the colour boundary IS the ball, so ground
-     changes hands as it advances. Sampled from the ball's own x at each stop,
-     minus the boundary's resting x (465.7 at the ball's height), so the two
-     are the same motion expressed twice — they cannot drift apart. */
-  .pitch-adv{transform:translateX(0);animation:advance 3s linear 1 both;}
-  @keyframes advance{
-    0%{transform:translateX(-138px);}  10%{transform:translateX(-111px);}
-    20%{transform:translateX(-87px);}  30%{transform:translateX(-66px);}
-    40%{transform:translateX(-48px);}  50%{transform:translateX(-33px);}
-    60%{transform:translateX(-21px);}  70%{transform:translateX(-12px);}
-    80%{transform:translateX(-5px);}   90%{transform:translateX(-1px);}
-    100%{transform:translateX(0);}}
-  @keyframes dotdrop{
-    0%{opacity:0;transform:scale(.2);}
-    55%{opacity:.9;transform:scale(1.45);}
-    100%{opacity:.5;transform:scale(1);}}
-  .pitch-ball{transform:translate(466px,0);animation:drive 3s linear 1 both;}
-  @keyframes drive{
-    0%{transform:translate(328px,0);}      10%{transform:translate(355px,-6.2px);}
-    20%{transform:translate(379px,-9.2px);} 30%{transform:translate(400px,-10px);}
-    40%{transform:translate(418px,-9.2px);} 50%{transform:translate(433px,-7.5px);}
-    60%{transform:translate(445px,-5.4px);} 70%{transform:translate(454px,-3.3px);}
-    80%{transform:translate(461px,-1.5px);} 90%{transform:translate(465px,-0.4px);}
-    100%{transform:translate(466px,0);}}
-  .fieldlabel{display:flex;justify-content:space-between;font-family:'Barlow Condensed';
-    font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-top:10px;}
-  .fieldlabel span:first-child{color:var(--turf-glow);}
-  .fieldlabel span:last-child{color:var(--brick-glow);}
+  /* the product IS the hero image: a paper file card with real output */
+  .filecard{background:var(--paper);color:var(--navy);border:1px solid var(--line);
+    box-shadow:0 34px 80px -30px rgba(0,0,0,.85), 0 0 0 1px var(--gold-edge);
+    transform:rotate(1.4deg);}
+  .filecard.flat{transform:none;}
+  .filehead{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);
+    padding:12px 16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.14em;text-transform:uppercase;}
+  .filehead span{color:var(--flag);font-size:11.5px;letter-spacing:.1em;}
+  .fbody{padding:8px 16px 14px;}
+  .frow{display:grid;grid-template-columns:38px 1fr 92px 44px 44px;gap:10px;
+    align-items:center;padding:9px 0;border-bottom:1px solid #EDEAE1;font-size:15px;}
+  .frow:last-child{border-bottom:0;}
+  .fslot{font-family:'Barlow Condensed';font-weight:800;font-size:13px;color:var(--slate);
+    letter-spacing:.06em;}
+  .fname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fbar{height:9px;background:#EDEAE1;border-radius:99px;overflow:hidden;}
+  .fbar i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
+  .fpct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:18px;
+    text-align:right;font-variant-numeric:tabular-nums;}
+  .fproj{font-size:12.5px;color:var(--slate);text-align:right;font-variant-numeric:tabular-nums;}
+  .fnc{grid-column:3 / 6;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--slate);text-align:right;}
+  .fcap{padding:10px 16px 13px;border-top:2px solid var(--navy);font-size:12.5px;
+    color:var(--slate);line-height:1.55;}
+  .real{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--turf);border:1px solid var(--turf);
+    padding:2px 7px;border-radius:2px;}
 
-  /* the weekly habit, stated plainly — people buy a routine, not a document */
-  .ritual{margin-top:30px;padding:22px 26px;background:linear-gradient(120deg,
-      rgba(30,122,70,.10),rgba(10,20,32,.45) 65%);border-left:4px solid var(--turf);
-    border-top:1px solid rgba(46,169,104,.25);border-right:1px solid rgba(46,169,104,.15);
-    border-bottom:1px solid rgba(46,169,104,.15);max-width:760px;}
-  .ritual h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:26px;
-    text-transform:uppercase;line-height:1.05;}
-  .ritual p{margin-top:12px;font-size:15px;line-height:1.68;color:var(--dusk2);}
-  .ritual b{color:var(--paper);}
-
-  /* ---------- watch-the-ledger capture: the off-ramp for everyone who wants
-       proof before payment. Their patience is reasonable, and the ledger is
-       the asset that answers it — so give them a way to wait WITH us. ------ */
-  .watch{display:grid;grid-template-columns:1.15fr 1fr;gap:22px;align-items:center;
-    margin-top:30px;padding:22px 24px;border:1px solid var(--gold-edge);
-    background:linear-gradient(120deg,rgba(242,194,48,.07),rgba(10,20,32,.4) 60%);}
-  .watch h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:27px;
-    text-transform:uppercase;line-height:1.05;}
-  .watch p{margin-top:9px;font-size:14.5px;line-height:1.6;color:var(--dusk2);}
-  .watchform{display:flex;flex-wrap:wrap;gap:10px;}
-  .watchform input{flex:1 1 190px;min-width:0;padding:14px 15px;font:inherit;font-size:16px;
-    color:var(--paper);background:rgba(10,20,32,.75);border:2px solid rgba(246,244,238,.35);}
-  .watchform input::placeholder{color:#7C8DA5;}
-  .watchform input:focus{outline:none;border-color:var(--flag);}
-  .watchform .btn{flex:0 0 auto;font-size:16px;padding:14px 22px;}
-  .watchnote{flex:1 0 100%;margin-top:2px;font-size:13px;color:var(--flag);min-height:1em;}
-  .hero .watchform{margin-top:30px;max-width:620px;}
-  .heronote{margin-top:10px;font-size:13px;color:#9DB0C6;max-width:560px;}
-
-  /* ---------- FAQ ---------- */
-  .faq{margin-top:44px;max-width:760px;}
-  .faq details{border:1px solid rgba(143,163,188,.2);border-left:3px solid var(--gold-edge);
-    background:linear-gradient(180deg,rgba(24,42,69,.6),rgba(12,23,39,.8));margin-top:12px;}
-  .faq details[open]{border-left-color:var(--flag);}
-  .faq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;
-    align-items:center;gap:14px;padding:16px 18px;font-family:'Barlow Condensed';
-    font-weight:800;font-size:19px;letter-spacing:.03em;text-transform:uppercase;color:var(--paper);}
-  .faq summary::-webkit-details-marker{display:none;}
-  .faq summary::after{content:"+";font-size:22px;color:var(--flag);flex:none;}
-  .faq details[open] summary::after{content:"–";}
-  .faq .a{padding:0 18px 16px;font-size:14.5px;line-height:1.65;color:#A9B9CC;max-width:66ch;}
-  .faq .a b{color:var(--paper);}
-
-  /* ---------- receipts ticker ---------- */
-  .ticker{position:relative;border-top:1px solid var(--gold-edge);border-bottom:1px solid var(--gold-edge);
-    background:linear-gradient(180deg,#0E1D31,#0A1420);
-    box-shadow:inset 0 1px 0 rgba(246,244,238,.05), inset 0 0 46px rgba(0,0,0,.5),
-      0 14px 30px -18px rgba(0,0,0,.8);
-    overflow:hidden;}
-  .ticker .track{display:flex;width:max-content;animation:tick 46s linear infinite;}
-  .ticker:hover .track{animation-play-state:paused;}
-  .reel{display:flex;list-style:none;align-items:center;}
-  .reel li{display:flex;align-items:center;white-space:nowrap;padding:13px 24px 13px 0;
-    font-family:'Barlow Condensed';font-weight:700;font-size:16.5px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--dusk2);}
-  .reel li::before{content:"◆";font-size:8px;color:var(--turf-glow);margin-right:24px;
-    text-shadow:0 0 9px rgba(46,169,104,.9);}
-  .reel li b{color:var(--flag);font-weight:800;font-variant-numeric:tabular-nums;padding:0 .28em;
-    text-shadow:0 0 14px rgba(242,194,48,.35);}
-  @keyframes tick{from{transform:translateX(0);}to{transform:translateX(-50%);}}
-
-  /* ---------- section scaffolding ---------- */
-  section{padding:92px 0;position:relative;}
-  section.alt{background:linear-gradient(180deg,rgba(246,244,238,.035),rgba(246,244,238,.015));
-    border-top:1px solid rgba(242,194,48,.12);border-bottom:1px solid rgba(242,194,48,.12);}
-  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.3em;
-    text-transform:uppercase;color:var(--flag);display:flex;align-items:center;gap:14px;
-    text-shadow:0 0 14px rgba(242,194,48,.3);}
-  .eyebrow::after{content:"";flex:1;height:1px;
-    background:linear-gradient(90deg,rgba(242,194,48,.45),transparent);}
+  /* ------------------------------------------------ numbered sections */
+  section{padding:58px 0 8px;}
+  .secnum{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.26em;text-transform:uppercase;color:var(--flag);
+    display:flex;align-items:center;gap:14px;}
+  .secnum::after{content:"";flex:1;height:1px;background:rgba(246,244,238,.14);}
   h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:clamp(34px,5.8vw,66px);line-height:.95;text-transform:uppercase;margin-top:16px;
-    text-shadow:0 16px 38px rgba(0,0,0,.55);}
-  .lede{margin-top:16px;font-size:17px;line-height:1.7;color:var(--dusk2);max-width:660px;}
+    font-size:clamp(30px,4.4vw,46px);text-transform:uppercase;line-height:.96;
+    margin:12px 0 10px;text-shadow:0 3px 0 rgba(0,0,0,.5);}
+  .lede{font-size:16.5px;line-height:1.6;color:var(--dusk2);max-width:56ch;margin-bottom:26px;}
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;}
+  .duo .filecard{margin-top:6px;}
 
-  /* ---------- floating paper (the signature) ---------- */
-  .tilt{transform:var(--tilt,none);transition:transform .28s cubic-bezier(.2,.7,.3,1);}
-  .tilt:hover{transform:translateY(-8px) rotate(0deg);}
-  .sheet{position:relative;background:linear-gradient(180deg,#FFFFFF 0%,var(--paper) 100%);
-    color:var(--navy);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.6),
-      0 34px 60px -24px rgba(0,0,0,.72),
-      0 12px 26px -12px rgba(0,0,0,.55),
-      0 0 0 1px var(--gold-edge),
-      0 0 38px -6px rgba(242,194,48,.16);
-    transition:box-shadow .28s ease;}
-  .tilt:hover .sheet, .sheet.tilt:hover{
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.6),
-      0 46px 80px -28px rgba(0,0,0,.8),
-      0 16px 32px -12px rgba(0,0,0,.6),
-      0 0 0 1px rgba(242,194,48,.4),
-      0 0 52px -4px rgba(242,194,48,.3);}
-  .sheet::before{ /* gold gaffer tape pinning the sheet */
-    content:"";position:absolute;top:-13px;left:50%;margin-left:-46px;width:92px;height:26px;
-    background:linear-gradient(180deg,rgba(255,218,94,.92),rgba(242,194,48,.82));
-    clip-path:polygon(5% 8%,98% 0,95% 92%,0 100%);
-    box-shadow:0 5px 12px rgba(0,0,0,.4);opacity:.95;}
+  /* the flip widget */
+  .flip{padding:18px 16px 6px;}
+  .flipnames{display:flex;justify-content:space-between;font-weight:800;font-size:16px;}
+  .flipnames small{display:block;font-weight:500;color:var(--slate);font-size:12px;}
+  .flipbar{display:flex;height:14px;border-radius:99px;overflow:hidden;margin:12px 0 8px;}
+  .flipbar .a{background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
+  .flipbar .b{background:#D8D3C6;}
+  .flippct{display:flex;justify-content:space-between;
+    font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;}
+  .flippct span:last-child{color:var(--slate);}
 
-  /* ---------- section 1: what you get ---------- */
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:52px;}
-  .grid3 .reveal{display:flex;min-width:0;}
-  .grid3 .reveal:nth-child(2){margin-top:30px;}
-  .grid3 .reveal:nth-child(3){margin-top:12px;}
-  .fcard{flex:1;padding:26px 22px 20px;}
-  .fcard h3{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:26px;
-    line-height:1;text-transform:uppercase;display:flex;align-items:center;gap:10px;}
-  .fcard h3::before{content:"";width:20px;height:5px;flex:none;background:var(--flag);
-    clip-path:polygon(20% 0,100% 0,80% 100%,0 100%);}
-  .fcard p{margin-top:12px;font-size:14px;line-height:1.6;color:var(--ink2);}
-  .real{display:block;margin-top:14px;font-size:10.5px;font-weight:800;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--slate);border-top:1px dashed var(--line);padding-top:10px;}
+  /* usage widget */
+  .usage{padding:14px 16px 8px;}
+  .urow{display:grid;grid-template-columns:1fr 150px 120px;gap:12px;align-items:center;
+    padding:8px 0;border-bottom:1px solid #EDEAE1;font-size:14.5px;}
+  .urow:last-child{border-bottom:0;}
+  .urow b{font-weight:700;}
+  .ubar{height:9px;background:#EDEAE1;border-radius:99px;overflow:hidden;}
+  .ubar i{display:block;height:100%;background:linear-gradient(90deg,#1E7A46,#2EA968);
+    border-radius:99px;}
+  .ucount{font-size:12.5px;color:var(--slate);text-align:right;white-space:nowrap;}
 
-  /* mini report excerpts — the actual product paper */
-  .mini{margin-top:16px;background:var(--card);border:2px solid var(--navy);
-    box-shadow:0 12px 24px -14px rgba(16,30,51,.55);}
-  .mrow{display:grid;grid-template-columns:44px 1fr 56px;gap:10px;align-items:center;
-    padding:10px 12px;border-top:1px solid #EDEAE1;font-size:13.5px;}
-  .mrow:first-child{border-top:none;}
-  .mrow .slot{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);}
-  .mrow .p{font-weight:700;}
-  .mrow .p small{display:block;font-weight:500;color:var(--slate);font-size:11px;}
-  .mrow .pts{font-family:'Barlow Condensed';font-weight:900;font-style:italic;text-align:right;
-    font-size:19px;color:var(--turf);font-variant-numeric:tabular-nums;}
-  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;padding:13px 12px;}
-  .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:var(--brick);
-    border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
-    justify-content:center;border-radius:50%;}
-  .srow .why{font-size:13.5px;color:var(--ink2);line-height:1.55;}
-  .srow .why b{color:var(--navy);}
+  /* the week strip */
+  .weekstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
+  .day{background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 18px 16px;}
+  .day b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
+  .day p{font-size:14.5px;line-height:1.6;color:var(--dusk2);}
 
-  /* ---------- section 2: calibration exhibit ---------- */
-  .exhibit{max-width:740px;margin-top:44px;padding:18px 18px 16px;}
-  .exhibit-cap{font-family:'Barlow Condensed';font-weight:800;font-size:13px;
-    letter-spacing:.14em;text-transform:uppercase;color:var(--brick);margin-bottom:9px;}
-  .proof-links{list-style:none;margin:0;padding:0;background:var(--card);
-    border:2px solid var(--navy);}
-  .proof-links li{padding:13px 16px;border-top:1px solid #EDEAE1;font-size:15px;
-    line-height:1.55;color:var(--ink2);}
-  .proof-links li:first-child{border-top:0;}
-  .proof-links a{color:var(--navy);text-decoration:none;border-bottom:2px solid var(--flag);}
-  .proof-links a:hover{background:var(--turf-tint);}
-  .honest{margin-top:20px;font-size:13px;color:var(--dusk);line-height:1.7;max-width:680px;}
-  .stamp{display:inline-block;margin-top:22px;border:3px double var(--turf-glow);color:var(--turf-glow);
-    font-family:'Barlow Condensed';font-weight:900;letter-spacing:.22em;font-size:14px;
-    text-transform:uppercase;padding:8px 16px;transform:rotate(-2.5deg);border-radius:3px;
-    box-shadow:0 0 24px rgba(46,169,104,.25), inset 0 0 14px rgba(46,169,104,.12);
-    text-shadow:0 0 10px rgba(46,169,104,.5);}
+  /* trust strip */
+  .truststrip{margin-top:54px;border-top:1px solid rgba(246,244,238,.12);
+    border-bottom:1px solid rgba(246,244,238,.12);padding:18px 0;
+    font-size:14.5px;color:var(--dusk2);text-align:center;}
+  .truststrip a{color:var(--flag);}
 
-  /* ---------- section 3: steps ---------- */
-  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px;}
-  .step{background:linear-gradient(180deg,rgba(24,42,69,.75),rgba(12,23,39,.9));
-    border:1px solid rgba(143,163,188,.18);border-top:1px solid rgba(246,244,238,.18);
-    padding:28px 24px;min-width:0;
-    box-shadow:0 26px 44px -26px rgba(0,0,0,.75);
-    transition:border-color .22s ease, box-shadow .22s ease, background .22s ease;}
-  .step:hover{border-color:rgba(242,194,48,.55);
-    box-shadow:0 30px 52px -26px rgba(0,0,0,.85), 0 0 40px -8px rgba(242,194,48,.25);}
-  .step .n{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:88px;
-    line-height:.8;color:var(--flag);}
-  @supports ((-webkit-text-stroke:2px #000)){
-    .step .n{color:transparent;-webkit-text-stroke:2.5px var(--flag);
-      text-shadow:0 0 26px rgba(242,194,48,.25);}
-  }
-  .step h3{font-family:'Barlow Condensed';font-weight:800;font-size:22px;text-transform:uppercase;
-    margin-top:14px;color:var(--paper);line-height:1.1;}
-  .step p{margin-top:10px;font-size:14px;line-height:1.6;color:#A9B9CC;}
-
-  /* ---------- section 4: pricing ---------- */
-  .plans{display:grid;grid-template-columns:1.2fr 1fr;gap:28px;margin-top:52px;max-width:760px;}
-  .plans .reveal{display:flex;min-width:0;}
-  .plan{flex:1;background:var(--card);border:2px solid var(--navy);padding:28px 26px;
-    position:relative;color:var(--navy);}
-  .plan.founder{border-color:#E9B92B;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,.6),
-      0 40px 70px -26px rgba(0,0,0,.8),
-      0 0 0 1px rgba(242,194,48,.35),
-      0 0 54px -4px rgba(242,194,48,.34);}
-  .plan .tag{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--slate);}
-  .plan.founder .tag{color:var(--turf);}
-  .plan .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:64px;
-    line-height:1;margin-top:10px;font-variant-numeric:tabular-nums;
-    text-shadow:0 3px 0 rgba(16,30,51,.13);}
-  .plan .price small{font-size:16px;color:var(--slate);font-family:'Barlow';font-weight:700;font-style:normal;}
-  .plan ul{margin:16px 0 0 18px;font-size:13.5px;line-height:1.75;color:var(--ink2);}
-  .plan .btn{margin-top:20px;font-size:16px;padding:13px 22px;}
-  .stamp50{position:absolute;top:16px;right:16px;font-family:'Barlow Condensed';font-weight:900;
-    font-size:19px;line-height:1;letter-spacing:.2em;text-transform:uppercase;
-    color:rgba(179,64,47,.88);border:3px double rgba(179,64,47,.8);border-radius:4px;
-    padding:9px 11px 8px;transform:rotate(9deg);mix-blend-mode:multiply;pointer-events:none;
-    box-shadow:inset 0 0 12px rgba(179,64,47,.14);}
-  .honest2{margin-top:18px;font-size:12.5px;color:var(--dusk);line-height:1.65;max-width:660px;}
-  .soon{margin-top:20px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+  /* ------------------------------------------------ pricing */
+  .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;}
+  .plan{background:var(--card);color:var(--navy);border:1px solid var(--line);
+    padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;}
+  .plan.founder{border:2px solid var(--flag);}
+  .stamp50{position:absolute;top:-13px;right:16px;background:var(--flag);color:var(--navy);
+    font-family:'Barlow Condensed';font-weight:800;font-size:12.5px;letter-spacing:.12em;
+    text-transform:uppercase;padding:4px 10px;}
+  .plan .tag{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--turf);}
+  .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:52px;
+    line-height:1;margin-top:8px;}
+  .price small{font-family:'Barlow';font-size:14px;font-weight:700;color:var(--slate);
+    font-style:normal;}
+  .plan ul{margin:14px 0 0 18px;font-size:14px;line-height:1.7;color:var(--ink2);}
+  .plan .soon{margin-top:16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
     letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);
-    background:var(--flag-tint);border:none;border-left:4px solid var(--flag-deep);
-    padding:13px 16px;text-align:left;}
-  .funnel{margin-top:36px;padding:20px 22px;max-width:760px;border-left:6px solid var(--turf);}
-  /* The closing ask. This class was on the markup with no rule behind it, so
-     the last thing a 6,500px scroll arrives at looked like more page. */
-  .closer{position:relative;
-    background:radial-gradient(680px 300px at 50% 0%,rgba(242,194,48,.10),transparent 70%),
-      linear-gradient(180deg,rgba(10,20,32,.55),rgba(5,9,15,.85));
-    border-top:1px solid rgba(242,194,48,.28);}
-  .closer::before{content:"";position:absolute;left:50%;top:-1px;width:150px;height:3px;
-    transform:translateX(-50%);background:var(--flag);}
-  .closer p{color:var(--dusk2);}
-  .funnel > b{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:20px;
-    text-transform:uppercase;letter-spacing:.06em;}
-  .funnel ol{margin:12px 0 0 20px;font-size:13.5px;line-height:1.75;color:var(--ink2);}
+    background:#F4EED9;border-left:4px solid var(--flag-deep);padding:12px 14px;}
+  .finance{margin-top:16px;font-size:13px;color:var(--dusk);line-height:1.65;max-width:70ch;}
+  .finance a{color:var(--flag);}
 
-  /* ---------- trust + footer ---------- */
-  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px;}
-  .trust > div{font-size:13.5px;line-height:1.65;color:#A9B9CC;min-width:0;
-    background:linear-gradient(180deg,rgba(24,42,69,.7),rgba(12,23,39,.88));
-    border:1px solid rgba(143,163,188,.16);border-top:3px solid var(--brick-glow);
-    padding:20px 18px;box-shadow:0 22px 38px -24px rgba(0,0,0,.75);
-    transition:border-color .22s ease, box-shadow .22s ease;}
-  .trust > div:nth-child(2){border-top-color:var(--flag);}
-  .trust > div:nth-child(3){border-top-color:var(--turf-glow);}
-  .trust > div:hover{border-color:rgba(242,194,48,.4);border-top-width:3px;
-    box-shadow:0 26px 44px -24px rgba(0,0,0,.85), 0 0 34px -8px rgba(242,194,48,.2);}
-  .trust b{display:block;font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:19px;letter-spacing:.04em;text-transform:uppercase;color:var(--paper);margin-bottom:6px;}
-  footer{padding:44px 0 60px;font-size:12.5px;color:#7E90A8;line-height:1.75;
-    border-top:1px solid rgba(242,194,48,.14);}
-  footer b{color:var(--paper);}
+  /* ------------------------------------------------ faq */
+  .faq{max-width:720px;}
+  .faq details{border-bottom:1px solid rgba(246,244,238,.12);}
+  .faq summary{cursor:pointer;padding:15px 0;font-weight:700;font-size:16.5px;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .faq summary::after{content:"+";font-family:'Barlow Condensed';font-weight:800;
+    font-size:22px;color:var(--flag);}
+  .faq details[open] summary::after{content:"–";}
+  .faq .a{padding:0 0 16px;font-size:15px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
+  .faq .a a{color:var(--flag);}
 
-  /* ---------- scroll reveal — hidden state only applies when JS is running,
-       so the page is never blank for a no-script visitor ---------- */
-  /* a hair of scale plus a gentle overshoot makes things ARRIVE rather than
-     just fade in — the difference between lively and mechanical */
-  html.js .reveal{opacity:0;transform:translateY(30px) scale(.975);
-    transition:opacity .55s ease, transform .62s cubic-bezier(.16,.9,.28,1.06);
-    transition-delay:var(--d,0s);}
-  html.js .reveal.in{opacity:1;transform:none;}
+  /* ------------------------------------------------ closer + footer */
+  .closer{text-align:center;padding:70px 0 20px;}
+  .closer p{color:var(--dusk2);margin:8px auto 20px;max-width:46ch;}
+  footer{margin-top:56px;border-top:1px solid rgba(246,244,238,.14);
+    padding:22px 0 44px;font-size:12.5px;color:#7C8DA5;line-height:1.8;}
+  footer a{color:var(--flag);text-decoration:none;}
+  footer a:hover{text-decoration:underline;}
 
-  /* ---------- accessibility: motion off means motion OFF ---------- */
+  /* reveal */
+  .js .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease;}
+  .js .reveal.in{opacity:1;transform:none;}
   @media (prefers-reduced-motion: reduce){
-    *,*::before,*::after{animation:none !important;transition:none !important;}
-    .tilt,.tilt:hover,.btn,.btn:hover,.step,.stamp,.stamp50,.herofb{transform:none !important;}
-    html.js .reveal{opacity:1 !important;transform:none !important;}
-    .ticker .track{animation:none !important;}
-    .reel.dup{display:none;}
-    .ticker{overflow-x:auto;}
-    html{scroll-behavior:auto;}
+    .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
   }
 
-  /* ---------- responsive ---------- */
-  @media (max-width:900px){
-    .grid3{grid-template-columns:1fr;gap:34px;}
-    .watch{grid-template-columns:1fr;}
-    .grid3 .reveal:nth-child(2),.grid3 .reveal:nth-child(3){margin-top:0;}
-    .steps,.trust{grid-template-columns:1fr;}
+  @media (max-width:880px){
+    .hero{grid-template-columns:1fr;padding:44px 0 40px;gap:30px;}
+    .duo{grid-template-columns:1fr;}
+    .weekstrip{grid-template-columns:1fr;}
     .plans{grid-template-columns:1fr;}
-    .herofb{right:-140px;opacity:.09;}
-  }
-  @media (max-width:680px){
-    section{padding:64px 0;}
-    .hero{padding:64px 0 56px;}
-    .proof-chips{gap:24px 28px;}
-    .step .n{font-size:64px;}
-    .plan .price{font-size:54px;}
-    .reel li{font-size:14.5px;padding-right:18px;}
-    .reel li::before{margin-right:18px;}
+    .navlinks .hidesm{display:none;}
   }
 </style>
 </head>
 <body>
+<div class="wrap">
+
+<nav>
+  <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylnBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylnSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylnVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylnPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylnBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylnPath" fill="url(#bylnSpec)" stroke="none"/><use href="#bylnPath" fill="url(#bylnVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg>Beat Your League</a>
+  <div class="navlinks">
+    <a class="hidesm" href="sample-report.html">See a real file</a>
+    <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
+         a closed checkout reads as bait. JS rewrites it the day checkout opens;
+         if JS never runs, the honest state is what shows. -->
+    <a class="btn gold" id="nav-cta" href="#watch-form">Get launch access</a>
+  </div>
+</nav>
 
 <header class="hero">
-  <!-- The same ball at watermark scale (L=238, H=132 -> r=280.561). Outline only
-       at 14% opacity, so it carries the true geometry — pointed ends, the seam's
-       bow, laces that shorten toward the tips — rather than shading nobody would
-       see. The two inner arcs are the panel seams reading around the far side. -->
-  <svg class="herofb" viewBox="0 0 520 320" aria-hidden="true" focusable="false">
-    <g transform="translate(260 160) rotate(-18)" fill="none" stroke="#F2C230" stroke-linecap="round">
-      <path d="M-238 0A280.561 280.561 0 0 1 238 0A280.561 280.561 0 0 1-238 0Z" stroke-width="3.5"/>
-      <path d="M-150 6Q0-19 150 6" stroke-width="2.6" opacity=".75"/>
-      <path d="M-65.8-28.6L-58.2 19.8M-22.6-36.2L-19.4 23.7M22.6-36.2L19.4 23.7M65.8-28.6L58.2 19.8"
-            stroke-width="3.2" opacity=".75"/>
-      <path d="M-196 0A280.561 280.561 0 0 1 196 0" stroke-width="1.6" opacity=".35"/>
-      <path d="M-196 0A280.561 280.561 0 0 0 196 0" stroke-width="1.6" opacity=".35"/>
-    </g>
-  </svg>
-  <div class="wrap">
-    <div class="topline">
-      <div class="brand">
-        <!-- The mark. A football is a prolate spheroid, so the silhouette is a
-             VESICA — two circular arcs meeting at sharp points — not an ellipse;
-             that one substitution is what made the old mark read as a sticker.
-             Arc radius is derived, not eyeballed: through (-L,0),(0,-H),(L,0)
-             the radius is (L²+H²)/2H, giving r=13.145 at L=11.4, H=6.6. The
-             points come out at ~60°, whose miter ratio (2.0) sits under SVG's
-             default limit of 4, so they stay sharp with no extra handling.
-             Depth is three stacked layers on one path: a form gradient lit from
-             the upper left, a specular bloom, and a vignette that darkens the
-             tips where they turn away. The -18° tilt is the dynamism — a
-             horizontal football is inert — and the rotated bounding box is
-             22.1x14.4, so it still fits the 26x17 viewBox untouched. -->
-        <svg viewBox="0 0 26 17" aria-hidden="true" focusable="false">
-          <defs>
-            <linearGradient id="bylMarkBody" x1=".12" y1="0" x2=".72" y2="1">
-              <stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>
-              <stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>
-            </linearGradient>
-            <radialGradient id="bylMarkSpec" cx=".34" cy=".24" r=".40">
-              <stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>
-              <stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="bylMarkVig" cx=".5" cy=".5" r=".60">
-              <stop offset=".42" stop-color="#25120A" stop-opacity="0"/>
-              <stop offset="1" stop-color="#25120A" stop-opacity=".62"/>
-            </radialGradient>
-          </defs>
-          <g transform="translate(13 8.5) rotate(-18)">
-            <path id="bylMarkPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z"
-                  fill="url(#bylMarkBody)" stroke="#F2C230" stroke-width=".9"/>
-            <use href="#bylMarkPath" fill="url(#bylMarkSpec)" stroke="none"/>
-            <use href="#bylMarkPath" fill="url(#bylMarkVig)" stroke="none"/>
-            <g stroke="#F6F4EE" stroke-linecap="round" fill="none">
-              <path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/>
-              <path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91"
-                    stroke-width="1"/>
-            </g>
-          </g>
-        </svg>
-        Beat Your League
-      </div>
-      <span class="livepill"><i></i>First file: Tuesday, Sep 8</span>
-    </div>
-    <h1>We set your lineup. <em><span>Then we grade ourselves in public.</span></em></h1>
-    <p class="sub">Every Tuesday: the lineup we'd set for your exact roster under your
-    league's scoring, with a number on every call worth making — the coin flip included.
-    Every Monday: those calls come back against the real box score, on a page your
-    league can check. Built from your roster and the real NFL record — we never
-    connect to your league.</p>
-    <p class="whyfree">$39 USD for the season. The first file lands Tuesday, Sep 8, and
-    refunds are no-questions through Week 2 — read two of them, then decide.</p>
+  <div>
+    <div class="eyebrow">Fantasy football · start/sit, decided</div>
+    <h1>Know who <em><span>to start.</span></em></h1>
+    <p class="sub">Every close call on your roster, decided — for your exact team,
+    under your league's scoring, with the odds on each one. One short file a week.
+    You just set the lineup.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
-         right here — not three screens down. The paid CTA unhides the day
-         CHECKOUT_OPEN flips. -->
+         right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
       <input type="email" id="watch-email" placeholder="you@example.com"
              autocomplete="email" aria-label="Email me when signups open">
-      <button class="btn go" type="submit">Tell me when it opens</button>
-      <p class="watchnote" id="watch-note" role="status"></p>
+      <button class="btn gold" type="submit">Get launch access</button>
     </form>
-    <p class="heronote">Signups open before Week 1. Leave your email and you get
-    exactly one message when they do — nothing between now and then.
-    No card, and unsubscribe in one click.</p>
+    <p class="watchnote" id="watch-note" role="status"></p>
+    <p class="heroline"><b>First files land Tuesday, Sep 8.</b> One email when signups
+    open — nothing else, no card, unsubscribe in one click.</p>
     <div class="cta-row">
-      <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up your team
-        <span class="arrow">→</span></a>
-      <a class="btn ghost" href="sample-report.html">Read a real report</a>
+      <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
+      <a class="btn ghost" href="sample-report.html">See a real file</a>
     </div>
-    <div class="proof-chips">
-      <span class="chip">Graded on <b>eleven NFL seasons</b> before launch</span>
-      <span class="chip">Set up in <b>90 seconds</b> — no login, no password</span>
-      <span class="chip">Every call <b>dated &amp; graded</b> in public</span>
-    </div>
-    <div class="fieldwrap reveal">
-      <svg class="pitch" viewBox="0 0 800 300" xmlns="http://www.w3.org/2000/svg"
-           role="img" aria-label="A night stadium field under the lights, the ball driven deep downfield: Tuesday's plan on the left, Monday's grade on the right.">
-        <defs>
-          <linearGradient id="turfSide" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0" stop-color="#1C7345"/><stop offset="1" stop-color="#0C3721"/>
-          </linearGradient>
-          <linearGradient id="brickSide" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0" stop-color="#7C2C21" stop-opacity=".92"/><stop offset="1" stop-color="#3E170F"/>
-          </linearGradient>
-          <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#F6F4EE" stop-opacity=".16"/>
-            <stop offset=".4" stop-color="#F2C230" stop-opacity=".04"/>
-            <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
-          </linearGradient>
-          <!-- light has no edges: the cones get blurred into haze -->
-          <filter id="haze" x="-60%" y="-40%" width="220%" height="200%">
-            <feGaussianBlur stdDeviation="14"/>
-          </filter>
-          <radialGradient id="pool">
-            <stop offset="0" stop-color="#F6F4EE" stop-opacity=".20"/>
-            <stop offset="1" stop-color="#F6F4EE" stop-opacity="0"/>
-          </radialGradient>
-          <radialGradient id="ballglow">
-            <stop offset="0" stop-color="#F2C230" stop-opacity=".55"/>
-            <stop offset="1" stop-color="#F2C230" stop-opacity="0"/>
-          </radialGradient>
-          <!-- the ball's own form shading, matching the logo mark -->
-          <linearGradient id="ballBody" x1=".12" y1="0" x2=".72" y2="1">
-            <stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>
-            <stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>
-          </linearGradient>
-          <radialGradient id="ballSpec" cx=".34" cy=".24" r=".40">
-            <stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>
-            <stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/>
-          </radialGradient>
-          <radialGradient id="ballVig" cx=".5" cy=".5" r=".60">
-            <stop offset=".42" stop-color="#25120A" stop-opacity="0"/>
-            <stop offset="1" stop-color="#25120A" stop-opacity=".62"/>
-          </radialGradient>
-          <linearGradient id="stands" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#0A1420" stop-opacity="0"/>
-            <stop offset="1" stop-color="#16273E"/>
-          </linearGradient>
-          <clipPath id="turfClip"><polygon points="60,255 740,255 620,95 180,95"/></clipPath>
-        </defs>
-
-        <!-- far stands, hinted not drawn -->
-        <path d="M150 95 L650 95 L690 52 L110 52 Z" fill="url(#stands)"/>
-        <g fill="#F6F4EE" opacity=".16">
-          <rect x="176" y="70" width="3" height="3"/><rect x="214" y="64" width="3" height="3"/>
-          <rect x="262" y="74" width="3" height="3"/><rect x="309" y="61" width="3" height="3"/>
-          <rect x="357" y="72" width="3" height="3"/><rect x="404" y="63" width="3" height="3"/>
-          <rect x="451" y="73" width="3" height="3"/><rect x="498" y="66" width="3" height="3"/>
-          <rect x="546" y="71" width="3" height="3"/><rect x="593" y="62" width="3" height="3"/>
-        </g>
-
-        <!-- floodlight towers + beams -->
-        <g>
-          <g filter="url(#haze)">
-            <polygon points="98,36 110,36 206,228 58,228" fill="url(#beam)"/>
-            <polygon points="690,36 702,36 742,228 594,228" fill="url(#beam)"/>
-          </g>
-          <g stroke="#8FA3BC" stroke-width="2" opacity=".45">
-            <line x1="104" y1="36" x2="104" y2="76"/><line x1="696" y1="36" x2="696" y2="76"/>
-          </g>
-          <g fill="#F2C230">
-            <rect x="86" y="20" width="36" height="12" rx="2" opacity=".85"/>
-            <rect x="678" y="20" width="36" height="12" rx="2" opacity=".85"/>
-          </g>
-          <ellipse cx="104" cy="26" rx="40" ry="18" fill="url(#pool)"/>
-          <ellipse cx="696" cy="26" rx="40" ry="18" fill="url(#pool)"/>
-        </g>
-
-        <!-- the field: near edge wide, far edge narrow -> yard lines converge -->
-        <g class="turf" clip-path="url(#turfClip)">
-          <!-- ground you hold is the whole field; the rival's half is laid over
-               it and slides right as the ball advances, so territory visibly
-               changes hands. Extended past the sideline so sliding it can
-               never expose a gap; the field clip keeps it honest. -->
-          <polygon points="60,255 740,255 620,95 180,95" fill="url(#turfSide)"/>
-          <g class="pitch-adv">
-            <polygon points="474.8,255 1240,255 1240,95 448.4,95" fill="url(#brickSide)"/>
-          </g>
-          <polygon points="60,255 128,255 224,95 180,95" fill="#1C7345" opacity=".55"/>
-          <polygon points="672,255 740,255 620,95 576,95" fill="#7C2C21" opacity=".55"/>
-          <ellipse cx="215" cy="180" rx="150" ry="80" fill="url(#pool)"/>
-          <ellipse cx="590" cy="180" rx="150" ry="80" fill="url(#pool)"/>
-        </g>
-
-        <!-- yard lines, goal to goal, plus hash marks and numbers -->
-        <g>
-          <line class="ln goal" x1="128" y1="255" x2="224" y2="95"/>
-          <line class="ln" x1="182.4" y1="255" x2="259.2" y2="95"/>
-          <line class="ln" x1="236.8" y1="255" x2="294.4" y2="95"/>
-          <line class="ln" x1="291.2" y1="255" x2="329.6" y2="95"/>
-          <line class="ln" x1="345.6" y1="255" x2="364.8" y2="95"/>
-          <line class="ln fifty" x1="400" y1="255" x2="400" y2="95"/>
-          <line class="ln" x1="454.4" y1="255" x2="435.2" y2="95"/>
-          <line class="ln" x1="508.8" y1="255" x2="470.4" y2="95"/>
-          <line class="ln" x1="563.2" y1="255" x2="505.6" y2="95"/>
-          <line class="ln" x1="617.6" y1="255" x2="540.8" y2="95"/>
-          <line class="ln goal" x1="672" y1="255" x2="576" y2="95"/>
-          <g class="hash">
-            <line x1="176" y1="168" x2="188" y2="168"/><line x1="230" y1="168" x2="242" y2="168"/>
-            <line x1="284" y1="168" x2="296" y2="168"/><line x1="338" y1="168" x2="350" y2="168"/>
-            <line x1="394" y1="168" x2="406" y2="168"/><line x1="448" y1="168" x2="460" y2="168"/>
-            <line x1="502" y1="168" x2="514" y2="168"/><line x1="556" y1="168" x2="568" y2="168"/>
-            <line x1="610" y1="168" x2="622" y2="168"/>
-          </g>
-          <g class="num">
-            <text x="196.8" y="230">10</text><text x="247.6" y="230">20</text>
-            <text x="298.4" y="230">30</text><text x="349.2" y="230">40</text>
-            <text x="400" y="230">50</text><text x="450.8" y="230">40</text>
-            <text x="501.6" y="230">30</text><text x="552.4" y="230">20</text>
-            <text x="603.2" y="230">10</text>
-          </g>
-          <polygon points="60,255 740,255 620,95 180,95" fill="none"
-                   stroke="rgba(246,244,238,.42)" stroke-width="2"/>
-        </g>
-
-        <!-- where their half starts -->
-        <!-- the line of scrimmage travels with the ball -->
-        <g class="pitch-adv">
-          <line class="split" x1="474.8" y1="255" x2="448.4" y2="95"/>
-        </g>
-
-        <!-- the drive: trail, then the ball resting in their territory -->
-        <g transform="translate(0,200)">
-          <!-- dot positions sampled from the same quadratic the ball rides;
-               delays are when the ball arrives, so dots land behind it -->
-          <g>
-            <circle class="pitch-dot" cx="338.1" cy="-2.6" r="1.9" style="animation-delay:.107s"/>
-            <circle class="pitch-dot" cx="348.1" cy="-4.82" r="2" style="animation-delay:.218s"/>
-            <circle class="pitch-dot" cx="358" cy="-6.64" r="2.1" style="animation-delay:.334s"/>
-            <circle class="pitch-dot" cx="367.8" cy="-8.06" r="2.2" style="animation-delay:.454s"/>
-            <circle class="pitch-dot" cx="377.7" cy="-9.1" r="2.3" style="animation-delay:.581s"/>
-            <circle class="pitch-dot" cx="387.4" cy="-9.74" r="2.4" style="animation-delay:.715s"/>
-            <circle class="pitch-dot" cx="397.1" cy="-10" r="2.5" style="animation-delay:.858s"/>
-            <circle class="pitch-dot" cx="406.8" cy="-9.86" r="2.6" style="animation-delay:1.01s"/>
-            <circle class="pitch-dot" cx="416.3" cy="-9.32" r="2.7" style="animation-delay:1.175s"/>
-            <circle class="pitch-dot" cx="425.8" cy="-8.4" r="2.8" style="animation-delay:1.357s"/>
-            <circle class="pitch-dot" cx="435.4" cy="-7.08" r="2.9" style="animation-delay:1.561s"/>
-            <circle class="pitch-dot" cx="444.7" cy="-5.38" r="3" style="animation-delay:1.8s"/>
-            <circle class="pitch-dot" cx="454.1" cy="-3.28" r="3.1" style="animation-delay:2.1s"/>
-          </g>
-          <!-- Same vesica as the logo mark, at L=15/H=9 (r=17). The tilt lives on
-               an INNER group on purpose: .pitch-ball's own transform is owned by
-               the drive keyframes, so a rotate written here would be erased the
-               moment the animation starts. -->
-          <g class="pitch-ball">
-            <circle r="26" fill="url(#ballglow)"/>
-            <g transform="rotate(-18)">
-              <path id="pitchBallPath" d="M-15 0A17 17 0 0 1 15 0A17 17 0 0 1-15 0Z"
-                    fill="url(#ballBody)" stroke="#F2C230" stroke-width="1.15"/>
-              <use href="#pitchBallPath" fill="url(#ballSpec)" stroke="none"/>
-              <use href="#pitchBallPath" fill="url(#ballVig)" stroke="none"/>
-              <g stroke="#F6F4EE" stroke-linecap="round" fill="none">
-                <path d="M-9.7 .39Q0-1.25 9.7 .39" stroke-width="1.05" opacity=".92"/>
-                <path d="M-4.18-1.79L-3.71 1.20M-1.41-2.28L-1.22 1.45M1.41-2.28L1.22 1.45M4.18-1.79L3.71 1.20"
-                      stroke-width="1.32"/>
-              </g>
-            </g>
-          </g>
-        </g>
-      </svg>
-      <div class="fieldlabel"><span>Tuesday: the plan</span><span>Monday: the grade</span></div>
+  </div>
+  <div class="reveal">
+    <div class="filecard">
+      <div class="filehead">Your lineup · decided <span>Real output · 2024, week 10</span></div>
+      <div class="fbody">
+        <div class="frow"><span class="fslot">WR</span><span class="fname">Ja'Marr Chase</span>
+          <span class="fbar"><i style="width:65%"></i></span><span class="fpct">65%</span><span class="fproj">15.3</span></div>
+        <div class="frow"><span class="fslot">TE</span><span class="fname">George Kittle</span>
+          <span class="fbar"><i style="width:66%"></i></span><span class="fpct">66%</span><span class="fproj">10.7</span></div>
+        <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
+          <span class="fbar"><i style="width:58%"></i></span><span class="fpct">58%</span><span class="fproj">12.7</span></div>
+        <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
+          <span class="fnc">no call · status unconfirmed</span></div>
+      </div>
+      <div class="fcap">The percentage is the odds that start beats your best bench
+      option. When we can't stand behind a number, the row says so. <span class="real">Real output</span></div>
     </div>
   </div>
 </header>
 
-<!-- receipts ticker — every figure below already appears on this page, sourced where shown -->
-<div class="ticker" aria-label="What the report tracks, from real league records">
-  <div class="track">
-    <ul class="reel">
-      <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
-      <li>the week's coin flip · <b>58%, decided in writing</b></li>
-      <li><b>111.5</b> projected · a real range, not a promise</li>
-      <li>kittle <b>66% over the bench option</b> · called in writing</li>
-      <li>your lineup, decided · <b>every tuesday</b></li>
-      <li>last week's calls · <b>graded against the box score</b></li>
-    </ul>
-    <ul class="reel dup" aria-hidden="true">
-      <li>chase <b>34 targets</b> in 4 games · usage on every start</li>
-      <li>the week's coin flip · <b>58%, decided in writing</b></li>
-      <li><b>111.5</b> projected · a real range, not a promise</li>
-      <li>kittle <b>66% over the bench option</b> · called in writing</li>
-      <li>your lineup, decided · <b>every tuesday</b></li>
-      <li>last week's calls · <b>graded against the box score</b></li>
-    </ul>
-  </div>
-</div>
+<section>
+  <div class="secnum">01 · The lineup</div>
+  <h2>Built for your roster. Not everyone's.</h2>
+  <p class="lede">Rankings talk to the whole internet. Your file is computed from your
+  exact roster and your league's scoring — every slot decided, with the odds on each
+  call we can stand behind.</p>
+</section>
 
 <section>
-  <div class="wrap">
-    <div class="eyebrow">What you get every Tuesday</div>
-    <h2>Your lineup, decided. With a number on it.</h2>
-    <p class="lede">Rankings talk to your whole league at once. This is a file about your
-    team: the lineup we'd set under your own scoring, the odds behind every call worth
-    making, and who's actually getting the ball. You don't have to become the
-    spreadsheet guy in your league — you just have to outscore him.</p>
-    <div class="grid3">
-      <div class="reveal">
-        <div class="fcard sheet tilt" style="--tilt:rotate(-2.2deg)">
-          <h3>The lineup</h3>
-          <p>Every slot set from your league's scoring, with the reasoning attached — and
-          when a call isn't earned, the slot says "no call" instead of guessing.</p>
-          <div class="mini">
-            <div class="mrow"><span class="slot">WR</span><span class="p">Ja'Marr Chase<small>65% over the bench option</small></span><span class="pts">15.3</span></div>
-            <div class="mrow"><span class="slot">WR</span><span class="p">Amon-Ra St. Brown<small>58% over the bench option</small></span><span class="pts">12.7</span></div>
-            <div class="mrow"><span class="slot">TE</span><span class="p">George Kittle<small>66% over the bench option</small></span><span class="pts">10.7</span></div>
-          </div>
-          <span class="real">Real output · 2024 NFL season, week 10</span>
+  <div class="secnum">02 · The coin flip</div>
+  <div class="duo">
+    <div>
+      <h2>The toss-up, called.</h2>
+      <p class="lede">Every week has one call that's genuinely close — the one the
+      rankings leave you alone with. We pick a side and put a number on it:
+      Start Amon-Ra St. Brown over Courtland Sutton — 58%, proj 12.7 vs 10.3.</p>
+    </div>
+    <div class="filecard flat reveal">
+      <div class="filehead">The week's closest call <span>Real output · 2024, week 10</span></div>
+      <div class="flip">
+        <div class="flipnames">
+          <span>Amon-Ra St. Brown<small>start · proj 12.7</small></span>
+          <span style="text-align:right">Courtland Sutton<small>sit · proj 10.3</small></span>
         </div>
+        <div class="flipbar"><span class="a" style="width:58%"></span><span class="b" style="width:42%"></span></div>
+        <!-- One numeral only: the sample publishes the 58% side and nothing
+             else, and a "Real output" card may not print a figure the product
+             never printed — even an arithmetic complement. -->
+        <div class="flippct"><span>58%</span></div>
       </div>
-      <div class="reveal" style="--d:.12s">
-        <div class="fcard sheet tilt" style="--tilt:rotate(1.7deg)">
-          <h3>The coin flip, called</h3>
-          <p>Every week has one start-sit call that's genuinely close — the one the
-          rankings leave you alone with. We pick a side in writing, put the number on it,
-          and Monday it comes back graded either way.</p>
-          <div class="mini">
-            <div class="srow"><div class="x">?</div><div class="why"><b>Start Amon-Ra St. Brown
-            over Courtland Sutton</b> — 58%, proj 12.7 vs 10.3. The closest call of the
-            week, decided in writing — so Monday has a verdict either way.</div></div>
-          </div>
-          <span class="real">Real output · 2024 NFL season, week 10</span>
-        </div>
-      </div>
-      <div class="reveal" style="--d:.24s">
-        <div class="fcard sheet tilt" style="--tilt:rotate(-1.4deg)">
-          <h3>The receipts</h3>
-          <p>Monday morning, last week's calls come back with the box score sitting next
-          to them — wins and misses both, on a public page your leaguemates can check
-          themselves. When one lands, you're holding a dated receipt for the group chat.</p>
-          <div class="mini">
-            <div class="srow"><div class="x" style="color:var(--turf);border-color:var(--turf)">✓</div>
-            <div class="why"><b>Every published call gets graded against the real box
-            score</b>, hit or miss — the rules froze before Week 1, so the bar can't move
-            after a result.</div></div>
-          </div>
-          <span class="real">The grading rules are written in code, in public</span>
-        </div>
-      </div>
+      <div class="fcap">Decided in writing before kickoff — so Monday has a verdict
+      either way. <span class="real">Real output</span></div>
     </div>
   </div>
 </section>
 
-<section class="alt">
-  <div class="wrap">
-    <div class="eyebrow">How it works</div>
-    <h2>Setup is ninety seconds and a paste.</h2>
-    <div class="steps">
-      <div class="step reveal"><div class="n">1</div><h3>Paste your roster</h3>
-        <p>Straight out of whatever app your league lives in — Sleeper, ESPN, Yahoo,
-        anything you can copy names from. Positions, bye weeks and junk are fine;
-        we read the names. No login, no password, no league connection.</p></div>
-      <div class="step reveal" style="--d:.12s"><div class="n">2</div><h3>Pick your scoring</h3>
-        <p>PPR, half, or standard, plus your league size and lineup shape. Two taps —
-        it's what makes every number in your file worth reading, because a call under
-        the wrong scoring is somebody else's call.</p></div>
-      <div class="step reveal" style="--d:.24s"><div class="n">3</div><h3>Tuesday, it's in your inbox</h3>
-        <p>Your lineup decided with the odds on each call, who's actually getting the
-        ball, a plan for late news — and last week's calls back with the box score.</p></div>
+<section>
+  <div class="secnum">03 · The role</div>
+  <div class="duo">
+    <div class="filecard flat reveal">
+      <div class="filehead">Who's getting the ball <span>Real output · 2024, week 10</span></div>
+      <!-- Bars scale on the per-game RATE (8.5 → 100%), not the raw total: the
+           windows differ (Kittle missed a game), and a total-scaled chart would
+           contradict the per-game number printed on its own row. -->
+      <div class="usage">
+        <div class="urow"><b>Ja'Marr Chase</b><span class="ubar"><i style="width:100%"></i></span><span class="ucount">34 targets (8.5 a game) · last 4 games</span></div>
+        <div class="urow"><b>Amon-Ra St. Brown</b><span class="ubar"><i style="width:61%"></i></span><span class="ucount">21 targets (5.2 a game) · last 4 games</span></div>
+        <div class="urow"><b>George Kittle</b><span class="ubar"><i style="width:79%"></i></span><span class="ucount">20 targets (6.7 a game) · last 3 games</span></div>
+      </div>
+      <div class="fcap">Counted from the games, never projected — the role shows up
+      before the points do. <span class="real">Real output</span></div>
     </div>
-
-    <div class="ritual reveal">
-      <h3>What the season actually looks like</h3>
-      <p><b>Tuesday morning, ninety seconds.</b> You open one email. At the top is a
-      three-box checklist — the lineup calls worth making, and the one player whose news
-      you need to check before Sunday. Tick the boxes and you're done.</p>
-      <p><b>Everything under the checklist is the evidence for it</b>, there for the weeks
-      you want to argue with us: the odds behind each call, what each starter has actually
-      been given — targets, carries, the ball in his hands — and the week's coin flip
-      decided with the reasoning attached.</p>
-      <p><b>Then Monday, last week's calls come back graded</b> against the real box
-      score, with the date they were made still on them. That's the whole routine.
-      It's one email. There's nothing to check, install, or babysit.</p>
-    </div>
-
-    <div class="cta-row" style="margin-top:36px">
-      <a class="btn go" href="join/index.html">Set up your team <span class="arrow">→</span></a>
+    <div>
+      <h2>See the role before the points.</h2>
+      <p class="lede">Targets and carries for every starter, counted from the real
+      games. When a player's opportunity jumps, you know before your league does.</p>
     </div>
   </div>
 </section>
 
-<section id="honesty">
-  <div class="wrap">
-    <div class="eyebrow">Why trust the numbers</div>
-    <h2>Graded before we sold a single file.<br>Graded in public every Monday after.</h2>
-    <p class="lede">Before asking anyone for money, we replayed eleven NFL seasons and graded
-    thousands of our own start/sit calls against the real box scores — then published every
-    result, the misses included, with the grading rules frozen in code before Week 1. A number
-    next to a player who turns out to be inactive isn't analysis, it's a guess wearing one. So
-    when a call hasn't earned its number, your report says <b>"no call"</b> — and every number
-    that does print lands on a public page, dated, where it gets graded hit or miss.</p>
+<section>
+  <div class="secnum">Your week</div>
+  <h2>Ninety seconds on Tuesday morning.</h2>
+  <div class="weekstrip">
+    <div class="day reveal"><b>Tuesday</b><p>Your file lands. A short checklist up
+      top — the calls worth making, and the one player whose news to watch. Tick the
+      boxes, done in ninety seconds.</p></div>
+    <div class="day reveal"><b>Sunday</b><p>Your lineup's already set. If late news
+      breaks, the file told you the if/then in advance.</p></div>
+    <div class="day reveal"><b>Monday</b><p>Your calls come back graded against the
+      real box score as games go final — so you always know how the file is doing.</p></div>
+  </div>
+  <div class="truststrip reveal">
+    Every call we send is graded against the real box score, in public — see
+    <a href="backtest.html">how the method scored across eleven seasons</a> or
+    <a href="ledger/index.html">the season's running record</a>.
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="secnum">Pricing</div>
+  <h2>Try a month, or take the season.</h2>
+  <div class="plans">
     <div class="reveal">
-      <div class="exhibit sheet tilt" style="--tilt:rotate(1.1deg)">
-        <div class="exhibit-cap">Read it all before you decide</div>
-        <ul class="proof-links">
-          <li><a href="confidence.html"><b>The number next to a player, graded</b></a> —
-          eleven seasons of box scores, every percentage we print, and the rule that
-          decides what we're allowed to claim.</li>
-          <li><a href="projections.html"><b>Us vs. the free projections in your app</b></a> —
-          where they beat us, where they go silent, and what that's worth to you.</li>
-          <li><a href="no-call.html"><b>The rule behind "no call"</b></a> — measured against
-          two seasons of real injury reports, result published whole.</li>
-          <li><a href="backtest.html"><b>The whole record, unedited</b></a> — the same
-          grading, exactly as the program wrote it: every failing band left in.</li>
+      <div class="plan">
+        <div class="tag">Monthly</div>
+        <div class="price">$12.99 <small>/ month, USD</small></div>
+        <ul>
+          <li>The full weekly file, every week</li>
+          <li>Cancel any time, yourself, in one click</li>
+          <li>Billing stops when the season does — we don't charge through
+          the offseason</li>
         </ul>
-      </div>
-    </div>
-    <p class="honest">The numbers you'll see in a report are the ones we're prepared to be
-    graded on, <a href="ledger/index.html">in public</a>. The record starts filling
-    from mid-September, and it never gets edited.</p>
-    <span class="stamp">Graded on real box scores</span>
-  </div>
-</section>
-
-<section class="alt" id="pricing">
-  <div class="wrap">
-    <div class="eyebrow">Pricing</div>
-    <h2>Your buy-in bought you a seat.<br>This buys the scouting file.</h2>
-    <p class="lede">One flat price for the season, every report through your title game,
-    refundable no-questions through Week 2. Read the first two, then decide.</p>
-    <div class="plans">
-      <div class="reveal">
-        <div class="plan founder sheet tilt" style="--tilt:rotate(-1.3deg)">
-          <span class="stamp50" aria-hidden="true">Founding</span>
-          <div class="tag">Founding Season Pass · 2026</div>
-          <div class="price">$39 <small>/ season, USD</small></div>
-          <ul>
-            <li>Every weekly report, Week 1 through your title game</li>
-            <li>Usage on every starter — targets, carries, the ball in his hands</li>
-            <li>Every call dated and graded — your receipt for the group chat</li>
-            <li>No-questions refund through Week 2 — one per person; if you
-            re-subscribe after a refund, that one's final</li>
-            <li>Renews once a year at $39 unless you cancel — charged next August,
-            before the season it covers, never during the offseason. We email you
-            first, and you cancel yourself in one click
-            (<a href="legal.html#cancel" style="color:var(--turf)">here's exactly
-            how</a>)</li>
-          </ul>
-          <a class="btn gold" href="join/index.html" data-checkout>Set up your team — lock the founding rate</a>
-        </div>
-      </div>
-      <div class="reveal" style="--d:.12s">
-        <div class="plan sheet tilt" style="--tilt:rotate(1.2deg)">
-          <div class="tag">Or month to month</div>
-          <div class="price">$12.99 <small>/ month, USD</small></div>
-          <ul>
-            <li>Same report, same receipts</li>
-            <li>Cancel any time</li>
-            <li><b>Billing stops when the season does.</b> We don't charge you
-            through the offseason — there's nothing to send</li>
-            <li>For seeing a few weeks first — the pass is there when
-            you're sure</li>
-          </ul>
-          <div class="soon" id="monthly-cta">Checkout opens at launch</div>
-        </div>
+        <div class="soon" id="monthly-cta">Checkout opens at launch</div>
       </div>
     </div>
     <div class="reveal" style="--d:.1s">
-      <p class="honest" style="margin:18px 0 0">Running the league?
-        <a href="league-pass.html" style="color:var(--flag)">One payment covers every
-        team &rarr;</a></p>
-
-      <div class="funnel sheet tilt" style="--tilt:rotate(-.6deg)">
-        <b>How buying works, in the open:</b>
-        <ol>
-          <li><b>Today:</b> paste your roster and pick your scoring in ninety seconds.
-          Until checkout opens, nothing is saved and nothing is charged — and when it
-          opens, the season pass is $39 at the founding rate, locked in for every
-          renewal.</li>
-          <li><b>Before Week 1:</b> checkout opens — you pay on Stripe's own secure page,
-          and card details never touch our systems. Reports go only to paid subscribers,
-          from the first issue on.</li>
-          <li><b>Tue Sep 8:</b> your first report lands. Refunds are no-questions
-          through Week 2.</li>
-          <li><b>A year from now:</b> the pass renews at $39 unless you cancel. We email you
-          before it bills, cancelling is one click in your own account page, and we will
-          never make you ask us to stop charging you.</li>
-        </ol>
+      <div class="plan founder">
+        <span class="stamp50" aria-hidden="true">Founding rate</span>
+        <div class="tag">Season pass · 2026</div>
+        <div class="price">$39 <small>/ season, USD</small></div>
+        <ul>
+          <li>Every weekly file, Week 1 through your title game</li>
+          <li>No-questions refund through Week 2, one per person. If you refund
+          and later re-subscribe, there's no second refund</li>
+          <li>Renews once a year at $39 unless you cancel — we email you first,
+          and cancelling is one click
+          (<a href="legal.html#cancel" style="color:var(--turf)">how</a>)</li>
+        </ul>
+        <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens at launch</div>
       </div>
     </div>
-    <!-- When the Stripe links are pasted into site/join/, flip CHECKOUT_OPEN
-         below — the founder button becomes a live CTA and the monthly note
-         becomes a link. Keep exactly one decision visible (pass + monthly
-         anchor). -->
   </div>
+  <p class="finance" id="finance-note">Payment runs on Stripe's own page when checkout
+  opens. Setting up today saves nothing yet — leave your email above and you'll get one
+  message the morning it opens, at the founding rate. Running the league?
+  <a href="league-pass.html">One payment can cover every team</a>.</p>
 </section>
 
 <section id="faq">
-  <div class="wrap">
-    <div class="eyebrow">Fair questions</div>
-    <h2>Before you ask the group chat</h2>
-    <div class="faq reveal">
-      <details>
-        <summary>Does it work with my league app?</summary>
-        <div class="a">Any of them. We never connect to a league — you paste your roster
-        as plain names, from Sleeper, ESPN, Yahoo, or a napkin. If you can copy it, we
-        can read it.</div>
-      </details>
-      <details>
-        <summary>Does it match my league's scoring?</summary>
-        <div class="a">Yes — you pick PPR, half-PPR, or standard, plus your league size
-        and lineup shape (superflex included). Every number in your file is computed
-        under <b>your</b> settings, because a call under the wrong scoring is somebody
-        else's call.</div>
-      </details>
-      <details>
-        <summary>When does it arrive?</summary>
-        <div class="a">Tuesday morning, every week of the season — after Monday
-        night's box score has been graded, before your lineup decisions are due. The
-        first one lands Tuesday, Sep 8.</div>
-      </details>
-      <details>
-        <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Trades and pickups happen — reply to any report with your
-        updated roster and your file follows it from the next Tuesday.</div>
-      </details>
-      <details>
-        <summary>When does the public record start?</summary>
-        <div class="a">The first calls print in Week 2 for the standard setup we've
-        graded — full PPR, 12 teams, the usual lineup — leaning on last season at first
-        and saying so on each row. Other setups start in Week 4, once both players in a
-        call have three games of record. Grading follows as soon as the games are final,
-        so the record starts filling from mid-September. Week 1 itself carries no
-        number: nobody has played, and there's no injury report to check anyone
-        against — it sets your lineup in last season's scoring order and shows you the
-        figure behind every row. <a href="sample-first-week.html"
-        style="color:var(--flag)">Here is that first file</a>, so nothing about your
-        first Tuesday is a surprise.</div>
-      </details>
-      <details>
-        <summary>Why is there no win probability on my matchup?</summary>
-        <div class="a">Because we haven't earned it. We only publish a number when our own
-        testing says it holds up, and matchup win odds aren't there yet — same reason a
-        too-close call prints "no call" instead of a guess. We measured that rule
-        against two seasons of real injury reports and
-        <a href="no-call.html" style="color:var(--flag)">published the whole result</a>;
-        the numbers you do see are the ones we're prepared to be graded on,
-        <a href="ledger/index.html" style="color:var(--flag)">in public</a>.</div>
-      </details>
-    </div>
+  <div class="secnum">Fair questions</div>
+  <h2>Before you ask the group chat</h2>
+  <div class="faq reveal">
+    <details>
+      <summary>Does it work with my league app?</summary>
+      <div class="a">Any of them — Sleeper, ESPN, Yahoo, anything. You paste your
+      roster once (or pick names from a list) and we take it from there. No league
+      connection needed.</div>
+    </details>
+    <details>
+      <summary>Does it match my league's scoring?</summary>
+      <div class="a">Yes. PPR, half-PPR, or standard, plus your league size and lineup
+      shape (superflex included). Every number is computed under your settings.</div>
+    </details>
+    <details>
+      <summary>When does it arrive?</summary>
+      <div class="a">Tuesday morning, every week of the season — once the whole week's
+      games are in the books, days before your lineup locks. The first one lands
+      Tuesday, Sep 8.</div>
+    </details>
+    <details>
+      <summary>What if my roster changes mid-season?</summary>
+      <div class="a">Trades and pickups happen — reply to any file with your updated
+      roster and it follows from the next Tuesday.</div>
+    </details>
+    <details>
+      <summary>When do the numbers start?</summary>
+      <div class="a">Week 2 for the standard setup we've graded (full PPR, 12 teams,
+      the usual lineup) — leaning on last season at first, and saying so on each row.
+      Other setups start in Week 4 — which is after the Week-2 refund window closes,
+      so weigh that before you buy. Week 1 sets your lineup in last season's scoring
+      order; <a href="sample-first-week.html">here's exactly what that first file
+      looks like</a>, so nothing about your first Tuesday is a surprise.</div>
+    </details>
   </div>
 </section>
 
-<section class="alt">
-  <div class="wrap">
-    <div class="eyebrow">The fine print, up front</div>
-    <h2>What we will never do</h2>
-    <div class="trust">
-      <div><b>We don't touch betting</b>Straight analysis for your fantasy lineup — no
-      spreads, no props, no staking advice. Decisions stay yours; that's the fun part.</div>
-      <div><b>We can't lose what we never hold</b>We keep a roster, an email, and your
-      scoring settings. No password, no league login, and payments live with Stripe —
-      there's no account to breach because there's no account.</div>
-      <div><b>The grading rules froze before Week 1</b>Hit or miss is decided by rules
-      written into code before a single game, so the bar can't be softened after a
-      result. Every call we send you lands on <a href="ledger/index.html"
-      style="color:var(--flag);text-decoration:underline">the receipts page</a>, dated.</div>
-    </div>
-  </div>
-</section>
-
-<!-- The page ends on an ask, not a disclaimer. A visitor who read this far is
-     the warmest lead the page will ever hold. -->
 <section class="closer">
-  <div class="wrap" style="text-align:center">
-    <h2 style="margin-bottom:6px">The first file goes out Tuesday, Sep 8.</h2>
-    <p style="margin:0 auto 22px;max-width:520px">A season of calls you can check,
-    and the receipts to prove you made them.</p>
-    <div class="cta-row" style="justify-content:center">
-      <a class="btn gold" href="join/index.html">Set up your team</a>
-      <a class="btn ghost" href="sample-report.html">Read a real report</a>
-    </div>
+  <h2>The first file goes out Tuesday, Sep 8.</h2>
+  <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
+  <div class="cta-row" style="justify-content:center">
+    <a class="btn gold" id="closer-cta" href="#watch-form">Get launch access</a>
+    <a class="btn ghost" href="sample-report.html">See a real file</a>
   </div>
 </section>
 
 <footer>
-  <div class="wrap">
-    <b>Beat Your League</b> — the weekly scouting report for your fantasy roster —
-    one file, every Tuesday.<br>
-    Sample visuals above are real output from the 2024 NFL season, labeled where shown.
-    NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
-    settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
-    Not affiliated with the NFL. Fantasy decisions are yours to make.<br>
-    <a href="legal.html" style="color:var(--flag)">Terms, refunds &amp; privacy</a> ·
-    <a href="ledger/index.html" style="color:var(--flag)">The receipts</a> ·
-    <a href="backtest.html" style="color:var(--flag)">The full grading record</a> ·
-    <a href="compare/index.html" style="color:var(--flag)">Us vs. the field, honestly</a>
-  </div>
+  <b style="color:var(--dusk2)">Beat Your League</b> — the weekly scouting report for
+  your fantasy roster — one file, every Tuesday.<br>
+  Sample visuals above are real output from the 2024 NFL season, labeled where shown.
+  NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
+  settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
+  Not affiliated with the NFL.<br>
+  <a href="legal.html">Terms, refunds &amp; privacy</a> ·
+  <a href="ledger/index.html">The receipts</a> ·
+  <a href="backtest.html">Our grading record</a> ·
+  <a href="confidence.html">The number, graded</a> ·
+  <a href="projections.html">vs. free projections</a> ·
+  <a href="no-call.html">The "no call" rule</a> ·
+  <a href="compare/index.html">Us vs. the field</a>
 </footer>
+
+</div>
 
 <script type="application/ld+json">
 {
@@ -1079,17 +472,15 @@
       "@type": "FAQPage",
       "mainEntity": [
         {"@type": "Question", "name": "Does it work with my league app?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Any of them. We never connect to a league — you paste your roster as plain names, from Sleeper, ESPN, Yahoo, or a napkin. If you can copy it, we can read it."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Any of them — Sleeper, ESPN, Yahoo, anything. You paste your roster once (or pick names from a list) and we take it from there. No league connection needed."}},
         {"@type": "Question", "name": "Does it match my league's scoring?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Yes — you pick PPR, half-PPR, or standard, plus your league size and lineup shape (superflex included). Every number is computed under your settings."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR, or standard, plus your league size and lineup shape (superflex included). Every number is computed under your settings."}},
         {"@type": "Question", "name": "When does it arrive?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season — after Monday night's box score has been graded, before your lineup decisions are due."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season — once the whole week's games are in the books, days before your lineup locks."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and your file follows it from the next Tuesday."}},
-        {"@type": "Question", "name": "When does the public record start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "The first calls print in Week 2 for the standard setup we've graded — full PPR, 12 teams, the usual lineup — leaning on last season at first and saying so on each row. Other setups start in Week 4, once both players in a call have three games of record. Grading follows as soon as the games are final, so the record starts filling from mid-September. Week 1 itself carries no number: nobody has played, and there's no injury report to check anyone against."}},
-        {"@type": "Question", "name": "Why is there no win probability on my matchup?",
-         "acceptedAnswer": {"@type": "Answer", "text": "We only publish a number when our own testing says it holds up, and matchup win odds aren't there yet. The numbers you do see are the ones we're prepared to be graded on, in public."}}
+         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any file with your updated roster and it follows from the next Tuesday."}},
+        {"@type": "Question", "name": "When do the numbers start?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Week 2 for the standard setup we've graded (full PPR, 12 teams, the usual lineup) — leaning on last season at first, and saying so on each row. Other setups start in Week 4 — which is after the Week-2 refund window closes, so weigh that before you buy. Week 1 sets your lineup in last season's scoring order."}}
       ]
     }
   ]
@@ -1105,12 +496,13 @@ document.documentElement.classList.add("js");
 // the payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
 const CHECKOUT_OPEN = false;
-// The launch waitlist. One address, one message, when signups open. Point it at
-// a list backend and capture starts working with no other change. The pick is
-// Loops (free tier; documented keyless form endpoint a static page can POST
-// to): https://app.loops.so/api/newsletter-form/<FORM_ID>. Empty means the page
-// says so plainly rather than pretending to have recorded anything.
-const NOTIFY_LIST_ENDPOINT = "";
+// The launch waitlist. One address, one message, when signups open. It posts to
+// the same Cloudflare Worker that takes League Pass seats and roster updates
+// (infra/form-worker.js, kind "waitlist") — one backend for every form on the
+// site, and run/waitlist.py sends the single launch email from the list it
+// holds. Empty means the page says so plainly rather than pretending to have
+// recorded anything.
+const WAITLIST_ENDPOINT = "";
 // Where the FREE list lives. Must be a page that offers a no-card free option —
 // never the paid checkout URL, or the page would promise "free" and hand over a
 // $39 subscribe form. Empty means fall through to the mailto capture below.
@@ -1128,16 +520,22 @@ if (watchForm) {
       note.textContent = "That email doesn't look right.";
       return;
     }
-    if (NOTIFY_LIST_ENDPOINT) {
+    if (WAITLIST_ENDPOINT) {
       try {
-        const res = await fetch(NOTIFY_LIST_ENDPOINT, {
+        const res = await fetch(WAITLIST_ENDPOINT, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, list: "launch-notify" }),
+          body: JSON.stringify({ kind: "waitlist", email: email }),
+          signal: AbortSignal.timeout(15000),
         });
         if (!res.ok) throw new Error(String(res.status));
         note.textContent = "You're on the list. One email when signups open, nothing else.";
-        return;
-      } catch (err) { /* fall through to the paths below */ }
+      } catch (err) {
+        // A failed request is a failed request — falling through to the
+        // "isn't wired up" message below would explain it with a falsehood.
+        note.textContent = "That didn't send — check your connection and try " +
+          "again. Nothing was recorded.";
+      }
+      return;
     }
     if (LEDGER_FREE_URL) {
       note.textContent = "Opening the free signup page…";
@@ -1162,14 +560,21 @@ if (watchForm) {
 // as Stripe's client_reference_id). A CTA that jumps a buyer to checkout
 // directly takes their money and leaves us with no idea whose team to report on.
 if (CHECKOUT_OPEN) {
-  // The hero's paid CTA exists in the markup and unhides here, so a closed
-  // checkout never dangles a button that dead-ends after a full roster paste.
   const heroOpen = document.getElementById("hero-open");
   if (heroOpen) heroOpen.hidden = false;
-  const founder = document.querySelector("[data-checkout]");
-  if (founder) {
-    founder.href = "join/index.html";
-    founder.textContent = "Get the season pass — $39";
+  const nav = document.getElementById("nav-cta");
+  if (nav) {
+    nav.href = "join/index.html";
+    nav.textContent = "Set up my team";
+  }
+  const season = document.getElementById("season-cta");
+  if (season) {
+    const link = document.createElement("a");
+    link.className = "btn gold";
+    link.style.marginTop = "16px";
+    link.href = "join/index.html";
+    link.textContent = "Get the season pass — $39";
+    season.replaceWith(link);
   }
   const monthly = document.getElementById("monthly-cta");
   if (monthly) {
@@ -1181,6 +586,43 @@ if (CHECKOUT_OPEN) {
     link.textContent = "Subscribe monthly";
     monthly.replaceWith(link);
   }
+  const closerCta = document.getElementById("closer-cta");
+  if (closerCta) {
+    closerCta.href = "join/index.html";
+    closerCta.textContent = "Set up my team";
+  }
+  const closerNote = document.getElementById("closer-note");
+  if (closerNote) {
+    closerNote.textContent =
+      "Set up takes about two minutes — your file lands every Tuesday morning.";
+  }
+  // The closed-state copy must not survive the flip: the capture promised "one
+  // email when signups open" (that email has gone out) and the finance line
+  // said "setting up today saves nothing yet" (it saves everything now — the
+  // roster rides into checkout). False copy on launch morning is the one day
+  // this page cannot afford it.
+  for (const id of ["watch-form", "watch-note"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+  const heroline = document.querySelector(".heroline");
+  if (heroline) {
+    heroline.replaceChildren();
+    heroline.textContent = "Checkout is open — set up your team and your first " +
+      "file lands Tuesday morning.";
+  }
+  const finance = document.getElementById("finance-note");
+  if (finance) {
+    const passLink = finance.querySelector("a");
+    finance.textContent = "Payment runs on Stripe's own page — your roster and " +
+      "scoring ride into checkout with you, and the founding rate is locked in " +
+      "for every renewal. Running the league? ";
+    if (passLink) {
+      passLink.textContent = "One payment can cover every team";
+      finance.appendChild(passLink);
+      finance.appendChild(document.createTextNode("."));
+    }
+  }
 }
 
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1191,9 +633,12 @@ if (!reduced && "IntersectionObserver" in window) {
       if (entry.isIntersecting) { entry.target.classList.add("in"); io.unobserve(entry.target); }
     }
   }, { threshold: 0.15 });
-  targets.forEach((el) => io.observe(el));
+  targets.forEach((t) => io.observe(t));
+  // Failsafe: content must never STAY hidden. If the observer misfires for
+  // any reason, everything reveals on its own within moments.
+  setTimeout(() => targets.forEach((t) => t.classList.add("in")), 1400);
 } else {
-  targets.forEach((el) => el.classList.add("in"));
+  targets.forEach((t) => t.classList.add("in"));
 }
 </script>
 </body>
