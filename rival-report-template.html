@@ -202,6 +202,12 @@
   .tcall{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
     text-align:right;font-variant-numeric:tabular-nums;color:var(--turf);}
   .tcall .tsub{display:inline;font-family:var(--sans);font-weight:600;}
+  /* The numeral drawn: the same bar the Regret Score uses, scaled to a row.
+     The fill IS the percentage — no rescaling, or the picture and the number
+     would disagree about the same call. */
+  .tcall .cbar{display:block;height:4px;background:#EAE7DE;margin-top:5px;
+    border-radius:2px;overflow:hidden;}
+  .tcall .cbar i{display:block;height:100%;background:var(--turf);}
   .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
   .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
   .ttotal td{border-top:2px solid var(--navy);background:#F2F0E8;

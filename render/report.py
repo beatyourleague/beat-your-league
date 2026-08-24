@@ -569,7 +569,12 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
         flags = [f["text"] for f in (slot.get("flags") or [])]
         confidence = slot.get("confidence")
         if confidence is not None:
-            call = f'<b>{_pct(confidence)}%</b>'
+            # The bar draws the numeral it sits under — same width, same
+            # number — so a reader who skims sees the same call a reader who
+            # reads does. Grade C: still a recorded prediction, not accuracy.
+            call = (f'<b>{_pct(confidence)}%</b>'
+                    f'<span class="cbar"><i style="width:{_pct(confidence)}%">'
+                    f'</i></span>')
         elif mixed and slot.get("player_name"):
             call = (f'<span class="tsub">'
                     f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
