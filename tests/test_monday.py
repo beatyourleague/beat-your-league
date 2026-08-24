@@ -401,3 +401,114 @@ def test_a_lost_duplicate_row_is_still_a_loss(tmp_path) -> None:
     with pytest.raises(monday.MondayError, match="would disappear"):
         monday.guard_shrink([row], out)
     monday.guard_shrink([row, dict(row)], out)          # unchanged: fine
+
+
+def test_the_public_record_shows_which_setup_decided_each_call() -> None:
+    """public_entries has carried `scoring` and `league_size` since the store
+    split, and its docstring says exactly why — "without the preset the two
+    render as identical duplicate rows" — but _row never displayed either, so
+    they rendered as identical duplicate rows.
+
+    The picker offers 3 scoring presets x 4 league sizes, so ONE real
+    head-to-head can publish as up to 12 rows on the public page, all decided
+    by one game, with nothing telling them apart. A reader counting rows would
+    read twelve pieces of evidence where there is one. Found Aug 24 2026."""
+    from render.ledger_site import _row
+
+    base = dict(season="2024", week=10, slot="WR", pick="Ja'Marr Chase",
+                over="Courtland Sutton", status="graded", outcome="hit",
+                margin=36.4, void_reason=None, regret=False)
+    ppr = _row({**base, "scoring": "ppr", "league_size": 12, "confidence": 0.647})
+    std = _row({**base, "scoring": "standard", "league_size": 8, "confidence": 0.632})
+    assert "PPR" in ppr and "12-team" in ppr
+    assert "Standard" in std and "8-team" in std
+    assert ppr != std, "two cohorts' rows are still indistinguishable"
+    # A pre-split store carries neither and must not render "None".
+    old = _row({**base, "scoring": None, "league_size": None, "confidence": 0.6})
+    assert "None" not in old
+
+
+def test_the_public_record_does_not_sell_a_rival_the_product_has_not_got() -> None:
+    """The generator closed every Monday republish with "Your league's version
+    starts when you pick a rival" above a "Pick your rival" button. The product
+    reads no league and has no rival (PLAN §0), and the join page it points at
+    contains the word only in a leftover CSS class. The landing links this page
+    twice as its proof asset, so the funnel routed a skeptical buyer here and
+    then promised what the destination cannot deliver — verbatim the failure
+    test_the_funnel_never_promises_what_the_product_cannot_see exists to catch,
+    on the one page that test does not cover."""
+    import re
+    from render.ledger_site import render_ledger
+    from engine.ledger import ledger_summary
+
+    page = render_ledger([], ledger_summary([]))
+    prose = re.sub(r"<[^>]+>", " ", page)
+    for banned in ("rival", "opponent", "waiver"):
+        assert banned not in prose.lower(), \
+            f"the public record promises {banned!r}, which this product cannot see"
+
+
+def test_one_unreadable_store_does_not_stop_the_others(tmp_path, capsys) -> None:
+    """load_ledger -> _collapse raises when a call_id carries two different
+    graded outcomes, and nothing caught it: the process died partway through
+    the store loop, stores sorted after the poisoned one were never graded,
+    and the public page was never regenerated.
+
+    That duplicate is an ANTICIPATED state, not a freak one — .gitattributes
+    sets merge=union on the ledger so a Monday/Tuesday push race concatenates
+    instead of conflicting, which is the very thing _collapse resolves. So its
+    unresolvable case meant a total outage recurring every Monday until a human
+    hand-edited a JSONL, while new pending calls piled up behind it.
+
+    Contained, but never swallowed: the run still goes red so the cron files
+    its issue. A store nobody can read is calls that will never settle."""
+    import run.monday as monday
+    from engine.ledger import GRADED, LedgerCall, ledger_path, record_calls
+
+    def call(store, cid, outcome):
+        return LedgerCall(
+            call_id=cid, source="slot", league_id=store, season="2024", week=10,
+            roster_id=1, slot="WR", pick_id="p", pick_name="Pick",
+            over_id="o", over_name="Over", confidence=0.65,
+            recorded_at="2024-11-05T12:00:00+00:00", status=GRADED,
+            outcome=outcome, pick_points=20.0, over_points=5.0,
+            graded_at="2024-11-12T12:00:00+00:00")
+
+    good = "typed-ppr-12-2024"
+    bad = "typed-standard-12-2024"       # sorts BEFORE the good one
+    record_calls(ledger_path(tmp_path, good), [call(good, "g1", "hit")])
+    # Two different graded outcomes for one call_id — what merge=union can make.
+    path = ledger_path(tmp_path, bad)
+    record_calls(path, [call(bad, "x1", "hit")])
+    with path.open("a", encoding="utf-8") as handle:
+        import dataclasses, json
+        handle.write(json.dumps(dataclasses.asdict(call(bad, "x1", "miss"))) + "\n")
+
+    code = monday.main(["--processed-dir", str(tmp_path), "--dry-run",
+                        "--out", str(tmp_path / "site")])
+    out = capsys.readouterr()
+    assert good in out.out, "a readable store was skipped because another was not"
+    assert "UNREADABLE" in out.err
+    assert code == 1, "an unreadable store must still turn the run red"
+
+
+def test_a_stuck_call_is_reported_even_when_nothing_new_is_recorded() -> None:
+    """Staleness was max(week of any call this season) - call.week, so it only
+    grew while the TUESDAY run kept recording. Every situation that actually
+    strands calls also stops recording — a broken send cron, total churn, the
+    end of the season — so those calls stayed "0 weeks old" and were never
+    reported. Week 17-18 calls were structurally unreportable. That is exactly
+    the silence the alarm exists to break."""
+    from run.monday import _weeks_old
+
+    class _C:
+        def __init__(self, season, week):
+            self.season, self.week = season, week
+
+    stranded = _C("2024", 10)
+    calls = [stranded]                     # nothing newer ever recorded
+    assert _weeks_old(stranded, calls) == 0, "the old ledger-relative behaviour"
+    # Against the calendar it is correctly six weeks old.
+    assert _weeks_old(stranded, calls, now_week=16, now_season="2024") == 6
+    # A different season falls back rather than subtracting across seasons.
+    assert _weeks_old(stranded, calls, now_week=3, now_season="2025") == 0

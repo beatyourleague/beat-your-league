@@ -559,14 +559,29 @@ def _grade_locked(path: Path, sources: "_Sources") -> tuple[int, int]:
 # summaries — the numbers every public surface cites
 # --------------------------------------------------------------------- #
 
-def load_all_ledgers(processed_dir: Path) -> list[LedgerCall]:
+def load_all_ledgers(processed_dir: Path,
+                     unreadable: list[str] | None = None) -> list[LedgerCall]:
     """Every league's ledger, combined — the public page must reflect every
-    published call, not just the configured league's."""
+    published call, not just the configured league's.
+
+    One unreadable store used to raise here and abort the caller, which for
+    run/monday.py meant the whole grading run died and the public page was
+    never regenerated. Pass ``unreadable`` to collect the failures instead:
+    the caller reports them and goes red, but every OTHER store still grades
+    and the record still publishes. One store's problem must not become every
+    store's. (Without the list the old raising behaviour is kept, so nothing
+    silently starts swallowing errors.)
+    """
     root = Path(processed_dir) / "ledger"
     calls: list[LedgerCall] = []
     if root.is_dir():
         for path in sorted(root.glob("*/calls.jsonl")):
-            calls.extend(load_ledger(path))
+            try:
+                calls.extend(load_ledger(path))
+            except Exception as exc:  # noqa: BLE001
+                if unreadable is None:
+                    raise
+                unreadable.append(f"{path.parent.name}: {exc}")
     return calls
 
 

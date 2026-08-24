@@ -39,9 +39,22 @@ def _row(entry: Mapping[str, Any]) -> str:
     else:
         result = "—"
     regret = ' <span class="tag">regret call</span>' if entry.get("regret") else ""
+    # The SETUP the call was made under. public_entries has carried `scoring`
+    # and `league_size` since the store split, and its docstring says why —
+    # "without the preset the two render as identical duplicate rows" — but
+    # this renderer never displayed either, so they rendered as identical
+    # duplicate rows. The picker offers 3 presets x 4 sizes, so one real
+    # head-to-head can publish as up to 12 rows, all decided by one game, with
+    # nothing on the page telling them apart. Found Aug 24 2026.
+    setup = " · ".join(str(v) for v in (
+        {"ppr": "PPR", "half_ppr": "Half PPR", "standard": "Standard"}.get(
+            str(entry.get("scoring")), entry.get("scoring")),
+        f'{entry["league_size"]}-team' if entry.get("league_size") else None,
+    ) if v and v != "None")
     return (
         f'<tr class="{klass}"><td>{esc(entry["season"])} · W{esc(entry["week"])}</td>'
         f'<td>{esc(entry["slot"])}</td>'
+        f'<td class="setup">{esc(setup) if setup else "—"}</td>'
         f'<td><b>{esc(entry["pick"])}</b> over {esc(entry["over"])}{regret}</td>'
         f'<td class="num">{entry["confidence"]:.0%}</td>'
         f'<td class="stamp-{klass}">{esc(str(outcome).upper())}</td>'
@@ -77,7 +90,8 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
             '<h2>Every call, in the open</h2>'
             '<p class="note">Recorded the moment it was published, graded when the games went '
             'final, never edited after. Voids are shown, not hidden.</p>'
-            '<div style="overflow-x:auto"><table><tr><th>Week</th><th>Slot</th><th>The call</th>'
+            '<div style="overflow-x:auto"><table><tr><th>Week</th><th>Slot</th>'
+            '<th>Setup</th><th>The call</th>'
             '<th class="num">Stated</th><th>Result</th><th class="num">Margin</th></tr>'
             + "".join(_row(e) for e in entries) + "</table></div>"
         )
@@ -163,11 +177,11 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
   <main>{body}</main>
   <div style="padding:24px 28px;border-top:3px double var(--line);text-align:center;">
     <p style="margin:0 0 12px;font-size:15px;">Every row is a call we actually sent,
-    recorded before kickoff and graded in the open. Your league's version starts when
-    you pick a rival.</p>
+    recorded before kickoff and graded in the open. Yours start the week you set
+    up your team.</p>
     <a href="../join/index.html" style="display:inline-block;background:var(--turf);color:#fff;
       text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
-      letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Pick your rival</a>
+      letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up my team</a>
   </div>
   <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not picks. No betting
   content, no staking advice. Page generated {esc(stamp)} · league identities of subscribers

@@ -42,8 +42,22 @@ PROCESSED_DIR = REPO_ROOT / "data" / "processed"
 STALE_AFTER_WEEKS = 2
 
 
-def _weeks_old(call, calls) -> int:
-    """How many weeks the record has moved on past this call's own week."""
+def _weeks_old(call, calls, now_week: int | None = None,
+               now_season: str | None = None) -> int:
+    """How many weeks have passed since this call's own week.
+
+    Measured against the CALENDAR, with the ledger's newest week only as a
+    fallback. Keying it off the ledger alone made the alarm silence itself in
+    exactly the situations that strand calls: staleness was
+    max(week of any call this season) - call.week, which only grows while the
+    TUESDAY run keeps recording. A broken send cron, every subscriber churning,
+    or simply the end of the season all stop `latest` advancing, so calls that
+    nothing can ever settle stayed at 0 weeks old and were never reported —
+    the precise silence this alarm was added to break. Week 17-18 calls were
+    structurally unreportable. Found Aug 24 2026.
+    """
+    if now_season is not None and now_week is not None and str(call.season) == str(now_season):
+        return now_week - call.week
     latest = max((c.week for c in calls if c.season == call.season), default=call.week)
     return latest - call.week
 
@@ -134,27 +148,56 @@ def main(argv: list[str] | None = None) -> int:
 
     total_graded = 0
     total_pending = 0
+    unreadable: list[str] = []
     for league_id in stores:
         path = ledger_path(args.processed_dir, league_id)
-        before = load_ledger(path)
+        # One unreadable store used to abort the WHOLE run: load_ledger ->
+        # _collapse raises when a call_id carries two different graded
+        # outcomes, nothing caught it, and stores sorted after the poisoned one
+        # were never graded while the public page was never regenerated. That
+        # duplicate is an ANTICIPATED state — .gitattributes deliberately sets
+        # merge=union on the ledger so a Monday/Tuesday push race concatenates
+        # instead of conflicting, which is exactly what _collapse exists to
+        # resolve — so its unresolvable case recurring every Monday until a
+        # human hand-edits a JSONL is a total outage from a routine event.
+        # One store's problem must not become every store's. Found Aug 24 2026.
+        try:
+            before = load_ledger(path)
+        except Exception as exc:  # noqa: BLE001
+            unreadable.append(f"{league_id}: {exc}")
+            print(f"  {league_id}: UNREADABLE — {exc}", file=sys.stderr)
+            continue
         if args.dry_run:
             pending = sum(1 for c in before if c.status == PENDING)
             print(f"  {league_id}: {len(before)} call(s), {pending} pending")
             total_pending += pending
             continue
-        graded, pending = grade_ledger_nflverse(path, args.cache)
+        try:
+            graded, pending = grade_ledger_nflverse(path, args.cache)
+        except Exception as exc:  # noqa: BLE001 — same containment rule
+            unreadable.append(f"{league_id}: {exc}")
+            print(f"  {league_id}: GRADING FAILED — {exc}", file=sys.stderr)
+            continue
         total_graded += graded
         total_pending += pending
         print(f"  {league_id}: {graded} settled this run, {pending} still pending "
               f"({len(before)} recorded)")
 
-    calls = load_all_ledgers(args.processed_dir)
+    calls = load_all_ledgers(args.processed_dir, unreadable)
     # A call that stays PENDING long after its games is not "waiting for Monday
     # Night Football" — it is a call nothing can settle (a player whose team we
     # cannot resolve, a week whose box scores never landed), and the failure
     # mode is silence: it simply never appears on the record. Say so.
+    # The real clock. current_season/current_week come from the schedule
+    # release, so they keep advancing when the ledger does not.
+    try:
+        from run.solo import current_season, current_week
+        _season = str(current_season(args.cache))
+        _week = int(current_week(args.cache, _season))
+    except Exception:                       # noqa: BLE001 — a cold cache
+        _season, _week = None, None
     stale = [c for c in calls if c.status == PENDING
-             and _weeks_old(c, calls) >= STALE_AFTER_WEEKS]
+             and _weeks_old(c, calls, _week, _season) >= STALE_AFTER_WEEKS]
     if stale:
         by_week = sorted({(c.season, c.week) for c in stale})
         print(f"  {len(stale)} call(s) still pending {STALE_AFTER_WEEKS}+ weeks "
@@ -178,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print("(dry run — nothing graded, nothing published)")
         print(line)
-        return 0
+        return 1 if unreadable else 0
 
     entries = public_entries(calls)
     try:
@@ -194,6 +237,17 @@ def main(argv: list[str] | None = None) -> int:
         # an empty page over a good one is exactly what guard_shrink prevents.
         print("Nothing settled yet — the public page is left as it stands.")
     print("LLM tokens this run: 0 (deterministic layer only)")
+    unreadable = sorted(set(unreadable))
+    if unreadable:
+        # Contained, never swallowed. Every other store still graded and the
+        # record still published, but a store nobody can read is calls that
+        # will never settle, so the run goes red and the cron files its issue.
+        print(f"{len(unreadable)} ledger store(s) could not be read or graded; "
+              f"their calls cannot settle until a human looks:", file=sys.stderr)
+        for note in unreadable:
+            print(f"  ! {note}", file=sys.stderr)
+        print(line)
+        return 1
     print(line)
     return 0
 
