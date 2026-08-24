@@ -578,6 +578,21 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The first file is published too (`site/sample-first-week.html`, Aug 23 2026 — shipped in the
+same commit as the review fixes, which its message does not name).** A buyer decides on the
+mid-season sample and then receives a WEEK ONE file, which by design carries no number
+anywhere: no week-0 injury report exists, so nothing is confirmable and nothing prints. That
+gap between what sold and what arrives is a Week-2 refund with a stamp on it. Both samples are
+built by `make sample` through the real pipeline from the same pinned roster, they link each
+other, and the week-1 page shows what it actually is — the lineup seated in last season's
+scoring order with the figure behind every row, and the checklist naming when numbers start
+(next week for the measured scope, Week 4 otherwise). Note it seats a DIFFERENT lineup than
+week 10 (LaPorta over Kittle, Ravens over Broncos) because the ordering is last season's
+per-appearance scoring, which is the honest week-1 answer. Fixed alongside: `TEAM_RANGE_GATE`
+still said "your league hasn't played its first games" — written for the product that read a
+league, and a sentence implying we can see theirs is the same wrong-reason failure the
+constant beside it exists to avoid.
+
 **The proof page published the one table that may never be shown as accuracy (Aug 23 2026).**
 `render/backtest_site.py` drew its calibration chart for every table whose header row matched —
 and the source has TWO, so `site/backtest.html`, linked from the landing and four evidence
