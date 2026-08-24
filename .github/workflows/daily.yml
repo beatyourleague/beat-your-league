@@ -75,6 +75,29 @@ jobs:
           .venv/bin/python -m run.intake
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
+      # The pre-renewal notice (Cal. B&P §17602(b) and a promise this site
+      # makes in seven places). The window is 15-45 days wide, so a missed day
+      # costs nothing and the send log makes a duplicate impossible. Runs even
+      # if the sweep above failed: a Stripe hiccup during intake must not also
+      # swallow somebody's legally-owed notice.
+      - name: Send pre-renewal notices
+        if: always()
+        id: renewals
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+        run: |
+          set +e
+          .venv/bin/python -m run.renewals --send
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
@@ -105,6 +128,13 @@ jobs:
         run: |
           echo "run.intake exited 1 — a paid signup is blocked, or Stripe could"
           echo "not be read. See the sweep step's log."
+          exit 1
+      # Exit 2 is "STRIPE_API_KEY unset", the expected pre-launch state.
+      - name: Fail the run if a renewal notice could not be sent
+        if: always() && steps.renewals.outputs.code == '1'
+        run: |
+          echo "run.renewals exited 1 — a legally-owed pre-renewal notice was"
+          echo "not sent. See that step's log."
           exit 1
       - name: Raise an issue if the sweep failed
         if: failure()

@@ -578,6 +578,26 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The pre-renewal notice, built (`render/renewal.py` + `run/renewals.py`, Aug 23 2026) — the
+last outstanding legal-floor gap.** Seven places across five surfaces promise "we email you
+before it bills", and Cal. B&P §17602(b) requires it 15–45 days before any renewal of a year or
+longer, naming the renewal, the amount and how to cancel. It was promised at the point of sale
+and kept nowhere, which is deceptive from the first sale — so it exists before the first renewal
+cycle rather than after it. Three recipient rules, each mutation-tested, and they are the whole
+compliance surface:
+- **A subscription set to cancel is never told it will renew.** It is ending; "we are about to
+  charge you $39" is a false statement about somebody's money, the worst kind to send.
+- **Monthly gets no annual notice.** It bills monthly and stops on its own at season's end; the
+  statute does not reach it and the notice would describe a charge that is not coming.
+- **The amount and date come from STRIPE, never from our price constants.** A founding
+  subscriber renews at the rate they joined at (legal §3), which the constants do not know, so a
+  subscription we cannot price is one we do not notify — reported, never guessed.
+Keyed on the renewal DATE (`renewal-{date}-{slug}`), so a re-run inside the 15–45 day window
+sends nothing twice and next year's renewal still gets its own notice. Rides `daily.yml` with
+`if: always()` — a Stripe hiccup during intake must not swallow a legally-owed notice — and
+`--send` is opt-in like every other sender here. Nothing to configure beyond the secrets that
+already exist; before checkout opens it exits 2 and says so.
+
 **The first file is published too (`site/sample-first-week.html`, Aug 23 2026 — shipped in the
 same commit as the review fixes, which its message does not name).** A buyer decides on the
 mid-season sample and then receives a WEEK ONE file, which by design carries no number
@@ -743,9 +763,7 @@ that undermines the sale unless the law mandates it. What it found and what chan
   wrong under CalOPPA) — rewritten and pinned. The join page's renewal terms lived only in the
   post-submit block the paid flow never shows (ROSCA/CA ARL want them at the point of
   consent) — now a plan-aware `#terms-line` above the button, seat mode hidden. Legal §3 now
-  backs the "founding rate locked for every renewal" pitch. **Still owed, not built:** the
-  pre-renewal reminder email promised on five surfaces (CA B&P §17602(b), 15–45 days before an
-  annual renewal) — needed before Aug 2027, not before launch.
+  backs the "founding rate locked for every renewal" pitch.
 - **Sample report polish found by the cold read:** `-0.0 over` (dead heat now says "even
   with"), per-row no-call reasons (`short_gate`: "no call · no bench QB" instead of one pooled
   line), replay-aware provenance ("Rebuilt … from the 2024 season archive" and the injury line

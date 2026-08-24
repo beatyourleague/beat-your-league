@@ -244,3 +244,24 @@ def test_the_weekly_intake_step_can_send_welcomes_too() -> None:
     intake = next(s for s in steps if s.get("id") == "intake")
     env = intake.get("env") or {}
     assert "EMAIL_PROVIDER" in env and "BILLING_PORTAL_URL" in env
+
+
+def test_the_daily_cron_sends_the_promised_pre_renewal_notice() -> None:
+    """Seven surfaces promise "we email you before it bills", and California
+    requires it 15-45 days before any yearly renewal. A module that nothing
+    runs keeps that promise exactly as well as no module at all, so the send
+    is pinned to the cron — and pinned to run even when the signup sweep
+    above it failed, because a Stripe hiccup during intake must not also
+    swallow somebody's legally-owed notice."""
+    assert "run.renewals --send" in _commands("daily.yml"), \
+        "nothing runs the pre-renewal notice"
+    step = next(s for s in _steps("daily.yml")
+                if "run.renewals" in str(s.get("run", "")))
+    assert step.get("if") == "always()", \
+        "the notice is skipped whenever an earlier step fails"
+    for secret in ("STRIPE_API_KEY", "EMAIL_PROVIDER", "BILLING_PORTAL_URL"):
+        assert secret in str(step.get("env", {})), \
+            f"the notice step cannot see {secret}"
+    # A failure is surfaced, and exit 2 (no Stripe key yet) is not a failure.
+    text = _text("daily.yml")
+    assert "steps.renewals.outputs.code == '1'" in text
