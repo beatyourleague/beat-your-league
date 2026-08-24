@@ -98,6 +98,13 @@ jobs:
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
 
+      # The reply kit: the day's defensible numbers, all of them from the
+      # public record. Cheap, deterministic, and the one growth channel that
+      # runs without the owner writing anything from scratch.
+      - name: Draft the daily reply kit
+        if: always()
+        run: .venv/bin/python -m run.posts replykit
+
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
@@ -113,6 +120,13 @@ jobs:
       # sent.jsonl is the only record of who was welcomed. Losing it means
       # double-welcoming everyone; merge=union (.gitattributes) keeps the
       # push race with the other crons a concatenation, not a conflict.
+      - name: Upload the day's reply kit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reply-kit
+          path: content/
+          if-no-files-found: warn
       - name: Persist the send log
         if: always()
         run: |

@@ -265,3 +265,24 @@ def test_the_daily_cron_sends_the_promised_pre_renewal_notice() -> None:
     # A failure is surfaced, and exit 2 (no Stripe key yet) is not a failure.
     text = _text("daily.yml")
     assert "steps.renewals.outputs.code == '1'" in text
+
+
+def test_the_public_drafts_run_on_the_record_that_was_just_settled() -> None:
+    """PLAN's Sep 8-15 item: the content system exists and, until it was
+    ported, drafted from a Sleeper league — so it produced nothing for the
+    product that ships. Monday grades and then drafts; the daily cron writes
+    the reply kit. Both upload content/ as an artifact rather than posting
+    anything: a human edits voice and approves (PLAN §5)."""
+    monday, daily = _commands("monday.yml"), _commands("daily.yml")
+    assert "run.posts all" in monday, "Monday grades but drafts nothing"
+    assert "run.posts replykit" in daily, "no daily reply kit"
+    # Drafting comes AFTER settlement — a draft of an ungraded record is a
+    # post about games that have not finished.
+    assert monday.index("run.monday") < monday.index("run.posts")
+    # The drafts reach a human, and nothing here posts to a channel.
+    for name in ("monday.yml", "daily.yml"):
+        paths = "\n".join(str(s.get("with", {}).get("path", ""))
+                          for s in _steps(name))
+        assert "content/" in paths, f"{name} does not upload the drafts"
+    assert "run.content" not in monday + daily, \
+        "the Sleeper-rooted drafting path is back in a cron"

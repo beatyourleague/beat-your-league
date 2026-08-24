@@ -1,4 +1,21 @@
-"""Phase 5: draft the public content formats from graded data.
+"""RETIRED: Phase 5 drafting for the Sleeper league product.
+
+**This module drafts from a data stack the product no longer runs.** It reads
+a league's history, its transaction log and its managers' behaviour, none of
+which exist under PLAN §0 — so it produces nothing for the shipping product
+and no cron or Make target invokes it. The live path is ``run/posts.py``,
+which drafts Receipts Monday, Coin-Flip Friday and the reply kit from the
+public ledger alone; Hype Wednesday did not survive the move, because it
+ranked waiver chases out of the transaction log and drafting it from anything
+else would mean inventing the number it reports.
+
+Kept, unedited, for the same reason ``reports/backtest.md`` is kept: it is
+what the earlier product did, and deleting the record of that is worse than
+labelling it.
+
+Original docstring follows.
+
+Phase 5: draft the public content formats from graded data.
 
 Usage:
     python -m run.content receipts [--league ID] [--week N]

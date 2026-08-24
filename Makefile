@@ -31,8 +31,13 @@ backtest-early:
 backtest-retired:
 	$(PY) -m engine.backtest --league $(RETIRED_LEAGUE)
 
+# The public drafts, from the graded record (run/posts.py). `make content`
+# used to run run/content.py, which drafts from a Sleeper league and so
+# produces nothing for the product that ships — pointing the target at the
+# live path is what stops somebody generating league-flavoured drafts for a
+# product that has no league.
 content:
-	$(PY) -m run.content all
+	$(PY) -m run.posts all
 
 # Turn completed payments into the subscriber registry. Needs STRIPE_API_KEY.
 sync:
@@ -118,8 +123,11 @@ sample:
 index:
 	$(PY) -m render.player_index --season $(SEASON)
 
+# Grade first, then draft: a Receipts post written before settlement is a
+# post about games that have not finished.
 receipts:
-	$(PY) -m run.content receipts
+	$(PY) -m run.monday
+	$(PY) -m run.posts receipts
 
 test:
 	$(PY) -m pytest tests/ -q

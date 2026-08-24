@@ -64,6 +64,15 @@ jobs:
           restore-keys: nflverse-
       - name: Grade the ledger and republish the record
         run: .venv/bin/python -m run.monday
+      # The public drafts, from the record the step above just settled — and
+      # ONLY from it: run/posts.py cannot reach a subscriber's file. Never
+      # posted automatically; a human edits voice and approves (PLAN §5), so
+      # these ride the artifact rather than any outbound channel. Runs even if
+      # grading exited non-zero: last week's settled calls are still worth
+      # drafting from, and the failure is reported by its own step below.
+      - name: Draft the public posts
+        if: always()
+        run: .venv/bin/python -m run.posts all
       - name: Save nflverse cache
         if: always()
         uses: actions/cache/save@v4
@@ -75,11 +84,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: receipts-monday
-          # content/ is gone from this list: it is written by run.content,
-          # which is the Sleeper-rooted drafting path this cron no longer runs.
-          # The content drafts are a separate job to rebuild on the roster
-          # stack; leaving a dead path here would quietly thin the artifact.
+          # content/ is back: run/posts.py rebuilt the drafts on the roster
+          # product's own record (run/content.py was Sleeper-rooted and
+          # produced nothing here). Drafts are for a human to edit before
+          # posting, so the artifact is where they go.
           path: |
+            content/
             site/ledger/
             data/processed/ledger/
           if-no-files-found: warn

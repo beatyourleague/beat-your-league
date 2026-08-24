@@ -578,6 +578,31 @@ The full rewrite, grounded in the six-lens launch research:
   links, price-in-hero. The landing's proof figures now quote the solo sample verbatim
   ("Start Tony Pollard over Chase Brown — 50%, proj 11.2 vs 11.2") and the quote test pins them.
 
+**The public content feed, ported (`run/posts.py`, Aug 24 2026) — PLAN's Sep 8–15 item.**
+`run/content.py` drafts Receipts Monday, Hype Wednesday, Coin-Flip Friday and the reply kit —
+from a Sleeper league's history, transaction log and manager behaviour, so it produced NOTHING
+for the product that ships. This is the cheapest marketing the plan has (deterministic, zero
+LLM spend, one artifact a week), and it was dead. Porting forced three decisions:
+- **One source: the public ledger.** In the league product the drafts drew on the OWNER's own
+  team. There is no owner team here — there are subscribers, and their files are private, so a
+  post quoting one would publish the roster they paid us to keep. `run/posts.py` reads the
+  anonymised ledger and nothing else; `run.rosters`, `run.tuesday`, `engine.solo_report` and
+  the rest are unreachable from it, pinned by an import walk (not a grep — a dependency comes
+  back through something it imports).
+- **Hype Wednesday is GONE, not ported.** It ranked waiver chases out of the transaction log;
+  no league means no log, no FAAB, no chase, and drafting it from anything else would invent
+  the number the post exists to report. The runner says so in its own output rather than
+  leaving the absence to be discovered.
+- **Nothing here grades.** `run/monday.py` owns settlement; the drafts READ what it settled,
+  and a pending call is never quoted (that is a claim about a game that has not finished).
+  Monday grades then drafts, in that order, pinned.
+Scoped to `typed-*` stores, because the processed directory also holds Sleeper-era ledgers and
+without the scope a retired product's graded calls would publish as this product's receipts,
+with an empty scoring column where the preset should be. `make content` and `make receipts`
+point at the live path — leaving them on the dead one is how somebody generates
+league-flavoured drafts for a product with no league — and `run/content.py` keeps its code
+under a header saying what it is, the same treatment `reports/backtest.md` gets.
+
 **The pre-renewal notice, built (`render/renewal.py` + `run/renewals.py`, Aug 23 2026) — the
 last outstanding legal-floor gap.** Seven places across five surfaces promise "we email you
 before it bills", and Cal. B&P §17602(b) requires it 15–45 days before any renewal of a year or
