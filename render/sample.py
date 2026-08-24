@@ -19,9 +19,12 @@ unless the product computed it.
 The roster is FIXED and documented so the page is reproducible: well-known
 2024 players a visitor will recognize, in the product's default 12-team PPR
 shape, at week 10 — far enough into a season that form, usage and confidences
-all publish, with the QB, K and DEF rows honestly reading "no call" (no bench
-alternative; defenses ungraded), which is the mixed week the real product
-ships.
+all publish. That makes it the mixed week the real product ships: three slots
+carry a number, three carry an explained hold ("status unconfirmed"), and the
+QB, K and DEF rows carry none at all, because their reason is STRUCTURAL (no
+bench alternative; defenses ungraded) and lives in the note under the table
+rather than on a row that would repeat it every week — see
+render.report.is_structural_gate.
 """
 
 from __future__ import annotations

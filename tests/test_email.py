@@ -8,6 +8,7 @@ honesty rules are inherited — these tests pin the email-specific surface.
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
@@ -178,6 +179,69 @@ def test_a_gated_row_says_why_in_its_own_cell() -> None:
     assert short_gate("availability in doubt (questionable)", "WR") \
         == "no call · status unconfirmed"
     assert short_gate(None, "K") == "no call"
+
+
+def test_a_structural_hold_does_not_spend_a_row_on_any_surface() -> None:
+    """Owner decision, Aug 24 2026 — separate the grid from the calls.
+
+    A STRUCTURAL gate is a permanent fact about the roster's shape (no backup
+    QB, no backup K, defenses ungraded): it prints identically every week and
+    carries nothing after the first read. A CONTINGENT gate ("status
+    unconfirmed") is the honesty feature working — we could have called this
+    slot and held back for a reason specific to this player, this week.
+
+    Measured before the change: SIX of nine rows in the published sample read
+    "no call" and three of those six were structural, so three real calls and
+    three genuine holds read as a table full of refusals. Both kinds are still
+    explained IN FULL in the note under the table — nothing is withheld, only
+    de-duplicated — and this pins that, because dropping a reason instead of
+    relocating it would turn a presentation fix into a disclosure loss."""
+    from render.report import is_structural_gate
+
+    assert is_structural_gate("nobody on your bench is eligible here")
+    assert is_structural_gate("we don't put a number on defenses yet — we haven't")
+    assert is_structural_gate("no eligible player with any scoring history")
+    assert not is_structural_gate("availability in doubt (designated Questionable)")
+    assert not is_structural_gate("not enough games on record yet (1 and 2)")
+    assert not is_structural_gate(None)
+
+    import render.sample as sample
+    from render.email import render_email, text_summary
+    from render.report import render, TEMPLATE_PATH
+    try:
+        report = sample.build(10)
+    except Exception as exc:                       # pragma: no cover
+        import pytest
+        pytest.skip(f"sample cache unavailable: {exc}")
+
+    structural = {s["slot"] for s in report["lineup"]
+                  if s.get("confidence") is None
+                  and is_structural_gate(s.get("confidence_gate"))}
+    contingent = {s["slot"] for s in report["lineup"]
+                  if s.get("confidence") is None
+                  and s.get("confidence_gate")
+                  and not is_structural_gate(s["confidence_gate"])}
+    assert structural and contingent, \
+        "the sample must exercise BOTH kinds or this test proves nothing"
+
+    browser = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
+    email_html = render_email(report)
+    text = text_summary(report)
+    for surface, name in ((browser, "browser"), (email_html, "email")):
+        rows = re.findall(r"<tr[^>]*>.*?</tr>", surface, re.S)
+        for slot in structural:
+            hits = [r for r in rows if re.search(rf">\s*{slot}\s*<", r)
+                    and "no call" in r]
+            assert not hits, (
+                f"{name}: structural slot {slot} still spends a row on a "
+                f"marker that repeats every week")
+    # Every reason still reaches the reader, on all three surfaces.
+    for surface, name in ((browser, "browser"), (email_html, "email"), (text, "text")):
+        for gate in {s["confidence_gate"] for s in report["lineup"]
+                     if s.get("confidence_gate")}:
+            head = gate.split("(")[0].split("—")[0].strip()[:28]
+            assert head in surface or html.escape(head) in surface, \
+                f"{name} dropped a withheld-reason instead of relocating it: {head!r}"
 
 
 def test_the_explainer_makes_no_claim_a_shown_number_is_not_a_guess() -> None:

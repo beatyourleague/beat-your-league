@@ -44,7 +44,9 @@ from render.report import (
     availability_basis,
     edge_phrase,
     esc,
+    is_structural_gate,
     no_call_explainer,
+    no_call_head,
     number_sections,
     short_gate,
     who_can_cover,
@@ -625,6 +627,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
         projected = f"{slot['projected']:.1f}" if slot.get("projected") is not None else "—"
         if slot.get("confidence") is not None:
             confidence = f"{slot['confidence']:.0%} vs {slot.get('alternative_name')}"
+        elif mixed and is_structural_gate(slot.get("confidence_gate")):
+            # Structural: a permanent fact about the roster's shape, carried
+            # once below rather than on a row that repeats it every week.
+            confidence = ""
         elif mixed:
             confidence = "no call"
         elif slot.get("projected") is None and slot.get("usage"):
@@ -636,11 +642,18 @@ def text_summary(report: Mapping[str, Any]) -> str:
         else:
             confidence = ""
         lines.append(f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
-    if not mixed:
-        gates = sorted({s["confidence_gate"] for s in report["lineup"]
-                        if s.get("confidence_gate")})
-        if gates:
-            lines.append(f"  No call on any slot this week: {' · '.join(gates)}.")
+    # Plain text has no note under the table, so every reason a slot carries no
+    # number has to arrive here — including the structural ones whose per-row
+    # markers were dropped above. Printing them only in the all-gated case left
+    # a mixed week's blank cells unexplained.
+    gates = sorted({s["confidence_gate"] for s in report["lineup"]
+                    if s.get("confidence_gate")})
+    if gates:
+        shown_marker = any(
+            s.get("confidence") is None and s.get("confidence_gate")
+            and not is_structural_gate(s["confidence_gate"])
+            for s in report["lineup"]) and mixed
+        lines.append(f"  {no_call_head(shown_marker, mixed)} {' · '.join(gates)}.")
     regret = report["regret"]
     lines.append("")
     if "gate" in regret:
@@ -733,6 +746,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
     is a comparison and there is no opponent to compare against."""
     slots = report["lineup"]
     mixed = any(s.get("confidence") is not None for s in slots)
+    shown_marker = False
     rows = []
     for slot in slots:
         name = slot.get("player_name") or "—"
@@ -742,7 +756,9 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
         confidence = slot.get("confidence")
         if confidence is not None:
             call = f'<b style="color:{TURF};">{_pct(confidence)}%</b>'
-        elif mixed and slot.get("player_name"):
+        elif (mixed and slot.get("player_name")
+                and not is_structural_gate(slot.get("confidence_gate"))):
+            shown_marker = True
             call = (f'<span style="{SMALL}">'
                     f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
         else:
@@ -767,8 +783,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
     note = ""
     gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
     if gates:
-        head_text = (f'Why some slots say "{NO_CALL}":' if mixed
-                     else f'{NO_CALL.capitalize()} on any slot this week:')
+        head_text = no_call_head(shown_marker, mixed)
         note = _note(f'<b>{esc(head_text)}</b> '
                      f'{esc(no_call_explainer(" · ".join(sorted(gates))))}')
     table = (f'<table role="presentation" width="100%" cellpadding="0" '

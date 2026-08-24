@@ -107,9 +107,30 @@ modern, professional product. Nothing ships with default or unstyled HTML.
   is not Sleeper's authorization**; §11.1 also bars the USER from connecting to a third-party
   product that uses league/roster/transaction/scoring data "for that third-party's commercial or
   business purposes," with §11.2's remedy being termination of **their** account.
-  **Engineering consequence: there is no architecture that fixes this.** Browser-side compute, a
-  local CLI, an extension, a BYO-data POST, and a subscriber-forked Actions cron were all researched
-  and all fail §11.3 — do not propose them as a workaround again. What DOES help is reducing
+  **CORRECTION (Aug 24 2026) — this file quoted §11.3 without its closing exception, and omitted
+  §2.9 entirely.** Re-verified by raw fetch + exact-string match (curl → strip tags → `str.find`,
+  never a summarised fetch). §11.3 ends: "…except pursuant to a **separate written agreement
+  executed by Sleeper, or other approval given by Sleeper**, expressly authorizing that access."
+  And §2.9 — absent from the May 28 2025 terms, written in the same Jul 24 2026 revision as the
+  prohibition — names this product's category and defines the status that cures it: third-party
+  "fantasy tools, applications, or services that you may elect to connect or synchronize with your
+  Sleeper account, leagues, rosters" become an "**Approved Integration Partner**" where they have
+  "entered into a separate written agreement with Sleeper authorizing the inclusion/connection (or
+  otherwise been approved by Sleeper)," and then a user's election to connect "**is a permitted use
+  of the Services** and shall not, by itself, constitute a violation of these Terms." docs.sleeper.com
+  says the same thing in plainer words: "For commercial use of the Sleeper API, please reach out to
+  us directly to discuss licensing."
+  **What this changes: nothing about the shipped architecture, and one thing about the reasoning.**
+  Reading Sleeper as a wall was wrong; it is a gate, and the key is written permission, which we do
+  not have and have not asked for (owner decision, Aug 24 2026: business-development correspondence
+  is not a build-path dependency). Until Sleeper grants it in writing, every sentence below stands
+  and the product stays platform-independent — which is strictly safer anyway and serves the ESPN,
+  Yahoo and CBS users no Sleeper grant would ever reach. What is now recorded correctly is that the
+  path EXISTS, so a future reader does not re-derive a dead end that the terms themselves contradict.
+  **Engineering consequence: no architecture fixes this WITHOUT that permission.** Browser-side
+  compute, a local CLI, an extension, a BYO-data POST, and a subscriber-forked Actions cron were all
+  researched and all fail §11.3 — do not propose them as a workaround again. The missing ingredient
+  was never architecture; it is the written approval §11.3 and §2.9 both point at. What DOES help is reducing
   surface: move the schedule, weekly stats and projections to nflverse (CC-BY-4.0, commercial use
   permitted with attribution), which removes all three undocumented feeds and leaves only documented
   `/v1` league endpoints. Projections move AFTER launch — swapping them invalidates the band's 77.9%

@@ -161,6 +161,44 @@ SEEDED_SECTION_LINE = ("This early in the season, last season is counted into "
                        "season alone.")
 
 
+# A gate is STRUCTURAL when it would print identically every week for this
+# roster: the QB slot with no backup quarterback, the kicker with no backup
+# kicker, the defense the model does not score yet. It states the shape of the
+# lineup, not anything about this week, so after the first read it carries no
+# information. A CONTINGENT gate — "status unconfirmed", "too few games yet" —
+# is the honesty feature doing its job: we could have called this slot and held
+# back for a reason specific to this player, this week.
+#
+# Measured on the published sample (Aug 24 2026): SIX of nine rows read
+# "no call" and THREE of those six were structural, so the three genuine
+# holds — and the three real calls — read as a table full of refusals. Both
+# kinds are still explained in full in the note under the table; what changes
+# is which ones spend a row. This is the same rule the mixed-week test already
+# applies: a marker that says nothing the note does not say once has not
+# earned a row of its own.
+STRUCTURAL_GATES = ("nobody on your bench", "we don't put a number on defenses",
+                    "no eligible player")
+
+
+def is_structural_gate(gate: str | None) -> bool:
+    """True when this gate is a permanent fact about the roster's shape."""
+    return bool(gate) and gate.startswith(STRUCTURAL_GATES)
+
+
+def no_call_head(shown_any_marker: bool, mixed: bool) -> str:
+    """The note's opening, matched to what the rows above it actually show.
+
+    Three states, because there are three: some rows carry a marker; calls
+    were published but every withheld slot was structural (no markers at all);
+    or nothing was called this week.
+    """
+    if shown_any_marker:
+        return f'Why some slots say "{NO_CALL}":'
+    if mixed:
+        return "Why some slots carry no number:"
+    return f"{NO_CALL.capitalize()} on any slot this week:"
+
+
 def short_gate(gate: str | None, slot: str) -> str:
     """The per-row reason a slot carries no number, short enough for the call
     column. The note under the table used to lump every reason into one
@@ -168,6 +206,8 @@ def short_gate(gate: str | None, slot: str) -> str:
     — three of nine rows in the published sample read "no call" with the
     reasons pooled underneath. A bare "no call" on the only QB on the roster
     reads as a defect; "no bench QB" reads as what it is.
+
+    Structural gates no longer reach here — see is_structural_gate.
     """
     if not gate:
         return NO_CALL
@@ -556,6 +596,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     """
     slots = report["lineup"]
     mixed = any(s.get("confidence") is not None for s in slots)
+    shown_marker = False
     rows = []
     for slot in slots:
         name = slot.get("player_name") or "—"
@@ -575,7 +616,9 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
             call = (f'<b>{_pct(confidence)}%</b>'
                     f'<span class="cbar"><i style="width:{_pct(confidence)}%">'
                     f'</i></span>')
-        elif mixed and slot.get("player_name"):
+        elif (mixed and slot.get("player_name")
+                and not is_structural_gate(slot.get("confidence_gate"))):
+            shown_marker = True
             call = (f'<span class="tsub">'
                     f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
         else:
@@ -592,8 +635,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     note = ""
     gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
     if gates:
-        head_text = (f'Why some slots say "{NO_CALL}":' if mixed
-                     else f'{NO_CALL.capitalize()} on any slot this week:')
+        head_text = no_call_head(shown_marker, mixed)
         note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
                 f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
     seeded_note = (f'<div class="withheld">{esc(SEEDED_SECTION_LINE)}</div>'
