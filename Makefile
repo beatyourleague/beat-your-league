@@ -115,6 +115,12 @@ sample:
 	$(PY) -m render.sample
 	$(PY) -m render.sample --week 1
 
+# One pre-season file, for eyeballing it before a send. Takes a roster of
+# player ids; the real ones come from a subscriber's own ref at intake.
+# make preseason ROSTER="00-0034796,00-0032764,..."
+preseason:
+	$(PY) -m render.preseason --roster "$(ROSTER)" --print
+
 # The player directory the intake page downloads. Regenerate whenever the
 # nflverse cache moves — a stale directory cannot resolve a rookie, and the
 # subscriber who rostered him simply cannot finish signup. `--check` fails if

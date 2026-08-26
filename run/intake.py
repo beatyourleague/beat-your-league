@@ -59,7 +59,7 @@ from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
                          load_rosters)
 from render.welcome import welcome_message
 from run.delivery import DRY_PROVIDER, build_provider, send_all
-from run.solo import CACHE_DIR, SoloError, load_week_data
+from run.solo import CACHE_DIR, SoloError, load_week_data, spec_from_ref
 from run.subscriptions import SubscriptionError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -509,6 +509,66 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
               file=sys.stderr)
 
 
+def _send_preseason(servable: list[RosterSignup], data, season: str) -> None:
+    """The file they get for paying, on the day they pay.
+
+    The weekly product cannot say anything until box scores exist, so a buyer
+    who signed up in draft season used to hold nothing for up to a fortnight.
+    "I paid and got nothing" is the dominant refund driver in a subscription
+    this size, and it was built into the calendar rather than being anyone's
+    fault. This closes it with FACTS — the published schedule and last season's
+    completed box scores — so it carries no calibration burden and makes no
+    call the frozen method would govern.
+
+    One roster per file, so failures are contained per subscriber exactly as in
+    run/tuesday.py: one person's odd roster must never cost everybody else the
+    file they paid for.
+    """
+    from engine.preseason import build_preseason_report, bye_by_team
+    from render.preseason import preseason_message
+
+    if data is None or not servable:
+        return
+    try:
+        byes = bye_by_team(CACHE_DIR, season)
+    except Exception as exc:  # noqa: BLE001 — no schedule, no file, no failure
+        print(f"Pre-season files: skipped, the {season} schedule could not be "
+              f"read ({exc})", file=sys.stderr)
+        return
+
+    messages = []
+    for signup in servable:
+        try:
+            roster = signup.roster()
+            spec = spec_from_ref(roster)
+            report = build_preseason_report(
+                spec, data.directory, data.prior, season, CACHE_DIR,
+                season_started=getattr(data, "week", 1) > 1, byes=byes)
+            messages.append(preseason_message(
+                signup.email, signup.slug, report,
+                purchased_at=str(signup.seen_at or "")))
+        except Exception as exc:  # noqa: BLE001 — batch contract
+            print(f"    PRE-SEASON FILE FAILED for {signup.slug}: {exc!r}",
+                  file=sys.stderr)
+    if not messages:
+        return
+
+    provider = build_provider(None)
+    if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
+        print(f"Pre-season files: {len(messages)} pending — EMAIL_PROVIDER is "
+              f"not set, so none were sent and none were recorded.")
+        return
+    sends = send_all(messages, provider=provider)
+    delivered = [r for r in sends if r.ok and not r.skipped]
+    failures = [r for r in sends if not r.ok]
+    print(f"Pre-season files via {provider.name}: {len(delivered)} sent, "
+          f"{len(sends) - len(delivered) - len(failures)} already sent, "
+          f"{len(failures)} failed")
+    for result in failures:
+        print(f"    PRE-SEASON SEND FAILED {result.message.key}: {result.detail}",
+              file=sys.stderr)
+
+
 # --------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------- #
@@ -571,6 +631,9 @@ def main(argv: list[str] | None = None) -> int:
     blocked: dict[tuple[str, str], str] = {}
     known: set[str] = set()
     known_season = str(datetime.now(timezone.utc).year)
+    # Bound before the try: the except below is not fatal, so `data` has to
+    # exist either way for the senders that read it.
+    data = None
     try:
         data = load_week_data(args.cache)
         known = {player.player_id for player in data.directory.players}
@@ -710,6 +773,7 @@ def main(argv: list[str] | None = None) -> int:
     # reports what is pending rather than failing — the registry is this run's
     # contract; the weekly and daily crons set EMAIL_PROVIDER.
     _send_welcomes(servable, seat_rows, known_season)
+    _send_preseason(servable, data, known_season)
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered

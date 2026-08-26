@@ -781,6 +781,37 @@ questionable BENCH player whose doubt gates a slot (Pollard, week 9) was named n
 pivot plan looked only at questionable starters and the solo checklist returned before its
 late-news item. `late_news()` feeds both now.
 
+**The pre-season file (`engine/preseason.py` + `render/preseason.py`, Aug 24 2026) — what
+they get for paying, on the day they pay.** Owner decision: take money during draft season
+rather than waiting for Sep 8, and protect profit by keeping the refund window tight (the
+alternative — extending it — was declined; low budget, safety of profits first). The weekly
+product cannot say anything until box scores exist, so a buyer who signed up in draft season
+held NOTHING for up to a fortnight, and "I paid and got nothing" is the dominant refund
+driver at this size. It was built into the calendar rather than being anyone's fault.
+- **Only facts, and that is the design.** Two sources, both already cached and verified
+  present: the published NFL schedule (2026 byes resolve today) and last season's completed
+  box scores scored under the subscriber's own rule (2025 = 18,540 REG rows). No projection,
+  no probability, no ranking of what WILL happen — so the frozen method's Grade C, which
+  governs published *predictions*, has nothing here to govern. That is what let it ship in a
+  week with no preregistration and no arm, and `test_the_file_states_no_probability_and_
+  makes_no_call` pins the absence on all three surfaces, because the moment a projection
+  creeps in the file acquires the calibration burden it was designed without.
+- **RULE P1 — an absence is never a zero.** A rookie scored 0.0 reads as "he was dreadful"
+  when the truth is "we have nothing on him". And a team DEFENSE is a *different* absence:
+  we decline to score defenses (the same stance `TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False`
+  takes weekly), so it must not be reported as a player we know nothing about.
+- **RULE P2 — a bye is only reported where a slot genuinely cannot be filled.** The check
+  places the players who ARE available into the starting template; "your RBs are on bye"
+  when a third RB covers it is a false alarm, and a file that cries wolf in August is not
+  read in October. On a real roster it finds W13 leaving QB *and* TE empty — the kind of
+  thing a manager can still trade around in August.
+- Sent from `run/intake.py` at purchase, keyed on the PURCHASE like the welcome and for the
+  same reason (a season-keyed key re-mails everybody the product ever had). Email-safe half
+  is separate from the browser render — mailing the browser-grade file ships soup, which
+  `run/batch.py` learned the hard way. The title switches to "Your Roster File" once the
+  season starts, because the same content still serves a Week-6 buyer but must not call
+  itself pre-season in October. `make preseason ROSTER="..."` renders one locally.
+
 **The dry proving run (Aug 24 2026) — six launch paths executed for real, 15 confirmed
 defects, two of them blockers.** Nothing had ever run `run/tuesday.py` against a registry,
 because none existed. Building a synthetic one and sending to it confirmed the standing
