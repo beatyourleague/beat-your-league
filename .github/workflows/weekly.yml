@@ -63,7 +63,7 @@ jobs:
       # GitHub evicts caches after 7 days without access and this cron touches
       # it on exactly a 7-day cycle, so one skipped week is the whole margin.
       - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
@@ -71,7 +71,7 @@ jobs:
       # The nflverse download cache. Both run.intake and run.tuesday call
       # load_week_data, so without this one cron run downloads ~30 MB twice.
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -147,13 +147,13 @@ jobs:
         run: .venv/bin/python -m run.tuesday
       - name: Save subscriber registry
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}

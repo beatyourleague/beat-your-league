@@ -40,13 +40,13 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install --disable-pip-version-check -r requirements.txt
       - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
           restore-keys: registry-
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -107,13 +107,13 @@ jobs:
 
       - name: Save subscriber registry
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
