@@ -173,7 +173,7 @@ jobs:
           git push
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: weekly-reports
           # reports/subscribers/ and reports/outbox/ are EXCLUDED deliberately.
