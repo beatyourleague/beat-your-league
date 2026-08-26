@@ -465,11 +465,15 @@ def test_no_personal_contact_details_are_published() -> None:
         found = personal.findall(text)
         assert not personal.search(text), \
             f"personal email address published in {page_path.relative_to(SITE)}"
-    # Placeholder addresses must not look real either — a fake-but-plausible
-    # address silently swallows refund and deletion requests.
+    # The legal page must carry a REACHABLE contact route — refund and deletion
+    # requests have nowhere else to go. Set Aug 26 2026 to the project inbox
+    # (Cloudflare Email Routing -> the operator), never a personal address, and
+    # never a plausible-looking invention that silently swallows requests.
     legal = (SITE / "legal.html").read_text(encoding="utf-8")
-    assert re.search(r"added before launch", legal, re.I), \
-        "legal page must flag the missing contact address, not invent one"
+    assert "hello@beatyourleague.com" in legal, \
+        "legal page lost its contact route — refunds and deletions need one"
+    assert not re.search(r"added before launch", legal, re.I), \
+        "the contact placeholder is still there; it was set before launch"
 
 
 def test_signup_degrades_honestly_without_a_contact_route() -> None:
@@ -619,12 +623,22 @@ def test_renewal_terms_are_in_sight_of_the_checkout_button() -> None:
         "a seat holder must not be shown billing terms"
 
 
-def test_unset_legal_placeholders_are_visible_not_invented() -> None:
-    """A guessed jurisdiction is worse than a blank one."""
+def test_the_legal_page_names_a_real_jurisdiction_and_contact() -> None:
+    """A guessed jurisdiction is worse than a blank one — which is why this
+    stayed an explicit placeholder until the owner supplied it. Set Aug 26 2026
+    to Ontario, Canada (the operator's own province). What this now guards is
+    the other direction: the placeholders must not come BACK, because a
+    contract with no governing law and a refund route with no address are the
+    two gaps that make everything else on the page unenforceable."""
     legal = (SITE / "legal.html").read_text(encoding="utf-8")
-    assert re.search(r"\[jurisdiction — to be set before", legal), \
-        "governing law must stay an explicit placeholder until the owner sets it"
-    assert re.search(r"\[contact address — added before launch\]", legal)
+    assert re.search(r"Province of Ontario", legal), \
+        "governing law lost its jurisdiction"
+    assert "hello@beatyourleague.com" in legal, "legal page lost its contact route"
+    for ghost in (r"\[jurisdiction", r"\[contact address", "to be set before"):
+        assert not re.search(ghost, legal), f"a placeholder came back: {ghost}"
+    # The consumer savings clause travels with it: naming Ontario must not read
+    # as stripping rights a buyer has where they actually live.
+    assert re.search(r"doesn't remove protections you have", legal, re.I)
     for page, name in ((LANDING, "landing"), (JOIN, "join")):
         assert re.search(r'href="\.\./legal\.html"|href="legal\.html"', page), \
             f"{name} page does not link the terms"
@@ -656,10 +670,20 @@ def test_monthly_price_never_undercuts_the_season_pass() -> None:
 
 
 def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
-    """An unlabelled price is ambiguous to a buyer and a support burden."""
+    """An unlabelled price is ambiguous to a buyer and a support burden — and
+    the ambiguity is not hypothetical here: the seller is in Ontario, so a
+    Canadian reading a bare "$39" would reasonably assume CAD and be charged
+    roughly a third more at checkout. That gap, discovered at the payment step,
+    is exactly what produces a chargeback.
+
+    Owner decision (Aug 26 2026): the figure stays bare at every decision point
+    — "$39 USD" six times is clutter for the US majority — and the currency is
+    stated ONCE per page, plainly, near the price. So this checks the statement
+    exists, not that the token sits beside every numeral."""
     for page, name in ((LANDING, "landing"), (JOIN, "join"),
                        (LEAGUE_PASS, "league pass")):
-        assert re.search(r"USD", page), f"{name} page shows a price with no currency"
+        assert re.search(r"All prices in US dollars|USD", page), \
+            f"{name} page shows a price with no currency stated anywhere"
     legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
     assert re.search(r"All prices are in US dollars", legal, re.I)
 
@@ -1258,7 +1282,7 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
     assert "Seat already paid by your commissioner" in JOIN
     assert "covers " in JOIN and "every manager in your league" in prose(JOIN)
-    assert f"${MONTHLY_PRICE} USD / month" in JOIN
+    assert f"${MONTHLY_PRICE} / month" in JOIN
     # The commissioner's shareable seat link exists only pre-checkout (Stripe
     # confirmation messages are static per link and cannot carry a league id).
     assert 'id="seat-share"' in JOIN
@@ -1643,7 +1667,7 @@ def test_the_league_pass_arithmetic_matches_the_actual_season_price() -> None:
     obligation — the multiple has to be true. It said "twelve individual passes
     would cost $348" for as long as the season pass was $29, and a stale
     comparison on our own page is a false claim about our own prices."""
-    match = re.search(r"Twelve individual passes would cost \$(\d+) USD", LEAGUE_PASS)
+    match = re.search(r"Twelve individual passes would cost \$(\d+)", LEAGUE_PASS)
     assert match, "the League Pass page lost its comparison"
     assert int(match.group(1)) == 12 * int(SEASON_PRICE), (
         f"the page compares against ${match.group(1)} but twelve season passes "

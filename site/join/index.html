@@ -145,13 +145,13 @@
     <h1>Set Up Your Team</h1>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's file: the
     lineup we'd set, with the odds on the calls we can stand behind. A paid product from
-    day one — <b>$39 USD for the season</b>, founding rate locked in for every renewal.</p>
+    day one — <b>$39 for the season</b>, founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet — it opens before Week 1. You're welcome to set up now to see how it works, but
     nothing is saved until it does; leave your email on the
     <a href="../index.html">front page</a> and we'll send exactly one message when it opens.</div>
     <div class="beta-chips" id="header-chips">
-      <span>$39 USD / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
+      <span>$39 / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
     </div>
   </header>
 
@@ -212,7 +212,8 @@ Baltimore Ravens
         <div class="note">The address they bought the League Pass with — that is how
         your seat is matched to their pass.</div>
       </div>
-      <p class="terms-line" id="terms-line">The season pass is <b>$39 USD and renews once
+      <p class="terms-line" id="currency-note">All prices in US dollars.</p>
+      <p class="terms-line" id="terms-line">The season pass is <b>$39 and renews once
       a year at $39 unless you cancel</b>. We email you before it bills, and you cancel
       yourself any time from your own billing page. Refunds are no-questions through
       Week 2 — one per person.</p>
@@ -283,7 +284,7 @@ const FORM_ENDPOINT = "";
 // path must keep working even if the owner ever splits the backends.
 const NOTIFY_LIST_ENDPOINT = "";
 // Deliberately EMPTY: no personal address ships on a public page.
-const CONTACT_EMAIL = "";
+const CONTACT_EMAIL = "hello@beatyourleague.com";
 // Stripe accepts up to 200 chars of [A-Za-z0-9_-] and SILENTLY DROPS anything
 // else while still showing a working payment page. The browser is the only
 // place that failure can be made loud, so it is checked before we navigate.
@@ -742,16 +743,16 @@ if (UPDATE_MODE) {
   $("submit").textContent = "Continue to checkout — $12.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
     "team's file: the lineup we'd set, with the odds on the calls we can stand " +
-    "behind. A paid product from day one — $12.99 USD a month, and billing " +
+    "behind. A paid product from day one — $12.99 a month, and billing " +
     "stops on its own when the season ends.";
   $("header-chips").replaceChildren();
-  ["$12.99 USD / month", "Cancel any time", "First report Tue Sep 8"]
+  ["$12.99 / month", "Cancel any time", "First report Tue Sep 8"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;
       $("header-chips").appendChild(chip);
     });
-  const monthlyTerms = "Monthly is $12.99 USD and bills again each month " +
+  const monthlyTerms = "Monthly is $12.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time.";
   $("renew-note").textContent = monthlyTerms;
@@ -762,10 +763,10 @@ if (UPDATE_MODE) {
   // price on the page has to be the one this purchase actually costs.
   $("header-pitch").textContent = "Set up once, and every Tuesday every manager " +
     "in your league gets their own file: the lineup we'd set, with the odds on " +
-    "the calls we can stand behind. One League Pass covers all of it — $99 USD " +
+    "the calls we can stand behind. One League Pass covers all of it — $99 " +
     "for the whole league's season.";
   $("header-chips").replaceChildren();
-  ["$99 USD / league / season", "Covers every manager", "First report Tue Sep 8"]
+  ["$99 / league / season", "Covers every manager", "First report Tue Sep 8"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;
@@ -773,7 +774,7 @@ if (UPDATE_MODE) {
     });
   // The pass is $99, and the renewal disclosure must name the amount that
   // actually renews — the season-pass sentence would be a wrong disclosure.
-  const passTerms = "The League Pass is $99 USD and renews once a year at $99 " +
+  const passTerms = "The League Pass is $99 and renews once a year at $99 " +
     "unless you cancel. We email you before it bills, and you cancel yourself any " +
     "time from your own billing page. Refunds are no-questions through Week 2 — " +
     "one per league.";

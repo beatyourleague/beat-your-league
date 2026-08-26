@@ -355,7 +355,7 @@
     <div class="reveal">
       <div class="plan">
         <div class="tag">Monthly</div>
-        <div class="price">$12.99 <small>/ month, USD</small></div>
+        <div class="price">$12.99 <small>/ month</small></div>
         <ul>
           <li>The full weekly file, every week</li>
           <li>Cancel any time, yourself, in one click</li>
@@ -369,7 +369,7 @@
       <div class="plan founder">
         <span class="stamp50" aria-hidden="true">Founding rate</span>
         <div class="tag">Season pass · 2026</div>
-        <div class="price">$39 <small>/ season, USD</small></div>
+        <div class="price">$39 <small>/ season</small></div>
         <ul>
           <li>Every weekly file, Week 1 through your title game</li>
           <li>No-questions refund through Week 2, one per person. If you refund
@@ -382,6 +382,7 @@
       </div>
     </div>
   </div>
+  <p class="finance" id="currency-note">All prices in US dollars.</p>
   <p class="finance" id="finance-note">Payment runs on Stripe's own page when checkout
   opens. Setting up today saves nothing yet — leave your email above and you'll get one
   message the morning it opens, at the founding rate. Running the league?
@@ -508,7 +509,7 @@ const WAITLIST_ENDPOINT = "";
 // $39 subscribe form. Empty means fall through to the mailto capture below.
 const LEDGER_FREE_URL = "";
 // Empty on purpose — no personal address on a public page. Set before launch.
-const CONTACT_EMAIL = "";
+const CONTACT_EMAIL = "hello@beatyourleague.com";
 
 const watchForm = document.getElementById("watch-form");
 if (watchForm) {
