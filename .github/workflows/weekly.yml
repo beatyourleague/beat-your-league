@@ -41,7 +41,7 @@ jobs:
       # shallow clone, and `git pull --rebase` against a shallow history
       # can fail — which would break the persist step whose whole job is
       # keeping the record safe.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
