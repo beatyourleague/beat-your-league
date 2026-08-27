@@ -316,19 +316,26 @@ def _wait_for_shot(process: subprocess.Popen, shot: Path,
     return b""
 
 
-def render(page: str, out: Path, chrome: str | None = None) -> Path:
+def render_png(html: str, out: Path, width: int, height: int,
+               chrome: str | None = None) -> Path:
+    """One headless-Chrome pipeline, shared by every generated image.
+
+    Extracted so render/brand.py cannot grow a second copy of the shutter
+    logic — the Chrome-does-not-exit workaround below is exactly the kind of
+    hard-won detail that gets fixed in one copy and not the other.
+    """
     binary = chrome or find_chrome()
     with tempfile.TemporaryDirectory() as work:
-        source = Path(work) / "og.html"
-        source.write_text(build_html(page), encoding="utf-8")
-        shot = Path(work) / "og.png"
+        source = Path(work) / "page.html"
+        source.write_text(html, encoding="utf-8")
+        shot = Path(work) / "shot.png"
         process = subprocess.Popen(
             [binary, "--headless=new", "--disable-gpu", "--hide-scrollbars",
              "--no-first-run", "--no-default-browser-check",
              "--disable-extensions", "--disable-crash-reporter",
-             f"--screenshot={shot}", f"--window-size={WIDTH},{HEIGHT}",
-             # Google Fonts has to arrive before the shutter, or the card ships
-             # in Helvetica and stops looking like the product it advertises.
+             f"--screenshot={shot}", f"--window-size={width},{height}",
+             # Google Fonts has to arrive before the shutter, or the image
+             # ships in Helvetica and stops looking like the product.
              "--virtual-time-budget=8000",
              "--force-device-scale-factor=1",
              f"--user-data-dir={Path(work) / 'profile'}",
@@ -347,16 +354,22 @@ def render(page: str, out: Path, chrome: str | None = None) -> Path:
             raise OgError(f"Chrome wrote no screenshot in {RENDER_TIMEOUT:.0f}s. "
                           f"{detail}")
 
-    width, height = png_size(data)
-    if (width, height) != (WIDTH, HEIGHT):
-        raise OgError(f"the card rendered {width}x{height}, expected "
-                      f"{WIDTH}x{HEIGHT} — the viewport did not take")
-    data = stamp_source(data, page_digest(page))
+    got = png_size(data)
+    if got != (width, height):
+        raise OgError(f"rendered {got[0]}x{got[1]}, expected {width}x{height} "
+                      f"— the viewport did not take")
     if len(data) > MAX_BYTES:
-        raise OgError(f"the card is {len(data)} bytes, over the "
+        raise OgError(f"the image is {len(data)} bytes, over the "
                       f"{MAX_BYTES}-byte ceiling")
     Path(out).write_bytes(data)
     return Path(out)
+
+
+def render(page: str, out: Path, chrome: str | None = None) -> Path:
+    """The social card specifically: render, then stamp its source digest."""
+    written = render_png(build_html(page), Path(out), WIDTH, HEIGHT, chrome=chrome)
+    written.write_bytes(stamp_source(written.read_bytes(), page_digest(page)))
+    return written
 
 
 def main(argv: list[str] | None = None) -> int:

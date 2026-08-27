@@ -203,3 +203,69 @@ def test_the_card_copy_is_swept_for_banned_words_like_every_other_surface() -> N
     for pattern in _DEV_SPEAK:
         hit = re.search(pattern, surface, re.I)
         assert not hit, f"the social card carries developer vocabulary: {hit.group(0)!r}"
+
+
+# --------------------------------------------------------------------- #
+# the brand assets Stripe renders on surfaces we do not control
+# --------------------------------------------------------------------- #
+
+def test_the_colours_handed_to_stripe_are_legible_both_ways() -> None:
+    """Stripe applies the brand and accent colours to buttons, links and header
+    bands without telling us which is which. So a colour is only safe to hand
+    over if it works as TEXT and as a GROUND — measured, not judged.
+
+    This is why the brand's own gold is deliberately absent: #F2C230 on white
+    is 1.68:1, so as a link colour or under white text it is invisible. It
+    stays on our surfaces, where we control what sits on it.
+    """
+    from render.brand import COLOURS
+
+    def luminance(value: str) -> float:
+        value = value.lstrip("#")
+        parts = [int(value[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        parts = [p / 12.92 if p <= 0.04045 else ((p + 0.055) / 1.055) ** 2.4
+                 for p in parts]
+        return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]
+
+    def contrast(a: str, b: str) -> float:
+        la, lb = luminance(a), luminance(b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+    for role in ("brand", "accent"):
+        colour = COLOURS[role]
+        assert contrast(colour, "#FFFFFF") >= 4.5, (
+            f"{role} {colour} is {contrast(colour, '#FFFFFF'):.2f}:1 on white — "
+            f"unreadable if Stripe uses it for link text")
+        assert contrast(colour, "#FFFFFF") >= 4.5 or contrast(colour, "#000000") >= 4.5
+    assert contrast(COLOURS["gold"], "#FFFFFF") < 4.5, (
+        "gold now passes on white — the comment explaining its exclusion is stale")
+
+
+def test_the_brand_assets_exist_at_the_sizes_stripe_expects() -> None:
+    from render.brand import ASSETS, OUT_DIR
+
+    for name, _build, size in ASSETS:
+        path = OUT_DIR / name
+        assert path.is_file(), f"{name} is missing — run `make brand`"
+        assert og.png_size(path.read_bytes()) == size
+
+
+def test_the_logo_is_drawn_from_the_same_mark_as_every_page() -> None:
+    """One drawing of the logo. A second copy is how the invoice header and the
+    site's own header end up subtly different."""
+    source = (REPO / "render" / "brand.py").read_text(encoding="utf-8")
+    assert "from render.report import mark_svg" in source
+    # Check for the GEOMETRY, not for "<svg" — brand.py legitimately names the
+    # opening tag as a replace() target when it sizes the imported mark.
+    for drawing in ("linearGradient", "radialGradient", "<path", "stop-color"):
+        assert drawing not in source, (
+            f"brand.py contains {drawing!r} — it is drawing its own mark "
+            f"instead of importing the one every page uses")
+
+
+def test_one_chrome_pipeline_serves_both_generators() -> None:
+    """The Chrome-does-not-exit workaround is exactly the kind of hard-won
+    detail that gets fixed in one copy and not the other."""
+    brand = (REPO / "render" / "brand.py").read_text(encoding="utf-8")
+    assert "render_png" in brand
+    assert "subprocess" not in brand, "brand.py spawns its own browser"

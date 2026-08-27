@@ -5,7 +5,7 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview monday monday-preview sample \
-        og billing billing-preview
+        og brand billing billing-preview
 
 week:
 	$(PY) -m run.week
@@ -122,6 +122,12 @@ sample:
 # figures are READ from that page, so a stale og.png advertises stale numbers.
 og:
 	$(PY) -m render.og
+
+# The two PNGs Stripe's branding settings take. Same mark as every page, so
+# there is no second drawing of the logo to drift from the first. Committed;
+# CI never renders one.
+brand:
+	$(PY) -m render.brand
 
 # Schedule the end-of-season stop on every monthly subscription. Preview first:
 # this is the only money-mutating call in the repo.
