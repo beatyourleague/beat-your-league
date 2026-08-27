@@ -540,3 +540,94 @@ def test_a_subscriber_whose_report_failed_fails_the_run(
     assert "1 reports written, 1 failed" in out
     assert "1 sent" in out, "the healthy subscriber should still be delivered"
     assert code == 1, "a failed report must not exit 0 just because sends worked"
+
+
+# --------------------------------------------------------------------- #
+# RULE E1 — a refund ends entitlement even while the subscription is active
+# --------------------------------------------------------------------- #
+
+def _refund_sub(charge, **over):
+    """A live subscription of ours, in the shape Stripe's list call returns."""
+    row = {"id": "sub_1", "status": "active",
+           "customer": {"id": "cus_1", "email": "fan@example.com", "metadata": {}},
+           "latest_invoice": {"id": "in_1", "charge": charge}}
+    row.update(over)
+    return row
+
+
+def test_a_fully_refunded_subscriber_stops_being_entitled(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The hole: refunding a charge does NOT change the subscription's status.
+    Stripe leaves it `active`, so the entitlement check kept answering yes and
+    the subscriber kept receiving a report every Tuesday for money they had
+    been given back — on a season pass, for a YEAR.
+
+    It takes no bad intent. Refunding and forgetting to cancel is one missed
+    click in the Dashboard, which is exactly why it cannot rest on memory.
+    """
+    import run.subscriptions as subs
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        [_refund_sub({"amount": 3900, "amount_refunded": 3900, "refunded": True})]
+        if "status=active" in url else []))
+    paid = subs.load_paid_from_stripe(api_key="sk")
+    assert not paid.covers("fan@example.com"), "a refunded subscriber is still served"
+    assert paid.refunded == frozenset({"sub_1"}), "the revocation is not reported"
+
+
+def test_a_partial_refund_keeps_the_subscriber(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pro-rata goodwill adjustment is how the terms handle a mid-term
+    change. Cutting somebody off mid-apology is worse than the problem."""
+    import run.subscriptions as subs
+    monkeypatch.setattr(subs, "_stripe_get", lambda url, key: _stripe_page(
+        [_refund_sub({"amount": 3900, "amount_refunded": 500, "refunded": False})]
+        if "status=active" in url else []))
+    assert subs.load_paid_from_stripe(api_key="sk").covers("fan@example.com")
+
+
+def test_a_charge_refunded_to_the_penny_in_parts_counts_as_full() -> None:
+    """Stripe's flag is what Stripe set; the arithmetic is what is true."""
+    import run.subscriptions as subs
+    assert subs.fully_refunded(
+        _refund_sub({"amount": 3900, "amount_refunded": 3900, "refunded": False}))
+
+
+@pytest.mark.parametrize("invoice", [
+    None,                                   # no invoice yet
+    "in_1",                                 # unexpanded id
+    {"charge": None},                       # invoice, no charge
+    {"charge": "ch_1"},                     # unexpanded charge
+    {"charge": {}},                         # charge with no amounts
+    {"charge": {"amount": 0, "amount_refunded": 0}},
+])
+def test_anything_we_cannot_read_claims_no_refund(invoice) -> None:
+    """Fails toward SERVING. Being too eager silently drops a paying
+    subscriber — a report that just stops arriving while the card is still
+    charged, which is the failure they notice and we do not."""
+    import run.subscriptions as subs
+    assert not subs.fully_refunded(
+        {"id": "sub_1", "status": "active", "latest_invoice": invoice})
+
+
+def test_the_refund_check_runs_before_any_identifier_is_collected() -> None:
+    """A League Pass payer whose $99 went back would otherwise keep ELEVEN
+    other people served through covered_leagues — the expensive version of
+    this bug, and one no per-subscriber test would catch."""
+    import run.subscriptions as subs
+    src = Path(subs.__file__).read_text(encoding="utf-8")
+    body = src[src.find("def load_paid_from_stripe"):]
+    refund_at = body.find("fully_refunded(subscription)")
+    assert refund_at > 0, "the refund check is gone from the entitlement walk"
+    for collector in ("emails.add", "customer_ids.add", "covered_leagues.add"):
+        assert body.find(collector) > refund_at, (
+            f"{collector} runs BEFORE the refund check, so a refunded "
+            f"subscriber still reaches the paid list through it")
+
+
+def test_the_expansion_that_makes_the_rule_possible_is_requested() -> None:
+    """Without it `latest_invoice` returns as a bare id string, fully_refunded
+    can never answer true, and the rule is dead code that looks alive.
+    `expand[]` must repeat, which a dict cannot do."""
+    import run.subscriptions as subs
+    src = Path(subs.__file__).read_text(encoding="utf-8")
+    assert '("expand[]", "data.latest_invoice.charge")' in src
+    assert '("expand[]", "data.customer")' in src

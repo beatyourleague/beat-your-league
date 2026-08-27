@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_EXPORT = REPO_ROOT / "data" / "registry" / "substack-export.csv"
@@ -64,6 +64,10 @@ class PaidList:
     # Leagues covered by an entitled League Pass, read from the payer's own
     # Stripe record rather than from a covered_by email somebody typed.
     covered_leagues: frozenset[str] = frozenset()
+    # RULE E1. Subscriptions dropped because the money went back — reported by
+    # the run so a revoked entitlement is a visible event rather than a
+    # subscriber who quietly stopped appearing.
+    refunded: frozenset[str] = frozenset()
 
     def covers(self, email: str) -> bool:
         return email.strip().lower() in self.emails
@@ -104,6 +108,22 @@ class PaidList:
 # that bounced.
 _ENTITLED_STATUSES = ("active", "trialing")
 
+# RULE E1 — A REFUND ENDS ENTITLEMENT, EVEN WHILE THE SUBSCRIPTION IS ACTIVE.
+#
+# Refunding a charge does not change the subscription's status: Stripe leaves
+# it `active`, so the statuses above kept answering yes and the subscriber kept
+# receiving a report every Tuesday for money they had been given back. On a
+# season pass that runs for a YEAR. It needs no bad intent to happen — refunding
+# and forgetting to cancel is one missed click in the Dashboard — which is
+# exactly why it cannot be left to the operator's memory.
+#
+# Only a FULL refund revokes. A partial one is how a pro-rata goodwill
+# adjustment is issued (the terms offer one for a mid-term change), and treating
+# that as "no longer a customer" would cut off somebody we had just apologised
+# to. Read from the latest invoice's own charge, expanded in the same list call,
+# so this costs no extra request per subscriber.
+REFUND_REVOKES = True
+
 STRIPE_API = "https://api.stripe.com/v1/subscriptions"
 
 # Customer-metadata keys written by run/sync.py. Namespaced so we never collide
@@ -131,6 +151,37 @@ def _stripe_get(url: str, api_key: str) -> dict:
         raise SubscriptionError("Stripe returned a response we could not read") from None
 
 
+def fully_refunded(subscription: Mapping[str, Any]) -> bool:
+    """Has the money for the period we are in been given back in full?
+
+    RULE E1. Read off the latest invoice's own charge, which the list call
+    expands. Everything is checked before it is trusted, because this is
+    external input and a wrong answer goes one of two bad ways: too eager and a
+    paying subscriber is silently dropped, too shy and a refunded one keeps
+    being served for a year.
+
+    A PARTIAL refund deliberately does not revoke — that is how a pro-rata
+    goodwill adjustment is issued, and cutting somebody off mid-apology would
+    be worse than the problem this solves.
+    """
+    invoice = subscription.get("latest_invoice")
+    if not isinstance(invoice, dict):
+        return False                      # unexpanded or absent: claim nothing
+    charge = invoice.get("charge")
+    if not isinstance(charge, dict):
+        return False
+    if charge.get("refunded") is True:
+        return True                       # Stripe's own "fully refunded" flag
+    # Belt and braces: the flag is what Stripe sets, the arithmetic is what is
+    # true. A charge refunded to the penny by several partial refunds is fully
+    # refunded whatever the flag says.
+    amount = charge.get("amount")
+    returned = charge.get("amount_refunded")
+    if isinstance(amount, int) and isinstance(returned, int) and amount > 0:
+        return returned >= amount
+    return False
+
+
 def load_paid_from_stripe(api_key: str | None = None,
                           statuses: Iterable[str] = _ENTITLED_STATUSES) -> PaidList:
     """Every email currently entitled to a report, straight from Stripe.
@@ -147,8 +198,14 @@ def load_paid_from_stripe(api_key: str | None = None,
     emails: set[str] = set()
     customer_ids: set[str] = set()
     covered_leagues: set[str] = set()
+    refunded: list[str] = []
     for status in statuses:
-        params = {"status": status, "limit": "100", "expand[]": "data.customer"}
+        # A LIST of pairs, not a dict: `expand[]` has to repeat, and a dict can
+        # only carry it once. RULE E1's expansion is the second one, answered in
+        # the same request rather than one extra call per subscriber every week.
+        params = [("status", status), ("limit", "100"),
+                  ("expand[]", "data.customer"),
+                  ("expand[]", "data.latest_invoice.charge")]
         url = f"{STRIPE_API}?{urllib.parse.urlencode(params)}"
         while True:
             page = _stripe_get(url, key)
@@ -163,6 +220,13 @@ def load_paid_from_stripe(api_key: str | None = None,
                 if not isinstance(customer, dict) or customer.get("deleted"):
                     # An unexpanded id, or a deleted customer, has no usable
                     # email — and we will not mail an address we cannot read.
+                    continue
+                # RULE E1, applied before a single identifier is collected: a
+                # fully refunded subscriber must not reach `emails`,
+                # `customer_ids` OR `covered_leagues` — a League Pass payer who
+                # was refunded would otherwise keep eleven other people served.
+                if fully_refunded(subscription):
+                    refunded.append(str(subscription.get("id")))
                     continue
                 email = (customer.get("email") or "").strip().lower()
                 if email:
@@ -186,7 +250,8 @@ def load_paid_from_stripe(api_key: str | None = None,
     return PaidList(emails=frozenset(emails), source="stripe",
                     status_column=",".join(statuses),
                     customer_ids=frozenset(customer_ids),
-                    covered_leagues=frozenset(covered_leagues))
+                    covered_leagues=frozenset(covered_leagues),
+                    refunded=frozenset(refunded))
 
 
 def resolve_paid_list(csv_path: Path | None = None) -> PaidList:

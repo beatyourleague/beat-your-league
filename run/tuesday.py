@@ -225,6 +225,13 @@ def main(argv: list[str] | None = None) -> int:
         if paid.status_column is None:
             print("NOTE: that export has no subscription-status column, so "
                   "everyone listed in it is treated as paying.")
+        if paid.refunded:
+            # RULE E1. Said out loud, because a refund leaves the subscription
+            # ACTIVE in Stripe — so from the Dashboard this person still looks
+            # like a customer, and the only place the revocation is visible is
+            # here.
+            print(f"{len(paid.refunded)} subscription(s) were refunded in full "
+                  f"and are no longer served: " + ", ".join(sorted(paid.refunded)))
         had_registry = len(subscribers)
         subscribers = entitled
         if dropped:
