@@ -463,7 +463,7 @@
 </section>
 
 <section class="closer">
-  <h2>The first file goes out Tuesday, Sep 8.</h2>
+  <h2 id="closer-head">The first file goes out Tuesday, Sep 8.</h2>
   <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
   <div class="cta-row" style="justify-content:center">
     <a class="btn gold" id="closer-cta" href="#watch-form">Get launch access</a>
@@ -632,11 +632,6 @@ if (CHECKOUT_OPEN) {
     closerCta.href = "join/index.html";
     closerCta.textContent = "Set up my team";
   }
-  const closerNote = document.getElementById("closer-note");
-  if (closerNote) {
-    closerNote.textContent =
-      "Set up takes about two minutes — your file lands every Tuesday morning.";
-  }
   // The closed-state copy must not survive the flip: the capture promised "one
   // email when signups open" (that email has gone out) and the finance line
   // said "setting up today saves nothing yet" (it saves everything now — the
@@ -650,33 +645,52 @@ if (CHECKOUT_OPEN) {
   // nor leave an address — during the peak draft fortnight. A dead end that
   // also throws away the lead is strictly worse than the honest waiting list
   // it replaced. Found Aug 27 2026 by three independent reviews at once.
+  //
+  // EVERY sentence written for the closed state is retired by the SAME flag,
+  // not just the form. The heroline IS the capture's caption ("one email when
+  // signups open — nothing else, no card"), and the finance line and the
+  // closer both talk to somebody who cannot buy yet. Rewriting those on
+  // CHECKOUT_OPEN while the form stays put on CHECKOUT_CAN_COMPLETE left an
+  // email-capture box captioned "Checkout is open", above a finance line
+  // saying the roster rides into a checkout that does not exist — the two
+  // halves of one screen contradicting each other. One flag decides, so they
+  // cannot disagree again.
   if (CHECKOUT_CAN_COMPLETE) {
     for (const id of ["watch-form", "watch-note"]) {
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     }
-  }
-  const heroline = document.querySelector(".heroline");
-  if (heroline) {
-    heroline.replaceChildren();
-    // "lands Tuesday morning" was true of the product before the roster file
-    // existed. run/intake.py mails a file on the day of purchase now — the
-    // week's report to anyone who buys before that week's kickoff, the roster
-    // file otherwise — so the old sentence told a buyer to wait for something
-    // they already have, on the one screen where impatience loses the sale.
-    heroline.textContent = "Checkout is open — set up your team and your first " +
-      "file lands today.";
-  }
-  const finance = document.getElementById("finance-note");
-  if (finance) {
-    const passLink = finance.querySelector("a");
-    finance.textContent = "Payment runs on Stripe's own page — your roster and " +
-      "scoring ride into checkout with you, and the founding rate is locked in " +
-      "for every renewal. Running the league? ";
-    if (passLink) {
-      passLink.textContent = "One payment can cover every team";
-      finance.appendChild(passLink);
-      finance.appendChild(document.createTextNode("."));
+    const heroline = document.querySelector(".heroline");
+    if (heroline) {
+      heroline.replaceChildren();
+      // "lands Tuesday morning" was true of the product before the roster file
+      // existed. run/intake.py mails a file on the day of purchase now — the
+      // week's report to anyone who buys before that week's kickoff, the roster
+      // file otherwise — so the old sentence told a buyer to wait for something
+      // they already have, on the one screen where impatience loses the sale.
+      heroline.textContent = "Checkout is open — set up your team and your " +
+        "first file lands today.";
+    }
+    // Same sentence, same reason, at the bottom of the page. The heading also
+    // carries a hardcoded date that is simply false from Sep 9 onward.
+    const closerHead = document.getElementById("closer-head");
+    if (closerHead) closerHead.textContent = "Your first file lands today.";
+    const closerNote = document.getElementById("closer-note");
+    if (closerNote) {
+      closerNote.textContent = "Set up takes about two minutes. Then a new " +
+        "file every Tuesday morning.";
+    }
+    const finance = document.getElementById("finance-note");
+    if (finance) {
+      const passLink = finance.querySelector("a");
+      finance.textContent = "Payment runs on Stripe's own page — your roster " +
+        "and scoring ride into checkout with you, and the founding rate is " +
+        "locked in for every renewal. Running the league? ";
+      if (passLink) {
+        passLink.textContent = "One payment can cover every team";
+        finance.appendChild(passLink);
+        finance.appendChild(document.createTextNode("."));
+      }
     }
   }
 }

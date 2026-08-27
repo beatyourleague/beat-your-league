@@ -223,6 +223,48 @@ def test_every_paid_cta_routes_through_the_picker() -> None:
         "both pricing CTAs must point at join/, not at a payment link"
 
 
+def test_the_capture_and_its_own_caption_retire_on_the_same_flag() -> None:
+    """One screen must not contradict itself.
+
+    Two flags exist deliberately: CHECKOUT_OPEN says "sell", CHECKOUT_CAN_COMPLETE
+    says a payment link is actually pasted in. The email capture retires on the
+    second, because a page that can neither take money nor take an address is a
+    dead end during the peak draft fortnight.
+
+    But the sentences AROUND the capture were rewritten on the first. So with
+    the flags split — which is the live state today — the page showed an email
+    box captioned "Checkout is open", above a finance line promising the roster
+    rides into a checkout that does not exist. Reproduced in a browser before
+    this test was written.
+
+    The .heroline IS the capture's caption ("one email when signups open"), and
+    the closer and finance lines both address someone who cannot buy yet, so
+    all of them belong behind the same flag as the form.
+    """
+    block = LANDING.split("if (CHECKOUT_CAN_COMPLETE)")[1]
+    # Bounded by the enclosing CHECKOUT_OPEN block's close, which is the last
+    # thing in it — everything after is unrelated page script.
+    block = block.split("\n}\n")[0]
+    for element in ("watch-form", "heroline", "finance-note",
+                    "closer-head", "closer-note"):
+        assert element in block, (
+            f"{element} is retired or rewritten outside the "
+            f"CHECKOUT_CAN_COMPLETE guard, so it changes while the capture it "
+            f"talks about is still on screen")
+
+
+def test_the_closer_heading_does_not_outlive_its_own_date() -> None:
+    """"The first file goes out Tuesday, Sep 8" is true until Sep 8 2026 and
+    false every day after. It is honest in the closed state — nobody can buy,
+    so the first file really is that Tuesday — but it must not survive the
+    flip, and the flip must replace it rather than leave a stale date under a
+    live Buy button."""
+    assert 'id="closer-head"' in LANDING, "the heading cannot be rewritten"
+    block = LANDING.split("if (CHECKOUT_CAN_COMPLETE)")[1].split("\n}\n")[0]
+    assert "closerHead" in block and "Sep 8" not in block, (
+        "the flip leaves a hardcoded launch date on the closer")
+
+
 def test_the_checkout_url_carries_the_signup() -> None:
     """This IS the architecture: no server, no second list — the picks ride into
     the payment, and the paying email is forced to equal the picking email."""
