@@ -169,11 +169,45 @@ def test_scout_renders_untrusted_names_as_text_only() -> None:
 # --------------------------------------------------------------------- #
 
 def test_checkout_is_a_single_constant_away_on_both_pages() -> None:
-    assert re.search(r"const CHECKOUT_OPEN = false", LANDING), \
+    """The wiring slots must exist whatever state they are in — one constant
+    per page is the whole payment integration, and losing a slot means losing
+    the ability to open or close checkout at all.
+
+    This no longer pins CHECKOUT_OPEN to false. It was flipped on Aug 27 2026
+    (owner decision: launch now, create the Stripe links after), which is a
+    deliberate interim state, not a mistake — and the guarantee that makes it
+    safe is tested below rather than here."""
+    assert re.search(r"const CHECKOUT_OPEN = (true|false);", LANDING), \
         "landing page lost its checkout wiring slot"
-    for const in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY"):
-        assert re.search(rf'const {const} = ""', JOIN), \
+    for const in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS"):
+        assert re.search(rf"const {const} = ", JOIN), \
             f"join page lost its {const} wiring slot"
+
+
+def test_an_open_checkout_with_no_links_still_warns_before_the_work() -> None:
+    """The interim state between "launched" and "Stripe links exist": the
+    landing invites a purchase and the picker cannot finish one.
+
+    That is only tolerable because the picker says so BEFORE the buyer pastes
+    fifteen names, never after — the same rule that produced the closed-note in
+    the first place. A dead end discovered at the end of the work reads as
+    broken software; one stated at the top reads as "not yet".
+
+    This test exists precisely so that the interim cannot quietly become the
+    permanent state without somebody noticing the funnel is a cul-de-sac."""
+    links_live = not all(re.search(rf'const {c} = ""', JOIN) for c in
+                         ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY",
+                          "STRIPE_LINK_PASS"))
+    if links_live:
+        return                      # checkout can actually complete; nothing to warn about
+    assert 'id="closed-note"' in JOIN, \
+        "checkout is open with no payment links and the picker has no warning"
+    assert re.search(r"isn't open just yet", JOIN), \
+        "the closed-checkout message is gone while the links are still empty"
+    # And it is decided from the LINKS, not hand-toggled — a hand-set banner
+    # is one someone forgets to remove the day the links land.
+    assert re.search(r"STRIPE_LINK[_A-Z]*\s*(\|\||\?|===|!==|&&)|!.*STRIPE_LINK", JOIN), \
+        "the warning must be driven by whether a payment link exists"
 
 
 def test_every_paid_cta_routes_through_the_picker() -> None:
@@ -1745,6 +1779,27 @@ def _paid_path_modules(root: str = "run.batch") -> set[Path]:
             if (repo / (n.replace(".", "/") + ".py")).is_file()}
 
 
+def _runners_the_crons_execute() -> set[str]:
+    """Every `python -m run.X` a workflow actually RUNS, comments excluded.
+
+    Comments are stripped because a `#` line inside a `run:` block explaining
+    why a runner was REMOVED would otherwise be read as evidence that it is
+    still there — a test measuring its own documentation.
+    """
+    import yaml
+
+    roots: set[str] = set()
+    workflows = SITE.parent / ".github" / "workflows"
+    for path in sorted(workflows.glob("*.yml")):
+        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job in (doc.get("jobs") or {}).values():
+            for step in job.get("steps") or []:
+                for line in str(step.get("run", "")).splitlines():
+                    body = line.split("#", 1)[0]
+                    roots.update(re.findall(r"-m\s+(run\.[a-z_]+)", body))
+    return roots
+
+
 def test_the_roster_runner_cannot_reach_sleeper_at_all() -> None:
     """``run/tuesday.py`` is the runner PLAN §0's product actually uses, and its
     whole claim is that no league platform is involved. Unlike the staged check
@@ -1779,17 +1834,39 @@ def test_no_sleeper_in_the_paid_path() -> None:
     people to ignore red suites.
 
     The historical backtest may keep its Sleeper code — that is research on a
-    public sample league, not a commercial service — which is exactly why this
-    walks the imports reachable from `run/batch.py` rather than the whole repo.
+    public sample league, not a commercial service — so this walks only the
+    modules the PAID PATH reaches.
+
+    WHAT "the paid path" MEANS, and why it is derived rather than named
+    (Aug 27 2026, found by flipping CHECKOUT_OPEN): this used to walk
+    `run/batch.py`, which WAS the paid runner when it was written. batch is now
+    the retired league runner — nothing executes it — while the live product
+    runs run.tuesday, run.intake, run.solo and run.monday, every one of which
+    is clean. So the first real launch turned the suite red over a module no
+    customer can reach, which is exactly the cry-wolf failure the staging above
+    exists to avoid.
+
+    A hardcoded root goes stale the moment the architecture moves. The paid
+    path is therefore READ OUT OF THE CRONS — whatever they actually run is
+    what can touch a paying customer — so re-adding a Sleeper-reaching runner
+    to a workflow fails this immediately, and retiring one stops being a
+    reason to edit a test. Commands only, never comments: a workflow comment
+    naming run.batch must not be read as evidence that it runs.
     """
     plan = (SITE.parent / "PLAN.md").read_text(encoding="utf-8")
     checkout_open = not re.search(r"const CHECKOUT_OPEN = false", LANDING)
     links_live = not all(re.search(rf'const {c} = ""', JOIN) for c in
                          ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY",
                           "STRIPE_LINK_PASS"))
+
+    roots = _runners_the_crons_execute()
+    assert roots, "no runner found in any workflow — this guard has gone blind"
+    reached: set[Path] = set()
+    for root in roots:
+        reached |= _paid_path_modules(root)
     offenders = sorted(
-        p.name for p in _paid_path_modules()
-        if re.search(r"api\.sleeper\.app|sleeper\.app/|docs\.sleeper", 
+        p.name for p in reached
+        if re.search(r"api\.sleeper\.app|sleeper\.app/|docs\.sleeper",
                      p.read_text(encoding="utf-8")))
 
     if checkout_open or links_live:

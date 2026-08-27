@@ -496,7 +496,7 @@ document.documentElement.classList.add("js");
 // because the intake page is what attaches the buyer's roster and scoring to
 // the payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
-const CHECKOUT_OPEN = false;
+const CHECKOUT_OPEN = true;
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
 // (infra/form-worker.js, kind "waitlist") — one backend for every form on the
