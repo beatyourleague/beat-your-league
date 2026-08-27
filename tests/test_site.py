@@ -690,17 +690,32 @@ LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
 def test_monthly_price_never_undercuts_the_season_pass() -> None:
     """The monthly tier exists to make the pass obvious. If a full season of
     monthly costs LESS than the pass, the anchor inverts and the pass becomes
-    the sucker's choice — which is exactly what $6.99 did (PLAN §4)."""
-    SEASON_MONTHS = 3.65   # Sep 8 -> late Dec, 111 days
+    the sucker's choice — which is exactly what $6.99 did (PLAN §4).
+
+    Measured in CHARGES, not months. Stripe bills monthly in advance on the
+    anniversary, so a subscriber is charged an integer number of times and a
+    fractional multiplier prices a customer who does not exist. The old
+    `× 3.65` was satisfied by anything above $10.69, which is why it passed at
+    a price the modal customer beat: PLAN §4 names the Week 10–12 elimination
+    cliff as the point most monthly subscribers leave, and a Week-1 joiner who
+    leaves there has been charged exactly three times. At $12.99 that is
+    $38.97 — three cents under the pass gross, 63 cents under it net of Stripe
+    fees — after three months of collection risk and no upfront cash. A tier
+    whose typical customer is worth less than the tier it feeds is a leak, not
+    a ladder.
+    """
+    BILLED_MONTHS = 3      # the modal churn point, and an integer because
+    #                        charges are. Sep 8 -> the week 10-12 cliff.
     rendered = markup_only(LANDING)
     monthly = re.search(r'class="price">\$(\d+\.\d\d) <small>/ month', rendered)
     season = re.search(r'class="price">\$(\d+) <small>/ season', rendered)
     assert monthly and season, "could not read both prices off the pricing cards"
-    monthly_season_total = float(monthly.group(1)) * SEASON_MONTHS
+    modal_total = float(monthly.group(1)) * BILLED_MONTHS
     pass_price = float(season.group(1))
-    assert monthly_season_total > pass_price, (
-        f"a full season month-to-month costs ${monthly_season_total:.2f}, which is "
-        f"less than the ${pass_price:.2f} pass — the anchor is inverted")
+    assert modal_total > pass_price, (
+        f"a subscriber who leaves at the elimination cliff has paid "
+        f"${modal_total:.2f} against a ${pass_price:.2f} pass — the tier meant "
+        f"to feed the pass is worth less than it")
 
 
 def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
@@ -2029,7 +2044,7 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     assert "header-chips" in pass_branch
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
                          .split("else if (WANTS_PASS)")[0]
-    assert "header-pitch" in monthly_branch and "12.99" in monthly_branch
+    assert "header-pitch" in monthly_branch and "14.99" in monthly_branch
 
 
 def test_seat_mode_carries_no_billing_promises_and_warns_up_front() -> None:

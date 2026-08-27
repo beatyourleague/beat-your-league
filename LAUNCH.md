@@ -93,7 +93,7 @@ footer (only there — reports to paying subscribers are transactional).
 3. **Three products/payment links** — on each link, toggle **"Require customers to accept
    your terms of service"**:
    - Season pass — subscription, **$39 USD / year**
-   - Monthly — subscription, **$12.99 USD / month**
+   - Monthly — subscription, **$14.99 USD / month**
    - League Pass — subscription, **$99 USD / year**
 4. **Custom text above the Pay button** (closes the disclosure gap on the one page we
    don't control). One API call per link — replace key and `plink_…`:
@@ -101,7 +101,7 @@ footer (only there — reports to paying subscribers are transactional).
    curl https://api.stripe.com/v1/payment_links/plink_SEASON -u "rk_live_...:" -d "custom_text[submit][message]=Renews automatically each season at \$39 USD unless you cancel. We email you before any renewal, and you can cancel any time from your billing page — the link is in every report we send."
    ```
    ```bash
-   curl https://api.stripe.com/v1/payment_links/plink_MONTHLY -u "rk_live_...:" -d "custom_text[submit][message]=Bills \$12.99 USD monthly until you cancel. Billing stops automatically when the season ends — we never charge through the offseason."
+   curl https://api.stripe.com/v1/payment_links/plink_MONTHLY -u "rk_live_...:" -d "custom_text[submit][message]=Bills \$14.99 USD monthly until you cancel. Billing stops automatically when the season ends — we never charge through the offseason."
    ```
    ```bash
    curl https://api.stripe.com/v1/payment_links/plink_PASS -u "rk_live_...:" -d "custom_text[submit][message]=Renews automatically each season at \$99 USD unless you cancel. We email you before any renewal, and you can cancel any time from your billing page."

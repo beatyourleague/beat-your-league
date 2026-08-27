@@ -7,7 +7,7 @@ so this email is where the obligation is met — and it doubles as the honest
 "here is what happens next" a first Tuesday deserves.
 
 Everything here is plan-aware because the renewal terms differ by what was
-bought: a $39 season pass renews yearly, a $12.99 monthly bills until the season
+bought: a $39 season pass renews yearly, a $14.99 monthly bills until the season
 ends, a $99 League Pass renews yearly and covers seats, and a SEAT bills nobody
 at all. Sending a seat holder renewal terms for money they never spent would be
 its own small dishonesty.
@@ -25,7 +25,7 @@ from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
 SEASON_PRICE = "$39"
-MONTHLY_PRICE = "$12.99"
+MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$99"
 
 _FONT = "font-family:Arial,Helvetica,sans-serif;"

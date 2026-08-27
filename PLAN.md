@@ -354,9 +354,22 @@ Refunds no-questions through Week 2. The monthly×3.65 > season-pass rule below 
 
 **CORRECTION forced by the price change:** at $39 the season pass is no longer cheaper than paying
 monthly all season, so the ladder inverts and the monthly tier becomes the rational buy. Fix by
-raising monthly to **$12.99** (3.65 × $12.99 = $47.41, so the pass saves ~18%) when the $39 price
-ships. Whichever numbers are chosen, the invariant stands: **monthly × 3.65 must exceed the season
-pass, or the anchor argues against the product you want sold.**
+raising monthly when the $39 price ships.
+
+**SECOND CORRECTION (Aug 27 2026) — the multiplier was the wrong unit, and it hid an inversion.**
+Stripe bills monthly in advance on the anniversary, so a subscriber is charged an INTEGER number
+of times; `× 3.65` prices a customer who does not exist. Worse, the elimination cliff named above
+is the modal churn point, and a Week-1 joiner who leaves there has been charged exactly **three**
+times. At $12.99 that is **$38.97 — three cents under the $39 pass, and 63 cents under it net of
+Stripe fees** ($36.94 vs $37.57), after three months of collection risk with no upfront cash. So
+the tier built to make the pass obvious was quietly worth less than the pass. The old test guard
+(`monthly × 3.65 > $39`) was satisfied by any price above $10.69 and therefore never saw it.
+**Monthly is $14.99** (3 charges = $44.97; a full season = $59.96, so the pass saves 35%). The
+invariant is now stated in charges: **monthly × 3 must exceed the season pass**, pinned by
+`test_monthly_price_never_undercuts_the_season_pass`. Charm pricing on monthly and round numbers
+on the season tiers is deliberate, not drift — it is each price wearing its own category's
+clothes, and it matches the verified monthly field on the compare page (FootClan $11.99,
+Scoutcast $5.99, FantasyPros $3.99–$22.99).
 
 **Code consequences of the price change** (do them together, item 12 in §3): `site/index.html`,
 `site/join/index.html`, `site/league-pass.html`, the renewal-disclosure strings, and the
@@ -376,8 +389,9 @@ season runs Sep 8 → late Dec = 111 days ≈ 3.65 months ≈ 16 weekly reports.
 always exceed the season pass**, or the anchor argues against the product we want sold and invites
 exactly the month-to-month churn this pricing exists to prevent. At $6.99 against the old $29 pass
 the ladder was inverted ($25.49 < $29); $9.99 fixed it ($36.43). **At $39 it inverts again**
-($36.43 < $39), which is why the monthly tier rises to $12.99 alongside the price change
-($47.41, so the pass saves ~18%). Re-check this arithmetic on any future price move.
+($36.43 < $39), which is why the monthly tier rose alongside the price change. **Now stated in
+CHARGES, not months** (see the second correction below): monthly × 3 must exceed the season pass,
+which at $14.99 gives $44.97 against $39. Re-check this arithmetic on any future price move.
 
 **Copy does not argue the price** (owner direction, Aug 15 2026, recorded in CLAUDE.md — this
 supersedes the earlier "anchor to the league pot" instruction, which was still written here and is

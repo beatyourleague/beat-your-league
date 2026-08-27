@@ -271,7 +271,7 @@ Baltimore Ravens
 // Payment links. Empty means checkout is not open, and the page says the
 // roster was NOT saved rather than congratulating anyone.
 const STRIPE_LINK_SEASON = "";    // $39/season, auto-renewing annual
-const STRIPE_LINK_MONTHLY = "";   // $12.99/month
+const STRIPE_LINK_MONTHLY = "";   // $14.99/month
 const STRIPE_LINK_PASS = "";      // $99/season, whole league
 
 // League Pass SEATS only. A seat holder pays nothing, so there is no payment to
@@ -742,19 +742,19 @@ if (UPDATE_MODE) {
     note.style.display = "block";
   }
 } else if (WANTS_MONTHLY) {
-  $("submit").textContent = "Continue to checkout — $12.99/mo";
+  $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
     "team's file: the lineup we'd set, with the odds on the calls we can stand " +
-    "behind. A paid product from day one — $12.99 a month, and billing " +
+    "behind. A paid product from day one — $14.99 a month, and billing " +
     "stops on its own when the season ends.";
   $("header-chips").replaceChildren();
-  ["$12.99 / month", "Cancel any time", "First report Tue Sep 8"]
+  ["$14.99 / month", "Cancel any time", "First report Tue Sep 8"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;
       $("header-chips").appendChild(chip);
     });
-  const monthlyTerms = "Monthly is $12.99 and bills again each month " +
+  const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time.";
   $("renew-note").textContent = monthlyTerms;

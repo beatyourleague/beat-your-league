@@ -12,7 +12,7 @@ Five surfaces promise this, one of them the operative contract:
 Nothing enforced any of it. A Stripe monthly subscription bills forever, and no
 code in this repo had ever written to `/v1/subscriptions` at all — every Stripe
 call was a read plus one customer-metadata write. So in February a monthly
-subscriber would have been charged $12.99 for a product that sends nothing,
+subscriber would have been charged for a product that sends nothing,
 which is precisely the forgot-to-cancel pattern PLAN §4 bans outright.
 
 `cancel_at` is the primitive. It takes an instant, it never refunds, and when

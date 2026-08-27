@@ -624,6 +624,78 @@ point at the live path — leaving them on the dead one is how somebody generate
 league-flavoured drafts for a product with no league — and `run/content.py` keeps its code
 under a header saying what it is, the same treatment `reports/backtest.md` gets.
 
+**Monthly billing ran forever, and every shared link was a grey box (Aug 27 2026).** Two
+promises with nothing behind them.
+
+**The offseason (`run/billing.py`).** Five surfaces promise "billing stops on its own when
+the season ends" — the welcome email, `legal.html` (the operative contract, under a "this
+page wins" clause), the landing, the join page, and the custom text above Stripe's own Pay
+button. Nothing enforced any of it: **no code in this repo had ever written to
+`/v1/subscriptions`**, so in February a monthly subscriber is charged for a product that
+sends nothing — the forgot-to-cancel pattern PLAN §4 bans outright. `cancel_at` is the
+primitive: it never refunds, and when the date is more than a period away Stripe leaves the
+cycle alone until the subscription renews into the period containing it, then SHORTENS that
+period and prorates the invoice down, so the last charge covers the days actually served.
+Four rules, each bought with a failure reproduced in adversarial review:
+- **RULE B1 — never delete, never guess a season.** `current_season` answers the season that
+  just ENDED once the next schedule is unpublished (its own docstring concedes the fallback),
+  so a stop date derived from it is in the PAST for ~4 months a year. An earlier design's
+  answer to a past date was `DELETE /v1/subscriptions/{id}`; with checkout deliberately open
+  in draft season that deletes a just-paid subscription within the hour, every hour.
+  `stop_for` returns `(None, season)` and the run REPORTS it and exits non-zero. A missing
+  stop date is a problem to raise, never a licence to end somebody's subscription.
+- **RULE B2 — the plan comes from the PRICE.** The interval on the subscription's own price
+  decides, never our `plan` field and never a ref prefix — same reasoning as
+  `STRIPE_PAYMENT_LINKS` outranking a ref. The $39 and $99 tiers must renew.
+- **RULE B3 — late, never early.** A fired `cancel_at` cannot be undone; the customer needs a
+  new subscription and a new payment. So the stop is derived from the SEND CALENDAR — the
+  first Tuesday `current_week` answers the last week, plus a whole retry Tuesday — rather than
+  from "the finale is a Sunday", which is true of 24 of 28 cached seasons and is not a rule.
+  Verified across all 28, including 2010, whose final send lands two days AFTER its last game
+  because a week-16 makeup held `current_week` back.
+- **RULE B4 — ours only.** Scoped to customers carrying `byl_roster_ref`; the sweep otherwise
+  walks every subscription in the Stripe account.
+Dry by default (`--send`), `daily.yml` gated to the daily cron because that job also carries
+an hourly one and no step was schedule-gated. Five guards mutation-tested. Two things it
+forced: `run/renewals.py` read only `cancel_at_period_end` and never `cancel_at` — harmless
+only while nothing set the other, so it went live the same day and would have told a
+subscription scheduled to END that it was about to be charged $39; and LAUNCH.md's key recipe
+granted Subscriptions **Read**, which 403s every write.
+
+**The preview card (`render/og.py` → `site/og.png`).** Every page carried a placeholder
+comment where `og:image` belongs, so a link posted on X — the only marketing channel —
+rendered as a grey box with a domain in it. The card's figures are **READ from the landing
+page's hero file card**, which a test already pins to the published sample, so it inherits
+that pin and cannot advertise a number the product stopped producing; unreadable rows REFUSE
+rather than falling back to something invented. Rendered by headless Chrome (no image library
+in requirements, and X does not render SVG previews) and COMMITTED, so CI never needs a
+browser — `make og`, a deliberate local act like `make sample`. Chrome 152 writes the
+screenshot and then does not exit, so the renderer waits on the ARTEFACT and kills the
+browser itself; waiting on the process turned a working render into a timeout, twice. All 12
+pages carry it through one shared constant (`SOCIAL_IMAGE_TAGS` in `render/report.py`), and
+the three generators interpolate it rather than each keeping a copy to drift.
+
+**Monthly is $14.99 (owner decision, Aug 27 2026).** PLAN §4's invariant was stated in
+MONTHS (`monthly × 3.65 > $39`) and the unit was wrong: Stripe bills in advance on the
+anniversary, so charges are INTEGERS, and PLAN §4's own modal churn event — the Week 10–12
+elimination cliff — is exactly three charges. At $12.99 that is **$38.97, three cents under
+the $39 pass** and 63 cents under it net of fees, after three months of collection risk with
+no upfront cash: the tier built to make the pass obvious was worth less than the pass. The
+old test guard was satisfied by any price above $10.69 and never saw it; it now reads
+`× 3`. Charm pricing on monthly beside round numbers on the season tiers is deliberate — it
+matches the verified monthly field on the compare page (FootClan $11.99, Scoutcast $5.99,
+FantasyPros $3.99–$22.99) while $39/$99 wear the season-pass convention.
+**No feature-gating**, and on a stronger ground than code cost: `run/tuesday.py` contains no
+reference to `plan` at all, so gating would put the first tier branch into a delivery
+pipeline whose whole documented history is "every serious bug has been a path nobody
+executed." What monthly needed was not features but honesty — the pre-season roster file
+already ships to every buyer on the day they pay, regardless of plan, and was named on ZERO
+sales surfaces while the landing said the opposite ("First files land Tuesday, Sep 8"). Both
+pricing cards now say it, and the `CHECKOUT_OPEN` flip no longer tells a buyer their first
+file arrives Tuesday. Fixed alongside: `legal.html` §5 scoped the Week-2 refund to "your
+first season pass", so the operative contract offered monthly buyers no refund at all while
+the acknowledgment email we legally owe them promised one.
+
 **The pre-renewal notice, built (`render/renewal.py` + `run/renewals.py`, Aug 23 2026) — the
 last outstanding legal-floor gap.** Seven places across five surfaces promise "we email you
 before it bills", and Cal. B&P §17602(b) requires it 15–45 days before any renewal of a year or
@@ -1019,7 +1091,7 @@ social-meta guards glob the whole directory and caught it automatically.
 **The welcome email (`render/welcome.py`, Aug 23 2026) — the acknowledgment a subscription
 legally owes its buyer.** California's ARL requires a retainable post-purchase notice carrying the
 renewal terms and the cancel method; Stripe's receipt states the charge but not our cancel route.
-Plan-aware because the disclosures differ by purchase: season ($39/yr renewal), monthly ($12.99
+Plan-aware because the disclosures differ by purchase: season ($39/yr renewal), monthly ($14.99
 until season's end, no annual clause), League Pass payer ($99/yr, refund one per league, seats
 note), and SEAT — no billing terms at all, because renewal language for money never spent reads as
 a charge waiting to happen. **Built from the SIGNUP, never the registry row**: the registry
