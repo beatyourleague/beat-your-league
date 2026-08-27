@@ -127,11 +127,11 @@ def test_the_cancel_link_prefers_the_billing_portal(monkeypatch) -> None:
     assert "billing.stripe.com/p/login/x1" in msg.text
 
 
-def test_without_a_portal_the_legal_steps_are_the_destination(monkeypatch) -> None:
+def test_without_a_portal_the_terms_steps_are_the_destination(monkeypatch) -> None:
     monkeypatch.setenv("SITE_URL", "https://example.com")
     msg = _msg()
-    assert "https://example.com/legal.html#cancel" in msg.html
-    assert "https://example.com/legal.html#cancel" in msg.text
+    assert "https://example.com/terms.html#cancel" in msg.html
+    assert "https://example.com/terms.html#cancel" in msg.text
 
 
 def test_with_nothing_configured_the_email_still_names_a_route() -> None:
@@ -139,7 +139,7 @@ def test_with_nothing_configured_the_email_still_names_a_route() -> None:
     silent about cancellation either."""
     msg = _msg()
     assert "href" not in msg.html.split("Cancel any time")[1].split(".")[0]
-    assert re.search(r"legal page", msg.text, re.I)
+    assert re.search(r"terms page", msg.text, re.I)
 
 
 # --------------------------------------------------------------------- #

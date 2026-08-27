@@ -102,11 +102,11 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     cancel_line = (
         "Cancel any time, yourself, in about fifteen seconds — "
         + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>.'
-           if href else "the steps are on our site's legal page.")
+           if href else "the steps are on our site's terms page.")
     )
     cancel_text = ("Cancel any time, yourself, in about fifteen seconds — "
                    + (f"{label}: {href}" if href else
-                      "the steps are on our site's legal page."))
+                      "the steps are on our site's terms page."))
 
     what_next = ("Every Tuesday morning, one email: the lineup we'd set for "
                  "your roster under your scoring, the odds on every call worth "

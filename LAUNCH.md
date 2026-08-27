@@ -20,7 +20,7 @@ file is the hands-on-keyboard half.
 3. Cloudflare **Email Routing** (free): create `hello@<domain>` forwarding to your real
    inbox. That address becomes `CONTACT_EMAIL` and the reply-to on every report.
 4. **Tell me:** the domain and the chosen contact address, plus your legal jurisdiction
-   (state/country). I fill `legal.html`'s two placeholders, `CONTACT_EMAIL` on both funnel
+   (state/country). I fill `terms.html`'s two placeholders, `CONTACT_EMAIL` on both funnel
    pages, and add `site/CNAME`.
 
 ## 2. GitHub (~30 min)
@@ -84,11 +84,16 @@ footer (only there — reports to paying subscribers are transactional).
 ## 5. Stripe (~90 min) — links, terms checkbox, portal, key
 
 1. **Public details** (Settings → Business → Public details): set Terms of service URL to
-   `https://<domain>/legal.html` and Privacy policy URL to
-   `https://<domain>/legal.html#privacy`.
+   `https://<domain>/terms.html` and Privacy policy URL to
+   `https://<domain>/privacy.html`.
+
+   Two separate documents on purpose: the URL is shown to the buyer at
+   checkout, and "legal.html" told them nothing about which one they were
+   opening. `legal.html` still resolves — it redirects to the terms — so
+   nothing that already points at it breaks.
 2. **Customer portal** (Settings → Billing → Customer portal): activate, allow
    subscription cancellation. Copy the permanent login link (`https://billing.stripe.com/p/login/…`)
-   → that is the `BILLING_PORTAL_URL` secret. Also paste it into `legal.html` at the marked
+   → that is the `BILLING_PORTAL_URL` secret. Also paste it into `terms.html` at the marked
    comment (or tell me and I will).
 3. **Three products/payment links** — on each link, toggle **"Require customers to accept
    your terms of service"**:

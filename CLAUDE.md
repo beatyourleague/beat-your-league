@@ -1629,7 +1629,22 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   still names the rival, because it goes only to the person entitled to see it. Guarded by
   `test_no_real_league_member_is_named_on_any_public_page`. Regenerate `site/backtest.html`
   and `site/sample-report.html` through those paths — never by hand.
-- **`site/legal.html`** carries terms, renewal, refunds (one per person), privacy, 18+, and
+**Terms and privacy are two documents (Aug 27 2026).** Stripe shows the Terms of service
+and Privacy policy URLs to the buyer at checkout, and `legal.html` told them nothing about
+which one they were opening — the field names are separate for a reason. `site/terms.html`
+keeps all 15 sections and their original numbers (renumbering would have broken the page's
+own "section 4" and "section 15" cross-references), with §10 now pointing at the policy
+rather than containing it. `site/privacy.html` is a real standalone policy — collection,
+processors, retention, deletion rights, age — and it leads with the strongest claim the site
+can honestly make: **no cookies, no analytics, no trackers**, verified by a test that sweeps
+every page for tracker scripts. It also names Google Fonts, because the pages do load type
+from Google and "no trackers" beside a silent third-party request is the small untruth that
+discredits a whole page. `site/legal.html` stays as a redirect stub with a canonical link:
+the site was already live, and a 404 on a terms link is the worst broken link a paid site
+can have. The `#cancel` anchor moved with the terms, so the route printed in every report
+(`cancel_destination`) is `terms.html#cancel`.
+
+- **`site/terms.html`** carries terms, renewal, refunds (one per person), 18+, and
   contact; both funnel pages link it. It is plain-language, not lawyer-reviewed — say so if
   asked, and recommend a real review before scale.
 - **No personal contact details ship on the site (owner instruction, Aug 14 2026).**

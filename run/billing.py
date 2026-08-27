@@ -5,7 +5,7 @@ Five surfaces promise this, one of them the operative contract:
     render/welcome.py  "billing stops on its own when the season ends — we
                         don't charge through the offseason, because we aren't
                         sending you anything."
-    site/legal.html    "We do not charge monthly through the offseason"
+    site/terms.html    "We do not charge monthly through the offseason"
     site/index.html, site/join/index.html, and the payment link's own custom
     text above Stripe's Pay button (LAUNCH.md).
 

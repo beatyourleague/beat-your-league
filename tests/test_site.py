@@ -545,7 +545,7 @@ def test_no_personal_contact_details_are_published() -> None:
     # requests have nowhere else to go. Set Aug 26 2026 to the project inbox
     # (Cloudflare Email Routing -> the operator), never a personal address, and
     # never a plausible-looking invention that silently swallows requests.
-    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    legal = (SITE / "terms.html").read_text(encoding="utf-8")
     assert "hello@beatyourleague.com" in legal, \
         "legal page lost its contact route — refunds and deletions need one"
     assert not re.search(r"added before launch", legal, re.I), \
@@ -563,18 +563,83 @@ def test_signup_degrades_honestly_without_a_contact_route() -> None:
 
 
 def test_legal_page_covers_the_promises_money_depends_on() -> None:
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     for required in (r"renew once a year|renews once a year", r"cancel yourself at any time",
                      r"one refund per person", r"18 or older",
                      r"never see or store your card", r"not affiliated"):
         assert re.search(required, legal, re.I), f"legal page is missing: {required}"
 
 
+def test_the_privacy_policy_stands_on_its_own() -> None:
+    """It is linked from Stripe's checkout as the privacy policy, so it has to
+    BE one rather than a section that used to live inside the terms.
+
+    Each requirement is a thing a reader came to the page to find, and each is
+    also a thing that quietly disappears when a page is rewritten for length.
+    """
+    # BODY ONLY. prose() collapses whitespace but does not strip tags, so a
+    # claim surviving in <meta name="description"> would satisfy an assertion
+    # while the page a reader actually sees had lost it — the guard reading the
+    # wrong copy of the sentence.
+    page = (SITE / "privacy.html").read_text(encoding="utf-8")
+    privacy = prose(page[page.find("<body>"):])
+    for required, why in (
+            (r"what we collect", "the heading a reader scans for"),
+            (r"never ask for", "passwords and card details, stated as absences"),
+            (r"no cookies|sets no cookies", "the strongest true claim on the page"),
+            (r"analytics", "named explicitly, not merely absent"),
+            (r"do not sell your data|don't sell your data", "the promise buyers check"),
+            (r"delete", "the right that makes the rest meaningful"),
+            (r"how long", "retention"),
+            (r"stripe", "the processor that holds the payment"),
+            (r"18 or older", "the age gate"),
+            (r"hello@beatyourleague\.com", "a route to exercise any of it")):
+        assert re.search(required, privacy, re.I), \
+            f"privacy policy is missing {required!r} — {why}"
+
+
+def test_the_privacy_policy_does_not_claim_more_privacy_than_we_deliver() -> None:
+    """The no-cookies claim is only honest while it is true, and the pages DO
+    reach one third party: Google Fonts sees a visitor's IP. Saying "no
+    trackers" while silently loading a Google stylesheet is the kind of small
+    untruth that discredits the whole page, so the policy names it."""
+    pages = [p for p in SITE.rglob("*.html")]
+    fonts = [p for p in pages
+             if "fonts.googleapis.com" in p.read_text(encoding="utf-8")]
+    whole = (SITE / "privacy.html").read_text(encoding="utf-8")
+    privacy = whole[whole.find("<body>"):]           # body only, same reason
+    if fonts:
+        assert re.search(r"google fonts", privacy, re.I), (
+            f"{len(fonts)} pages load Google Fonts and the privacy policy does "
+            f"not mention it, while claiming no trackers")
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        for tracker in ("googletagmanager", "google-analytics", "gtag(",
+                        "plausible.io", "fathom", "posthog"):
+            assert tracker not in text, (
+                f"{page.name} loads {tracker} while privacy.html says the site "
+                f"runs no analytics")
+
+
+def test_both_documents_are_reachable_and_the_old_url_still_resolves() -> None:
+    """legal.html was live before the split. Nothing external points at it that
+    we know of, but a 404 on a terms link is the worst possible broken link on
+    a paid site, so it redirects rather than disappearing."""
+    stub = (SITE / "legal.html").read_text(encoding="utf-8")
+    assert 'http-equiv="refresh"' in stub and "terms.html" in stub
+    assert 'href="privacy.html"' in stub, "the stub strands anyone after privacy"
+    assert 'rel="canonical"' in stub, "search engines need the destination"
+    for page in (SITE / "index.html", SITE / "join" / "index.html"):
+        text = page.read_text(encoding="utf-8")
+        assert re.search(r'href="(\.\./)?terms\.html', text), f"{page.name}: no terms link"
+        assert re.search(r'href="(\.\./)?privacy\.html"', text), f"{page.name}: no privacy link"
+
+
 def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
     """"You can cancel any time" without saying HOW is friction wearing a
     promise's clothes. The terms must give real, followable steps."""
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
-    assert re.search(r'id="cancel"', (SITE / "legal.html").read_text(encoding="utf-8")), \
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
+    assert re.search(r'id="cancel"', (SITE / "terms.html").read_text(encoding="utf-8")), \
         "the cancellation steps need a linkable anchor"
     # A concrete destination, not "contact your provider". Which vendor it names
     # is a platform decision; that it names ONE is not negotiable.
@@ -589,7 +654,7 @@ def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
     assert re.search(r"does not always stop a", legal, re.I), \
         "terms must warn that unsubscribing is not the same as cancelling"
     for page, name in ((LANDING, "landing"), (JOIN, "join")):
-        assert re.search(r'legal\.html#cancel', page), \
+        assert re.search(r'(\.\./)?terms\.html#cancel', page), \
             f"{name} page should link straight to the cancellation steps"
 
 
@@ -613,7 +678,7 @@ def test_every_report_carries_a_way_out() -> None:
 def test_billing_never_outlives_the_product() -> None:
     """We only charge for months we actually send something. Monthly billing
     stops at season end; the annual renewal lands before the season it covers."""
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     assert re.search(r"billing runs only while the season runs", legal, re.I)
     assert re.search(r"do not charge monthly through the offseason", legal, re.I)
     assert re.search(r"never during\s+the offseason", legal, re.I)
@@ -623,7 +688,7 @@ def test_billing_never_outlives_the_product() -> None:
 def test_legal_page_actually_protects_the_business() -> None:
     """Consumer promises without limits is a one-sided contract. These are the
     clauses that stop a $29 sale becoming an unbounded claim."""
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     protections = {
         "liability cap": r"total liability to you.{0,80}limited to the amount you",
         "no consequential damages": r"indirect, incidental, special, or consequential",
@@ -646,18 +711,18 @@ def test_legal_page_actually_protects_the_business() -> None:
 
 
 def test_the_contract_describes_the_product_actually_sold() -> None:
-    """legal.html carries a 'this page wins' clause — so when §1, §7, §9 and
+    """terms.html carries a 'this page wins' clause — so when §1, §7, §9 and
     §10 still described the discontinued Sleeper product (a Rival Report built
     from the league's record, a privacy list of 'your Sleeper user ID and which
     manager you named as your rival'), the operative contract did not cover
     the service being sold, and the privacy policy was inaccurate under
     CalOPPA. Found by a compliance read three weeks before launch."""
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     for stale in (r"Rival Report", r"Sleeper user ID", r"named as your rival",
                   r"league's own publicly readable record", r"Sleeper's public API",
                   r"depend on Sleeper"):
         assert not re.search(stale, legal, re.I), \
-            f"legal.html still describes the Sleeper product: {stale!r}"
+            f"terms.html still describes the Sleeper product: {stale!r}"
     # ...and it describes what is actually collected and depended on.
     assert re.search(r"the roster you entered", legal, re.I)
     assert re.search(r"scoring settings", legal, re.I)
@@ -706,7 +771,7 @@ def test_the_legal_page_names_a_real_jurisdiction_and_contact() -> None:
     the other direction: the placeholders must not come BACK, because a
     contract with no governing law and a refund route with no address are the
     two gaps that make everything else on the page unenforceable."""
-    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    legal = (SITE / "terms.html").read_text(encoding="utf-8")
     assert re.search(r"Province of Ontario", legal), \
         "governing law lost its jurisdiction"
     assert "hello@beatyourleague.com" in legal, "legal page lost its contact route"
@@ -716,7 +781,7 @@ def test_the_legal_page_names_a_real_jurisdiction_and_contact() -> None:
     # as stripping rights a buyer has where they actually live.
     assert re.search(r"doesn't remove protections you have", legal, re.I)
     for page, name in ((LANDING, "landing"), (JOIN, "join")):
-        assert re.search(r'href="\.\./legal\.html"|href="legal\.html"', page), \
+        assert re.search(r'href="(\.\./)?terms\.html"', page), \
             f"{name} page does not link the terms"
 
 
@@ -764,7 +829,7 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     """The landing pricing card is the single source of truth for price, and
     two surfaces were never enrolled in that propagation.
 
-    legal.html is the operative contract under a "this page wins" clause, so a
+    terms.html is the operative contract under a "this page wins" clause, so a
     stale price there is not a typo — it is the document that governs. And
     compare/index.html is where a diligent buyer checks us against nine
     competitors, which is the worst place to be caught quoting an old number.
@@ -775,7 +840,7 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     monthly = re.search(r'class="price">\$(\d+\.\d\d) <small>/ month', rendered)
     season = re.search(r'class="price">\$(\d+) <small>/ season', rendered)
     assert monthly and season, "could not read both prices off the pricing cards"
-    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    legal = (SITE / "terms.html").read_text(encoding="utf-8")
     compare = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
     # The compare table quotes NINE competitors' real prices, so only our own
     # row may be swept for a stale figure — scoping it to any narrower thing
@@ -783,7 +848,7 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     ours = re.search(r'<tr class="us">.*?</tr>', compare, re.S)
     assert ours, "the comparison table no longer marks our own row"
 
-    for page, name in ((legal, "legal.html"), (ours.group(0), "compare, our row")):
+    for page, name in ((legal, "terms.html"), (ours.group(0), "compare, our row")):
         assert f"${monthly.group(1)}" in page, (
             f"{name} does not state the monthly price the landing charges "
             f"(${monthly.group(1)})")
@@ -793,7 +858,7 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
                   if p != f"${monthly.group(1)}"}
         assert not others, (
             f"{name} carries another decimal price {sorted(others)} — one of "
-            f"them is stale, and legal.html is the operative contract")
+            f"them is stale, and terms.html is the operative contract")
 
 
 def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
@@ -811,7 +876,7 @@ def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
                        (LEAGUE_PASS, "league pass")):
         assert re.search(r"All prices in US dollars|USD", page), \
             f"{name} page shows a price with no currency stated anywhere"
-    legal = prose((SITE / "legal.html").read_text(encoding="utf-8"))
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     assert re.search(r"All prices are in US dollars", legal, re.I)
 
 
@@ -832,7 +897,7 @@ def test_league_pass_states_its_own_terms() -> None:
         assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
     # It must not promise a report to managers who never signed up.
     assert re.search(r"Managers who never sign up simply don't get a report", prose_page, re.I)
-    assert re.search(r'href="legal\.html"', LEAGUE_PASS)
+    assert re.search(r'href="terms\.html"', LEAGUE_PASS)
 
 
 def test_league_pass_makes_no_win_promise() -> None:
@@ -1212,7 +1277,7 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
     banned = r"\b(calibrated|tested|proven|accurate)\b|we hit \d"
     # The samples are here because the review sweep (Aug 24) found "tested" in
     # the published sample's own DEF-gate prose — product copy renders onto
-    # these pages, so a leak in engine wording ships here first. legal.html is
+    # these pages, so a leak in engine wording ships here first. terms.html is
     # here because its warranty disclaimer said "accurate" (a negation, but
     # the frozen ban is on the word, and reword-not-allowlist is the precedent).
     surfaces = {"landing": LANDING, "join": JOIN,
@@ -1220,7 +1285,7 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
                 "compare": COMPARE,
                 "sample": SAMPLE_REPORT,
                 "sample-first-week": (SITE / "sample-first-week.html").read_text(encoding="utf-8"),
-                "legal": (SITE / "legal.html").read_text(encoding="utf-8")}
+                "legal": (SITE / "terms.html").read_text(encoding="utf-8")}
     for name, page in surfaces.items():
         visible = re.sub(r"<head>.*?</head>|<script\b.*?</script>|<style\b.*?</style>|"
                          r"<!--.*?-->", " ", page, flags=re.S | re.I)
@@ -1426,7 +1491,7 @@ def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
 
     surfaces = [
         SITE / "index.html", SITE / "join" / "index.html",
-        SITE / "league-pass.html", SITE / "legal.html",
+        SITE / "league-pass.html", SITE / "terms.html", SITE / "privacy.html",
         SITE / "backtest.html", SITE / "ledger" / "index.html",
         SITE / "sample-report.html",
         SITE.parent / "rival-report-template.html",

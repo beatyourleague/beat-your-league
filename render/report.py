@@ -153,7 +153,7 @@ def source_line(meta: Mapping[str, Any]) -> str:
 CANCEL_HEAD = "Done with this?"
 CANCEL_BODY = ("Cancel it yourself from your own billing page — it takes about "
                "fifteen seconds and stops the billing immediately; the exact "
-               "steps are on our legal page. "
+               "steps are on our terms page. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end.")
 def cancel_destination() -> tuple[str, str]:
@@ -171,7 +171,7 @@ def cancel_destination() -> tuple[str, str]:
         return portal, "your billing page"
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if site:
-        return f"{site}/legal.html#cancel", "the exact steps, on our legal page"
+        return f"{site}/terms.html#cancel", "the exact steps, on our terms page"
     return "", ""
 
 

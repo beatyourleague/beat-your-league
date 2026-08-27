@@ -399,7 +399,7 @@ def test_the_week_one_subject_does_not_call_an_ordering_a_decision() -> None:
 def test_every_report_carries_a_machine_readable_way_out(tmp_path, monkeypatch) -> None:
     """A delivered draft's headers were From, To, Subject, MIME-Version and
     Content-Type — nothing else. No List-Unsubscribe, and the footer's own
-    sentence ("the exact steps are on our legal page") was never a link on
+    sentence ("the exact steps are on our terms page") was never a link on
     either half: the HTML carried exactly one href, the roster-update link.
     ~18 emails a season, each promising a fifteen-second cancel with no way to
     reach it (found Aug 24 2026 by reading a draft the dry provider wrote).
@@ -428,7 +428,7 @@ def test_every_report_carries_a_machine_readable_way_out(tmp_path, monkeypatch) 
     # And the route falls back rather than rendering a dead link.
     monkeypatch.delenv("BILLING_PORTAL_URL", raising=False)
     monkeypatch.setenv("SITE_URL", "https://example.com")
-    assert cancel_destination()[0] == "https://example.com/legal.html#cancel"
+    assert cancel_destination()[0] == "https://example.com/terms.html#cancel"
     monkeypatch.delenv("SITE_URL", raising=False)
     assert cancel_destination() == ("", ""), \
         "with nothing configured the footer must render prose, never a dead link"

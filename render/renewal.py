@@ -89,14 +89,14 @@ def renewal_message(renewal: Renewal) -> Message:
         "If you'd rather not renew, cancel it yourself in about fifteen "
         "seconds — "
         + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>. '
-           if href else "the steps are on our site's legal page. ")
+           if href else "the steps are on our site's terms page. ")
         + "Cancel before that date and you are not charged."
     )
     cancel_text = (
         "If you'd rather not renew, cancel it yourself in about fifteen "
         "seconds — "
         + (f"{label}: {href}. " if href else
-           "the steps are on our site's legal page. ")
+           "the steps are on our site's terms page. ")
         + "Cancel before that date and you are not charged.")
 
     lede = (f"Your subscription renews on {when}, and the card on file will be "

@@ -61,7 +61,7 @@ class Message:
     # Where "stop sending me this" points. For a PAID subscription there is no
     # free list to leave — unsubscribing and cancelling are the same act — so
     # this is the billing portal where the money actually stops, falling back
-    # to the legal page's cancel section. Emitted as List-Unsubscribe on every
+    # to the terms page's cancel section. Emitted as List-Unsubscribe on every
     # provider: a weekly report went out with no unsubscribe mechanism of any
     # kind and no cancel link in either half, while its own footer said the
     # steps were "on our legal page" (found Aug 24 2026, by reading a
