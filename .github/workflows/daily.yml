@@ -18,6 +18,22 @@ on:
   schedule:
     # 14:00 UTC daily — mid-morning US either side of the DST change.
     - cron: "0 14 * * *"
+    # AND every hour. A purchase is the moment a subscriber is most engaged and
+    # least patient: buying on Wednesday and holding nothing until Thursday
+    # afternoon is the "I paid and got nothing" gap that drives refunds at this
+    # size, and during draft season they are actively working on the team they
+    # just paid you to analyse.
+    #
+    # Safe to run hourly for the same reason the Tuesday retry is safe: every
+    # message carries an idempotency key checked against sent.jsonl, so a run
+    # with no new payments finds nothing to do and mails nobody. The 14:00 run
+    # above is the one that also sends renewal notices and drafts the reply
+    # kit; those steps are cheap and idempotent too.
+    #
+    # This is the interim. Once the form Worker is deployed, a Stripe webhook
+    # can trigger this workflow directly and the wait drops from an hour to a
+    # minute — same pipeline, better trigger.
+    - cron: "0 * * * *"
   workflow_dispatch: {}
 
 permissions:

@@ -696,3 +696,51 @@ def test_the_worker_the_picker_and_the_intake_agree_on_the_update_contract() -> 
         assert field in worker
     # And it never accepts an unauthenticated read.
     assert "Bearer ${env.FORM_API_KEY}" in worker and "401" in worker
+
+
+def test_a_purchase_before_kickoff_gets_the_week_it_paid_for() -> None:
+    """A mid-season buyer used to get the roster file — byes and last season's
+    record — and wait until the next Tuesday for the product they actually
+    bought. Buying on a Wednesday meant six days of holding nothing.
+
+    Now the file a purchase earns depends on WHEN it happened:
+      pre-season, or mid-week -> the roster file (facts, no calls)
+      after Tuesday's send, before kickoff -> that week's report
+
+    The line is KICKOFF, and it is an honesty line rather than a convenience
+    one. Confidences are predictions about that week's games and the ledger
+    records them as such (principle 2), so publishing a report after kickoff
+    would put a "prediction" about a finished game on the public record —
+    the one thing the ledger exists to prevent. week_has_kicked_off answers
+    True on anything it cannot determine, so doubt falls to the roster file.
+    """
+    from datetime import date
+
+    from run.solo import CACHE_DIR, week_has_kicked_off
+
+    # Real 2026 schedule: week 1's first game is Sep 9.
+    assert week_has_kicked_off(CACHE_DIR, "2026", 1, date(2026, 9, 8)) is False
+    assert week_has_kicked_off(CACHE_DIR, "2026", 1, date(2026, 9, 9)) is True
+    assert week_has_kicked_off(CACHE_DIR, "2026", 1, date(2026, 9, 20)) is True
+    # A week the schedule does not cover reads as STARTED, never as "safe".
+    assert week_has_kicked_off(CACHE_DIR, "2026", 99, date(2026, 9, 1)) is True
+    assert week_has_kicked_off(CACHE_DIR, "1999", 1, date(2026, 9, 1)) is True
+
+
+def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
+    """The purchase moment is when a subscriber is most engaged and least
+    patient. A daily-only sweep meant someone buying at 15:00 waited nearly a
+    full day for anything at all — during draft season, while actively working
+    on the team they just paid to have analysed.
+
+    Safe hourly for the same reason the Tuesday retry is safe: every message is
+    keyed and checked against sent.jsonl, so a run with no new payments mails
+    nobody."""
+    import re
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parent.parent / ".github" / "workflows"
+            / "daily.yml").read_text(encoding="utf-8")
+    crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
+    assert "0 * * * *" in crons, f"the hourly intake sweep is gone: {crons}"
+    assert "0 14 * * *" in crons, "the daily run (renewals, reply kit) moved"

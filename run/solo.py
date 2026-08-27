@@ -106,6 +106,50 @@ def _final_teams_for_week(cache_dir: Path, season: str, week: int) -> set[str]:
     return done
 
 
+def week_has_kicked_off(cache_dir: Path, season: str, week: int,
+                        today: "date | None" = None) -> bool:
+    """Has week ``week`` started playing yet?
+
+    Load-bearing for honesty, not convenience. A report's confidences are
+    PREDICTIONS about that week's games, and the ledger records them as such
+    (principle 2). Publishing one after kickoff would put a "prediction" about
+    a finished game on the public record — the single thing the ledger exists
+    to make impossible.
+
+    So a purchase made mid-week does NOT get that week's calls. It gets the
+    roster file instead, and its first weekly file on the next Tuesday.
+
+    Read off the schedule's earliest gameday for the week. Unknown reads as
+    STARTED: if we cannot tell, we must not publish a prediction.
+    """
+    import csv as _csv
+    from datetime import date as _date, datetime as _dt
+
+    today = today or _dt.now(timezone.utc).date()
+    try:
+        path = fetch("schedules", "games.csv", cache_dir, live=True)
+    except NflverseError:
+        return True                       # cannot tell -> do not publish
+    first: "_date | None" = None
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in _csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            try:
+                if int(row.get("week") or 0) != int(week):
+                    continue
+                day = _dt.strptime((row.get("gameday") or "").strip(), "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            if first is None or day < first:
+                first = day
+    if first is None:
+        return True                       # week not in the schedule -> unknown
+    return today >= first
+
+
 def assert_week_is_complete(cache_dir: Path, season: str, week: int,
                             weekly: Mapping[int, Mapping[str, Any]]) -> None:
     """Refuse to build a report from a week whose box scores have not landed.

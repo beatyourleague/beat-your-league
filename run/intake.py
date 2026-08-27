@@ -509,36 +509,77 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
               file=sys.stderr)
 
 
-def _send_preseason(servable: list[RosterSignup], data, season: str) -> None:
+def _first_file(signup, data, season: str, processed_dir):
+    """The file a purchase earns, chosen by WHEN the purchase happened.
+
+    Pre-season, or mid-week: the roster file — byes, thin spots and last
+    season's record under their own scoring. Facts only, no calls.
+
+    Between Tuesday's send and that week's kickoff: the WEEK'S REPORT, the
+    thing they actually paid for. A buyer on the Wednesday of week 6 should
+    not wait six days to see the product.
+
+    The line is kickoff, and it is an honesty line rather than a convenience
+    one. Confidences are predictions about that week's games and the ledger
+    records them as such (principle 2), so publishing a report after kickoff
+    would put a "prediction" about a finished game on the public record. When
+    in doubt week_has_kicked_off answers True, and they get the roster file.
+    """
+    from run.solo import week_has_kicked_off
+
+    if getattr(data, "week", 1) > 1 and not week_has_kicked_off(
+            CACHE_DIR, season, data.week):
+        from run.rosters import RosterSubscriber
+        from run.tuesday import run_subscriber
+        roster = signup.roster()
+        subscriber = RosterSubscriber(
+            email=signup.email, ref=signup.ref,
+            player_ids=tuple(roster.player_ids), slots=tuple(roster.slots),
+            scoring=roster.scoring, league_size=roster.league_size,
+            plan="season", origin=signup.slug)
+        template = (REPO_ROOT / "rival-report-template.html").read_text(
+            encoding="utf-8")
+        result = run_subscriber(subscriber, data, template,
+                                processed_dir=processed_dir)
+        if result.ok and result.message is not None:
+            return result.message
+        # Fall through to the roster file rather than sending nothing.
+    return None
+
+
+def _send_first_files(servable: list[RosterSignup], data, season: str,
+                      processed_dir=None) -> None:
     """The file they get for paying, on the day they pay.
 
     The weekly product cannot say anything until box scores exist, so a buyer
     who signed up in draft season used to hold nothing for up to a fortnight.
-    "I paid and got nothing" is the dominant refund driver in a subscription
-    this size, and it was built into the calendar rather than being anyone's
-    fault. This closes it with FACTS — the published schedule and last season's
-    completed box scores — so it carries no calibration burden and makes no
-    call the frozen method would govern.
+    "I paid and got nothing" is the dominant refund driver at this size.
 
-    One roster per file, so failures are contained per subscriber exactly as in
-    run/tuesday.py: one person's odd roster must never cost everybody else the
-    file they paid for.
+    One file per purchase, never two — three emails at once (welcome, roster
+    file, weekly report) reads as a mailing list rather than a product.
     """
     from engine.preseason import build_preseason_report, bye_by_team
     from render.preseason import preseason_message
 
+    from run.tuesday import PROCESSED_DIR
+
+    processed_dir = processed_dir or PROCESSED_DIR
     if data is None or not servable:
         return
     try:
         byes = bye_by_team(CACHE_DIR, season)
-    except Exception as exc:  # noqa: BLE001 — no schedule, no file, no failure
-        print(f"Pre-season files: skipped, the {season} schedule could not be "
-              f"read ({exc})", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001
+        print(f"First files: skipped, the {season} schedule could not be read "
+              f"({exc})", file=sys.stderr)
         return
 
     messages = []
     for signup in servable:
         try:
+            weekly = _first_file(signup, data, season, processed_dir)
+            if weekly is not None:
+                messages.append(weekly)
+                continue
             roster = signup.roster()
             spec = spec_from_ref(roster)
             report = build_preseason_report(
@@ -548,24 +589,24 @@ def _send_preseason(servable: list[RosterSignup], data, season: str) -> None:
                 signup.email, signup.slug, report,
                 purchased_at=str(signup.seen_at or "")))
         except Exception as exc:  # noqa: BLE001 — batch contract
-            print(f"    PRE-SEASON FILE FAILED for {signup.slug}: {exc!r}",
+            print(f"    FIRST FILE FAILED for {signup.slug}: {exc!r}",
                   file=sys.stderr)
     if not messages:
         return
 
     provider = build_provider(None)
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
-        print(f"Pre-season files: {len(messages)} pending — EMAIL_PROVIDER is "
-              f"not set, so none were sent and none were recorded.")
+        print(f"First files: {len(messages)} pending — EMAIL_PROVIDER is not "
+              f"set, so none were sent and none were recorded.")
         return
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
-    print(f"Pre-season files via {provider.name}: {len(delivered)} sent, "
+    print(f"First files via {provider.name}: {len(delivered)} sent, "
           f"{len(sends) - len(delivered) - len(failures)} already sent, "
           f"{len(failures)} failed")
     for result in failures:
-        print(f"    PRE-SEASON SEND FAILED {result.message.key}: {result.detail}",
+        print(f"    FIRST FILE SEND FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
 
 
@@ -773,7 +814,7 @@ def main(argv: list[str] | None = None) -> int:
     # reports what is pending rather than failing — the registry is this run's
     # contract; the weekly and daily crons set EMAIL_PROVIDER.
     _send_welcomes(servable, seat_rows, known_season)
-    _send_preseason(servable, data, known_season)
+    _send_first_files(servable, data, known_season)
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered
