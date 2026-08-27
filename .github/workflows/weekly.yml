@@ -26,6 +26,22 @@ on:
     # Harmless for correctness (week resolution is date-based, never hour-based)
     # but it is a real change to when a subscriber's inbox lights up.
     - cron: "0 11 * * 2"
+    # THE SAME JOB AGAIN, four hours later. Not a second workflow: one
+    # definition means the retry cannot drift from the thing it is retrying.
+    #
+    # If the 11:00 run worked, this costs nothing — every message carries an
+    # idempotency key of (season, week, subscriber) checked against
+    # data/processed/sent.jsonl, so it finds everyone already sent, reports
+    # them as skipped, and exits clean. If the 11:00 run FAILED, subscribers
+    # get their file the same morning instead of whenever the failure is
+    # noticed, which for a solo operator could be Thursday.
+    #
+    # A missed week is far more likely and far more damaging than a duplicate
+    # email, which is why this errs toward running twice. The one window it
+    # cannot cover is a run that sent successfully and then failed to commit
+    # sent.jsonl — the send log is uploaded as an artifact for exactly that
+    # case, and recovering from it is deliberately manual.
+    - cron: "0 15 * * 2"
   workflow_dispatch: {}
 
 permissions:

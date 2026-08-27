@@ -286,3 +286,39 @@ def test_the_public_drafts_run_on_the_record_that_was_just_settled() -> None:
         assert "content/" in paths, f"{name} does not upload the drafts"
     assert "run.content" not in monday + daily, \
         "the Sleeper-rooted drafting path is back in a cron"
+
+
+def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
+    """A failed Tuesday cron does not mean stale data — it means NOBODY got a
+    report that week, and for a solo operator the failure might not be noticed
+    until Thursday. So the same job is scheduled twice.
+
+    It is safe to run twice by construction, not by luck: every message carries
+    an idempotency key of (season, week, subscriber) checked against
+    data/processed/sent.jsonl, so a second run finds everyone already sent,
+    marks them skipped, and mails nobody. That property is tested directly in
+    tests/test_delivery.py; this pins that we actually rely on it.
+
+    ONE workflow with two schedules, deliberately — a separate retry workflow
+    would be a copy free to drift from the thing it retries, which is the
+    failure mode this repo has hit before with per-entry-point copies.
+
+    Added Aug 27 2026 (owner decision). The uncovered window is a run that
+    sends and then fails to commit sent.jsonl; the log is uploaded as an
+    artifact for that case and recovery is deliberately manual."""
+    import re
+
+    text = _text("weekly.yml")
+    crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
+    assert len(crons) == 2, f"the Tuesday retry is gone: {crons}"
+    assert "0 11 * * 2" in crons, "the main Tuesday send moved"
+    retry = [c for c in crons if c != "0 11 * * 2"]
+    assert retry and retry[0].endswith("* * 2"), \
+        f"the retry must land on the same weekday as the send, got {retry}"
+    # Same morning, not a different day: the product promises Tuesday.
+    hours = sorted(int(c.split()[1]) for c in crons)
+    assert hours[1] - hours[0] <= 8, \
+        f"the retry is {hours[1] - hours[0]}h later — subscribers expect Tuesday"
+    # And it must be the SAME job, so the retry cannot drift from the send.
+    assert text.count("runs-on:") == 1, \
+        "the retry became a second job — one definition, or they will diverge"
