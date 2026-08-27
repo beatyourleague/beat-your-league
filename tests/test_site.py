@@ -9,6 +9,7 @@ is about to ship a dark pattern (PLAN.md §4, CLAUDE.md principle 3).
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
@@ -568,6 +569,59 @@ def test_legal_page_covers_the_promises_money_depends_on() -> None:
                      r"one refund per person", r"18 or older",
                      r"never see or store your card", r"not affiliated"):
         assert re.search(required, legal, re.I), f"legal page is missing: {required}"
+
+
+def test_the_post_purchase_page_sets_an_honest_delivery_expectation() -> None:
+    """The page a buyer lands on the instant after paying.
+
+    "I paid and got nothing" is the dominant refund driver at this size, and
+    the gap is real: run/intake.py sends the welcome and the first file, and
+    daily.yml runs it HOURLY — so a buyer can wait up to an hour. Stripe's own
+    confirmation page says a payment was received and nothing about when
+    anything arrives, which leaves the buyer to guess during the exact window
+    where guessing turns into a chargeback.
+
+    The page must therefore state a wait we can actually keep. If the intake
+    cron ever slows down, this assertion is where that becomes visible.
+    """
+    page = SITE / "thanks.html"
+    assert page.is_file(), "the post-purchase page is missing"
+    text = page.read_text(encoding="utf-8")
+    visible = html.unescape(prose(text[text.find("<body>"):]))
+
+    workflow = (SITE.parent / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
+    assert 'cron: "0 * * * *"' in workflow, (
+        "the intake no longer runs hourly, so \"up to an hour\" on the "
+        "post-purchase page may now be a promise we cannot keep")
+    assert re.search(r"up to an hour", visible, re.I), \
+        "the page does not say how long the first file takes"
+
+    for required, why in (
+            (r"spam", "a new sending domain's first email often lands there"),
+            (r"refund", "the Week-2 window, at the moment they are most anxious"),
+            (r"cancel", "stated before they have to go looking for it"),
+            (r"hello@beatyourleague\.com", "a human, reachable")):
+        assert re.search(required, visible, re.I), \
+            f"post-purchase page is missing {required!r} — {why}"
+
+    assert 'name="robots" content="noindex"' in text, (
+        "this page reads as a claim about the reader out of context; it must "
+        "not turn up in a search result")
+
+
+def test_the_post_purchase_page_promises_only_what_gets_sent() -> None:
+    """It describes the first file, so it must describe the one that ships.
+
+    run/intake.py's _first_file sends the WEEK'S REPORT to anyone who buys
+    before that week's kickoff and the roster file otherwise — so a page
+    promising only one of the two is wrong for half of all buyers.
+    """
+    text = (SITE / "thanks.html").read_text(encoding="utf-8")
+    visible = html.unescape(prose(text[text.find("<body>"):]))
+    assert re.search(r"roster file", visible, re.I), "the pre-season case"
+    assert re.search(r"current week's report|week's report", visible, re.I), \
+        "the mid-season case — a Wednesday buyer gets that week's report"
+    assert re.search(r"every tuesday", visible, re.I), "the recurring product"
 
 
 def test_the_privacy_policy_stands_on_its_own() -> None:

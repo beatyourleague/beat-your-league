@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — You're in</title>
+<meta name="description" content="Your subscription is live. Here is what arrives, when, and how to stop it.">
+<meta property="og:title" content="Beat Your League — You're in">
+<meta property="og:description" content="Your subscription is live. Here is what arrives, when, and how to stop it.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://beatyourleague.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Beat Your League lineup file: four roster slots, three with a percentage, one reading no call.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+  header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--flag);}
+  .brand svg.mark{width:22px;height:15px;flex:none;}
+  header .brand a{color:inherit;text-decoration:none;}
+  /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
+     and cancellation instructions a nervous buyer came here to read. */
+  main a,p a,li a{color:var(--brick);text-decoration:underline;
+    text-underline-offset:2px;text-decoration-thickness:1px;}
+  main a:hover,p a:hover,li a:hover{color:var(--navy);}
+  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
+  main{padding:10px 28px 34px;}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+    margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
+  p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
+  ul{margin-left:20px;}
+  b{color:var(--navy);}
+  .note{background:var(--card);border-left:5px solid var(--flag);padding:12px 14px;margin:14px 0;
+    font-size:14px;line-height:1.6;}
+  footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+</style>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <div class="brand"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylgBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylgSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylgVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylgPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylgBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylgPath" fill="url(#bylgSpec)" stroke="none"/><use href="#bylgPath" fill="url(#bylgVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><a href="index.html">Beat Your League</a></div>
+    <h1>You&#x27;re in.</h1>
+    <p>Payment went through and your subscription is live. Here is exactly what happens
+    next, so nothing about it is a surprise.</p>
+  </header>
+  <main>
+
+    <div class="note"><b>Your first file is on its way — allow up to an hour.</b> It is built
+    from the roster you just entered, so it is not a template we had sitting around. If it
+    has not arrived after that, check your spam folder; marking it &quot;not spam&quot; once
+    keeps every future file in your inbox.</div>
+
+    <h2>1. What arrives, and when</h2>
+    <ul>
+      <li><b>Today:</b> your first file. Before the season starts that is your roster file —
+      every bye week on your team, last season&#x27;s numbers under your scoring with each
+      player&#x27;s rank at his position, and the weeks your lineup cannot be filled. Once
+      the season is running you get the current week&#x27;s report instead.</li>
+      <li><b>Every Tuesday morning after that:</b> the week&#x27;s file — the lineup we would
+      set for your exact roster, the odds on every call we can stand behind, and a plain
+      &quot;no call&quot; wherever we cannot.</li>
+      <li><b>A separate email in a moment:</b> a short receipt from us with your renewal
+      terms and the cancel link, to keep.</li>
+    </ul>
+
+    <h2>2. If your roster changes</h2>
+    <p>Rosters churn — that is the point of the waiver run. Reply to any file with your
+    updated roster and the next one follows it.</p>
+
+    <h2>3. Changed your mind</h2>
+    <p>Full refund, no questions, any time through Week 2 — one per person. And you can
+    cancel yourself in about fifteen seconds from your billing page, whose link is at the
+    bottom of every file we send; <a href="terms.html#cancel">the steps are here</a>. We do
+    not ask why, and there is no retention call.</p>
+
+    <h2>4. Anything else</h2>
+    <p>Email <b>hello@beatyourleague.com</b> — refunds, deletion, or anything that looks
+    wrong. The full <a href="terms.html">Terms</a> and
+    <a href="privacy.html">Privacy Policy</a> are always one click away.</p>
+
+    <p style="margin-top:22px"><a href="index.html">← Back to the site</a> &middot;
+    <a href="sample-report.html">See a sample file</a></p>
+</main>
+  <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language
+  rather than legalese; it is not legal advice, and it does not limit any right you have under
+  consumer law where you live.</footer>
+</div>
+</body>
+</html>
