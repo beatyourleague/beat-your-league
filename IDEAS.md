@@ -92,3 +92,36 @@ is in the current sprint.
 - Whether the projections feed should be adopted as a blend (reports/
   projections-eval.md: 68.8% vs 64.4% on 368 shared calls, but no opinion on
   626 of 994). Needs the matchup band re-backtested under the blend first.
+
+## Year-round revenue (owner question, Aug 27 2026) — product first, then price
+
+The monthly tier stops at season's end (`run/billing.py`), and the obvious
+commercial thought is to bill through the offseason instead. Measured against
+the real 2026 calendar: the product delivers **18 weekly files over 119 days —
+33% of the year**, and is silent for the other **246 days**. Billing $14.99 ×
+12 would be **$179.88 for 18 files**, with 246 days of charging for nothing.
+That is the pattern PLAN §4 bans and five surfaces promise against, including
+the operative contract, and commercially it converts a returning customer into
+a chargeback ($15 plus the amount plus ratio damage) and a public complaint.
+
+**The recurring revenue already exists**: the season pass renews annually at
+$39 and the League Pass at $99, and RULE B2 in `run/billing.py` exists
+specifically to protect both from the offseason stop. The gap is not recurring
+billing, it is offseason PRODUCT.
+
+What the data we already hold could honestly support, in order of cheapness:
+- **Season review (Jan–Feb).** `engine/ledger.py` already holds every published
+  call, graded, and the box scores are cached. "Your season, every call graded,
+  the points you left on the bench" is close to free to build and lands exactly
+  when a manager is still thinking about it.
+- **Draft prep (Jun–Aug).** `engine/preseason.py` already produces it — byes,
+  positional ranks under the subscriber's own scoring, slots that cannot be
+  filled. It ships today as the purchase-day file; it is a product on its own.
+- **Mar–May: nothing honest.** Free agency and the draft are what move value
+  then, nflverse carries no news, and there is no free source that does. Do not
+  sell those months.
+
+So the reachable shape is ~7 months of product, not 12. Sequence: build the
+season review, then the draft-prep file as its own artifact, and only then
+price a twelve-month tier. Selling the months before they contain something is
+the one move that cannot be undone cheaply — it is the review that follows you.
