@@ -497,6 +497,11 @@ document.documentElement.classList.add("js");
 // the payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
 const CHECKOUT_OPEN = true;
+// Whether a purchase can actually FINISH — set to true only once the Stripe
+// payment links exist in site/join/index.html. CHECKOUT_OPEN sells; this says
+// whether selling works. While they disagree, the email capture stays up so a
+// visitor who cannot pay can still leave an address.
+const CHECKOUT_CAN_COMPLETE = false;
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
 // (infra/form-worker.js, kind "waitlist") — one backend for every form on the
@@ -602,9 +607,19 @@ if (CHECKOUT_OPEN) {
   // said "setting up today saves nothing yet" (it saves everything now — the
   // roster rides into checkout). False copy on launch morning is the one day
   // this page cannot afford it.
-  for (const id of ["watch-form", "watch-note"]) {
-    const el = document.getElementById(id);
-    if (el) el.hidden = true;
+  //
+  // BUT the capture only retires once a purchase can actually COMPLETE. The
+  // flag says "sell"; the payment links say whether selling works. Retiring
+  // the capture on the flag alone left the site with NO completable action at
+  // all — a visitor could neither pay (the picker says checkout isn't open)
+  // nor leave an address — during the peak draft fortnight. A dead end that
+  // also throws away the lead is strictly worse than the honest waiting list
+  // it replaced. Found Aug 27 2026 by three independent reviews at once.
+  if (CHECKOUT_CAN_COMPLETE) {
+    for (const id of ["watch-form", "watch-note"]) {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    }
   }
   const heroline = document.querySelector(".heroline");
   if (heroline) {

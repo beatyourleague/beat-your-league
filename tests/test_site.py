@@ -2062,3 +2062,30 @@ def test_the_picker_offers_type_to_add_beside_the_paste_box() -> None:
     # The input lives inside the roster form like every other picker input.
     form = JOIN.split('<form id="form-roster"')[1].split("</form>")[0]
     assert 'id="player-search"' in form
+
+
+def test_the_site_always_offers_one_action_a_visitor_can_finish() -> None:
+    """Flipping CHECKOUT_OPEN sold the product AND retired the email capture,
+    while the payment links were still empty. Net effect on the live site:
+    a visitor could not pay (the picker says checkout isn't open) and could not
+    leave an address either — a sealed cul-de-sac, during the peak draft
+    fortnight, found by three independent reviews the same morning.
+
+    The rule this encodes: the capture retires when a purchase can actually
+    COMPLETE, never merely when the flag says "sell". A dead end that also
+    throws away the lead is strictly worse than the honest waiting list it
+    replaced."""
+    can_complete = re.search(r"const CHECKOUT_CAN_COMPLETE = (true|false);", LANDING)
+    assert can_complete, "the landing lost its can-complete flag"
+    links_live = not all(re.search(rf'const {c} = ""', JOIN) for c in
+                         ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY",
+                          "STRIPE_LINK_PASS"))
+    # The flag must not claim more than the picker can deliver.
+    if can_complete.group(1) == "true":
+        assert links_live, \
+            "CHECKOUT_CAN_COMPLETE is true but the picker has no payment links"
+    # And while it is false, hiding the capture must be gated on it.
+    rewrites = LANDING.split("if (CHECKOUT_OPEN)")[1]
+    hide = rewrites.split('"watch-form"')[0]
+    assert "CHECKOUT_CAN_COMPLETE" in hide, \
+        "the email capture is retired without checking a purchase can finish"

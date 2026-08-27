@@ -94,12 +94,20 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         report = report_for(subscriber.spec(), data,
                             league_size=subscriber.league_size,
                             processed_dir=processed_dir)
-        # The self-serve roster update link: the only place the subscriber's
-        # token travels. None (and so nothing rendered) until SITE_URL and
-        # UPDATE_SECRET exist — a dead link is worse than no link.
-        report["meta"]["update_url"] = update_url(
-            os.environ.get("SITE_URL", ""), subscriber.email, subscriber.slug,
-            os.environ.get("UPDATE_SECRET", ""))
+        # NO roster-update credential travels in a report. It used to render
+        # directly beneath _forward_line(), which invites the subscriber to
+        # forward this very file to their league — so the product asked people
+        # to hand a leaguemate a token that rewrites their own lineup for every
+        # remaining Tuesday. In a product framed around league rivalry, the
+        # recipient is the most motivated adversary there is.
+        #
+        # Removing it costs nothing today: FORM_ENDPOINT is empty, so self-serve
+        # updates were not running, and the FAQ already answers roster changes
+        # with "reply to any file". Restoring it safely means CONFIRMING the
+        # change — mail the address already on the registry row and apply only
+        # when that is clicked — so a forwarded report grants nothing and the
+        # real subscriber is told when somebody tries. Found Aug 27 2026.
+        report["meta"]["update_url"] = None
     except SoloError as exc:
         return RunResult(subscriber, ok=False, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — batch contract: one subscriber's

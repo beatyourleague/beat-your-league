@@ -175,36 +175,58 @@ def test_a_paid_roster_becomes_an_email(tmp_path) -> None:
     assert "@" not in result.message.key
 
 
-def test_every_report_carries_its_roster_update_link_only_when_it_resolves(
+def test_no_report_ever_carries_a_roster_write_credential(
         tmp_path, monkeypatch) -> None:
-    """The update link is the one place the subscriber's token travels, so it
-    must reach all three surfaces (browser, HTML email, plain text) — and
-    with no site or no secret there must be no link at all, never a dead one.
-    The slug in it is the origin slug, so a roster that has already been
-    changed once still links to the same place."""
-    from run.updates import update_token
-    template = Path("rival-report-template.html").read_text(encoding="utf-8")
-    monkeypatch.delenv("SITE_URL", raising=False)
-    monkeypatch.delenv("UPDATE_SECRET", raising=False)
-    result = tuesday.run_subscriber(_subscriber(), _week_data(tmp_path), template,
-                                    out_dir=tmp_path / "out",
-                                    processed_dir=tmp_path / "processed")
-    assert result.ok and "Roster changed" not in result.message.html
-    assert "join/?update=" not in result.message.text
+    """This test used to assert the OPPOSITE — that the tokenised update link
+    reached all three surfaces. It was codifying a vulnerability.
 
+    The link rendered directly beneath _forward_line(), which invites the
+    subscriber to forward this very file to their league ("Got this from a
+    leaguemate?"). The token is an HMAC of their address, and run/updates.py
+    rests its entire safety argument on that token reaching them "inside their
+    own reports and nowhere else". So the product asked people to forward a
+    document containing a credential that lets the recipient rewrite the
+    sender's lineup for every remaining Tuesday — in a product framed around
+    league rivalry, where the recipient is the most motivated adversary in the
+    threat model. run/updates.py applies newest-first-seen per target with no
+    confirmation step, so the change would be silent.
+
+    It never shipped: update_url is None until SITE_URL and UPDATE_SECRET are
+    both set. Removing it costs nothing today either — FORM_ENDPOINT is empty,
+    so self-serve updates were not running, and the FAQ already answers roster
+    changes with "reply to any file".
+
+    Restoring the feature safely means CONFIRMING the change rather than
+    authenticating it with a forwardable secret: accept the submission, mail
+    the address already on the registry row, apply only when clicked. Then a
+    forwarded report grants nothing and the real subscriber is told when
+    somebody tries. Found Aug 27 2026.
+    """
+    template = Path("rival-report-template.html").read_text(encoding="utf-8")
+    # WITH the launch secrets set — the state that used to produce the leak.
     monkeypatch.setenv("SITE_URL", "https://x.test")
     monkeypatch.setenv("UPDATE_SECRET", "s3")
-    sub = _subscriber(origin="abc123def0")
-    result = tuesday.run_subscriber(sub, _week_data(tmp_path), template,
-                                    out_dir=tmp_path / "out2",
-                                    processed_dir=tmp_path / "processed2")
+    result = tuesday.run_subscriber(_subscriber(origin="abc123def0"),
+                                    _week_data(tmp_path), template,
+                                    out_dir=tmp_path / "out",
+                                    processed_dir=tmp_path / "processed")
     assert result.ok, result.detail
-    link = f"https://x.test/join/?update=abc123def0&token={update_token('fan@example.com', 's3')}"
-    import html as _html
-    assert _html.escape(link) in result.message.html
-    assert link in result.message.text
-    assert _html.escape(link) in result.html_path.read_text(encoding="utf-8")
-    assert "Roster changed?" in result.message.html
+
+    surfaces = {
+        "email html": result.message.html,
+        "plain text": result.message.text,
+        "archived html": result.html_path.read_text(encoding="utf-8"),
+    }
+    for name, body in surfaces.items():
+        assert "token=" not in body, f"{name} carries a roster-write token"
+        assert "?update=" not in body, f"{name} carries an update credential"
+        assert "Roster changed?" not in body, \
+            f"{name} still offers the tokenised update route"
+
+    # The forward invitation stays — it is the one organic acquisition line,
+    # and it is safe precisely because the file no longer carries a secret.
+    assert "leaguemate" in surfaces["email html"], \
+        "the forward line went with it; only the credential should have"
 
 
 def test_published_calls_are_recorded_the_week_they_are_published(tmp_path) -> None:

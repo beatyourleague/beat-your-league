@@ -9,6 +9,7 @@ honesty rules are inherited — these tests pin the email-specific surface.
 from __future__ import annotations
 
 import html
+import inspect
 import re
 from pathlib import Path
 
@@ -444,3 +445,58 @@ def test_the_cancel_route_is_reachable_on_both_halves(tmp_path, monkeypatch) -> 
         "the email footer promises a cancel route and does not link it"
     assert "CANCEL:" in text_summary(report), \
         "the plain-text half has no way to reach the cancel route"
+
+
+def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
+    """render/report.py's footer renders _forward_line() and update_line()
+    ADJACENT (report.py:1050-1051, mirrored in email.py). The first invites
+    forwarding — "Got this from a leaguemate?" is the product's stated organic
+    acquisition channel. The second carries update_url, whose own docstring
+    says the link "is the ONLY place the subscriber's token travels, which is
+    what makes the public form safe to post to."
+
+    So the report tells you to forward it, and the thing you forward contains
+    a credential that lets the recipient rewrite the sender's roster for every
+    remaining Tuesday. In a product whose framing is league rivalry, the
+    recipient is the single most motivated adversary there is.
+
+    It has never shipped: update_url is None until SITE_URL and UPDATE_SECRET
+    are both set, so update_line renders nothing. That is exactly why this
+    guard is cheap now and expensive later — setting one environment variable
+    would otherwise silently create the leak, with no test in the way.
+
+    This does not decide the permanent design (a confirmation step mailed to
+    the address on file would keep both features). It makes the unsafe
+    combination impossible to ship by accident."""
+    import os
+
+    import render.report as rp
+    from render.report import _forward_line, update_line
+
+    # Both are gated on SITE_URL / UPDATE_SECRET, so neither renders today.
+    # The leak appears the moment the launch secrets are set — which is the
+    # whole reason to pin it before that happens rather than after.
+    assert _forward_line() == "", "SITE_URL is set in this environment"
+    old = os.environ.get("SITE_URL")
+    os.environ["SITE_URL"] = "https://example.com"
+    try:
+        forward = _forward_line()
+    finally:
+        if old is None:
+            os.environ.pop("SITE_URL", None)
+        else:
+            os.environ["SITE_URL"] = old
+    assert "leaguemate" in forward, \
+        "the forward invitation changed — update this guard, do not delete it"
+
+    assert update_line({}) == ""
+    live = update_line({"update_url": "https://example.com/join/?update=abc&token=deadbeef"})
+    assert "token=" in live, "the fixture no longer exercises a credential"
+
+    footer_src = inspect.getsource(rp)
+    both = "_forward_line()" in footer_src and "update_line(meta)" in footer_src
+    assert not both, (
+        "the report footer renders the forward invitation and the roster-write "
+        "token together — a forwarded report hands a leaguemate the ability to "
+        "rewrite the sender's lineup. Split them, or gate the update on a "
+        "confirmation mailed to the address on file.")

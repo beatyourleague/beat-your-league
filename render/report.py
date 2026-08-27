@@ -1022,6 +1022,27 @@ UPDATE_BODY = ("Trades and pickups happen — update your roster here and your f
                "follows it from the next Tuesday:")
 
 
+# WHY THE TOKENISED UPDATE LINK IS NOT IN THE FOOTER (Aug 27 2026).
+#
+# It used to render immediately after _forward_line(), which invites the
+# subscriber to forward this very file to their league. update_url carries an
+# HMAC of their address, and run/updates.py rests its entire safety argument on
+# that token reaching them "inside their own reports and nowhere else". So the
+# product asked people to forward a document containing a credential that lets
+# the recipient rewrite the sender's lineup for every remaining Tuesday — in a
+# product whose framing is league rivalry, where the recipient is the most
+# motivated adversary in the threat model.
+#
+# Nothing shipped: update_url is None until SITE_URL and UPDATE_SECRET are both
+# set. Removing it now costs nothing operationally either, because FORM_ENDPOINT
+# is empty, so self-serve updates were not running regardless — and the FAQ
+# already answers roster changes with "reply to any file".
+#
+# To bring it back safely, the update must be CONFIRMED rather than
+# authenticated by a forwardable secret: accept the submission, mail a
+# confirmation to the address already on the registry row, and apply it only
+# when that is clicked. Then a forwarded report grants nothing, and the real
+# subscriber is told when somebody tries.
 def update_line(meta: Mapping[str, Any]) -> str:
     """The self-serve roster update link, shared by both renderers. Rendered
     only when the run produced one (run/updates.update_url gates it on the
@@ -1048,7 +1069,6 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{_forward_line()}'
-        f'{update_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         # Every commercial email needs a working way out. It points at the
