@@ -129,6 +129,47 @@ def test_a_hand_set_stop_date_outranks_the_computed_one() -> None:
     assert any("already stops at" in n for n in notes)
 
 
+def test_a_stop_date_we_set_ourselves_is_corrected_when_the_calendar_moves() -> None:
+    """The stamp was written and never read.
+
+    `needs_stop` branched on `cancel_at` alone, so a date THIS MODULE had
+    written was reported as "somebody set this by hand" and left frozen —
+    telling ours from theirs is the only reason the stamp exists. Harmless
+    while the calendar never moves; the day a schedule shifts or RETRY_DAYS
+    changes, every subscription keeps a stop date computed against a schedule
+    that no longer applies, and the run says so every day forever.
+    """
+    old = int((AT - timedelta(days=1)).timestamp())
+    ours = sub(cancel_at=old, metadata={STOP_METADATA_KEY: str(old)})
+    due, notes = needs_stop([ours], AT)
+    assert len(due) == 1, "our own stale stop date was never corrected"
+    assert notes == []
+
+    # ...but a date we did NOT set is still left alone, stamp or no stamp.
+    theirs = sub(cancel_at=old, metadata={STOP_METADATA_KEY: str(old - 999)})
+    due, notes = needs_stop([theirs], AT)
+    assert due == [] and any("we did not set it" in n for n in notes)
+
+
+def test_a_paused_subscription_is_not_silent_in_the_offseason_gap(
+        monkeypatch, capsys) -> None:
+    """The one state where nothing else would ever mention it.
+
+    The `at is None` branch returns before `needs_stop` is called, so the
+    REPORTABLE notes cannot fire there — and the census filtered to WRITABLE,
+    so a paused monthly subscription of ours passed through in total silence at
+    exit 0. Stripe resumes billing a paused subscription without asking us, so
+    that is a customer billing through the offseason with nothing to stop them
+    and no sentence anywhere.
+    """
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (None, "2026"))
+    monkeypatch.setattr(billing, "load_subscriptions",
+                        lambda key: [sub(status="paused")])
+    assert billing.main(["--send"]) == 1
+    assert "NO STOP DATE" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
 def test_a_dead_subscription_is_skipped(status: str) -> None:
     """Stripe accepts only metadata on a canceled subscription, so writing

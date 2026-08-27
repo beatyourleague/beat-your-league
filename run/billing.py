@@ -216,6 +216,26 @@ def _period_end(subscription: Mapping[str, Any]) -> int | None:
     return None
 
 
+def our_stamp(subscription: Mapping[str, Any]) -> int | None:
+    """The stop instant WE wrote on this subscription, if we wrote one.
+
+    This is the whole reason the stamp exists — telling our own computed date
+    from one a human set in the Dashboard, or one the customer set through the
+    portal. It was written and never read: `needs_stop` branched on `cancel_at`
+    alone, so a date this module had written itself was reported as "somebody
+    set this by hand" and left frozen. Harmless while the calendar never moves;
+    the moment a schedule shifts or RETRY_DAYS changes, every subscription
+    keeps the old date forever and the run says so every day.
+    """
+    metadata = subscription.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    try:
+        return int(str(metadata.get(STOP_METADATA_KEY)))
+    except (TypeError, ValueError):
+        return None
+
+
 def _already_stopping(subscription: Mapping[str, Any]) -> bool:
     """Both of Stripe's ways of saying "this one is scheduled to end".
 
@@ -305,13 +325,21 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], at: datetime,
             continue                             # already ending; leave it
         existing = subscription.get("cancel_at")
         if isinstance(existing, int):
-            if existing != target:
+            if existing == target:
+                continue                         # idempotent: nothing to do
+            if our_stamp(subscription) == existing:
+                # OUR date, and the calendar has moved under it. Correcting it
+                # is the point of the stamp; leaving it would keep a stop date
+                # computed against a schedule that no longer applies.
+                due.append(dict(subscription))
+            else:
                 notes.append(
                     f"subscription {subscription.get('id')} already stops at "
                     f"{datetime.fromtimestamp(existing, timezone.utc):%Y-%m-%d}, "
-                    f"not {at:%Y-%m-%d} — left as it stands, since a date "
-                    f"somebody set by hand outranks a computed one")
-            continue                             # idempotent: nothing to do
+                    f"not {at:%Y-%m-%d}, and we did not set it — left as it "
+                    f"stands, since a date somebody chose outranks a computed "
+                    f"one")
+            continue
         due.append(dict(subscription))
     return due, notes
 
@@ -374,8 +402,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     ours = [s for s in subscriptions if _is_ours(s)]
+    # WRITABLE **and** REPORTABLE. A paused or unpaid subscription resumes
+    # billing on its own, so in the offseason gap — where this branch returns
+    # before needs_stop is ever called — filtering to WRITABLE alone let one
+    # pass through in complete silence at exit 0, which is the only state where
+    # nothing else would ever mention it.
     monthly = [s for s in ours
-               if _interval(s) not in (None, YEARLY) and s.get("status") in WRITABLE]
+               if _interval(s) not in (None, YEARLY)
+               and s.get("status") in WRITABLE + REPORTABLE]
     # The alarm population, and it must agree with `needs_stop` — a subscription
     # already carrying a stop date is not "billing with nothing to stop it".
     # Without this the last days of every season go red about a date we set
