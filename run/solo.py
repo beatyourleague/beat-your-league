@@ -219,6 +219,32 @@ def _weeks(rows: list[dict[str, str]], season: str) -> dict[int, list[str]]:
     return out
 
 
+def _ends(rows: list[dict[str, str]]) -> dict[str, str]:
+    """season -> the ISO date of its last regular-season game.
+
+    One expression of "when does a season end", because three callers wanted it
+    and two of them were about to derive it again. `current_season` reads it,
+    and so does the rule that decides when a monthly subscription stops billing
+    — and those two disagreeing would mean cancelling somebody in the middle of
+    a season or a fortnight after one.
+    """
+    out: dict[str, str] = {}
+    for row in rows:
+        season = str(row.get("season") or "")
+        week = _int(row.get("week"))
+        day = (row.get("gameday") or "").strip()
+        if season and week and day and day > out.get(season, ""):
+            out[season] = day
+    return out
+
+
+def season_ends(cache_dir: Path, *,
+                live: bool = True,
+                session: requests.Session | None = None) -> dict[str, str]:
+    """Every season the schedule covers -> the date of its last REG game."""
+    return _ends(_schedule(cache_dir, live=live, session=session))
+
+
 def current_season(cache_dir: Path, today: date | None = None, *,
                    session: requests.Session | None = None) -> str:
     """The season we are in or about to play.
@@ -229,17 +255,20 @@ def current_season(cache_dir: Path, today: date | None = None, *,
     anyway — and returning the season that just ended is far safer than
     guessing the next one, because a report about a season that is over is the
     quietest principle-3 violation in the codebase (CLAUDE.md).
+
+    NOTE for anyone reaching for this elsewhere: in that gap it answers a season
+    that is OVER. That is right for "which season is a report about" and wrong
+    for anything scheduling a future event — run/billing.py needs a season still
+    to be played and asks for one explicitly rather than reusing this.
     """
-    rows = _schedule(cache_dir, session=session)
-    seasons = sorted({str(row.get("season") or "") for row in rows if row.get("season")})
-    if not seasons:
+    ends = _ends(_schedule(cache_dir, session=session))
+    if not ends:
         raise SoloError("the schedule release carries no regular-season games")
-    when = today or datetime.now(timezone.utc).date()
-    for season in seasons:                       # ascending: earliest match wins
-        days = [d for week in _weeks(rows, season).values() for d in week]
-        if days and max(days) >= when.isoformat():
+    when = (today or datetime.now(timezone.utc).date()).isoformat()
+    for season in sorted(ends):                  # ascending: earliest match wins
+        if ends[season] >= when:
             return season
-    return seasons[-1]
+    return sorted(ends)[-1]
 
 
 def current_week(cache_dir: Path, season: str, today: date | None = None, *,

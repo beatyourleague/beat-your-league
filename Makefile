@@ -4,7 +4,8 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview monday monday-preview sample
+        intake intake-preview tuesday tuesday-preview monday monday-preview sample \
+        og billing billing-preview
 
 week:
 	$(PY) -m run.week
@@ -114,6 +115,21 @@ demo:
 sample:
 	$(PY) -m render.sample
 	$(PY) -m render.sample --week 1
+
+# The social preview card. Needs headless Chrome, so it is a deliberate local
+# act like `make sample` — the PNG is committed and CI never renders one.
+# Run it after any change to the landing page's hero file card: the card's
+# figures are READ from that page, so a stale og.png advertises stale numbers.
+og:
+	$(PY) -m render.og
+
+# Schedule the end-of-season stop on every monthly subscription. Preview first:
+# this is the only money-mutating call in the repo.
+billing-preview:
+	$(PY) -m run.billing
+
+billing:
+	$(PY) -m run.billing --send
 
 # One pre-season file, for eyeballing it before a send. Takes a roster of
 # player ids; the real ones come from a subscriber's own ref at intake.

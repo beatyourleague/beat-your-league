@@ -75,9 +75,20 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
             for subscription in data:
                 if not isinstance(subscription, dict):
                     continue
-                if subscription.get("cancel_at_period_end"):
+                if (subscription.get("cancel_at_period_end")
+                        or isinstance(subscription.get("cancel_at"), int)):
                     # Ending, not renewing. No notice is owed and a notice
                     # would be false.
+                    #
+                    # `cancel_at` belongs beside `cancel_at_period_end` and was
+                    # missing: the two are different ways to say the same thing,
+                    # and reading only one was harmless only for as long as
+                    # nothing in the repo set the other. run/billing.py now
+                    # sets `cancel_at`, so this became live the day it shipped —
+                    # a subscription scheduled to end would have been told "we
+                    # are about to charge you $39", which is the false statement
+                    # about somebody's money this module's first rule exists to
+                    # prevent.
                     continue
                 item = _first_item(subscription)
                 price = (item or {}).get("price")

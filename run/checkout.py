@@ -41,7 +41,16 @@ CUSTOMERS_API = "https://api.stripe.com/v1/customers"
 WATERMARK_SLACK_SECONDS = 3 * 24 * 3600
 
 
-def post(url: str, api_key: str, form: dict[str, str]) -> dict:
+def post(url: str, api_key: str, form: dict[str, str],
+         what: str = "writing customer metadata",
+         needs: str = "WRITE access to Customers") -> dict:
+    """One form-encoded write. ``what``/``needs`` name the call in the error.
+
+    They are arguments rather than a fixed sentence because a second caller now
+    exists: a message telling an operator to grant Customers write access when
+    the call that actually 403'd was a subscription update sends them to fix the
+    wrong permission, and the promise stays broken while they do.
+    """
     body = urllib.parse.urlencode(form).encode("utf-8")
     request = urllib.request.Request(
         url, data=body, method="POST",
@@ -55,9 +64,8 @@ def post(url: str, api_key: str, form: dict[str, str]) -> dict:
         # Never echo the request — it carries the secret key.
         detail = exc.read().decode("utf-8", "replace")[:200]
         raise SubscriptionError(
-            f"Stripe returned HTTP {exc.code} writing customer metadata. The "
-            f"restricted key needs WRITE access to Customers. Response: {detail}"
-        ) from None
+            f"Stripe returned HTTP {exc.code} {what}. The restricted key needs "
+            f"{needs}. Response: {detail}") from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise SubscriptionError(f"could not reach Stripe: {exc}") from None
     except json.JSONDecodeError:

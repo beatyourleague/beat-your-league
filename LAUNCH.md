@@ -107,9 +107,18 @@ footer (only there — reports to paying subscribers are transactional).
    curl https://api.stripe.com/v1/payment_links/plink_PASS -u "rk_live_...:" -d "custom_text[submit][message]=Renews automatically each season at \$99 USD unless you cancel. We email you before any renewal, and you can cancel any time from your billing page."
    ```
 5. **Restricted API key** (Developers → API keys → Create restricted key):
-   Checkout Sessions **Read** · Subscriptions **Read** · Customers **Write** (the sweep
-   stamps signup metadata onto the customer). Everything else: None. This is
-   `STRIPE_API_KEY` — the same key works in the curl commands above.
+   Checkout Sessions **Read** · Subscriptions **Write** · Customers **Write**.
+   Everything else: None. This is `STRIPE_API_KEY` — the same key works in the
+   curl commands above.
+
+   Both writes are load-bearing and each is used for exactly one thing.
+   *Customers*: the sweep stamps the roster onto the customer, so we stop
+   depending on Stripe keeping old Checkout Sessions listable. *Subscriptions*:
+   `run/billing.py` sets the end-of-season `cancel_at` on every monthly
+   subscription — with Read only, that write 403s and monthly subscribers are
+   charged straight through the offseason, against the promise printed above
+   Stripe's own Pay button. The daily run fails loudly if it cannot write, so a
+   Read-only key shows up as a red cron rather than as a February chargeback.
 6. `STRIPE_PAYMENT_LINKS` secret: `s:<season plink id>,m:<monthly plink id>,p:<pass plink id>`
    (the `plink_…` id is in each link's dashboard URL).
 7. **Tell me the three full payment-link URLs.** I paste them into `site/join/index.html`,
