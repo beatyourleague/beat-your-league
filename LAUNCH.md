@@ -152,16 +152,20 @@ footer (only there — reports to paying subscribers are transactional).
      We are not registered for tax anywhere, so an address is data we would
      hold and never use.
 4. **Custom text above the Pay button** (closes the disclosure gap on the one page we
-   don't control). One API call per link — replace key and `plink_…`:
+   don't control — it is API-only, with no Dashboard field). One command, run in Terminal
+   from the repo:
    ```bash
-   curl https://api.stripe.com/v1/payment_links/plink_SEASON -u "rk_live_...:" -d "custom_text[submit][message]=Renews automatically each season at \$39 USD unless you cancel. We email you before any renewal, and you can cancel any time from your billing page — the link is in every report we send."
+   python3 infra/stripe_paylink_text.py
    ```
-   ```bash
-   curl https://api.stripe.com/v1/payment_links/plink_MONTHLY -u "rk_live_...:" -d "custom_text[submit][message]=Bills \$14.99 USD monthly until you cancel. Billing stops automatically when the season ends — we never charge through the offseason."
-   ```
-   ```bash
-   curl https://api.stripe.com/v1/payment_links/plink_PASS -u "rk_live_...:" -d "custom_text[submit][message]=Renews automatically each season at \$99 USD unless you cancel. We email you before any renewal, and you can cancel any time from your billing page."
-   ```
+   It asks for the link map, then for the key (hidden — never in shell history, never in
+   `ps`), writes all three, reads each back to confirm Stripe stored what we sent, and tells
+   you to delete the key. Use the throwaway `setup-payment-link-text` key here, never the
+   cron key.
+
+   The prices come from `render/welcome.py`, which a test ties to the pricing page — so the
+   sentence above Stripe's Pay button cannot drift from the one beside the Buy button. That
+   is why this is a script rather than three curls pasted into this file with the prices
+   typed in by hand.
 5. **Restricted API key** (Developers → API keys → Create restricted key):
    Checkout Sessions **Read** · Subscriptions **Write** · Customers **Write**.
    Everything else: None. This is `STRIPE_API_KEY`.

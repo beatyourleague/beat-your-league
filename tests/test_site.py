@@ -2502,3 +2502,42 @@ def test_the_cancel_section_links_the_portal_rather_than_describing_it() -> None
     assert "LAUNCH:" not in cancel, "the launch placeholder comment is still there"
     assert not re.search(r"looks\s+like billing\.stripe\.com", cancel), (
         "still describing the URL shape instead of linking it")
+
+
+def test_the_pay_button_disclosure_quotes_the_price_the_page_charges() -> None:
+    """The text above Stripe's Pay button is the last renewal disclosure a
+    buyer meets, and it is on the one page we do not control — API-only, with
+    no Dashboard field. It was three curl commands in a doc with the prices
+    typed into them, which is a fourth copy of every price and the copy nobody
+    would think to update.
+
+    infra/stripe_paylink_text.py builds them from render/welcome.py's
+    constants, which another test already ties to the pricing page. So the
+    sentence above Stripe's Pay button cannot disagree with the one beside the
+    Buy button.
+    """
+    import sys
+    sys.path.insert(0, str(SITE.parent))
+    from infra.stripe_paylink_text import MESSAGES
+    from render.welcome import MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE
+
+    assert set(MESSAGES) == {"season", "monthly", "league_pass"}
+    assert SEASON_PRICE in MESSAGES["season"]
+    assert MONTHLY_PRICE in MESSAGES["monthly"]
+    assert PASS_PRICE in MESSAGES["league_pass"]
+    # Each tier's disclosure must state ITS renewal shape, not another's.
+    assert "each season" in MESSAGES["season"] and "monthly" not in MESSAGES["season"]
+    assert "offseason" in MESSAGES["monthly"], (
+        "the monthly disclosure omits the season-end stop, which is the one "
+        "promise a monthly buyer most needs at the moment of paying")
+    for plan, text in MESSAGES.items():
+        assert "cancel" in text.lower(), f"{plan} disclosure never mentions cancelling"
+
+
+def test_the_paylink_script_never_takes_the_key_as_an_argument() -> None:
+    """An argument is visible in the shell history and in `ps` while it runs.
+    getpass is the only intake."""
+    source = (SITE.parent / "infra" / "stripe_paylink_text.py").read_text(encoding="utf-8")
+    assert "getpass.getpass(" in source
+    assert "argparse" not in source, "a key passed as a flag lands in shell history"
+    assert "Never echo the request" in source, "the error path may leak the key"
