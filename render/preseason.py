@@ -61,10 +61,13 @@ THIN_BASIS = ("Positions where everyone who can play the slot is already "
               "matchup and there's nobody behind him.")
 
 FORM_HEAD = "Last season, under your rules"
-FORM_BASIS = ("Points per game they actually played, scored under your league's "
-              "settings — not per week, so a player who missed time isn't "
-              "punished twice. This is a record of what happened, not a "
-              "forecast for this year.")
+FORM_BASIS = ("Where each of your players finished last season at his position, "
+              "and what he averaged — both scored under your league's own "
+              "settings, so the rank is yours rather than a generic one. Per "
+              "game he actually played, not per week, so time missed isn't "
+              "punished twice. Anyone under eight games has no rank: too few "
+              "to be a fact. This is a record of what happened, not a forecast "
+              "for this year.")
 
 
 # The same content is useful all season — a Week-6 buyer still wants to know
@@ -83,12 +86,27 @@ def _stamp() -> str:
     return datetime.now(timezone.utc).strftime("%a %d %b %Y")
 
 
+def rank_phrase(row: Mapping[str, Any]) -> str:
+    """"WR3 of 159" — the context that makes the per-game number mean anything.
+
+    A reader cannot tell whether 18.7 a game is good. WR3 they can tell
+    instantly, because it is the vocabulary they already think in.
+    """
+    rank = row.get("rank")
+    if not rank:
+        return ""
+    position, place, pool = rank
+    return f"{position}{place} of {pool}"
+
+
 def _record_cell(row: Mapping[str, Any]) -> str:
     record = row.get("record")
     if not record:
         # RULE P1, and the two absences are different facts.
         return f'<span class="tsub">{esc(row.get("no_record_reason") or NO_RECORD)}</span>'
-    return (f'<b>{record["per_game"]}</b> <span class="tsub">a game over '
+    rank = rank_phrase(row)
+    lead = f'<b>{esc(rank)}</b> · ' if rank else ""
+    return (f'{lead}<span class="tsub">{record["per_game"]} a game over '
             f'{record["games"]}</span>')
 
 
@@ -240,8 +258,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
     lines += ["", FORM_HEAD.upper()]
     for row in report["roster"]:
         record = row.get("record")
-        last = (f'{record["per_game"]} a game over {record["games"]}' if record
-                else (row.get("no_record_reason") or NO_RECORD))
+        if record:
+            rank = rank_phrase(row)
+            last = ((f"{rank} · " if rank else "")
+                    + f'{record["per_game"]} a game over {record["games"]}')
+        else:
+            last = row.get("no_record_reason") or NO_RECORD
         bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
         lines.append(f'  {row["position"]:<5} {row["name"]:<24} '
                      f'{(row.get("team") or "—"):<4} {bye:<14} {last}')
@@ -347,8 +369,10 @@ def email_html(report: Mapping[str, Any]) -> str:
     form_rows = ""
     for row in report["roster"]:
         record = row.get("record")
-        last = (f'<b style="color:{TURF};">{record["per_game"]}</b> '
-                f'<span style="{SMALL}">a game over {record["games"]}</span>'
+        rank = rank_phrase(row)
+        last = ((f'<b style="color:{TURF};">{esc(rank)}</b> ' if rank else "")
+                + f'<span style="{SMALL}">{record["per_game"]} a game over '
+                f'{record["games"]}</span>'
                 if record else
                 f'<span style="{SMALL}">'
                 f'{esc(row.get("no_record_reason") or NO_RECORD)}</span>')

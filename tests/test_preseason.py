@@ -57,8 +57,18 @@ def _prior(exclude: set[str] | None = None) -> dict:
         for player in ROSTER:
             if player.player_id in exclude or player.position == "DEF":
                 continue
-            rows[player.player_id] = {"receptions": "5", "receiving_yards": "50",
-                                      "receiving_tds": "0"}
+            if player.player_id == "p-wr1":
+                # Volume catcher: 9 receptions, modest yards. PPR pays him.
+                rows[player.player_id] = {"receptions": "9", "receiving_yards": "40",
+                                          "receiving_tds": "0"}
+            elif player.player_id == "p-wr2":
+                # Deep threat at the SAME position: few catches, big yards.
+                # PPR (13.0) puts wr1 ahead; standard (4.0 vs 10.0) flips it.
+                rows[player.player_id] = {"receptions": "2", "receiving_yards": "100",
+                                          "receiving_tds": "0"}
+            else:
+                rows[player.player_id] = {"receptions": "5", "receiving_yards": "50",
+                                          "receiving_tds": "0"}
         out[week] = rows
     return out
 
@@ -315,3 +325,72 @@ def test_both_halves_report_the_same_collisions() -> None:
         for name in hit["players"]:
             assert name in html_prose, f"{name} missing from the email half"
             assert name in text, f"{name} missing from the text half"
+
+
+def test_a_rank_makes_the_number_mean_something_and_is_the_buyers_own() -> None:
+    """"18.7 a game" does not tell a reader whether that is good. "WR3 of 159"
+    does, instantly, in the vocabulary they already think in — and it is the
+    single cheapest way to make a file of last season's facts feel valuable on
+    the day somebody pays.
+
+    It is also where the product's core claim becomes visible. The rank is
+    computed under THIS subscriber's scoring, so the same roster ranks
+    differently in PPR and standard: measured on real 2025 data, Derrick Henry
+    is RB4 in PPR and RB2 in standard, while the reception-heavy Jaxon
+    Smith-Njigba goes the other way, WR19 to WR23. A generic ranking site
+    cannot say that. This test pins that the two actually differ, because a
+    rank that ignored the preset would silently make the pitch untrue.
+
+    Still a pure fact: a ranking of what happened, not a claim about what will.
+    """
+    from engine.preseason import RANK_MIN_GAMES, positional_ranks, prior_season_form
+
+    ppr = _report(spec=_spec(scoring="ppr"))
+    std = _report(spec=_spec(scoring="standard"))
+    assert any(r["rank"] for r in ppr["roster"]), "no rank was computed at all"
+
+    # THE LOAD-BEARING ASSERTION: the preset must actually move the rank. A
+    # reception-heavy receiver and a rushing back swap places between PPR and
+    # standard; if they do not, the rank ignored the subscriber's rules and the
+    # product's central claim is quietly false.
+    def rank_of(report, pid):
+        row = next(r for r in report["roster"] if r["player_id"] == pid)
+        return row["rank"]
+    # p-wr1 (9 catches, 40 yards) and p-wr2 (2 catches, 100 yards) are both
+    # WRs, so they share one pool and the preset decides who leads it.
+    catcher_ppr, deep_ppr = rank_of(ppr, "p-wr1"), rank_of(ppr, "p-wr2")
+    catcher_std, deep_std = rank_of(std, "p-wr1"), rank_of(std, "p-wr2")
+    assert None not in (catcher_ppr, deep_ppr, catcher_std, deep_std)
+    assert (catcher_ppr[1] < deep_ppr[1]) != (catcher_std[1] < deep_std[1]), (
+        f"the RANK did not move with the scoring preset — "
+        f"ppr {catcher_ppr}/{deep_ppr}, standard {catcher_std}/{deep_std}. "
+        f"A rank that ignores the subscriber's rules makes the product's "
+        f"central claim untrue.")
+
+    # A defense is never ranked — we decline to score them (RULE P1's sibling).
+    defense = next(r for r in ppr["roster"] if r["position"] == "DEF")
+    assert defense["rank"] is None
+
+    # A player with no prior season has no rank either.
+    rookie = next(r for r in ppr["roster"] if r["player_id"] == "p-rookie")
+    assert rookie["rank"] is None
+
+    # Too few games is "no rank", never a rank built on a small sample. Uses a
+    # player the directory KNOWS and whose position is rankable, so the guard
+    # is what excludes him rather than an unknown id.
+    known = {"p-wr1": {"points": 99.0, "games": RANK_MIN_GAMES - 1,
+                       "per_game": 99.0}}
+    assert positional_ranks(known, _directory()) == {}, \
+        "a rank was built on fewer than RANK_MIN_GAMES appearances"
+    enough = {"p-wr1": {"points": 99.0, "games": RANK_MIN_GAMES,
+                        "per_game": 99.0}}
+    assert positional_ranks(enough, _directory()) == {"p-wr1": ("WR", 1, 1)}
+
+    # The rank is rendered, on every surface, and it reads as a rank.
+    from render.preseason import email_html, text_summary
+    for name, page in (("email", email_html(ppr)), ("text", text_summary(ppr))):
+        prose = _prose(page)
+        assert re.search(r"\b(QB|RB|WR|TE|K)\d+ of \d+", prose), \
+            f"{name} does not show a positional rank"
+    # And adding it did not smuggle in a prediction.
+    assert "%" not in _prose(text_summary(ppr))

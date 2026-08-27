@@ -135,6 +135,48 @@ def prior_season_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
             for pid in totals if games[pid]}
 
 
+# Half a season. A rank built on three good games would be a small-sample
+# artefact dressed as a fact, and this file's whole claim is that everything in
+# it is a fact. Below the bar a player simply has no rank, stated as such.
+RANK_MIN_GAMES = 8
+
+# Ranked positions. DEF is excluded for the same reason it carries no record:
+# we decline to score defenses, so we cannot honestly rank them either.
+RANKED_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K"})
+
+
+def positional_ranks(form: Mapping[str, Mapping[str, float]],
+                     directory: PlayerDirectory,
+                     min_games: int = RANK_MIN_GAMES,
+                     ) -> dict[str, tuple[str, int, int]]:
+    """player -> (position, rank, pool size) by last season's points per game.
+
+    The number the file already prints — "18.7 a game" — does not tell a
+    reader whether that is good. "WR3 of 159" does, instantly, in the
+    vocabulary they already think in. And because it is scored under THIS
+    subscriber's rules, the rank is theirs rather than a generic one: a
+    reception-heavy receiver ranks differently in PPR than in standard, which
+    is the whole point of computing anything per-league.
+
+    Still a pure fact — a ranking of what happened, not a claim about what
+    will. No calibration burden, nothing for the frozen method to govern.
+    """
+    position_of = {p.player_id: p.position for p in directory.players}
+    pools: dict[str, list[tuple[float, str]]] = {}
+    for player_id, record in form.items():
+        position = position_of.get(player_id)
+        if position in RANKED_POSITIONS and record["games"] >= min_games:
+            pools.setdefault(position, []).append(
+                (record["per_game"], player_id))
+    out: dict[str, tuple[str, int, int]] = {}
+    for position, pool in pools.items():
+        # Ties break on id so a report is byte-identical across runs.
+        ordered = sorted(pool, key=lambda row: (-row[0], row[1]))
+        for index, (_points, player_id) in enumerate(ordered, start=1):
+            out[player_id] = (position, index, len(ordered))
+    return out
+
+
 def build_preseason_report(
     spec,
     directory: PlayerDirectory,
@@ -155,6 +197,7 @@ def build_preseason_report(
     by_id = {p.player_id: p for p in directory.players}
     byes = dict(byes) if byes is not None else bye_by_team(cache_dir, season)
     form = prior_season_form(prior, spec.rule)
+    ranks = positional_ranks(form, directory)
     slots = list(spec.slots)
 
     roster: list[dict[str, Any]] = []
@@ -178,6 +221,8 @@ def build_preseason_report(
             # RULE P1: absent, never zero.
             "record": dict(record) if record else None,
             # Which KIND of absence, so the render can say the true one.
+            # (position, rank, pool) or None — see positional_ranks.
+            "rank": list(ranks[player_id]) if player_id in ranks else None,
             "no_record_reason": (
                 None if record
                 else DEFENSE_NOT_SCORED if player.position == DEFENSE
