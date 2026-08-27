@@ -273,7 +273,7 @@ Baltimore Ravens
 // roster was NOT saved rather than congratulating anyone.
 const STRIPE_LINK_SEASON = "";    // $39/season, auto-renewing annual
 const STRIPE_LINK_MONTHLY = "";   // $14.99/month
-const STRIPE_LINK_PASS = "";      // $99/season, whole league
+const STRIPE_LINK_PASS = "https://buy.stripe.com/fZudRbgAjd9U2iPbjkaMU03";  // $99/season, whole league
 
 // League Pass SEATS only. A seat holder pays nothing, so there is no payment to
 // carry their picks — the one path that still needs a form backend. PLAN §0
@@ -298,20 +298,34 @@ const CONTACT_EMAIL = "hello@beatyourleague.com";
 // pattern also keeps the check identical to the one the encoder applies.
 
 const QUERY = new URLSearchParams(location.search);
-// Say checkout is closed BEFORE someone pastes fifteen names, not after. The
-// end-of-flow message stays (nothing is saved and the page must say so), but
-// discovering that only after full setup is the worst moment to disappoint.
-if (!STRIPE_LINK_SEASON && !STRIPE_LINK_MONTHLY && !STRIPE_LINK_PASS) {
-  const note = document.getElementById("closed-note");
-  if (note && !new URLSearchParams(location.search).has("pass")) {
-    note.style.display = "block";
-  }
-}
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
 // season pass, so a mangled link can never silently downgrade the sale.
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
 const WANTS_PASS = QUERY.get("plan") === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
+
+// Say checkout is closed BEFORE someone pastes fifteen names, not after. The
+// end-of-flow message stays (nothing is saved and the page must say so), but
+// discovering that only after full setup is the worst moment to disappoint.
+//
+// PER PLAN, not all-or-nothing. The old test was
+// `!SEASON && !MONTHLY && !PASS`, which is only correct while every link is
+// empty together — and links arrive ONE AT A TIME as they are created in
+// Stripe. The moment the first one landed, the note switched off for the two
+// tiers that still could not take money, and a season buyer was shown
+// "Continue to checkout — $39", entered fifteen names, and learned at submit
+// that nothing had been saved. Exactly the disappointment this note exists to
+// move earlier.
+const PLAN_LINK = WANTS_PASS ? STRIPE_LINK_PASS
+                : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+if (!PLAN_LINK) {
+  const note = document.getElementById("closed-note");
+  // A seat holder is not buying anything, so a payment link has no bearing on
+  // whether their flow works — that one turns on FORM_ENDPOINT instead.
+  if (note && !SEAT_MODE) {
+    note.style.display = "block";
+  }
+}
 // ?update=<slug>&token=<token> — the link inside every report. The slug names
 // the subscription being changed and the token is the subscriber's own
 // credential (an HMAC the intake verifies); a malformed pair is not an update,

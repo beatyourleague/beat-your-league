@@ -2447,3 +2447,38 @@ def test_the_address_never_enters_the_system_that_builds_reports() -> None:
         for field in ("address", "shipping", "phone", "tax_ids"):
             assert f'customer.get("{field}")' not in text, (
                 f"run/{module} reads customer.{field} into our own records")
+
+
+def test_the_closed_note_is_decided_per_plan_not_all_or_nothing() -> None:
+    """Payment links arrive ONE AT A TIME as each is created in Stripe, so the
+    half-configured state is not an edge case — it is every state between the
+    first link and the last.
+
+    The guard used to be `!SEASON && !MONTHLY && !PASS`, correct only while all
+    three were empty together. Reproduced in a browser the moment the League
+    Pass link landed: /join/ showed a season buyer "Continue to checkout — $39"
+    with no warning, and they would have pasted fifteen player names before
+    learning at submit that nothing was saved — precisely the disappointment
+    this note exists to move earlier.
+    """
+    assert "const PLAN_LINK = WANTS_PASS ? STRIPE_LINK_PASS" in JOIN, (
+        "the closed note no longer resolves the link for the visitor's own plan")
+    assert "if (!PLAN_LINK) {" in JOIN
+    assert not re.search(r"!STRIPE_LINK_SEASON\s*&&\s*!STRIPE_LINK_MONTHLY", JOIN), (
+        "the all-or-nothing guard is back: one configured tier switches the "
+        "warning off for the tiers that still cannot take money")
+    # The plan must be known before the note is decided, or PLAN_LINK reads
+    # undefined constants and the note never shows for anyone.
+    assert JOIN.index("const WANTS_PASS") < JOIN.index("const PLAN_LINK")
+
+
+def test_a_configured_tier_can_take_money_while_the_others_cannot() -> None:
+    """The other half of the same property: a live link must actually work.
+    Only the tiers still missing a link say checkout is closed."""
+    live = re.findall(r'const (STRIPE_LINK_\w+) = "(https://buy\.stripe\.com/[^"]+)"', JOIN)
+    empty = re.findall(r'const (STRIPE_LINK_\w+) = ""', JOIN)
+    assert len(live) + len(empty) == 3, "a payment-link constant went missing"
+    for _name, url in live:
+        assert "?" not in url, (
+            f"{url} carries a query string; the picker appends "
+            f"client_reference_id and would produce a malformed URL")
