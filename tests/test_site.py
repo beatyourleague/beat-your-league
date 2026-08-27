@@ -2387,3 +2387,32 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     ucount = re.search(r"\.ucount\{([^}]*)\}", LANDING).group(1)
     assert "nowrap" not in ucount, \
         ".ucount is nowrap again — that is what pushed the page sideways"
+
+
+def test_location_data_stays_in_stripe_and_never_reaches_our_records() -> None:
+    """The privacy policy makes an EXHAUSTIVE claim — email, roster, scoring,
+    "that is everything we hold about you". Card country and billing postal
+    code are visible in Stripe's dashboard (Stripe collects them to verify the
+    card, whatever our checkout settings say), and reading them there is fine.
+    Copying one into our own store would make that sentence false.
+
+    So this pins both halves: the policy says where they live, and no code
+    reads them off a Stripe customer.
+    """
+    whole = (SITE / "privacy.html").read_text(encoding="utf-8")
+    privacy = html.unescape(prose(whole[whole.find("<body>"):]))
+    assert re.search(r"country your card was\s+issued in", privacy, re.I), (
+        "the policy no longer says what Stripe shows us about location")
+    assert re.search(r"They stay in Stripe|never copied into our records", privacy, re.I)
+
+    # And the code half. run/subscriptions.py is the only place a Stripe
+    # customer object is read for anything other than metadata.
+    source = (SITE.parent / "run" / "subscriptions.py").read_text(encoding="utf-8")
+    reads = set(re.findall(r'customer\.get\("([a-z_]+)"', source))
+    assert reads <= {"deleted", "email", "id", "metadata"}, (
+        f"run/subscriptions.py now reads {sorted(reads)} off a Stripe customer "
+        f"— anything beyond email/id/metadata contradicts the privacy policy's "
+        f"'that is everything we hold about you'")
+    for field in ("address", "shipping", "phone", "tax_ids"):
+        assert f'customer.get("{field}")' not in source, (
+            f"customer.{field} is being read into our own records")

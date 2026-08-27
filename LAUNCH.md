@@ -101,8 +101,33 @@ footer (only there — reports to paying subscribers are transactional).
    - Monthly — subscription, **$14.99 USD / month**
    - League Pass — subscription, **$99 USD / year**
 
-   Four settings must stay OFF on every link, each for a reason that costs
-   money or breaks delivery:
+   Every option on that screen stays OFF. Decided Aug 27 2026, recorded so it
+   is not re-litigated at the screen:
+   - **Managed Payments** — 3.5% ON TOP of the standard fee ($2.80 rather than
+     $1.43 on a $39 pass; $136.50 per hundred sales). It buys global tax
+     compliance we do not need while registered nowhere, and it makes Stripe
+     the merchant of record, which contradicts `terms.html` naming us as the
+     counterparty. The one thing that would genuinely trigger it is material
+     EU sales — the EU has no registration threshold for non-established
+     suppliers of digital services, so VAT is technically due from the first
+     euro. Watch card country in Stripe; if EU revenue stops being incidental,
+     that is the moment this 3.5% starts being worth it.
+   - **Collect tax automatically** — nothing to collect while registered
+     nowhere, and it adds a per-transaction fee.
+   - **Collect customer names / business names / addresses / phone** — all
+     four falsify `site/privacy.html`, which claims exhaustively that email,
+     roster and scoring settings are "everything we hold about you". Location
+     for tax monitoring and marketing comes free from the card country and the
+     postal code Stripe verifies anyway; READ those in Stripe's dashboard and
+     never copy them into the registry (pinned by
+     `test_location_data_stays_in_stripe_and_never_reaches_our_records`).
+   - **Include a free trial** — the Week-2 no-questions refund already is the
+     trial, and it is disclosed on the pricing card, in the contract and in the
+     welcome email. A trial would also land in weeks 1-3, which publish no
+     confidence numbers, so it would show the thinnest version of the product.
+   - **Adjustable quantity** and **Limit the number of payments** — see below.
+
+   These two in particular cost money or break delivery:
    - **Adjustable quantity** — one purchase is one roster. A quantity of 2
      charges twice and still produces exactly one `client_reference_id`, so
      the second one buys nothing and reads as an overcharge.
