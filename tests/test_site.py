@@ -2389,30 +2389,61 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
         ".ucount is nowrap again — that is what pushed the page sideways"
 
 
-def test_location_data_stays_in_stripe_and_never_reaches_our_records() -> None:
-    """The privacy policy makes an EXHAUSTIVE claim — email, roster, scoring,
-    "that is everything we hold about you". Card country and billing postal
-    code are visible in Stripe's dashboard (Stripe collects them to verify the
-    card, whatever our checkout settings say), and reading them there is fine.
-    Copying one into our own store would make that sentence false.
+def test_the_policy_discloses_the_address_stripe_now_collects() -> None:
+    """Owner decision, Aug 27 2026: switch on Stripe's "collect customer
+    addresses". The reason is tax — nexus thresholds are counted per country
+    AND per state, so knowing where sales come from is what makes it possible
+    to register in the right places.
 
-    So this pins both halves: the policy says where they live, and no code
-    reads them off a Stripe customer.
+    Collecting it made THREE statements on this page false at once, which is
+    why the policy had to be rewritten before the toggle was flipped and not
+    after: the exhaustive "whole list" note, the header lede's "and nothing
+    else", and section 2's "no postal address". A privacy policy that lags the
+    collection by even a day is the kind of small untruth that discredits every
+    other claim on the page — and this one is linked from Stripe's own
+    checkout, so a buyer may read it in the same minute they hand the address
+    over.
     """
     whole = (SITE / "privacy.html").read_text(encoding="utf-8")
-    privacy = html.unescape(prose(whole[whole.find("<body>"):]))
-    assert re.search(r"country your card was\s+issued in", privacy, re.I), (
-        "the policy no longer says what Stripe shows us about location")
-    assert re.search(r"They stay in Stripe|never copied into our records", privacy, re.I)
+    page = html.unescape(prose(whole[whole.find("<body>"):]))
+    lede = html.unescape(prose(whole))
 
-    # And the code half. run/subscriptions.py is the only place a Stripe
-    # customer object is read for anything other than metadata.
+    assert re.search(r"billing address", page, re.I), \
+        "the address is collected and the policy does not say so"
+    assert re.search(r"billing address you give Stripe at checkout", page, re.I), (
+        "the exhaustive 'whole list' note omits the address")
+    assert not re.search(r"no postal address", page, re.I), (
+        "section 2 still claims we never ask for a postal address")
+    assert not re.search(r"scoring settings, and nothing else", lede, re.I), (
+        "the lede still says the old three-item list is everything")
+    # Why we take it, in the buyer's terms — a purpose, not just a disclosure.
+    assert re.search(r"tax", page, re.I), "no stated purpose for the address"
+    assert re.search(r"not.{0,40}(target|advertis)", page, re.I), (
+        "the policy does not rule out the use a reader will assume")
+    # And the limit that keeps it out of everything we publish.
+    assert re.search(r"not.{0,60}copied into", page, re.I), (
+        "the policy no longer says the address stays out of the report system")
+
+
+def test_the_address_never_enters_the_system_that_builds_reports() -> None:
+    """Collecting it in Stripe and pulling it into our pipeline are different
+    decisions, and only the first was made.
+
+    The address is for reading in Stripe's dashboard to see where sales come
+    from. Nothing about a report needs it — the file is computed from a roster
+    and public NFL data — so keeping it out of run/ means it cannot leak
+    through a rendered report, the public record of graded calls, a CI log or
+    an Actions artifact. The policy promises exactly this ("not copied into the
+    system that builds and sends your reports"), so the promise and the code
+    are pinned together.
+    """
     source = (SITE.parent / "run" / "subscriptions.py").read_text(encoding="utf-8")
     reads = set(re.findall(r'customer\.get\("([a-z_]+)"', source))
     assert reads <= {"deleted", "email", "id", "metadata"}, (
         f"run/subscriptions.py now reads {sorted(reads)} off a Stripe customer "
-        f"— anything beyond email/id/metadata contradicts the privacy policy's "
-        f"'that is everything we hold about you'")
-    for field in ("address", "shipping", "phone", "tax_ids"):
-        assert f'customer.get("{field}")' not in source, (
-            f"customer.{field} is being read into our own records")
+        f"— the policy says the address stays out of the report system")
+    for module in ("subscriptions.py", "intake.py", "rosters.py", "tuesday.py"):
+        text = (SITE.parent / "run" / module).read_text(encoding="utf-8")
+        for field in ("address", "shipping", "phone", "tax_ids"):
+            assert f'customer.get("{field}")' not in text, (
+                f"run/{module} reads customer.{field} into our own records")

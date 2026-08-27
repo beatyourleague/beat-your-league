@@ -114,13 +114,24 @@ footer (only there — reports to paying subscribers are transactional).
      that is the moment this 3.5% starts being worth it.
    - **Collect tax automatically** — nothing to collect while registered
      nowhere, and it adds a per-transaction fee.
-   - **Collect customer names / business names / addresses / phone** — all
-     four falsify `site/privacy.html`, which claims exhaustively that email,
-     roster and scoring settings are "everything we hold about you". Location
-     for tax monitoring and marketing comes free from the card country and the
-     postal code Stripe verifies anyway; READ those in Stripe's dashboard and
-     never copy them into the registry (pinned by
-     `test_location_data_stays_in_stripe_and_never_reaches_our_records`).
+   - **Collect customer addresses — ON** (owner decision, Aug 27 2026). The
+     reason is tax: nexus thresholds are counted per country AND per state, so
+     knowing where sales come from is what makes registering in the right place
+     possible at all. `site/privacy.html` was rewritten FIRST — collecting it
+     falsified three statements there at once (the exhaustive "whole list"
+     note, the lede's "and nothing else", and §2's "no postal address"), and
+     that page is linked from Stripe's own checkout, so a buyer may read it in
+     the same minute they hand the address over. §7 now also says plainly that
+     an address inside a payment record cannot always be deleted on request,
+     because tax law requires those to be kept.
+     **The address stays in Stripe.** It is read in the dashboard and never
+     enters `run/` — pinned by
+     `test_the_address_never_enters_the_system_that_builds_reports`, so it
+     cannot leak through a report, the public ledger, a CI log or an artifact.
+   - **Collect customer names / business names / phone — OFF.** Nothing uses
+     them, and each is one more field on a mobile checkout reached from a link
+     on X. If Stripe's address block turns out to force a name field, add the
+     name to `privacy.html` §1 before the first live sale, not after.
    - **Include a free trial** — the Week-2 no-questions refund already is the
      trial, and it is disclosed on the pricing card, in the contract and in the
      welcome email. A trial would also land in weeks 1-3, which publish no
