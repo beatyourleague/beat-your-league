@@ -75,6 +75,81 @@ class SoloError(RuntimeError):
     """The week could not be built for this roster."""
 
 
+def _final_teams_for_week(cache_dir: Path, season: str, week: int) -> set[str]:
+    """Teams whose REG game that week has a final score in the schedule.
+
+    Same source and same conservatism as engine.ledger._final_teams: a game
+    with either score missing has not been played, or has not been posted.
+    """
+    import csv as _csv
+
+    try:
+        path = fetch("schedules", "games.csv", cache_dir, live=True)
+    except NflverseError:
+        return set()
+    done: set[str] = set()
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in _csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            try:
+                if int(row.get("week") or 0) != int(week):
+                    continue
+            except ValueError:
+                continue
+            if (row.get("home_score") or "").strip() and (row.get("away_score") or "").strip():
+                for team in (row.get("home_team"), row.get("away_team")):
+                    if team:
+                        done.add(team)
+    return done
+
+
+def assert_week_is_complete(cache_dir: Path, season: str, week: int,
+                            weekly: Mapping[int, Mapping[str, Any]]) -> None:
+    """Refuse to build a report from a week whose box scores have not landed.
+
+    The report for week W projects from weeks 1..W-1, so W-1 has to be
+    COMPLETE. It is not enough for the stat file to exist: nflverse publishes
+    on its own schedule (observed: the stats_player release stamped 03:35 ET),
+    and a Tuesday run that starts before Monday night's game is ingested reads
+    a week that is missing it — silently, because every other row is there.
+
+    The consequence is not a crash, which is why it needed a guard: a player
+    who played Monday night is projected from one fewer game, and one close
+    enough to MIN_GAMES_FOR_CALL loses his call entirely. That is the same
+    shape as the bug where the model's cutoff was a week early and 14.6% of
+    slots seated a different player — quiet, plausible, and wrong.
+
+    engine/ledger.py already refuses to GRADE an incomplete week (RULE L1);
+    this is the same rule applied to BUILDING, from the same schedule data, so
+    the two halves of the product cannot disagree about what "the week is in"
+    means. Found Aug 27 2026 while choosing the cron hour: the grader guarded
+    itself and the builder did not.
+
+    Silent by design in two cases. Week 1 has no prior week. And a schedule we
+    cannot read yields no finals, which is "not checked" rather than
+    "incomplete" — an nflverse outage must not become a second, different
+    fatal error when fetch's own cache fallback already handles it.
+    """
+    if week <= 1:
+        return
+    prior = week - 1
+    final = _final_teams_for_week(cache_dir, season, prior)
+    if not final:
+        return                      # nothing played yet, or no schedule to read
+    observed = {str((row or {}).get("team") or "").strip()
+                for row in (weekly.get(prior) or {}).values()}
+    missing = sorted(t for t in final if t and t not in observed)
+    if missing:
+        raise SoloError(
+            f"week {prior}'s box scores have not landed yet — the schedule "
+            f"says {', '.join(missing)} finished, but no stat rows exist for "
+            f"them. A report built now would project week {week} from an "
+            f"incomplete week {prior}. Re-run once nflverse has published.")
+
+
 # --------------------------------------------------------------------- #
 # the calendar, from the schedule release
 # --------------------------------------------------------------------- #
@@ -362,6 +437,12 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         raise SoloError(
             f"could not load {int(season) - 1} for the positional prior: {exc}"
         ) from exc
+
+    # The week we project FROM must be complete before we build anything —
+    # same rule engine/ledger.py applies before it grades, from the same
+    # schedule data, so the two halves cannot disagree about what "the week
+    # is in" means.
+    assert_week_is_complete(cache_dir, season, week, weekly)
 
     return WeekData(
         season=season,

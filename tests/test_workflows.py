@@ -311,8 +311,18 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     text = _text("weekly.yml")
     crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
     assert len(crons) == 2, f"the Tuesday retry is gone: {crons}"
-    assert "0 11 * * 2" in crons, "the main Tuesday send moved"
-    retry = [c for c in crons if c != "0 11 * * 2"]
+    main = "0 12 * * 2"
+    assert main in crons, f"the main Tuesday send moved: {crons}"
+    # Never earlier than 12:00 UTC. Below that the November send drifts to
+    # 06:00 ET, and more importantly it closes on nflverse's own publish
+    # window — their stats_player release was observed stamped 03:35 ET, and a
+    # run that starts before Monday night is ingested projects from a short
+    # week. assert_week_is_complete now refuses rather than shipping that, so
+    # the cost of being early is a failed run, not a wrong report — but there
+    # is no reason to court it.
+    assert min(int(c.split()[1]) for c in crons) >= 12, \
+        f"a Tuesday run before 12:00 UTC risks nflverse not having published: {crons}"
+    retry = [c for c in crons if c != main]
     assert retry and retry[0].endswith("* * 2"), \
         f"the retry must land on the same weekday as the send, got {retry}"
     # Same morning, not a different day: the product promises Tuesday.
@@ -322,3 +332,31 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     # And it must be the SAME job, so the retry cannot drift from the send.
     assert text.count("runs-on:") == 1, \
         "the retry became a second job — one definition, or they will diverge"
+
+
+def test_the_report_refuses_a_week_whose_box_scores_are_missing() -> None:
+    """The GRADER has always refused to settle a week whose box scores had not
+    landed (RULE L1). The BUILDER had no such check, so a Tuesday run that
+    started before nflverse ingested Monday night's game would project week W
+    from a week W-1 that is silently missing it.
+
+    Not a crash — that is why it needed a guard. A player who played Monday
+    night gets projected from one fewer game, and one sitting close to
+    MIN_GAMES_FOR_CALL loses his call entirely. Same shape as the bug where the
+    model's cutoff was a week early and 14.6% of slots seated a different
+    player: quiet, plausible, wrong.
+
+    Both halves now read the same schedule and apply the same rule, so they
+    cannot disagree about what "the week is in" means. Found Aug 27 2026 while
+    choosing the cron hour."""
+    import inspect
+
+    import run.solo as solo
+
+    assert hasattr(solo, "assert_week_is_complete")
+    # It is actually CALLED on the build path, not merely defined.
+    src = inspect.getsource(solo.load_week_data)
+    assert "assert_week_is_complete(" in src, \
+        "the completeness guard exists but the loader never calls it"
+    # Week 1 has no prior week and must never trip.
+    solo.assert_week_is_complete(solo.CACHE_DIR, "2024", 1, {})

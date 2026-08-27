@@ -20,12 +20,20 @@ name: weekly-report
 
 on:
   schedule:
-    # Tuesdays 11:00 UTC. That is 07:00 ET while US daylight time is in effect
-    # and 06:00 ET from Nov 1 2026, when it ends — cron has no timezone, so the
-    # back half of the season sends an hour earlier than the front half.
-    # Harmless for correctness (week resolution is date-based, never hour-based)
-    # but it is a real change to when a subscriber's inbox lights up.
-    - cron: "0 11 * * 2"
+    # Tuesdays 12:00 UTC — 08:00 ET on daylight time, 07:00 ET from Nov 1
+    # 2026. Cron has no timezone, so the hour drifts by one across the season;
+    # 12:00 was chosen over 11:00 so BOTH halves land at a civilised morning
+    # hour instead of 06:00 ET in November.
+    #
+    # The floor is not taste, it is nflverse: Monday night's box scores have to
+    # be published before a week-W report can project from a complete week W-1.
+    # Their stats_player release was observed stamped 03:35 ET, so 08:00 gives
+    # roughly four hours of margin after an overnight publish — and the ceiling
+    # is that subscribers need the file with a full day before Wednesday waiver
+    # processing. run/solo.py's assert_week_is_complete now refuses outright if
+    # the week really is short, so a late publish is a loud failure and a
+    # retry, never a quietly worse report.
+    - cron: "0 12 * * 2"
     # THE SAME JOB AGAIN, four hours later. Not a second workflow: one
     # definition means the retry cannot drift from the thing it is retrying.
     #
@@ -41,7 +49,7 @@ on:
     # cannot cover is a run that sent successfully and then failed to commit
     # sent.jsonl — the send log is uploaded as an artifact for exactly that
     # case, and recovering from it is deliberately manual.
-    - cron: "0 15 * * 2"
+    - cron: "0 16 * * 2"
   workflow_dispatch: {}
 
 permissions:
