@@ -729,14 +729,62 @@ def test_every_report_carries_a_way_out() -> None:
             f"{name} must not route cancellation through a human inbox"
 
 
-def test_billing_never_outlives_the_product() -> None:
-    """We only charge for months we actually send something. Monthly billing
-    stops at season end; the annual renewal lands before the season it covers."""
+def test_monthly_billing_never_outlives_the_product() -> None:
+    """Monthly stops at season end, and run/billing.py is what makes it true."""
     legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     assert re.search(r"billing runs only while the season runs", legal, re.I)
     assert re.search(r"do not charge monthly through the offseason", legal, re.I)
-    assert re.search(r"never during\s+the offseason", legal, re.I)
     assert re.search(r"billing stops when the season does", prose(LANDING), re.I)
+
+
+def test_the_contract_does_not_promise_a_renewal_date_stripe_will_not_honour() -> None:
+    """This test used to REQUIRE the false promise, which is how it survived.
+
+    terms.html said the annual renewal is "charged shortly before the season it
+    covers — never during the offseason". Stripe anchors a renewal on the
+    subscription's own creation date, nothing in this repo moves that anchor,
+    and RULE B2 in run/billing.py deliberately never touches a yearly plan. So
+    a season pass bought in November renews the following November — mid-season
+    — and one bought in January renews in January, deep in the offseason. The
+    sentence was false for every buyer who did not happen to join in Aug/Sep,
+    in the document that wins over every other surface.
+
+    What replaced it is the promise we DO keep: the anniversary is stated
+    plainly, and render/renewal.py sends the 15-45 day notice that California's
+    ARL requires and that run/renewals.py actually runs.
+    """
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
+    assert not re.search(r"never during\s+the offseason", legal, re.I), (
+        "the unkeepable annual-renewal promise is back — nothing in this repo "
+        "moves a Stripe billing anchor, and RULE B2 forbids touching a yearly "
+        "subscription at all")
+    assert not re.search(r"shortly before the season it covers", legal, re.I)
+    assert re.search(r"anniversary of the day you subscribed", legal, re.I), (
+        "the contract no longer says when an annual renewal actually falls")
+    assert re.search(r"15 and 45 days", legal), (
+        "the notice window we do keep — and legally owe — is unstated")
+
+
+def test_the_contract_agrees_with_itself_on_when_monthly_billing_starts() -> None:
+    """Section 3 said BOTH "you're charged when you subscribe" AND "you are
+    charged monthly from the week your reports start". Those are mutually
+    exclusive, and with a plain Payment Link and no billing anchor the first is
+    what happens — so the second was false for every draft-season buyer, which
+    the landing page actively recruits ("Sign up before Week 1 and your roster
+    file lands the same day").
+
+    Reproduction is arithmetic: a week-1 joiner is billed five times for
+    $62.46, and an Aug 27 buyer five times for $68.45, because billing starts
+    at purchase and not at kickoff.
+    """
+    legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
+    assert re.search(r"charged\s+when you subscribe", legal, re.I)
+    assert not re.search(r"from the week your reports start", legal, re.I), (
+        "the contract claims monthly billing begins at kickoff; it begins at "
+        "purchase, and checkout is deliberately open in draft season")
+    assert re.search(r"is not refunded|not refunded", legal, re.I), (
+        "the contract does not disclose that a part-month already billed is "
+        "not refunded when the season-end stop fires inside it")
 
 
 def test_legal_page_actually_protects_the_business() -> None:

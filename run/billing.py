@@ -15,13 +15,27 @@ call was a read plus one customer-metadata write. So in February a monthly
 subscriber would have been charged for a product that sends nothing,
 which is precisely the forgot-to-cancel pattern PLAN §4 bans outright.
 
-`cancel_at` is the primitive. It takes an instant, it never refunds, and when
-the date is more than a period away Stripe leaves the cycle alone until the
-subscription renews into the period containing it, then SHORTENS that final
-period and prorates the invoice down. So the last charge is for the days
-actually served, which is a stronger version of the promise than the sentence
-makes. `cancel_at_period_end` is the wrong shape — it stops at whatever billing
+`cancel_at` is the primitive. It takes an instant and it never refunds.
+`cancel_at_period_end` is the wrong shape — it stops at whatever billing
 boundary happens to come next, which is an arbitrary month.
+
+**What the subscriber is actually charged, stated precisely, because an earlier
+version of this docstring rounded it off in our favour.** Two cases:
+
+- The stop is MORE than a period away (the ordinary case — bought in September,
+  season ends in January). Stripe leaves the cycle alone until the subscription
+  renews into the period containing the stop, then shortens that period and
+  prorates the invoice down. The last charge really is for the days served.
+- The stop lands INSIDE a period already paid for (bought late in the season,
+  or a stop date that moves). `apply_stop` sends `proration_behavior=none`
+  there, so no credit is raised and the subscriber has paid a full month for a
+  period cut short. That is not a rounding error we should describe as
+  proration: it is the honest cost of the rule, and site/terms.html says so in
+  the buyer's own words rather than leaving them to discover it.
+
+The one case worth naming: somebody who subscribes monthly in the last days of
+a season pays a full month for the one or two files left in it. The remedy is
+not to prorate — it is not to sell them a month that is nearly over.
 
 Four rules, each bought with a reproduced failure in review:
 

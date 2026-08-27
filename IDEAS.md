@@ -121,6 +121,33 @@ What the data we already hold could honestly support, in order of cheapness:
   then, nflverse carries no news, and there is no free source that does. Do not
   sell those months.
 
+**Reviewed Aug 27 2026 (4 lenses + 2 adversarial challenges, one tasked with building
+the strongest case FOR year-round billing).** The case for was built honestly and it
+fails, on a point that VALIDATES the owner's own framing rather than dismissing it.
+Corrections to the paragraphs above, which were written before the review:
+
+- **"33% of the year" is not by itself the argument.** The $39 pass charges for the same
+  246 silent days and nobody calls it deceptive. The defensible ground is UNIT COHERENCE:
+  a season is the unit we sell, a month is not a season. That survives a sharp buyer;
+  "we only bill for months we deliver" does not, because the pass does not.
+- **The decisive point is that nothing is IN FORCE in a charged offseason month.** A gym
+  is open, an insurance policy would pay out, a software seat can be logged into — each
+  has state in the month it bills. This product has no account, no login, no server (a
+  hard constraint), and `site/terms.html` §4 hands over every report already sent, on
+  cancellation, forever. So an offseason charge preserves nothing and a cancelling
+  subscriber forfeits nothing. The owner's instinct — that an active account is what
+  justifies recurring billing — is exactly right, and it is precisely why this fails here.
+- **The market split is clean, from our own verified comparison page:** every product sold
+  BY THE SEASON charges once per season; every product billed MONTHLY has a continuously
+  available account. Nothing in the repo records what any competitor does in the offseason,
+  so no claim about that may be published.
+- **Do not repeat the card-network argument as stated.** Visa's dispute-monitoring program
+  carries an absolute-count condition as well as a ratio, so "one February dispute exceeds
+  the threshold" is not a fact we checked. The dispute risk is real; that framing of it is
+  not sourced.
+- **This section is not independent corroboration.** It was written hours before the
+  review, from the same brief, so three of the four lenses citing it back are circular.
+
 So the reachable shape is ~7 months of product, not 12. Sequence: build the
 season review, then the draft-prep file as its own artifact, and only then
 price a twelve-month tier. Selling the months before they contain something is

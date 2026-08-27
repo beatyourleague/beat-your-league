@@ -366,7 +366,17 @@ the tier built to make the pass obvious was quietly worth less than the pass. Th
 (`monthly × 3.65 > $39`) was satisfied by any price above $10.69 and therefore never saw it.
 **Monthly is $14.99** (3 charges = $44.97; a full season = $59.96, so the pass saves 35%). The
 invariant is now stated in charges: **monthly × 3 must exceed the season pass**, pinned by
-`test_monthly_price_never_undercuts_the_season_pass`. Charm pricing on monthly and round numbers
+`test_monthly_price_never_undercuts_the_season_pass`.
+
+**THIRD CORRECTION (same day) — "a full season = $59.96" is wrong, and wrong in the
+direction that flatters monthly.** It assumed four charges. Computed against the real stop
+date (`run/billing.py` resolves 2027-01-13 for the 2026 season) a week-1 joiner is billed on
+five anniversaries — Sep 8, Oct 8, Nov 8, Dec 8 and a Jan 8 renewal prorated down to the
+stop — **$62.46**. And checkout deliberately opens in draft season, so an Aug 27 buyer is
+billed from August: **$68.45**, because the final part-month is inside a period already paid
+for and `proration_behavior=none` raises no credit there. So the pass saves 37–43%, not 35%.
+Nothing about the pricing decision changes — the gap moved in the pass's favour — but the
+figure was quoted on the strength of arithmetic nobody had run against the calendar. Charm pricing on monthly and round numbers
 on the season tiers is deliberate, not drift — it is each price wearing its own category's
 clothes, and it matches the verified monthly field on the compare page (FootClan $11.99,
 Scoutcast $5.99, FantasyPros $3.99–$22.99).
