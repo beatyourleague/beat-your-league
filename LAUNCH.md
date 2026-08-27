@@ -95,6 +95,21 @@ footer (only there — reports to paying subscribers are transactional).
    - Season pass — subscription, **$39 USD / year**
    - Monthly — subscription, **$14.99 USD / month**
    - League Pass — subscription, **$99 USD / year**
+
+   Four settings must stay OFF on every link, each for a reason that costs
+   money or breaks delivery:
+   - **Adjustable quantity** — one purchase is one roster. A quantity of 2
+     charges twice and still produces exactly one `client_reference_id`, so
+     the second one buys nothing and reads as an overcharge.
+   - **Limit the number of payments** — `run/billing.py` owns when a monthly
+     subscription ends, computed from the real schedule. A second mechanism
+     ending it on a count would fight that and win silently.
+   - **Promotion codes** — a founding rate is already the discount, and legal
+     §3 promises that rate at every renewal; a code on top makes the renewal
+     amount something our own constants cannot state.
+   - **Collecting addresses / phone** — CLAUDE.md's minimum-collection rule.
+     We are not registered for tax anywhere, so an address is data we would
+     hold and never use.
 4. **Custom text above the Pay button** (closes the disclosure gap on the one page we
    don't control). One API call per link — replace key and `plink_…`:
    ```bash
@@ -108,8 +123,15 @@ footer (only there — reports to paying subscribers are transactional).
    ```
 5. **Restricted API key** (Developers → API keys → Create restricted key):
    Checkout Sessions **Read** · Subscriptions **Write** · Customers **Write**.
-   Everything else: None. This is `STRIPE_API_KEY` — the same key works in the
-   curl commands above.
+   Everything else: None. This is `STRIPE_API_KEY`.
+
+   **The curl commands in step 4 need a DIFFERENT scope: Payment Links Write.**
+   They write to `/v1/payment_links`, which the three scopes above do not
+   cover, so the running key cannot make those calls and would 403. Add
+   Payment Links **Write** to the key, run the three curls once, then edit the
+   key and set it back to None — the shipped key never needs it again, and a
+   key that can rewrite a payment link is a key that can change what a buyer is
+   charged.
 
    Both writes are load-bearing and each is used for exactly one thing.
    *Customers*: the sweep stamps the roster onto the customer, so we stop
