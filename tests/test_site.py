@@ -2482,3 +2482,23 @@ def test_a_configured_tier_can_take_money_while_the_others_cannot() -> None:
         assert "?" not in url, (
             f"{url} carries a query string; the picker appends "
             f"client_reference_id and would produce a malformed URL")
+
+
+def test_the_cancel_section_links_the_portal_rather_than_describing_it() -> None:
+    """"Cancelling has concrete steps" is only half the promise; the steps have
+    to be followable from the page making them. §4 used to describe the URL
+    shape ("it looks like billing.stripe.com/p/login/…") because the portal did
+    not exist yet — a nervous buyer reading the contract before paying had
+    nothing to click.
+
+    The report footer and welcome email carry the same destination from the
+    BILLING_PORTAL_URL secret; this pins the one copy a human pasted, since a
+    hand-pasted link is the copy that goes stale.
+    """
+    terms = (SITE / "terms.html").read_text(encoding="utf-8")
+    cancel = terms[terms.find('id="cancel"'):terms.find("<h2>5.")]
+    assert re.search(r'href="https://billing\.stripe\.com/p/login/[A-Za-z0-9]+"', cancel), (
+        "the cancellation section does not link the billing portal")
+    assert "LAUNCH:" not in cancel, "the launch placeholder comment is still there"
+    assert not re.search(r"looks\s+like billing\.stripe\.com", cancel), (
+        "still describing the URL shape instead of linking it")
