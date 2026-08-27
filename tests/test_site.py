@@ -760,6 +760,42 @@ def test_monthly_price_never_undercuts_the_season_pass() -> None:
         f"to feed the pass is worth less than it")
 
 
+def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() -> None:
+    """The landing pricing card is the single source of truth for price, and
+    two surfaces were never enrolled in that propagation.
+
+    legal.html is the operative contract under a "this page wins" clause, so a
+    stale price there is not a typo — it is the document that governs. And
+    compare/index.html is where a diligent buyer checks us against nine
+    competitors, which is the worst place to be caught quoting an old number.
+    Both were updated by hand during the $12.99 -> $14.99 move and nothing
+    would have caught it if either had been missed.
+    """
+    rendered = markup_only(LANDING)
+    monthly = re.search(r'class="price">\$(\d+\.\d\d) <small>/ month', rendered)
+    season = re.search(r'class="price">\$(\d+) <small>/ season', rendered)
+    assert monthly and season, "could not read both prices off the pricing cards"
+    legal = (SITE / "legal.html").read_text(encoding="utf-8")
+    compare = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
+    # The compare table quotes NINE competitors' real prices, so only our own
+    # row may be swept for a stale figure — scoping it to any narrower thing
+    # than <tr class="us"> would be a guard that reads somebody else's number.
+    ours = re.search(r'<tr class="us">.*?</tr>', compare, re.S)
+    assert ours, "the comparison table no longer marks our own row"
+
+    for page, name in ((legal, "legal.html"), (ours.group(0), "compare, our row")):
+        assert f"${monthly.group(1)}" in page, (
+            f"{name} does not state the monthly price the landing charges "
+            f"(${monthly.group(1)})")
+        assert f"${season.group(1)}" in page, (
+            f"{name} does not state the season price the landing charges")
+        others = {p for p in re.findall(r"\$\d+\.\d\d", page)
+                  if p != f"${monthly.group(1)}"}
+        assert not others, (
+            f"{name} carries another decimal price {sorted(others)} — one of "
+            f"them is stale, and legal.html is the operative contract")
+
+
 def test_every_price_shown_to_a_buyer_names_its_currency() -> None:
     """An unlabelled price is ambiguous to a buyer and a support burden — and
     the ambiguity is not hypothetical here: the seller is in Ontario, so a

@@ -17,8 +17,11 @@ from run.billing import (REPORTABLE, RETRY_DAYS, ROSTER_METADATA_KEY,
                          _is_ours, apply_stop, last_send, needs_stop, stop_for)
 from run.solo import season_ends
 
-CACHE = Path(__file__).resolve().parent.parent / "data" / "raw"
-HAVE_SCHEDULE = (CACHE / "nflverse" / "games.csv").is_file()
+# The same directory run/billing.py reads. These MUST name one path: when the
+# guard checked data/raw/nflverse/games.csv while the argument passed data/raw,
+# the tests exercised a cache that only ever existed because they downloaded it.
+CACHE = Path(__file__).resolve().parent.parent / "data" / "raw" / "nflverse"
+HAVE_SCHEDULE = (CACHE / "games.csv").is_file()
 needs_schedule = pytest.mark.skipif(
     not HAVE_SCHEDULE,
     reason="no cached nflverse schedule (data/ is gitignored); "
@@ -143,9 +146,57 @@ def test_a_paused_or_unpaid_subscription_is_said_out_loud(status: str) -> None:
     assert any(status in n for n in notes), f"{status} passed through in silence"
 
 
+@pytest.mark.parametrize("status", REPORTABLE)
+def test_a_yearly_subscription_in_dunning_is_not_an_alarm(status: str) -> None:
+    """RULE B2 outranks status, and the filter order used to have it backwards.
+
+    Reproduced: one $39 season pass in Stripe's `unpaid` dunning end-state and
+    zero monthly subscriptions produced a note, and `main` returns 1 on any
+    note, so daily.yml fired "::error::A monthly subscription is billing with
+    no end-of-season stop date" and filed a bug issue — EVERY DAY, about a
+    subscription RULE B2 forbids ever giving a stop date to. There is no action
+    a human could take, which makes it a permanent false alarm on the only
+    alarm guarding an irreversible money promise.
+
+    The old test parametrized REPORTABLE over the monthly fixture only, so the
+    ordering was pinned by nothing.
+    """
+    due, notes = needs_stop([yearly(status=status)], AT)
+    assert due == []
+    assert notes == [], (
+        f"a yearly subscription in {status} raised {notes} — the daily cron "
+        f"goes red forever over a plan that must renew")
+
+
+def test_a_reportable_note_does_not_call_an_unpaid_subscription_paused() -> None:
+    _due, notes = needs_stop([sub(status="unpaid")], AT)
+    assert notes and "paused" not in notes[0], (
+        "the note describes every REPORTABLE status as paused")
+
+
 @pytest.mark.parametrize("status", WRITABLE)
 def test_every_live_status_gets_a_stop_date(status: str) -> None:
     assert len(needs_stop([sub(status=status)], AT)[0]) == 1
+
+
+def test_the_alarm_ignores_subscriptions_that_already_have_a_stop_date(
+        monkeypatch, capsys) -> None:
+    """The two days between a season's last game and its stop date firing.
+
+    On 2027-01-11 and 01-12 no season satisfies `ends >= today`, so `stop_for`
+    answers None — while every monthly subscriber already carries a perfectly
+    good 2027-01-13 stop date set months earlier. The census counted them as
+    "billing with nothing to stop them", so the cron went red and filed a bug
+    issue about a date we set ourselves.
+    """
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (None, "2026"))
+    monkeypatch.setattr(billing, "load_subscriptions",
+                        lambda key: [sub(cancel_at=int(AT.timestamp()))])
+    assert billing.main(["--send"]) == 0, capsys.readouterr().err
+    # ...but one with NO stop date still fails the run.
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    assert billing.main(["--send"]) == 1
 
 
 # --------------------------------------------------------------------- #
@@ -202,16 +253,37 @@ def test_the_stop_clears_the_final_send_and_a_whole_retry_tuesday() -> None:
     Sunday" rule: 4 of the 28 cached seasons end on a Monday, and 2010's final
     send lands two days AFTER its last game because a week-16 makeup held
     current_week back.
+
+    The first version of this test asserted `send + RETRY_DAYS > send + 7`,
+    which is the claim 8 > 7 and never reads the schedule at all. It ran the
+    calendar and then checked arithmetic. Now every assertion is against
+    `current_week`, which is what `last_send` claims to be derived from.
     """
+    from run.solo import current_week
+
     ends = season_ends(CACHE, live=False)
     assert len(ends) > 20, "the archive should cover many seasons"
     for season in sorted(ends):
+        final = date.fromisoformat(ends[season])
+        last_week = current_week(CACHE, season, final, session=None)
         send = last_send(CACHE, season, live=False)
         assert send is not None, f"{season}: no send date"
+        assert send.weekday() == 1, f"{season}: {send} is not a Tuesday"
+        # The final week really is mailed on that day...
+        assert current_week(CACHE, season, send, session=None) >= last_week, (
+            f"{season}: week {last_week} is not the one mailed on {send}, so a "
+            f"stop derived from it cuts the subscriber off before their last "
+            f"report — and a fired cancel_at cannot be undone")
+        # ...and not a week earlier, or the stop is a week later than it needs
+        # to be and somebody is billed into the offseason.
+        assert current_week(CACHE, season, send - timedelta(days=7),
+                            session=None) < last_week, (
+            f"{season}: week {last_week} was already mailed by "
+            f"{send - timedelta(days=7)}; {send} is not the FIRST such Tuesday")
+        # The stop clears a whole retry Tuesday PAST the real final send.
         stop = send + timedelta(days=RETRY_DAYS)
-        assert stop > send + timedelta(days=7), (
-            f"{season}: stop {stop} does not clear the retry Tuesday after the "
-            f"final send {send}")
+        assert (stop - final).days >= 1, f"{season}: stop {stop} precedes {final}"
+        assert stop >= send + timedelta(days=8), f"{season}: no retry margin"
 
 
 @needs_schedule

@@ -41,6 +41,29 @@ def test_the_card_is_small_enough_to_be_fetched() -> None:
     assert CARD.stat().st_size <= og.MAX_BYTES
 
 
+def test_the_committed_card_was_built_from_the_landing_page_as_it_stands() -> None:
+    """The staleness this cannot be allowed to have.
+
+    The card's figures are read from the hero file card, so editing that hero
+    and not running `make og` leaves the committed image advertising numbers
+    the page no longer shows — and nobody on our side ever LOOKS at og.png,
+    because it is only ever seen inside other people's timelines. A Makefile
+    comment saying "regenerate after editing the hero" is a rule enforced by
+    memory, and this repo's own history records exactly that failing on the
+    demo report, which was re-rendered from a stale JSON for weeks.
+
+    So `make og` stamps a digest of its source into the PNG and this compares
+    it. Reproduction: change any figure in the landing hero card and this test
+    fails until the card is rebuilt.
+    """
+    stamped = og.source_digest(CARD.read_bytes())
+    assert stamped is not None, (
+        "site/og.png carries no source fingerprint — rebuild it with `make og`")
+    assert stamped == og.page_digest(LANDING), (
+        "site/og.png was built from an older landing page, so it may be "
+        "advertising figures the product no longer produces. Run `make og`.")
+
+
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: str(p.relative_to(SITE)))
 def test_every_public_page_carries_the_card(page: Path) -> None:
     """Including the generated ones. A page whose og:image is missing renders on
@@ -127,10 +150,56 @@ def test_a_wrong_sized_render_is_rejected_rather_than_published() -> None:
     assert og.png_size(header) == (640, 480) != (og.WIDTH, og.HEIGHT)
 
 
+WORDS = {0: "no", 1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+
 def test_the_alt_text_describes_what_is_actually_on_the_card() -> None:
-    """Read aloud by a screen reader, and shown by clients that decline images."""
+    """Read aloud by a screen reader, and shown by clients that decline images.
+
+    DERIVED from the rows, not checked for a word. The first version asserted
+    `str(len(rows)) in alt or "four" in alt.lower()` against a sentence that
+    contains the word "four" — a membership check where the needle is a word
+    from the haystack tests nothing, and it passed with the Saquon Barkley row
+    deleted from the landing page.
+    """
     alt = re.search(r'og:image:alt" content="([^"]+)"', SOCIAL_IMAGE_TAGS).group(1)
-    assert "no call" in alt, (
-        "the honesty the card is built around is missing from its description")
     rows = og.hero_rows(LANDING)
-    assert str(len(rows)) in alt or "four" in alt.lower()
+    called = [r for r in rows if r["pct"]]
+    nocall = [r for r in rows if r["nocall"]]
+    assert alt == (
+        f"A Beat Your League lineup file: {WORDS[len(rows)]} roster slots, "
+        f"{WORDS[len(called)]} with a percentage, "
+        f"{WORDS[len(nocall)]} reading no call."), (
+        "the alt text no longer describes the card the landing page defines")
+
+
+def test_a_dropped_row_refuses_rather_than_shipping_a_shorter_card() -> None:
+    """Nobody on our side ever looks at og.png — it is seen inside other
+    people's timelines. A card quietly showing three of four slots would never
+    be noticed here, and the row most likely to be dropped is the no-call one,
+    which is the only differently-shaped row and the one carrying the honesty."""
+    broken = LANDING.replace('<span class="fnc">', '<span class="fnc muted">', 1)
+    assert broken != LANDING, "the no-call row markup moved; update this test"
+    with pytest.raises(og.OgError, match="drops one"):
+        og.hero_rows(broken)
+
+
+def test_the_card_copy_is_swept_for_banned_words_like_every_other_surface() -> None:
+    """The card is a buyer surface that no page-level sweep can see: it is a
+    PNG, and its source lives in a generator rather than under site/. At Grade C
+    the frozen method bans calibrated/tested/proven/accurate/"we hit X%" on
+    every surface, and og:image:alt sits in <head>, which the page sweeps strip
+    before they look."""
+    from tests.test_site import _DEV_SPEAK
+
+    # Imported, never retyped — a second copy of the banned list is exactly the
+    # drift this repo keeps finding.
+    grade_c = r"\b(calibrated|tested|proven|accurate)\b|we hit \d"
+
+    surface = re.sub(r"<style>.*?</style>", " ", og.build_html(LANDING), flags=re.S)
+    surface = re.sub(r"<[^>]+>", " ", surface) + " " + SOCIAL_IMAGE_TAGS
+    hit = re.search(grade_c, surface, re.I)
+    assert not hit, f"the social card carries a Grade-C banned word: {hit.group(0)!r}"
+    for pattern in _DEV_SPEAK:
+        hit = re.search(pattern, surface, re.I)
+        assert not hit, f"the social card carries developer vocabulary: {hit.group(0)!r}"

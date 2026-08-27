@@ -564,7 +564,18 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     from run.tuesday import PROCESSED_DIR
 
     processed_dir = processed_dir or PROCESSED_DIR
-    if data is None or not servable:
+    if not servable:
+        return
+    if data is None:
+        # Two very different states shared one silent return. Nobody to send to
+        # is nothing to say; a paid signup we could not build a file for is the
+        # promise on the pricing card ("your roster file lands the same day")
+        # going unkept, and it deserves a sentence. It self-heals on the next
+        # hourly run, so this is a note rather than a failure — but a silence
+        # nobody can see is how a run quietly stops delivering.
+        print(f"First files: skipped for {len(servable)} paid signup(s) — this "
+              f"week's data could not be loaded. They send on the next run.",
+              file=sys.stderr)
         return
     try:
         byes = bye_by_team(CACHE_DIR, season)

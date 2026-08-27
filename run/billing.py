@@ -73,7 +73,14 @@ from run.subscriptions import SubscriptionError, _stripe_get
 SUBSCRIPTIONS_API = "https://api.stripe.com/v1/subscriptions"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CACHE_DIR = REPO_ROOT / "data" / "raw"
+# The SAME directory every other nflverse reader uses (run/solo.py,
+# render/player_index.py, engine/ledger.py). `fetch` resolves `cache_dir /
+# asset` with no subdirectory of its own, so `data/raw` here quietly created a
+# SECOND games.csv at `data/raw/games.csv` — a copy no cron restores and none
+# saves, so in CI it downloads on every run and an nflverse outage becomes
+# (None, None) and a filed bug issue, instead of falling back to the cached
+# schedule the way `fetch` intends.
+CACHE_DIR = REPO_ROOT / "data" / "raw" / "nflverse"
 
 # The customer metadata run/intake.py stamps on every roster purchase. RULE B4.
 ROSTER_METADATA_KEY = "byl_roster_ref"
@@ -209,6 +216,18 @@ def _period_end(subscription: Mapping[str, Any]) -> int | None:
     return None
 
 
+def _already_stopping(subscription: Mapping[str, Any]) -> bool:
+    """Both of Stripe's ways of saying "this one is scheduled to end".
+
+    One predicate because two readings of it drifted: `needs_stop` skipped
+    these and `main`'s census did not, so a subscription carrying a perfectly
+    good stop date was counted among those "billing with nothing to stop
+    them" — and the alarm went off about a date we had set ourselves.
+    """
+    return (bool(subscription.get("cancel_at_period_end"))
+            or isinstance(subscription.get("cancel_at"), int))
+
+
 def _is_ours(subscription: Mapping[str, Any]) -> bool:
     """RULE B4. The customer must carry the roster stamp intake writes."""
     customer = subscription.get("customer")
@@ -259,22 +278,29 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], at: datetime,
     for subscription in subscriptions:
         if not _is_ours(subscription):
             continue
+        interval = _interval(subscription)
+        # RULE B2 FIRST, before status is ever considered. A yearly price may
+        # never receive a stop date, so no state it is ever in is this module's
+        # business — and checking status first meant a $39 pass sitting in
+        # Stripe's `unpaid` dunning end-state produced a note, which fails the
+        # run, which files a bug issue, EVERY DAY, about a subscription there is
+        # by definition nothing to do about. An alarm that fires daily for
+        # nothing is how the real one gets ignored.
+        if interval == YEARLY:
+            continue
         status = subscription.get("status")
         if status in REPORTABLE:
             notes.append(
                 f"subscription {subscription.get('id')} is {status} and was not "
-                f"given a stop date — a paused subscription resumes billing on "
-                f"its own, so this one needs a human")
+                f"given a stop date — Stripe resumes billing a {status} "
+                f"subscription without asking us, so this one needs a human")
             continue
         if status not in WRITABLE:
             continue
-        interval = _interval(subscription)
         if interval is None:
             notes.append(f"subscription {subscription.get('id')} has no readable "
                          f"billing interval — left alone rather than guessed at")
             continue
-        if interval == YEARLY:
-            continue                             # RULE B2: these must renew
         if subscription.get("cancel_at_period_end"):
             continue                             # already ending; leave it
         existing = subscription.get("cancel_at")
@@ -350,22 +376,28 @@ def main(argv: list[str] | None = None) -> int:
     ours = [s for s in subscriptions if _is_ours(s)]
     monthly = [s for s in ours
                if _interval(s) not in (None, YEARLY) and s.get("status") in WRITABLE]
+    # The alarm population, and it must agree with `needs_stop` — a subscription
+    # already carrying a stop date is not "billing with nothing to stop it".
+    # Without this the last days of every season go red about a date we set
+    # ourselves: the 2026 finale is 2027-01-10 and the stop is 2027-01-13, so on
+    # the 11th and 12th no season satisfies `ends >= today` and `at` is None.
+    unstopped = [s for s in monthly if not _already_stopping(s)]
 
     if at is None:
         # RULE B1. Never a licence to end anybody's subscription.
-        print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly")
-        if monthly:
-            print(f"NO STOP DATE: {len(monthly)} monthly subscription(s) are "
-                  f"billing with nothing scheduled to stop them"
-                  + (f" — the {season} season is already over and the next "
-                     f"schedule has not been published." if season else
-                     " — no season schedule could be read.")
+        print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly, "
+              f"{len(monthly) - len(unstopped)} already stopping")
+        if unstopped:
+            print(f"NO STOP DATE: {len(unstopped)} monthly subscription(s) are "
+                  f"billing with nothing scheduled to stop them, and no season "
+                  f"still to be played could be read from the schedule"
+                  + (f" (the most recent is {season})." if season else ".")
                   + " Nothing was cancelled; this needs a human.",
                   file=sys.stderr)
             print(line)
             return 1
-        print("No monthly subscriptions and no season to stop them at — "
-              "nothing to do.")
+        print("Nothing billing without a stop date, and no season still to be "
+              "played — nothing to do.")
         print(line)
         return 0
 

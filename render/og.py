@@ -27,12 +27,14 @@ from __future__ import annotations
 import argparse
 import html
 import re
+import hashlib
 import shutil
 import struct
 import subprocess
 import sys
 import tempfile
 import time
+import zlib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,6 +97,19 @@ def hero_rows(page: str) -> list[dict[str, str]]:
                      "nocall": nocall.strip()})
     if not rows:
         raise OgError("the hero file card carried no rows we could read")
+    # A regex that stops matching drops a row SILENTLY, and a card showing
+    # three of four slots is not obviously broken to anyone — least of all
+    # here, where nobody views the output; it is seen inside other people's
+    # timelines. Counting what the card DECLARES turns a parser that has
+    # fallen behind the markup into a refusal instead of a quieter lie. The
+    # no-call row is the one most likely to go: it is the only row with a
+    # different shape, and it is the row that carries the honesty.
+    declared = body.count('<div class="frow">')
+    if len(rows) != declared:
+        raise OgError(
+            f"the hero file card declares {declared} rows and only "
+            f"{len(rows)} could be read — refusing to publish a card that "
+            f"drops one")
     return rows
 
 
@@ -213,6 +228,46 @@ def find_chrome() -> str:
         "when regenerating site/og.png; the committed PNG is what ships.")
 
 
+# The fingerprint key stamped into the PNG. The card's figures are read from
+# the landing page, so an edit to the hero file card leaves the committed image
+# advertising numbers the page no longer shows — and NOBODY on our side ever
+# looks at og.png, because it is only ever seen inside other people's
+# timelines. A Makefile comment saying "regenerate after editing the hero" is a
+# rule enforced by memory, which this repo's own history records failing on the
+# demo report. So the source is stamped into the file and a test compares it.
+SOURCE_KEY = b"byl-source-sha256"
+
+
+def _text_chunk(key: bytes, value: bytes) -> bytes:
+    payload = b"tEXt" + key + b"\x00" + value
+    return (struct.pack(">I", len(payload) - 4) + payload
+            + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF))
+
+
+def stamp_source(data: bytes, digest: str) -> bytes:
+    """Insert the source fingerprint straight after IHDR."""
+    end = 8 + 8 + struct.unpack(">I", data[8:12])[0] + 4     # sig + IHDR + crc
+    return data[:end] + _text_chunk(SOURCE_KEY, digest.encode("ascii")) + data[end:]
+
+
+def source_digest(data: bytes) -> str | None:
+    """The fingerprint a stamped card carries, or None if it has none."""
+    marker = b"tEXt" + SOURCE_KEY + b"\x00"
+    at = data.find(marker)
+    if at < 0:
+        return None
+    # The length field precedes the 4-byte type, and counts the chunk's DATA
+    # only — so the data runs from `at + 4` to `at + 4 + length`.
+    length = struct.unpack(">I", data[at - 4:at])[0]
+    value = data[at + len(marker):at + 4 + length]
+    return value.decode("ascii", "replace")
+
+
+def page_digest(page: str) -> str:
+    """What the card WOULD be built from, right now."""
+    return hashlib.sha256(build_html(page).encode("utf-8")).hexdigest()
+
+
 def png_size(data: bytes) -> tuple[int, int]:
     """Width and height straight out of the IHDR chunk.
 
@@ -296,6 +351,7 @@ def render(page: str, out: Path, chrome: str | None = None) -> Path:
     if (width, height) != (WIDTH, HEIGHT):
         raise OgError(f"the card rendered {width}x{height}, expected "
                       f"{WIDTH}x{HEIGHT} — the viewport did not take")
+    data = stamp_source(data, page_digest(page))
     if len(data) > MAX_BYTES:
         raise OgError(f"the card is {len(data)} bytes, over the "
                       f"{MAX_BYTES}-byte ceiling")
@@ -317,10 +373,13 @@ def main(argv: list[str] | None = None) -> int:
         if not out.is_file():
             print(f"MISSING {out} — run `make og`", file=sys.stderr)
             return 1
-        width, height = png_size(out.read_bytes())
+        data = out.read_bytes()
+        width, height = png_size(data)
+        stale = source_digest(data) != page_digest(page)
         print(f"{out.relative_to(REPO_ROOT)}: {width}x{height}, "
-              f"{out.stat().st_size:,} bytes")
-        return 0 if (width, height) == (WIDTH, HEIGHT) else 1
+              f"{out.stat().st_size:,} bytes, "
+              f"{'STALE — run `make og`' if stale else 'current'}")
+        return 0 if ((width, height) == (WIDTH, HEIGHT) and not stale) else 1
 
     rows = hero_rows(page)
     render(page, out)
