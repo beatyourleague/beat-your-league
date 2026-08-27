@@ -136,14 +136,19 @@
 
   /* usage widget */
   .usage{padding:14px 16px 8px;}
-  .urow{display:grid;grid-template-columns:1fr 150px 120px;gap:12px;align-items:center;
+  /* min-width:0 on every child is load-bearing, not defensive: a grid item
+     defaults to min-width:auto, so `white-space:nowrap` on .ucount forced its
+     120px column out to the ~230px the text needs — pushing the row past the
+     viewport and scrolling the whole PAGE sideways on a phone. */
+  .urow{display:grid;grid-template-columns:1fr 150px minmax(0,200px);gap:12px;align-items:center;
     padding:8px 0;border-bottom:1px solid #EDEAE1;font-size:14.5px;}
   .urow:last-child{border-bottom:0;}
   .urow b{font-weight:700;}
   .ubar{height:9px;background:#EDEAE1;border-radius:99px;overflow:hidden;}
   .ubar i{display:block;height:100%;background:linear-gradient(90deg,#1E7A46,#2EA968);
     border-radius:99px;}
-  .ucount{font-size:12.5px;color:var(--slate);text-align:right;white-space:nowrap;}
+  .urow > *{min-width:0;}
+  .ucount{font-size:12.5px;color:var(--slate);text-align:right;}
 
   /* the week strip */
   .weekstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
@@ -205,8 +210,31 @@
     .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
   }
 
+  /* The hero card is the proof, and its five fixed columns (258px of them)
+     starve the name wherever the CARD's own column is narrow — which is not
+     the same thing as a narrow viewport. Measured across a width sweep: at
+     375px the name got 39px for content needing 130, and at 881px — one pixel
+     ABOVE the old breakpoint, where the hero returns to two columns but the
+     card is still only ~377px — all four names truncated again. So this keys
+     on 1000px, where the card finally has room, not on the layout breakpoint.
+     Dropping the bar returns ~100px and loses nothing: the percentage beside
+     it states the same number. */
+  @media (max-width:1000px){
+    .frow{grid-template-columns:30px 1fr 42px 44px;gap:8px;}
+    .fbar{display:none;}
+    .fnc{grid-column:2 / 5;}
+  }
+  /* Very small phones: a wrapped name over two lines beats "Amon-Ra St. B…".
+     Truncation hides which player it is; wrapping only costs a row of height. */
+  @media (max-width:360px){
+    .fname{white-space:normal;overflow:visible;}
+  }
   @media (max-width:880px){
     .hero{grid-template-columns:1fr;padding:44px 0 40px;gap:30px;}
+    /* Usage: the count gets its own line rather than fighting for a column. */
+    .urow{grid-template-columns:1fr auto;gap:8px 10px;}
+    .ubar{grid-column:1 / -1;order:3;}
+    .ucount{grid-column:1 / -1;order:2;text-align:left;}
     .duo{grid-template-columns:1fr;}
     .weekstrip{grid-template-columns:1fr;}
     .plans{grid-template-columns:1fr;}

@@ -2089,3 +2089,41 @@ def test_the_site_always_offers_one_action_a_visitor_can_finish() -> None:
     hide = rewrites.split('"watch-form"')[0]
     assert "CHECKOUT_CAN_COMPLETE" in hide, \
         "the email capture is retired without checking a purchase can finish"
+
+
+def test_the_proof_cards_survive_a_narrow_screen() -> None:
+    """Measured in a real browser across a width sweep (Aug 27 2026), because
+    CSS bugs of this shape are invisible to every other kind of test:
+
+    - At 375px the hero card's five fixed columns (258px of them) left 39px for
+      a name needing 130 — every player truncated to about three characters, on
+      the one card whose whole job is to be believed.
+    - At 881px, ONE PIXEL above the old 880 breakpoint, all four truncated
+      again: the hero returns to two columns there, so the card's own column is
+      narrower than it was on a phone. The bug lived at the boundary, which is
+      why the fix keys on 1000px — where the card actually has room — rather
+      than on the layout breakpoint.
+    - The usage row's .ucount carried `white-space:nowrap` in a 120px column.
+      A grid item defaults to min-width:auto, so that column blew out to the
+      ~230px the text needs and scrolled the WHOLE PAGE sideways on a phone.
+
+    The last one matters most for a link opened from X on a mobile: a page that
+    scrolls sideways reads as broken before a word of it is read.
+    """
+    # The hero card's compact treatment keys on the CARD's width, not the
+    # layout breakpoint that happens to sit at 880.
+    assert re.search(r"@media \(max-width:1000px\)\{[^}]*\.frow\{", LANDING, re.S), \
+        "the hero card's narrow treatment is gone or re-keyed to a breakpoint"
+    compact = LANDING.split("@media (max-width:1000px)")[1][:400]
+    assert ".fbar{display:none;}" in compact, \
+        "the bar column is back on narrow screens — it is the 92px the name needs"
+    assert ".fnc{grid-column:2 / 5;}" in compact, \
+        "the no-call row still spans the five-column grid"
+
+    # Grid children must be allowed to shrink, or nowrap text forces the row
+    # wider than the viewport again.
+    assert re.search(r"\.urow > \*\{min-width:0;\}", LANDING), \
+        "grid items can grow past their column again (min-width:auto)"
+    ucount = re.search(r"\.ucount\{([^}]*)\}", LANDING).group(1)
+    assert "nowrap" not in ucount, \
+        ".ucount is nowrap again — that is what pushed the page sideways"
