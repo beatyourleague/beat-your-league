@@ -58,7 +58,7 @@ file is the hands-on-keyboard half.
 
 The email capture on the landing page and the join page posts
 `{kind:"waitlist", email}` to the same Cloudflare Worker that takes seats and
-roster updates, and `python -m run.waitlist` reads it back and sends the one
+roster updates, and `.venv/bin/python -m run.waitlist` reads it back and sends the one
 promised launch email through Resend. So there is no separate list vendor to
 set up — **do step 5b**, then tell me the Worker URL and I wire
 `WAITLIST_ENDPOINT` (landing) and `NOTIFY_LIST_ENDPOINT` (join) to it and
@@ -155,7 +155,7 @@ footer (only there — reports to paying subscribers are transactional).
    don't control — it is API-only, with no Dashboard field). One command, run in Terminal
    from the repo:
    ```bash
-   python3 infra/stripe_paylink_text.py
+   .venv/bin/python infra/stripe_paylink_text.py
    ```
    It asks for the link map, then for the key (hidden — never in shell history, never in
    `ps`), writes all three, reads each back to confirm Stripe stored what we sent, and tells

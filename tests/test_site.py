@@ -2541,3 +2541,27 @@ def test_the_paylink_script_never_takes_the_key_as_an_argument() -> None:
     assert "getpass.getpass(" in source
     assert "argparse" not in source, "a key passed as a flag lands in shell history"
     assert "Never echo the request" in source, "the error path may leak the key"
+
+
+def test_no_doc_tells_the_owner_to_run_this_repo_on_system_python() -> None:
+    """`python3` on this machine is 3.9 and has no `requests`, and every module
+    here reaches it through ingest/nflverse.py. Every Makefile target uses
+    `$(PY)` = .venv/bin/python for exactly that reason; a doc that says
+    `python3` instead hands the owner a ModuleNotFoundError at the one moment
+    they are following instructions literally. Reproduced, then pinned.
+    """
+    import re
+    for name in ("LAUNCH.md", "README.md"):
+        doc = SITE.parent / name
+        if not doc.is_file():
+            continue
+        for line in doc.read_text(encoding="utf-8").splitlines():
+            # The lookbehind must exclude "/" as well as ".", or
+            # `.venv/bin/python` matches its own fix — which it did, on the
+            # first run of this guard.
+            assert not re.search(r"(?<![/.\w])python3?\s+-m\s+(run|render|engine|ingest)\b",
+                                 line), (
+                f"{name} tells the owner to run a repo module on system python: "
+                f"{line.strip()!r} — use .venv/bin/python")
+            assert not re.search(r"(?<![/.\w])python3?\s+\S*\.py\b", line), (
+                f"{name} runs a repo script on system python: {line.strip()!r}")
