@@ -26,6 +26,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -38,6 +39,10 @@ from render.welcome import MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE  # noqa: E402
 from run.checkout import parse_link_plans  # noqa: E402
 
 API = "https://api.stripe.com/v1/payment_links"
+
+# Restricted (rk_) or secret (sk_), live or test. Checked BEFORE the first
+# request so a mistyped password never reaches Stripe's servers.
+KEY_SHAPE = re.compile(r"^[rs]k_(live|test)_[A-Za-z0-9]{20,}$")
 
 CANCEL = ("you can cancel any time from your billing page")
 
@@ -91,9 +96,28 @@ def main() -> int:
 
     print("\nThis writes the renewal disclosure onto three Stripe payment links.")
     print("Use the throwaway `setup-payment-link-text` key, not the cron key.")
-    key = getpass.getpass("Restricted key (hidden, not echoed): ").strip()
+    print()
+    print("  >>> This is NOT your Mac password and NOT your Stripe login. <<<")
+    print("  Paste the STRIPE RESTRICTED KEY. It starts with 'rk_' and is about")
+    print("  100 characters long. Find it at: dashboard.stripe.com ->")
+    print("  Developers -> API keys.  Nothing will appear as you paste.")
+    print()
+    key = getpass.getpass("Stripe restricted key (starts rk_): ").strip()
     if not key:
         raise SystemExit("No key given — nothing was changed.")
+    # CHECK THE SHAPE BEFORE ANY NETWORK CALL. A hidden prompt in a terminal
+    # reads as a system password prompt, and the owner typed his password into
+    # it — which this script then sent to Stripe, where it landed in a
+    # failed-auth log. A password must never leave the machine because of a
+    # misread prompt, so anything not shaped like a Stripe key is refused here.
+    if not KEY_SHAPE.match(key):
+        raise SystemExit(
+            "\nThat does not look like a Stripe key, so it was NOT sent anywhere.\n"
+            "  A Stripe key looks like:  rk_live_51AbCdEf...  (or rk_test_...)\n"
+            "  It is about 100 characters and contains no spaces.\n"
+            "  You may have pasted a password — if so, nothing was transmitted,\n"
+            "  but change it anyway if you typed it somewhere else too.\n"
+            "  Find the key: dashboard.stripe.com -> Developers -> API keys\n")
 
     print()
     for plan in ("season", "monthly", "league_pass"):

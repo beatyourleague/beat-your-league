@@ -2565,3 +2565,37 @@ def test_no_doc_tells_the_owner_to_run_this_repo_on_system_python() -> None:
                 f"{line.strip()!r} — use .venv/bin/python")
             assert not re.search(r"(?<![/.\w])python3?\s+\S*\.py\b", line), (
                 f"{name} runs a repo script on system python: {line.strip()!r}")
+
+
+def test_a_mistyped_password_never_reaches_stripe() -> None:
+    """A hidden terminal prompt reads as a system password prompt.
+
+    The owner typed his Mac password into it, and the script sent that straight
+    to Stripe as an auth attempt — where it landed in a failed-auth log and
+    came back partially echoed in the error. The prompt wording was the cause;
+    the transmission was the harm, and only the second one is fixable in code.
+
+    So the key's SHAPE is checked before any network call: anything that is not
+    a Stripe key is refused locally, and a secret typed by mistake never leaves
+    the machine.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_paylink", SITE.parent / "infra" / "stripe_paylink_text.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    for good in ("rk_live_" + "A1b2C3d4E5" * 3, "sk_test_" + "z9Y8x7W6v5" * 3):
+        assert module.KEY_SHAPE.match(good), f"a real key was refused: {good[:12]}…"
+    for bad in ("hunter2", "Password123", "my mac password",
+                "rk_live_short", "", "rk_" + "x" * 40,
+                "correct horse battery staple"):
+        assert not module.KEY_SHAPE.match(bad), (
+            f"{bad!r} would be sent to Stripe as an auth attempt")
+
+    source = (SITE.parent / "infra" / "stripe_paylink_text.py").read_text(encoding="utf-8")
+    # The refusal must come BEFORE the first request, or the guard is decoration.
+    assert source.index("KEY_SHAPE.match(key)") < source.index("for plan in ("), (
+        "the shape check runs after the first Stripe call")
+    assert "NOT your Mac password" in source, (
+        "the prompt no longer says what it is not, which is what caused this")
