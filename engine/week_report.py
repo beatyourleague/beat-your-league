@@ -128,6 +128,10 @@ class SlotPick:
     alternative_id: str | None        # the specific alternative confidence is against
     alternative_projection: Projection | None
     flags: list[dict[str, str]]       # renderer chips: {"kind", "text"}
+    # reports/fallback-method.md §1: the best bench option, when he was not
+    # confirmed and the call was made against the next confirmed one instead.
+    # Presentation only (late news, the if/then) — never graded.
+    doubtful_alternative_id: str | None = None
 
 
 def _slot_restrictiveness(slot: str) -> int:
@@ -185,6 +189,7 @@ def optimal_lineup(
     week: int,
     prior_form: Mapping[str, float] | None = None,
     calibrate=None,
+    confirmed_fallback: bool = False,
 ) -> list[SlotPick]:
     """Fill the starting slots with the highest-projected available players.
 
@@ -283,6 +288,7 @@ def optimal_lineup(
         status = statuses[pid]
         alternatives = eligible(slot, exclude_out=True)
         alt_id = alternatives[0] if alternatives else None
+        doubtful: str | None = None
 
         confidence = None
         gate: str | None = None
@@ -305,6 +311,24 @@ def optimal_lineup(
             gate = DEFENSE_GATE
         else:
             ok, reason = may_publish_confidence(status, statuses[alt_id])
+            if (not ok and confirmed_fallback
+                    and status.status is Status.ACTIVE
+                    and statuses[alt_id].status is not Status.ACTIVE):
+                # reports/fallback-method.md §1. The starter is confirmed and
+                # only the best bench option is in doubt: call it against the
+                # next confirmed bench option at this slot, in the same
+                # projection order, if one has enough games and is not a team
+                # defense. Otherwise the slot stays gated exactly as before.
+                for cand in alternatives[1:]:
+                    cand_projection = projections.get(cand)
+                    if (cand.startswith(f"{DEFENSE}-") or cand_projection is None
+                            or cand_projection.evidence < MIN_GAMES_FOR_CALL
+                            or statuses[cand].status is not Status.ACTIVE):
+                        continue
+                    doubtful = alt_id
+                    alt_id, alt_projection = cand, cand_projection
+                    ok, reason = True, None
+                    break
             if ok:
                 confidence = probability_outscores(projection, alt_projection)
                 if confidence < 0.5:
@@ -341,7 +365,7 @@ def optimal_lineup(
             flags.append({"kind": "seeded", "text": "last season counted in"})
         picks_by_index[index] = SlotPick(slot, index, pid, projection, status,
                                          confidence, gate, alt_id, alt_projection,
-                                         flags)
+                                         flags, doubtful)
     return [picks_by_index[i] for i in sorted(picks_by_index)]
 
 

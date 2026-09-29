@@ -275,7 +275,8 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
                      weeks: Sequence[int] = GRADED_WEEKS,
                      depth_multiplier: float = 2.0,
                      prior_self_weight: float = 0.0,
-                     defenses: bool = False) -> list[StartSitCall]:
+                     defenses: bool = False,
+                     confirmed_fallback: bool = False) -> list[StartSitCall]:
     """Every graded call for one season.
 
     ``prior_self_weight`` enables the preregistered early-season seed and is
@@ -286,6 +287,9 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     defense is ranked on its previous season, a defense's graded points are
     ``score_defense``, and the product's defense gate is lifted for this call
     only. With it False no defense ever has a row, so nothing here moves.
+
+    ``confirmed_fallback`` is reports/fallback-method.md §1's switch, passed
+    straight to ``optimal_lineup``; False (inert) everywhere but that arm.
     """
     prior = season_rows(raw_dir, str(int(season) - 1))
     if not prior:
@@ -307,7 +311,7 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     try:
         return _season_calls(season, weeks, universe, rosters, weekly, template,
                              rule, players, prior_self, prior_self_weight,
-                             raw_dir, injuries)
+                             raw_dir, injuries, confirmed_fallback)
     finally:
         week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED = gate
 
@@ -332,7 +336,7 @@ def _with_defenses(weekly, universe: Universe, raw_dir: Path, season: str):
 
 def _season_calls(season, weeks, universe, rosters, weekly, template, rule,
                   players, prior_self, prior_self_weight, raw_dir,
-                  injuries) -> list[StartSitCall]:
+                  injuries, confirmed_fallback=False) -> list[StartSitCall]:
     out: list[StartSitCall] = []
     for week in weeks:
         season_obj = build_backtest_season(universe, rosters, weekly, season,
@@ -353,7 +357,8 @@ def _season_calls(season, weeks, universe, rosters, weekly, template, rule,
             available = availability_for(season, week, roster, universe, weekly,
                                           injuries, byes)
             picks = optimal_lineup(season_obj, team_week, model, players,
-                                   available, week)
+                                   available, week,
+                                   confirmed_fallback=confirmed_fallback)
             for pick in picks:
                 if pick.confidence is None or not pick.alternative_id:
                     continue
