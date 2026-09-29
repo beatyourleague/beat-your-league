@@ -6,13 +6,6 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-m", "http.server", "8321", "--directory", "site"],
       "port": 8321
-    },
-    {
-      "name": "review",
-      "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "http.server", "8322", "--directory",
-                      "/private/tmp/claude-501/-Users-kevin-Code-beat-your-league/83dc14ab-5512-46ce-ad1b-c9d0b9c75013/scratchpad"],
-      "port": 8322
     }
   ]
 }
