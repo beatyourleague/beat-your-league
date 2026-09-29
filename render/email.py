@@ -674,7 +674,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
             # once below rather than on a row that repeats it every week.
             confidence = ""
         elif mixed:
-            confidence = "no call"
+            # The same words the HTML rows use ("start · waiting on …",
+            # "projection only") — this half said "no call" after both HTML
+            # surfaces had moved on (found Sep 29 2026 on a live 2026 build).
+            confidence = row_label(slot)
         elif slot.get("projected") is None and slot.get("usage"):
             # Week 1. The checklist says the slots are filled in last season's
             # scoring order and that the figure is "shown on each line" — true
@@ -706,7 +709,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
             s.get("confidence") is None and s.get("confidence_gate")
             and not is_structural_gate(s["confidence_gate"])
             for s in report["lineup"]) and mixed
-        lines.append(f"  {no_call_head(shown_marker, mixed)} {gate_list(gates)}.")
+        # Plain text draws no bars, so the sentence about the bar goes.
+        explain = no_call_explainer(gate_list(gates)).replace(
+            ", and the bar starts at 50% (a toss-up)", "")
+        lines.append(f"  {no_call_head(shown_marker, mixed)} {explain}")
     # The rest of the roster. Plain text is what many phones preview and what a
     # screen reader reads, so a benched player missing here is missing, full
     # stop — the HTML table beside it does not help.
@@ -723,11 +729,20 @@ def text_summary(report: Mapping[str, Any]) -> str:
     regret = report["regret"]
     lines.append("")
     if "gate" in regret:
-        lines.append(f"REGRET SCORE: {regret['gate']}")
+        lines.append(f"THE WEEK'S CLOSEST CALL: {regret['gate']}")
     else:
         lines.append(
-            f"REGRET SCORE: start {regret['start_name']} over {regret['over_name']} "
-            f"({regret['confidence']:.0%})")
+            f"THE WEEK'S CLOSEST CALL: start {regret['start_name']} over "
+            f"{regret['over_name']} ({regret['confidence']:.0%})")
+        if regret.get("definition"):
+            lines.append(f"  {regret['definition']}")
+    # The if/then plan. The checklist's late-news line says "your if/then below
+    # already has the answer" — and this half had no if/then at all until
+    # Sep 29 2026, so in plain text that sentence pointed at nothing.
+    if report.get("pivots"):
+        lines += ["", "IF/THEN FOR GAMEDAY"]
+        for plan in report["pivots"]:
+            lines.append(f"  If {plan['condition']}: {plan['action']}")
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
     # The gap list is operator bookkeeping (field names, internal reasons) and
     # never goes in a subscriber's email — the report already says, in place and

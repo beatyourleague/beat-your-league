@@ -236,6 +236,7 @@ def test_a_structural_hold_does_not_spend_a_row_on_any_surface() -> None:
 
     browser = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
     email_html = render_email(report)
+    from render.email import text_summary
     text = text_summary(report)
     for surface, name in ((browser, "browser"), (email_html, "email")):
         rows = re.findall(r"<tr[^>]*>.*?</tr>", surface, re.S)
@@ -533,3 +534,23 @@ def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
         "token together — a forwarded report hands a leaguemate the ability to "
         "rewrite the sender's lineup. Split them, or gate the update on a "
         "confirmation mailed to the address on file.")
+
+
+def test_the_plain_text_half_says_what_the_html_says() -> None:
+    """Found Sep 29 2026 building a live 2026 report: the plain-text half (what
+    phone previews and screen readers use) still said "no call" and "REGRET
+    SCORE", cut the odds explanation short, and had no if/then at all while its
+    own checklist promised one "below". Built on the published sample week."""
+    import render.sample as sample
+    try:
+        report = sample.build(10)
+    except Exception as exc:                       # pragma: no cover
+        import pytest
+        pytest.skip(f"sample data not cached: {exc}")
+    from render.email import text_summary
+    text = text_summary(report)
+    assert "REGRET" not in text and "no call" not in text
+    assert "THE WEEK'S CLOSEST CALL" in text
+    assert "The % is the chance your starter outscores" in text
+    assert "start · waiting on Tony Pollard" in text
+    assert "IF/THEN FOR GAMEDAY" in text and "Keep Chase Brown at FLEX" in text
