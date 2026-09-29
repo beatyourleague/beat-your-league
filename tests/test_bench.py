@@ -126,7 +126,7 @@ def test_a_benched_starter_calibre_player_leads_the_game_plan_with_evidence() ->
     assert items, "a benched RB15 produced no explanation"
     text = _said(items[0])
     assert "STAR" in text and "RB15 last season" in text
-    assert "9.0, 3.0 and 9.0" in text, "the explanation must show his games"
+    assert "9.0, 3.0, 9.0" in text, "the explanation must show his games"
     assert "7.6" in text
 
 
@@ -275,8 +275,11 @@ def test_the_explanation_says_who_took_the_slot() -> None:
     # the one he would displace.
     # Action first since Sep 29 2026: the start is the bold line, the
     # benched player's numbers are the detail under it.
-    assert "Start FLEX over STAR at FLEX" in text, text
-    assert "to FLEX's 9.0" in text, text
+    # No odds pair FLEX with STAR in this fixture, so the line benches STAR
+    # and names who plays instead (Sep 29 2026: "Start X over Y" is kept for
+    # the pair that actually carries the slot's odds).
+    assert "Bench STAR — FLEX starts at FLEX" in text, text
+    assert "FLEX 9.0" in text, text
 
 
 def test_the_form_explanation_asserts_no_judgment() -> None:
@@ -290,4 +293,4 @@ def test_the_form_explanation_asserts_no_judgment() -> None:
                             avail, 4, 12, ranks)
     text = next(_said(i) for i in items if "STAR" in _said(i))
     assert " but " not in text, f"a judgment the numbers may contradict: {text}"
-    assert "8.5, 14.7 and 18.4" in text
+    assert "8.5, 14.7, 18.4" in text

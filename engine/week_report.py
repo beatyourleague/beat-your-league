@@ -676,8 +676,8 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex,
         # file doubting them.
         + _usage_driver(raw_dir, season, week, closest.player_id,
                           closest.alternative_id),
-        "definition": ("The number is the chance he outscores that specific "
-                       "bench option at this slot."),
+        "definition": (f"That's the chance {players.name(closest.player_id or '')} "
+                       f"outscores {players.name(closest.alternative_id)} this week."),
     }
 
 
@@ -999,7 +999,7 @@ def pivots(
                           + (f" to {name}'s {theirs:.1f}" if theirs is not None else ""))
             plans.append({
                 "condition": f"{name} (bench) is cleared to play",
-                "action": action + ". If he's ruled out, nothing changes",
+                "action": action + ". If he's out, nothing changes.",
             })
     for pick in rival_picks:
         if pick.status and pick.status.status is Status.QUESTIONABLE:

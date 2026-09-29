@@ -1086,7 +1086,7 @@ def test_the_legal_page_names_a_real_jurisdiction_and_contact() -> None:
 def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
     """A slot without odds explains itself in plain words — never a version
     number, never a bare blank."""
-    assert "slots without odds" in SAMPLE_REPORT.lower()
+    assert "rows without odds this week" in SAMPLE_REPORT.lower()
     assert not re.search(r"\bv0\.\d", SAMPLE_REPORT)
 
 

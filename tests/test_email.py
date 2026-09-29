@@ -52,7 +52,7 @@ def test_email_carries_every_section(tmp_path: Path) -> None:
     """Per-subscriber reports are private — there is no hosted copy to link
     to, so the email must BE the report, not a teaser for one."""
     html_out = render_email(_report(tmp_path))
-    for title in ("The 30-Second Game Plan", "The Matchup", "Lineup",
+    for title in ("Your Game Plan", "The Matchup", "Lineup",
                   "Is Fragile", "The Week's Closest Call", "If/Then for Gameday",
                   "Waiver Hype Meter", "The Receipts"):
         assert title in html_out or html.escape(title) in html_out, \
@@ -267,7 +267,7 @@ def test_the_explainer_makes_no_claim_a_shown_number_is_not_a_guess() -> None:
     from render.report import no_call_explainer
     text = no_call_explainer("nobody on your bench is eligible here")
     assert "guess for free" not in text
-    assert "outscores the best option on your bench" in text
+    assert "outscores your best bench player" in text
     assert "confirmed to play" in text
 
 
@@ -281,7 +281,7 @@ def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:
     q = "availability in doubt (designated Questionable)"
     assert row_label({"confidence_gate": q, "status": "active",
                       "alternative_name": "Tony Pollard"}) \
-        == "start · Tony Pollard questionable"
+        == "start · waiting on Tony Pollard"
     assert row_label({"confidence_gate": q, "status": "questionable",
                       "alternative_name": "Tony Pollard"}) \
         == "questionable · see if/then"

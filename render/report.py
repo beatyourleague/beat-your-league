@@ -194,10 +194,10 @@ def no_call_explainer(listed: str) -> str:
     and you can guess for free" — is gone, because it asserted that a shown
     number is not a guess, which is exactly the claim the grade withholds.
     """
-    return (f"{listed}. Where a slot has odds, they're the chance your starter "
-            f"outscores the best option on your bench; the bar starts at 50%, an "
-            f"even matchup. We put odds only on head-to-heads where both players "
-            f"are confirmed to play.")
+    return (f"The % is the chance your starter outscores your best bench "
+            f"player at that spot, and the bar starts at 50% (a toss-up). We only "
+            f"give odds when both players are confirmed to play. Rows without "
+            f"odds this week: {listed}.")
 
 
 # §5 of the early-season method (Grade B): the seed moves every number in the
@@ -240,19 +240,19 @@ def no_call_head(shown_any_marker: bool, mixed: bool) -> str:
     or nothing was called this week.
     """
     if shown_any_marker or mixed:
-        return "About the slots without odds:"
-    return "No odds on any slot this week:"
+        return "How to read the odds."
+    return "No odds this week."
 
 
 # The reasons a slot carries no odds, in the buyer's words. The engine's own
 # strings are precise and stay precise (the ledger and tests read them); this is
 # only how a reader is told. Order matters: first match wins.
 _GATE_PHRASES = (
-    ("availability in doubt", "a player in that head-to-head is listed questionable"),
-    ("not a live head-to-head", "a player in that head-to-head is out"),
-    ("nobody on your bench", "no bench player at that position to compare against"),
-    ("not enough games", "fewer than three games on record so far"),
-    ("we don't put odds on defenses", "defenses get a projection, not odds"),
+    ("availability in doubt", "one of the two players is questionable"),
+    ("not a live head-to-head", "one of the two players is out"),
+    ("nobody on your bench", "no bench player at that position"),
+    ("not enough games", "not enough games played yet"),
+    ("we don't put odds on defenses", "defenses get a projection only"),
     ("no eligible player", "no eligible player with a scoring record"),
 )
 
@@ -294,9 +294,9 @@ def row_label(slot: Mapping[str, Any]) -> str:
     if gate.startswith("no eligible player") or not gate:
         return ""
     if starter_ok and alt:
-        if gate.startswith("availability in doubt"):
-            return f"start · {alt} questionable"
-        return f"start · {alt} unconfirmed"
+        # "waiting on", not "questionable": the row belongs to the STARTER,
+        # and the plain fact is that his odds wait on the bench player's news.
+        return f"start · waiting on {alt}"
     if gate.startswith("availability in doubt"):
         return "questionable · see if/then"
     return "status open · see if/then"
@@ -469,7 +469,7 @@ def section_checklist(items: list[Mapping[str, Any]]) -> str:
                if item.get("detail") else "")
             + f'<div class="{klass}">{esc(item["deadline"])}</div></div></div>'
         )
-    return _section("The 30-Second Game Plan", 1, f'<div class="plan">{"".join(tasks)}</div>')
+    return _section("Your Game Plan", 1, f'<div class="plan">{"".join(tasks)}</div>')
 
 
 def section_last_week(last: Mapping[str, Any] | None) -> str:

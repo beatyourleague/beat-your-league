@@ -112,9 +112,7 @@ def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
 
 # What the report says where an opponent used to be. Stated once, plainly, in
 # the buyer's register — not a gate note, because nothing is being withheld.
-NO_OPPONENT_NOTE = (
-    "Every call in this file is your player against your own bench — so every "
-    "point it finds comes from starting the right guys.")
+NO_OPPONENT_NOTE = "Every call below is your starter against your own bench."
 
 # The band renders with NO coverage claim. The frozen method (§10.8) gates
 # the "about 78%" sentence until the nflverse band table exists: that figure
@@ -303,6 +301,13 @@ def _games_phrase(values: Sequence[float]) -> str:
     return f"{body} in his last three games"
 
 
+def _games_line(values: Sequence[float]) -> str:
+    """The same games as one short sentence: "Last three games: 3.5, 16.8, 4.8." """
+    shown = ", ".join(f"{v:.1f}" for v in values[-3:])
+    label = {1: "His one game", 2: "His two games"}.get(len(values), "Last three games")
+    return f"{label}: {shown}."
+
+
 def _displaced_by(position: str, picks: Sequence[Any],
                   players: PlayerIndex) -> tuple[str, str, float, Any] | None:
     """(name, slot, projection) of the starter who took this player's place.
@@ -409,33 +414,44 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
     # facts sit underneath as the reason. Same facts, no new claim: no
     # connective asserts WHY he sits (a "but" once implied form did, when he
     # actually sat on a near-tie).
+    # Plain words (owner review, Sep 29 2026): short sentences, one fact
+    # each. "Start X over Y" only when that exact pair carries the slot's odds;
+    # otherwise the line is "Bench Y" and says who plays instead — the old
+    # wording printed "Start Chase Brown over Tony Pollard at FLEX" while the
+    # same slot's odds were against Courtland Sutton, two different "over"
+    # players for one slot.
     for entry in explained[:MAX_NOTABLE_ITEMS]:
-        rank = f"{entry['last_season_rank']} last season"
+        rank = f"{entry['last_season_rank']} last season."
+        doubtful = (availability.classify(entry["player_id"]).status.value
+                    == "questionable")
         if entry["out"]:
             reason = f" ({entry['out_reason']})" if entry["out_reason"] else ""
             action = f"Bench {entry['name']} — he can't play this week"
-            detail = f"{rank}{reason}."
+            detail = f"{rank}{reason}".rstrip(".") + "."
         elif not entry["games"]:
             action = f"Bench {entry['name']} — no games this season yet"
-            detail = f"{rank}."
+            detail = rank
         else:
             instead = _displaced_by(entry["position"], picks, players)
-            form = f"this year {_games_phrase(entry['games'])}"
+            form = _games_line(entry['games'])
+            listed = " Listed questionable." if doubtful else ""
             if instead is None:
                 action = f"Bench {entry['name']}"
-                own = (f", projecting {entry['projected']:.1f}"
+                own = (f" Projects {entry['projected']:.1f}."
                        if entry["projected"] is not None else "")
-                detail = f"{rank}; {form}{own}."
+                detail = f"{rank}{listed} {form}{own}"
             else:
                 who, slot, proj, pick = instead
-                odds = ""
-                if (getattr(pick, "alternative_id", None) == entry["player_id"]
-                        and getattr(pick, "confidence", None) is not None):
-                    odds = f" · {round(pick.confidence * 100)}%"
-                action = f"Start {who} over {entry['name']} at {slot}{odds}"
-                versus = (f", projecting {entry['projected']:.1f} to {who}'s {proj:.1f}"
+                paired = (getattr(pick, "alternative_id", None) == entry["player_id"]
+                          and getattr(pick, "confidence", None) is not None)
+                if paired:
+                    action = (f"Start {who} over {entry['name']} at {slot} · "
+                              f"{round(pick.confidence * 100)}%")
+                else:
+                    action = f"Bench {entry['name']} — {who} starts at {slot}"
+                versus = (f" Projects {entry['projected']:.1f}, {who} {proj:.1f}."
                           if entry["projected"] is not None else "")
-                detail = f"{entry['name']}: {rank}; {form}{versus}."
+                detail = f"{entry['name']}: {rank}{listed} {form}{versus}"
         items.append({"action": action, "detail": detail,
                       "deadline": "before this week's first kickoff",
                       "urgency": "now"})

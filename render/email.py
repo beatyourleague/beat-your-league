@@ -202,7 +202,7 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
             f'<table role="presentation" width="100%" cellpadding="0" '
             f'cellspacing="0" border="0">{"".join(rows)}</table>'
             f'</td></tr></table>')
-    return _sec(1, "The 30-Second Game Plan", body)
+    return _sec(1, "Your Game Plan", body)
 
 
 def _last_week(last: Mapping[str, Any] | None) -> str:
