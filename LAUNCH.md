@@ -59,6 +59,13 @@ the offer of a refund.
 3. **Settings → Business → Public details:** Terms of service URL
    `https://beatyourleague.com/terms.html`, Privacy policy URL
    `https://beatyourleague.com/privacy.html`.
+
+   **Settings → Business → Branding** (the new logo, Sep 29 2026 — Stripe still shows the
+   old one or none until you do this; it's on the checkout page, receipts and invoices):
+   - **Icon:** upload `site/brand/icon.png`
+   - **Logo:** upload `site/brand/logo.png`
+   - **Brand color:** `#101E33` (navy) · **Accent color:** `#B3402F` (brick). Not the gold:
+     on white it's unreadable as a link or under white text.
 4. **Put the renewal terms above Stripe's Pay button.** It's API-only, with no Dashboard
    field. In Terminal, from the repo folder, paste this whole line:
    ```bash
