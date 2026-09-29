@@ -241,7 +241,7 @@
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
     <div class="note">Scoring and league size decide how every player in your
-    report is scored — a call under the wrong scoring is somebody else's call.</div>
+    report is scored, so every number matches your league.</div>
     <div class="opts" id="opt-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
       <label><input type="radio" name="scoring" value="half_ppr">Half PPR</label>
@@ -298,7 +298,7 @@ Baltimore Ravens
       <p class="terms-line" id="terms-line">The season pass is <b>$39 and renews once
       a year at $39 unless you cancel</b>. We email you before it bills, and you cancel
       yourself any time from your own billing page. Refunds are no-questions until
-      your second weekly report's week kicks off — one per person.</p>
+      your second report's week kicks off — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
     </form>
@@ -320,7 +320,7 @@ Baltimore Ravens
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
         <li id="first-note">Your first report lands <b>the day you join</b>. Refunds are no-questions
-        until your second weekly report's week kicks off — one per person, and a
+        until your second report's week kicks off — one per person, and a
         re-subscription after a refund is final.
         Changed your mind later?
         <a href="../terms.html#cancel">Cancelling takes about fifteen seconds</a> in your
@@ -894,7 +894,7 @@ if (UPDATE_MODE) {
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time. " +
-    "Refunds are no-questions until your second weekly report's week kicks off — " +
+    "Refunds are no-questions until your second report's week kicks off — " +
     "one per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;

@@ -193,7 +193,13 @@ def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
         assert not loose.search(text), \
             f"{name} still promises a refund after the second file's games"
     kickoff = re.compile(r"second\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
-    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE),
+    # The selling pages may say it shorter ("your second report's week kicks
+    # off"); the terms, which define a weekly report, and the welcome email
+    # keep the precise form.
+    selling = re.compile(r"second\s+(?:weekly\s+)?report's\s+week\s+kicks\s+off", re.I)
+    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE)):
+        assert selling.search(page), f"{name} page does not say when the window closes"
+    for name, page in (
                        ("league pass", prose((SITE / "league-pass.html")
                                              .read_text(encoding="utf-8"))),
                        ("thanks", prose((SITE / "thanks.html")

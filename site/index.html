@@ -265,7 +265,13 @@
     transition:width 1.1s cubic-bezier(.2,.8,.2,1);}
   .flipbar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;
     background:var(--navy);opacity:.35;}
-  .flippct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;}
+  .flippct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;
+    position:relative;height:28px;}
+  .flippct span{position:absolute;top:0;transform:translateX(-100%);white-space:nowrap;}
+  .fliptoss{position:relative;height:14px;margin-top:10px;font-size:10.5px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--slate);}
+  .fliptoss span{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;}
+  .fliptoss + .flipbar{margin-top:4px;}
 
   /* usage widget */
   .usage{padding:12px 16px 8px;}
@@ -324,6 +330,9 @@
   .plan.founder{border:2px solid var(--flag);padding:30px 26px;
     box-shadow:0 30px 70px -24px rgba(0,0,0,.85),0 0 48px -8px rgba(242,194,48,.45);}
   .plan.founder .price{font-size:60px;}
+  /* The season pass is the one to land on: a touch larger and lifted, on
+     screens wide enough to sit the two cards side by side. */
+  @media (min-width:761px){.plan.founder{transform:scale(1.035);transform-origin:center;}}
   .stamp50{position:absolute;top:-14px;right:16px;color:var(--navy);
     background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     box-shadow:0 6px 16px -6px rgba(0,0,0,.6);
@@ -487,7 +496,8 @@
     <div class="kicker">Fantasy football · start/sit</div>
     <h1>Know who <em><span>to start.</span></em></h1>
     <p class="sub">Your roster. Your scoring. Every close call decided, with the odds.
-    In your inbox every Tuesday.</p>
+    In your inbox every Tuesday — and again Saturday if injury news changes your
+    lineup.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -575,15 +585,16 @@
             <span>George Kittle<small>start · proj 10.4</small></span>
             <span style="text-align:right">Sam LaPorta<small>sit · proj 7.8</small></span>
           </div>
+          <div class="fliptoss" aria-hidden="true"><span>toss-up</span></div>
           <div class="flipbar"><span class="a" data-w="63" style="width:63%"></span></div>
           <!-- One numeral only: the sample publishes the 63% side and nothing
                else, and a real-output card may not print a figure the product
                never printed — even an arithmetic complement. -->
-          <div class="flippct"><span>63%</span></div>
+          <div class="flippct"><span style="left:63%">63%</span></div>
         </div>
       </div><!--/card-->
     </div>
-    <div class="note"><b>The close one, called</b><p>Every week has a call you could
+    <div class="note"><b>No coin flips left to you</b><p>Every week has a call you could
       argue either way. We pick a side and tell you how sure to be: Start George Kittle
       over Sam LaPorta — 63%, proj 10.4 vs 7.8.</p></div>
     <div class="leaf">
@@ -599,7 +610,7 @@
         </div>
       </div><!--/card-->
     </div>
-    <div class="note"><b>Who's really getting the ball</b><p>Targets and carries for
+    <div class="note"><b>See a role change before your league does</b><p>Targets and carries for
       every starter, from the real games. When a player's role grows, it's right there in
       your report.</p></div>
     <div class="leaf last">
@@ -645,7 +656,7 @@
 </section>
 
 <section>
-  <h2>Ninety seconds on Tuesday morning</h2>
+  <h2>Your week, handled</h2>
   <ol class="timeline">
     <li><b>Tuesday</b><p>Your report lands. A short checklist up top — the calls worth
       making, and the one player whose news to watch. Tick the boxes, done in ninety
@@ -670,7 +681,7 @@
       <ul>
         <li>Your first report the day you sign up, then every Tuesday</li>
         <li>A final check on Saturday when injury news changes your lineup</li>
-        <li>Try it risk-free. Full refund, no questions, until your second weekly
+        <li>Try it risk-free. Full refund, no questions, until your second
         report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
         <li>Cancel any time yourself, in one click</li>
@@ -687,9 +698,10 @@
         <li>Your first report the day you sign up, then every Tuesday through your
         title game</li>
         <li>A final check on Saturday when injury news changes your lineup</li>
-        <li>Try it risk-free. Full refund, no questions, until your second weekly
+        <li>Try it risk-free. Full refund, no questions, until your second
         report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
+        <li>Cancel any time yourself, in one click</li>
         <li>Renews once a year at $39 unless you cancel — we email you first,
         and cancelling is one click
         (<a href="terms.html#cancel">how</a>)</li>
@@ -722,6 +734,7 @@
     <div>
       <h2>Before you ask the group chat</h2>
       <p class="lede">Straight answers to what managers ask first.</p>
+      <p style="margin-top:22px"><a class="btn ghost" href="sample-report.html">See a real report</a></p>
     </div>
     <div class="faq">
       <details>
