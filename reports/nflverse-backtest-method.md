@@ -460,3 +460,14 @@ every pick; only the printed and recorded number moves. This document's own
 run and its Grade C are unchanged and stay published as the record of the
 model before the correction.
 
+### C6 — team defenses graded, and combined settings (2026-09-29)
+
+`reports/round-two-method.md` (committed as 6833098 before any number) added
+an inert `defenses` switch to `calls_for_season` (False reproduces this run
+exactly, pinned by test) and graded, on 2020–2024 through the published
+recalibration: team-defense calls, and nine combined settings. Result
+(`reports/round-two-backtest.md`): all nine combinations Grade B; defenses
+Grade D — 667 calls, 52.9% landed, resolution −1.6 points — so
+`TEAM_DEFENSE_CONFIDENCE_CALIBRATED` stays False, now as a measured result
+rather than an untested one (C1 above recorded why they had been excluded).
+

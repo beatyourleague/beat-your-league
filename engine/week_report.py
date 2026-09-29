@@ -81,12 +81,20 @@ WIN_PROBABILITY_CALIBRATED = False
 # machinery stays, the number does not print, and the reason is stated in the
 # buyer's own words. Flip it only with passing evidence for the DEF population
 # specifically.
+#
+# MEASURED, and it stays False (reports/round-two-backtest.md, Sep 29 2026):
+# the preregistered defense arm graded D — on 2020-2024 the picks landed 52.9%,
+# resolution -1.6 points (the most confident defense calls did no better than
+# the least), and the method's §2 keeps the gate closed on a D. Flip it only
+# with a new preregistration that passes.
 TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False
 # "checked", never "tested": the frozen method bans the word at Grade C on
 # every surface, and this sentence renders in every report and the published
-# sample (found on the sample by review sweep, Aug 24 2026).
-DEFENSE_GATE = ("we don't put a number on defenses yet — we haven't checked our "
-                "defense calls against enough real weeks to stand behind one")
+# sample (found on the sample by review sweep, Aug 24 2026). Since Sep 29 it
+# states the measured reason rather than "not checked yet".
+DEFENSE_GATE = ("no number on defenses — we checked our defense calls against five "
+                "seasons and they came out close to a coin flip, so a percentage "
+                "would mislead you")
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
     "No win percentage. We checked one against two seasons and our favorites "

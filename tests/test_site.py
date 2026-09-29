@@ -1463,7 +1463,8 @@ REPORTS = SITE.parent / "reports"
     # Two sources: the parent grading and the early-season arm — the page
     # translates both, and a figure must exist in at least one of them.
     (CONFIDENCE, ("nflverse-backtest.md", "early-season-backtest.md",
-                  "setups-backtest.md", "recalibration-backtest.md")),
+                  "setups-backtest.md", "recalibration-backtest.md",
+                  "round-two-backtest.md")),
 ])
 def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
     """These pages are hand-written translations of operator reports into buyer

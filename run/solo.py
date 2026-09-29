@@ -629,6 +629,19 @@ def calibrator_for(week: int, seeded: bool):
     return lambda p: recalibrate(p, b)
 
 
+# reports/round-two-method.md §2: nine common combinations graded as they ship
+# (recalibrated, 2020-2024). All graded B, so none is withheld; combinations
+# not listed keep the every-setting-C-or-better rule. Pinned to
+# reports/round-two-backtest.md by tests/test_round_two.py.
+COMBO_GRADES = {
+    ("half_ppr", 10, "standard"): "B", ("half_ppr", 14, "standard"): "B",
+    ("standard", 10, "standard"): "B", ("standard", 14, "standard"): "B",
+    ("half_ppr", 12, "superflex"): "B", ("ppr", 10, "superflex"): "B",
+    ("ppr", 14, "superflex"): "B", ("half_ppr", 12, "no K or DEF"): "B",
+    ("half_ppr", 8, "standard"): "B",
+}
+
+
 MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 
 

@@ -444,6 +444,15 @@ and a new commit (the data exists — `stats_team_week_*` resolves for every sea
 Corrections go in an APPENDED §15 of the method doc, never edited into the frozen text, or nobody
 can tell what was preregistered.
 
+**Combinations and defenses, graded (Sep 29 2026).** `reports/round-two-method.md` preregistered
+(6833098) nine combined settings and team defenses, graded on 2020–2024 as they ship (through
+the published recalibration). All nine combinations graded B (ECE 1.5–2.2%); `run/solo.COMBO_GRADES`
+records them. Defenses graded **D**: 667 calls, 52.9% landed, resolution −1.6 — no skill at all —
+so `TEAM_DEFENSE_CONFIDENCE_CALIBRATED` stays False and `DEFENSE_GATE` now states the measured
+reason. The defenses run needed `calls_for_season(defenses=True)`: defense lines joined as the
+product joins them, ranked on the prior season, scored by `score_defense`, product gate lifted in
+a try/finally; `defenses=False` reproduces the published run exactly (pinned: 2014 = 953 calls).
+
 **The number is recalibrated (Sep 29 2026).** Every grading showed the same error in weeks
 4–16: failing bands land ABOVE stated. `reports/recalibration-method.md` was preregistered and
 committed (5846734) before `engine/recalibration.py` ran once: p' = σ(b·logit(p)), one parameter,

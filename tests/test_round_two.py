@@ -59,3 +59,19 @@ def test_the_product_gate_is_restored_even_when_a_run_fails(monkeypatch) -> None
         parent.calls_for_season("2014", parent.RAW_DIR, parent.INJURY_DIR,
                                 preset("ppr"), defenses=True)
     assert week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED is before
+
+
+def test_the_product_carries_the_published_decisions() -> None:
+    """Method §2, applied: every combination's grade in run/solo.COMBO_GRADES
+    matches the report, no D is carried without a withholding path, and the
+    defense gate is open if and only if the report says it ships."""
+    from engine.week_report import TEAM_DEFENSE_CONFIDENCE_CALIBRATED
+    from run.solo import COMBO_GRADES
+    report = (REPO / "reports" / "round-two-backtest.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| (X\d) \| (\w+), (\d+) teams, ([^|]+?) \| \d+ \| \d+ "
+                      r"\| \*\*(\w)\*\* \|", report, re.M)
+    assert len(rows) == len(r2.COMBOS)
+    for _, scoring, size, shape, grade in rows:
+        assert COMBO_GRADES[(scoring, int(size), shape)] == grade
+    assert "D" not in COMBO_GRADES.values(), "build the withholding path first"
+    assert TEAM_DEFENSE_CONFIDENCE_CALIBRATED is ("**SHIPS**" in report)
