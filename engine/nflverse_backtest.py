@@ -276,7 +276,8 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
                      depth_multiplier: float = 2.0,
                      prior_self_weight: float = 0.0,
                      defenses: bool = False,
-                     confirmed_fallback: bool = False) -> list[StartSitCall]:
+                     confirmed_fallback: bool = False,
+                     late_self_weight: float = 0.0) -> list[StartSitCall]:
     """Every graded call for one season.
 
     ``prior_self_weight`` enables the preregistered early-season seed and is
@@ -302,7 +303,7 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     players = player_index_for(universe)
     injuries = load_weeks(fetch_injuries(season, injury_dir), season)
     prior_self = (prior_self_observations(prior, rule)
-                  if prior_self_weight > 0 else None)
+                  if prior_self_weight > 0 or late_self_weight > 0 else None)
 
     import engine.week_report as week_report
     gate = week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED
@@ -311,7 +312,8 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     try:
         return _season_calls(season, weeks, universe, rosters, weekly, template,
                              rule, players, prior_self, prior_self_weight,
-                             raw_dir, injuries, confirmed_fallback)
+                             raw_dir, injuries, confirmed_fallback,
+                             late_self_weight)
     finally:
         week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED = gate
 
@@ -336,13 +338,15 @@ def _with_defenses(weekly, universe: Universe, raw_dir: Path, season: str):
 
 def _season_calls(season, weeks, universe, rosters, weekly, template, rule,
                   players, prior_self, prior_self_weight, raw_dir,
-                  injuries, confirmed_fallback=False) -> list[StartSitCall]:
+                  injuries, confirmed_fallback=False,
+                  late_self_weight=0.0) -> list[StartSitCall]:
     out: list[StartSitCall] = []
     for week in weeks:
         season_obj = build_backtest_season(universe, rosters, weekly, season,
                                            template, rule, through_week=week)
         model = ProjectionModel(season_obj, players, prior_self=prior_self,
-                                prior_self_weight=prior_self_weight)
+                                prior_self_weight=prior_self_weight,
+                                late_self_weight=late_self_weight)
         byes = bye_teams(raw_dir, season, week)
         rows = weekly.get(week) or {}
         for roster_id, roster in enumerate(rosters, start=1):

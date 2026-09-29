@@ -51,6 +51,11 @@ MIN_GAMES_FOR_CALL = 3
 # the frozen model would, so no wiring mistake can leak last season into them.
 SEEDED_WEEKS = frozenset({2, 3})
 
+# The ONLY weeks the season-long seed may touch (reports/anchor-method.md §2),
+# enforced here for the same reason. Unlike the early seed it moves the
+# projection and never the publish gate: its pseudo-games are not evidence.
+LATE_SEEDED_WEEKS = frozenset(range(4, 17))
+
 # Floor on the standard deviation so a freak low-variance sample can't produce
 # a 99.9% confidence out of three data points.
 MIN_SD = 2.0
@@ -202,6 +207,7 @@ class ProjectionModel:
         shrinkage_k: float = DEFAULT_SHRINKAGE_K,
         prior_self: Mapping[str, list[float]] | None = None,
         prior_self_weight: float = 0.0,
+        late_self_weight: float = 0.0,
     ) -> None:
         self.season = season
         self.players = players
@@ -213,6 +219,9 @@ class ProjectionModel:
         # requires and a test verifies.
         self._prior_self = dict(prior_self or {})
         self._prior_self_weight = float(prior_self_weight)
+        # reports/anchor-method.md: the same observations at weight λ_L in
+        # weeks 4-16. 0.0 is inert.
+        self._late_self_weight = float(late_self_weight)
         # player_id -> [(week, points), ...] ascending, appearances only.
         self._appearances: dict[str, list[tuple[int, float]]] = {}
         # player_id -> sorted weeks the player was on someone's roster. A week
@@ -310,10 +319,14 @@ class ProjectionModel:
         # Prior-season self-evidence, discounted (early-season method §2):
         # w = λ·m, entering the same weighted blend as everything else — and
         # ONLY in the preregistered weeks, no matter how the model was built.
-        self_vals = (self._prior_self.get(player_id, [])
-                     if self._prior_self_weight > 0 and week in SEEDED_WEEKS
-                     else [])
-        w = self._prior_self_weight * len(self_vals)
+        if self._prior_self_weight > 0 and week in SEEDED_WEEKS:
+            lam, counts_as_evidence = self._prior_self_weight, True
+        elif self._late_self_weight > 0 and week in LATE_SEEDED_WEEKS:
+            lam, counts_as_evidence = self._late_self_weight, False
+        else:
+            lam, counts_as_evidence = 0.0, False
+        self_vals = self._prior_self.get(player_id, []) if lam > 0 else []
+        w = lam * len(self_vals)
         if n == 0 and prior.samples == 0 and w == 0:
             return None
 
@@ -350,7 +363,9 @@ class ProjectionModel:
             games=n,
             rostered_weeks=opportunities,
             position=position,
-            seeded_games=w,
+            # Weeks 4-16 (anchor method §2.1): the seed moved the mean, but
+            # it is not evidence for the publish gate and carries no flag.
+            seeded_games=w if counts_as_evidence else 0.0,
         )
 
     def project_many(
