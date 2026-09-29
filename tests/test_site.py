@@ -127,6 +127,25 @@ def test_a_subscribers_own_report_carries_no_home_button() -> None:
                                       "anonymized_demo": True, "season": 2024})
 
 
+def test_the_join_sidebar_sells_only_to_a_buyer_and_quotes_the_real_count() -> None:
+    """The join page's sidebar (Sep 29 2026) carries purchase copy: refund
+    terms and "your first file today". A seat holder pays nothing and an
+    update comes from an existing subscriber, so the sidebar must hide in both
+    modes — the seat flow once shipped refund language about money a seat
+    holder never spent. And its graded-call count is the live grading's own,
+    read from the report, like the landing page's."""
+    assert '<aside class="side">' in JOIN
+    guard = re.search(r"if \(SEAT_MODE \|\| UPDATE_MODE\) \{(.*?)\n\}", JOIN, re.S)
+    assert guard and "side.hidden = true" in guard.group(1), \
+        "the sidebar's purchase copy shows to seat holders and updaters"
+    source = (SITE.parent / "reports" / "nflverse-backtest.md").read_text(encoding="utf-8")
+    graded = int(re.search(r"\| Calls graded \| (\d+) \|", source).group(1))
+    side = JOIN.split('<aside class="side">')[1].split("</aside>")[0]
+    counts = re.findall(r"\b\d{1,3},\d{3}\b", side)
+    assert counts and all(c.replace(",", "") == str(graded) for c in counts), \
+        f"the sidebar's call count drifted from the grading ({graded:,})"
+
+
 def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> None:
     """"Through Week 2" gave a buyer who joined in Week 3 no window at all,
     while the pricing card beside the button still sold them one — the

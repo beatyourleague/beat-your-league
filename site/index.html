@@ -325,7 +325,14 @@
   /* The hero card lives in a phone that shrinks with the screen, so at phone
      widths the name column is what gets squeezed. A wrapped name over two
      lines beats "Amon-Ra St. B…": truncation hides which player it is. */
+  nav .btn .short{display:none;}
+  @media (max-width:480px){
+    .watchform{flex-direction:column;}
+    .watchform .btn{clip-path:none;}
+  }
   @media (max-width:430px){
+    nav .btn .long{display:none;}
+    nav .btn .short{display:inline;}
     nav .btn{font-size:14px;padding:10px 14px;white-space:nowrap;}
     .brand{font-size:13px;letter-spacing:.18em;}
     .frow{grid-template-columns:26px 1fr 44px 38px;gap:8px;}
@@ -343,7 +350,7 @@
     <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
          a closed checkout reads as bait. JS rewrites it the day checkout opens;
          if JS never runs, the honest state is what shows. -->
-    <a class="btn gold" id="nav-cta" href="#watch-form">Get launch access</a>
+    <a class="btn gold" id="nav-cta" href="#watch-form"><span class="long">Tell me when it opens</span><span class="short">Notify me</span></a>
   </div>
 </nav>
 
@@ -359,7 +366,7 @@
     <form class="watchform" id="watch-form" novalidate>
       <input type="email" id="watch-email" placeholder="you@example.com"
              autocomplete="email" aria-label="Email me when signups open">
-      <button class="btn gold" type="submit">Get launch access</button>
+      <button class="btn gold" type="submit">Tell me when it opens</button>
     </form>
     <p class="watchnote" id="watch-note" role="status"></p>
     <p class="heroline"><b>A new file every Tuesday of the season.</b> One email when signups
@@ -505,7 +512,7 @@
         <li>Billing stops when the season does — we don't charge through
         the offseason</li>
       </ul>
-      <div class="soon" id="monthly-cta">Checkout opens at launch</div>
+      <div class="soon" id="monthly-cta">Checkout opens soon</div>
     </div>
     <div class="plan founder">
       <span class="stamp50" aria-hidden="true">Founding rate</span>
@@ -520,7 +527,7 @@
         and cancelling is one click
         (<a href="terms.html#cancel">how</a>)</li>
       </ul>
-      <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens at launch</div>
+      <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens soon</div>
     </div>
   </div>
   <p class="finance" id="currency-note">All prices in US dollars.</p>
@@ -579,7 +586,7 @@
   <h2 class="slant" id="closer-head">Your lineup, decided every Tuesday.</h2>
   <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
   <div class="cta-row" style="justify-content:center">
-    <a class="btn gold" id="closer-cta" href="#watch-form">Get launch access</a>
+    <a class="btn gold" id="closer-cta" href="#watch-form">Tell me when it opens</a>
     <a class="btn ghost" href="sample-report.html">See a real file</a>
   </div>
 </section>

@@ -144,13 +144,85 @@
   .opts input{margin-right:6px;}
   textarea{width:100%;min-height:150px;padding:11px 12px;border:1px solid var(--line);
     font:inherit;font-size:14px;line-height:1.5;background:#fff;resize:vertical;}
+
+  /* ------------------------------------------------ Sep 29 2026 polish
+     The page stays paper-light on purpose (the dark landing sells, the paper
+     product delivers); what changes is that it reads as a finished product:
+     a progress bar, real toggles, a sidebar that keeps the reason to buy in
+     view, and reassurance beside the button that takes the money. */
+  body{background:radial-gradient(900px 500px at 50% -10%,#F3EFE3,transparent 70%),#E7E4DA;
+    padding:22px 12px 56px;}
+  .shell{max-width:980px;margin:0 auto;display:grid;
+    grid-template-columns:minmax(0,600px) minmax(0,330px);gap:28px;align-items:start;
+    justify-content:center;}
+  .page{max-width:none;margin:0;border-radius:4px;overflow:hidden;
+    box-shadow:0 30px 60px -30px rgba(16,30,51,.35),0 2px 10px rgba(16,30,51,.06);}
+  header h1{font-size:42px;margin-top:14px;}
+  .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:18px;}
+  .progress span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:rgba(246,244,238,.5);padding-top:8px;border-top:3px solid rgba(246,244,238,.18);}
+  .progress .on{color:var(--flag);border-top-color:var(--flag);}
+  body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
+  body:has(#step-email:not(.hidden)) .progress .s2,
+  body:has(#step-email:not(.hidden)) .progress .s3{color:var(--flag);border-top-color:var(--flag);}
+  section{padding:24px 26px 26px;border-top:1px solid var(--line);}
+  .eyebrow{color:var(--navy);font-size:15px;letter-spacing:.18em;}
+  .opts{gap:6px;margin-top:10px;}
+  .opts label{position:relative;border-radius:999px;padding:8px 14px;font-size:13.5px;
+    border:1.5px solid var(--line);transition:background .15s,border-color .15s,color .15s;}
+  .opts label:hover{border-color:var(--navy);}
+  .opts input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}
+  .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:#fff;}
+  .opts label:has(input:focus-visible){outline:3px solid var(--flag);outline-offset:2px;}
+  #player-search{border-radius:3px;}
+  textarea{border-radius:3px;}
+  #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:3px;}
+  #submit{background:linear-gradient(180deg,#24924F,var(--turf));
+    box-shadow:0 10px 22px -12px rgba(30,122,70,.8);}
+  .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
+    font-size:12.5px;color:var(--slate);font-weight:600;}
+  .secure svg{width:12px;height:14px;flex:none;}
+  /* sidebar */
+  .side{position:sticky;top:22px;background:linear-gradient(180deg,#182A45,var(--navy));
+    color:var(--paper);border-radius:4px;padding:22px 22px 20px;
+    box-shadow:0 30px 60px -30px rgba(16,30,51,.5);}
+  .side h2{font-family:'Barlow Condensed';font-weight:800;font-size:22px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--flag);}
+  .side ul{list-style:none;margin-top:12px;display:grid;gap:11px;}
+  .side li{display:grid;grid-template-columns:18px 1fr;gap:9px;font-size:14px;line-height:1.5;
+    color:#DCE3EC;}
+  .side li::before{content:"";width:14px;height:14px;margin-top:3px;border-radius:50%;
+    background:var(--flag) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7.2 6 9.6l4.6-5' fill='none' stroke='%23101E33' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;}
+  .side li b{color:#fff;}
+  .side .proof{margin-top:18px;padding-top:16px;border-top:1px solid rgba(246,244,238,.14);
+    font-size:13.5px;line-height:1.5;color:#C9D4E2;}
+  .side .proof b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:34px;
+    color:var(--flag);line-height:1;margin-bottom:4px;}
+  .side a{color:var(--flag);}
+  .side .trust{margin-top:16px;padding-top:14px;border-top:1px solid rgba(246,244,238,.14);
+    display:grid;gap:6px;font-size:12.5px;color:#C9D4E2;}
+  header .note{color:#F6F4EE;background:rgba(242,194,48,.1);border-left:3px solid var(--flag);
+    padding:10px 12px;font-size:13px;}
+  header .note a{color:var(--flag);}
+  @media (max-width:960px){
+    .shell{grid-template-columns:minmax(0,600px);}
+    .side{position:static;}
+  }
+  @media (max-width:480px){
+    body{padding:0 0 40px;}
+    .page,.side{border-radius:0;}
+    header h1{font-size:36px;}
+    section{padding:22px 18px 24px;}
+  }
 </style>
 </head>
 <body>
+<div class="shell">
 <div class="page">
   <header>
     <div class="topbar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byljBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byljSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byljVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byljPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byljBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byljPath" fill="url(#byljSpec)" stroke="none"/><use href="#byljPath" fill="url(#byljVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
     <h1>Set Up Your Team</h1>
+    <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's file: the
     lineup we'd set, with the odds on every close call. A paid product from
     day one — <b>$39 for the season</b>, founding rate locked in for every renewal.</p>
@@ -226,6 +298,7 @@ Baltimore Ravens
       yourself any time from your own billing page. Refunds are no-questions until
       your second weekly file's week kicks off — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
+      <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
     </form>
     <div class="err" id="err-email"></div>
     <div class="done" id="done">
@@ -261,6 +334,25 @@ Baltimore Ravens
     <a href="../terms.html">Terms &amp; refunds</a> &middot;
     <a href="../privacy.html">Privacy</a>
   </footer>
+</div>
+<aside class="side">
+  <h2>What lands in your inbox</h2>
+  <ul>
+    <li><span><b>Your first file today</b>, then a new one every Tuesday morning</span></li>
+    <li><span>Every slot decided for <b>your roster, your scoring</b></span></li>
+    <li><span><b>The odds on every close call</b> — and "no call" where we won't guess</span></li>
+    <li><span>An <b>if/then plan</b> for late injury news</span></li>
+    <li><span>Every call <b>graded in public</b> the Monday after</span></li>
+  </ul>
+  <div class="proof"><b>10,041</b>real start/sit calls, replayed from eleven NFL seasons and
+  graded, misses included. <a href="../confidence.html">See how they graded</a> ·
+  <a href="../sample-report.html">see a real file</a></div>
+  <div class="trust">
+    <span>✓ Two weekly files to decide — full refund, no questions</span>
+    <span>✓ Cancel yourself in one click, any time</span>
+    <span>✓ No league login, no password — just your roster</span>
+  </div>
+</aside>
 </div>
 <script src="roster.js"></script>
 <script>
@@ -345,6 +437,15 @@ const UPDATE_SLUG = QUERY.get("update") || "";
 const UPDATE_TOKEN = QUERY.get("token") || "";
 const UPDATE_MODE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
                     /^[0-9a-f]{20}$/.test(UPDATE_TOKEN);
+
+// The sidebar sells a purchase. A seat holder buys nothing and an update comes
+// from somebody already subscribed: neither may read refund terms or "your
+// first file today" about money they are not spending — the same mistake the
+// seat flow's own copy was once fixed for.
+if (SEAT_MODE || UPDATE_MODE) {
+  const side = document.querySelector(".side");
+  if (side) side.hidden = true;
+}
 
 const TEMPLATES = {
   std: ["QB","RB","RB","WR","WR","TE","FLEX","K","DEF"],
