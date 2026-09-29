@@ -9,6 +9,8 @@ projections only, never a probability (``engine/final_check.py``).
 
 from __future__ import annotations
 
+from render.report import buyer_slots
+
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -41,6 +43,7 @@ def _lower_first(text: str) -> str:
     return text[:1].lower() + text[1:]
 
 
+@buyer_slots
 def subject_for_check(week: int, changes: list[Change]) -> str:
     moves = [c for c in changes if c.kind in (SWAP, BACK)]
     if len(moves) == 1:
@@ -80,6 +83,7 @@ def _items(items: list[Change], tint: str, rule_colour: str, box: bool) -> str:
             f'cellspacing="0" border="0">{"".join(rows)}</table></td></tr></table>')
 
 
+@buyer_slots
 def render_final_check(plan: Mapping[str, Any], changes: list[Change],
                        at: datetime) -> str:
     week = esc(plan["week"])
@@ -134,6 +138,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         f'</body>\n</html>\n')
 
 
+@buyer_slots
 def text_for_check(plan: Mapping[str, Any], changes: list[Change],
                    at: datetime) -> str:
     lines = [f"BEAT YOUR LEAGUE — WEEK {plan['week']} FINAL CHECK",

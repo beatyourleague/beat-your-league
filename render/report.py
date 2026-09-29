@@ -31,6 +31,27 @@ from typing import Any, Mapping
 from ingest.nflverse import ATTRIBUTION
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Slot codes are the engine's identifiers ("SUPER_FLEX"); a buyer reads the
+# name their league app uses. Translated once, at every surface's OUTPUT, so
+# the code keeps meaning one thing everywhere it is compared (eligibility, the
+# ledger, the Saturday plan) and no internal spelling reaches an inbox — the
+# proving run found "SUPER_FLEX" breaking the plain-text table's columns.
+SLOT_DISPLAY = {"SUPER_FLEX": "SFLEX", "WRRB_FLEX": "W/R", "REC_FLEX": "W/T",
+                "IDP_FLEX": "IDP"}
+
+
+def buyer_slots(fn):
+    """Decorator: a renderer's text, with every internal slot code named."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        out = fn(*args, **kwargs)
+        for code, name in SLOT_DISPLAY.items():
+            out = out.replace(code, name)
+        return out
+    return wrapped
 TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 # What a withheld number says to a BUYER. Version numbers, file paths and cost
 # telemetry are operator vocabulary and never appear in a report someone paid
@@ -1413,6 +1434,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     ]
 
 
+@buyer_slots
 def render(report: Mapping[str, Any], template_html: str) -> str:
     style, links = extract_design(template_html)
     style += MARK_CSS

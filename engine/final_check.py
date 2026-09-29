@@ -53,8 +53,12 @@ WATCH = "watch"          # a starter is newly questionable: the plan if he sits
 REMINDER = "reminder"    # still questionable, as on Tuesday
 CLEARED = "cleared"      # questionable on Tuesday, off the report now
 
-# The kinds that are worth an email on their own (RULE F3).
-TRIGGERS = frozenset({SWAP, NO_FILL, BACK, WATCH})
+# The kinds that are worth an email on their own (RULE F3). A starter newly
+# QUESTIONABLE is not one: most questionable players play, and the proving run
+# (2025 weeks 4-8, twelve subscribers) mailed half of all Saturday emails for
+# questionable-only news that changed nothing. It rides along when a real
+# change sends the email anyway.
+TRIGGERS = frozenset({SWAP, NO_FILL, BACK})
 
 
 @dataclass(frozen=True)
@@ -277,10 +281,15 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
                 # Named once: two questionable starters must not both be
                 # told the same bench player is their cover.
                 used.add(placed[0])
-            plan_b = (f"If he's ruled out, start {name(placed[0])}"
-                      + (f" and move {name(slots[placed[1]][1])} to {slot}"
-                         if placed[1] is not None else f" at {slot}")
-                      + f" — he {_number(players[placed[0]], basis)}."
+            # The mover and the slot the newcomer takes are both named: "start
+            # X and move Y to WR — he projects 12.3" left "he" and X's slot
+            # to guesswork (proving run, 2025 week 4).
+            plan_b = ((f"If he's ruled out, move {name(slots[placed[1]][1])} to "
+                       f"{slot} and start {name(placed[0])} at "
+                       f"{slots[placed[1]][0]}"
+                       if placed[1] is not None else
+                       f"If he's ruled out, start {name(placed[0])} at {slot}")
+                      + f" ({_number(players[placed[0]], basis)})."
                       if placed else
                       f"Every other {slot} option on your roster is out or "
                       f"on bye, so keep him in.")

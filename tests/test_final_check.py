@@ -104,13 +104,35 @@ def test_a_bench_player_on_bye_or_ruled_out_is_never_offered() -> None:
     assert [c.kind for c in changes] == [NO_FILL]
 
 
-def test_a_newly_questionable_starter_gets_a_plan_and_an_email() -> None:
+def test_a_newly_questionable_starter_gets_a_plan_but_no_email_on_its_own() -> None:
+    """Most questionable players play. The proving run mailed half of all
+    Saturday emails for questionable-only news; it now rides along only when
+    a real change sends the email anyway."""
     plan = _roster()
     q = Now("questionable", "listed questionable (knee)")
     changes = final_check(plan, _now(plan, wr1=q))
     assert [c.kind for c in changes] == [WATCH]
-    assert "If he's ruled out, start Benchwr at WR" in changes[0].detail
-    assert worth_sending(changes)
+    assert "If he's ruled out, start Benchwr at WR (projects 9.5)." in changes[0].detail
+    assert not worth_sending(changes)
+    with_a_swap = final_check(plan, _now(plan, wr1=q, te=OUT))
+    assert worth_sending(with_a_swap) and WATCH in {c.kind for c in with_a_swap}
+
+
+def test_a_backup_plan_through_the_flex_names_both_moves() -> None:
+    plan = _roster(flex=("WR", 10.0, "active", 6),
+                   benchrb=("RB", 9.0, "active", None))
+    q = Now("questionable", "listed questionable (knee)")
+    [watch] = final_check(plan, _now(plan, wr1=q, benchwr=Now(playing=False)))
+    assert watch.detail.endswith("If he's ruled out, move Flex to WR and start "
+                                 "Benchrb at FLEX (projects 9.0).")
+
+
+def test_a_non_injury_absence_reads_as_its_reason() -> None:
+    assert saturday._reason("questionable", "not injury related - resting player") \
+        == "listed questionable (resting)"
+    assert saturday._reason("out", "not injury related - personal matter") \
+        == "listed out (personal matter)"
+    assert saturday._reason("out", "ankle") == "listed out (ankle)"
 
 
 def test_still_questionable_since_tuesday_is_a_reminder_not_a_reason_to_mail() -> None:

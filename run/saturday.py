@@ -270,6 +270,11 @@ def roster_statuses(cache_dir: Path) -> dict[str, tuple[str, str | None]]:
 
 
 def _reason(designation: str, injury: str) -> str:
+    # The archive writes non-injury absences as "not injury related - resting
+    # player"; the reader needs the reason, not the form field.
+    if injury.startswith("not injury related"):
+        injury = injury.split("-", 1)[-1].strip() if "-" in injury else "not injury related"
+        injury = {"resting player": "resting"}.get(injury, injury)
     return f"listed {designation}" + (f" ({injury})" if injury else "")
 
 

@@ -13,6 +13,8 @@ verbs are past tense on purpose.
 
 from __future__ import annotations
 
+from render.report import buyer_slots
+
 import argparse
 import sys
 from datetime import datetime, timezone
@@ -213,6 +215,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     ]
 
 
+@buyer_slots
 def render(report: Mapping[str, Any], template_html: str) -> str:
     style, links = extract_design(template_html)
     style += MARK_CSS
@@ -232,6 +235,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
 # the plain-text half — what a text-only client and every screen reader get
 # --------------------------------------------------------------------- #
 
+@buyer_slots
 def text_summary(report: Mapping[str, Any]) -> str:
     meta = report["meta"]
     lines = [f'{meta["season"]} · {file_title(report).upper()}',

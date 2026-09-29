@@ -20,6 +20,8 @@ surfaces can never drift apart. All data is escaped on the way in.
 
 from __future__ import annotations
 
+from render.report import buyer_slots
+
 import os
 from typing import Any, Mapping
 
@@ -631,6 +633,7 @@ def _forward_lines() -> list[str]:
             f"built from their own roster — {site}/join."]
 
 
+@buyer_slots
 def text_summary(report: Mapping[str, Any]) -> str:
     """Plain-text digest of the report — the text half of every email."""
     meta = report["meta"]
@@ -778,6 +781,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
               "once you do."]
     return "\n".join(lines) + "\n"
 
+@buyer_slots
 def subject_for(report: Mapping[str, Any]) -> str:
     """What lands in the inbox.
 
@@ -986,6 +990,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
     ]
 
 
+@buyer_slots
 def render_email(report: Mapping[str, Any]) -> str:
     """The full report as a self-contained, email-safe HTML document."""
     meta = report["meta"]
