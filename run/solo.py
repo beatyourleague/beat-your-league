@@ -678,8 +678,16 @@ def spec_from_ref(ref: RosterRef, label: str = "Your Team") -> RosterSpec:
 
 def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                cache_dir: Path = CACHE_DIR,
-               processed_dir: Path | None = None) -> dict[str, Any]:
-    """Build one subscriber's report from the shared week load."""
+               processed_dir: Path | None = None,
+               projections_out: dict[str, float] | None = None) -> dict[str, Any]:
+    """Build one subscriber's report from the shared week load.
+
+    ``projections_out``, when given, is filled with this week's projection for
+    EVERY rostered player — including one the report prints no number for
+    because he could not play on Tuesday's information. The Saturday final
+    check (``engine/final_check.py``) needs those: a player who was out last
+    week and is cleared by Friday can only be weighed against a starter with
+    the same model's number, computed on the same day the report went out."""
     # Against the DIRECTORY, not the PlayerIndex: `position()` answers "UNK"
     # for an id it has never seen rather than None, so the guard it was written
     # against never fired once and an unknown id would have rendered as a blank
@@ -732,6 +740,12 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # Week 1: no counted usage exists yet, and an empty row leaves the
         # reader no way to check why this player is starting over that one.
         return _prior_form_line(player_id, data.prior, spec.rule)
+
+    if projections_out is not None:
+        for player_id in spec.player_ids:
+            projection = model.project(player_id, data.week)
+            if projection is not None and projection.games:
+                projections_out[player_id] = round(projection.mean, 1)
 
     report = build_solo_report(spec, season, data.players, model,
                                data.availability, data.week, Path(cache_dir),

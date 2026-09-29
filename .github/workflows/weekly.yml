@@ -92,6 +92,18 @@ jobs:
           path: data/registry
           key: registry-${{ github.run_id }}
           restore-keys: registry-
+      # The lineups each subscriber was sent, for Saturday's final check
+      # (run/saturday.py). Their OWN key, never inside data/registry: the
+      # hourly intake cron saves that cache constantly, and a save racing this
+      # run's would drop the week's plans. Restored before the send so the
+      # 16:00 retry — which writes no new plans when everything was already
+      # sent — saves the 12:00 run's plans forward instead of an empty folder.
+      - name: Restore sent lineups
+        uses: actions/cache/restore@v4
+        with:
+          path: data/plans
+          key: plans-${{ github.run_id }}
+          restore-keys: plans-
       # The nflverse download cache. Both run.intake and run.tuesday call
       # load_week_data, so without this one cron run downloads ~30 MB twice.
       - name: Restore nflverse cache
@@ -175,6 +187,12 @@ jobs:
         with:
           path: data/registry
           key: registry-${{ github.run_id }}
+      - name: Save sent lineups
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/plans
+          key: plans-${{ github.run_id }}
       - name: Save nflverse cache
         if: always()
         uses: actions/cache/save@v4

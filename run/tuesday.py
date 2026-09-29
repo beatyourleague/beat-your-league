@@ -43,7 +43,9 @@ from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
-from run.solo import CACHE_DIR, SoloError, WeekData, load_week_data, report_for
+from run.solo import (CACHE_DIR, SoloError, WeekData, _prior_form,
+                       load_week_data, report_for)
+from run.saturday import PLANS_DIR, build_plan, write_plan
 from run.updates import update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 
@@ -76,6 +78,8 @@ class RunResult:
     detail: str
     html_path: Path | None = None
     message: Message | None = None
+    # The lineup as sent, for the Saturday final check (run/saturday.py).
+    plan: dict | None = None
 
 
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
@@ -90,10 +94,12 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     permanently, because RULE L4 makes a graded entry immutable. Reproduced:
     `--no-send` on an arbitrary week wrote 4 rows into the real store.
     """
+    projections: dict[str, float] = {}
     try:
         report = report_for(subscriber.spec(), data,
                             league_size=subscriber.league_size,
-                            processed_dir=processed_dir)
+                            processed_dir=processed_dir,
+                            projections_out=projections)
         # NO roster-update credential travels in a report. It used to render
         # directly beneath _forward_line(), which invites the subscriber to
         # forward this very file to their league — so the product asked people
@@ -168,12 +174,69 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         except Exception as exc:  # noqa: BLE001 — batch contract
             ledger_note = f" · LEDGER RECORD FAILED: {exc!r}"
 
+    try:
+        spec = subscriber.spec()
+        plan = build_plan(
+            report, projections, _prior_form(data.prior, spec.rule),
+            {pid: data.availability.classify(pid).status.value
+             for pid in spec.player_ids},
+            subscriber.slug)
+    except Exception:  # noqa: BLE001 — the report is built; Saturday can do without
+        plan = None
+
     published = sum(1 for slot in report["lineup"]
                     if slot.get("confidence") is not None)
     detail = (f"{published}/{len(report['lineup'])} confidences · "
               f"{len(report['meta'].get('gaps') or [])} gaps" + ledger_note)
     return RunResult(subscriber, ok=True, detail=detail, html_path=html_path,
-                     message=message)
+                     message=message, plan=plan)
+
+
+def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
+                     no_paid_check: bool = False) -> list[RosterSubscriber] | None:
+    """The subscribers entitled to mail this run, or None when that cannot be
+    answered (reported on stderr). Shared with the Saturday final check: the
+    rule for who gets mailed must not have two copies to drift apart.
+    """
+    if no_paid_check:
+        return subscribers
+    try:
+        paid = resolve_paid_list(paid_list)
+    except SubscriptionError as exc:
+        print(str(exc), file=sys.stderr)
+        return None
+    entitled = [s for s in subscribers if paid.entitles(s)]
+    dropped = [s for s in subscribers if not paid.entitles(s)]
+    print(f"Paid check: {len(paid.emails)} entitled subscriber(s) "
+          f"(source: {paid.source})")
+    if paid.status_column is None:
+        print("NOTE: that export has no subscription-status column, so "
+              "everyone listed in it is treated as paying.")
+    if paid.refunded:
+        # RULE E1. Said out loud, because a refund leaves the subscription
+        # ACTIVE in Stripe — so from the Dashboard this person still looks
+        # like a customer, and the only place the revocation is visible is
+        # here.
+        print(f"{len(paid.refunded)} subscription(s) were refunded in full "
+              f"and are no longer served: " + ", ".join(sorted(paid.refunded)))
+    had_registry = len(subscribers)
+    subscribers = entitled
+    if dropped:
+        print(f"Skipping {len(dropped)} subscriber(s) who are no longer "
+              f"paying: " + ", ".join(s.slug for s in dropped))
+    if not subscribers:
+        # Everyone in a non-empty registry failing at once is far more
+        # likely to be a broken entitlement source than a business that lost
+        # every customer in a week. Exiting 0 made that a green cron with an
+        # empty inbox — the failure nobody notices until somebody asks.
+        print(f"NOTHING TO SEND: all {had_registry} registry entries failed "
+              f"the paid check against {paid.source}.", file=sys.stderr)
+        print("  If that is genuinely everyone cancelling, re-run with "
+              "--no-paid-check to confirm. Otherwise the entitlement source "
+              "is wrong or stale — check it before next Tuesday.",
+              file=sys.stderr)
+        return None
+    return subscribers
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -201,6 +264,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="preview the emails without sending")
     parser.add_argument("--resend", action="store_true",
                         help="send again even if this week already went out")
+    parser.add_argument("--plans-dir", type=Path, default=None,
+                        help="where the Saturday final check reads the lineups "
+                             "sent (default: data/plans/, real sends only)")
     args = parser.parse_args(argv)
 
     try:
@@ -212,43 +278,10 @@ def main(argv: list[str] | None = None) -> int:
         print("roster registry is empty — nothing to do")
         return 0
 
-    if not args.no_paid_check:
-        try:
-            paid = resolve_paid_list(args.paid_list)
-        except SubscriptionError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        entitled = [s for s in subscribers if paid.entitles(s)]
-        dropped = [s for s in subscribers if not paid.entitles(s)]
-        print(f"Paid check: {len(paid.emails)} entitled subscriber(s) "
-              f"(source: {paid.source})")
-        if paid.status_column is None:
-            print("NOTE: that export has no subscription-status column, so "
-                  "everyone listed in it is treated as paying.")
-        if paid.refunded:
-            # RULE E1. Said out loud, because a refund leaves the subscription
-            # ACTIVE in Stripe — so from the Dashboard this person still looks
-            # like a customer, and the only place the revocation is visible is
-            # here.
-            print(f"{len(paid.refunded)} subscription(s) were refunded in full "
-                  f"and are no longer served: " + ", ".join(sorted(paid.refunded)))
-        had_registry = len(subscribers)
-        subscribers = entitled
-        if dropped:
-            print(f"Skipping {len(dropped)} subscriber(s) who are no longer "
-                  f"paying: " + ", ".join(s.slug for s in dropped))
-        if not subscribers:
-            # Everyone in a non-empty registry failing at once is far more
-            # likely to be a broken entitlement source than a business that lost
-            # every customer in a week. Exiting 0 made that a green cron with an
-            # empty inbox — the failure nobody notices until somebody asks.
-            print(f"NOTHING TO SEND: all {had_registry} registry entries failed "
-                  f"the paid check against {paid.source}.", file=sys.stderr)
-            print("  If that is genuinely everyone cancelling, re-run with "
-                  "--no-paid-check to confirm. Otherwise the entitlement source "
-                  "is wrong or stale — check it before next Tuesday.",
-                  file=sys.stderr)
-            return 1
+    subscribers = paid_subscribers(subscribers, args.paid_list,
+                                   args.no_paid_check)
+    if subscribers is None:
+        return 1
 
     # One load for the whole run. Everything in it is per-week rather than
     # per-subscriber, which is the cost NFR made structural.
@@ -322,6 +355,27 @@ def main(argv: list[str] | None = None) -> int:
         if provider.name == DRY_PROVIDER:
             print(f"    (dry run — nothing left this machine; drafts in "
                   f"{_display(DRY_OUTBOX)})")
+        # The lineup each subscriber was actually SENT, for Saturday's final
+        # check. Only for a send that happened now: a retry that skipped an
+        # earlier send may have rebuilt a slightly different report (a stat
+        # correction overnight), and the plan must match what is in the inbox.
+        # A preview writes none unless it is pointed somewhere on purpose.
+        plans_dir = args.plans_dir or (
+            PLANS_DIR if provider.name != DRY_PROVIDER else None)
+        if plans_dir is not None:
+            plans = {r.message.key: r.plan for r in ok if r.message and r.plan}
+            written = 0
+            for send in delivered:
+                plan = plans.get(send.message.key)
+                if plan is None:
+                    continue
+                try:
+                    write_plan(plans_dir, plan)
+                    written += 1
+                except OSError as exc:
+                    print(f"    plan not saved for {send.message.key}: {exc}",
+                          file=sys.stderr)
+            print(f"    {written} lineup(s) saved for Saturday's final check")
         if send_failures:
             return 1
 

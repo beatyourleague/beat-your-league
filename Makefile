@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview monday monday-preview sample \
         og brand billing billing-preview
 
 week:
@@ -65,6 +65,14 @@ tuesday:
 
 tuesday-preview:
 	EMAIL_PROVIDER=dry $(PY) -m run.tuesday --allow-dry
+
+# The Saturday final check: Friday's injury report against the lineups sent
+# on Tuesday. Mails only the subscribers whose lineup has to change.
+saturday:
+	$(PY) -m run.saturday
+
+saturday-preview:
+	EMAIL_PROVIDER=dry $(PY) -m run.saturday --allow-dry
 
 # Settle last week's published calls against the real box scores and republish
 # the public record. No secrets, no league — grading reads public data only.

@@ -1,0 +1,99 @@
+# Saturday final check (run/saturday.py): Friday's injury report, applied to
+# the lineup each subscriber was sent on Tuesday. Mails ONLY the subscribers
+# whose lineup has to change — a weekly "no changes" email is one people learn
+# to skip, and then they skip the one that matters.
+#
+# No report is rebuilt and no probability is computed, so nothing here touches
+# the ledger. It reads three things: the registry (who is paying), the plans
+# the Tuesday run stored (what they were told), and nflverse's injury report,
+# schedule and player statuses (what is true now).
+
+name: saturday-final-check
+
+on:
+  schedule:
+    # Saturdays 16:00 UTC — noon ET on daylight time, 11:00 ET from Nov 1.
+    # Teams playing Sunday file their final injury report on Friday
+    # afternoon; nflverse rebuilds its injury release daily around 14:00 UTC
+    # (observed on the release's own asset timestamps), so 16:00 reads a file
+    # that has Friday in it, with a day left to act on it. run.saturday
+    # refuses outright if the week's report is not in yet, rather than
+    # reading a missing report as a healthy league.
+    - cron: "0 16 * * 6"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # persist sent.jsonl — it is what stops a second send
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      - name: Restore subscriber registry
+        uses: actions/cache/restore@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+          restore-keys: registry-
+      - name: Restore sent lineups
+        uses: actions/cache/restore@v4
+        with:
+          path: data/plans
+          key: plans-${{ github.run_id }}
+          restore-keys: plans-
+      - name: Restore nflverse cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw/nflverse
+          key: nflverse-${{ github.run_id }}
+          restore-keys: nflverse-
+      # EMAIL_PROVIDER unset means dry-run, which exits 1 (NOTHING WAS SENT)
+      # only when there was something to send — a quiet Saturday passes.
+      - name: Send final checks
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+        run: .venv/bin/python -m run.saturday
+      - name: Persist the send log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Saturday final check: send log"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push
+      - name: Raise an issue if the check failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Saturday final check failed: $(date -u +%Y-%m-%d)" \
+            --body "The Saturday final check failed, so subscribers whose lineup changed may not have been told.
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Check in this order: whether this week's injury report was published
+          (the log says so), whether the plans cache was restored, the email
+          provider credentials." \
+            --label bug || true

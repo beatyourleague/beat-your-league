@@ -1011,6 +1011,29 @@ page's job, never baked in; the check touches nothing; gold never on a mid-tone 
 version there); Stripe gets navy, never gold. The landing's JSON-LD names `brand/icon.png` as the
 Organization logo, and the og card carries the mark.
 
+**The Saturday final check (`run/saturday.py`, Sep 29 2026).** The Tuesday report is built
+on week W-1's injury report, because week W's does not exist on a Tuesday — so by Sunday a
+report can say "start" about a player ruled out on Friday. `saturday.yml` (Sat 16:00 UTC, after
+nflverse's ~14:00 daily injury rebuild) holds Friday's report against the lineup each subscriber
+was SENT and mails only the ones who must change something. Rules (`engine/final_check.py`):
+- **No new number.** Swaps follow Tuesday's printed projections; no probability is computed, so
+  nothing enters the ledger and nothing needs grading. Test: no `%` on any surface of it.
+- **It reads a stored plan, never a rebuilt report.** `run/tuesday.py` writes
+  `data/plans/{season}/wNN-{slug}.json` only for a send that happened in that run (never a dry
+  preview, never a retry that skipped). Rebuilding on Saturday could compare against a lineup
+  nobody was sent. Plans are cached under their OWN key (`plans-`), never inside the registry
+  cache the hourly intake saves constantly. No plan for anybody = lost cache, exit 1.
+- **F1** a player whose game has kicked off is never moved or offered (Thursday games).
+  **F2** "cleared" needs the team's FINAL report (two days before its game, in NFL time — a
+  Sunday-night kickoff is Monday in UTC); Out/Doubtful act whenever seen. **F3** quiet unless
+  something changed: a swap, an uncoverable slot, or a starter NEWLY questionable. Reminders and
+  "cleared" ride along only then.
+- A week whose injury report is not in (under 75% of still-to-play teams filed anything)
+  refuses, exit 1 — an empty report reads as a healthy league. IR/PUP/suspended/released from
+  `players.csv` count as out: a player moved to IR stops appearing on the injury report.
+- Selling copy may say it (landing timeline, both price cards, the FAQ + JSON-LD, join, the
+  welcome) — it runs on the same secrets as Tuesday, so it ships whenever sending does.
+
 **Selling strategy: sell the win, keep the record off the pitch (owner decision, Sep 29 2026).**
 Supersedes every earlier instruction to show the grading on selling surfaces. A buyer
 decides in seconds, and grades, failing bands, "misses included" and "what free feeds did

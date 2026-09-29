@@ -121,7 +121,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     what_next = ("Every Tuesday morning, one email: the lineup we'd set for "
                  "your roster under your scoring, the odds on every call worth "
                  "making, and last week's calls graded against the real box "
-                 "score. Reading it takes about ninety seconds.")
+                 "score. Reading it takes about ninety seconds. And if Friday's "
+                 "injury report changes your lineup, a short final check lands "
+                 "Saturday with the swap — only when something changes.")
     roster_line = ("Trades and pickups happen — reply to any report with your "
                    "updated roster and your report follows it from the next "
                    "Tuesday.")
