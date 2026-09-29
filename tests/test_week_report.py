@@ -605,7 +605,8 @@ def test_render_gates_and_disclaimer(tmp_path: Path) -> None:
     raw = _write_cache(tmp_path, season)
     report = build_week_report(raw, season.league_id, REPORT_WEEK, 1)
     html_out = render(report, _template())
-    assert "Not calling it" in html_out          # gates visible, not hidden
+    from render.report import NOT_CALLING_IT
+    assert NOT_CALLING_IT in html_out            # gates visible, not hidden
     assert "not guarantees" in html_out          # disclaimer footer present
     assert "Mike's Marauders" not in html_out    # no sample-data leakage
     assert "Not affiliated with Sleeper" in html_out

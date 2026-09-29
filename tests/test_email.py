@@ -87,10 +87,11 @@ def test_email_escapes_hostile_names(tmp_path: Path) -> None:
 
 
 def test_email_gates_render_honestly(tmp_path: Path) -> None:
-    """A withheld number says "no call"/"Not calling it" — never a version
+    """A withheld number carries a visible labelled reason — never a version
     number, never a fabricated zero."""
+    from render.report import NOT_CALLING_IT
     html_out = render_email(_report(tmp_path))
-    assert "Not calling it" in html_out
+    assert NOT_CALLING_IT in html_out
     assert "v0.3" not in html_out and "v0." not in html_out
 
 
@@ -200,7 +201,14 @@ def test_a_structural_hold_does_not_spend_a_row_on_any_surface() -> None:
     from render.report import is_structural_gate
 
     assert is_structural_gate("nobody on your bench is eligible here")
-    assert is_structural_gate("we don't put a number on defenses yet — we haven't")
+    # Defenses are NOT structural any more (Sep 29 2026): the row says
+    # "projection only", which is an answer rather than a refusal, so it earns
+    # its place in the call column.
+    from engine.week_report import DEFENSE_GATE
+    from render.report import row_label
+    assert not is_structural_gate(DEFENSE_GATE)
+    assert row_label({"confidence_gate": DEFENSE_GATE, "status": "active",
+                      "slot": "DEF"}) == "projection only"
     assert is_structural_gate("no eligible player with any scoring history")
     assert not is_structural_gate("availability in doubt (designated Questionable)")
     assert not is_structural_gate("not enough games on record yet (1 and 2)")
@@ -240,7 +248,11 @@ def test_a_structural_hold_does_not_spend_a_row_on_any_surface() -> None:
     for surface, name in ((browser, "browser"), (email_html, "email"), (text, "text")):
         for gate in {s["confidence_gate"] for s in report["lineup"]
                      if s.get("confidence_gate")}:
-            head = gate.split("(")[0].split("—")[0].strip()[:28]
+            # The reader sees the reason in plain words (render.report
+            # .gate_phrase), not the engine's string — so that is what must
+            # arrive.
+            from render.report import gate_phrase
+            head = gate_phrase(gate)
             assert head in surface or html.escape(head) in surface, \
                 f"{name} dropped a withheld-reason instead of relocating it: {head!r}"
 
@@ -249,11 +261,31 @@ def test_the_explainer_makes_no_claim_a_shown_number_is_not_a_guess() -> None:
     """Grade C of the frozen method deletes 'otherwise we'd be guessing, and
     you can guess for free' from the no-call explainer — it asserts that a
     printed number is not a guess, which is the claim the grade withholds —
-    and keeps the public-record sentence."""
+    and it stays gone. It still states what a printed number means and when
+    one prints."""
     from render.report import no_call_explainer
     text = no_call_explainer("nobody on your bench is eligible here")
     assert "guess for free" not in text
-    assert "public record and gets graded" in text
+    assert "outscores the best option on your bench" in text
+    assert "confirmed to play" in text
+
+
+def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:
+    """Owner review, Sep 29 2026. The published sample printed "no call ·
+    status unconfirmed" on Saquon Barkley, whose own status was confirmed:
+    the doubt was about his bench alternative, Tony Pollard (Questionable).
+    The start was right either way, and the row read as if Barkley were the
+    problem. A row now says what is true of it."""
+    from render.report import row_label
+    q = "availability in doubt (designated Questionable)"
+    assert row_label({"confidence_gate": q, "status": "active",
+                      "alternative_name": "Tony Pollard"}) \
+        == "start · Tony Pollard questionable"
+    assert row_label({"confidence_gate": q, "status": "questionable",
+                      "alternative_name": "Tony Pollard"}) \
+        == "questionable · see if/then"
+    assert "unconfirmed" not in row_label({"confidence_gate": q, "status": "active",
+                                           "alternative_name": "X"})
 
 
 def test_the_email_carries_what_the_browser_report_carries(tmp_path: Path) -> None:

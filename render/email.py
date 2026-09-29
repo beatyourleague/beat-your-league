@@ -52,6 +52,8 @@ from render.report import (
     no_call_head,
     number_sections,
     short_gate,
+    row_label,
+    gate_list,
     who_can_cover,
 )
 
@@ -573,7 +575,7 @@ def _receipts(receipts: Mapping[str, Any]) -> str:
     if not record:
         inner = (f'{esc(receipts.get("note", ""))}<br>'
                  f'<span style="{SMALL}text-transform:uppercase;'
-                 f'letter-spacing:1px;">Ledger opens · this week</span>')
+                 f'letter-spacing:1px;">Results · from next week</span>')
     else:
         parts = [esc(receipts.get("note", ""))]
         best, worst = receipts.get("best_call"), receipts.get("worst_call")
@@ -701,7 +703,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
             s.get("confidence") is None and s.get("confidence_gate")
             and not is_structural_gate(s["confidence_gate"])
             for s in report["lineup"]) and mixed
-        lines.append(f"  {no_call_head(shown_marker, mixed)} {' · '.join(gates)}.")
+        lines.append(f"  {no_call_head(shown_marker, mixed)} {gate_list(gates)}.")
     # The rest of the roster. Plain text is what many phones preview and what a
     # screen reader reads, so a benched player missing here is missing, full
     # stop — the HTML table beside it does not help.
@@ -839,8 +841,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
         elif (mixed and slot.get("player_name")
                 and not is_structural_gate(slot.get("confidence_gate"))):
             shown_marker = True
-            call = (f'<span style="{SMALL}">'
-                    f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
+            call = f'<span style="{SMALL}">{esc(row_label(slot))}</span>'
         else:
             call = ""
         cell = f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
@@ -865,7 +866,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
     if gates:
         head_text = no_call_head(shown_marker, mixed)
         note = _note(f'<b>{esc(head_text)}</b> '
-                     f'{esc(no_call_explainer(" · ".join(sorted(gates))))}')
+                     f'{esc(no_call_explainer(gate_list(gates)))}')
     table = (f'<table role="presentation" width="100%" cellpadding="0" '
              f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
     seeded_note = (_note(esc(SEEDED_SECTION_LINE))

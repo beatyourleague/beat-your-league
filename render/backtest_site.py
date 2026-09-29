@@ -47,7 +47,7 @@ import re
 import sys
 from pathlib import Path
 
-from render.report import SOCIAL_IMAGE_TAGS, mark_svg
+from render.report import NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # The frozen method's per-surface mapping (reports/nflverse-backtest-method.md
@@ -636,7 +636,9 @@ def build(source: Path = SOURCE) -> str:
     title, heading, lede = _shell(source)
     # Token substitution rather than str.format: the shell carries a CSS block
     # full of braces, and formatting it raises on the first `{--navy...}`.
-    shell = (HEAD.replace("@@SOCIAL@@", SOCIAL_IMAGE_TAGS)
+    # Kept out of search results (owner direction, Sep 29 2026): the record
+    # stays public and linked from nowhere that sells.
+    shell = (HEAD.replace("@@SOCIAL@@", NOINDEX_TAG + SOCIAL_IMAGE_TAGS)
                  .replace("@@TITLE@@", html.escape(title, quote=True))
                  .replace("@@HEADING@@", html.escape(heading, quote=False))
                  .replace("@@LEDE@@", lede))

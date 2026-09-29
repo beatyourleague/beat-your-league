@@ -19,6 +19,10 @@ from conftest import requires_demo_render, requires_sample_league
 SITE = Path(__file__).resolve().parent.parent / "site"
 LANDING = (SITE / "index.html").read_text(encoding="utf-8")
 JOIN = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+# The published grading (owner direction, Sep 29 2026): kept live as the record,
+# never linked from a page that sells, and kept out of search results.
+_EVIDENCE_PAGES = ("backtest.html", "confidence.html", "projections.html",
+                   "no-call.html", "compare/index.html", "ledger/index.html")
 ROSTER_JS = (SITE / "join" / "roster.js").read_text(encoding="utf-8")
 LEDGER = (SITE / "ledger" / "index.html").read_text(encoding="utf-8")
 COMPARE = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
@@ -132,18 +136,16 @@ def test_the_join_sidebar_sells_only_to_a_buyer_and_quotes_the_real_count() -> N
     terms and "your first file today". A seat holder pays nothing and an
     update comes from an existing subscriber, so the sidebar must hide in both
     modes — the seat flow once shipped refund language about money a seat
-    holder never spent. And its graded-call count is the live grading's own,
-    read from the report, like the landing page's."""
+    holder never spent. Since Sep 29 2026 (owner direction) it sells the file,
+    not the grading: no backtest count and no link to a grading page."""
     assert '<aside class="side">' in JOIN
     guard = re.search(r"if \(SEAT_MODE \|\| UPDATE_MODE\) \{(.*?)\n\}", JOIN, re.S)
     assert guard and "side.hidden = true" in guard.group(1), \
         "the sidebar's purchase copy shows to seat holders and updaters"
-    source = (SITE.parent / "reports" / "nflverse-backtest.md").read_text(encoding="utf-8")
-    graded = int(re.search(r"\| Calls graded \| (\d+) \|", source).group(1))
     side = JOIN.split('<aside class="side">')[1].split("</aside>")[0]
-    counts = re.findall(r"\b\d{1,3},\d{3}\b", side)
-    assert counts and all(c.replace(",", "") == str(graded) for c in counts), \
-        f"the sidebar's call count drifted from the grading ({graded:,})"
+    assert not re.findall(r"\b\d{1,3},\d{3}\b", side), "a backtest count is back in the sidebar"
+    for page in _EVIDENCE_PAGES:
+        assert page not in side, f"the sidebar links the grading page {page}"
 
 
 def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> None:
@@ -539,32 +541,17 @@ def test_the_landing_quotes_no_backtest_figure_in_either_direction() -> None:
         assert figure not in visible, \
             f"backtest figure {figure} is quoted on the landing page; it belongs on " \
             "the evidence page that carries its context"
-    # One exception, owner decision Sep 29 2026: the VOLUME of the grading —
-    # how many calls were replayed and graded — is a fact about the work, not
-    # a claim about how often it was right, and it sells without saying
-    # anything the frozen method forbids. It must be the live grading's own
-    # count, read from the report, never typed in and left to drift.
+    # Since Sep 29 2026 (owner direction) the volume of the grading goes too:
+    # "10,041 real calls graded… misses included" led a first impression with
+    # the audit instead of the benefit. No grading count, no grading
+    # vocabulary, and no link to a grading page (see
+    # test_no_selling_page_links_the_grading_pages).
     source = (SITE.parent / "reports" / "nflverse-backtest.md").read_text(encoding="utf-8")
     graded = int(re.search(r"\| Calls graded \| (\d+) \|", source).group(1))
-    for count in re.findall(r"\b\d{1,3}(?:,\d{3})+\b", visible):
-        if count.replace(",", "") == str(graded):
-            continue
-        assert int(count.replace(",", "")) < 1000 or count in ("$1,000",), \
-            f"{count} on the landing is not the live grading's call count ({graded:,})"
-    proof = re.search(r"\d{1,3},\d{3}</div>\s*<p>(.*?)</p>", LANDING, re.S)
-    assert proof and f"{graded:,}" in LANDING, \
-        "the proof line lost its count, or the count no longer matches the grading"
-    assert re.search(r"misses included", proof.group(1)), \
-        "the proof line must say the misses are in it — a count alone implies a record"
-    seasons = len(re.findall(r"^\| 20\d\d \| \d+ \|$", source, re.M))
-    words = {10: "ten", 11: "eleven", 12: "twelve", 13: "thirteen"}
-    assert f"{words.get(seasons, seasons)} NFL seasons" in proof.group(1), \
-        f"the proof line's season count no longer matches the grading ({seasons})"
-    assert not re.search(r"hindsight filter|calibration error|buckets?\b", visible,
-                         re.I), "calibration vocabulary leaked back onto the sales page"
-    # Every proof is one click away, never zero clicks.
-    for href in ("confidence.html", "projections.html", "no-call.html", "backtest.html"):
-        assert f'href="{href}"' in LANDING, f"the landing no longer links {href}"
+    assert f"{graded:,}" not in visible, "the grading count is back on the landing"
+    assert not re.search(r"hindsight filter|calibration error|buckets?\b|misses included"
+                         r"|grade [A-D]\b", visible, re.I), \
+        "grading vocabulary leaked back onto the sales page"
 
 
 def test_published_backtest_exists_and_keeps_its_failures() -> None:
@@ -588,7 +575,6 @@ def test_published_backtest_exists_and_keeps_its_failures() -> None:
     published_off = len(re.findall(r">\s*(?:<b>)?off(?:</b>)?\s*<", text))
     assert published_off >= failing, (
         f"source records {failing} failing band(s), page shows {published_off}")
-    assert 'href="backtest.html"' in LANDING
     # And the retired study stays in the record rather than being deleted —
     # generated, unedited, and saying what it is in its own first line.
     retired = (REPORTS / "backtest.md").read_text(encoding="utf-8")
@@ -605,8 +591,28 @@ def test_ledger_page_promises_misses_are_published() -> None:
     assert re.search(r"analysis, not picks", LEDGER, re.I)
 
 
-def test_landing_links_to_the_public_ledger() -> None:
-    assert 'href="ledger/index.html"' in LANDING
+def test_no_selling_page_links_the_grading_pages() -> None:
+    """Owner direction, Sep 29 2026: a new buyer decides on a first impression,
+    and the grading pages (grades, failing bands, what free feeds did better)
+    create doubt at the moment of decision without helping anyone win. They
+    stay live and unedited as the record — nothing is deleted or rewritten —
+    but no page that sells links to them, and search engines are told to leave
+    them out. A strong record can be promoted back deliberately, later."""
+    selling = {
+        "landing": LANDING, "join": JOIN,
+        "league pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
+        "thanks": (SITE / "thanks.html").read_text(encoding="utf-8"),
+        "sample": (SITE / "sample-report.html").read_text(encoding="utf-8"),
+        "first-week sample": (SITE / "sample-first-week.html").read_text(encoding="utf-8"),
+    }
+    for name, page in selling.items():
+        for target in _EVIDENCE_PAGES:
+            assert not re.search(rf'href="(?:\.\./)?{re.escape(target)}', page), \
+                f"{name} links the grading page {target}"
+    for target in _EVIDENCE_PAGES:
+        page = (SITE / target).read_text(encoding="utf-8")
+        assert re.search(r'<meta name="robots" content="noindex', page), \
+            f"{target} is not kept out of search results"
 
 
 # --------------------------------------------------------------------- #
@@ -1074,8 +1080,9 @@ def test_the_legal_page_names_a_real_jurisdiction_and_contact() -> None:
 
 
 def test_withheld_numbers_read_as_a_decision_not_a_defect() -> None:
-    """A gated slot must say we chose not to call it — never a version number."""
-    assert "no call" in SAMPLE_REPORT.lower()
+    """A slot without odds explains itself in plain words — never a version
+    number, never a bare blank."""
+    assert "slots without odds" in SAMPLE_REPORT.lower()
     assert not re.search(r"\bv0\.\d", SAMPLE_REPORT)
 
 
@@ -1191,7 +1198,7 @@ def test_league_pass_states_its_own_terms() -> None:
 def test_league_pass_makes_no_win_promise() -> None:
     prose_page = prose(LEAGUE_PASS)
     assert re.search(r"not a guarantee", prose_page, re.I)
-    assert re.search(r"somebody finishes last", prose_page, re.I)
+    assert re.search(r"somebody finishes last|exactly one champion", prose_page, re.I)
 
 
 def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
@@ -1397,7 +1404,7 @@ def test_the_entity_sentence_is_identical_everywhere() -> None:
     The first version of the sentence described the retired product, which is
     why this is a test and not a convention."""
     plan = (SITE.parent / "PLAN.md").read_text(encoding="utf-8")
-    match = re.search(r"^> (Beat Your League is a weekly .+?failed\.)$", plan,
+    match = re.search(r"^> (Beat Your League is a weekly .+?late news\.)$", plan,
                       re.S | re.M)
     assert match, "PLAN §1 lost the blockquoted entity sentence"
     sentence = re.sub(r"\s+", " ", match.group(1).replace("> ", ""))

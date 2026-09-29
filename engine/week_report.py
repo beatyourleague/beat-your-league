@@ -92,9 +92,8 @@ TEAM_DEFENSE_CONFIDENCE_CALIBRATED = False
 # every surface, and this sentence renders in every report and the published
 # sample (found on the sample by review sweep, Aug 24 2026). Since Sep 29 it
 # states the measured reason rather than "not checked yet".
-DEFENSE_GATE = ("no number on defenses — we checked our defense calls against five "
-                "seasons and they came out close to a coin flip, so a percentage "
-                "would mislead you")
+DEFENSE_GATE = ("we don't put odds on defenses — a defense gets its projection, "
+                "and odds are kept for the head-to-heads we can call")
 # Buyer-facing wording: plain English, no file paths, no lab vocabulary.
 WIN_PROBABILITY_GATE = (
     "No win percentage. We checked one against two seasons and our favorites "

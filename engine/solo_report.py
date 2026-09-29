@@ -86,8 +86,8 @@ from engine.week_report import (TEAM_RANGE_GATE,
 def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
     """Section 06 — what the public record says so far."""
     empty = {"record": None,
-             "note": "Ledger opens this week — every published call gets "
-                     "graded against the real box score, hit or miss."}
+             "note": "Your results start here: once this week's games are "
+                     "final, every call shows up with how it played out."}
     if processed_dir is None:
         return empty
     try:
@@ -102,12 +102,10 @@ def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
     hits = sum(1 for c in graded if c.outcome == "hit")
     weeks = sorted({c.week for c in graded})
     note = (f"{hits} of {len(graded)} calls have come in right so far, "
-            f"weeks {weeks[0]}-{weeks[-1]}. Every one of them was written down "
-            f"before kickoff and is on the public page, misses included.")
+            f"weeks {weeks[0]}-{weeks[-1]}, each one written down before kickoff.")
     if len(weeks) == 1:
         note = (f"{hits} of {len(graded)} calls have come in right so far, "
-                f"from week {weeks[0]}. Every one was written down before "
-                f"kickoff and is on the public page, misses included.")
+                f"from week {weeks[0]}, each one written down before kickoff.")
     return {"record": {"graded": len(graded), "hits": hits,
                        "first_week": weeks[0], "last_week": weeks[-1]},
             "note": note}

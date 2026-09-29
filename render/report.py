@@ -38,7 +38,7 @@ TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 # software, when the truth is the opposite: we refuse to print what we can't
 # stand behind.
 NO_CALL = "no call"          # in a tight column
-NOT_CALLING_IT = "Not calling it"   # as a label above the reason
+NOT_CALLING_IT = "Heads up"   # as a label above the reason
 
 # The logo mark, single-sourced. It shipped on the landing hero and NOWHERE
 # else — not on the report the subscriber actually pays for, not on the ledger
@@ -103,13 +103,17 @@ OG_IMAGE = f"{SITE_ORIGIN}/og.png"
 # summary_large_image, not summary: `summary` renders a small square thumbnail
 # and crops a 1.91:1 card to a stamp, which throws away the file card that is the
 # whole point of having an image.
+# The grading pages stay public and unlinked from anything that sells, and
+# out of search results (owner direction, Sep 29 2026).
+NOINDEX_TAG = '<meta name="robots" content="noindex">\n'
+
 SOCIAL_IMAGE_TAGS = (
     '<meta name="twitter:card" content="summary_large_image">\n'
     f'<meta property="og:image" content="{OG_IMAGE}">\n'
     '<meta property="og:image:width" content="1200">\n'
     '<meta property="og:image:height" content="630">\n'
     '<meta property="og:image:alt" content="A Beat Your League lineup file: '
-    'four roster slots, three with a percentage, one reading no call.">\n'
+    'four roster slots, three with a percentage, one marked start.">\n'
 )
 
 FAVICON_LINK = '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">'
@@ -190,11 +194,10 @@ def no_call_explainer(listed: str) -> str:
     and you can guess for free" — is gone, because it asserted that a shown
     number is not a guess, which is exactly the claim the grade withholds.
     """
-    return (f"{listed}. When we do put a number on a slot, it means: the odds "
-            f"this guy outscores the best option on your bench, and its bar starts at "
-            f"50%, a coin flip. We only show it once "
-            f"we've confirmed both players are active — and every one goes on the "
-            f"public record and gets graded.")
+    return (f"{listed}. Where a slot has odds, they're the chance your starter "
+            f"outscores the best option on your bench; the bar starts at 50%, an "
+            f"even matchup. We put odds only on head-to-heads where both players "
+            f"are confirmed to play.")
 
 
 # §5 of the early-season method (Grade B): the seed moves every number in the
@@ -221,8 +224,7 @@ SEEDED_SECTION_LINE = ("This early in the season, last season is counted into "
 # is which ones spend a row. This is the same rule the mixed-week test already
 # applies: a marker that says nothing the note does not say once has not
 # earned a row of its own.
-STRUCTURAL_GATES = ("nobody on your bench", "we don't put a number on defenses",
-                    "no eligible player")
+STRUCTURAL_GATES = ("nobody on your bench", "no eligible player")
 
 
 def is_structural_gate(gate: str | None) -> bool:
@@ -237,11 +239,67 @@ def no_call_head(shown_any_marker: bool, mixed: bool) -> str:
     were published but every withheld slot was structural (no markers at all);
     or nothing was called this week.
     """
-    if shown_any_marker:
-        return f'Why some slots say "{NO_CALL}":'
-    if mixed:
-        return "Why some slots carry no number:"
-    return f"{NO_CALL.capitalize()} on any slot this week:"
+    if shown_any_marker or mixed:
+        return "About the slots without odds:"
+    return "No odds on any slot this week:"
+
+
+# The reasons a slot carries no odds, in the buyer's words. The engine's own
+# strings are precise and stay precise (the ledger and tests read them); this is
+# only how a reader is told. Order matters: first match wins.
+_GATE_PHRASES = (
+    ("availability in doubt", "a player in that head-to-head is listed questionable"),
+    ("not a live head-to-head", "a player in that head-to-head is out"),
+    ("nobody on your bench", "no bench player at that position to compare against"),
+    ("not enough games", "fewer than three games on record so far"),
+    ("we don't put odds on defenses", "defenses get a projection, not odds"),
+    ("no eligible player", "no eligible player with a scoring record"),
+)
+
+
+def gate_phrase(gate: str) -> str:
+    """One engine gate reason, as the note under the lineup states it."""
+    for prefix, phrase in _GATE_PHRASES:
+        if gate.startswith(prefix):
+            return phrase
+    # Anything else is an availability reason from engine/availability.py
+    # (no report yet, bye status unknown): the player's status is open.
+    return "a player's status isn't confirmed yet"
+
+
+def gate_list(gates) -> str:
+    """The note's list of reasons: phrased, de-duplicated, stable order."""
+    return " · ".join(sorted({gate_phrase(g) for g in gates}))
+
+
+def row_label(slot: Mapping[str, Any]) -> str:
+    """What a lineup row without odds says in its call column.
+
+    It says what is TRUE of this row. The old label, "no call · status
+    unconfirmed", printed on Saquon Barkley in the published sample when the
+    doubt was about his bench alternative, Tony Pollard (listed Questionable):
+    Barkley was confirmed and was the start either way, and the row read as if
+    he were the problem. So: when the starter is confirmed, the row says start,
+    and names who is in doubt.
+    """
+    gate = slot.get("confidence_gate") or ""
+    alt = slot.get("alternative_name")
+    starter_ok = slot.get("status") == "active"
+    if gate.startswith("we don't put odds on defenses"):
+        return "projection only"
+    if gate.startswith("not enough games"):
+        return "odds after 3 games"
+    if gate.startswith("nobody on your bench"):
+        return f"no bench {slot.get('slot', '')}".strip()
+    if gate.startswith("no eligible player") or not gate:
+        return ""
+    if starter_ok and alt:
+        if gate.startswith("availability in doubt"):
+            return f"start · {alt} questionable"
+        return f"start · {alt} unconfirmed"
+    if gate.startswith("availability in doubt"):
+        return "questionable · see if/then"
+    return "status open · see if/then"
 
 
 def short_gate(gate: str | None, slot: str) -> str:
@@ -688,8 +746,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
         elif (mixed and slot.get("player_name")
                 and not is_structural_gate(slot.get("confidence_gate"))):
             shown_marker = True
-            call = (f'<span class="tsub">'
-                    f'{esc(short_gate(slot.get("confidence_gate"), slot["slot"]))}</span>')
+            call = f'<span class="tsub">{esc(row_label(slot))}</span>'
         else:
             call = ""
         rows.append(
@@ -706,7 +763,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     if gates:
         head_text = no_call_head(shown_marker, mixed)
         note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
-                f'{esc(no_call_explainer(" · ".join(sorted(gates))))}</div>')
+                f'{esc(no_call_explainer(gate_list(gates)))}</div>')
     seeded_note = (f'<div class="withheld">{esc(SEEDED_SECTION_LINE)}</div>'
                    if report["meta"].get("seeded") else "")
     return _section("The Lineup", 3,
@@ -1053,7 +1110,7 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
     record = receipts.get("record")
     if not record:
         inner = (f'{esc(receipts.get("note", ""))}'
-                 f'<br><span class="stamp">Ledger opens · this week</span>')
+                 f'<br><span class="stamp">Results · from next week</span>')
     else:
         parts = [esc(receipts.get("note", ""))]
         best, worst = receipts.get("best_call"), receipts.get("worst_call")

@@ -169,8 +169,11 @@ def test_the_alt_text_describes_what_is_actually_on_the_card() -> None:
     assert alt == (
         f"A Beat Your League lineup file: {WORDS[len(rows)]} roster slots, "
         f"{WORDS[len(called)]} with a percentage, "
-        f"{WORDS[len(nocall)]} reading no call."), (
+        f"{WORDS[len(nocall)]} marked start."), (
         "the alt text no longer describes the card the landing page defines")
+    # "marked start" must be what those rows really say (Sep 29 2026: a row
+    # whose bench option is in doubt reads "start · <name> questionable").
+    assert all(str(r["nocall"]).startswith("start") for r in nocall), nocall
 
 
 def test_a_dropped_row_refuses_rather_than_shipping_a_shorter_card() -> None:

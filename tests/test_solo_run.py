@@ -879,7 +879,7 @@ def test_section_six_reports_the_record_the_product_actually_publishes(tmp_path)
 
     # An empty store is the launch state, and it still says so honestly.
     assert solo_receipts(store, tmp_path)["record"] is None
-    assert "Ledger opens this week" in solo_receipts(store, tmp_path)["note"]
+    assert "Your results start here" in solo_receipts(store, tmp_path)["note"]
 
     record_calls(ledger_path(tmp_path, store), [
         call(1, 4, "hit"), call(2, 4, "hit"), call(3, 5, "miss"),
@@ -889,7 +889,8 @@ def test_section_six_reports_the_record_the_product_actually_publishes(tmp_path)
                              "first_week": 4, "last_week": 5}, \
         "section 06 still cannot see the record the product publishes"
     assert "2 of 3" in out["note"] and "weeks 4-5" in out["note"]
-    assert "misses included" in out["note"]
+    # The count carries its denominator ("2 of 3"), so every graded call is in
+    # it; the note no longer spells out the misses (owner direction, Sep 29).
 
     # A different cohort's store is a different record — the scoring preset and
     # league size are part of a call's identity, so they must not pool.

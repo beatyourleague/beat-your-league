@@ -989,6 +989,30 @@ pattern: every serious bug in this repo has been a path nobody had executed.
   log that is never pruned or entitlement-checked. Keyed on the purchase now.
 Every fix is mutation-tested; the reproduction is in each test's docstring.
 
+**Selling strategy: sell the win, keep the record off the pitch (owner decision, Sep 29 2026).**
+Supersedes every earlier instruction to show the grading on selling surfaces. A buyer
+decides in seconds, and grades, failing bands, "misses included" and "what free feeds did
+better" plant doubt at that moment without helping anyone win. So:
+- **Selling pages** (landing, join, League Pass, thanks, both samples) sell what the file does
+  for the buyer: their roster and scoring, every close call decided, the odds, the if/then,
+  ninety seconds on Tuesday, the Sunday-regret scene. No backtest counts (10,041 included), no
+  grades, no misses, no links to grading pages — `test_no_selling_page_links_the_grading_pages`.
+- **The grading pages stay live, unedited and `noindex`** (backtest, confidence, projections,
+  no-call, compare, ledger). The weekly grading keeps running; principle 2 now means the
+  record exists and is kept honestly, not that it is marketed. Promote it back only
+  deliberately, when it helps the sale.
+- **Product copy says what is true of each row, confidently.** A slot whose BENCH option is
+  in doubt reads "start · <name> questionable" (it used to read "no call · status
+  unconfirmed" on a confirmed star); defenses read "projection only"; the note is "About the
+  slots without odds". `render.report.row_label` / `gate_phrase` are the single source.
+- **The floors that stay:** no invented results or outcome promises ("win X% more"), no fake
+  testimonials or customer counts, the Grade-C/B banned words (calibrated, tested, proven,
+  accurate) stay banned, and refund limits, renewal and cancel terms stay disclosed before
+  purchase. Strong selling on what the product does is fine; claims about results need
+  evidence we don't have.
+- Before the NEXT pre-season, restore the numbers-start caveat for pre-Week-4 joiners (the FAQ
+  now answers for mid-season buyers only).
+
 **The redesign directive (Aug 24 2026) — owner decisions, each pinned by test where a test
 can hold it.** The owner benchmarked the site against netprophet.pro and ruled: too many words
 per section; the stadium-field hero is tacky and is GONE; public grading may support but never

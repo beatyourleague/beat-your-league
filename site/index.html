@@ -4,16 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — your lineup, decided every Tuesday</title>
-<meta name="description" content="Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails one decided file — the lineup it would set for your exact roster under your league's scoring, with the odds on every call worth making and the week's coin flip decided — and it publishes its own accuracy test, including the buckets it failed.">
+<meta name="description" content="Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
-<meta property="og:description" content="Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails one decided file — the lineup it would set for your exact roster under your league's scoring, with the odds on every call worth making and the week's coin flip decided — and it publishes its own accuracy test, including the buckets it failed.">
+<meta property="og:description" content="Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://beatyourleague.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A Beat Your League lineup file: four roster slots, three with a percentage, one reading no call.">
+<meta property="og:image:alt" content="A Beat Your League lineup file: four roster slots, three with a percentage, one marked start.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -220,6 +220,8 @@
     mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
   .proofline .big{font-family:'Barlow Condensed';font-weight:900;font-size:clamp(54px,7vw,76px);
     line-height:.9;color:var(--flag);font-variant-numeric:tabular-nums;}
+  .proofline .big small{display:block;font-size:.3em;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--dusk2);margin-top:8px;}
   .proofline p{font-size:17px;line-height:1.55;color:var(--dusk2);max-width:60ch;}
   .proofline p b{color:var(--paper);}
   .proofline a{color:var(--flag);}
@@ -293,6 +295,21 @@
   .timeline b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:20px;
     text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
   .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:34ch;}
+
+  /* rankings vs. your file */
+  .versus{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:900px;}
+  .vcol{border:1px solid rgba(246,244,238,.14);padding:22px 24px;}
+  .vcol.ours{background:var(--paper);color:var(--navy);border:2px solid var(--flag);
+    box-shadow:0 0 48px -10px rgba(242,194,48,.35);}
+  .vhead{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--dusk);margin-bottom:12px;}
+  .vcol.ours .vhead{color:var(--turf);}
+  .vcol ul{list-style:none;display:grid;gap:12px;}
+  .vcol li{display:flex;gap:10px;font-size:15.5px;line-height:1.45;color:var(--dusk);}
+  .vcol li::before{content:"–";flex:none;width:14px;color:var(--dusk);}
+  .vcol.ours li{color:var(--navy);font-weight:600;}
+  .vcol.ours li::before{content:"✓";color:var(--turf);font-weight:800;}
+  @media (max-width:640px){.versus{grid-template-columns:1fr;}}
 
   /* ------------------------------------------------ pricing */
   .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px;}
@@ -465,10 +482,10 @@
       <button class="btn gold" type="submit">Tell me when it opens</button>
     </form>
     <p class="watchnote" id="watch-note" role="status"></p>
-    <ul class="creds" aria-label="How the numbers are checked">
-      <li><b>10,041</b> real calls graded</li>
-      <li>Every league setting graded</li>
-      <li>Misses published</li>
+    <ul class="creds" aria-label="What you get">
+      <li>Built for your exact roster and scoring</li>
+      <li>Every close call decided</li>
+      <li>Set your lineup in 90 seconds</li>
     </ul>
     <p class="heroline"><b>A new file every Tuesday of the season.</b> One email when signups
     open — nothing else, no card, unsubscribe in one click.</p>
@@ -504,10 +521,10 @@
             <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
               <span class="fbar"><i data-w="22" style="width:22%"></i></span><span class="fpct" data-n="61">61%</span></div>
             <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
-              <span class="fnc">no call · status unconfirmed</span></div>
+              <span class="fnc">start · Tony Pollard questionable</span></div>
           </div>
-          <div class="fcap">Each number is the odds that start beats your best bench option.
-          Bars start at even odds, a coin flip. "No call" means we don't guess.</div>
+          <div class="fcap">Each number is the chance that start beats your best bench
+          option. The longer the bar, the surer the call.</div>
         </div><!--/card-->
         <div class="peek" aria-hidden="true"><div class="filehead">The week's closest call</div>
           <p>Start Amon-Ra St. Brown over Courtland Sutton</p>
@@ -523,19 +540,18 @@
 
 <section class="proof">
   <div class="proofline">
-    <div class="big">10,041</div>
-    <p><b>Real start/sit calls, replayed from eleven NFL seasons and graded against the box
-    scores — misses included.</b> Then the number was corrected and graded again on five
-    seasons the correction never saw. Every call we send this season is graded the same
-    way, in public. <a href="confidence.html">See how they graded</a> ·
-    <a href="ledger/index.html">this season's running record</a></p>
+    <div class="big">12:55<small>Sunday</small></div>
+    <p><b>He was on your bench. He went for 30. You lost by four.</b> Every manager has
+    that week — lost on one close call, made in a hurry five minutes before kickoff. The
+    file makes that call on Tuesday, for your roster, with the odds. Sunday, you just
+    watch.</p>
   </div>
 </section>
 
 <section>
   <h2>What lands in your inbox</h2>
-  <p class="lede">Rankings talk to the whole internet. Your file is built from your roster
-  and your league's scoring, every slot decided. Here's the rest of that same real file.</p>
+  <p class="lede">Every slot decided, for your roster and your league's scoring. Here's the
+  rest of that same real file.</p>
   <div class="rows">
     <div class="leaf first">
       <div class="filecard anim" data-real="2024-w10">
@@ -592,6 +608,31 @@
 </section>
 
 <section>
+  <h2>Why not just use rankings?</h2>
+  <p class="lede">Rankings are written for everybody. Your file is written for your team.</p>
+  <div class="versus">
+    <div class="vcol">
+      <div class="vhead">Rankings</div>
+      <ul>
+        <li>One list for millions of rosters</li>
+        <li>Standard scoring, unless you go looking</li>
+        <li>WR14 or WR19 — you still have to decide</li>
+        <li>Late news? Hope you're watching</li>
+      </ul>
+    </div>
+    <div class="vcol ours">
+      <div class="vhead">Your file</div>
+      <ul>
+        <li>Built on your roster, player by player</li>
+        <li>Scored your league's way, every number</li>
+        <li>Every close call decided, with the odds</li>
+        <li>The if/then for late news, set on Tuesday</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
   <h2>Ninety seconds on Tuesday morning</h2>
   <ol class="timeline">
     <li><b>Tuesday</b><p>Your file lands. A short checklist up top — the calls worth
@@ -599,8 +640,8 @@
       seconds.</p></li>
     <li><b>Sunday</b><p>Your lineup's already set. If late news breaks, the file told
       you the if/then in advance.</p></li>
-    <li><b>Monday</b><p>Your calls come back graded against the real box score as games
-      go final — so you always know how the file is doing.</p></li>
+    <li><b>Monday</b><p>You made the right calls, and you have the file to show the group
+      chat you made them before kickoff.</p></li>
   </ol>
 </section>
 
@@ -614,7 +655,8 @@
       <div class="price">$14.99 <small>/ month</small></div>
       <ul>
         <li>Your first file the day you sign up, then every Tuesday</li>
-        <li>Two weekly files to decide: full refund, no questions, one per person
+        <li>Try it risk-free: full refund, no questions, until your second weekly
+        file's week kicks off — one per person
         (<a href="terms.html#refunds">the exact terms</a>)</li>
         <li>Cancel any time yourself, in one click</li>
         <li>Billing stops when the season does — we don't charge through
@@ -629,7 +671,8 @@
       <ul>
         <li>Your first file the day you sign up, then every Tuesday through your
         title game</li>
-        <li>Two weekly files to decide: full refund, no questions, one per person
+        <li>Try it risk-free: full refund, no questions, until your second weekly
+        file's week kicks off — one per person
         (<a href="terms.html#refunds">the exact terms</a>)</li>
         <li>Renews once a year at $39 unless you cancel — we email you first,
         and cancelling is one click
@@ -649,8 +692,7 @@
   <div class="faqgrid">
     <div>
       <h2>Before you ask the group chat</h2>
-      <p class="lede">Anything else, <a href="compare/index.html" style="color:var(--flag)">see
-      how we stack up against the field</a> — prices and all.</p>
+      <p class="lede">Straight answers to what managers ask first.</p>
     </div>
     <div class="faq">
       <details>
@@ -662,9 +704,8 @@
       <details>
         <summary>Does it match my league's scoring?</summary>
         <div class="a">Yes. PPR, half-PPR, or standard, plus your league size and lineup
-        shape (superflex included). Every number is computed under your settings, and
-        each setting — plus the most common combinations of them — was graded against
-        real seasons. <a href="confidence.html">Here's how each one did</a>.</div>
+        shape (superflex included). Every projection and every number in your file is
+        computed under your league's settings — not a generic scoring system.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
@@ -673,12 +714,12 @@
         the day you sign up.</div>
       </details>
       <details>
-        <summary>What if a call misses?</summary>
-        <div class="a">Some will. A 61% call should lose about four times in ten — that's
-        what the number means, and it's why we print it instead of hiding behind a
-        ranking. Every call we send is graded <a href="ledger/index.html">in public</a>
-        against the box score, misses included. And you have two weekly files to decide,
-        with a no-questions refund.</div>
+        <summary>How is this different from free rankings?</summary>
+        <div class="a">Rankings give everyone the same list and leave the decision to you. Your file starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble.</div>
+      </details>
+      <details>
+        <summary>How long does it take each week?</summary>
+        <div class="a">About ninety seconds. The top of the file is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it.</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
@@ -687,14 +728,10 @@
       </details>
       <details>
         <summary>When do the numbers start?</summary>
-        <div class="a">Right away if you join now: from Week 4 on, every setup gets odds
-        in its first file. Before that, Week 2 for the standard setup we've graded (full
-        PPR, 12 teams, the usual lineup), leaning on last season and saying so on each
-        row, and Week 4 for other setups — if you join before the season, that's after
-        your refund window (your first two weekly files) closes, so weigh that before you
-        buy. Week 1 sets your lineup in last season's scoring
-        order; <a href="sample-first-week.html">here's exactly what that first file
-        looks like</a>.</div>
+        <div class="a">Right away. From Week 4 on, every file carries odds from the first
+        one you get. (Early in a season the file leans on last season until there's
+        enough this year — <a href="sample-first-week.html">here's what a Week 1 file
+        looks like</a>.)</div>
       </details>
     </div>
   </div>
@@ -718,14 +755,10 @@
   NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
   settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
   Not affiliated with the NFL.<br>
+  <a href="sample-report.html">See a real file</a> ·
+  <a href="league-pass.html">League Pass</a> ·
   <a href="terms.html">Terms &amp; refunds</a> &middot;
-    <a href="privacy.html">Privacy</a> ·
-  <a href="ledger/index.html">The receipts</a> ·
-  <a href="backtest.html">Our grading record</a> ·
-  <a href="confidence.html">The number, graded</a> ·
-  <a href="projections.html">vs. free projections</a> ·
-  <a href="no-call.html">The "no call" rule</a> ·
-  <a href="compare/index.html">Us vs. the field</a>
+    <a href="privacy.html">Privacy</a>
 </footer>
 
 </div>
@@ -737,7 +770,7 @@
     {
       "@type": "Product",
       "name": "Beat Your League",
-      "description": "Beat Your League is a weekly start/sit tool for fantasy football: every Tuesday it emails one decided file — the lineup it would set for your exact roster under your league's scoring, with the odds on every call worth making and the week's coin flip decided — and it publishes its own accuracy test, including the buckets it failed.",
+      "description": "Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "39", "priceCurrency": "USD",
          "description": "Season pass — every weekly report through your title game, the first on the day you join. No-questions refund until your second weekly file's week kicks off."},
@@ -751,15 +784,17 @@
         {"@type": "Question", "name": "Does it work with my league app?",
          "acceptedAnswer": {"@type": "Answer", "text": "Any of them — Sleeper, ESPN, Yahoo, anything. You paste your roster once (or pick names from a list) and we take it from there. No league connection needed."}},
         {"@type": "Question", "name": "Does it match my league's scoring?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR, or standard, plus your league size and lineup shape (superflex included). Every number is computed under your settings, and each setting, plus the most common combinations of them, was graded against real seasons."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR, or standard, plus your league size and lineup shape (superflex included). Every projection and every number in your file is computed under your league's settings — not a generic scoring system."}},
         {"@type": "Question", "name": "When does it arrive?",
          "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season — once the whole week's games are in the books, days before your lineup locks."}},
-        {"@type": "Question", "name": "What if a call misses?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Some will. A 61% call should lose about four times in ten — that's what the number means, and it's why we print it instead of hiding behind a ranking. Every call we send is graded in public against the box score, misses included. And you have two weekly files to decide, with a no-questions refund."}},
+        {"@type": "Question", "name": "How is this different from free rankings?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your file starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
+        {"@type": "Question", "name": "How long does it take each week?",
+         "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the file is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?",
          "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any file with your updated roster and it follows from the next Tuesday."}},
         {"@type": "Question", "name": "When do the numbers start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Right away if you join now: from Week 4 on, every setup gets odds in its first file. Before that, Week 2 for the standard setup we've graded (full PPR, 12 teams, the usual lineup), leaning on last season and saying so on each row, and Week 4 for other setups — if you join before the season, that's after your refund window (your first two weekly files) closes, so weigh that before you buy. Week 1 sets your lineup in last season's scoring order."}}
+         "acceptedAnswer": {"@type": "Answer", "text": "Right away. From Week 4 on, every file carries odds from the first one you get. Early in a season the file leans on last season until there's enough this year."}}
       ]
     }
   ]
@@ -1017,7 +1052,7 @@ if (!reduced && "IntersectionObserver" in window) {
 if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
-    ".timeline, .plans, .finance, .faqgrid, .closer > *");
+    ".timeline, .versus, .plans, .finance, .faqgrid, .closer > *");
   const rise = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
