@@ -45,12 +45,13 @@ _cancel_destination = cancel_destination
 # The refund window is PURCHASE-relative, never a calendar week: "through
 # Week 2" gave anyone who bought from Week 3 on no window at all, while every
 # selling page kept promising one. The terms page defines a weekly file; this
-# is the retainable copy of the same promise, so it states when it closes.
-REFUND_TERMS = ("Refunds are no-questions until a week after your second "
-                "weekly file — one per person, and a re-subscription after a "
-                "refund is final.")
-REFUND_TERMS_LEAGUE = ("Refunds are no-questions until a week after your "
-                       "second weekly file — one per league.")
+# is the retainable copy of the same promise, so it states when it closes —
+# at kickoff, before the second file's lineup can be played and then returned.
+REFUND_TERMS = ("Refunds are no-questions until your second weekly file's "
+                "week kicks off — one per person, and a re-subscription after "
+                "a refund is final.")
+REFUND_TERMS_LEAGUE = ("Refunds are no-questions until your second weekly "
+                       "file's week kicks off — one per league.")
 
 
 def _plan_terms(plan: str) -> tuple[str, list[str]]:

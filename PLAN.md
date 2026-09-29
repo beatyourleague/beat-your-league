@@ -349,8 +349,8 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
    the thing arriving in the inbox and on the published test.
 
 **At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$9.99/mo**.
-Refunds no-questions through the buyer's first two weekly files (was "through Week 2" until
-Sep 29 2026 — see the refund-cycling note below). The monthly×3.65 > season-pass rule below still holds at $39
+Refunds no-questions until the buyer's second weekly file's week kicks off (was "through Week 2"
+until Sep 29 2026 — see the refund-cycling note below). The monthly×3.65 > season-pass rule below still holds at $39
 (3.65 × $9.99 = $36.43 — **this now INVERTS**; see the corrected rule).
 
 **CORRECTION forced by the price change:** at $39 the season pass is no longer cheaper than paying
@@ -601,8 +601,8 @@ and chargebacks cost more than a retained month while endangering the payment ac
 weeks of reports, refund inside the no-questions window, re-subscribe later, refund again — a free
 season. The honest close is a policy stated *before* purchase, not friction added after it:
 
-> **One no-questions refund per person.** The window runs until a week after your second weekly
-> file. Re-subscribe after a refund and that purchase is final — you keep every report either way.
+> **One no-questions refund per person.** The window runs until your second weekly file's week
+> kicks off. Re-subscribe after a refund and that purchase is final — you keep every report either way.
 
 **The window is counted in the buyer's own files, not the calendar (owner decision, Sep 29 2026).**
 "Through Week 2" was written for a launch where everyone bought in August. The site went on
@@ -610,12 +610,18 @@ selling into Week 4 under it, so every buyer from Week 3 on was sold a refund pr
 pricing card that the terms page had already voided — a window with no days in it. The window is
 now **two weekly files**, whichever plan and whenever in the season: a weekly file is the report
 for one week's games; the day-one roster file is not one, a day-one weekly report is (so a
-mid-week buyer does not get three files inside the window); if the season ends first, it runs a
-week past the last file. For an August buyer this is the old window to within a day, so the
-exposure change is confined to mid-season buyers, who previously had none. Defined in
+mid-week buyer does not get three files inside the window); if the season ends first, it closes
+a week after the last file. **It closes when the second file's week kicks off** — the first game
+of the week that file covers — not a week after that file (tightened the same day, owner
+decision): the later close let a buyer play the second file's lineup, watch the games settle it
+and refund on the result. At kickoff both files are in hand and the first file's week has played
+out in full, which is the judgement the window exists for. For an August buyer this closes before
+Week 2's games rather than after them, so it is tighter than the old window; mid-season buyers,
+who previously had none, gain one. Defined in
 `site/terms.html` §5 and pinned by `test_the_refund_window_is_counted_from_the_purchase_not_the_calendar`.
 Enforcement stays manual: `data/processed/sent.jsonl` records every weekly file sent, keyed by
-week and subscriber slug, which is the whole evidence a refund decision needs.
+week and subscriber slug; the second weekly key's week number plus that week's first kickoff on
+the NFL schedule is the whole evidence a refund decision needs.
 
 Why this is the right shape: it is disclosed pre-purchase (so it is a term, not a trap), it costs
 an honest customer nothing, and it removes the only version of the loop worth running. Note the
@@ -627,8 +633,8 @@ Do not attempt device/IP fingerprinting or any other tracking to detect repeat r
 disproportionate, hostile, and would collect exactly the data this project promises never to hold.
 
 **Where the non-refundable money legitimately comes from:**
-1. **Season pass, paid upfront.** $39 lands on day one. The no-questions window closes a week
-   after the buyer's second weekly file; everything after is earned revenue, not float.
+1. **Season pass, paid upfront.** $39 lands on day one. The no-questions window closes when the
+   buyer's second weekly file's week kicks off; everything after is earned revenue, not float.
 2. **Value must land before that window shuts.** Weeks 1 and 2 reports are the highest-stakes
    deliverables of the season — a missed or thin Week 1 is a refund request with a stamp on it.
 3. **Reduce refunds by removing their causes, never their availability:** set expectations about

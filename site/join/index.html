@@ -217,8 +217,8 @@ Baltimore Ravens
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The season pass is <b>$39 and renews once
       a year at $39 unless you cancel</b>. We email you before it bills, and you cancel
-      yourself any time from your own billing page. Refunds are no-questions through
-      your first two weekly files — one per person.</p>
+      yourself any time from your own billing page. Refunds are no-questions until
+      your second weekly file's week kicks off — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
     </form>
     <div class="err" id="err-email"></div>
@@ -239,8 +239,8 @@ Baltimore Ravens
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
         <li id="first-note">Your first file lands <b>the day you join</b>. Refunds are no-questions
-        through your first two weekly files — one per person, and a re-subscription after
-        a refund is final.
+        until your second weekly file's week kicks off — one per person, and a
+        re-subscription after a refund is final.
         Changed your mind later?
         <a href="../terms.html#cancel">Cancelling takes about fifteen seconds</a> in your
         own account — you never have to ask us.</li>
@@ -773,7 +773,8 @@ if (UPDATE_MODE) {
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time. " +
-    "Refunds are no-questions through your first two weekly files — one per person.";
+    "Refunds are no-questions until your second weekly file's week kicks off — " +
+    "one per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
 } else if (WANTS_PASS) {
@@ -795,8 +796,8 @@ if (UPDATE_MODE) {
   // actually renews — the season-pass sentence would be a wrong disclosure.
   const passTerms = "The League Pass is $99 and renews once a year at $99 " +
     "unless you cancel. We email you before it bills, and you cancel yourself any " +
-    "time from your own billing page. Refunds are no-questions through your first " +
-    "two weekly files — one per league.";
+    "time from your own billing page. Refunds are no-questions until your second " +
+    "weekly file's week kicks off — one per league.";
   $("renew-note").textContent = passTerms;
   $("terms-line").textContent = passTerms;
 }

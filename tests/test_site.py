@@ -119,6 +119,36 @@ def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> No
             f"{name} page lost the refund window where the money is asked for"
 
 
+def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
+    """A window that ran "a week after your second weekly file" let a buyer
+    set that file's lineup, watch the games settle it, and refund on the
+    result — the second file used in full, then returned. The window closes
+    when the second file's week kicks off: both files are in hand, the first
+    one's week has played out, and the second has not been put to use yet.
+
+    Every surface has to say the same close, or the loosest one is the
+    promise: "through your first two weekly files" reads as the end of the
+    second file's games, which is the week this change takes back."""
+    import render.welcome as welcome
+    loose = re.compile(r"a\s+week\s+after\s+your\s+second\s+weekly"
+                       r"|through\s+your\s+first\s+two\s+weekly", re.I)
+    for name, page in _buyer_surfaces().items():
+        text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
+        assert not loose.search(text), \
+            f"{name} still promises a refund after the second file's games"
+    kickoff = re.compile(r"second\s+weekly\s+file's\s+week\s+kicks\s+off", re.I)
+    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE),
+                       ("league pass", prose((SITE / "league-pass.html")
+                                             .read_text(encoding="utf-8"))),
+                       ("thanks", prose((SITE / "thanks.html")
+                                        .read_text(encoding="utf-8"))),
+                       ("terms", prose((SITE / "terms.html")
+                                       .read_text(encoding="utf-8")))):
+        assert kickoff.search(page), f"{name} page does not say when the window closes"
+    assert kickoff.search(welcome.REFUND_TERMS)
+    assert kickoff.search(welcome.REFUND_TERMS_LEAGUE)
+
+
 def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     """A window counted in files is only as firm as the definition of a file.
     Without one, "my day-one roster file was the first" and "the season ended
@@ -126,7 +156,9 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     settled, and a window that never closes is the one without an end date."""
     terms = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     section = terms.split('id="refunds"', 1)[1].split("<h2", 1)[0]
-    assert re.search(r"a week after your second weekly\s+file", section, re.I)
+    assert re.search(r"your second weekly\s+file's\s+week\s+kicks\s+off", section, re.I)
+    assert re.search(r"first game of the week that file\s+covers", section, re.I), \
+        "\"kicks off\" needs the game it means, or Sunday's slate is an argument"
     assert re.search(r"weekly file is the report for one week", section, re.I)
     assert re.search(r"roster file[^.]*isn't one", section, re.I)
     assert re.search(r"season ends before your second", section, re.I), \

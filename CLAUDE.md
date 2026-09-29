@@ -1632,10 +1632,14 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
 **The refund window is two weekly files, counted from the purchase (owner decision, Sep 29
 2026).** "Through Week 2" was a calendar date written for an August launch; the site kept
 selling into Week 4 under it, so every buyer from Week 3 on read "no-questions refund" on the
-pricing card and bought a window the terms had already closed. It now runs until a week after
-the buyer's second weekly file, on every plan and whenever they join (terms §5 `#refunds`
-defines it: a weekly file is one week's report; the day-one ROSTER file is not one, a day-one
-weekly REPORT is; a season that ends first extends it a week past the last file). The
+pricing card and bought a window the terms had already closed. It now runs until the buyer's
+second weekly file's week kicks off (the first game of the week that file covers), on every plan
+and whenever they join (terms §5 `#refunds` defines it: a weekly file is one week's report; the
+day-one ROSTER file is not one, a day-one weekly REPORT is; a season that ends first closes it a
+week after the last file). **Kickoff, not "a week after the second file"** — the later close,
+live for a few hours the same day, let a buyer play the second file's lineup, watch it settle
+and refund on the result; `test_the_refund_window_closes_before_the_second_file_is_played`
+bans that wording and the looser "through your first two weekly files" on every surface. The
 welcome email reads `REFUND_TERMS` / `REFUND_TERMS_LEAGUE` from `render/welcome.py`.
 `test_the_refund_window_is_counted_from_the_purchase_not_the_calendar` sweeps every page under
 `site/` plus those constants for a calendar-anchored window (mutation-checked on four
