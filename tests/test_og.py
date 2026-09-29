@@ -167,7 +167,7 @@ def test_the_alt_text_describes_what_is_actually_on_the_card() -> None:
     called = [r for r in rows if r["pct"]]
     nocall = [r for r in rows if r["nocall"]]
     assert alt == (
-        f"A Beat Your League lineup file: {WORDS[len(rows)]} roster slots, "
+        f"A Beat Your League lineup report: {WORDS[len(rows)]} roster slots, "
         f"{WORDS[len(called)]} with a percentage, "
         f"{WORDS[len(nocall)]} marked start."), (
         "the alt text no longer describes the card the landing page defines")

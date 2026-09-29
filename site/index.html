@@ -4,16 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — your lineup, decided every Tuesday</title>
-<meta name="description" content="Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
+<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
-<meta property="og:description" content="Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
+<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://beatyourleague.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A Beat Your League lineup file: four roster slots, three with a percentage, one marked start.">
+<meta property="og:image:alt" content="A Beat Your League lineup report: four roster slots, three with a percentage, one marked start.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,7 +88,7 @@
   .heroline b{color:var(--dusk2);}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
 
-  /* the Tuesday email, as it arrives: a phone, an inbox row, the file */
+  /* the Tuesday email, as it arrives: a phone, an inbox row, the report */
   .phonewrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;}
   /* A stadium light behind the phone: dark frame on a dark page otherwise
      dissolves into it. Painted behind, never over, the screen. */
@@ -98,7 +98,7 @@
       rgba(46,169,104,.10) 66%,transparent);}
   .phonewrap > *{position:relative;z-index:1;}
   /* An iPhone's proportions (19.5:9), bezel, Dynamic Island and home
-     indicator. The file runs on past the bottom edge, as a real inbox does. */
+     indicator. The report runs on past the bottom edge, as a real inbox does. */
   .phone{position:relative;width:100%;max-width:320px;aspect-ratio:9 / 19.5;
     background:linear-gradient(145deg,#3A404B,#0B0E13 40%,#232830);border-radius:52px;
     padding:11px;box-shadow:0 0 0 1.5px #8C939E,0 0 0 3px rgba(12,14,18,.9),
@@ -148,7 +148,7 @@
   .homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:36%;
     height:5px;border-radius:3px;background:#111;z-index:2;}
   /* The Tuesday notification: drops from the island, gets tapped, becomes the
-     inbox row and the file below it. Played once, on load; at rest it is gone
+     inbox row and the report below it. Played once, on load; at rest it is gone
      and the phone shows the inbox, so a page whose script never runs is whole. */
   .notif{position:absolute;top:46px;left:8px;right:8px;z-index:3;display:grid;
     grid-template-columns:30px 1fr auto;gap:9px;align-items:start;padding:9px 11px;
@@ -226,8 +226,8 @@
   .proofline p b{color:var(--paper);}
   .proofline a{color:var(--flag);}
 
-  /* one real file, annotated in the margin: each note sits level with the part
-     of the file it describes, and the paper runs unbroken down the left. */
+  /* one real report, annotated in the margin: each note sits level with the part
+     of the report it describes, and the paper runs unbroken down the left. */
   .rows{display:grid;grid-template-columns:minmax(0,640px) minmax(0,1fr);gap:0 44px;}
   .leaf{background:var(--paper);border-top:1px dashed #CFC8B6;
     box-shadow:-18px 0 40px -30px rgba(0,0,0,.9),18px 0 40px -30px rgba(0,0,0,.9),
@@ -296,7 +296,7 @@
     text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
   .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:34ch;}
 
-  /* rankings vs. your file */
+  /* rankings vs. your report */
   .versus{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:900px;}
   .vcol{border:1px solid rgba(246,244,238,.14);padding:22px 24px;}
   .vcol.ours{background:var(--paper);color:var(--navy);border:2px solid var(--flag);
@@ -469,7 +469,7 @@
 <nav>
   <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="bylnBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="bylnSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="bylnVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="bylnPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#bylnBody)" stroke="#F2C230" stroke-width=".9"/><use href="#bylnPath" fill="url(#bylnSpec)" stroke="none"/><use href="#bylnPath" fill="url(#bylnVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg>Beat Your League</a>
   <div class="navlinks">
-    <a class="hidesm" href="sample-report.html">See a real file</a>
+    <a class="hidesm" href="sample-report.html">See a real report</a>
     <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
          a closed checkout reads as bait. JS rewrites it the day checkout opens;
          if JS never runs, the honest state is what shows. -->
@@ -496,11 +496,11 @@
       <li>Every close call decided</li>
       <li>Set your lineup in 90 seconds</li>
     </ul>
-    <p class="heroline"><b>A new file every Tuesday of the season.</b> One email when signups
+    <p class="heroline"><b>A new report every Tuesday of the season.</b> One email when signups
     open — nothing else, no card, unsubscribe in one click.</p>
     <div class="cta-row">
       <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
-      <a class="btn ghost" href="sample-report.html">See a real file</a>
+      <a class="btn ghost" href="sample-report.html">See a real report</a>
     </div>
   </div>
   <div class="phonewrap">
@@ -543,7 +543,7 @@
         <div class="homebar" aria-hidden="true"></div>
       </div>
     </div>
-    <p class="realtag"><b>Real file</b> · built from the 2024 season, Week 10</p>
+    <p class="realtag"><b>Real report</b> · built from the 2024 season, Week 10</p>
   </div>
 </header>
 
@@ -552,7 +552,7 @@
     <div class="big">12:55<small>Sunday</small></div>
     <p><b>He was on your bench. He went for 30. You lost by four.</b> Every manager has
     that week — lost on one close call, made in a hurry five minutes before kickoff. The
-    file makes that call on Tuesday, for your roster, with the odds. Sunday, you just
+    report makes that call on Tuesday, for your roster, with the odds. Sunday, you just
     watch.</p>
   </div>
 </section>
@@ -560,7 +560,7 @@
 <section>
   <h2>What lands in your inbox</h2>
   <p class="lede">Every slot decided, for your roster and your league's scoring. Here's the
-  rest of that same real file.</p>
+  rest of that same real report.</p>
   <div class="rows">
     <div class="leaf first">
       <div class="filecard anim" data-real="2024-w10">
@@ -596,7 +596,7 @@
     </div>
     <div class="note"><b>Who's really getting the ball</b><p>Targets and carries for
       every starter, from the real games. When a player's role grows, it's right there in
-      your file.</p></div>
+      your report.</p></div>
     <div class="leaf last">
       <div class="filecard anim" data-real="2024-w10">
         <div class="filehead">If/then for gameday</div>
@@ -608,15 +608,15 @@
       </div><!--/card-->
     </div>
     <div class="note"><b>Late news, handled early</b><p>Got a questionable player? The
-      file already tells you what to do if he plays and if he doesn't.</p></div>
+      report already tells you what to do if he plays and if he doesn't.</p></div>
   </div>
-  <p class="realfoot"><b>Real file</b> · every figure above comes from the published
+  <p class="realfoot"><b>Real report</b> · every figure above comes from the published
   <a href="sample-report.html" style="color:var(--flag)">2024 Week 10 sample</a>.</p>
 </section>
 
 <section>
   <h2>Why not just use rankings?</h2>
-  <p class="lede">Rankings are written for everybody. Your file is written for your team.</p>
+  <p class="lede">Rankings are written for everybody. Your report is written for your team.</p>
   <div class="versus">
     <div class="vcol">
       <div class="vhead">Rankings</div>
@@ -628,7 +628,7 @@
       </ul>
     </div>
     <div class="vcol ours">
-      <div class="vhead">Your file</div>
+      <div class="vhead">Your report</div>
       <ul>
         <li>Built on your roster, player by player</li>
         <li>Scored your league's way, every number</li>
@@ -642,28 +642,28 @@
 <section>
   <h2>Ninety seconds on Tuesday morning</h2>
   <ol class="timeline">
-    <li><b>Tuesday</b><p>Your file lands. A short checklist up top — the calls worth
+    <li><b>Tuesday</b><p>Your report lands. A short checklist up top — the calls worth
       making, and the one player whose news to watch. Tick the boxes, done in ninety
       seconds.</p></li>
-    <li><b>Sunday</b><p>Your lineup's already set. If late news breaks, the file told
+    <li><b>Sunday</b><p>Your lineup's already set. If late news breaks, the report told
       you the if/then in advance.</p></li>
-    <li><b>Monday</b><p>You made the right calls, and you have the file to show the group
+    <li><b>Monday</b><p>You made the right calls, and you have the report to show the group
       chat you made them before kickoff.</p></li>
   </ol>
 </section>
 
 <section id="pricing">
   <h2 class="slant">Try a month, or take the season.</h2>
-  <p class="lede">Joining mid-season? Your first file lands the day you sign up, then a
+  <p class="lede">Joining mid-season? Your first report lands the day you sign up, then a
   new one every Tuesday.</p>
   <div class="plans">
     <div class="plan">
       <div class="tag">Monthly</div>
       <div class="price">$14.99 <small>/ month</small></div>
       <ul>
-        <li>Your first file the day you sign up, then every Tuesday</li>
+        <li>Your first report the day you sign up, then every Tuesday</li>
         <li>Try it risk-free. Full refund, no questions, until your second weekly
-        file's week kicks off. One per person
+        report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
         <li>Cancel any time yourself, in one click</li>
         <li>Billing stops when the season does — we don't charge through
@@ -676,10 +676,10 @@
       <div class="tag">Season pass · 2026</div>
       <div class="price">$39 <small>/ season</small></div>
       <ul>
-        <li>Your first file the day you sign up, then every Tuesday through your
+        <li>Your first report the day you sign up, then every Tuesday through your
         title game</li>
         <li>Try it risk-free. Full refund, no questions, until your second weekly
-        file's week kicks off. One per person
+        report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
         <li>Renews once a year at $39 unless you cancel — we email you first,
         and cancelling is one click
@@ -701,7 +701,7 @@
     <p class="whyquote">Rankings answer <em>who's good this week.</em> Nobody answers
     <em>who do I start</em> — for your team, under your scoring, before you're staring at
     it at 12:55 on Sunday.</p>
-    <p class="whybody">So we built the file we wanted: every close call on your roster
+    <p class="whybody">So we built the report we wanted: every close call on your roster
     decided on Tuesday, the odds on each one, and the plan for late news. One email, a
     few minutes of your week, and Sunday back to being fun. Questions? Write to
     <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
@@ -724,7 +724,7 @@
       <details>
         <summary>Does it match my league's scoring?</summary>
         <div class="a">Yes. PPR, half-PPR or standard, your league size, and your lineup
-        (superflex too). Every number in your file is worked out your league's way.</div>
+        (superflex too). Every number in your report is worked out your league's way.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
@@ -734,22 +734,22 @@
       </details>
       <details>
         <summary>How is this different from free rankings?</summary>
-        <div class="a">Rankings give everyone the same list and leave the decision to you. Your file starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble.</div>
+        <div class="a">Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble.</div>
       </details>
       <details>
         <summary>How long does it take each week?</summary>
-        <div class="a">About ninety seconds. The top of the file is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it.</div>
+        <div class="a">About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it.</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Trades and pickups happen — reply to any file with your updated
+        <div class="a">Trades and pickups happen — reply to any report with your updated
         roster and it follows from the next Tuesday.</div>
       </details>
       <details>
         <summary>When do the numbers start?</summary>
-        <div class="a">Right away. From Week 4 on, every file carries odds from the first
-        one you get. (Early in a season the file leans on last season until there's
-        enough this year — <a href="sample-first-week.html">here's what a Week 1 file
+        <div class="a">Right away. From Week 4 on, every report carries odds from the first
+        one you get. (Early in a season the report leans on last season until there's
+        enough this year — <a href="sample-first-week.html">here's what a Week 1 report
         looks like</a>.)</div>
       </details>
     </div>
@@ -761,7 +761,7 @@
   <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
   <div class="cta-row" style="justify-content:center">
     <a class="btn gold" id="closer-cta" href="#watch-form">Tell me when it opens</a>
-    <a class="btn ghost" href="sample-report.html">See a real file</a>
+    <a class="btn ghost" href="sample-report.html">See a real report</a>
   </div>
 </section>
 
@@ -769,12 +769,12 @@
 
 <footer>
   <b style="color:var(--dusk2)">Beat Your League</b> — the weekly scouting report for
-  your fantasy roster — one file, every Tuesday.<br>
+  your fantasy roster, every Tuesday.<br>
   Sample visuals above are real output from the 2024 NFL season, labeled where shown.
   NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
   settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
   Not affiliated with the NFL.<br>
-  <a href="sample-report.html">See a real file</a> ·
+  <a href="sample-report.html">See a real report</a> ·
   <a href="league-pass.html">League Pass</a> ·
   <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a> ·
   <a href="terms.html">Terms &amp; refunds</a> &middot;
@@ -790,10 +790,10 @@
     {
       "@type": "Product",
       "name": "Beat Your League",
-      "description": "Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.",
+      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "39", "priceCurrency": "USD",
-         "description": "Season pass — every weekly report through your title game, the first on the day you join. No-questions refund until your second weekly file's week kicks off."},
+         "description": "Season pass — every weekly report through your title game, the first on the day you join. No-questions refund until your second weekly report's week kicks off."},
         {"@type": "Offer", "price": "14.99", "priceCurrency": "USD",
          "description": "Monthly — same report, cancel any time, billing stops when the season does."}
       ]
@@ -804,17 +804,17 @@
         {"@type": "Question", "name": "Does it work with my league app?",
          "acceptedAnswer": {"@type": "Answer", "text": "Any of them — Sleeper, ESPN, Yahoo, anything. You paste your roster once (or pick names from a list) and we take it from there. No league connection needed."}},
         {"@type": "Question", "name": "Does it match my league's scoring?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR or standard, your league size, and your lineup (superflex too). Every number in your file is worked out your league's way."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR or standard, your league size, and your lineup (superflex too). Every number in your report is worked out your league's way."}},
         {"@type": "Question", "name": "When does it arrive?",
          "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up."}},
         {"@type": "Question", "name": "How is this different from free rankings?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your file starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
         {"@type": "Question", "name": "How long does it take each week?",
-         "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the file is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any file with your updated roster and it follows from the next Tuesday."}},
+         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
         {"@type": "Question", "name": "When do the numbers start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Right away. From Week 4 on, every file carries odds from the first one you get. Early in a season the file leans on last season until there's enough this year."}}
+         "acceptedAnswer": {"@type": "Answer", "text": "Right away. From Week 4 on, every report carries odds from the first one you get. Early in a season the report leans on last season until there's enough this year."}}
       ]
     }
   ]
@@ -974,22 +974,22 @@ if (CHECKOUT_OPEN) {
     const heroline = document.querySelector(".heroline");
     if (heroline) {
       heroline.replaceChildren();
-      // "lands Tuesday morning" was true of the product before the roster file
-      // existed. run/intake.py mails a file on the day of purchase now — the
+      // "lands Tuesday morning" was true of the product before the roster report
+      // existed. run/intake.py mails a report on the day of purchase now — the
       // week's report to anyone who buys before that week's kickoff, the roster
-      // file otherwise — so the old sentence told a buyer to wait for something
+      // report otherwise — so the old sentence told a buyer to wait for something
       // they already have, on the one screen where impatience loses the sale.
       heroline.textContent = "Checkout is open — set up your team and your " +
-        "first file lands today.";
+        "first report lands today.";
     }
     // Same sentence, same reason, at the bottom of the page. The heading also
     // carries a hardcoded date that is simply false from Sep 9 onward.
     const closerHead = document.getElementById("closer-head");
-    if (closerHead) closerHead.textContent = "Your first file lands today.";
+    if (closerHead) closerHead.textContent = "Your first report lands today.";
     const closerNote = document.getElementById("closer-note");
     if (closerNote) {
       closerNote.textContent = "Set up takes about two minutes. Then a new " +
-        "file every Tuesday morning.";
+        "report every Tuesday morning.";
     }
     const finance = document.getElementById("finance-note");
     if (finance) {
@@ -1029,12 +1029,12 @@ function play(card) {
     };
     requestAnimationFrame(tick);
     // A background tab never runs animation frames, and a number frozen at
-    // "50%" would misquote the file. The final figure lands regardless.
+    // "50%" would misquote the report. The final figure lands regardless.
     setTimeout(() => { el.textContent = end + "%"; }, 1400 + i * 160);
   });
 }
 // The hero's own card waits for its email to arrive: the notification drops in,
-// the row appears under it and is tapped, and then the file gets decided.
+// the row appears under it and is tapped, and then the report gets decided.
 const heroCard = document.getElementById("hero-card");
 const notif = document.getElementById("notif");
 const mailrow = document.getElementById("mailrow");

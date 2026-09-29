@@ -615,9 +615,8 @@ def _forward_lines() -> list[str]:
     if not site:
         return []
     return ["",
-            f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own file, "
-            f"built from their own roster — {site}/join. The record we're graded "
-            f"on is public: {site}/ledger."]
+            f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own report, "
+            f"built from their own roster — {site}/join."]
 
 
 def text_summary(report: Mapping[str, Any]) -> str:

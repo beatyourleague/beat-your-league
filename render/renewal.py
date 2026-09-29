@@ -102,9 +102,9 @@ def renewal_message(renewal: Renewal) -> Message:
     lede = (f"Your subscription renews on {when}, and the card on file will be "
             f"charged {renewal.amount}. Nothing is due before then, and this "
             f"is the only notice we send about it.")
-    what = ("Renewing keeps the Tuesday file coming for the season ahead — "
+    what = ("Renewing keeps the Tuesday report coming for the season ahead — "
             "the lineup we'd set for your roster under your scoring, with "
-            "every call graded in public afterwards.")
+            "the odds on every close call.")
 
     html = (
         f'<div style="{_BODY}max-width:560px;margin:0 auto;padding:8px 4px;">'

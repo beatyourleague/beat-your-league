@@ -171,7 +171,7 @@ def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> No
                                              .read_text(encoding="utf-8"))),
                        ("terms", prose((SITE / "terms.html")
                                        .read_text(encoding="utf-8")))):
-        assert re.search(r"first two weekly files|second weekly file", page, re.I), \
+        assert re.search(r"first two weekly reports|second weekly report", page, re.I), \
             f"{name} page lost the refund window where the money is asked for"
 
 
@@ -192,7 +192,7 @@ def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
         text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
         assert not loose.search(text), \
             f"{name} still promises a refund after the second file's games"
-    kickoff = re.compile(r"second\s+weekly\s+file's\s+week\s+kicks\s+off", re.I)
+    kickoff = re.compile(r"second\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
     for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE),
                        ("league pass", prose((SITE / "league-pass.html")
                                              .read_text(encoding="utf-8"))),
@@ -212,11 +212,11 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     settled, and a window that never closes is the one without an end date."""
     terms = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     section = terms.split('id="refunds"', 1)[1].split("<h2", 1)[0]
-    assert re.search(r"your second weekly\s+file's\s+week\s+kicks\s+off", section, re.I)
-    assert re.search(r"first game of the week that file\s+covers", section, re.I), \
+    assert re.search(r"your second weekly\s+report's\s+week\s+kicks\s+off", section, re.I)
+    assert re.search(r"first game of the week that report\s+covers", section, re.I), \
         "\"kicks off\" needs the game it means, or Sunday's slate is an argument"
-    assert re.search(r"weekly file is the report for one week", section, re.I)
-    assert re.search(r"roster file[^.]*isn't one", section, re.I)
+    assert re.search(r"weekly report covers one week", section, re.I)
+    assert re.search(r"roster report[^.]*isn't one", section, re.I)
     assert re.search(r"season ends before your second", section, re.I), \
         "a buyer who joins in the last fortnight has a window with no end"
     assert re.search(r"reaches you after its week has kicked off[^.]*"
@@ -814,7 +814,7 @@ def test_the_post_purchase_page_promises_only_what_gets_sent() -> None:
     """
     text = (SITE / "thanks.html").read_text(encoding="utf-8")
     visible = html.unescape(prose(text[text.find("<body>"):]))
-    assert re.search(r"roster file", visible, re.I), "the pre-season case"
+    assert re.search(r"roster report", visible, re.I), "the pre-season case"
     assert re.search(r"current week's report|week's report", visible, re.I), \
         "the mid-season case — a Wednesday buyer gets that week's report"
     assert re.search(r"every tuesday", visible, re.I), "the recurring product"
@@ -1747,7 +1747,10 @@ def test_forward_line_is_gated_on_a_real_destination(monkeypatch) -> None:
     assert _forward_line() == ""
     monkeypatch.setenv("SITE_URL", "https://example.com/")
     line = _forward_line()
-    assert "example.com/join" in line and "example.com/ledger" in line
+    assert "example.com/join" in line
+    # The ledger link left the forward line Sep 29 2026: a forwarded report is
+    # a selling surface, and the grading pages are kept off every one.
+    assert "ledger" not in line
 
 
 def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:

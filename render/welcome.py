@@ -47,11 +47,11 @@ _cancel_destination = cancel_destination
 # selling page kept promising one. The terms page defines a weekly file; this
 # is the retainable copy of the same promise, so it states when it closes —
 # at kickoff, before the second file's lineup can be played and then returned.
-REFUND_TERMS = ("Refunds are no-questions until your second weekly file's "
+REFUND_TERMS = ("Refunds are no-questions until your second weekly report's "
                 "week kicks off — one per person, and a re-subscription after "
                 "a refund is final.")
 REFUND_TERMS_LEAGUE = ("Refunds are no-questions until your second weekly "
-                       "file's week kicks off — one per league.")
+                       "report's week kicks off — one per league.")
 
 
 def _plan_terms(plan: str) -> tuple[str, list[str]]:
@@ -123,7 +123,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                  "making, and last week's calls graded against the real box "
                  "score. Reading it takes about ninety seconds.")
     roster_line = ("Trades and pickups happen — reply to any report with your "
-                   "updated roster and your file follows it from the next "
+                   "updated roster and your report follows it from the next "
                    "Tuesday.")
 
     html = (
@@ -155,9 +155,12 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         roster_line,
     ]) + "\n"
 
-    subject = ("Your seat is in — first file lands Tuesday morning"
+    # A buyer's first report goes out the day they pay (run/intake.py), so
+    # their subject says it is on its way; a seat's first one is the next
+    # Tuesday run.
+    subject = ("Your seat is in — first report lands Tuesday morning"
                if plan == "seat" else
-               "You're in — first file lands Tuesday morning")
+               "You're in — your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,
     # so the key moved with it and `servable` — the projection of an
     # append-only signup log that is never pruned and never entitlement-checked

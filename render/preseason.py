@@ -32,12 +32,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # deliberately contains none, and if that reads as "the product is broken" the
 # refund it prevents becomes the refund it causes.
 IN_SEASON_OPENER = (
-    "This is the standing file on your roster: what the schedule already says "
+    "This is the standing report on your roster: what the schedule already says "
     "about the weeks ahead, and what your players did last season under your "
-    "scoring. No calls in here — those come in your weekly file, where they "
+    "scoring. No calls in here — those come in your weekly report, where they "
     "can be graded.")
 
-OPENER = ("Your season doesn't start for a couple of weeks, so this file makes "
+OPENER = ("Your season doesn't start for a couple of weeks, so this report makes "
           "no calls — there's nothing played to base one on, and we don't put a "
           "number on a guess. What it does instead is tell you the two things "
           "already decided: where the schedule leaves you short, and what your "
@@ -73,8 +73,8 @@ FORM_BASIS = ("Where each of your players finished last season at his position, 
 # The same content is useful all season — a Week-6 buyer still wants to know
 # their Week 11 leaves two slots empty — but a file headed "Pre-Season" in
 # October is the small wrongness that makes a reader distrust the rest of it.
-PRESEASON_TITLE = "Your Pre-Season File"
-INSEASON_TITLE = "Your Roster File"
+PRESEASON_TITLE = "Your Pre-Season Report"
+INSEASON_TITLE = "Your Roster Report"
 
 
 def file_title(report: Mapping[str, Any]) -> str:

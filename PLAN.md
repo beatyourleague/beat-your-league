@@ -188,7 +188,7 @@ inclusion in a roundup or an AI answer is one sentence a stranger can copy.
 pitch email, README, directory submission). Identical phrasing across independent domains is the
 co-occurrence signal that forms an entity; varying it destroys the only mechanism available:
 
-> Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.
+> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.
 
 *(Rewritten Sep 29 2026, owner direction: the sentence sells what the file does for the buyer; the published grading stays public but is no longer part of the pitch.)*
 

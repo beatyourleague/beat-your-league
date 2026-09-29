@@ -112,7 +112,7 @@ SOCIAL_IMAGE_TAGS = (
     f'<meta property="og:image" content="{OG_IMAGE}">\n'
     '<meta property="og:image:width" content="1200">\n'
     '<meta property="og:image:height" content="630">\n'
-    '<meta property="og:image:alt" content="A Beat Your League lineup file: '
+    '<meta property="og:image:alt" content="A Beat Your League lineup report: '
     'four roster slots, three with a percentage, one marked start.">\n'
 )
 
@@ -131,8 +131,8 @@ MARK_CSS = (".brand svg.mark{width:22px;height:15px;flex:none;}"
 # this constant renders in the report footer, the email footer AND the launch
 # announcement, so a stale promise here is a false claim on every surface at
 # once.
-BRAND_LINE = ("the weekly scouting report for your fantasy roster — "
-              "one file, every Tuesday.")
+BRAND_LINE = ("the weekly scouting report for your fantasy roster, "
+              "every Tuesday.")
 NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
                    "picks, no staking advice. Fantasy decisions are yours to make.")
 SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
@@ -405,7 +405,7 @@ def header(meta: Mapping[str, Any]) -> str:
         # "numbers are left off" sentence would be false of the page it sits on.
         banner = (
             '<div class="regret-note" style="margin:0;border-left:none;">'
-            f'SAMPLE FILE — a real week from the {esc(meta["season"])} NFL season, '
+            f'SAMPLE REPORT — a real week from the {esc(meta["season"])} NFL season, '
             f'built exactly the way yours will be: one roster, scored its league\'s '
             f'way, from that week\'s box scores and injury reports.</div>'
         )
@@ -1145,7 +1145,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         # sold and what arrives is a refund with a stamp on it. Each page says
         # what the other one shows.
         companion = (
-            'A mid-season file, once the season has a record to read, looks '
+            'A mid-season report, once the season has a record to read, looks '
             'like <a href="sample-report.html" style="color:var(--brick);'
             'font-weight:700;">this</a>. '
             if meta.get("first_week_demo") else
@@ -1153,11 +1153,11 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         )
         return (
             '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
-            f'This file is from the {season} season. {companion}'
+            f'This report is from the {season} season. {companion}'
             'Yours is built from your own '
             'roster, scored your league\'s way — '
             '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
-            'set it up</a> and your first file lands the day you join.</div>'
+            'set it up</a> and your first report lands the day you join.</div>'
         )
     return (
         '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
@@ -1177,13 +1177,12 @@ def _forward_line() -> str:
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if not site:
         return ""
-    return (f'Got this from a leaguemate? Every manager gets their own file, built '
-            f'from their own roster — {esc(site)}/join. The record we\'re graded on '
-            f'is public: {esc(site)}/ledger.<br>')
+    return (f'Got this from a leaguemate? Every manager gets their own report, '
+            f'built from their own roster — {esc(site)}/join.<br>')
 
 
 UPDATE_HEAD = "Roster changed?"
-UPDATE_BODY = ("Trades and pickups happen — update your roster here and your file "
+UPDATE_BODY = ("Trades and pickups happen — update your roster here and your report "
                "follows it from the next Tuesday:")
 
 

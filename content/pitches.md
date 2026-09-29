@@ -28,7 +28,7 @@ are a channel.
 >
 > Hey [name] — I make a small fantasy football tool and I'll keep this to four sentences.
 >
-> Beat Your League is a weekly start/sit file for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.
+> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.
 >
 > Two things you can check in under a minute: our full backtest with the failing buckets left
 > in ([site]/backtest.html), and the only published answer I know of to "how accurate are

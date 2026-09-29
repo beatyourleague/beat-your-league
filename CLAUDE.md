@@ -1017,6 +1017,10 @@ better" plant doubt at that moment without helping anyone win. So:
   in doubt reads "start · <name> questionable" (it used to read "no call · status
   unconfirmed" on a confirmed star); defenses read "projection only"; the note is "About the
   slots without odds". `render.report.row_label` / `gate_phrase` are the single source.
+- **The product is a "report", never a "file" (owner decision, Sep 29 2026).** Plain word,
+  matches the email's own heading, and "file" suggested an attachment. The refund terms define
+  a "weekly report" (`second weekly report's week kicks off`, pinned by test). Kept: "card on
+  file" (billing), operator log lines, and the retired rival product's "the file on <rival>".
 - **The floors that stay:** no invented results or outcome promises ("win X% more"), no fake
   testimonials or customer counts, the Grade-C/B banned words (calibrated, tested, proven,
   accurate) stay banned, and refund limits, renewal and cancel terms stay disclosed before
