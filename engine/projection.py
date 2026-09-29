@@ -56,6 +56,10 @@ SEEDED_WEEKS = frozenset({2, 3})
 # projection and never the publish gate: its pseudo-games are not evidence.
 LATE_SEEDED_WEEKS = frozenset(range(4, 17))
 
+# reports/context-method.md §2: the weeks announced-absence availability and
+# the opponent / expected-score multipliers may touch. Inert unless supplied.
+CONTEXT_WEEKS = frozenset(range(4, 17))
+
 # Floor on the standard deviation so a freak low-variance sample can't produce
 # a 99.9% confidence out of three data points.
 MIN_SD = 2.0
@@ -208,6 +212,8 @@ class ProjectionModel:
         prior_self: Mapping[str, list[float]] | None = None,
         prior_self_weight: float = 0.0,
         late_self_weight: float = 0.0,
+        excused: Mapping[str, frozenset[int]] | None = None,
+        multiplier=None,
     ) -> None:
         self.season = season
         self.players = players
@@ -222,6 +228,12 @@ class ProjectionModel:
         # reports/anchor-method.md: the same observations at weight λ_L in
         # weeks 4-16. 0.0 is inert.
         self._late_self_weight = float(late_self_weight)
+        # reports/context-method.md: weeks that are neither an appearance nor a
+        # miss for availability (byes, announced absences), and a callable
+        # (player_id, week) -> multiplier on per-game scoring. Both inert when
+        # None, and both confined to CONTEXT_WEEKS inside project().
+        self._excused = excused
+        self._multiplier = multiplier
         # player_id -> [(week, points), ...] ascending, appearances only.
         self._appearances: dict[str, list[tuple[int, float]]] = {}
         # player_id -> sorted weeks the player was on someone's roster. A week
@@ -274,7 +286,7 @@ class ProjectionModel:
     def position_prior(self, position: str, before_week: int) -> PositionPrior:
         """League-wide scoring and appearance rate for a position, from weeks
         before ``before_week``."""
-        key = (position, before_week)
+        key = (position, before_week, self._context_on(before_week))
         cached = self._prior_cache.get(key)
         if cached is not None:
             return cached
@@ -284,9 +296,12 @@ class ProjectionModel:
         for player_id, weeks in self._rostered.items():
             if self.position_of(player_id) != position:
                 continue
-            opportunities += sum(1 for week in weeks if week < before_week)
+            skip = self._skipped(player_id, before_week)
+            opportunities += sum(1 for week in weeks
+                                 if week < before_week and week not in skip)
             appearances += sum(
-                1 for week, _ in self._appearances.get(player_id, ()) if week < before_week
+                1 for week, _ in self._appearances.get(player_id, ())
+                if week < before_week and week not in skip
             )
             values.extend(
                 points
@@ -305,6 +320,15 @@ class ProjectionModel:
         )
         self._prior_cache[key] = prior
         return prior
+
+    def _context_on(self, week: int) -> bool:
+        return week in CONTEXT_WEEKS and (self._excused is not None
+                                          or self._multiplier is not None)
+
+    def _skipped(self, player_id: str, week: int) -> frozenset[int]:
+        if self._excused is None or week not in CONTEXT_WEEKS:
+            return frozenset()
+        return self._excused.get(player_id, frozenset())
 
     def project(self, player_id: str, week: int) -> Projection | None:
         """Project ``player_id`` for ``week`` using only weeks < ``week``.
@@ -348,12 +372,22 @@ class ProjectionModel:
             variance = ((n * player_variance + w * self_variance
                          + k_blend * prior.variance) / total)
         sd = max(math.sqrt(max(variance, 0.0)), MIN_SD)
+        if self._multiplier is not None and week in CONTEXT_WEEKS:
+            # Context method §2 M and V: per-game scoring when he plays.
+            mean = mean * float(self._multiplier(player_id, week))
 
         # Availability: beta-binomial appearance rate, shrunk toward the
         # position's rate with the same K. Opportunities are weeks the player
-        # was rostered, so time spent in free agency is not held against him.
-        opportunities = self.rostered_weeks(player_id, week)
-        appear = (n + k * prior.appearance_rate) / (opportunities + k) if opportunities + k else prior.appearance_rate
+        # was rostered, so time spent in free agency is not held against him —
+        # and, under the context method's A, neither is a bye or an absence
+        # the injury report announced.
+        skip = self._skipped(player_id, week)
+        opportunities = sum(1 for w in self._rostered.get(player_id, ())
+                            if w < week and w not in skip)
+        n_avail = n if not skip else sum(
+            1 for w, _ in self._appearances.get(player_id, ())
+            if w < week and w not in skip)
+        appear = (n_avail + k * prior.appearance_rate) / (opportunities + k) if opportunities + k else prior.appearance_rate
         return Projection(
             player_id=player_id,
             as_of_week=week,

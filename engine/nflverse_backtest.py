@@ -277,7 +277,8 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
                      prior_self_weight: float = 0.0,
                      defenses: bool = False,
                      confirmed_fallback: bool = False,
-                     late_self_weight: float = 0.0) -> list[StartSitCall]:
+                     late_self_weight: float = 0.0,
+                     context: str = "") -> list[StartSitCall]:
     """Every graded call for one season.
 
     ``prior_self_weight`` enables the preregistered early-season seed and is
@@ -313,9 +314,41 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
         return _season_calls(season, weeks, universe, rosters, weekly, template,
                              rule, players, prior_self, prior_self_weight,
                              raw_dir, injuries, confirmed_fallback,
-                             late_self_weight)
+                             late_self_weight,
+                             context_inputs(context, season, raw_dir, universe,
+                                            weekly, rule, injuries))
     finally:
         week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED = gate
+
+
+def context_inputs(context: str, season: str, raw_dir: Path, universe: Universe,
+                   weekly, rule: ScoringRule, injuries):
+    """reports/context-method.md §2: a week -> ProjectionModel-kwargs function
+    for the requested components ("A", "M", "V" in any combination), or None
+    when none is requested — the published runs pass nothing and reproduce."""
+    if not context:
+        return None
+    from engine.context import excused_weeks, games_by_week, multiplier_for
+    with fetch_schedule(raw_dir).open(encoding="utf-8", newline="") as handle:
+        schedule = games_by_week(csv.DictReader(handle), season)
+    players = list(universe.positions)
+
+    def inputs(week: int) -> dict:
+        kwargs: dict = {}
+        if "A" in context:
+            kwargs["excused"] = excused_weeks(players, weekly, schedule,
+                                              injuries, week)
+        if "M" in context or "V" in context:
+            kwargs["multiplier"] = multiplier_for(
+                week, weekly, rule, schedule.get(week, []),
+                use_matchup="M" in context, use_market="V" in context)
+        return kwargs
+    return inputs
+
+
+def fetch_schedule(raw_dir: Path) -> Path:
+    from ingest.nflverse import fetch
+    return fetch("schedules", "games.csv", raw_dir)
 
 
 def _with_defenses(weekly, universe: Universe, raw_dir: Path, season: str):
@@ -339,14 +372,15 @@ def _with_defenses(weekly, universe: Universe, raw_dir: Path, season: str):
 def _season_calls(season, weeks, universe, rosters, weekly, template, rule,
                   players, prior_self, prior_self_weight, raw_dir,
                   injuries, confirmed_fallback=False,
-                  late_self_weight=0.0) -> list[StartSitCall]:
+                  late_self_weight=0.0, ctx=None) -> list[StartSitCall]:
     out: list[StartSitCall] = []
     for week in weeks:
         season_obj = build_backtest_season(universe, rosters, weekly, season,
                                            template, rule, through_week=week)
         model = ProjectionModel(season_obj, players, prior_self=prior_self,
                                 prior_self_weight=prior_self_weight,
-                                late_self_weight=late_self_weight)
+                                late_self_weight=late_self_weight,
+                                **(ctx(week) if ctx else {}))
         byes = bye_teams(raw_dir, season, week)
         rows = weekly.get(week) or {}
         for roster_id, roster in enumerate(rosters, start=1):

@@ -203,7 +203,8 @@ def usage_week(cache_dir: Path, season: str, week: int, *, live: bool = False,
 # these turns a 150-column row into a 25-column one, which matters when the
 # backtest holds a whole season in memory at once.
 SCORING_COLUMNS = frozenset({
-    "player_id", "player_display_name", "position", "team", "season", "week",
+    "player_id", "player_display_name", "position", "team", "opponent_team",
+    "season", "week",
     "season_type", "receptions", "passing_yards", "passing_tds",
     "passing_interceptions", "passing_2pt_conversions", "rushing_yards",
     "rushing_tds", "rushing_2pt_conversions", "receiving_yards",

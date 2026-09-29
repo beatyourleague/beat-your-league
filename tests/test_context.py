@@ -1,0 +1,89 @@
+"""reports/context-method.md — the code promises, before the run."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from engine.context import (excused_weeks, market_table, matchup_table,
+                            multiplier_for, team_in_week)
+from engine.context_backtest import choose
+from engine.projection import ProjectionModel
+from engine.scoring import preset
+from test_early_season import _players, _season
+
+
+def test_the_switches_are_inert_when_absent() -> None:
+    season, players = _season(weeks=6), _players()
+    frozen = ProjectionModel(season, players).project("p1", 7)
+    assert ProjectionModel(season, players, excused=None,
+                           multiplier=None).project("p1", 7) == frozen
+
+
+def test_context_touches_weeks_4_to_16_only() -> None:
+    season, players = _season(weeks=17), _players()
+    frozen = ProjectionModel(season, players)
+    boosted = ProjectionModel(season, players, multiplier=lambda pid, w: 1.5)
+    assert boosted.project("p1", 10).active_mean > frozen.project("p1", 10).active_mean
+    for week in (3, 17):
+        assert boosted.project("p1", week) == frozen.project("p1", week)
+
+
+def test_an_excused_week_is_neither_an_appearance_nor_a_miss() -> None:
+    season, players = _season(weeks=6), _players()
+    # p1 missed week 3 (no appearance), which the injury report announced.
+    for week in (3,):
+        tw = season.weeks[week][1]
+        season.weeks[week][1] = type(tw)(**{**tw.__dict__,
+                                            "appeared": frozenset(tw.appeared) - {"p1"}})
+    plain = ProjectionModel(season, players).project("p1", 7)
+    forgiven = ProjectionModel(season, players,
+                               excused={"p1": frozenset({3})}).project("p1", 7)
+    assert forgiven.appear_probability > plain.appear_probability
+    assert forgiven.games == plain.games          # the gate still counts real games
+
+
+def test_the_market_multiplier_is_a_square_root_ratio() -> None:
+    games = [{"home_team": "KC", "away_team": "BAL", "spread_line": "3",
+              "total_line": "47"},
+             {"home_team": "NYG", "away_team": "DAL", "spread_line": "-7",
+              "total_line": "41"}]
+    table = market_table(games)
+    implied = {"KC": 25.0, "BAL": 22.0, "NYG": 17.0, "DAL": 24.0}
+    mean = sum(implied.values()) / 4
+    for team, value in implied.items():
+        assert abs(table[team] - (value / mean) ** 0.5) < 1e-9
+    assert market_table([{"home_team": "A", "away_team": "B"}]) == {}
+
+
+def test_the_matchup_shrinks_toward_the_league_with_six_games() -> None:
+    rule = preset("ppr")
+    row = lambda team, opp, yds: {"team": team, "opponent_team": opp,  # noqa: E731
+                                  "position": "WR", "receiving_yards": yds}
+    weekly = {1: {"a": row("X", "BAD", 200), "b": row("Y", "GOOD", 0)},
+              2: {"a": row("X", "BAD", 200), "b": row("Y", "GOOD", 0)},
+              3: {"c": row("Z", "X", 100)}}
+    games = [{"home_team": "Z", "away_team": "BAD"}]
+    allowed, played, league = matchup_table(weekly, rule, 4)
+    assert played["BAD"] == 2 and allowed[("BAD", "WR")] == 40.0
+    mult = multiplier_for(4, weekly, rule, games, use_matchup=True, use_market=False)
+    base = league["WR"]
+    assert abs(mult("c", 4) - (40.0 + 6 * base) / ((2 + 6) * base)) < 1e-9
+    assert mult("c", 4) > 1.0 and mult("c", 5) == 1.0 and mult("DEF-Z", 4) == 1.0
+
+
+def test_a_bye_and_an_out_designation_are_excused() -> None:
+    weekly = {1: {"p": {"team": "KC"}}, 3: {"p": {"team": "KC"}}}
+    schedule = {1: [{"home_team": "KC", "away_team": "BAL"}],
+                2: [{"home_team": "NYG", "away_team": "DAL"}],
+                3: [{"home_team": "KC", "away_team": "BAL"}],
+                4: [{"home_team": "KC", "away_team": "BAL"}]}
+    injuries = {3: SimpleNamespace(by_gsis={"p": "Out"})}
+    assert excused_weeks(["p"], weekly, schedule, injuries, 5) == {"p": frozenset({2, 3})}
+    assert team_in_week("p", 2, weekly) == "KC"
+
+
+def test_the_arm_is_chosen_on_the_fit_seasons_by_margin() -> None:
+    assert choose({"A": (10, 5, 0), "AM": (12, 5, 0), "AV": (12, 6, 0),
+                   "AMV": (11, 5, 0)}) == "AM"
+    assert choose({"A": (5, 5, 0), "AM": (4, 5, 0), "AV": (1, 9, 0),
+                   "AMV": (0, 0, 0)}) is None
