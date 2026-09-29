@@ -1,9 +1,12 @@
 # Beat Your League — Master Plan (0 → Automated)
 
 Owner: solo operator + Claude Code. Budget hard cap: **$100** (plan below uses ≤ $68 through launch).
-Calendar anchor: today is **Mon Aug 17, 2026**. Launch **Tue Sep 8**. NFL kickoff **Thu Sep 10**.
-Peak *draft* weekend **Aug 29–Sep 7** — note this is BEFORE launch; see §3.
-This file is the business plan. `CLAUDE.md` is the engineering spec. When they conflict, fix whichever is wrong.
+**Where this stands (Sep 29 2026, Week 4 of 18):** the Sep 8 launch did not happen and no payment
+has ever been processed. Checkout opens mid-season once the owner's setup in `LAUNCH.md` is done.
+§3 is rewritten for that; the decisions elsewhere stand, and passages they overtook are marked
+where they sit.
+This file is the business plan. `CLAUDE.md` is the engineering spec. `LAUNCH.md` is the owner's
+setup checklist. When they conflict, fix whichever is wrong.
 
 **Revised Aug 17 2026** after a 27-agent market study (five research lenses, three rival strategies,
 nine independent judges). What changed: positioning, price, a free door, the channel order, the
@@ -138,14 +141,14 @@ depends on, and it was previously fragmented across leagues nobody outside can s
 1. **BUILT: `ingest/nflverse.py`** — weekly counted usage, schedule byes, cached, outage-tolerant,
    with `ATTRIBUTION` as a shipped licence term (RULE N1) and first-party outputs only (RULE N2:
    no PFR snap counts, no CC-BY-SA FTN charting). 12 tests, three mutations checked.
-2. **Next: the roster intake.** Replace the Sleeper picker with a paste-your-roster flow — scoring
+2. **DONE (Aug 21 2026): the roster intake.** Replace the Sleeper picker with a paste-your-roster flow — scoring
    format, roster slots, 15 player names matched to GSIS ids. This is the piece the product now
    stands on, and its friction is the main product risk (see §6).
-3. **Then: cut the Sleeper path out of the paid pipeline.** `ingest/pull.py`, `run/sync.py`'s
-   verification, `site/join/`'s live calls. Keep the Sleeper code paths only for the historical
+3. **DONE: the Sleeper path is out of the paid pipeline** (`test_no_sleeper_in_the_paid_path`).
+   `ingest/pull.py`, `run/sync.py`'s verification, `site/join/`'s live calls. Keep the Sleeper code paths only for the historical
    backtest, which is research on a public sample league, not a commercial service.
-4. **`site/legal.html`:** the Sleeper-dependency clause becomes an nflverse attribution + a
-   data-source note. The subscriber-account risk disappears with the dependency.
+4. **DONE: the terms** (now `site/terms.html`) carry the nflverse attribution and a data-source
+   note instead of the Sleeper-dependency clause. The subscriber-account risk went with it.
 5. **Two minutes still worth spending:** diff §11 on web.archive.org against a pre-July-2026
    capture. Not to decide anything now — to know whether Sleeper wrote those clauses *at* this
    product category, which tells you what the rest of the market is walking into.
@@ -175,8 +178,8 @@ of them by free products (§9). Not a "blend": a compound identity is unpasteabl
 inclusion in a roundup or an AI answer is one sentence a stranger can copy.
 
 **The split that makes it work — never swap these:**
-- **To buyers, sell the file arriving.** It shows up Tuesday, about the specific human you're
-  playing, with your league's own numbers. Delivery and specificity.
+- **To buyers, sell the file arriving.** It shows up Tuesday, about your own roster, under your
+  league's own scoring. Delivery and specificity.
 - **To editors, directories and answer engines, sell the published test.** That is the inclusion
   handle — the thing pasted into a list. It is also the only differentiator that survived
   verification, because no competitor has a commercial incentive to publish a weak number.
@@ -204,18 +207,19 @@ pages engines quote, for zero benefit. **The label goes outward, never inward** 
 (landing, report, emails, join) stay AI-free, which is a genuine wedge against LeagueVision's
 messaging. `_DEV_SPEAK` keeps enforcing that; this is not a licence to loosen it.
 
-Kept: **"Beat your league, not the books."** Analysis, never picks. Receipts, never hype.
-Rivalry stays in the *name*, the subject line and the Rival Watch strip — and comes **out of the
-value argument**, because H2H/rivalry data is free at Sleeper native, ffwrapped and My Fantasy
-Analyzer. It is flavour, not the reason to pay.
+Kept: analysis, never picks. Receipts, never hype. (*"Beat your league, not the books"* is
+retired from every page: it put betting in the buyer's head purely to disclaim it.) Rivalry
+stays in the *name* and **out of the value argument**, because H2H/rivalry data is free at
+Sleeper native, ffwrapped and My Fantasy Analyzer — and since §0 the product has no opponent to
+show anyway.
 
 ## 2. Budget
 
 | Item | Cost | Notes |
 |---|---|---|
 | Claude Pro (Aug + Sep) | $40 | powers Claude Code build + language layer |
-| Sleeper API, GitHub, GitHub Actions, GH Pages | $0 | free tiers — see §0 on the licence |
-| Domain + DNS | $15 | **no longer optional**: SPF/DKIM on a real domain is what keeps the send out of spam, and DNS propagation is wall-clock time. Buy it day one |
+| GitHub, GitHub Actions, GH Pages, Cloudflare (DNS, email forwarding, the form Worker) | $0 | free tiers. Sleeper is no longer used (§0) |
+| Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
 | Stripe | 2.9% + 30¢ per charge | no fixed cost |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
 | Resend Pro | $20/mo | **trigger: when subscribers + trials exceed 90.** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000 |
@@ -224,107 +228,77 @@ Analyzer. It is flavour, not the reason to pay.
 
 ## 3. Build & launch timeline
 
-Sprints 0–3 as originally written are **superseded**. Phases 1–6 of the engineering spec are all
-built (417 tests); what remains is not engineering. The 22 days to Sep 8 hold roughly **56 hours**
-of work, sequenced so the riskiest assumption is tested first.
+**Rewritten Sep 29 2026.** The pre-launch plan — sprints A to C, 56 hours in the 22 days to
+Sep 8 — is in git history; what became of it is below. The engineering is done (979 tests).
+**The Sep 8 launch did not happen:** no payment has ever been processed, and checkout opens
+mid-season once the owner's setup is done. The step-by-step is `LAUNCH.md`; this section keeps
+the plan-level view.
 
-**The sequencing principle, adopted from every judge independently: SELL BEFORE YOU BUILD.**
-Everything previously planned was build-then-hope, in a strategy whose research could not read a
-single customer's words. Three closed League Passes is $297 and the first real demand evidence this
-business has ever had; zero closes after five honest attempts tells you the bundle isn't wanted at
-any price — *before* thirty hours go into pages.
+### What happened to the pre-launch plan
+| Item | Outcome |
+|---|---|
+| Email Sleeper; sample leagues for FAAB use; run the owner's own league | **Dropped** — the product left Sleeper instead (§0), and the waiver market went with it |
+| Project inbox, contact address, jurisdiction | **Done** — `hello@beatyourleague.com`; terms under Ontario law |
+| Domain, DNS, GitHub Pages | **Done** — `beatyourleague.com`. SPF/DKIM arrive with Resend (LAUNCH.md step 2) |
+| Stripe products and payment links | **Done.** The key, the secrets and one real purchase are LAUNCH.md steps 1–4 |
+| Send rehearsal | **Not done** — LAUNCH.md step 4, and nobody else's money moves before it |
+| League Pass open to any manager | **Done** |
+| Take the sample to 5+ leagues and close passes | **Not done** — checkout never opened. Now LAUNCH.md section 6 |
+| Free first week | **Built as `run/trial.py`**, run by hand on request; on the site the refund window does the job |
+| Waiver-market fallback | **Dropped** with the waiver market (§0) |
+| $39 price, positioning rewrite, evidence pages, `site/compare/` | **Done** |
+| Mention campaign | **Written, on hold** — the owner is not emailing other sites for now (`content/pitches.md`) |
+| `robots.txt`, JSON-LD | **Done.** No `sitemap.xml` or canonical links yet — hygiene, not a lever |
 
-### A. Unblock (11h) — nothing else can ship until these land
-| # | Task | Size |
-|---|---|---|
-| 1 | **Email Sleeper about commercial licensing** (§0) | S (1h) |
-| 2 | Sample your own leagues: what % actually use FAAB, and how many settled weeks the waiver section can carry — before writing a word of copy about it | S (0.5h) |
-| 3 | Project inbox live; fill `CONTACT_EMAIL` (empty on both funnel pages) and the `legal.html` jurisdiction placeholders | S (1h) |
-| 4 | Domain + `site/CNAME` + DNS + SPF/DKIM. **Start day one** — propagation is wall-clock | M (3h) |
-| 5 | Real league ID + roster ID; one full `make week` against the real league. Nothing has ever run against it | M (3h) |
-| 6 | Stripe: three payment links, `STRIPE_PAYMENT_LINKS`, `CHECKOUT_OPEN`. One live purchase end to end (picker → `client_reference_id` → sweep → verify → registry → batch → send-to-self), then refund | M (4h) |
-| 7 | **Send rehearsal — non-negotiable.** `EMAIL_PROVIDER=resend`, real send to self, opened in Gmail + Outlook + Apple Mail, then a full dry batch | M (5h) |
+### Now → January, from Week 4
+1. **Open checkout** — LAUNCH.md steps 1–4. Every week this slips is a week of the season nobody
+   can buy.
+2. **Deploy the form Worker** — LAUNCH.md step 5: League Pass seats and self-serve roster updates.
+3. **Sell to people** in §5.1's order; LAUNCH.md section 6 has the commands.
+4. **Start the public record.** A call is recorded only when a report is mailed, so nothing
+   exists until the first subscriber — or the owner's own test subscription (LAUNCH.md
+   section 9).
+5. **Read the §6 gates on their dates.** Oct 11 arrives about ten days after checkout opens.
 
-Item 7 does not get cut. This repo's own history is a cron gated on a gitignored path that could
-never have mailed anybody, and a dry run that logged sends and would have skipped every real
-recipient. The failure mode is a green run with empty inboxes, invisible until Tuesday.
+### Weekly loop, once checkout is open
+- **Tue:** the cron builds and mails every subscriber's file; the owner opens their own as QA.
+  (~15 min)
+- **Daily:** intake mails welcomes and first files hourly. Nothing to do unless a run goes red.
+- **Mon:** grading republishes the public record. Once it holds graded rows, post Receipts
+  Monday from `run/posts.py`'s draft. (~30 min)
+- **Thu–Sun:** X replies, about 20 minutes a day (§5).
 
-### B. Sell (6.5h) — late August, before another line of code
-| # | Task | Size |
-|---|---|---|
-| 8 | Reword `site/league-pass.html`: **any manager** can buy the pass, not just the commissioner | S (0.5h) |
-| 9 | **Take the existing sample report to 5+ real leagues and try to close $99 League Passes and $39 season passes** | M (6h) |
+Hype Wednesday is retired: it ranked waiver chases from the league's transaction log, which
+the product no longer reads.
 
-**Pull this into Aug 23–Sep 3, not launch week.** That is when drafts run, leaguemates are engaged
-and wallets are open. Sep 8 is *after* peak intent — a real cost of the launch date that no amount
-of site work fixes. If three leagues say yes at $99 without hesitating, $39 is too low.
-
-### C. Then, in this order (32h)
-| # | Task | Size | Note |
-|---|---|---|---|
-| 10 | **Free first week — manual runbook** | S (2.5h) | Collect email + username, render, send from the project inbox. No `FORM_ENDPOINT`, no registry schema change, no new entitlement route, no tests rewritten. ~45 min/week at ≤50 trials |
-| 11 | Prior-season fallback in `build_waiver_market` + tests | M (4h) | `engine/waivers.py` reads only the current season's settled weeks, so Week 1 renders "no settled waiver weeks yet". `load_season_chain()` already exists — this is wiring |
-| 12 | Price change to $39 + tests + legal renewal disclosure | S (2h) | |
-| 13 | Positioning rewrite across `index` / `join` / `league-pass` | M (6h) | Entity sentence, delivery lead, omissions block, Regret Score demoted, rivalry out of the value argument |
-| 14 | Publish `projections-eval.md` + `gate-backtest.md` via `render/backtest_site.py` | M (5h) | Includes translating operator register into buyer-neutral language **and adding both pages to the parametrized `_DEV_SPEAK` / no-betting / no-personal-contact sweeps** — new pages under `site/` escape those guards by default |
-| 15 | `site/compare/` — one honest comparison page | M (7h) | Real prices for ten products, free ones included, our own weaknesses in the table, founder authorship disclosed in line one, dated "prices checked" stamp |
-| 16 | Third-party mention campaign: 12–15 pitches | M (4h) | §5 |
-| 17 | `sitemap.xml`, `robots.txt`, JSON-LD Product/Offer/FAQ, canonical | S (1.5h) | Hygiene, not a lever |
-
-**~56h against ~60h available.** If real capacity is 45h, cut in this order: trim `compare/` to a
-table-only page (−3h), scope the waiver fallback to the season only (−4h), hygiene to 1h (−0.5h),
-pitches to 8 (−2h). Blocking, selling, the free week and the positioning rewrite survive at every
-level.
-
-### Season operations (Sep 8 → Jan)
-Weekly loop (hours shown = after automation matures / before):
-- **Tue:** pipeline generates all subscriber reports + drafts week's content → human QA sample → send. (30m / 90m)
-- **Wed:** Hype Meter public post (from pipeline draft). (15m)
-- **Thu–Sun:** 20 min/day replies on X. Non-negotiable; this is growth.
-- **Mon:** auto-grading runs vs box scores → ledger page updates → receipt cards render → post Receipts thread. (30m)
-
-### In-season additions (revised Aug 17 2026)
-| When | Task | Size |
-|---|---|---|
-| Sep 8–15 | **Stand up the public content feed.** `run/content.py` already drafts Receipts Monday, Hype Wednesday and Coin-Flip Friday from graded data at zero marginal cost, and none of it is published. Free Substack (for its internal recommendation network), mirrored to `site/` for crawlability | M (3h setup, then ~30 min/week) |
-| Week 3–4 | **Sunday "Final Call" send** — a short 10am email printing only what *changed* since Tuesday, plus the now-live if/then branches | M (8h) |
-| Sep 15 → | Discord participation, 2h/week. Reddit **only after** personally reading Rule 1 and the self-promo rule | recurring |
-| October | Automate the trial (`plan:"trial"`, one-send entitlement route, paywall follow-up) — **only if manual conversion clears the §6 bar** | M (8h) |
-| October | **Promote the receipts back into the funnel** once ≥30 graded rows exist, and re-pitch every roundup with a checkable number attached | S (2h) |
-| Oct–Nov | Open-source the league-FAAB calculator on GitHub + ship a **stdio MCP** on npx/PyPI, product named in the README | L (10h) |
-
-**Why the Sunday send is Week 3 and not pre-launch:** it is the right feature — the injury gap is
-real and cadence is a table stake we lose badly (Scoutcast ships four briefings a week, STACKED
-two, we ship one on the wrong side of the news cycle). But it is a second cron, a diff renderer, a
-new idempotency suffix and a second template that must not drift from `render/report.py`'s shared
-constants. Ship it when Tuesday is boring.
-
-**Why the MCP is honest and cheap:** a *stdio* MCP runs on the user's own machine and takes a
-username or league ID as an argument, so with Sleeper's no-auth API it needs no server, no OAuth,
-no secret store and no identity layer. Its value is a checkbox in every comparison table, a reason
-for a roundup to include us, and a GitHub page (a heavily-cited domain) that is a third-party
-surface we fully control — **not** an acquisition channel. Say that out loud rather than counting
-subscribers from it.
+### In-season additions — status
+| Item | Status |
+|---|---|
+| Public content feed (Receipts Monday, Coin-Flip Friday) | **Built** — `run/posts.py`, drafting from the public record only. Nothing to post until it holds graded rows. Where it is published (Substack's free tier, or `site/`) is still open |
+| Sunday "Final Call" send | **Not started.** Still the right feature, on the original condition: ship it when Tuesday is boring — a second cron, a diff renderer and a second template that must not drift from `render/report.py` |
+| Automate the trial | **Only if** the manual one converts (§6) |
+| Promote the receipts back into the funnel | Once ≥30 graded rows exist |
+| Open-source FAAB calculator + stdio MCP | **Dropped** — both stood on the waiver market and Sleeper's API, which §0 removed |
 
 ### Automation milestones
-- Week 2: GitHub Actions cron replaces manual pipeline runs. *(Built.)*
-- Week 4: receipt-card image generator + public ledger page fully automatic. *(Built.)*
-- Week 6: subscriber onboarding fully self-serve. *(Built — `run/sync.py`.)*
-- Week 8: content drafting automated end-to-end; human role = edit voice + approve + reply only.
+- GitHub Actions crons replace manual runs. *(Built: weekly, daily plus hourly, Monday.)*
+- Receipt cards and the public ledger page fully automatic. *(Built.)*
+- Subscriber onboarding fully self-serve. *(Built — `run/intake.py`.)*
+- Content drafting automated; the human role is edit, approve, reply. *(Built — `run/posts.py`;
+  waits on graded rows.)*
 
 ### Next off-season — and the real launch
 
 **August 2027 is the actual launch.** Intent to pay peaks with drafts in the last week of August.
-Season 1 is a proof season: ~100 subscribers, a ledger holding real rows, a renewal cohort, an aged
-and indexed corpus, and hopefully a signed Sleeper licence. Judge 2026 against that, not a revenue
-number.
+Season 1, opened in Week 4, is a proof season: a ledger holding real rows, a renewal cohort, and
+an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 
 | Task | Size |
 |---|---|
-| **Aggregate FAAB corpus across subscriber leagues** — "across N real Sleeper leagues, the median winning Week-3 bid was $X." Uncopyable by rankings sites, and the causality runs subscribers → asset, never the reverse (league IDs are not enumerable) | L |
-| Relaunch into the draft peak with a year-old domain, real receipts, and an aged comparison hub | M |
-| Sleeper Mini — **only if §0's licensing conversation went well** | L |
-| ESPN / Yahoo — **only if** Sleeper-only proved to be the ceiling rather than the wedge | L |
+| Relaunch into the draft peak with a year-old domain, real receipts and an aged comparison hub | M |
+| Offseason product before any twelve-month price: season review (Jan–Feb), then draft prep (Jun–Aug) — see IDEAS.md | M |
+| ~~Aggregate FAAB corpus~~, ~~Sleeper Mini~~ | **Dropped** — both need Sleeper (§0) |
+| ~~ESPN / Yahoo~~ | **Already true** — a pasted roster works from any platform |
 
 ## 4. Offer ladder & monetization rules
 
@@ -336,10 +310,10 @@ competitor has a free door** — GridIQ free with no card, LeagueVision a 3-day 
 ffwrapped and My Fantasy Analyzer free outright. Paid-from-day-one, with no trial, no free artifact
 and no gradeable record until October, is the sharpest self-inflicted disadvantage in the analysis.
 
-1. **Free first week.** Their league, their rival, their numbers. It is also the *only* September
-   proof asset that exists, which is the sequencing problem nothing else solved. **Run it manually
-   for the first four weeks** — collect email + username, render, send. Zero code, zero vendor
-   dependency, ships day one. Automate in October only if it converts (§6).
+1. **Free first week.** Their roster, their scoring, their numbers. It is also the only proof
+   asset that needs no track record, which is the sequencing problem nothing else solved. **Run it
+   by hand, on request** — `run/trial.py` builds this week's file from the roster they send
+   (LAUNCH.md section 6). Zero vendor dependency. Automate it only if it converts (§6).
 2. **Season pass $39, not $29.** The market clusters $39–$99 (4for4 $39/$59/$99, Fantasy Life+
    $39.99, Scoutcast $49.99, FantasyPros $47.88/yr) while AI entrants sit at $4.99–$9.99/mo. $29
    is *below the market floor* and reads as a confession about the weak backtest. **$39 with a free
@@ -348,10 +322,10 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
 3. **Do not cut price to compete with free.** You cannot win a price war against $0. Compete on
    the thing arriving in the inbox and on the published test.
 
-**At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$9.99/mo**.
+**At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
 Refunds no-questions until the buyer's second weekly file's week kicks off (was "through Week 2"
-until Sep 29 2026 — see the refund-cycling note below). The monthly×3.65 > season-pass rule below still holds at $39
-(3.65 × $9.99 = $36.43 — **this now INVERTS**; see the corrected rule).
+until Sep 29 2026 — see the refund-cycling note below). Monthly moved from $9.99 to $14.99 because
+$9.99 inverted the ladder at $39; the corrections below record how.
 
 **CORRECTION forced by the price change:** at $39 the season pass is no longer cheaper than paying
 monthly all season, so the ladder inverts and the monthly tier becomes the rational buy. Fix by
@@ -382,18 +356,17 @@ on the season tiers is deliberate, not drift — it is each price wearing its ow
 clothes, and it matches the verified monthly field on the compare page (FootClan $11.99,
 Scoutcast $5.99, FantasyPros $3.99–$22.99).
 
-**Code consequences of the price change** (do them together, item 12 in §3): `site/index.html`,
+**DONE (Aug 2026). Code consequences of the price change**, recorded: `site/index.html`,
 `site/join/index.html`, `site/league-pass.html`, the renewal-disclosure strings, and the
 `tests/test_site.py` assertions that pin "$29" and the renewal terms. A price on a page that
 disagrees with the Stripe link is an honesty failure no test currently catches.
 
 **"First 50" framing is retired.** A count implies fewer than 50 customers exist, which is true and
-not worth announcing. The CTA says what actually happens: *"Get this week's report — free."*
+not worth announcing. The CTA says what actually happens.
 
 **Prices are USD** (owner decision, Aug 14 2026) — the paying fantasy market is overwhelmingly US.
 Every price shown to a buyer must carry the currency; an unlabelled "$39" is ambiguous for buyers
-and a support burden. Confirm the currency setting in Stripe before launch so the charge matches
-the page.
+and a support burden. All three payment links charge USD; LAUNCH.md step 1 re-checks it.
 
 **The ladder invariant** (established Aug 14 2026, re-derived Aug 17 at the new price): a paid
 season runs Sep 8 → late Dec = 111 days ≈ 3.65 months ≈ 16 weekly reports. **Monthly × 3.65 must
@@ -415,21 +388,22 @@ $468-vs-$99 arithmetic is their language.
 Implementation: Stripe recurring prices — annual (season pass) + monthly. One-offs via payment links.
 
 **Upsells appear only post-purchase, in-product, in this order:**
-1. Week 3 — **Rival Deep-Dive $19** (custom one-off report; ~20 min fulfillment with engine; offered as
-   one line inside subscriber reports only).
-2. Week 13 — **Playoff Gauntlet $12** (weeks 14–17 intensity package, offered only to alive teams —
+1. ~~Week 3 — Rival Deep-Dive $19~~ — **retired with the rival (§0).**
+2. Week 13 — **Playoff Gauntlet $12** *(not built)* (weeks 14–17 intensity package, offered only to alive teams —
    monetizes the elimination churn cliff instead of suffering it).
 3. **League Pass $99** — BUILT Aug 2026 (`site/league-pass.html`; `plan:"league_pass"` seats in the
-   registry; seat-coverage reporting in `run/batch.py`). One payment covers the league; every
-   manager who signs up gets their own report aimed at their own rival. Deliberately NOT a third
+   registry; seat-coverage reporting). One payment covers the league; every manager who signs
+   up gets their own report on their own roster. Seats go live with the form Worker (LAUNCH.md
+   step 5). Deliberately NOT a third
    card in the pricing section — one quiet link instead, so the individual buyer still faces
    exactly one decision. Arms-dealer dynamics make the league itself the marketing channel.
    **REVISED Aug 17 2026: any manager can buy it, not only the commissioner.** Precedent exists,
    and requiring the commissioner makes every league sale depend on one specific person agreeing.
    Copy edit, not architecture. This is also the **best-supported tier in the research**
-   (commissioner-buys-for-league is an established shape; CBS charges $99.95/league) and the only
-   motion that can close inside 22 days — §3B sells it before anything else gets built.
-4. Off-season — **NBA fantasy module** (Oct) to bridge revenue between football seasons.
+   (commissioner-buys-for-league is an established shape; CBS charges $99.95/league) and the
+   fastest motion there is: one group chat, one decision.
+4. Off-season — **NBA fantasy module** to bridge revenue between football seasons. *(Not
+   scheduled: IDEAS.md puts a season review and a draft-prep file first.)*
    (The old "Season 2 earlybird renewal (Feb)" is REMOVED: the pass already auto-renews at its
    anniversary, so selling the same person a renewal in February would either double-charge them
    or require cancelling a subscription they already have. Reposition it only as a win-back offer
@@ -451,23 +425,24 @@ end automatically**, and both the pricing card and the terms say so.
 
 **The only honest route to 12 months of billing is 12 months of product.** If that is wanted
 later, the candidates in rough order of realism:
-- **Dynasty/keeper leagues** — genuinely year-round (rookie drafts, offseason trades). The engine
-  already reads league history, so this is the most plausible offseason product.
-- **Draft Kit / draft-week product** (Aug) — already in Sprint 1, and the highest-demand offseason
-  moment of the year.
+- **Dynasty/keeper leagues** — genuinely year-round (rookie drafts, offseason trades). The
+  roster product would have to be told the dynasty context; it no longer reads league history.
+- **Draft Kit / draft-week product** (Aug) — the highest-demand offseason moment of the year, and
+  `engine/preseason.py` already produces a draft-prep file.
 - **NBA module** (Oct-Apr) — a different sport on the same engine, per item 4 above.
 Until one of those ships, the honest model is: charge for the season, renew for the next one, and
 make the renewal easy to say yes to by having a public ledger that argues for itself.
 
-**Launch blockers before the site goes public** — the operative list is now §3A; this records the
-constants and the one that must deliberately stay EMPTY. Each is a one-line edit once the account
-exists: a project contact inbox (never a personal address) into `CONTACT_EMAIL` on both funnel
-pages and into `legal.html`; `STRIPE_LINK_SEASON` / `_MONTHLY` / `_PASS` plus `CHECKOUT_OPEN`;
-`NOTIFY_LIST_ENDPOINT` for the launch waitlist (see §5.2) and `LEDGER_FREE_URL`. `SUBSTACK_URL` is
-superseded by the Stripe decision below and is only relevant if Substack takes the money after all.
-Until the inbox exists the signup forms honestly say signups aren't open — correct, but it also
-means zero conversions, so it is the first thing to fix.
+**Launch blockers** — the operative list is `LAUNCH.md` (Sep 29 2026). Of the constants this
+paragraph used to list: `CONTACT_EMAIL` is set on both funnel pages and in the terms; the three
+`STRIPE_LINK_*` constants were set on Aug 27 and emptied again on Sep 29 until the GitHub secrets
+exist, with `CHECKOUT_OPEN` following them; `NOTIFY_LIST_ENDPOINT` / `WAITLIST_ENDPOINT` were never
+wired and are moot once a purchase can complete (§5.2); `LEDGER_FREE_URL` and `SUBSTACK_URL` are
+unused.
 
+*(Superseded Aug 21–23 2026: seats are now honoured only when their commissioner's address
+actually bought a pass, roster updates carry a token only the subscriber's own reports hold, and
+the backend is the Cloudflare Worker — LAUNCH.md step 5. The Sleeper-era finding, as recorded:)*
 **`FORM_ENDPOINT` stays EMPTY until seat provenance is fixed** (found in the Aug 17 audit). The
 League Pass seat path validates that a pass covers the league, but nothing binds a claim to the
 person making it. Sleeper user ids are public and the seat link is necessarily public, so with a
@@ -510,8 +485,8 @@ person receiving a paid report is the failure that becomes a chargeback.
 Substack stays the fallback and the free-list home. If it is used for billing instead, the CSV
 export path covers it; the 10% fee is the price of not running the checkout.
 
-New launch blockers from this decision: `STRIPE_API_KEY` (a **restricted** key, read access to
-subscriptions + customers only), `EMAIL_PROVIDER` + that provider's key, and `EMAIL_FROM` on a
+New launch blockers from this decision: `STRIPE_API_KEY` (a **restricted** key — now Checkout
+Sessions read, Customers write and Subscriptions write; LAUNCH.md step 3), `EMAIL_PROVIDER` + that provider's key, and `EMAIL_FROM` on a
 domain with SPF/DKIM configured — an unauthenticated From address goes to spam, which at this
 volume is indistinguishable from not sending at all.
 
@@ -540,6 +515,8 @@ configuration live in one system — the one that already has to be correct. Lea
 which produce no payment of their own, are the single exception and use one free-tier form
 backend. Mechanics and the verified Stripe facts are in CLAUDE.md.
 
+*(Sleeper-era mechanics below. The roster product runs the same payment-carries-the-signup
+pattern through `run/intake.py`.)*
 **Built (Aug 14 2026): `run/sync.py` and the season auto-roll**, so the flow is zero-touch
 end to end including League Pass seats. A stranger picks their rival, pays, and receives a report
 every Tuesday with no human step anywhere. Mechanics in CLAUDE.md; the operator-visible facts:
@@ -562,12 +539,15 @@ every Tuesday with no human step anywhere. Mechanics in CLAUDE.md; the operator-
   and `site/league-pass.html` already discloses "renews once a year at $99 unless you cancel", so
   the term is stated where it is sold.
 
-**Revisit a small server (Cloudflare Worker) as a §7 risk item if either trigger fires: League
-Pass passes ~5 leagues, or the form backend proves flaky twice.** The form backend is now the
-only external dependency in the signup path and only affects seats, which is what makes that
-threshold the right one.
+**Decided Aug 23 2026: the form backend IS a Cloudflare Worker** (`infra/form-worker.js`). Free
+form vendors cap at ~50 submissions a month or cannot be read by a program; the Worker holds
+nothing secret and decides nothing, and every row is validated by the intake.
 
-New launch blockers from this decision:
+**The launch blockers this decision raised, all resolved:** the links exist; the League Pass is a
+recurring annual price; the terms name Stripe's billing portal as the place to cancel; the
+restricted key exists (permissions in LAUNCH.md step 3); and the pass link's confirmation message
+is moot — every link redirects to `thanks.html`, and the pass welcome email carries the seat
+link. As originally listed:
 - Create the Stripe products/prices and **Payment Links**, then paste them into
   `STRIPE_LINK_SEASON` / `STRIPE_LINK_MONTHLY` and set `CHECKOUT_OPEN = true`.
 - Make the **$99 League Pass a recurring annual price, not a one-time charge** — a one-time
@@ -596,6 +576,8 @@ and its entire moat is a public ledger that says *we publish our misses*. A "can
 screenshot kills both. Cancellation also lives inside Substack, so obstructing it is not even
 technically available to us; ROSCA and state auto-renewal laws require clear terms and easy exit;
 and chargebacks cost more than a retained month while endangering the payment account.
+*(Cancellation now lives in Stripe's billing portal, self-serve, rather than Substack — the same
+point stands.)*
 
 **Closing the refund-cycling loop (decided Aug 14 2026).** The exposure: buy the pass, take two
 weeks of reports, refund inside the no-questions window, re-subscribe later, refund again — a free
@@ -631,32 +613,35 @@ Why this is the right shape: it is disclosed pre-purchase (so it is a term, not 
 an honest customer nothing, and it removes the only version of the loop worth running. Note the
 operator eats the payment-processing fee on every refund — roughly $1–1.50 a cycle — so even
 without abuse, refunds are never free; that is a reason to prevent the *causes* of refunds, not to
-obstruct the refunds themselves. Enforcement is manual and trivial at this scale: Substack refunds
-are issued by the operator, who can see prior refunds against the same email before granting one.
+obstruct the refunds themselves. Enforcement is manual and trivial at this scale: refunds are
+issued by the operator in the Stripe dashboard (LAUNCH.md section 7), where prior refunds against
+the same email are visible before granting one.
 Do not attempt device/IP fingerprinting or any other tracking to detect repeat refunders — it is
 disproportionate, hostile, and would collect exactly the data this project promises never to hold.
 
 **Where the non-refundable money legitimately comes from:**
 1. **Season pass, paid upfront.** $39 lands on day one. The no-questions window closes when the
    buyer's second weekly file's week kicks off; everything after is earned revenue, not float.
-2. **Value must land before that window shuts.** Weeks 1 and 2 reports are the highest-stakes
-   deliverables of the season — a missed or thin Week 1 is a refund request with a stamp on it.
+2. **Value must land before that window shuts.** A buyer's first two files are the
+   highest-stakes deliverables they get — a missed or thin first file is a refund request with a
+   stamp on it.
 3. **Reduce refunds by removing their causes, never their availability:** set expectations about
    gated numbers up front ("when we don't show a number, that's the product working"), frame the
    first miss before it happens (a calibrated 64% call misses 36% of the time — Receipts Monday
-   is the mechanism), and make Week 1 land on time.
+   is the mechanism), and make the first file land on the day they pay.
 
-**Stickiness comes from engagement, not entrapment:** the rivalry (a named nemesis tracked all
-season), the ledger streak (a running public record they're part of), Rivalry Week, and the
-receipt cards they screenshot into their group chat. A subscriber who forgets they're subscribed
-is a chargeback and a bad review waiting to happen; a subscriber who opens Tuesday's email
-because they want to beat Mike renews without being asked.
+**Stickiness comes from engagement, not entrapment:** a file that is right about their own
+roster every Tuesday, a public record they can watch us grade, and receipt cards worth
+screenshotting into the group chat. (The named rival and Rivalry Week left with §0.) A subscriber
+who forgets they're subscribed is a chargeback and a bad review waiting to happen; a subscriber
+who opens Tuesday's email because it sets their lineup renews without being asked.
 
 **Renewal disclosure (non-negotiable).** The $39 pass is an **annual tier**, so it
 auto-renews — which is fine revenue and NOT fine to leave unsaid. Both decision points (landing
 pricing card + picker confirmation) must state "renews once a year at $39 unless you cancel", and
-a reminder email must go out **before** it bills. An undisclosed annual auto-renewal is the
-forget-to-cancel pattern with better manners, and it is ruled out here. `tests/test_site.py`
+a reminder email must go out **before** it bills (built: `run/renewals.py`, 15–45 days ahead).
+An undisclosed annual auto-renewal is the forget-to-cancel pattern with better manners, and it
+is ruled out here. `tests/test_site.py`
 enforces the on-page half of this.
 *Consequence to keep straight:* an auto-renewing pass cannot also be sold a "Season 2 earlybird
 renewal" (§4 upsell 4) — for renewing subscribers that offer becomes a thank-you//loyalty credit,
@@ -665,6 +650,7 @@ not a second charge.
 **Seasonality rule:** the monthly tier must not silently auto-renew through the Feb–Aug offseason
 when no product ships. Cancel or pause monthly subscribers at season end and invite them back for
 Season 2 — the alternative is a spring of chargebacks and the exact reputation this plan avoids.
+*(Built: `run/billing.py` sets every monthly subscription to stop at season's end.)*
 
 **Rules:** never more than one offer visible to a non-customer; never raise complexity before trust;
 Season 1 optimizes for renewals, referrals, and list growth — not maximum extraction. Rationale: monthly-only
@@ -696,37 +682,27 @@ cites Reddit least of all the major engines (~0.1%) while Google's AI surfaces l
 does little for Gemini. The Gemini-shaped play is YouTube, and **declining it is the right call for
 a solo part-timer — but name the cost:** we are not buying Gemini visibility this season.
 
-### 5.2 The launch waitlist (BUILT Aug 18 2026)
+### 5.2 The launch waitlist (built Aug 18 2026; never connected)
 
-The one asset that works before the product does, and the only thing on the site
-that can honestly ask for anything today — checkout is closed and the product is
-mid-rebuild. Capture is the existing form on the landing page, now retargeted:
-**one email when signups open, nothing between now and then, no card,
-unsubscribe in one click.** That volume promise is test-pinned, because a list
-collected on "one message" and then mailed weekly is an audience burned once and
-permanently.
+Built as the one thing the site could honestly ask for before checkout opened: **one email when
+signups open, nothing else, no card, unsubscribe in one click.** The volume promise is
+test-pinned, because a list collected on "one message" and then mailed weekly is an audience
+burned once and permanently.
 
-- **Owner action to start collecting today:** set `NOTIFY_LIST_ENDPOINT` in
-  `site/index.html` to a list backend. **Resend Audiences is the pick** — Resend
-  is already the chosen sender, so it is one vendor rather than two, and the
-  export drops straight into the sender below. Until it is set the page says
-  nothing was recorded rather than thanking somebody for a signup that went in
-  the bin (test-pinned).
-- **The send:** `python -m run.waitlist --list <export.csv> --url <join url>`.
-  Dry by default; `--send` with `EMAIL_PROVIDER` set is the real thing. Keyed
-  through the same `data/processed/sent.jsonl` the weekly batch uses, so a
-  re-run cannot mail anyone twice. An unconfigured `--send` prints NOTHING WAS
-  SENT and exits 1 rather than reporting a success.
-- **The copy may only promise what exists.** `FORBIDDEN_CLAIMS` is enforced by
-  test and currently blocks the waiver market, the rival, the opponent and the
-  self-updating report — the first draft of that email promised two of them,
-  inherited from a `BRAND_LINE` that still described the Sleeper product.
+**Status (Sep 29 2026): no list backend was ever connected, so no address was collected and there
+is no launch broadcast to send.** While checkout is closed the landing capture falls back to a
+prefilled email to the contact inbox; once a purchase can complete (`CHECKOUT_CAN_COMPLETE`) the
+capture retires. The machinery stays for the next time checkout is closed ahead of a season:
+`infra/form-worker.js` accepts `kind:"waitlist"` rows, `run/waitlist.py` sends the one promised
+email through the same idempotent send log as the weekly batch, and `FORBIDDEN_CLAIMS` keeps its
+copy to what exists.
 
 ### 5.1 Channel order, by subscribers per hour of founder time
 
-1. **Your own league and the leagues you're already in.** The only channel where the League Pass
-   closes inside 22 days. Twelve managers who already know you, in a group chat you already post
-   in. It does not scale and does not need to. *(§3B — do this first.)*
+1. **Your own league and the leagues you're already in.** The fastest channel there is, and the
+   League Pass's natural home once seats are live. Twelve managers who already know you, in a
+   group chat you already post in. It does not scale and does not need to. *(Do this first —
+   LAUNCH.md section 6.)*
 2. **Discords and league group chats.** Human mods you can actually ask permission from.
 3. **Founder-disclosed comparison content** (`site/compare/`). Verified working right now by a
    direct competitor: Scoutcast's co-founder wrote a "best fantasy football apps" piece, disclosed
@@ -736,21 +712,22 @@ permanently.
 4. **Third-party mention campaign.** 12–15 identical pitches, same week, same sentence (§1). The
    door is verifiably open — FantasyPros' own AI-tools listicle already includes two indies. One
    email is a lottery ticket; twelve identical ones is a channel, and repeated identical phrasing
-   across independent domains is the co-occurrence signal that forms an entity.
-5. **The weekly content feed you already built and are not publishing.** `run/content.py` drafts
-   Receipts Monday, Hype Wednesday and Coin-Flip Friday from graded data at zero marginal cost.
-   Publishing them is **~50 dated, number-dense, self-contained pages by January**, every one
-   already in the passage shape retrieval chunks well *because the honesty rules force it*. Biggest
-   missed asset in the whole plan; costs 3 hours plus 30 minutes a week.
-6. **`reports/projections-eval.md`** (written, unpublished). "How accurate are Sleeper's own
+   across independent domains is the co-occurrence signal that forms an entity. **On hold (owner,
+   Sep 2026): no emailing other sites for now.** `content/pitches.md` is written and waits.
+5. **The weekly content feed.** `run/posts.py` drafts Receipts Monday and Coin-Flip Friday from
+   the public record at zero marginal cost (Hype Wednesday retired with the waiver market). It
+   has nothing to draft until the record holds graded rows; from then it is one or two dated,
+   number-dense, self-contained pages a week, already in the passage shape retrieval chunks well
+   *because the honesty rules force it*. About 30 minutes a week.
+6. **`reports/projections-eval.md`** (published as `site/projections.html`). "How accurate are Sleeper's own
    projections?" has no published answer anywhere in the research, and we have one graded on a
    frozen call set. It is the **proof link on every pitch email** — verifiable in thirty seconds.
 7. **X replies.** Kept below, demoted: it is a real channel but slower per hour than 1–3.
 
 ### Query shapes to target — and the one to refuse
-Target question and comparison shapes, not commercial ones: *"how do I scout my fantasy football
-opponent," "is there a free alternative to LeagueVision," "how accurate are Sleeper's projections,"
-"how much FAAB should I bid in my league," "sleeper fantasy tools compared."*
+Target question and comparison shapes, not commercial ones: *"is there a free alternative to
+LeagueVision," "how accurate are Sleeper's projections," "sleeper fantasy tools compared."* (The
+opponent-scouting and FAAB-bid shapes left with the features that answered them, §0.)
 
 **Do not build branded `/vs/` pages.** Neither side of "LeagueVision vs Beat Your League" has
 search volume — those competitors have essentially no third-party review footprint. Comparison
@@ -766,14 +743,14 @@ search volume — those competitors have essentially no third-party review footp
 | Build a trade analyzer | Needs a server. Disclose the gap and point at a free one (~20h saved) |
 | Real-time injury alerts | Structurally wrong for a weekly email. Sell the if/then plan as the answer (~15h saved) |
 | Any remote/OAuth MCP or credential-holding service | Inverts the security posture for unproven acquisition value |
-| Sleeper Mini this season | React Native + approval gate + §0 unresolved |
+| Sleeper Mini this season | React Native + approval gate, and the product left Sleeper (§0) |
 | YouTube | Right to decline solo — but it is the Gemini play, so name the cost |
 | Post to r/fantasyfootball before reading its rules yourself | A ban from 3.4M members is unrecoverable; the check takes ten minutes. **Every crawler in the research was blocked, so these rules are UNVERIFIED** |
 | Loosen the honesty gates to look more like competitors | They are the tiebreaker inside the comparison, and they're tested in code |
 | Publish the availability-controlled calibration table as accuracy | `backtest.md` itself calls it a diagnostic. Already decided; do not undo it |
 
 ### Detail — X (ranked 7th; see §5.1 for the order)
-- **Setup, once in launch week:** bio + pinned backtest thread. Build a list of 25–30 fantasy accounts:
+- **Setup, once, before checkout opens:** bio + pinned backtest thread. Build a list of 25–30 fantasy accounts:
   2–3 giants (e.g., Matthew Berry, FantasyPros) for reach-surfing, the rest mid-size grinders (5–50K followers)
   because they actually engage back. Turn on notifications for the 10 most active.
 - **Data-replies — the core growth mechanic (20 min/day):** 15–20 replies daily to start/sit questions and hot
@@ -793,25 +770,24 @@ search volume — those competitors have essentially no third-party review footp
 
 ### Detail — Discords & league group chats (ranked 1st–2nd)
 - Sleeper communities and podcast Discords, same value-first conduct as Reddit.
-- Beta leagues (mine + 2–3 friends'): source of testimonial screenshots and the gift-a-rival mechanic. One
-  league group chat that adopts receipts culture = twelve warm prospects locked in a room with money on the
-  line. **Expect nearly all of season 1's subscribers to come from here** — §5.1 ranks this first,
-  and §3B sells into it before anything else gets built.
+- Beta leagues (mine + 2–3 friends'): source of testimonial screenshots. One league group chat that adopts
+  receipts culture = twelve warm prospects locked in a room with money on the line. **Expect nearly all of
+  season 1's subscribers to come from here** — §5.1 ranks this first, and LAUNCH.md section 6 starts here.
 
 ### Later — only once the ledger has a record
 - **Facebook fantasy groups:** large, older, underserved by data content. Weekly repost of the week's
   best-performing post, 15 min/week, optional.
-- **Podcast / newsletter pitches (from ~mid-Oct):** "a solo builder's engine went X% on coin-flip calls through
+- **Podcast / newsletter pitches** *(on hold with the mention campaign, and only once the record has
+  graded rows)*: "a solo builder's engine went X% on coin-flip calls through
   October" is a bookable story; an August pitch with no track record is not.
 
 **Three recurring public formats (pipeline-drafted, human-edited):**
 1. **Receipts Monday** — graded ledger, wins AND misses, receipt cards.
-2. **Hype Meter Wednesday** — "the waiver player everyone's chasing: real or mirage," with usage data.
+2. ~~**Hype Meter Wednesday**~~ — retired: it needed the league's transaction log (§0).
 3. **Coin-Flip Friday** — one genuinely hard start/sit, our call, our confidence, our reasoning.
 
 **Launch levers:** backtest thread (proof) · build-in-public numbers (trust) · league-mate testimonials (social
-proof) · mischief referral: subscribers can gift their rival a free week — "may the best analyst win." (The gift
-is the ad.)
+proof). (The gift-your-rival referral left with the rival, §0.)
 
 **Proof assets:** public prediction ledger on GH Pages, linked in bio. Every claim traceable.
 
@@ -822,6 +798,11 @@ slips, replies beat posts.
 
 Same rule the grading code already enforces on the model, applied to the business: written down
 before the season, never adjusted after results.
+
+**Status (Sep 29 2026): none has been read.** The Aug 31 gate passed, and the Oct 6 gate (three
+sends) passes, before checkout could serve a single buyer. The rest stand as written and are read
+on their dates. Oct 11 arrives about ten days after checkout opens, so the pivot rule below is
+the one to take seriously.
 
 | Read by | Metric | Green | Red → do this |
 |---|---|---|---|
@@ -844,9 +825,11 @@ Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, f
 
 ## 7. Risks & mitigations
 
-- **Sleeper licensing (§0)** → the single existential risk. Email this week; every other item is
-  conditional. Sleeper's terms also grant safe harbour only to approved integration partners, which
-  means exposure can land on a *subscriber's* account, not only ours.
+- **Sleeper licensing (§0)** → retired as a risk by leaving Sleeper (Aug 18 2026);
+  `test_no_sleeper_in_the_paid_path` keeps it retired.
+- **A late opening** → four of eighteen weeks are gone before the first sale, and the Oct 11 gates
+  arrive about ten days after it. Mitigation: open this week, sell to people rather than pages
+  (§5.1), and read §6 honestly rather than moving it.
 - **Free substitutes** → ffwrapped (free, no login, "manager profiles & rivalries"), GridIQ (free,
   weekly grades and points-left-on-bench), My Fantasy Analyzer (free FAAB suggestions), and
   Sleeper's own matchup screen. Mitigation: compete on the file *arriving* and on the published
@@ -856,8 +839,9 @@ Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, f
   §1's one sentence, and the omissions block that none of them can write back at us.
 - **Bad accuracy stretch** → pre-committed grading rules + publish misses; sell discipline, not
   clairvoyance.
-- **Weeks 1–3 have no confidences at all** → the free week, the waiver section (counted data,
-  no calibration burden), and copy that frames the gate as the product working.
+- **Weeks 1–3 carry few or no numbers** → the early-season arm prints weeks 2–3 for the measured
+  setup, and a buyer from Week 4 on gets numbers in their first file. Copy still frames a withheld
+  number as the product working.
 - **Seasonality** → dynasty/keeper or a draft-week product are the realistic year-round candidates;
   see §4. Do not bill through months with no product.
 - **Solo burnout** → if a week slips, subscriber reports ship and content skips.
@@ -871,8 +855,8 @@ season, essentially all of it from channels that are people, not pages.**
 
 If the threshold for "makes money" is higher than that, no strategy in five research lenses reaches
 it this season, and the correct move is to run 2026 deliberately as **the paid pilot that builds the
-2027 asset**: a real ledger, measured calibration, an aged corpus, a year-old domain, a renewal
-cohort, and possibly a signed Sleeper licence — all pointed at the August 2027 draft peak.
+2027 asset**: a real ledger, measured calibration, an aged corpus, a year-old domain and a
+renewal cohort — all pointed at the August 2027 draft peak.
 
 So: by Jan, an automated system with ≤3 hrs/week human input, ~100 paying subscribers, a public
 track record holding real graded rows, ~50 published dated pages, and a product a stranger can be
@@ -904,10 +888,9 @@ The product refuses to publish a number it cannot stand behind. The plan gets th
 **The largest gap: zero voice-of-customer.** Not one fantasy manager's own words were read; Reddit
 was blocked at the tool level in every research lens. Every demand claim in this plan is revealed
 preference from vendor pricing pages, and *"three competitors sell this"* is equally consistent
-with *"three competitors are failing to sell this."* **This is exactly what §3B exists to fix, and
-why selling comes before building.** No competitor's subscriber count, revenue or download figure
-was confirmed anywhere.
+with *"three competitors are failing to sell this."* **It is still the largest gap (Sep 29 2026):
+no payment has been processed yet, so selling to people (LAUNCH.md section 6) is what closes it.** No
+competitor's subscriber count, revenue or download figure was confirmed anywhere.
 
-**Unknowable from public data:** what share of Sleeper redraft leagues use FAAB (league IDs are not
-enumerable — sample your own, §3A item 2), and free-to-paid conversion for this niche (no benchmark
-exists; measure it, don't model it).
+**Unknowable from public data:** free-to-paid conversion for this niche (no benchmark exists;
+measure it, don't model it).

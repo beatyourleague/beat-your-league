@@ -4,11 +4,16 @@
 generated automatically from live league data and delivered to paying subscribers.
 
 **My Sleeper league ID:** `PASTE_LEAGUE_ID_HERE`  <!-- from sleeper.com/leagues/<ID>/... -->
+*(Sleeper-era: read only by the retired `ingest/` research path via `ingest/config.py`. The paid
+product reads no league — subscribers paste their roster — so this stays a placeholder.)*
 
 ---
 
 ## Product summary
 
+*(Sleeper-era summary, kept as the design record. The product that ships is the roster product:
+no opponent, no rival and no waiver market — see "The payment can become a report" and the solo
+sections below for what it carries.)*
 Subscribers get one report every Tuesday (template: `rival-report-template.html`), with eight
 sections: (1) 30-second action checklist with deadlines, (2) matchup + win probability +
 floor/ceiling ranges, (3) full optimal lineup with per-slot confidence, (4) where the rival is
@@ -17,11 +22,12 @@ for late news, (7) waiver Hype Meter (is league-wide FOMO justified or not), (8)
 receipts ledger where every call is graded against real box scores.
 
 Positioning: **analysis, not picks.** Emotional core: rivalry, regret-avoidance, bragging rights.
-Delivery: email/Substack at $5–8/month. The AI is invisible to the buyer.
+Delivery: email via Stripe Payment Links — $39 season pass (renews yearly), $14.99/month
+(stops at season's end), $99 League Pass. The AI is invisible to the buyer.
 
 **Business context:** the full go-to-market plan, calendar, budget, and decision gates live in
-`PLAN.md` (repo root). Build phases below exist to serve that plan's dates — Sprint 0 runs
-Aug 12–16, and Week 1 subscriber reports must ship Tue Sep 8. New feature ideas go to
+`PLAN.md` (repo root); the owner's remaining setup steps live in `LAUNCH.md`. The Sep 8 launch
+did not happen: as of Sep 29 2026 checkout opens mid-season, in Week 4. New feature ideas go to
 `IDEAS.md`, never into the current sprint.
 
 ## Non-negotiable principles
@@ -239,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status:** Phases 1-6 complete on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — picker → Stripe → registry → report → inbox, with no league read anywhere (628 tests passing). What is left before checkout opens is listed under "Still missing between payment and inbox" below; none of it is in the buyer's path.
+**Status (Sep 29 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (979 tests passing). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -251,14 +257,16 @@ Wednesday, Coin-Flip Friday — which quotes ONLY the recorded ledger entry, nev
 number — and the daily reply kit, which never names league members). `monday.yml` is the
 Monday grading cron; both crons persist the ledger via actions/cache + artifacts. Phase 5
 was adversarially reviewed: 10 confirmed findings fixed (incl. a reproduced cross-process
-race that silently erased recorded calls), 2 refuted.
+race that silently erased recorded calls), 2 refuted. *(Sleeper-era: for the roster product
+`make content` runs `run/posts.py`, Hype Wednesday is retired, and `monday.yml` commits the
+ledger rather than caching it — all described further down.)*
 Phase 6 mechanism: signup picker (`site/join/`, live-tested against real Sleeper accounts —
 username → leagues → own-roster auto-resolved → rival tapped from real team names), subscriber
 registry (`run/registry.py`, gitignored data), batch runner (`python -m run.batch`: one ingest
 per league, one report per subscriber, failures contained per-subscriber), and the Rival Watch
-strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). Remaining for
-launch: plug a free-tier form backend endpoint into the picker (mailto fallback works today)
-and connect the Substack list. All build phases are now complete.
+strip (named rival tracked weekly; Rivalry Week when the schedule pairs you). *(Sleeper-era:
+the picker, the rival and Rival Watch were retired Aug 18 2026; Substack was dropped for Stripe,
+and the form backend is the Cloudflare Worker in `infra/form-worker.js`.)*
 
 **The payment can become a report (Aug 21 2026) — the join that did not exist.** The intake
 collected a roster and `engine/solo_report.py` could build a report from one, and NOTHING
@@ -369,6 +377,8 @@ ones that were bought with real failures:
   latest-wins, so a subscriber who changed their picks twice was served the pick they abandoned).
   `run/sync.py` was moved onto it rather than keeping a second copy to drift.
 
+*(Fixed in code Aug 23 2026 by self-serve roster updates, `run/updates.py`, below — live once
+the form Worker is deployed, LAUNCH.md step 5. The original limitation, as recorded:)*
 **Known limitation, deliberate: there is no way to CHANGE a roster mid-season.** The key is
 (email, ref), so one purchase is one subscription; re-running the picker builds a new ref, which
 only reaches the registry attached to a new payment. A customer holding several is reported rather
@@ -376,16 +386,20 @@ than silently merged (that would drop a team) or silently split (that would doub
 A real fix is a self-serve edit and belongs with the customer portal.
 
 **Still missing between payment and inbox:**
-- **League Pass seats: the CODE is done, the BACKEND is an owner decision.** `run/intake.py` now
+- **Sending and entitlement are secrets, not code.** Resend, the Stripe key and the payment-link
+  map (LAUNCH.md steps 1–3), then one real purchase watched end to end (step 4). The join page's
+  payment links are empty until step 3 is done.
+- **League Pass seats and roster updates: the CODE is done, the BACKEND is chosen and not yet
+  deployed** — the Cloudflare Worker, `infra/form-worker.js` (LAUNCH.md step 5). `run/intake.py` now
   reads `FORM_ENDPOINT`, validates each claim and writes seat rows. The validation that matters:
   a seat is honoured only when its `covered_by` address actually bought a PASS — the payer set is
   built from sessions whose own `payment_link` was the pass link, never from what a seat claims.
   Relaxing that to "any payer" leaves the suite green unless a test names a season buyer
   specifically (found by mutation), and it would hand eleven free reports to anyone who found the
   seat link and knew one $39 subscriber's address. An unreadable backend REFUSES rather than
-  writing a Stripe-only registry that silently drops every seat. `FORM_ENDPOINT` stays empty per
-  PLAN §0, and empty means the tier delivers no seats rather than unpaid ones — so the remaining
-  work is choosing and wiring a validated form backend, not code.
+  writing a Stripe-only registry that silently drops every seat. `FORM_ENDPOINT` stays empty until
+  the Worker is deployed, and empty means the tier delivers no seats rather than unpaid ones, and
+  reports carry no update link rather than a dead one.
 - (Both the ledger-grading port and the cron rewiring are DONE — see below.)
 
 **A seat holder's "already paid" button was wired to the $39 checkout (Aug 21 2026).** The
@@ -1695,9 +1709,9 @@ What publishes vs gates (principle 1, wired in code, not prose):
   matchup backtest shows it underconfident (stated ~52% bucket observed 64.5%). Un-gate only
   with fresh passing evidence in backtest.md; more seasons of history will firm this up.
 
-Still waiting on TWO things: paste the real league ID at the top of this file, and my roster id
-(env SLEEPER_ROSTER_ID). Then `make week` (in season) or
-`.venv/bin/python -m run.week --week N` (explicit week) builds my real report.
+*(Retired Aug 18 2026 with the Sleeper product: this used to wait on the owner's league ID and
+roster id to build their own report through `run.week`. The roster product reads no league; a
+report on any roster is `.venv/bin/python -m run.trial` — LAUNCH.md section 6.)*
 
 **Session continuity — read this first if you are picking up on the desktop.**
 Phases 1 and 2 were built in Claude Code sessions *other than* the machine I normally

@@ -1,5 +1,9 @@
 # The mention campaign — one sentence, sixteen doors
 
+**ON HOLD (owner decision, Sep 2026): no emailing other sites for now.** Nothing here has been
+sent. It stays written for when that changes; re-check every target and price before a send,
+because the list below was verified on Aug 23 2026.
+
 **What this is (PLAN §3 item 16, §5.1 channel 4).** One identical pitch to every target in the
 same week. Repeated identical phrasing across independent domains is the co-occurrence signal
 that forms an entity; a dozen varied pitches are a dozen lottery tickets, twelve identical ones
@@ -11,8 +15,8 @@ are a channel.
 2. **The sentence goes verbatim.** It is the exact string in PLAN §1, and
    `test_the_entity_sentence_is_identical_everywhere` fails the build if this file drifts from
    it. Personalize ONE line (the greeting and their page's name), never the sentence.
-3. **Send them the same week**, and log each send + reply below so round two (mid-October,
-   with real graded receipts attached) knows who to re-approach.
+3. **Send them the same week**, and log each send + reply below so round two (once the
+   public record has graded calls to attach) knows who to re-approach.
 
 ---
 
@@ -75,9 +79,9 @@ US-tools issue), Feedspot's podcast list (no podcast exists), and There's An AI 
 ($49 submission fee — needs a PLAN §2 budget line first; decide only if round one produces
 nothing).
 
-## Round two — mid-October
+## Round two — once the public record has graded weeks
 
 Same list, one new sentence appended with real graded numbers from the public ledger ("through
-Week N: X calls graded, hit rate Y% against a stated Z%"). The October pitch is the strong one;
-this August round exists to be first, to be identical, and to make October's follow-up a reply
-instead of a cold email.
+Week N: X calls graded, hit rate Y% against a stated Z%"). That pitch is the strong one; round
+one exists to be first, to be identical, and to make the follow-up a reply instead of a cold
+email.

@@ -18,15 +18,19 @@ Done:
 - Terms (Ontario law) and privacy pages. The refund window is counted from each buyer's own
   purchase and closes when their second weekly file's week kicks off.
 - Three Stripe products and payment links — $39 season pass, $14.99 monthly, $99 League
-  Pass — wired into the join page.
+  Pass.
 - The Stripe customer portal is on; its login link is in the terms and in every report.
 - The restricted key `github-actions-crons` exists.
 
-**Heads-up: the join page can already take money.** The pricing buttons lead to it and its
-payment links are live, but nothing reads Stripe until step 3's key is set. A buyer who pays
-before then gets no welcome and no file until it is. Nothing is lost — the first run after
-step 3 sweeps every payment ever made — but a late first file is the likeliest refund there
-is. Steps 1–3 take under an hour; do them in one sitting.
+**Checkout is closed until step 3 is done** (Sep 29 2026). The join page's payment links are
+emptied and the pricing buttons say "Checkout opens at launch", because nothing reads Stripe
+until step 3's key is set — a buyer could have paid and received no welcome and no file. Steps
+1–3 take under an hour; do them in one sitting, and checkout reopens right after.
+
+**First, check Stripe → Payments for anything since Aug 27**, when the links went live. Any
+payment from then was never processed, so that buyer has had nothing. Tell me if there is one:
+the first run after step 3 sends their welcome and first file, and they're owed an apology and
+the offer of a refund.
 
 ---
 
@@ -116,14 +120,17 @@ Keys go only into these boxes — never into chat, a note or a file. The three r
 secrets (`FORM_ENDPOINT`, `FORM_API_KEY`, `UPDATE_SECRET`) come in step 5; until then the
 features that need them stay off rather than half-working.
 
+**Tell me when all eight are in.** I put the three payment links back on the join page and
+switch the pricing buttons on; it's live on the next push, and step 4 needs it.
+
 ## 4. The proving run (~1 hour)
 
 This repo's history includes a cron that could never have mailed anybody and still looked
 green. Nobody else's money moves until you've watched your own go all the way through.
 
-1. **Between a Tuesday morning and that week's first kickoff** (table in section 7), buy the
-   **$39 season pass** at https://beatyourleague.com/join/ with your own email and a real
-   card. Enter your real roster.
+1. **Once checkout has reopened, between a Tuesday morning and that week's first kickoff**
+   (table in section 7), buy the **$39 season pass** at https://beatyourleague.com/join/
+   with your own email and a real card. Enter your real roster.
 2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should finish green.
 3. **Check your inbox for two emails:**
    - **The welcome:** $39, renews yearly at $39, refunds "until your second weekly file's
