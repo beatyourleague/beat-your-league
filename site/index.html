@@ -59,9 +59,9 @@
   @media (prefers-reduced-motion: reduce){.btn{transition:none!important;transform:none!important;}}
 
   /* ------------------------------------------------ hero */
-  .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center;
-    padding:64px 0 54px;}
-  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+  .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;
+    padding:58px 0 30px;}
+  .kicker{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
     letter-spacing:.3em;text-transform:uppercase;color:var(--flag);}
   h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(52px,7.4vw,92px);line-height:.92;text-transform:uppercase;
@@ -77,98 +77,149 @@
     color:var(--paper);border-radius:2px;}
   .watchform input::placeholder{color:var(--dusk);}
   .watchnote{margin-top:10px;font-size:13px;color:var(--dusk);line-height:1.55;max-width:46ch;}
-  .heroline{margin-top:14px;font-size:13.5px;color:var(--dusk);}
+  .heroline{margin-top:14px;font-size:13.5px;color:var(--dusk);max-width:52ch;}
   .heroline b{color:var(--dusk2);}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
 
-  /* the product IS the hero image: a paper file card with real output */
-  .filecard{background:var(--paper);color:var(--navy);border:1px solid var(--line);
-    box-shadow:0 34px 80px -30px rgba(0,0,0,.85), 0 0 0 1px var(--gold-edge);
-    transform:rotate(1.4deg);}
-  .filecard.flat{transform:none;}
+  /* the Tuesday email, as it arrives: a phone, an inbox row, the file */
+  .phonewrap{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .phone{width:100%;max-width:372px;background:#0B0F16;border-radius:38px;padding:12px;
+    box-shadow:0 0 0 1px rgba(246,244,238,.1),0 40px 90px -30px rgba(0,0,0,.9),
+      0 0 60px -10px rgba(242,194,48,.12);}
+  .screen{background:#F2F0EA;border-radius:28px;overflow:hidden;}
+  .statusbar{display:flex;justify-content:space-between;padding:10px 22px 4px;
+    font-size:12px;font-weight:700;color:var(--navy);}
+  .inbox{padding:4px 16px 10px;font-size:12px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--slate);}
+  .mailrow{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
+    background:var(--card);margin:0 10px;padding:11px 12px;border-radius:12px;
+    box-shadow:0 1px 0 rgba(16,30,51,.06);}
+  .mailrow .av{width:34px;height:34px;border-radius:50%;background:var(--navy);
+    display:grid;place-items:center;}
+  .mailrow .av svg{width:22px;height:15px;}
+  .mailrow b{display:block;font-size:14px;color:var(--navy);}
+  .mailrow .subj{font-size:13px;color:var(--ink2);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;}
+  .mailrow time{font-size:12px;color:var(--slate);align-self:start;}
+  .screen .filecard{margin:10px;border-radius:10px;overflow:hidden;box-shadow:none;}
+  .realtag{font-size:12.5px;color:var(--dusk);letter-spacing:.02em;}
+  .realtag b{color:var(--flag);font-weight:700;}
+
+  /* the product's own paper */
+  .filecard{background:var(--paper);color:var(--navy);border:1px solid var(--line);}
   .filehead{display:flex;justify-content:space-between;align-items:center;gap:10px;
     background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);
-    padding:12px 16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    padding:11px 14px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
     letter-spacing:.14em;text-transform:uppercase;}
-  .filehead span{color:var(--flag);font-size:11.5px;letter-spacing:.1em;}
-  .fbody{padding:8px 16px 14px;}
-  .frow{display:grid;grid-template-columns:38px 1fr 92px 44px 44px;gap:10px;
-    align-items:center;padding:9px 0;border-bottom:1px solid #EDEAE1;font-size:15px;}
+  .fbody{padding:4px 14px 8px;}
+  .frow{display:grid;grid-template-columns:30px 1fr 70px 40px;gap:10px;
+    align-items:center;padding:9px 0;border-bottom:1px solid #E6E2D6;font-size:14.5px;}
   .frow:last-child{border-bottom:0;}
   .fslot{font-family:'Barlow Condensed';font-weight:800;font-size:13px;color:var(--slate);
     letter-spacing:.06em;}
   .fname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .fbar{height:9px;background:#EDEAE1;border-radius:99px;overflow:hidden;}
+  .fname small{display:block;font-weight:500;font-size:11.5px;color:var(--slate);}
+  /* Bars run from 50% (a coin flip) to 100%: every number is a head-to-head
+     against the best bench option, so zero is not the floor — 50 is. */
+  .fbar{height:8px;background:#E6E2D6;border-radius:99px;overflow:hidden;}
   .fbar i{display:block;height:100%;border-radius:99px;
-    background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
-  .fpct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:18px;
+    background:linear-gradient(90deg,var(--flag-deep),var(--flag));
+    transition:width .9s cubic-bezier(.2,.8,.2,1);}
+  .fpct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:19px;
     text-align:right;font-variant-numeric:tabular-nums;}
-  .fproj{font-size:12.5px;color:var(--slate);text-align:right;font-variant-numeric:tabular-nums;}
-  .fnc{grid-column:3 / 6;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+  .fnc{grid-column:3 / 5;font-size:11px;font-weight:800;letter-spacing:.06em;
     text-transform:uppercase;color:var(--slate);text-align:right;}
-  .fcap{padding:10px 16px 13px;border-top:2px solid var(--navy);font-size:12.5px;
-    color:var(--slate);line-height:1.55;}
-  .real{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--turf);border:1px solid var(--turf);
-    padding:2px 7px;border-radius:2px;}
+  .fcap{padding:9px 14px 12px;border-top:2px solid var(--navy);font-size:12px;
+    color:var(--slate);line-height:1.5;}
+  .js .anim .frow{opacity:0;transform:translateX(-6px);transition:opacity .4s ease,transform .4s ease;}
+  .js .anim.in .frow{opacity:1;transform:none;}
 
-  /* ------------------------------------------------ numbered sections */
-  section{padding:58px 0 8px;}
-  .secnum{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
-    letter-spacing:.26em;text-transform:uppercase;color:var(--flag);
-    display:flex;align-items:center;gap:14px;}
-  .secnum::after{content:"";flex:1;height:1px;background:rgba(246,244,238,.14);}
-  h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
-    font-size:clamp(30px,4.4vw,46px);text-transform:uppercase;line-height:.96;
-    margin:12px 0 10px;text-shadow:0 3px 0 rgba(0,0,0,.5);}
-  .lede{font-size:16.5px;line-height:1.6;color:var(--dusk2);max-width:56ch;margin-bottom:26px;}
-  .duo{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start;}
-  .duo .filecard{margin-top:6px;}
+  /* ------------------------------------------------ sections */
+  section{padding:70px 0 8px;}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(30px,4.2vw,44px);
+    text-transform:uppercase;line-height:.98;letter-spacing:.005em;margin:0 0 12px;}
+  h2.slant{font-weight:900;font-style:italic;text-shadow:0 3px 0 rgba(0,0,0,.5);}
+  .lede{font-size:17px;line-height:1.6;color:var(--dusk2);max-width:58ch;margin-bottom:30px;}
+
+  /* proof line */
+  .proof{padding:34px 0 0;}
+  .proofline{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;
+    border-top:1px solid rgba(246,244,238,.12);border-bottom:1px solid rgba(246,244,238,.12);
+    padding:24px 0;}
+  .proofline .big{font-family:'Barlow Condensed';font-weight:900;font-size:clamp(54px,7vw,76px);
+    line-height:.9;color:var(--flag);font-variant-numeric:tabular-nums;}
+  .proofline p{font-size:17px;line-height:1.55;color:var(--dusk2);max-width:60ch;}
+  .proofline p b{color:var(--paper);}
+  .proofline a{color:var(--flag);}
+
+  /* one real file, annotated in the margin: each note sits level with the part
+     of the file it describes, and the paper runs unbroken down the left. */
+  .rows{display:grid;grid-template-columns:minmax(0,640px) minmax(0,1fr);gap:0 44px;}
+  .leaf{background:var(--paper);border-top:1px dashed #CFC8B6;
+    box-shadow:-18px 0 40px -30px rgba(0,0,0,.9),18px 0 40px -30px rgba(0,0,0,.9),
+      0 0 0 1px var(--gold-edge);}
+  .leaf.first{border-top:0;}
+  .leaf.last{box-shadow:0 40px 60px -34px rgba(0,0,0,.9),0 0 0 1px var(--gold-edge);}
+  .leaf .filecard{border:0;}
+  .note{position:relative;padding:14px 0 26px 26px;border-left:2px solid var(--flag);}
+  .note::before{content:"";position:absolute;left:-46px;top:27px;width:44px;height:1px;
+    background:var(--flag);}
+  .note b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;
+    text-transform:uppercase;letter-spacing:.02em;color:var(--paper);margin-bottom:6px;}
+  .note p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:40ch;}
+  .realfoot{font-size:12.5px;color:var(--dusk);margin-top:14px;}
+  .realfoot b{color:var(--flag);font-weight:700;}
 
   /* the flip widget */
-  .flip{padding:18px 16px 6px;}
+  .flip{padding:16px 16px 10px;}
   .flipnames{display:flex;justify-content:space-between;font-weight:800;font-size:16px;}
   .flipnames small{display:block;font-weight:500;color:var(--slate);font-size:12px;}
-  .flipbar{display:flex;height:14px;border-radius:99px;overflow:hidden;margin:12px 0 8px;}
-  .flipbar .a{background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
-  .flipbar .b{background:#D8D3C6;}
-  .flippct{display:flex;justify-content:space-between;
-    font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;}
-  .flippct span:last-child{color:var(--slate);}
+  .flipbar{position:relative;display:flex;height:14px;border-radius:99px;overflow:hidden;
+    margin:12px 0 8px;background:#D8D3C6;}
+  .flipbar .a{background:linear-gradient(90deg,var(--flag-deep),var(--flag));
+    transition:width 1.1s cubic-bezier(.2,.8,.2,1);}
+  .flipbar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;
+    background:var(--navy);opacity:.35;}
+  .flippct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;}
 
   /* usage widget */
-  .usage{padding:14px 16px 8px;}
+  .usage{padding:12px 16px 8px;}
   /* min-width:0 on every child is load-bearing, not defensive: a grid item
      defaults to min-width:auto, so `white-space:nowrap` on .ucount forced its
      120px column out to the ~230px the text needs — pushing the row past the
      viewport and scrolling the whole PAGE sideways on a phone. */
-  .urow{display:grid;grid-template-columns:1fr 150px minmax(0,200px);gap:12px;align-items:center;
-    padding:8px 0;border-bottom:1px solid #EDEAE1;font-size:14.5px;}
+  .urow{display:grid;grid-template-columns:1fr 130px minmax(0,200px);gap:12px;align-items:center;
+    padding:8px 0;border-bottom:1px solid #E6E2D6;font-size:14.5px;}
   .urow:last-child{border-bottom:0;}
   .urow b{font-weight:700;}
-  .ubar{height:9px;background:#EDEAE1;border-radius:99px;overflow:hidden;}
+  .ubar{height:9px;background:#E6E2D6;border-radius:99px;overflow:hidden;}
   .ubar i{display:block;height:100%;background:linear-gradient(90deg,#1E7A46,#2EA968);
-    border-radius:99px;}
+    border-radius:99px;transition:width .9s cubic-bezier(.2,.8,.2,1);}
   .urow > *{min-width:0;}
   .ucount{font-size:12.5px;color:var(--slate);text-align:right;}
 
-  /* the week strip */
-  .weekstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px;}
-  .day{background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 18px 16px;}
-  .day b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:18px;
-    text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
-  .day p{font-size:14.5px;line-height:1.6;color:var(--dusk2);}
+  /* pivot widget */
+  .pivot{padding:14px 16px 16px;}
+  .pivot .if{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--brick);}
+  .pivot p{font-size:15px;line-height:1.55;margin-top:6px;}
 
-  /* trust strip */
-  .truststrip{margin-top:54px;border-top:1px solid rgba(246,244,238,.12);
-    border-bottom:1px solid rgba(246,244,238,.12);padding:18px 0;
-    font-size:14.5px;color:var(--dusk2);text-align:center;}
-  .truststrip a{color:var(--flag);}
+  /* the week, as one line through it */
+  .timeline{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+    margin-top:30px;position:relative;}
+  .timeline::before{content:"";position:absolute;left:0;right:0;top:9px;height:2px;
+    background:linear-gradient(90deg,var(--flag),rgba(242,194,48,.25));}
+  .timeline li{position:relative;padding:34px 26px 0 0;}
+  .timeline li::before{content:"";position:absolute;left:0;top:2px;width:16px;height:16px;
+    border-radius:50%;background:var(--pitch);border:3px solid var(--flag);}
+  .timeline b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:20px;
+    text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
+  .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:34ch;}
 
   /* ------------------------------------------------ pricing */
-  .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:26px;}
+  .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px;}
   .plan{background:var(--card);color:var(--navy);border:1px solid var(--line);
-    padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;}
+    padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;height:100%;}
   .plan.founder{border:2px solid var(--flag);}
   .stamp50{position:absolute;top:-13px;right:16px;background:var(--flag);color:var(--navy);
     font-family:'Barlow Condensed';font-weight:800;font-size:12.5px;letter-spacing:.12em;
@@ -179,7 +230,8 @@
     line-height:1;margin-top:8px;}
   .price small{font-family:'Barlow';font-size:14px;font-weight:700;color:var(--slate);
     font-style:normal;}
-  .plan ul{margin:14px 0 0 18px;font-size:14px;line-height:1.7;color:var(--ink2);}
+  .plan ul{margin:14px 0 0 18px;font-size:14.5px;line-height:1.7;color:var(--ink2);}
+  .plan ul a{color:var(--turf);}
   .plan .soon{margin-top:16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
     letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);
     background:#F4EED9;border-left:4px solid var(--flag-deep);padding:12px 14px;}
@@ -187,10 +239,14 @@
   .finance a{color:var(--flag);}
 
   /* ------------------------------------------------ faq */
-  .faq{max-width:720px;}
+  .faqgrid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;
+    align-items:start;}
+  .faqgrid .lede{margin-bottom:0;}
   .faq details{border-bottom:1px solid rgba(246,244,238,.12);}
-  .faq summary{cursor:pointer;padding:15px 0;font-weight:700;font-size:16.5px;list-style:none;
+  .faq details:first-child{border-top:1px solid rgba(246,244,238,.12);}
+  .faq summary{cursor:pointer;padding:16px 0;font-weight:700;font-size:16.5px;list-style:none;
     display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .faq summary::-webkit-details-marker{display:none;}
   .faq summary::after{content:"+";font-family:'Barlow Condensed';font-weight:800;
     font-size:22px;color:var(--flag);}
   .faq details[open] summary::after{content:"–";}
@@ -198,49 +254,52 @@
   .faq .a a{color:var(--flag);}
 
   /* ------------------------------------------------ closer + footer */
-  .closer{text-align:center;padding:70px 0 20px;}
+  .closer{text-align:center;padding:80px 0 20px;}
   .closer p{color:var(--dusk2);margin:8px auto 20px;max-width:46ch;}
   footer{margin-top:56px;border-top:1px solid rgba(246,244,238,.14);
     padding:22px 0 44px;font-size:12.5px;color:#7C8DA5;line-height:1.8;}
   footer a{color:var(--flag);text-decoration:none;}
   footer a:hover{text-decoration:underline;}
 
-  /* reveal */
-  .js .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease;}
-  .js .reveal.in{opacity:1;transform:none;}
+  /* Motion shows the product doing its job, once: rows get decided, the flip
+     tips, the targets fill. Nothing else moves. The static HTML already holds
+     every final value, so a page whose script never runs is complete. */
   @media (prefers-reduced-motion: reduce){
-    .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
+    .fbar i,.ubar i,.flipbar .a{transition:none!important;}
+    .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
   }
 
-  /* The hero card is the proof, and its five fixed columns (258px of them)
-     starve the name wherever the CARD's own column is narrow — which is not
-     the same thing as a narrow viewport. Measured across a width sweep: at
-     375px the name got 39px for content needing 130, and at 881px — one pixel
-     ABOVE the old breakpoint, where the hero returns to two columns but the
-     card is still only ~377px — all four names truncated again. So this keys
-     on 1000px, where the card finally has room, not on the layout breakpoint.
-     Dropping the bar returns ~100px and loses nothing: the percentage beside
-     it states the same number. */
-  @media (max-width:1000px){
-    .frow{grid-template-columns:30px 1fr 42px 44px;gap:8px;}
-    .fbar{display:none;}
-    .fnc{grid-column:2 / 5;}
-  }
-  /* Very small phones: a wrapped name over two lines beats "Amon-Ra St. B…".
-     Truncation hides which player it is; wrapping only costs a row of height. */
-  @media (max-width:360px){
-    .fname{white-space:normal;overflow:visible;}
-  }
   @media (max-width:880px){
-    .hero{grid-template-columns:1fr;padding:44px 0 40px;gap:30px;}
-    /* Usage: the count gets its own line rather than fighting for a column. */
-    .urow{grid-template-columns:1fr auto;gap:8px 10px;}
+    .hero{grid-template-columns:1fr;padding:40px 0 20px;gap:34px;}
+    .rows{grid-template-columns:1fr;}
+    .note{order:0;border-left:0;padding:24px 0 10px;}
+    .note::before{display:none;}
+    .rows > :nth-child(1){order:2;} .rows > :nth-child(2){order:1;}
+    .rows > :nth-child(3){order:4;} .rows > :nth-child(4){order:3;}
+    .rows > :nth-child(5){order:6;} .rows > :nth-child(6){order:5;}
+    .leaf{border-top:0;}
+    .proofline{grid-template-columns:1fr;gap:6px;}
+    .timeline{grid-template-columns:1fr;gap:22px;}
+    .timeline::before{left:7px;right:auto;top:0;bottom:0;width:2px;height:auto;
+      background:linear-gradient(180deg,var(--flag),rgba(242,194,48,.25));}
+    .timeline li{padding:0 0 0 34px;}
+    .plans{grid-template-columns:1fr;}
+    .faqgrid{grid-template-columns:1fr;gap:18px;}
+    .navlinks .hidesm{display:none;}
+  }
+  @media (max-width:560px){
+    .urow{grid-template-columns:1fr auto;gap:6px 10px;}
     .ubar{grid-column:1 / -1;order:3;}
     .ucount{grid-column:1 / -1;order:2;text-align:left;}
-    .duo{grid-template-columns:1fr;}
-    .weekstrip{grid-template-columns:1fr;}
-    .plans{grid-template-columns:1fr;}
-    .navlinks .hidesm{display:none;}
+  }
+  /* The hero card lives in a phone that shrinks with the screen, so at phone
+     widths the name column is what gets squeezed. A wrapped name over two
+     lines beats "Amon-Ra St. B…": truncation hides which player it is. */
+  @media (max-width:430px){
+    nav .btn{font-size:14px;padding:10px 14px;white-space:nowrap;}
+    .brand{font-size:13px;letter-spacing:.18em;}
+    .frow{grid-template-columns:26px 1fr 44px 38px;gap:8px;}
+    .fname{white-space:normal;overflow:visible;}
   }
 </style>
 </head>
@@ -260,11 +319,11 @@
 
 <header class="hero">
   <div>
-    <div class="eyebrow">Fantasy football · start/sit, decided</div>
+    <div class="kicker">Fantasy football · start/sit</div>
     <h1>Know who <em><span>to start.</span></em></h1>
-    <p class="sub">Every close call on your roster, decided — for your exact team,
-    under your league's scoring, with the odds on each one. One short file a week.
-    You just set the lineup.</p>
+    <p class="sub">Your exact roster, under your league's scoring, with every close call
+    decided and the odds on each one. One short file in your inbox every Tuesday. You
+    just set the lineup.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -280,189 +339,207 @@
       <a class="btn ghost" href="sample-report.html">See a real file</a>
     </div>
   </div>
-  <div class="reveal">
-    <div class="filecard">
-      <div class="filehead">Your lineup · decided <span>Real output · 2024, week 10</span></div>
-      <div class="fbody">
-        <div class="frow"><span class="fslot">WR</span><span class="fname">Ja'Marr Chase</span>
-          <span class="fbar"><i style="width:65%"></i></span><span class="fpct">65%</span><span class="fproj">15.3</span></div>
-        <div class="frow"><span class="fslot">TE</span><span class="fname">George Kittle</span>
-          <span class="fbar"><i style="width:66%"></i></span><span class="fpct">66%</span><span class="fproj">10.7</span></div>
-        <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
-          <span class="fbar"><i style="width:58%"></i></span><span class="fpct">58%</span><span class="fproj">12.7</span></div>
-        <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
-          <span class="fnc">no call · status unconfirmed</span></div>
+  <div class="phonewrap">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar" aria-hidden="true"><span>Tue</span><span>5G</span></div>
+        <div class="inbox" aria-hidden="true">Inbox</div>
+        <div class="mailrow">
+          <span class="av"><svg viewBox="0 0 26 17" aria-hidden="true" focusable="false"><defs><linearGradient id="byliBody" x1=".12" y1="0" x2=".72" y2="1"><stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/><stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/></linearGradient><radialGradient id="byliSpec" cx=".34" cy=".24" r=".40"><stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/><stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient><radialGradient id="byliVig" cx=".5" cy=".5" r=".60"><stop offset=".42" stop-color="#25120A" stop-opacity="0"/><stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient></defs><g transform="translate(13 8.5) rotate(-18)"><path id="byliPath" d="M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z" fill="url(#byliBody)" stroke="#F2C230" stroke-width=".9"/><use href="#byliPath" fill="url(#byliSpec)" stroke="none"/><use href="#byliPath" fill="url(#byliVig)" stroke="none"/><g stroke="#F6F4EE" stroke-linecap="round" fill="none"><path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/><path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10M3.18-1.36L2.82 .91" stroke-width="1"/></g></g></svg></span>
+          <span><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span>
+          <time>Tue</time>
+        </div>
+        <div class="filecard anim" data-real="2024-w10">
+          <div class="filehead">Your lineup · decided</div>
+          <div class="fbody">
+            <div class="frow"><span class="fslot">WR</span><span class="fname">Ja'Marr Chase</span>
+              <span class="fbar"><i data-w="29" style="width:29%"></i></span><span class="fpct" data-n="65">65%</span></div>
+            <div class="frow"><span class="fslot">TE</span><span class="fname">George Kittle</span>
+              <span class="fbar"><i data-w="32" style="width:32%"></i></span><span class="fpct" data-n="66">66%</span></div>
+            <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
+              <span class="fbar"><i data-w="16" style="width:16%"></i></span><span class="fpct" data-n="58">58%</span></div>
+            <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
+              <span class="fnc">no call · status unconfirmed</span></div>
+          </div>
+          <div class="fcap">Each number is the odds that start beats your best bench option.
+          Bars start at even odds, a coin flip. "No call" means we don't guess.</div>
+        </div><!--/card-->
       </div>
-      <div class="fcap">The percentage is the odds that start beats your best bench
-      option. When we can't stand behind a number, the row says so. <span class="real">Real output</span></div>
     </div>
+    <p class="realtag"><b>Real file</b> · built from the 2024 season, Week 10</p>
   </div>
 </header>
 
-<section>
-  <div class="secnum">01 · The lineup</div>
-  <h2>Built for your roster. Not everyone's.</h2>
-  <p class="lede">Rankings talk to the whole internet. Your file is computed from your
-  exact roster and your league's scoring — every slot decided, with the odds on each
-  call we can stand behind.</p>
+<section class="proof">
+  <div class="proofline">
+    <div class="big">10,041</div>
+    <p><b>Real start/sit calls, replayed from eleven NFL seasons and graded against the box
+    scores — misses included.</b> Every call we send this season is graded the same way,
+    in public. <a href="confidence.html">See how they graded</a> ·
+    <a href="ledger/index.html">this season's running record</a></p>
+  </div>
 </section>
 
 <section>
-  <div class="secnum">02 · The coin flip</div>
-  <div class="duo">
-    <div>
-      <h2>The toss-up, called.</h2>
-      <p class="lede">Every week has one call that's genuinely close — the one the
-      rankings leave you alone with. We pick a side and put a number on it:
-      Start Amon-Ra St. Brown over Courtland Sutton — 58%, proj 12.7 vs 10.3.</p>
-    </div>
-    <div class="filecard flat reveal">
-      <div class="filehead">The week's closest call <span>Real output · 2024, week 10</span></div>
-      <div class="flip">
-        <div class="flipnames">
-          <span>Amon-Ra St. Brown<small>start · proj 12.7</small></span>
-          <span style="text-align:right">Courtland Sutton<small>sit · proj 10.3</small></span>
+  <h2>What lands in your inbox</h2>
+  <p class="lede">Rankings talk to the whole internet. Your file is built from your roster
+  and your league's scoring, every slot decided. Here's the rest of that same real file.</p>
+  <div class="rows">
+    <div class="leaf first">
+      <div class="filecard anim" data-real="2024-w10">
+        <div class="filehead">The week's closest call</div>
+        <div class="flip">
+          <div class="flipnames">
+            <span>Amon-Ra St. Brown<small>start · proj 12.7</small></span>
+            <span style="text-align:right">Courtland Sutton<small>sit · proj 10.3</small></span>
+          </div>
+          <div class="flipbar"><span class="a" data-w="58" style="width:58%"></span></div>
+          <!-- One numeral only: the sample publishes the 58% side and nothing
+               else, and a real-output card may not print a figure the product
+               never printed — even an arithmetic complement. -->
+          <div class="flippct"><span>58%</span></div>
         </div>
-        <div class="flipbar"><span class="a" style="width:58%"></span><span class="b" style="width:42%"></span></div>
-        <!-- One numeral only: the sample publishes the 58% side and nothing
-             else, and a "Real output" card may not print a figure the product
-             never printed — even an arithmetic complement. -->
-        <div class="flippct"><span>58%</span></div>
-      </div>
-      <div class="fcap">Decided in writing before kickoff — so Monday has a verdict
-      either way. <span class="real">Real output</span></div>
+      </div><!--/card-->
     </div>
+    <div class="note"><b>The toss-up, called</b><p>Every week has one call that's genuinely
+      close — the one the rankings leave you alone with. We pick a side and put a number on
+      it before kickoff: Start Amon-Ra St. Brown over Courtland Sutton — 58%, proj 12.7 vs
+      10.3.</p></div>
+    <div class="leaf">
+      <div class="filecard anim" data-real="2024-w10">
+        <div class="filehead">Who's getting the ball</div>
+        <!-- Bars scale on the per-game RATE (8.5 → 100%), not the raw total: the
+             windows differ (Kittle missed a game), and a total-scaled chart would
+             contradict the per-game number printed on its own row. -->
+        <div class="usage">
+          <div class="urow"><b>Ja'Marr Chase</b><span class="ubar"><i data-w="100" style="width:100%"></i></span><span class="ucount">34 targets (8.5 a game) · last 4 games</span></div>
+          <div class="urow"><b>Amon-Ra St. Brown</b><span class="ubar"><i data-w="61" style="width:61%"></i></span><span class="ucount">21 targets (5.2 a game) · last 4 games</span></div>
+          <div class="urow"><b>George Kittle</b><span class="ubar"><i data-w="79" style="width:79%"></i></span><span class="ucount">20 targets (6.7 a game) · last 3 games</span></div>
+        </div>
+      </div><!--/card-->
+    </div>
+    <div class="note"><b>The role before the points</b><p>Targets and carries for every
+      starter, counted from the real games. When a player's opportunity jumps, you know
+      before your league does.</p></div>
+    <div class="leaf last">
+      <div class="filecard anim" data-real="2024-w10">
+        <div class="filehead">If/then for gameday</div>
+        <div class="pivot">
+          <div class="if">If Tony Pollard (bench) is cleared to play</div>
+          <p>Look again at FLEX: he projects 11.2 against Chase Brown's 11.2, and that
+          slot has no number until his status is known.</p>
+        </div>
+      </div><!--/card-->
+    </div>
+    <div class="note"><b>Late news, handled in advance</b><p>A questionable player is a
+      question you answer on Tuesday, not at 12:55 on Sunday. The file tells you what
+      changes either way.</p></div>
   </div>
+  <p class="realfoot"><b>Real file</b> · every figure above comes from the published
+  <a href="sample-report.html" style="color:var(--flag)">2024 Week 10 sample</a>.</p>
 </section>
 
 <section>
-  <div class="secnum">03 · The role</div>
-  <div class="duo">
-    <div class="filecard flat reveal">
-      <div class="filehead">Who's getting the ball <span>Real output · 2024, week 10</span></div>
-      <!-- Bars scale on the per-game RATE (8.5 → 100%), not the raw total: the
-           windows differ (Kittle missed a game), and a total-scaled chart would
-           contradict the per-game number printed on its own row. -->
-      <div class="usage">
-        <div class="urow"><b>Ja'Marr Chase</b><span class="ubar"><i style="width:100%"></i></span><span class="ucount">34 targets (8.5 a game) · last 4 games</span></div>
-        <div class="urow"><b>Amon-Ra St. Brown</b><span class="ubar"><i style="width:61%"></i></span><span class="ucount">21 targets (5.2 a game) · last 4 games</span></div>
-        <div class="urow"><b>George Kittle</b><span class="ubar"><i style="width:79%"></i></span><span class="ucount">20 targets (6.7 a game) · last 3 games</span></div>
-      </div>
-      <div class="fcap">Counted from the games, never projected — the role shows up
-      before the points do. <span class="real">Real output</span></div>
-    </div>
-    <div>
-      <h2>See the role before the points.</h2>
-      <p class="lede">Targets and carries for every starter, counted from the real
-      games. When a player's opportunity jumps, you know before your league does.</p>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="secnum">Your week</div>
-  <h2>Ninety seconds on Tuesday morning.</h2>
-  <div class="weekstrip">
-    <div class="day reveal"><b>Tuesday</b><p>Your file lands. A short checklist up
-      top — the calls worth making, and the one player whose news to watch. Tick the
-      boxes, done in ninety seconds.</p></div>
-    <div class="day reveal"><b>Sunday</b><p>Your lineup's already set. If late news
-      breaks, the file told you the if/then in advance.</p></div>
-    <div class="day reveal"><b>Monday</b><p>Your calls come back graded against the
-      real box score as games go final — so you always know how the file is doing.</p></div>
-  </div>
-  <div class="truststrip reveal">
-    Every call we send is graded against the real box score, in public — see
-    <a href="backtest.html">how the method scored across eleven seasons</a> or
-    <a href="ledger/index.html">the season's running record</a>.
-  </div>
+  <h2>Ninety seconds on Tuesday morning</h2>
+  <ol class="timeline">
+    <li><b>Tuesday</b><p>Your file lands. A short checklist up top — the calls worth
+      making, and the one player whose news to watch. Tick the boxes, done in ninety
+      seconds.</p></li>
+    <li><b>Sunday</b><p>Your lineup's already set. If late news breaks, the file told
+      you the if/then in advance.</p></li>
+    <li><b>Monday</b><p>Your calls come back graded against the real box score as games
+      go final — so you always know how the file is doing.</p></li>
+  </ol>
 </section>
 
 <section id="pricing">
-  <div class="secnum">Pricing</div>
-  <h2>Try a month, or take the season.</h2>
+  <h2 class="slant">Try a month, or take the season.</h2>
+  <p class="lede">Joining mid-season? Your first file lands the day you sign up, then a
+  new one every Tuesday.</p>
   <div class="plans">
-    <div class="reveal">
-      <div class="plan">
-        <div class="tag">Monthly</div>
-        <div class="price">$14.99 <small>/ month</small></div>
-        <ul>
-          <li>Your first file lands the day you sign up — not next Tuesday</li>
-          <li>The full weekly file, every week</li>
-          <li>No-questions refund until your second weekly file's week kicks off,
-          one per person. Cancel any time, yourself, in one click</li>
-          <li>Billing stops when the season does — we don't charge through
-          the offseason</li>
-        </ul>
-        <div class="soon" id="monthly-cta">Checkout opens at launch</div>
-      </div>
+    <div class="plan">
+      <div class="tag">Monthly</div>
+      <div class="price">$14.99 <small>/ month</small></div>
+      <ul>
+        <li>Your first file the day you sign up, then every Tuesday</li>
+        <li>Two weekly files to decide: full refund, no questions, one per person
+        (<a href="terms.html#refunds">the exact terms</a>)</li>
+        <li>Cancel any time yourself, in one click</li>
+        <li>Billing stops when the season does — we don't charge through
+        the offseason</li>
+      </ul>
+      <div class="soon" id="monthly-cta">Checkout opens at launch</div>
     </div>
-    <div class="reveal" style="--d:.1s">
-      <div class="plan founder">
-        <span class="stamp50" aria-hidden="true">Founding rate</span>
-        <div class="tag">Season pass · 2026</div>
-        <div class="price">$39 <small>/ season</small></div>
-        <ul>
-          <li>Your first file the day you sign up, then a new one every Tuesday
-          through your title game</li>
-          <li>No-questions refund until your second weekly file's week kicks off,
-          one per person. If you refund and later re-subscribe, there's no second refund</li>
-          <li>Renews once a year at $39 unless you cancel — we email you first,
-          and cancelling is one click
-          (<a href="terms.html#cancel" style="color:var(--turf)">how</a>)</li>
-        </ul>
-        <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens at launch</div>
-      </div>
+    <div class="plan founder">
+      <span class="stamp50" aria-hidden="true">Founding rate</span>
+      <div class="tag">Season pass · 2026</div>
+      <div class="price">$39 <small>/ season</small></div>
+      <ul>
+        <li>Your first file the day you sign up, then every Tuesday through your
+        title game</li>
+        <li>Two weekly files to decide: full refund, no questions, one per person
+        (<a href="terms.html#refunds">the exact terms</a>)</li>
+        <li>Renews once a year at $39 unless you cancel — we email you first,
+        and cancelling is one click
+        (<a href="terms.html#cancel">how</a>)</li>
+      </ul>
+      <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens at launch</div>
     </div>
   </div>
   <p class="finance" id="currency-note">All prices in US dollars.</p>
-  <p class="finance" id="finance-note">Payment runs on Stripe's own page when checkout
-  opens. Setting up today saves nothing yet — leave your email above and you'll get one
-  message the morning it opens, at the founding rate. Running the league?
+  <p class="finance" id="finance-note">Payment runs on Stripe's own page. Checkout opens
+  soon — leave your email above and you'll get one message the morning it does, at the
+  founding rate. Running the league?
   <a href="league-pass.html">One payment can cover every team</a>.</p>
 </section>
 
 <section id="faq">
-  <div class="secnum">Fair questions</div>
-  <h2>Before you ask the group chat</h2>
-  <div class="faq reveal">
-    <details>
-      <summary>Does it work with my league app?</summary>
-      <div class="a">Any of them — Sleeper, ESPN, Yahoo, anything. You paste your
-      roster once (or pick names from a list) and we take it from there. No league
-      connection needed.</div>
-    </details>
-    <details>
-      <summary>Does it match my league's scoring?</summary>
-      <div class="a">Yes. PPR, half-PPR, or standard, plus your league size and lineup
-      shape (superflex included). Every number is computed under your settings.</div>
-    </details>
-    <details>
-      <summary>When does it arrive?</summary>
-      <div class="a">Tuesday morning, every week of the season — once the whole week's
-      games are in the books, days before your lineup locks. The first one lands
-      the day you sign up.</div>
-    </details>
-    <details>
-      <summary>What if my roster changes mid-season?</summary>
-      <div class="a">Trades and pickups happen — reply to any file with your updated
-      roster and it follows from the next Tuesday.</div>
-    </details>
-    <details>
-      <summary>When do the numbers start?</summary>
-      <div class="a">Week 2 for the standard setup we've graded (full PPR, 12 teams,
-      the usual lineup) — leaning on last season at first, and saying so on each row.
-      Other setups start in Week 4 — if you join before the season, that's after
-      your refund window (your first two weekly files) closes, so weigh that before
-      you buy. Week 1 sets your lineup in last season's scoring
-      order; <a href="sample-first-week.html">here's exactly what that first file
-      looks like</a>, so nothing about your first Tuesday is a surprise.</div>
-    </details>
+  <div class="faqgrid">
+    <div>
+      <h2>Before you ask the group chat</h2>
+      <p class="lede">Anything else, <a href="compare/index.html" style="color:var(--flag)">see
+      how we stack up against the field</a> — prices and all.</p>
+    </div>
+    <div class="faq">
+      <details>
+        <summary>Does it work with my league app?</summary>
+        <div class="a">Any of them — Sleeper, ESPN, Yahoo, anything. You paste your
+        roster once (or pick names from a list) and we take it from there. No league
+        connection needed.</div>
+      </details>
+      <details>
+        <summary>Does it match my league's scoring?</summary>
+        <div class="a">Yes. PPR, half-PPR, or standard, plus your league size and lineup
+        shape (superflex included). Every number is computed under your settings.</div>
+      </details>
+      <details>
+        <summary>When does it arrive?</summary>
+        <div class="a">Tuesday morning, every week of the season — once the whole week's
+        games are in the books, days before your lineup locks. The first one lands
+        the day you sign up.</div>
+      </details>
+      <details>
+        <summary>What if my roster changes mid-season?</summary>
+        <div class="a">Trades and pickups happen — reply to any file with your updated
+        roster and it follows from the next Tuesday.</div>
+      </details>
+      <details>
+        <summary>When do the numbers start?</summary>
+        <div class="a">Right away if you join now: from Week 4 on, every setup gets odds
+        in its first file. Before that, Week 2 for the standard setup we've graded (full
+        PPR, 12 teams, the usual lineup), leaning on last season and saying so on each
+        row, and Week 4 for other setups — if you join before the season, that's after
+        your refund window (your first two weekly files) closes, so weigh that before you
+        buy. Week 1 sets your lineup in last season's scoring
+        order; <a href="sample-first-week.html">here's exactly what that first file
+        looks like</a>.</div>
+      </details>
+    </div>
   </div>
 </section>
 
 <section class="closer">
-  <h2 id="closer-head">Your lineup, decided every Tuesday.</h2>
+  <h2 class="slant" id="closer-head">Your lineup, decided every Tuesday.</h2>
   <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
   <div class="cta-row" style="justify-content:center">
     <a class="btn gold" id="closer-cta" href="#watch-form">Get launch access</a>
@@ -516,7 +593,7 @@
         {"@type": "Question", "name": "What if my roster changes mid-season?",
          "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any file with your updated roster and it follows from the next Tuesday."}},
         {"@type": "Question", "name": "When do the numbers start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Week 2 for the standard setup we've graded (full PPR, 12 teams, the usual lineup) — leaning on last season at first, and saying so on each row. Other setups start in Week 4 — if you join before the season, that's after your refund window (your first two weekly files) closes, so weigh that before you buy. Week 1 sets your lineup in last season's scoring order."}}
+         "acceptedAnswer": {"@type": "Answer", "text": "Right away if you join now: from Week 4 on, every setup gets odds in its first file. Before that, Week 2 for the standard setup we've graded (full PPR, 12 teams, the usual lineup), leaning on last season and saying so on each row, and Week 4 for other setups — if you join before the season, that's after your refund window (your first two weekly files) closes, so weigh that before you buy. Week 1 sets your lineup in last season's scoring order."}}
       ]
     }
   ]
@@ -699,19 +776,50 @@ if (CHECKOUT_OPEN) {
 }
 
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const targets = document.querySelectorAll(".reveal");
+// Motion shows the product deciding, once per card: rows arrive, bars fill to
+// their figure, percentages count up from a coin flip. The HTML already holds
+// every final value, so nothing here is needed for the page to be complete.
+const cards = document.querySelectorAll(".anim");
+function play(card) {
+  card.classList.add("in");
+  card.querySelectorAll(".frow").forEach((row, i) => {
+    row.style.transitionDelay = (i * 0.16) + "s";
+  });
+  card.querySelectorAll("[data-w]").forEach((bar, i) => {
+    setTimeout(() => { bar.style.width = bar.dataset.w + "%"; }, 120 + i * 160);
+  });
+  card.querySelectorAll("[data-n]").forEach((el, i) => {
+    const end = Number(el.dataset.n);
+    const start = performance.now() + 120 + i * 160;
+    const tick = (now) => {
+      const t = Math.min(1, Math.max(0, (now - start) / 900));
+      el.textContent = Math.round(50 + (end - 50) * (1 - Math.pow(1 - t, 3))) + "%";
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    // A background tab never runs animation frames, and a number frozen at
+    // "50%" would misquote the file. The final figure lands regardless.
+    setTimeout(() => { el.textContent = end + "%"; }, 1400 + i * 160);
+  });
+}
 if (!reduced && "IntersectionObserver" in window) {
+  cards.forEach((card) => {
+    card.querySelectorAll("[data-w]").forEach((bar) => {
+      bar.style.width = bar.closest(".flipbar") ? "50%" : "0%";
+    });
+    card.querySelectorAll("[data-n]").forEach((el) => { el.textContent = "50%"; });
+  });
   const io = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.isIntersecting) { entry.target.classList.add("in"); io.unobserve(entry.target); }
+      if (entry.isIntersecting) { play(entry.target); io.unobserve(entry.target); }
     }
-  }, { threshold: 0.15 });
-  targets.forEach((t) => io.observe(t));
-  // Failsafe: content must never STAY hidden. If the observer misfires for
-  // any reason, everything reveals on its own within moments.
-  setTimeout(() => targets.forEach((t) => t.classList.add("in")), 1400);
+  }, { threshold: 0.35 });
+  cards.forEach((card) => io.observe(card));
+  // Failsafe: a card must never STAY undecided. If the observer misfires,
+  // everything plays out on its own.
+  setTimeout(() => cards.forEach((card) => { if (!card.classList.contains("in")) play(card); }), 4000);
 } else {
-  targets.forEach((t) => t.classList.add("in"));
+  cards.forEach((card) => card.classList.add("in"));
 }
 </script>
 </body>

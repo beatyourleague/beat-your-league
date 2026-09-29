@@ -70,9 +70,9 @@ _ROW = re.compile(
     r'<div class="frow">'
     r'<span class="fslot">([^<]+)</span>'
     r'<span class="fname">([^<]+)</span>\s*'
-    r'(?:<span class="fbar"><i style="width:(\d+)%"></i></span>'
-    r'<span class="fpct">([\d.]+)%</span>'
-    r'<span class="fproj">([\d.]+)</span>'
+    r'(?:<span class="fbar"><i(?: data-w="\d+")? style="width:(\d+)%"></i></span>'
+    r'<span class="fpct"(?: data-n="\d+")?>([\d.]+)%</span>'
+    r'(?:<span class="fproj">([\d.]+)</span>)?'
     r'|<span class="fnc">([^<]+)</span>)',
     re.S)
 
@@ -85,7 +85,9 @@ def hero_rows(page: str) -> list[dict[str, str]]:
     inventing them here would be the fabrication principle 3 forbids, on the
     single most-forwarded surface we own.
     """
-    start = page.find('<div class="filecard">')
+    # The hero card is the page's first file card; since the Sep 29 2026
+    # redesign it carries a class list and a data marker, not a bare class.
+    start = page.find('<div class="filecard')
     if start < 0:
         raise OgError("no hero file card on the landing page — refusing to "
                       "invent rows for the social card")

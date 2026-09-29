@@ -516,10 +516,31 @@ def test_the_landing_quotes_no_backtest_figure_in_either_direction() -> None:
                      " ", LANDING, flags=re.S | re.I)
     visible = re.sub(r"\s+", " ", visible)
     for figure in ("53.5%", "2,056", "57.4%", "62.5%", "63.6%", "78.3%", "77.2%",
-                   "7.2%", "64.6%", "10,041"):
+                   "7.2%", "64.6%"):
         assert figure not in visible, \
             f"backtest figure {figure} is quoted on the landing page; it belongs on " \
             "the evidence page that carries its context"
+    # One exception, owner decision Sep 29 2026: the VOLUME of the grading —
+    # how many calls were replayed and graded — is a fact about the work, not
+    # a claim about how often it was right, and it sells without saying
+    # anything the frozen method forbids. It must be the live grading's own
+    # count, read from the report, never typed in and left to drift.
+    source = (SITE.parent / "reports" / "nflverse-backtest.md").read_text(encoding="utf-8")
+    graded = int(re.search(r"\| Calls graded \| (\d+) \|", source).group(1))
+    for count in re.findall(r"\b\d{1,3}(?:,\d{3})+\b", visible):
+        if count.replace(",", "") == str(graded):
+            continue
+        assert int(count.replace(",", "")) < 1000 or count in ("$1,000",), \
+            f"{count} on the landing is not the live grading's call count ({graded:,})"
+    proof = re.search(r"\d{1,3},\d{3}</div>\s*<p>(.*?)</p>", LANDING, re.S)
+    assert proof and f"{graded:,}" in LANDING, \
+        "the proof line lost its count, or the count no longer matches the grading"
+    assert re.search(r"misses included", proof.group(1)), \
+        "the proof line must say the misses are in it — a count alone implies a record"
+    seasons = len(re.findall(r"^\| 20\d\d \| \d+ \|$", source, re.M))
+    words = {10: "ten", 11: "eleven", 12: "twelve", 13: "thirteen"}
+    assert f"{words.get(seasons, seasons)} NFL seasons" in proof.group(1), \
+        f"the proof line's season count no longer matches the grading ({seasons})"
     assert not re.search(r"hindsight filter|calibration error|buckets?\b", visible,
                          re.I), "calibration vocabulary leaked back onto the sales page"
     # Every proof is one click away, never zero clicks.
@@ -1253,10 +1274,11 @@ def test_compare_lists_our_own_weaknesses_like_everyone_elses() -> None:
     """The complete honest comparison is the marketing strategy (PLAN §5) — a
     version that goes soft on its own row is just a longer ad. The row must
     name real product gaps, including the one that matters most to a buyer
-    right now: no track record until October."""
+    right now: no live track record yet. (It said "until October" until Sep 29
+    2026; the record starts with the first subscriber's file, not a date.)"""
     our_row = COMPARE.split('class="us"')[1].split("</tr>")[0]
     for admission in ("No draft kit", "no app", "we're new",
-                      "October", "backtest and a sample"):
+                      "record fills in", "backtest and a sample"):
         assert admission in our_row, \
             f"our own weaknesses column lost {admission!r}"
 
@@ -2022,7 +2044,9 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
     expects to exist, and pins every figure — integers and decimals — to the
     published sample."""
     import html as _html
-    cards = re.findall(r'<div class="filecard[^"]*">(.*?)<span class="real">',
+    # Re-anchored Sep 29 2026: the redesign states "Real file" once, not on
+    # every card, so the cards carry a data marker and a closing comment.
+    cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+">(.*?)<!--/card-->',
                        LANDING, re.S)
     assert len(cards) >= 3, (
         "the landing lost its Real-output cards, or the markup moved and this "
@@ -2516,15 +2540,17 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     The last one matters most for a link opened from X on a mobile: a page that
     scrolls sideways reads as broken before a word of it is read.
     """
-    # The hero card's compact treatment keys on the CARD's width, not the
-    # layout breakpoint that happens to sit at 880.
-    assert re.search(r"@media \(max-width:1000px\)\{[^}]*\.frow\{", LANDING, re.S), \
-        "the hero card's narrow treatment is gone or re-keyed to a breakpoint"
-    compact = LANDING.split("@media (max-width:1000px)")[1][:400]
-    assert ".fbar{display:none;}" in compact, \
-        "the bar column is back on narrow screens — it is the 92px the name needs"
-    assert ".fnc{grid-column:2 / 5;}" in compact, \
-        "the no-call row still spans the five-column grid"
+    # Since the Sep 29 2026 redesign the hero card sits inside a phone frame
+    # capped at 372px, so it is narrow at EVERY viewport and the squeeze comes
+    # only at phone widths, where the frame itself shrinks. There the columns
+    # tighten and a name wraps rather than truncating. Measured at 360-430px.
+    assert re.search(r"\.phone\{[^}]*max-width:372px", LANDING), \
+        "the phone frame lost its cap — re-measure the hero card's columns"
+    assert "@media (max-width:430px)" in LANDING, "the hero card's narrow treatment is gone"
+    compact = LANDING.split("@media (max-width:430px)")[1].split("\n  }")[0]
+    assert ".frow{" in compact, "the hero card's columns no longer tighten on a phone"
+    assert ".fname{white-space:normal" in compact, \
+        "names truncate again on a phone — the one card whose job is to be believed"
 
     # Grid children must be allowed to shrink, or nowrap text forces the row
     # wider than the viewport again.

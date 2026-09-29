@@ -191,7 +191,8 @@ def no_call_explainer(listed: str) -> str:
     number is not a guess, which is exactly the claim the grade withholds.
     """
     return (f"{listed}. When we do put a number on a slot, it means: the odds "
-            f"this guy outscores the best option on your bench. We only show it once "
+            f"this guy outscores the best option on your bench, and its bar starts at "
+            f"50%, a coin flip. We only show it once "
             f"we've confirmed both players are active — and every one goes on the "
             f"public record and gets graded.")
 
@@ -294,6 +295,12 @@ def esc(value: Any) -> str:
 
 def _pct(value: float) -> int:
     return max(0, min(100, round(value * 100)))
+
+
+def _bar_from_even(value: float) -> int:
+    """Bar width for a head-to-head probability, drawn from 50% (a coin
+    flip) to 100%: 0.58 -> 16, 0.66 -> 32, 1.0 -> 100."""
+    return max(0, min(100, round((value - 0.5) * 200)))
 
 
 def extract_design(template_html: str) -> tuple[str, str]:
@@ -669,12 +676,15 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
         flags = [f["text"] for f in (slot.get("flags") or [])]
         confidence = slot.get("confidence")
         if confidence is not None:
-            # The bar draws the numeral it sits under — same width, same
-            # number — so a reader who skims sees the same call a reader who
-            # reads does. Grade C: still a recorded prediction, not accuracy.
+            # The bar runs from 50% to 100%, not from zero: every number is a
+            # head-to-head against the best bench option, so 50 is a coin flip
+            # and the floor. Drawn from zero, a 58% lean looked nearly as long
+            # as a 66% call; drawn from 50 the reader who skims sees the same
+            # call as the reader who reads. Grade C: still a recorded
+            # prediction, not accuracy.
             call = (f'<b>{_pct(confidence)}%</b>'
-                    f'<span class="cbar"><i style="width:{_pct(confidence)}%">'
-                    f'</i></span>')
+                    f'<span class="cbar" title="Bar starts at 50%, a coin flip">'
+                    f'<i style="width:{_bar_from_even(confidence)}%"></i></span>')
         elif (mixed and slot.get("player_name")
                 and not is_structural_gate(slot.get("confidence_gate"))):
             shown_marker = True
