@@ -83,13 +83,21 @@
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
 
   /* the Tuesday email, as it arrives: a phone, an inbox row, the file */
-  .phonewrap{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .phonewrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;}
+  /* A stadium light behind the phone: dark frame on a dark page otherwise
+     dissolves into it. Painted behind, never over, the screen. */
+  .phonewrap::before{content:"";position:absolute;z-index:0;left:50%;top:44%;
+    width:680px;max-width:180vw;aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none;
+    background:radial-gradient(closest-side,rgba(242,194,48,.34),rgba(242,194,48,.14) 42%,
+      rgba(46,169,104,.10) 66%,transparent);}
+  .phonewrap > *{position:relative;z-index:1;}
   /* An iPhone's proportions (19.5:9), bezel, Dynamic Island and home
      indicator. The file runs on past the bottom edge, as a real inbox does. */
   .phone{position:relative;width:100%;max-width:320px;aspect-ratio:9 / 19.5;
-    background:linear-gradient(145deg,#2A2F38,#0B0E13 40%,#1A1E25);border-radius:52px;
-    padding:11px;box-shadow:0 0 0 1px rgba(246,244,238,.14),inset 0 0 0 2px #05070A,
-      0 50px 100px -34px rgba(0,0,0,.95),0 0 70px -12px rgba(242,194,48,.14);}
+    background:linear-gradient(145deg,#3A404B,#0B0E13 40%,#232830);border-radius:52px;
+    padding:11px;box-shadow:0 0 0 1.5px #8C939E,0 0 0 3px rgba(12,14,18,.9),
+      inset 0 0 0 2px #05070A,inset 1px 1px 0 3px rgba(255,255,255,.08),
+      0 60px 110px -30px rgba(0,0,0,1),0 0 90px -10px rgba(242,194,48,.28);}
   .phone::before,.phone::after{content:"";position:absolute;width:3px;border-radius:2px;
     background:#1E232B;}
   .phone::before{left:-3px;top:22%;height:9%;box-shadow:0 -52px 0 -1px #1E232B;}
