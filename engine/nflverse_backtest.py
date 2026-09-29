@@ -274,23 +274,65 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
                      league_size: int = LEAGUE_SIZE, seed: int = HEADLINE_SEED,
                      weeks: Sequence[int] = GRADED_WEEKS,
                      depth_multiplier: float = 2.0,
-                     prior_self_weight: float = 0.0) -> list[StartSitCall]:
+                     prior_self_weight: float = 0.0,
+                     defenses: bool = False) -> list[StartSitCall]:
     """Every graded call for one season.
 
     ``prior_self_weight`` enables the preregistered early-season seed and is
     0.0 — inert, headline unchanged — everywhere except that arm's runner.
+
+    ``defenses`` is reports/round-two-method.md §1b's switch, False (inert)
+    everywhere but that arm: weekly rows gain every team defense's line, each
+    defense is ranked on its previous season, a defense's graded points are
+    ``score_defense``, and the product's defense gate is lifted for this call
+    only. With it False no defense ever has a row, so nothing here moves.
     """
     prior = season_rows(raw_dir, str(int(season) - 1))
     if not prior:
         raise BacktestError(f"no {int(season) - 1} stats to build {season}'s field")
     weekly = season_rows(raw_dir, season)
     universe = build_universe(prior, rule, season_teams(raw_dir, season))
+    if defenses:
+        weekly, universe = _with_defenses(weekly, universe, raw_dir, season)
     rosters = allocate(universe, template, league_size, seed, depth_multiplier)
     players = player_index_for(universe)
     injuries = load_weeks(fetch_injuries(season, injury_dir), season)
     prior_self = (prior_self_observations(prior, rule)
                   if prior_self_weight > 0 else None)
 
+    import engine.week_report as week_report
+    gate = week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED
+    if defenses:
+        week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED = True
+    try:
+        return _season_calls(season, weeks, universe, rosters, weekly, template,
+                             rule, players, prior_self, prior_self_weight,
+                             raw_dir, injuries)
+    finally:
+        week_report.TEAM_DEFENSE_CONFIDENCE_CALIBRATED = gate
+
+
+def _with_defenses(weekly, universe: Universe, raw_dir: Path, season: str):
+    """round-two-method §1b items 1-2, on copies so nothing leaks."""
+    from engine.scoring import score_defense
+    from engine.subscriber import merge_defenses
+    from ingest.nflverse import defense_rows
+    merged = merge_defenses({w: dict(rows) for w, rows in weekly.items()},
+                            defense_rows(raw_dir, season))
+    prior_points = dict(universe.prior_points)
+    for teams in defense_rows(raw_dir, str(int(season) - 1)).values():
+        for abbr, row in teams.items():
+            value = score_defense(row, row.get("points_allowed"))
+            if value is not None:
+                key = f"{DEFENSE}-{abbr}"
+                prior_points[key] = prior_points.get(key, 0.0) + value
+    return merged, Universe(names=universe.names, positions=universe.positions,
+                            prior_points=prior_points)
+
+
+def _season_calls(season, weeks, universe, rosters, weekly, template, rule,
+                  players, prior_self, prior_self_weight, raw_dir,
+                  injuries) -> list[StartSitCall]:
     out: list[StartSitCall] = []
     for week in weeks:
         season_obj = build_backtest_season(universe, rosters, weekly, season,
@@ -319,6 +361,19 @@ def calls_for_season(season: str, raw_dir: Path, injury_dir: Path,
     return out
 
 
+def _points(rows, player_id: str, rule) -> float:
+    """A graded side's points. A defense has a row only under the
+    ``defenses`` switch, and is then scored as the product scores it."""
+    if player_id not in rows:
+        return 0.0
+    if player_id.startswith(f"{DEFENSE}-"):
+        from engine.scoring import score_defense
+        row = rows[player_id]
+        value = score_defense(row, row.get("points_allowed"))
+        return value if value is not None else 0.0
+    return score(rows[player_id], rule)
+
+
 def _call(season: str, week: int, roster_id: int, pick, rows, rule) -> StartSitCall:
     """One graded head-to-head, in the record engine.calibration already reads.
 
@@ -327,8 +382,7 @@ def _call(season: str, week: int, roster_id: int, pick, rows, rule) -> StartSitC
     scored nothing, which is exactly what his slot produced in a real lineup.
     """
     recommended, alternative = pick.player_id, pick.alternative_id
-    got = score(rows[recommended], rule) if recommended in rows else 0.0
-    other = score(rows[alternative], rule) if alternative in rows else 0.0
+    got, other = _points(rows, recommended, rule), _points(rows, alternative, rule)
     return StartSitCall(
         season=str(season), week=week, roster_id=roster_id,
         slot=pick.slot, slot_index=pick.slot_index,
