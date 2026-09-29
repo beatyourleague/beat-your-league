@@ -2599,3 +2599,34 @@ def test_a_mistyped_password_never_reaches_stripe() -> None:
         "the shape check runs after the first Stripe call")
     assert "NOT your Mac password" in source, (
         "the prompt no longer says what it is not, which is what caused this")
+
+
+FUNNEL_PAGES = ("index.html", "join/index.html", "league-pass.html", "thanks.html")
+
+
+@pytest.mark.parametrize("name", FUNNEL_PAGES)
+def test_no_funnel_page_carries_a_launch_date_that_outlives_itself(name: str) -> None:
+    """On Sep 29 2026 the live landing told every visitor "First files land
+    Tuesday, Sep 8" — three times — beside "Checkout opens at launch", and the
+    join page put "First report Tue Sep 8" beside every Buy button. To a cold
+    reader arriving from X that does not read as pre-launch; it reads as
+    abandoned.
+
+    The fix is not a newer date, which goes stale the same way. It is copy that
+    is true in August, in October and next August: "the day you sign up", "every
+    Tuesday". A launch date belongs in an announcement, never in a page that
+    outlives it — and "before Week 1" is the same mistake as a phrase.
+    """
+    # What a buyer can SEE: markup and JS string literals, not comments. The
+    # first run of this guard failed on a JS comment explaining why the old
+    # date was removed — prose SAYING not to hardcode a date, read as a date.
+    # `(^|\s)//` rather than `//`, so https:// URLs survive the strip.
+    text = (SITE / name).read_text(encoding="utf-8")
+    text = re.sub(r"<!--.*?-->|/\*.*?\*/", " ", text, flags=re.S)
+    text = re.sub(r"(^|\s)//[^\n]*", r"\1", text, flags=re.M)
+    for stale in (r"\bSept?\.? ?\d{1,2}\b(?!,? 20\d\d)", r"before Week 1",
+                  r"\bWeek 1 through\b", r"opens before Week"):
+        hit = re.search(stale, text)
+        assert not hit, (
+            f"{name} carries {hit.group(0)!r} — a date or season phase that will "
+            f"be false for most of the year")

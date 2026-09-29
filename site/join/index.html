@@ -149,11 +149,11 @@
     lineup we'd set, with the odds on the calls we can stand behind. A paid product from
     day one — <b>$39 for the season</b>, founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
-    yet — it opens before Week 1. You're welcome to set up now to see how it works, but
+    yet. You're welcome to set up now to see how it works, but
     nothing is saved until it does; leave your email on the
     <a href="../index.html">front page</a> and we'll send exactly one message when it opens.</div>
     <div class="beta-chips" id="header-chips">
-      <span>$39 / season · founding rate</span><span>Cancel any time</span><span>First report Tue Sep 8</span>
+      <span>$39 / season · founding rate</span><span>Cancel any time</span><span>First file the day you join</span>
     </div>
   </header>
 
@@ -238,7 +238,7 @@ Baltimore Ravens
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
         unless you cancel</b> — we email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
-        <li id="first-note">Your first report lands <b>Tuesday, Sep 8</b>. Refunds are no-questions
+        <li id="first-note">Your first file lands <b>the day you join</b>. Refunds are no-questions
         through Week 2 — one per person, and a re-subscription after a refund is final.
         Changed your mind later?
         <a href="../terms.html#cancel">Cancelling takes about fifteen seconds</a> in your
@@ -733,7 +733,7 @@ if (UPDATE_MODE) {
     "your own report — not a copy of theirs. Nothing to pay.";
   $("header-chips").replaceChildren();
   ["Seat already paid by your commissioner", "Your own report",
-   "First report Tue Sep 8"].forEach((text) => {
+   "First file the day you join"].forEach((text) => {
     const chip = document.createElement("span");
     chip.textContent = text;
     $("header-chips").appendChild(chip);
@@ -763,7 +763,7 @@ if (UPDATE_MODE) {
     "behind. A paid product from day one — $14.99 a month, and billing " +
     "stops on its own when the season ends.";
   $("header-chips").replaceChildren();
-  ["$14.99 / month", "Cancel any time", "First report Tue Sep 8"]
+  ["$14.99 / month", "Cancel any time", "First file the day you join"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;
@@ -783,7 +783,7 @@ if (UPDATE_MODE) {
     "the calls we can stand behind. One League Pass covers all of it — $99 " +
     "for the whole league's season.";
   $("header-chips").replaceChildren();
-  ["$99 / league / season", "Covers every manager", "First report Tue Sep 8"]
+  ["$99 / league / season", "Covers every manager", "First file the day you join"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;
