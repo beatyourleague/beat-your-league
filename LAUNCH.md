@@ -132,7 +132,7 @@ footer (only there — reports to paying subscribers are transactional).
      them, and each is one more field on a mobile checkout reached from a link
      on X. If Stripe's address block turns out to force a name field, add the
      name to `privacy.html` §1 before the first live sale, not after.
-   - **Include a free trial** — the Week-2 no-questions refund already is the
+   - **Include a free trial** — the two-file no-questions refund already is the
      trial, and it is disclosed on the pricing card, in the contract and in the
      welcome email. A trial would also land in weeks 1-3, which publish no
      confidence numbers, so it would show the thinnest version of the product.

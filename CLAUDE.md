@@ -1629,6 +1629,20 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   still names the rival, because it goes only to the person entitled to see it. Guarded by
   `test_no_real_league_member_is_named_on_any_public_page`. Regenerate `site/backtest.html`
   and `site/sample-report.html` through those paths — never by hand.
+**The refund window is two weekly files, counted from the purchase (owner decision, Sep 29
+2026).** "Through Week 2" was a calendar date written for an August launch; the site kept
+selling into Week 4 under it, so every buyer from Week 3 on read "no-questions refund" on the
+pricing card and bought a window the terms had already closed. It now runs until a week after
+the buyer's second weekly file, on every plan and whenever they join (terms §5 `#refunds`
+defines it: a weekly file is one week's report; the day-one ROSTER file is not one, a day-one
+weekly REPORT is; a season that ends first extends it a week past the last file). The
+welcome email reads `REFUND_TERMS` / `REFUND_TERMS_LEAGUE` from `render/welcome.py`.
+`test_the_refund_window_is_counted_from_the_purchase_not_the_calendar` sweeps every page under
+`site/` plus those constants for a calendar-anchored window (mutation-checked on four
+surfaces). The evidence for any refund decision is already in `sent.jsonl`: weekly files key
+as `{season}-wNN-{slug}` with `sent_at`, the roster file as `preseason-…`, which is exactly
+the line the definition draws.
+
 **Terms and privacy are two documents (Aug 27 2026).** Stripe shows the Terms of service
 and Privacy policy URLs to the buyer at checkout, and `legal.html` told them nothing about
 which one they were opening — the field names are separate for a reason. `site/terms.html`

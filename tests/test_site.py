@@ -81,6 +81,58 @@ def test_refund_limit_is_disclosed_before_purchase_not_after() -> None:
         assert re.search(r"final", page, re.I)
 
 
+def _buyer_surfaces() -> dict[str, str]:
+    """Every published page plus the retainable welcome email: anywhere a
+    buyer is told what they are entitled to."""
+    import render.welcome as welcome
+    pages = {str(p.relative_to(SITE)): p.read_text(encoding="utf-8")
+             for p in SITE.rglob("*.html")}
+    pages["render/welcome.py"] = " ".join(
+        (welcome.REFUND_TERMS, welcome.REFUND_TERMS_LEAGUE))
+    return pages
+
+
+def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> None:
+    """"Through Week 2" gave a buyer who joined in Week 3 no window at all,
+    while the pricing card beside the button still sold them one — the
+    promise a reader relies on, voided by a date they were never shown.
+
+    Reproduction: the site went on selling from Week 4 of 2026 under exactly
+    that wording. The window is the buyer's own first two weekly files, so it
+    exists whenever in the season they join."""
+    calendar = re.compile(
+        r"refund[^.<]{0,60}\b(?:through|until|in|during)\s+(?:the\s+)?"
+        r"(?:week[\s-]*\d|first\s+two\s+weeks)", re.I)
+    for name, page in _buyer_surfaces().items():
+        text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
+        assert not calendar.search(text), \
+            f"{name} ties the refund window to a calendar week"
+        assert not re.search(r"week[\s-]*2 refund|refund window closes[^.]{0,40}week",
+                             text, re.I), \
+            f"{name} names a calendar refund window"
+    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE),
+                       ("league pass", prose((SITE / "league-pass.html")
+                                             .read_text(encoding="utf-8"))),
+                       ("terms", prose((SITE / "terms.html")
+                                       .read_text(encoding="utf-8")))):
+        assert re.search(r"first two weekly files|second weekly file", page, re.I), \
+            f"{name} page lost the refund window where the money is asked for"
+
+
+def test_the_terms_define_the_file_the_refund_window_counts() -> None:
+    """A window counted in files is only as firm as the definition of a file.
+    Without one, "my day-one roster file was the first" and "the season ended
+    before my second" are both arguments the terms page must already have
+    settled, and a window that never closes is the one without an end date."""
+    terms = prose((SITE / "terms.html").read_text(encoding="utf-8"))
+    section = terms.split('id="refunds"', 1)[1].split("<h2", 1)[0]
+    assert re.search(r"a week after your second weekly\s+file", section, re.I)
+    assert re.search(r"weekly file is the report for one week", section, re.I)
+    assert re.search(r"roster file[^.]*isn't one", section, re.I)
+    assert re.search(r"season ends before your second", section, re.I), \
+        "a buyer who joins in the last fortnight has a window with no end"
+
+
 def test_cancellation_is_promised_and_never_obstructed() -> None:
     """Subscribers must be told they can leave, in plain words."""
     assert re.search(r"cancel yourself any time|cancel any time", JOIN, re.I), \
@@ -598,7 +650,7 @@ def test_the_post_purchase_page_sets_an_honest_delivery_expectation() -> None:
 
     for required, why in (
             (r"spam", "a new sending domain's first email often lands there"),
-            (r"refund", "the Week-2 window, at the moment they are most anxious"),
+            (r"refund", "the two-file refund window, at the moment they are most anxious"),
             (r"cancel", "stated before they have to go looking for it"),
             (r"hello@beatyourleague\.com", "a human, reachable")):
         assert re.search(required, visible, re.I), \

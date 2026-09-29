@@ -42,6 +42,17 @@ UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — 
 _cancel_destination = cancel_destination
 
 
+# The refund window is PURCHASE-relative, never a calendar week: "through
+# Week 2" gave anyone who bought from Week 3 on no window at all, while every
+# selling page kept promising one. The terms page defines a weekly file; this
+# is the retainable copy of the same promise, so it states when it closes.
+REFUND_TERMS = ("Refunds are no-questions until a week after your second "
+                "weekly file — one per person, and a re-subscription after a "
+                "refund is final.")
+REFUND_TERMS_LEAGUE = ("Refunds are no-questions until a week after your "
+                       "second weekly file — one per league.")
+
+
 def _plan_terms(plan: str) -> tuple[str, list[str]]:
     """(what you bought, the disclosures that purchase legally requires)."""
     if plan == "monthly":
@@ -50,8 +61,7 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
             [f"It bills {MONTHLY_PRICE} USD each month until you cancel, and "
              "billing stops on its own when the season ends — we don't charge "
              "through the offseason, because we aren't sending you anything.",
-             "Refunds are no-questions through Week 2 — one per person, and a "
-             "re-subscription after a refund is final."],
+             REFUND_TERMS],
         )
     if plan == "league_pass":
         # The seat link ships HERE because the page cannot deliver it: the
@@ -74,7 +84,7 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
             [f"It renews once a year at {PASS_PRICE} USD unless you cancel — "
              "charged before the season it covers, never during the offseason. "
              "We email you before it bills.",
-             "Refunds are no-questions through Week 2 — one per league.",
+             REFUND_TERMS_LEAGUE,
              seat_line],
         )
     if plan == "seat":
@@ -89,8 +99,7 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
         [f"It renews once a year at {SEASON_PRICE} USD unless you cancel — "
          "charged next August, before the season it covers, never during the "
          "offseason. We email you before it bills.",
-         "Refunds are no-questions through Week 2 — one per person, and a "
-         "re-subscription after a refund is final."],
+         REFUND_TERMS],
     )
 
 

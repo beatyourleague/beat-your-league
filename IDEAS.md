@@ -73,8 +73,9 @@ is in the current sprint.
 - $29 is at the floor of this market (4for4 Lite $39, Footballguys Pro $59.99,
   Fantasy Life+ $99.99, ETR draft kit $54.99). Consider $34-39 before the
   founding rate locks.
-- Reconsider the Week-2 refund window: Footballguys gives 30 days, Draft Sharks
-  refunds through December.
+- Reconsider the refund window's LENGTH (now two weekly files, purchase-relative,
+  since Sep 29 2026): Footballguys gives 30 days, Draft Sharks refunds through
+  December.
 - Retire "Beat your league, not the books." It puts betting in the buyer's head
   purely to disclaim it, in a product whose principle 4 forbids betting content.
 - The three landing feature cards share one internal anatomy and all three
