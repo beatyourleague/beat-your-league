@@ -82,6 +82,9 @@ PASTED = [
     # a leading K is an initial and must survive. "Jake Bates K DET" is how
     # every league app pastes a kicker, and it used to fail resolution.
     "Jake Bates K DET", "Harrison Butker K", "K. Walker", "K Walker",
+    # Sep 29 2026, a real ESPN paste: the app's own team spellings and its
+    # section headers must not stop a signup.
+    "Puka Nacua LAR WR", "Terry McLaurin WSH WR", "Bench", "Starters", "LAR D/ST",
 ]
 
 

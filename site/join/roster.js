@@ -35,8 +35,16 @@ function normalize(name) {
 
 // Decoration a pasted roster carries. "K" is deliberately absent: it would eat
 // the K of "K. Walker", and a kicker's line is identifiable without it.
+// Mirrors engine/roster.py TEAM_ALIASES: the league apps' spellings of teams
+// whose nflverse code differs ("LAR" for the Rams). Stripped like a team code,
+// and accepted as a defense on their own.
+const TEAM_ALIASES = {LAR: "LA", WSH: "WAS", JAC: "JAX", LVR: "LV", ARZ: "ARI",
+  GNB: "GB", KAN: "KC", NOR: "NO", NWE: "NE", SFO: "SF", TAM: "TB", HST: "HOU",
+  BLT: "BAL", CLV: "CLE"};
+
+// "Bench", "Starters", "Reserve(s)": section headers a copied roster carries.
 const DECORATION =
-  /\b(?:QB|RB|WR|TE|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX)\b|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,]+|\d+(?:\.\d+)?/gi;
+  /\b(?:QB|RB|WR|TE|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?)\b|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,]+|\d+(?:\.\d+)?/gi;
 
 function stripDecoration(line, teams) {
   let text = (line || "").replace(DECORATION, " ").replace(/\s+/g, " ").trim();
@@ -44,7 +52,8 @@ function stripDecoration(line, teams) {
   // a leading K is an initial ("K. Walker", "K Walker") and stays.
   text = text.replace(/(?<=[^\s.]) K(?= |$)/gi, "").trim();
   if (teams && teams.size) {
-    const kept = text.split(" ").filter((w) => !teams.has(w.toUpperCase()));
+    const kept = text.split(" ").filter(
+      (w) => !teams.has(w.toUpperCase()) && !(w.toUpperCase() in TEAM_ALIASES));
     // Only if something survives: "KC" alone IS the Chiefs defense, while the
     // same token inside "Mahomes QB KC" is noise.
     if (kept.length) text = kept.join(" ");
@@ -77,6 +86,7 @@ function buildDirectory(payload) {
       const nick = parts[parts.length - 1];
       const city = parts.slice(0, -1).join(" ");
       [team, nick, city, team + " DEF", nick + " DEF", name + " DEF"]
+        .concat(Object.keys(TEAM_ALIASES).filter((a) => TEAM_ALIASES[a] === team))
         .forEach((form) => push(normalize(form)));
     }
   }

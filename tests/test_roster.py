@@ -315,3 +315,19 @@ def test_the_real_directory_offers_exactly_the_teams_that_play() -> None:
     defenses = {p.team for p in directory.players if p.is_defense}
     assert defenses == set(season)
     assert directory.resolve("Rams").player.player_id == "DEF-LA"
+
+
+def test_league_app_team_spellings_and_section_headers_do_not_stop_a_signup() -> None:
+    """Sep 29 2026, a real ESPN paste walked through the join page: "Puka Nacua
+    LAR WR" failed (nflverse writes the Rams "LA") and the "Bench" header came
+    back as an unknown player. Either one stopped the signup."""
+    from engine.roster import TEAM_ALIASES, _defense_aliases, _strip_decoration
+    teams = {"LA", "WAS", "BAL"}
+    assert _strip_decoration("Puka Nacua LAR WR", teams) == "Puka Nacua"
+    assert _strip_decoration("Terry McLaurin WSH WR", teams) == "Terry McLaurin"
+    for header in ("Bench", "Starters", "Reserves", "BENCH"):
+        assert _strip_decoration(header, teams) == ""
+    assert TEAM_ALIASES["LAR"] == "LA"
+    from engine.roster import Player
+    rams = Player(player_id="DEF-LA", name="Los Angeles Rams", position="DEF", team="LA")
+    assert "lar" in _defense_aliases(rams)

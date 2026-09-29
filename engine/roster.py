@@ -173,14 +173,28 @@ def _defense_aliases(player: Player) -> set[str]:
     forms = {player.team or "", nick, player.name, city,
              f"{player.team} {DEFENSE}", f"{nick} {DEFENSE}",
              f"{player.name} {DEFENSE}"}
+    forms |= {alias for alias, team in TEAM_ALIASES.items() if team == player.team}
     return {normalize(f) for f in forms if normalize(f)}
 
 
 # Decoration a paste carries: slot labels, "- BYE 10", "(KC)", projections.
 # Stripped rather than parsed, because every platform writes them differently
 # and the name is the only thing they all agree on.
+# How the league apps spell teams whose nflverse code differs (ESPN, Yahoo and
+# Sleeper write the Rams "LAR", the Commanders "WSH"/"WAS", and so on), plus
+# the long forms some exports use. Stripped like a team code, and accepted as a
+# defense on their own. Found Sep 29 2026: "Puka Nacua LAR WR" pasted from ESPN
+# failed to resolve and stopped the signup.
+TEAM_ALIASES = {"LAR": "LA", "WSH": "WAS", "JAC": "JAX", "LVR": "LV", "ARZ": "ARI",
+                "GNB": "GB", "KAN": "KC", "NOR": "NO", "NWE": "NE", "SFO": "SF",
+                "TAM": "TB", "HST": "HOU", "BLT": "BAL", "CLV": "CLE"}
+
+
+# "Bench", "Starters", "Reserve(s)" are the section headers every league app
+# copies out with the roster; left in, each became an "unknown player" line.
 _DECORATION = re.compile(
-    r"\b(?:QB|RB|WR|TE|DEF|DST|D/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX)\b"
+    r"\b(?:QB|RB|WR|TE|DEF|DST|D/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX"
+    r"|BENCH|STARTERS?|RESERVES?)\b"
     r"|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,]+|\d+(?:\.\d+)?",
     re.I)
 
@@ -203,7 +217,8 @@ def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
     text = re.sub(r"\s+", " ", _DECORATION.sub(" ", line or "")).strip()
     text = re.sub(r"(?<=[^\s.]) K(?= |$)", "", text, flags=re.I).strip()
     if teams:
-        kept = [w for w in text.split() if w.upper() not in teams]
+        kept = [w for w in text.split()
+                if w.upper() not in teams and w.upper() not in TEAM_ALIASES]
         if kept:
             text = " ".join(kept)
     return text
