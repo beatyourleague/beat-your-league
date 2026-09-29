@@ -146,9 +146,15 @@ Then decide what happens to your subscription (section 9): keep it and it starts
 record, or cancel and refund it as section 7 describes. A refund doesn't return Stripe's fee
 (about $1.43).
 
-## 5. The form Worker (~20 min) — League Pass and roster updates
+## 5. The form Worker (~20 min) — the email list, League Pass and roster updates
 
-Two features wait on one Cloudflare Worker:
+**Do this one first — it needs nothing from steps 1–4.** While checkout is closed, the
+homepage's "Tell me when it opens" form is the only thing a visitor can do, and until this
+Worker exists it just opens their email app (and does nothing at all on a computer without
+one). Once it's live, the form saves the address on the spot and says so.
+
+Three features wait on one Cloudflare Worker, in the same account as the domain:
+- **The launch email list** on the homepage and the join page.
 - **League Pass seats.** The League Pass page's button stays hidden until then.
 - **"Roster changed?" links in every report.** Without them, a subscriber's file drifts out of
   date as waivers change their roster, and they have no way to fix it themselves.
@@ -171,11 +177,13 @@ and decides nothing: every row is checked before it reaches the subscriber list.
    ```
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
    `UPDATE_SECRET` = step 4's value.
-6. **Tell me the Worker URL** (it isn't a secret). I wire it into the join and League Pass
-   pages, switch the League Pass button on, and change the FAQ's roster answer to the link.
+6. **Tell me the Worker URL** (it isn't a secret). I wire it into the homepage's email form
+   and the join and League Pass pages, switch the League Pass button on, and change the FAQ's
+   roster answer to the link. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
+   email list on today.
 
-Until then both fail closed: seat claims are refused with a reason, and the update link
-simply doesn't appear in reports.
+Until then: the email form falls back to the visitor's own email app, seat claims are
+refused with a reason, and the update link simply doesn't appear in reports.
 
 ## 6. Selling from Week 4
 

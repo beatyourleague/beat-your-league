@@ -834,7 +834,12 @@ if (watchForm) {
         "we'd rather say that than pretend. Check back in a day or two.";
       return;
     }
-    note.textContent = "Opening a pre-filled email — send it and you're on the list.";
+    // On a computer with no mail app set up, a mailto link opens nothing at
+    // all, and the button looks broken. So the note also says how to do it by
+    // hand, in words that stay true whether or not the app opened.
+    note.textContent = "Opening a pre-filled email — send it and you're on the " +
+      "list. Nothing opened? Email " + CONTACT_EMAIL + " with the subject " +
+      "\u201cTell me when it opens\u201d.";
     window.location.href = "mailto:" + CONTACT_EMAIL +
       "?subject=" + encodeURIComponent("Tell me when it opens") +
       "&body=" + encodeURIComponent("Email me when signups open: " + email + "\n");
