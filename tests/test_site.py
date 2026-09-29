@@ -2163,7 +2163,7 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     The page said "above four of their set starters" for a rival whose bench
     player is now correctly named against the ONE slot he can fill. Whenever
     render/engine wording changes, regenerate the demo and update this quote."""
-    quoted = "Start Chase Brown over Courtland Sutton"
+    quoted = "Start George Kittle over Sam LaPorta"
     def flat(page: str) -> str:
         return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
     assert quoted in flat(SAMPLE_REPORT).replace("  ", " "), \
@@ -2171,13 +2171,13 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     assert quoted in flat(LANDING).replace("  ", " "), \
         "the landing page's coin-flip card drifted from the report it cites"
     # And the figures the card attaches to that claim.
-    assert "11.2 vs 10.3" in flat(SAMPLE_REPORT) and "11.2 vs 10.3" in flat(LANDING)
+    assert "10.4 vs 7.8" in flat(SAMPLE_REPORT) and "10.4 vs 7.8" in flat(LANDING)
     # The lineup card's rows, too — a row quoting a confidence the sample no
     # longer publishes is a number the product did not compute.
     import html as _html
     sample_rows = _html.unescape(flat(SAMPLE_REPORT))
-    for name, pct in (("Ja'Marr Chase", "70%"), ("Amon-Ra St. Brown", "61%"),
-                      ("George Kittle", "71%")):
+    for name, pct in (("Bijan Robinson", "71%"), ("Ja'Marr Chase", "70%"),
+                      ("Saquon Barkley", "69%")):
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))

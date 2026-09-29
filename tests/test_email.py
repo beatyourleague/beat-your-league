@@ -552,5 +552,5 @@ def test_the_plain_text_half_says_what_the_html_says() -> None:
     assert "REGRET" not in text and "no call" not in text
     assert "THE WEEK'S CLOSEST CALL" in text
     assert "The % is the chance your starter outscores" in text
-    assert "start · waiting on Tony Pollard" in text
-    assert "IF/THEN FOR GAMEDAY" in text and "Keep Chase Brown at FLEX" in text
+    assert "questionable · see if/then" in text
+    assert "IF/THEN FOR GAMEDAY" in text and "Move Courtland Sutton into FLEX" in text

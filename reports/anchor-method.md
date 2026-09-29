@@ -144,4 +144,10 @@ treats the symptom: the projection itself is what ignores last season.
 
 ## 8. Corrections
 
-(none)
+**Note 1 (Sep 29 2026, after the run — an interpretation, not a change).**
+§5 names single-setting arms; a subscriber's setup combines three settings
+(scoring, league size, lineup shape). The product reads it the conservative
+way: a setup is anchored only if EVERY one of its settings shipped. So a
+10-team half-PPR league is not anchored, because 10 teams did not ship. And a
+setup that is not anchored keeps the shipped recalibration b = 1.3714, since
+b′ was fitted to the anchored model and describes nothing else.

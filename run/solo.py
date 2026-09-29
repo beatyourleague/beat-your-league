@@ -618,15 +618,41 @@ RECALIBRATION_B: float | None = 1.3714
 RECALIBRATED_WEEKS = range(4, 17)
 
 
-def calibrator_for(week: int, seeded: bool):
+def calibrator_for(week: int, seeded: bool, anchored: bool = False):
     """The confidence map this report applies, or None. Method §3: weeks 17-18
     missed in the opposite direction and weeks 2-3 are their own arm, so
-    neither is touched."""
+    neither is touched. An anchored report (below) uses the b refitted for the
+    anchored model — anchor method §5 — never the one fitted without it."""
     if RECALIBRATION_B is None or seeded or week not in RECALIBRATED_WEEKS:
         return None
     from engine.recalibration import recalibrate
-    b = RECALIBRATION_B
+    b = ANCHOR_B if anchored else RECALIBRATION_B
     return lambda p: recalibrate(p, b)
+
+
+# reports/anchor-method.md §5, decided by its one run (Sep 29 2026,
+# reports/anchor-backtest.md). Counting a player's own last season at a
+# quarter-game per game in weeks 4-16: on held-out 2020-2024 the lineups went
+# 179-176-9 against the shipped model where they differed (p = 0.92 — a draw
+# on points, stated as one), the number stayed B (ECE 1.2%, b' = 1.4670), and
+# it benched 20% fewer available stars. C1 and C2 held, so it ships — but only
+# in the setups whose own arm also won more than it lost: 10- and 14-team
+# leagues and superflex did not, and keep the shipped model and its b.
+ANCHOR_WEIGHT: float | None = 0.25
+ANCHOR_B = 1.4670
+ANCHOR_WEEKS = range(4, 17)
+ANCHOR_SCORING = frozenset({"ppr", "half_ppr", "standard"})
+ANCHOR_SIZES = frozenset({8, 12})
+NO_K_OR_DEF_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")
+
+
+def anchored(spec: "RosterSpec", league_size: int, week: int, seeded: bool) -> bool:
+    """Does this report count last season in weeks 4-16? Every setting in the
+    setup must be one whose arm shipped (anchor method §8, note 1)."""
+    return (ANCHOR_WEIGHT is not None and not seeded and week in ANCHOR_WEEKS
+            and spec.scoring in ANCHOR_SCORING
+            and int(league_size) in ANCHOR_SIZES
+            and tuple(spec.slots) in (MEASURED_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
 
 
 # reports/fallback-method.md §3, decided by its one run (Sep 29 2026,
@@ -713,12 +739,16 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     # three real games do. The model itself refuses to seed any other week,
     # so this wiring can only ever narrow the regime, never widen it.
     seeded = seeded_scope(spec, league_size, data.week)
-    if seeded:
+    anchor = anchored(spec, league_size, data.week, seeded)
+    if seeded or anchor:
         from engine.nflverse_backtest import prior_self_observations
         model = ProjectionModel(season, data.players,
                                 prior_self=prior_self_observations(
                                     data.prior, spec.rule),
-                                prior_self_weight=EARLY_SEASON_LAMBDA)
+                                prior_self_weight=(EARLY_SEASON_LAMBDA
+                                                   if seeded else 0.0),
+                                late_self_weight=(ANCHOR_WEIGHT or 0.0)
+                                if anchor else 0.0)
     else:
         model = ProjectionModel(season, data.players)
 
@@ -754,7 +784,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                                         data.week + 1),
                                processed_dir=processed_dir,
                                last_season_ranks=last_season_ranks,
-                               calibrate=calibrator_for(data.week, seeded),
+                               calibrate=calibrator_for(data.week, seeded,
+                                                        anchor),
                                confirmed_fallback=fallback_for(data.week, seeded))
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the

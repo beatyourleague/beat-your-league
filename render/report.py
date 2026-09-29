@@ -146,7 +146,7 @@ SOCIAL_IMAGE_TAGS = (
     '<meta property="og:image:width" content="1200">\n'
     '<meta property="og:image:height" content="630">\n'
     '<meta property="og:image:alt" content="A Beat Your League lineup report: '
-    'four roster slots, three with a percentage, one marked start.">\n'
+    'four roster slots, three with a percentage, one marked questionable.">\n'
 )
 
 FAVICON_LINK = ('<link rel="icon" href="/favicon.ico" sizes="32x32">\n'

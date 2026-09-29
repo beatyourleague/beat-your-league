@@ -453,8 +453,8 @@ otherwise the slot stays gated. On 2020–2024, as shipped: the 217 calls it add
 1.1%, and no existing call moved — all three clauses held. Coverage 64.8% → 67.9% of slot-weeks.
 `run/solo.CONFIRMED_FALLBACK` is True and `fallback_for` applies it in weeks 4–16 only. The
 doubtful player rides on `SlotPick.doubtful_alternative_id` so late news and the if/then still
-name him (`week_report._doubtful`); he is never part of a graded call. The published sample
-now carries 4 of 9 odds and its closest call is Chase Brown over Sutton, 54%.
+name him (`week_report._doubtful`); he is never part of a graded call. (The published sample
+has moved since: see the anchor below.)
 
 **Combinations and defenses, graded (Sep 29 2026).** `reports/round-two-method.md` preregistered
 (6833098) nine combined settings and team defenses, graded on 2020–2024 as they ship (through
@@ -1010,6 +1010,24 @@ rendered from it by `make brand` (favicon .ico/.svg, apple-touch, 192/512 + mani
 page's job, never baked in; the check touches nothing; gold never on a mid-tone or photo (white
 version there); Stripe gets navy, never gold. The landing's JSON-LD names `brand/icon.png` as the
 Organization logo, and the og card carries the mark.
+
+**Last season counts all season — the anchor (Sep 29 2026).** Weeks 4–16 projected from
+current-season games only, so a proven starter with three slow games was benched like a
+replacement (Barkley, 2026 w4: RB15 last season, 9/3/9, projected 7.6, benched for LaPorta 9.0).
+`reports/anchor-method.md` was preregistered (cc98c2a) before `engine/anchor_backtest.py` ran:
+the player's own S−1 record at λ_L = 0.25 pseudo-games per game, in weeks 4–16, moving the
+projection but NEVER the publish gate (`seeded_games` stays 0, no row flag). Result on held-out
+2020–2024: lineups **179–176–9** vs shipped where they differed (p = 0.92 — a draw on points,
+say so), the number stays **B** (ECE 1.2%, refit b′ = 1.4670), and **20% fewer available stars
+benched** (1,085 → 870; the benched stars had outscored their replacement only 37% of the time).
+λ = 0.5 lost 225–262, so heavier anchoring is worse. It ships in PPR/half/standard, 8- and
+12-team, standard and no-K/DEF shapes; **10- and 14-team and superflex lost their own arms and
+keep the shipped model and b = 1.3714** (`run/solo.anchored`, method §8 note 1: every setting
+in a setup must have shipped). On 2026 w4 Barkley now projects 9.4, dead even with LaPorta,
+and the report calls it the coin flip it is (51%). The published sample moved with it: 5 of 9
+odds (Robinson 71, Chase 70, Barkley 69, St. Brown 68, Kittle 63), Pollard questionable at FLEX
+with Sutton as the if/then, closest call Kittle over LaPorta 63% — landing, og card and pins
+moved too. `site/confidence.html` does not describe the anchor yet (grading page, unlinked).
 
 **The Saturday final check (`run/saturday.py`, Sep 29 2026).** The Tuesday report is built
 on week W-1's injury report, because week W's does not exist on a Tuesday — so by Sunday a
