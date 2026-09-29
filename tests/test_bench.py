@@ -85,6 +85,12 @@ class _Spec:
 SLOTS = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 
 
+
+
+def _said(item) -> str:
+    """Everything a game-plan item shows: the bold action and the detail line."""
+    return f"{item['action']} {item.get('detail', '')}"
+
 def _fixture(out=()):
     roster = ("qb", "rb1", "rb2", "wr1", "wr2", "te", "flex",
               "star", "scrub", "hurt")
@@ -118,7 +124,7 @@ def test_a_benched_starter_calibre_player_leads_the_game_plan_with_evidence() ->
     spec, picks, players, model, avail, ranks = _fixture()
     _, items = bench_report(spec, picks, players, model, avail, 4, 12, ranks)
     assert items, "a benched RB15 produced no explanation"
-    text = items[0]["action"]
+    text = _said(items[0])
     assert "STAR" in text and "RB15 last season" in text
     assert "9.0, 3.0 and 9.0" in text, "the explanation must show his games"
     assert "7.6" in text
@@ -157,7 +163,7 @@ def test_a_player_who_cannot_play_carries_no_projection() -> None:
 def test_a_notable_player_who_cannot_play_is_explained_as_out_not_as_bad() -> None:
     spec, picks, players, model, avail, ranks = _fixture(out=("star",))
     _, items = bench_report(spec, picks, players, model, avail, 4, 12, ranks)
-    text = next(i["action"] for i in items if "STAR" in i["action"])
+    text = next(_said(i) for i in items if "STAR" in _said(i))
     assert "can't play this week" in text
     assert "9.0, 3.0" not in text, (
         "an injured star explained by his form reads as 'we benched him for "
@@ -168,7 +174,7 @@ def test_a_benched_player_with_no_games_this_season_says_so() -> None:
     spec, picks, players, model, avail, ranks = _fixture()
     model._obs["star"] = []
     _, items = bench_report(spec, picks, players, model, avail, 4, 12, ranks)
-    assert "hasn't played a game this season" in items[0]["action"]
+    assert "no games this season yet" in items[0]["action"]
 
 
 def test_the_game_plan_stays_thirty_seconds() -> None:
@@ -183,7 +189,7 @@ def test_the_game_plan_stays_thirty_seconds() -> None:
     # ...and every one of them is still named in the bench block.
     assert {"x1", "x2", "x3", "x4", "star"} <= {b["player_id"] for b in bench}
     # Best-ranked first, so the cap drops the least surprising.
-    assert "RB5" in items[0]["action"]
+    assert "RB5" in _said(items[0])
 
 
 def test_the_bench_is_ordered_and_reproducible() -> None:
@@ -264,10 +270,13 @@ def test_the_explanation_says_who_took_the_slot() -> None:
     spec, picks, players, model, avail, ranks = _fixture()
     _, items = bench_report(spec, _with_projections(picks), players, model,
                             avail, 4, 12, ranks)
-    text = next(i["action"] for i in items if "STAR" in i["action"])
+    text = next(_said(i) for i in items if "STAR" in _said(i))
     # RB-eligible starters: rb1 14.0, rb2 9.8, flex (RB) 9.0 — the lowest is
     # the one he would displace.
-    assert "FLEX starts at FLEX instead, at 9.0" in text, text
+    # Action first since Sep 29 2026: the start is the bold line, the
+    # benched player's numbers are the detail under it.
+    assert "Start FLEX over STAR at FLEX" in text, text
+    assert "to FLEX's 9.0" in text, text
 
 
 def test_the_form_explanation_asserts_no_judgment() -> None:
@@ -279,6 +288,6 @@ def test_the_form_explanation_asserts_no_judgment() -> None:
     model._obs["star"] = [8.5, 14.7, 18.4]   # Pollard's real 2024 line
     _, items = bench_report(spec, _with_projections(picks), players, model,
                             avail, 4, 12, ranks)
-    text = next(i["action"] for i in items if "STAR" in i["action"])
+    text = next(_said(i) for i in items if "STAR" in _said(i))
     assert " but " not in text, f"a judgment the numbers may contradict: {text}"
     assert "8.5, 14.7 and 18.4" in text

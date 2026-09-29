@@ -405,11 +405,9 @@ def header(meta: Mapping[str, Any]) -> str:
         # "numbers are left off" sentence would be false of the page it sits on.
         banner = (
             '<div class="regret-note" style="margin:0;border-left:none;">'
-            f'SAMPLE REPORT — built from the real {esc(meta["season"])} NFL season to '
-            f'show exactly what lands in your inbox on a Tuesday. Every number comes '
-            f'from actual box scores and public injury reports for that week; nothing '
-            f'is invented, and anything we could not back is left off, same as a live '
-            f'week.</div>'
+            f'SAMPLE FILE — a real week from the {esc(meta["season"])} NFL season, '
+            f'built exactly the way yours will be: one roster, scored its league\'s '
+            f'way, from that week\'s box scores and injury reports.</div>'
         )
     elif meta.get("historical_demo"):
         banner = (
@@ -441,7 +439,7 @@ def header(meta: Mapping[str, Any]) -> str:
         )
     return (
         f'<header class="bug">{brand}'
-        f'<h1>Week{esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
+        f'<h1>Week {esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
         f'<div class="chips">{"".join(chips)}</div></header>{banner}'
     )
 
@@ -467,7 +465,9 @@ def section_checklist(items: list[Mapping[str, Any]]) -> str:
         tasks.append(
             f'<div class="task"><div class="box"></div><div>'
             f'<div class="do">{esc(item["action"])}</div>'
-            f'<div class="{klass}">{esc(item["deadline"])}</div></div></div>'
+            + (f'<div class="why">{esc(item["detail"])}</div>'
+               if item.get("detail") else "")
+            + f'<div class="{klass}">{esc(item["deadline"])}</div></div></div>'
         )
     return _section("The 30-Second Game Plan", 1, f'<div class="plan">{"".join(tasks)}</div>')
 
@@ -906,7 +906,7 @@ def section_regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
         # No .call frame: a heavy navy card whose only content is an absence
         # reads as broken software rather than restraint.
-        return _section("Your Regret Score", 6, gate_note(regret["gate"]))
+        return _section("The Week's Closest Call", 6, gate_note(regret["gate"]))
     confidence = _pct(regret["confidence"])
     drivers = "".join(
         f'<span class="drv">{esc(d["label"])} <b>{esc(d["value"])}</b></span>'
@@ -920,7 +920,7 @@ def section_regret(regret: Mapping[str, Any]) -> str:
         f'<div class="drivers">{drivers}</div>'
         f'<p class="why">{esc(regret["definition"])}</p></div>'
     )
-    return _section("Your Regret Score", 6, body)
+    return _section("The Week's Closest Call", 6, body)
 
 
 def section_pivots(plans: list[Mapping[str, Any]]) -> str:
@@ -935,7 +935,7 @@ def section_pivots(plans: list[Mapping[str, Any]]) -> str:
             for p in plans
         )
         body = f'<div class="pivots">{rows}</div>'
-    return _section("Pivot Plan — Set It, Forget It", 7, body)
+    return _section("If/Then for Gameday", 7, body)
 
 
 def section_hype(entries: list[Mapping[str, Any]],
@@ -1149,10 +1149,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
             'like <a href="sample-report.html" style="color:var(--brick);'
             'font-weight:700;">this</a>. '
             if meta.get("first_week_demo") else
-            'The first file of a season is thinner than this one — no games '
-            'have been played yet — and it looks like '
-            '<a href="sample-first-week.html" style="color:var(--brick);'
-            'font-weight:700;">this</a>. '
+            ''
         )
         return (
             '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
@@ -1160,7 +1157,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
             'Yours is built from your own '
             'roster, scored your league\'s way — '
             '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
-            'set it up</a> and the first one lands Tuesday.</div>'
+            'set it up</a> and your first file lands the day you join.</div>'
         )
     return (
         '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'

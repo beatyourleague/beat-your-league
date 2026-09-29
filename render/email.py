@@ -191,7 +191,9 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
             f'border-radius:3px;background:{CARD};margin-top:2px;"></div></td>'
             f'<td style="{BASE}padding:10px 0;{rule}">'
             f'<b>{esc(item["action"])}</b><br>'
-            f'<span style="{SMALL}color:{color};">{esc(item["deadline"])}</span>'
+            + (f'<span style="{SMALL}color:{NAVY};">{esc(item["detail"])}</span><br>'
+               if item.get("detail") else "")
+            + f'<span style="{SMALL}color:{color};">{esc(item["deadline"])}</span>'
             f'</td></tr>'
         )
     body = (f'<table role="presentation" width="100%" cellpadding="0" '
@@ -437,7 +439,7 @@ def _regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
         body = (f'<p style="{BASE}font-weight:bold;margin:0 0 6px 0;">'
                 f'No coin-flip call published</p>{_gate(regret["gate"])}')
-        return _sec(6, "Your Regret Score", body)
+        return _sec(6, "The Week's Closest Call", body)
     confidence = _pct(regret["confidence"])
     drivers = " · ".join(
         f'{esc(d["label"])} <b>{esc(d["value"])}</b>' for d in regret["drivers"])
@@ -457,7 +459,7 @@ def _regret(regret: Mapping[str, Any]) -> str:
         f'<p style="{SMALL}margin:0 0 6px 0;">{drivers}</p>'
         f'<p style="{SMALL}margin:0;">{esc(regret["definition"])}</p></div></div>'
     )
-    return _sec(6, "Your Regret Score", body)
+    return _sec(6, "The Week's Closest Call", body)
 
 
 def _pivots(plans: list[Mapping[str, Any]]) -> str:
@@ -474,7 +476,7 @@ def _pivots(plans: list[Mapping[str, Any]]) -> str:
         )
         body = (f'<table role="presentation" width="100%" cellpadding="0" '
                 f'cellspacing="0" border="0">{rows}</table>')
-    return _sec(7, "Pivot Plan — Set It, Forget It", body)
+    return _sec(7, "If/Then for Gameday", body)
 
 
 def _bid_line(entry: Mapping[str, Any]) -> str:
@@ -635,6 +637,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
     ]
     for item in report["checklist"]:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
+        if item.get("detail"):
+            lines.append(f"      {item['detail']}")
     matchup = report["matchup"]
     head = "YOUR WEEK" if solo else "MATCHUP"
     if matchup.get("range_gate"):

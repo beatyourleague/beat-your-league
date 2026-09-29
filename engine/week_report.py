@@ -640,17 +640,18 @@ def regret_call(picks: list[SlotPick], players: PlayerIndex,
         "drivers": [
             {"label": "proj", "value": f"{closest.projection.mean:.1f} vs "
                                        f"{closest.alternative_projection.mean:.1f}"},
-            {"label": "form games", "value": f"{closest.projection.games} vs "
-                                             f"{closest.alternative_projection.games}"},
+            {"label": "games this season", "value": f"{closest.projection.games} vs "
+                                                    f"{closest.alternative_projection.games}"},
         ] + ([{"label": "seeded", "value": "last season counted in"}]
              if (closest.projection.seeded_games
-                 or closest.alternative_projection.seeded_games) else []) + [
-            {"label": "suits up", "value": f"{closest.projection.appear_probability:.0%} vs "
-                                              f"{closest.alternative_projection.appear_probability:.0%}"},
-        ] + _usage_driver(raw_dir, season, week, closest.player_id,
+                 or closest.alternative_projection.seeded_games) else [])
+        # "suits up 85% vs 85%" is gone (owner review, Sep 29 2026): it is a
+        # model input, and beside two confirmed-active players it read as the
+        # file doubting them.
+        + _usage_driver(raw_dir, season, week, closest.player_id,
                           closest.alternative_id),
-        "definition": ("What the number means: the odds this guy outscores that "
-                       "specific bench option at this slot."),
+        "definition": ("The number is the chance he outscores that specific "
+                       "bench option at this slot."),
     }
 
 
@@ -937,14 +938,28 @@ def pivots(
                              if pick.alternative_projection else ""),
             })
         elif not is_starter and pick.player_id and pick.projection:
+            # DECIDE (owner review, Sep 29 2026). Under a heading promising
+            # "set it, forget it" this used to say "Look again at FLEX … that
+            # slot has no number until his status is known" — handing the
+            # decision back. The projections are already on the page, so the
+            # plan states what they say: swap only when he projects higher,
+            # and say plainly that a dead heat is not worth a change.
             starter = players.name(pick.player_id)
-            alt_proj = (f"{pick.alternative_projection.mean:.1f}"
-                        if pick.alternative_projection else "—")
+            mine = round(pick.projection.mean, 1)
+            theirs = (round(pick.alternative_projection.mean, 1)
+                      if pick.alternative_projection else None)
+            if theirs is not None and theirs > mine:
+                action = (f"Start {name} at {pick.slot} — he projects {theirs:.1f} "
+                          f"to {starter}'s {mine:.1f}")
+            elif theirs is not None and theirs == mine:
+                action = (f"Keep {starter} at {pick.slot} — they project dead even "
+                          f"at {mine:.1f}, so it's not worth a swap")
+            else:
+                action = (f"Keep {starter} at {pick.slot} — he projects {mine:.1f}"
+                          + (f" to {name}'s {theirs:.1f}" if theirs is not None else ""))
             plans.append({
                 "condition": f"{name} (bench) is cleared to play",
-                "action": f"Look again at {pick.slot}: he projects {alt_proj} against "
-                          f"{starter}'s {pick.projection.mean:.1f}, and that slot has "
-                          f"no number until his status is known",
+                "action": action + ". If he's ruled out, nothing changes",
             })
     for pick in rival_picks:
         if pick.status and pick.status.status is Status.QUESTIONABLE:
@@ -1147,11 +1162,17 @@ def checklist(
                 "urgency": "done",
             })
         else:
-            listed = ", ".join(f"{players.name(p.player_id or '')} at {p.slot}"
-                               for p in seated)
+            # The instruction is the bold line; the nine names are its detail,
+            # slot first so it scans like the lineup screen it gets typed into.
+            # It used to be one run-on sentence ("Set this lineup: Josh Allen
+            # at QB, Saquon Barkley at RB, …") that was the longest line of the
+            # "30-second" plan.
+            listed = " · ".join(f"{p.slot} {players.name(p.player_id or '')}"
+                                for p in seated)
             items.append({
-                "action": f"Set this lineup{_stakes_clause(stakes)}: {listed}."
+                "action": f"Set this lineup{_stakes_clause(stakes)}"
                           f"{_behind_sentence(stakes)}",
+                "detail": listed,
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })
@@ -1263,10 +1284,12 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
     watch = late_news(my_picks, players, availability)
     if not watch:
         return []
-    names = ", ".join(name for name, _, _ in watch)
+    names = [name for name, _, _ in watch]
+    who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     return [{
-        "action": f"Check late news on: {names} — your pivot plan below covers "
-                  f"both outcomes.",
+        "action": f"Sunday morning: check {who}'s status" if len(names) == 1
+                  else f"Sunday morning: check on {who}",
+        "detail": "Your if/then below already has the answer either way.",
         "deadline": "gameday morning",
         "urgency": "deadline",
     }]

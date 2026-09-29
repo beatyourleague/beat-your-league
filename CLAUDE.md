@@ -1011,7 +1011,9 @@ better" plant doubt at that moment without helping anyone win. So:
   purchase. Strong selling on what the product does is fine; claims about results need
   evidence we don't have.
 - Before the NEXT pre-season, restore the numbers-start caveat for pre-Week-4 joiners (the FAQ
-  now answers for mid-season buyers only).
+  now answers for mid-season buyers only) and the mid-season sample's "the first file of a
+  season is thinner" line with its link to `sample-first-week.html` (`render/report.py`
+  `demo_band`).
 
 **The redesign directive (Aug 24 2026) — owner decisions, each pinned by test where a test
 can hold it.** The owner benchmarked the site against netprophet.pro and ruled: too many words

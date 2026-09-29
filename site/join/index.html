@@ -224,8 +224,8 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's file: the
-    lineup we'd set, with the odds on every close call. A paid product from
-    day one — <b>$39 for the season</b>, founding rate locked in for every renewal.</p>
+    lineup we'd set, with the odds on every close call. <b>$39 for the season</b>,
+    at a founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now to see how it works, but
     nothing is saved until it does; leave your email on the
@@ -251,7 +251,7 @@
       <label><input type="radio" name="size" value="14">14 teams</label>
     </div>
     <div class="opts" id="opt-template">
-      <label><input type="radio" name="template" value="std" checked>QB/RB/RB/WR/WR/TE/FLEX/K/DEF</label>
+      <label><input type="radio" name="template" value="std" checked>Standard lineup</label>
       <label><input type="radio" name="template" value="sf">Superflex</label>
       <label><input type="radio" name="template" value="nokd">No K or DEF</label>
     </div>
@@ -871,9 +871,8 @@ if (UPDATE_MODE) {
 } else if (WANTS_MONTHLY) {
   $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
-    "team's file: the lineup we'd set, with the odds on the calls we can stand " +
-    "behind. A paid product from day one — $14.99 a month, and billing " +
-    "stops on its own when the season ends.";
+    "team's file: the lineup we'd set, with the odds on every close call. " +
+    "$14.99 a month, and billing stops on its own when the season ends.";
   $("header-chips").replaceChildren();
   ["$14.99 / month", "Cancel any time", "First file the day you join"]
     .forEach((text) => {

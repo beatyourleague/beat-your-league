@@ -53,9 +53,10 @@ def test_email_carries_every_section(tmp_path: Path) -> None:
     to, so the email must BE the report, not a teaser for one."""
     html_out = render_email(_report(tmp_path))
     for title in ("The 30-Second Game Plan", "The Matchup", "Lineup",
-                  "Is Fragile", "Your Regret Score", "Pivot Plan",
+                  "Is Fragile", "The Week's Closest Call", "If/Then for Gameday",
                   "Waiver Hype Meter", "The Receipts"):
-        assert title in html_out, f"email dropped section: {title}"
+        assert title in html_out or html.escape(title) in html_out, \
+            f"email dropped section: {title}"
     assert "http" not in html_out.split("</title>")[1].split("Beat Your League</b>")[0], \
         "the report body must be self-contained (no hosted-report links)"
 

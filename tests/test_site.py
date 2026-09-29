@@ -274,7 +274,11 @@ def test_paid_from_day_one_is_stated_not_hidden() -> None:
     # charges until after someone invests effort.
     assert 'class="price">$' + SEASON_PRICE in markup_only(LANDING), \
         "the pricing section must state the season price plainly"
-    assert re.search(r"paid product from day one", JOIN_PROSE, re.I)
+    # The join page states the price in its opening line, before a single
+    # roster name is typed (the phrase "a paid product from day one" went Sep
+    # 29 2026 as internal-sounding; the price itself is the disclosure).
+    pitch = re.search(r'<p id="header-pitch">(.*?)</p>', JOIN, re.S).group(1)
+    assert f"{SEASON_PRICE} for the season" in pitch
     # And no free-tier implication anywhere: the only free thing is the
     # waitlist email, which says exactly what it is.
     assert not re.search(r"\bfree trial\b|\bfor free\b", LANDING_PROSE, re.I)
@@ -1268,7 +1272,7 @@ def test_the_published_sample_is_the_solo_product() -> None:
     Report), and it carries the solo banner."""
     assert "Week 10 Report" in SAMPLE_REPORT
     assert "Rival Report" not in SAMPLE_REPORT
-    assert "built from the real 2024 NFL season" in SAMPLE_REPORT
+    assert "a real week from the 2024 NFL season" in SAMPLE_REPORT
     makefile = (SITE.parent / "Makefile").read_text(encoding="utf-8")
     demo_block = makefile.split("\ndemo:")[1].split("\n\n")[0]
     assert "site/" not in demo_block, \
@@ -2461,12 +2465,13 @@ def test_the_two_samples_point_at_each_other() -> None:
     """Each page shows what the other one does not: rebuilding one without the
     other is how the pair drifts into contradicting itself."""
     assert 'href="sample-report.html"' in FIRST_WEEK_SAMPLE
-    assert 'href="sample-first-week.html"' in SAMPLE_REPORT
     assert "join/index.html" in FIRST_WEEK_SAMPLE, "first-week sample is a dead end"
-    # And the mid-season page says plainly that the first file is thinner,
-    # rather than leaving a buyer to discover it on Sep 8.
-    assert re.search(r"first file of a season is thinner",
-                     re.sub(r"<[^>]+>", " ", prose(SAMPLE_REPORT)))
+    assert "join/index.html" in SAMPLE_REPORT, "the sample is a dead end"
+    # The mid-season sample no longer points at the week-1 file (Sep 29 2026):
+    # a buyer joining now gets a full file, and the landing FAQ links the
+    # week-1 sample for anyone who asks. Before the NEXT pre-season, restore
+    # the "first file of a season is thinner" line here (CLAUDE.md, selling
+    # strategy).
 
 
 def test_closed_checkout_shows_no_live_paid_cta_anywhere() -> None:

@@ -113,16 +113,14 @@ def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
 # What the report says where an opponent used to be. Stated once, plainly, in
 # the buyer's register — not a gate note, because nothing is being withheld.
 NO_OPPONENT_NOTE = (
-    "This file is about your roster: every call is your player against your own "
-    "bench, decided on its own and graded on its own. We never connect to your "
-    "league, so who you're playing isn't part of it — every point of edge here "
-    "comes from starting the right players.")
+    "Every call in this file is your player against your own bench — so every "
+    "point it finds comes from starting the right guys.")
 
 # The band renders with NO coverage claim. The frozen method (§10.8) gates
 # the "about 78%" sentence until the nflverse band table exists: that figure
 # was measured on the Sleeper stack over real set lineups, and the solo
 # product's totals have never been measured the same way.
-SOLO_RANGE_BASIS = "Your realistic high and low for the week — a range, not a promise."
+SOLO_RANGE_BASIS = ""   # "79 – 144 realistic range" already says it
 
 
 def build_solo_report(
@@ -304,7 +302,7 @@ def _games_phrase(values: Sequence[float]) -> str:
 
 
 def _displaced_by(position: str, picks: Sequence[Any],
-                  players: PlayerIndex) -> tuple[str, str, float] | None:
+                  players: PlayerIndex) -> tuple[str, str, float, Any] | None:
     """(name, slot, projection) of the starter who took this player's place.
 
     The starter at a slot he is eligible for whose projection is LOWEST — the
@@ -319,11 +317,11 @@ def _displaced_by(position: str, picks: Sequence[Any],
         allowed = FLEX_ELIGIBILITY.get(pick.slot)
         if (position in allowed) if allowed else (pick.slot == position):
             candidates.append((pick.projection.mean, players.name(pick.player_id),
-                               pick.slot))
+                               pick.slot, pick))
     if not candidates:
         return None
-    mean, name, slot = min(candidates)
-    return name, slot, round(mean, 1)
+    mean, name, slot, pick = min(candidates, key=lambda c: c[:3])
+    return name, slot, round(mean, 1), pick
 
 
 def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
@@ -400,29 +398,43 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
     items: list[dict[str, str]] = []
     explained = sorted((b for b in bench if b["notable"]),
                        key=lambda b: int(b["last_season_rank"][len(b["position"]):]))
+    # ACTION FIRST (owner review, Sep 29 2026). The line used to open with the
+    # benched player's stat line and name the start last — "Sitting Sam
+    # LaPorta — TE3 last season. This year: 3.5, 16.8 and 4.8 …, projecting
+    # 6.5. George Kittle starts at TE instead, at 10.7." — so the one thing to
+    # DO was the last clause of a paragraph. Now the bold line is the decision
+    # (with the slot's odds when that exact head-to-head carries them) and the
+    # facts sit underneath as the reason. Same facts, no new claim: no
+    # connective asserts WHY he sits (a "but" once implied form did, when he
+    # actually sat on a near-tie).
     for entry in explained[:MAX_NOTABLE_ITEMS]:
-        lead = (f"Sitting {entry['name']} — {entry['last_season_rank']} last "
-                f"season, but ")
+        rank = f"{entry['last_season_rank']} last season"
         if entry["out"]:
             reason = f" ({entry['out_reason']})" if entry["out_reason"] else ""
-            body = f"he can't play this week{reason}."
+            action = f"Bench {entry['name']} — he can't play this week"
+            detail = f"{rank}{reason}."
         elif not entry["games"]:
-            body = "he hasn't played a game this season."
+            action = f"Bench {entry['name']} — no games this season yet"
+            detail = f"{rank}."
         else:
-            # NO "but" here. The first version read "RB23 last season, but 8.5,
-            # 14.7 and 18.4" for Tony Pollard — rising, good numbers — asserting
-            # his form was why he sat when he actually sat on a near-tie. A
-            # connective is a claim; the numbers and who took the slot are facts.
-            lead = f"Sitting {entry['name']} — {entry['last_season_rank']} last season. "
-            body = f"This year: {_games_phrase(entry['games'])}"
-            if entry["projected"] is not None:
-                body += f", projecting {entry['projected']:.1f}"
-            body += "."
             instead = _displaced_by(entry["position"], picks, players)
-            if instead is not None:
-                who, slot, proj = instead
-                body += f" {who} starts at {slot} instead, at {proj:.1f}."
-        items.append({"action": lead + body,
+            form = f"this year {_games_phrase(entry['games'])}"
+            if instead is None:
+                action = f"Bench {entry['name']}"
+                own = (f", projecting {entry['projected']:.1f}"
+                       if entry["projected"] is not None else "")
+                detail = f"{rank}; {form}{own}."
+            else:
+                who, slot, proj, pick = instead
+                odds = ""
+                if (getattr(pick, "alternative_id", None) == entry["player_id"]
+                        and getattr(pick, "confidence", None) is not None):
+                    odds = f" · {round(pick.confidence * 100)}%"
+                action = f"Start {who} over {entry['name']} at {slot}{odds}"
+                versus = (f", projecting {entry['projected']:.1f} to {who}'s {proj:.1f}"
+                          if entry["projected"] is not None else "")
+                detail = f"{entry['name']}: {rank}; {form}{versus}."
+        items.append({"action": action, "detail": detail,
                       "deadline": "before this week's first kickoff",
                       "urgency": "now"})
     return bench, items

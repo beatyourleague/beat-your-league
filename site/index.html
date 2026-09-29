@@ -338,6 +338,15 @@
   .finance{margin-top:16px;font-size:13px;color:var(--dusk);line-height:1.65;max-width:70ch;}
   .finance a{color:var(--flag);}
 
+  /* why this exists */
+  .why{padding-top:var(--gap-section);}
+  .whycard{border-left:3px solid var(--flag);padding:6px 0 6px 28px;max-width:760px;}
+  .whyquote{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(26px,3.4vw,36px);
+    line-height:1.15;margin:12px 0 14px;text-wrap:balance;}
+  .whyquote em{font-style:italic;color:var(--flag);}
+  .whybody{font-size:16.5px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
+  .whybody a{color:var(--flag);}
+
   /* ------------------------------------------------ faq */
   .faqgrid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;
     align-items:start;}
@@ -594,8 +603,8 @@
         <div class="filehead">If/then for gameday</div>
         <div class="pivot">
           <div class="if">If Tony Pollard (bench) is cleared to play</div>
-          <p>Look again at FLEX: he projects 11.2 against Chase Brown's 11.2, and that
-          slot has no number until his status is known.</p>
+          <p>Keep Chase Brown at FLEX — they project dead even at 11.2, so it's not
+          worth a swap. If he's ruled out, nothing changes.</p>
         </div>
       </div><!--/card-->
     </div>
@@ -688,6 +697,19 @@
   <a href="league-pass.html">One payment can cover every team</a>.</p>
 </section>
 
+<section class="why">
+  <div class="whycard">
+    <div class="kicker">Why this exists</div>
+    <p class="whyquote">Rankings answer <em>who's good this week.</em> Nobody answers
+    <em>who do I start</em> — for your team, under your scoring, before you're staring at
+    it at 12:55 on Sunday.</p>
+    <p class="whybody">So we built the file we wanted: every close call on your roster
+    decided on Tuesday, the odds on each one, and the plan for late news. One email, a
+    few minutes of your week, and Sunday back to being fun. Questions? Write to
+    <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
+  </div>
+</section>
+
 <section id="faq">
   <div class="faqgrid">
     <div>
@@ -757,6 +779,7 @@
   Not affiliated with the NFL.<br>
   <a href="sample-report.html">See a real file</a> ·
   <a href="league-pass.html">League Pass</a> ·
+  <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a> ·
   <a href="terms.html">Terms &amp; refunds</a> &middot;
     <a href="privacy.html">Privacy</a>
 </footer>
@@ -1052,7 +1075,7 @@ if (!reduced && "IntersectionObserver" in window) {
 if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
-    ".timeline, .versus, .plans, .finance, .faqgrid, .closer > *");
+    ".timeline, .versus, .whycard, .plans, .finance, .faqgrid, .closer > *");
   const rise = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;

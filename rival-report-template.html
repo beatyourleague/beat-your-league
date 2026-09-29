@@ -66,6 +66,7 @@
     background:var(--card);border:1px solid var(--line);padding:13px 14px;}
   .task .box{width:20px;height:20px;border:2.5px solid var(--navy);margin-top:1px;background:#fff;}
   .task .do{font-weight:700;font-size:15px;line-height:1.35;}
+  .task .why{font-size:13px;line-height:1.45;color:var(--ink2);margin-top:3px;}
   .task .dl{margin-top:3px;font-size:12.5px;font-weight:700;letter-spacing:.05em;
     text-transform:uppercase;color:var(--brick);}
   .task .dl.ok{color:var(--turf);}
@@ -200,14 +201,14 @@
   /* The solo lineup's call column. No tint anywhere in that grid: a tint is a
      comparison, and with no opponent there is nothing to compare against. */
   .tcall{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
-    text-align:right;font-variant-numeric:tabular-nums;color:var(--turf);}
+    text-align:right;font-variant-numeric:tabular-nums;color:var(--navy);}
   .tcall .tsub{display:inline;font-family:var(--sans);font-weight:600;}
   /* The numeral drawn: the same bar the Regret Score uses, scaled to a row.
      The fill IS the percentage — no rescaling, or the picture and the number
      would disagree about the same call. */
   .tcall .cbar{display:block;height:4px;background:#EAE7DE;margin-top:5px;
     border-radius:2px;overflow:hidden;}
-  .tcall .cbar i{display:block;height:100%;background:var(--turf);}
+  .tcall .cbar i{display:block;height:100%;background:linear-gradient(90deg,#D9A81B,var(--flag));}
   .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
   .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
   /* The bench: the rest of the roster, deliberately quieter than the lineup
@@ -261,9 +262,9 @@
   .call .verdict .over{color:var(--slate);font-size:19px;}
   .conf{display:flex;align-items:center;gap:10px;margin-top:12px;}
   .conf .bar{flex:1;height:10px;background:#EAE7DE;border:1px solid var(--line);}
-  .conf .bar i{display:block;height:100%;width:64%;background:var(--turf);}
-  .conf .num{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
-    font-variant-numeric:tabular-nums;color:var(--turf);}
+  .conf .bar i{display:block;height:100%;width:64%;background:linear-gradient(90deg,#D9A81B,var(--flag));}
+  .conf .num{font-family:'Barlow Condensed';font-weight:800;font-size:22px;
+    font-variant-numeric:tabular-nums;color:var(--navy);}
   .call .why{margin-top:12px;font-size:14.5px;line-height:1.55;color:var(--ink2);}
   .regret-note{margin-top:14px;padding:10px 12px;background:var(--brick-tint);
     border-left:4px solid var(--brick);font-size:13.5px;line-height:1.5;color:#7A2C1F;font-weight:500;}
@@ -505,7 +506,7 @@
 
   <!-- ===== 5. YOUR REGRET SCORE ===== -->
   <section>
-    <div class="eyebrow"><span class="tag">Your Regret Score</span><span class="n">05</span></div>
+    <div class="eyebrow"><span class="tag">The Week's Closest Call</span><span class="n">05</span></div>
     <div class="call">
       <div class="verdict">Start De'Von Achane <span class="over">over</span> Breece Hall</div>
       <div class="conf">
@@ -526,7 +527,7 @@
 
   <!-- ===== 6. PIVOT PLAN ===== -->
   <section>
-    <div class="eyebrow"><span class="tag">Pivot Plan — Set It, Forget It</span><span class="n">06</span></div>
+    <div class="eyebrow"><span class="tag">If/Then for Gameday</span><span class="n">06</span></div>
     <div class="pivots">
       <div class="pivot">
         <div class="if">If, before Mon 8:15 PM</div>
