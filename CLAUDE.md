@@ -444,6 +444,18 @@ and a new commit (the data exists — `stats_team_week_*` resolves for every sea
 Corrections go in an APPENDED §15 of the method doc, never edited into the frozen text, or nobody
 can tell what was preregistered.
 
+**The other setups, graded (Sep 29 2026).** `reports/setups-method.md` was
+preregistered and committed (d4cfe73) before `engine/setups_backtest.py` ran once: half-PPR,
+standard, 8/10/14 teams, superflex, no K or DEF, and weeks 17–18, each one setting away from the
+headline and graded alone by the parent's own code. All weeks 4–16 arms graded C; weeks 17–18
+graded B (1,168 calls, wide intervals, its one failing band landed BELOW stated). No D, so the
+numeral prints everywhere; `run/solo.SETTING_GRADES` records the grades and
+`tests/test_setups_backtest.py` fails if a D appears before a withholding path exists. In every
+weeks 4–16 arm, every failing band landed ABOVE its stated rate (the headline's direction).
+`site/confidence.html` publishes the table, pinned row for row to the report. Combined settings
+are not graded as combinations. The regime list below is kept as recorded; rookies and the live
+availability information set remain open.
+
 **Other regimes the audit found and did NOT fix** (recorded in method §15 C2 so they are not
 rediscovered as new): SUPER_FLEX slots (the picker offers the template; `TEMPLATE_T1` has no such
 slot, and QB-vs-non-QB is 0 of 956 graded 2024 calls), half-PPR and standard scoring (the published

@@ -38,3 +38,22 @@ def test_the_lineup_shapes_are_the_ones_the_product_sells() -> None:
     from run.trial import TEMPLATES
     assert setups.TEMPLATE_SF == TEMPLATES["sf"]
     assert setups.TEMPLATE_NKD == TEMPLATES["nokd"]
+
+
+def test_the_product_carries_every_graded_setting_and_withholds_on_d() -> None:
+    """Method §3's decision lives in run/solo.SETTING_GRADES. Every arm's grade
+    must be there exactly as the published run found it; and because no
+    withholding path exists yet, a D anywhere must fail here rather than let
+    a failed setting go on printing numbers."""
+    from run.solo import SETTING_GRADES
+    report = (Path(__file__).resolve().parent.parent / "reports"
+              / "setups-backtest.md").read_text(encoding="utf-8")
+    graded = dict(re.findall(r"^\| \w+ \| ([^|]+?) \| \d+ .*\*\*(\w)\*\* \|$",
+                             report, re.M))
+    assert len(graded) == len(setups.ARMS)
+    for arm in setups.ARMS:
+        key = (arm.setting, arm.value)
+        assert SETTING_GRADES.get(key) == graded[f"{arm.setting}: {arm.value}"], key
+    assert "D" not in SETTING_GRADES.values(), (
+        "a setting graded D: build the withholding path (method §3) before "
+        "shipping another report in that setting")

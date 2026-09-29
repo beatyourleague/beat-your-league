@@ -1462,7 +1462,8 @@ REPORTS = SITE.parent / "reports"
     (NO_CALL, "gate-backtest.md"),
     # Two sources: the parent grading and the early-season arm — the page
     # translates both, and a figure must exist in at least one of them.
-    (CONFIDENCE, ("nflverse-backtest.md", "early-season-backtest.md")),
+    (CONFIDENCE, ("nflverse-backtest.md", "early-season-backtest.md",
+                  "setups-backtest.md")),
 ])
 def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
     """These pages are hand-written translations of operator reports into buyer
@@ -1483,6 +1484,25 @@ def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> 
         assert figure in report, (
             f"{source} page cites {figure}, which is not in the report it "
             f"translates — regenerate or fix the page")
+
+
+def test_every_setup_on_the_confidence_page_matches_its_graded_run() -> None:
+    """The per-setup table (Sep 29 2026) translates reports/setups-backtest.md.
+    Every row must match its arm exactly (calls, rate, error, grade), every
+    arm must appear, and the one arm whose failing band went the wrong way
+    must say so beside its better grade."""
+    source = (REPORTS / "setups-backtest.md").read_text(encoding="utf-8")
+    arms = re.findall(r"^\| (\w+) \| ([^|]+) \| (\d+) \| \d+ \| ([\d.]+%) \| ([\d.]+%) "
+                      r"\| \d+ \| \d+ \| [\d.]+ \| \*\*(\w)\*\* \|$", source, re.M)
+    assert len(arms) == 8, "the setups report's summary table changed shape"
+    table = CONFIDENCE.split('class="setups"')[1].split("</table>")[0]
+    rows = re.findall(r"<tr><td>[^<]+</td><td>([\d,]+)</td><td>([\d.]+%)</td>"
+                      r"<td>([\d.]+%)</td><td>(\w)</td></tr>", table)
+    assert len(rows) == len(arms)
+    assert sorted(rows) == sorted((f"{int(c):,}", r, e, g) for _, _, c, r, e, g in arms)
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", CONFIDENCE))
+    assert re.search(r"its margins are wide", text) and re.search(r"went the other way", text), \
+        "weeks 17-18's better grade lost its disclosures"
 
 
 def test_the_projections_page_never_quotes_the_gap_without_its_uncertainty() -> None:
@@ -1534,7 +1554,7 @@ def test_the_confidence_page_leads_with_what_it_may_not_claim() -> None:
     assert re.search(r"Two of six pass", text)
     assert re.search(r"wrong in a flattering direction is still wrong", text, re.I)
     assert re.search(r"no claim that the number\s+is right", text, re.I)
-    assert re.search(r"PPR scoring, 12-team\s+leagues and the standard lineup", text), \
+    assert re.search(r"full PPR, 12 teams, the standard lineup", text), \
         "the scope the run covered must travel with the number"
     assert re.search(r"team defense never carries a\s+percentage", text, re.I)
     for other_study in ("53.5%", "2,056", "62.5% to", "77.2%"):

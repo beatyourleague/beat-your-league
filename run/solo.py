@@ -591,6 +591,22 @@ def _availability(cache_dir: Path, season: str, week: int,
 # product seeds ONLY that. Other presets, sizes and lineup shapes ship no
 # week-2-3 number until their own arms run.
 EARLY_SEASON_LAMBDA = 0.5
+# reports/setups-method.md §3, applied (Sep 29 2026). Each setting the signup
+# page offers was graded on its own by the parent method's rule; a setting that
+# graded D would withhold the numeral in every setup that has it. None did, so
+# the numeral prints everywhere — as a recorded prediction, never a claim.
+# tests/test_setups_backtest.py pins this map to reports/setups-backtest.md and
+# fails if a D ever appears before a withholding path exists.
+SETTING_GRADES = {
+    ("scoring", "ppr"): "C", ("scoring", "half_ppr"): "C",
+    ("scoring", "standard"): "C",
+    ("league size", "8"): "C", ("league size", "10"): "C",
+    ("league size", "12"): "C", ("league size", "14"): "C",
+    ("lineup shape", "standard"): "C", ("lineup shape", "superflex"): "C",
+    ("lineup shape", "no K or DEF"): "C",
+    ("weeks", "4-16"): "C", ("weeks", "17-18"): "B",
+}
+
 MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 
 

@@ -81,6 +81,12 @@
     clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
   footer{margin-top:52px;border-top:1px solid var(--line);padding-top:16px;
     font-size:12.5px;color:var(--slate);line-height:1.7;}
+  .tablewrap{overflow-x:auto;margin:14px 0 6px;}
+  table.setups{border-collapse:collapse;width:100%;font-size:14px;background:var(--card);
+    font-variant-numeric:tabular-nums;}
+  table.setups th,table.setups td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right;}
+  table.setups th:first-child,table.setups td:first-child{text-align:left;}
+  table.setups th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--slate);}
 </style>
 </head>
 <body>
@@ -154,12 +160,35 @@
   is right.</b> The percentage in your report prints as a recorded prediction, and the
   <a href="ledger/index.html">public record</a> is where it gets settled — one graded call
   at a time, from mid-September, never edited after the fact.</p>
-  <p>Two more limits that travel with the number. It was graded for PPR scoring, 12-team
-  leagues and the standard lineup; half-PPR, standard scoring, superflex and other league
-  sizes are on the list to be graded on their own, and until they are, the same number
-  prints for those setups without a grading behind it. And a team defense never carries a
-  percentage at all: no defense was graded here, so that slot shows a projection and no
-  number.</p>
+  <p>One limit that travels with the number: a team defense never carries a percentage.
+  No defense was graded, so that slot shows a projection and no number.</p>
+
+  <h2>Graded setup by setup</h2>
+  <p>The run above is full PPR, 12 teams, the standard lineup. Every other setting the
+  signup page offers got its own run on the same eleven seasons, one setting changed at a
+  time, under a rule committed before any of them computed a number. None failed the
+  floor, so the number prints in all of them.</p>
+  <div class="tablewrap"><table class="setups">
+    <thead><tr><th>Setting</th><th>Calls graded</th><th>Landed</th><th>Error</th><th>Grade</th></tr></thead>
+    <tbody>
+      <tr><td>Half-PPR scoring</td><td>10,004</td><td>65.9%</td><td>4.7%</td><td>C</td></tr>
+      <tr><td>Standard scoring</td><td>10,062</td><td>66.1%</td><td>5.1%</td><td>C</td></tr>
+      <tr><td>8 teams</td><td>6,979</td><td>64.0%</td><td>3.6%</td><td>C</td></tr>
+      <tr><td>10 teams</td><td>8,654</td><td>64.0%</td><td>3.1%</td><td>C</td></tr>
+      <tr><td>14 teams</td><td>11,488</td><td>67.1%</td><td>5.2%</td><td>C</td></tr>
+      <tr><td>Superflex</td><td>11,703</td><td>65.3%</td><td>3.9%</td><td>C</td></tr>
+      <tr><td>No kicker or defense</td><td>9,010</td><td>65.3%</td><td>3.9%</td><td>C</td></tr>
+      <tr><td>Weeks 17–18</td><td>1,168</td><td>65.6%</td><td>3.7%</td><td>B</td></tr>
+    </tbody>
+  </table></div>
+  <p>"Landed" is the share of decided calls where our pick outscored the bench option;
+  "error" is the expected calibration error across bands. The pattern is the one above, in
+  every setting from week 4 to week 16: <b>where a band missed, the calls landed more often
+  than we said, never less.</b> Grade C still means no claim that the number is right.
+  Weeks 17–18 reached the middle grade, but on 1,168 calls its margins are wide, and its
+  one failing band went the other way — where we wrote 80–90%, the calls landed about 11
+  points lower. Settings you combine, like half-PPR in a 10-team superflex league, weren't
+  graded as combinations; each setting was graded on its own.</p>
 
   <h2>The first weeks, graded on their own</h2>
   <p>The excluded weeks got their own preregistered run before launch: for weeks 2 and 3

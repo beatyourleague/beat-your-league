@@ -432,3 +432,18 @@ direction only: where W−1's report is absent entirely (week 1, or an archive
 outage), the product yields no snapshot rather than treating everyone as
 ACTIVE. The headline numbers above are unaffected; nothing in the frozen text
 changes.
+
+### C4 — C2's scoring, league-size, lineup-shape and week regimes, graded (2026-09-29)
+
+Resolved, by a separate preregistration rather than by editing this one:
+`reports/setups-method.md` (committed as d4cfe73 before any number existed) ran
+§9's arms C and E — half-PPR, standard, 10 and 14 teams, preregistered here
+and never run until now — together with 8 teams, superflex, no K or DEF, and
+weeks 17–18, each changing one setting and graded alone by §1 through this
+harness's own `calls_for_season` and `evaluate`. Result
+(`reports/setups-backtest.md`): every weeks 4–16 arm Grade C, weeks 17–18
+Grade B on 1,168 calls with wide intervals. No arm reached D, so under that
+method's §3 the numeral prints in every setting, as a recorded prediction.
+The headline's Grade C is unchanged (§9: arms only downgrade). Still open from
+C2: rookies and the live availability information set.
+
