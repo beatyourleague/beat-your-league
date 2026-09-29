@@ -78,6 +78,12 @@
     color:var(--paper);border-radius:2px;}
   .watchform input::placeholder{color:var(--dusk);}
   .watchnote{margin-top:10px;font-size:13px;color:var(--dusk);line-height:1.55;max-width:46ch;}
+  .creds{list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:18px;
+    font-size:13.5px;font-weight:600;color:var(--dusk2);}
+  .creds li{display:flex;align-items:center;gap:7px;}
+  .creds li::before{content:"";width:14px;height:14px;flex:none;border-radius:50%;
+    background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
+  .creds b{color:var(--flag);font-weight:800;}
   .heroline{margin-top:14px;font-size:13.5px;color:var(--dusk);max-width:52ch;}
   .heroline b{color:var(--dusk2);}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
@@ -194,14 +200,15 @@
   .js .anim.in .frow{opacity:1;transform:none;}
 
   /* ------------------------------------------------ sections */
-  section{padding:70px 0 8px;}
+  :root{--gap-section:96px;}
+  section{padding:var(--gap-section) 0 0;}
   h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(30px,4.2vw,44px);
     text-transform:uppercase;line-height:.98;letter-spacing:.005em;margin:0 0 12px;}
   h2.slant{font-weight:900;font-style:italic;text-shadow:0 3px 0 rgba(0,0,0,.5);}
   .lede{font-size:17px;line-height:1.6;color:var(--dusk2);max-width:58ch;margin-bottom:30px;}
 
   /* proof line */
-  .proof{padding:34px 0 0;}
+  .proof{padding:40px 0 0;}
   .proofline{display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center;
     border-top:1px solid rgba(246,244,238,.12);border-bottom:1px solid rgba(246,244,238,.12);
     padding:24px 0;}
@@ -291,8 +298,13 @@
   .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px;}
   .plan{background:var(--card);color:var(--navy);border:1px solid var(--line);
     padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;height:100%;}
-  .plan.founder{border:2px solid var(--flag);}
-  .stamp50{position:absolute;top:-13px;right:16px;background:var(--flag);color:var(--navy);
+  .plans{align-items:center;}
+  .plan.founder{border:2px solid var(--flag);padding:30px 26px;
+    box-shadow:0 30px 70px -24px rgba(0,0,0,.85),0 0 48px -8px rgba(242,194,48,.45);}
+  .plan.founder .price{font-size:60px;}
+  .stamp50{position:absolute;top:-14px;right:16px;color:var(--navy);
+    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
+    box-shadow:0 6px 16px -6px rgba(0,0,0,.6);
     font-family:'Barlow Condensed';font-weight:800;font-size:12.5px;letter-spacing:.12em;
     text-transform:uppercase;padding:4px 10px;}
   .plan .tag{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
@@ -335,8 +347,21 @@
   .stickybar .btn{display:block;text-align:center;clip-path:none;}
   .stickybar.show{transform:none;}
 
+  /* Sections rise into place once, as they arrive. Only below-the-fold
+     content is ever held back, and only when the script is running. */
+  .js .reveal{opacity:0;transform:translateY(22px);
+    transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1);}
+  .js .reveal.shown{opacity:1;transform:none;}
+  /* One pass of light across the main button, a few seconds in. */
+  .btn.gold{position:relative;overflow:hidden;}
+  .btn.gold.shine::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);
+    animation:shine 1s ease-out forwards;pointer-events:none;}
+  @keyframes shine{to{left:130%;}}
+  .hero .phonewrap{will-change:transform;}
+
   /* ------------------------------------------------ closer + footer */
-  .closer{text-align:center;padding:80px 0 20px;}
+  .closer{text-align:center;padding:var(--gap-section) 0 20px;}
   .closer p{color:var(--dusk2);margin:8px auto 20px;max-width:46ch;}
   footer{margin-top:56px;border-top:1px solid rgba(246,244,238,.14);
     padding:22px 0 44px;font-size:12.5px;color:#7C8DA5;line-height:1.8;}
@@ -349,6 +374,8 @@
   @media (prefers-reduced-motion: reduce){
     .fbar i,.ubar i,.flipbar .a,.stickybar,.hero .mailrow{transition:none!important;}
     .notif{display:none!important;}
+    .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
+    .btn.gold.shine::after{display:none;}
     .js .hero .mailrow.wait{opacity:1;transform:none;}
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
   }
@@ -367,7 +394,15 @@
     .note p{max-width:60ch;}
   }
   @media (max-width:880px){
-    .hero{grid-template-columns:1fr;padding:40px 0 20px;gap:34px;}
+    /* Phones see the product in the first screen: headline, then the phone,
+       then the form. The nav's own button keeps the action on screen. */
+    .hero{grid-template-columns:1fr;padding:26px 0 20px;gap:0;}
+    .hero > div:first-child{display:contents;}
+    .hero .kicker{order:1;} .hero h1{order:2;} .hero .sub{order:3;}
+    .hero .phonewrap{order:4;margin:26px 0 8px;}
+    .hero .phone{max-width:286px;}
+    .hero .watchform{order:5;} .hero .watchnote{order:6;} .hero .creds{order:7;}
+    .hero .heroline{order:8;} .hero .cta-row{order:9;margin-top:14px;}
     .proofline{grid-template-columns:1fr;gap:6px;}
     .timeline{grid-template-columns:1fr;gap:22px;}
     .timeline::before{left:7px;right:auto;top:0;bottom:0;width:2px;height:auto;
@@ -420,9 +455,8 @@
   <div>
     <div class="kicker">Fantasy football · start/sit</div>
     <h1>Know who <em><span>to start.</span></em></h1>
-    <p class="sub">Your exact roster, under your league's scoring, with every close call
-    decided and the odds on each one. One short file in your inbox every Tuesday. You
-    just set the lineup.</p>
+    <p class="sub">Your roster. Your scoring. Every close call decided, with the odds.
+    In your inbox every Tuesday.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -431,6 +465,11 @@
       <button class="btn gold" type="submit">Tell me when it opens</button>
     </form>
     <p class="watchnote" id="watch-note" role="status"></p>
+    <ul class="creds" aria-label="How the numbers are checked">
+      <li><b>10,041</b> real calls graded</li>
+      <li>Every league setting graded</li>
+      <li>Misses published</li>
+    </ul>
     <p class="heroline"><b>A new file every Tuesday of the season.</b> One email when signups
     open — nothing else, no card, unsubscribe in one click.</p>
     <div class="cta-row">
@@ -966,6 +1005,51 @@ if (!reduced && "IntersectionObserver" in window) {
   setTimeout(() => cards.forEach((card) => { if (!card.classList.contains("in")) play(card); }), 4000);
 } else {
   cards.forEach((card) => card.classList.add("in"));
+}
+
+// Sections rise in as they arrive. Only what starts below the fold is held
+// back, so nothing the visitor is already looking at ever disappears.
+if (!reduced && "IntersectionObserver" in window) {
+  const parts = document.querySelectorAll(
+    "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
+    ".timeline, .plans, .finance, .faqgrid, .closer > *");
+  const rise = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      e.target.classList.add("shown");
+      rise.unobserve(e.target);
+    }
+  }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+  parts.forEach((el) => {
+    if (el.getBoundingClientRect().top < window.innerHeight) return;
+    el.classList.add("reveal");
+    rise.observe(el);
+  });
+}
+
+// One pass of light across the hero's main button, once the phone has landed.
+if (!reduced) {
+  const main = [...document.querySelectorAll(".hero .btn.gold")]
+    .find((b) => b.offsetParent !== null);
+  if (main) setTimeout(() => main.classList.add("shine"), 2600);
+}
+
+// On wide screens the phone drifts a touch slower than the page: depth,
+// without anything to learn.
+if (!reduced && window.matchMedia("(min-width: 881px)").matches) {
+  const phone = document.querySelector(".hero .phonewrap");
+  let queued = false;
+  window.addEventListener("scroll", () => {
+    if (queued || !phone) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      // Phone and its caption move as one, and never more than 25px: the
+      // drift must not carry either onto the section below.
+      const y = Math.min(window.scrollY, 500);
+      phone.style.transform = "translateY(" + (y * 0.05).toFixed(1) + "px)";
+    });
+  }, { passive: true });
 }
 
 // The phone-width bar: shown only while neither the hero nor the closer (each
