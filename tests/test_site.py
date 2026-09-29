@@ -2911,3 +2911,15 @@ def test_every_page_points_at_icon_files_that_exist() -> None:
     # Google reads the brand logo from the landing page's structured data.
     logo = re.search(r'"logo": "https://beatyourleague\.com/([^"]+)"', LANDING)
     assert logo and (SITE / logo.group(1)).is_file()
+
+
+def test_the_join_page_loads_the_roster_parser_it_was_tested_with() -> None:
+    """GitHub Pages lets browsers cache a script for up to ten minutes, so a
+    returning visitor ran the OLD roster.js after the LAR / "Bench" parser fix
+    shipped (found Sep 29 2026) — the very failures the fix removed. The src
+    carries the file's own digest, so any change to the parser changes the
+    URL. If this fails, set the ?v= in site/join/index.html to the value below."""
+    import hashlib
+    digest = hashlib.sha256((SITE / "join" / "roster.js").read_bytes()).hexdigest()[:10]
+    assert f'<script src="roster.js?v={digest}"></script>' in JOIN, \
+        f"roster.js changed; its script tag needs ?v={digest}"
