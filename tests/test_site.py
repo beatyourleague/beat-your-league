@@ -2541,10 +2541,10 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     scrolls sideways reads as broken before a word of it is read.
     """
     # Since the Sep 29 2026 redesign the hero card sits inside a phone frame
-    # capped at 372px, so it is narrow at EVERY viewport and the squeeze comes
+    # capped at 320px, so it is narrow at EVERY viewport and the squeeze comes
     # only at phone widths, where the frame itself shrinks. There the columns
     # tighten and a name wraps rather than truncating. Measured at 360-430px.
-    assert re.search(r"\.phone\{[^}]*max-width:372px", LANDING), \
+    assert re.search(r"\.phone\{[^}]*max-width:320px", LANDING), \
         "the phone frame lost its cap — re-measure the hero card's columns"
     assert "@media (max-width:430px)" in LANDING, "the hero card's narrow treatment is gone"
     compact = LANDING.split("@media (max-width:430px)")[1].split("\n  }")[0]
