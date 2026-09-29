@@ -40,48 +40,81 @@ TEMPLATE_PATH = REPO_ROOT / "rival-report-template.html"
 NO_CALL = "no call"          # in a tight column
 NOT_CALLING_IT = "Heads up"   # as a label above the reason
 
-# The logo mark, single-sourced. It shipped on the landing hero and NOWHERE
-# else — not on the report the subscriber actually pays for, not on the ledger
-# or the backtest a skeptic is sent to. One shape, one file, every surface.
-#
-# The silhouette is a VESICA (two circular arcs meeting at points), not an
-# ellipse: a football is a prolate spheroid and the ellipse is what made the
-# old mark read as a sticker. Radius is derived from the half-length L and
-# half-height H as (L^2+H^2)/2H — at L=11.4, H=6.6 that is 13.145. Depth is
-# three layers on one path (form gradient, specular bloom, edge vignette) and
-# the -18 degree tilt is what stops it reading as inert.
-# ``uid`` namespaces the gradient ids so two marks can share a document.
-MARK_PATH = "M-11.4 0A13.145 13.145 0 0 1 11.4 0A13.145 13.145 0 0 1-11.4 0Z"
+# The logo mark, single-sourced (redrawn Sep 29 2026, owner-approved after three
+# rounds). A flat gold football on the 45-degree diagonal, two navy stripes set
+# in from the tips — the one cue only a football has — and a free-standing check
+# in the middle: "your lineup, decided". Rules the drawing keeps:
+#   * FLAT. No gradients, shadows or highlights: they die at 16px and cannot be
+#     printed in one colour. Depth, where wanted, is added by the page around it.
+#   * The check touches nothing. It stands clear of both stripes and the edge,
+#     so it reads as a tick at a glance.
+#   * Stripes and check share one stroke weight (4.0 on the 64 grid).
+#   * Tips softly blunted (a same-colour stroke with a round join), so they
+#     survive being rasterised small.
+#   * A clear gold tip shows beyond each stripe; without it the ball reads as a
+#     capsule.
+# Variants: "gold" (dark grounds, the default), "light" (a deeper gold for white
+# and cream), "black" and "white" (one-colour print, stripes and check cut out).
+# ``uid`` namespaces the clip/mask ids so several marks can share a document.
+MARK_PATH = "M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z"
+# The stroked lens's true outline: two r=35 arcs, used to clip the stripes.
+_MARK_CLIP = "M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z"
+_MARK_FRAME = "translate(32 32) rotate(-45)"
+_MARK_CHECK = "M24.3 31.7l5.5 5.5 10.7-11.2"
+_MARK_STRIPES = ('<rect x="-19.5" y="-20" width="4" height="40" transform="{f}"/>'
+                 '<rect x="15.5" y="-20" width="4" height="40" transform="{f}"/>')
+MARK_COLOURS = {
+    "gold": ("#F0B62A", "#101E33"),
+    "light": ("#E3A21A", "#101E33"),
+    "black": ("#000000", None),
+    "white": ("#FFFFFF", None),
+}
+ICON_GROUND = "#101E33"
 
 
-def mark_svg(uid: str = "byl", klass: str = "mark") -> str:
+def _mark_body(uid: str, variant: str) -> str:
+    """The drawing on the 64-unit grid, without the <svg> wrapper."""
+    ball, ink = MARK_COLOURS[variant]
+    lens = (f'<path d="{MARK_PATH}" transform="{_MARK_FRAME}" fill="{ball}" '
+            f'stroke="{ball}" stroke-width="3" stroke-linejoin="round"/>')
+    stripes = _MARK_STRIPES.format(f=_MARK_FRAME)
+    check = (f'<path d="{_MARK_CHECK}" fill="none" stroke-width="4" '
+             f'stroke-linecap="round" stroke-linejoin="round"')
+    clip = (f'<clipPath id="{uid}Clip"><path d="{_MARK_CLIP}" '
+            f'transform="{_MARK_FRAME}"/></clipPath>')
+    if ink:
+        return (f'<defs>{clip}</defs>{lens}'
+                f'<g clip-path="url(#{uid}Clip)" fill="{ink}">{stripes}</g>'
+                f'{check} stroke="{ink}"/>')
+    # One colour: the stripes and the check are CUT OUT of the ball, so the
+    # ground shows through them — the same shape in any single ink.
+    return (f'<defs>{clip}<mask id="{uid}Knock"><rect width="64" height="64" '
+            f'fill="#fff"/><g clip-path="url(#{uid}Clip)" fill="#000">{stripes}'
+            f'</g>{check} stroke="#000"/></mask></defs>'
+            f'<g mask="url(#{uid}Knock)">{lens}</g>')
+
+
+def mark_svg(uid: str = "byl", klass: str = "mark", variant: str = "gold") -> str:
     """The football mark as standalone inline SVG. Decorative: the wordmark
     beside it carries the name, so this is aria-hidden."""
-    return (
-        f'<svg class="{klass}" viewBox="0 0 26 17" aria-hidden="true" focusable="false">'
-        f'<defs>'
-        f'<linearGradient id="{uid}Body" x1=".12" y1="0" x2=".72" y2="1">'
-        f'<stop offset="0" stop-color="#C57F45"/><stop offset=".34" stop-color="#9A5228"/>'
-        f'<stop offset=".72" stop-color="#63321A"/><stop offset="1" stop-color="#381B0D"/>'
-        f'</linearGradient>'
-        f'<radialGradient id="{uid}Spec" cx=".34" cy=".24" r=".40">'
-        f'<stop offset="0" stop-color="#FFE0B4" stop-opacity=".58"/>'
-        f'<stop offset="1" stop-color="#FFE0B4" stop-opacity="0"/></radialGradient>'
-        f'<radialGradient id="{uid}Vig" cx=".5" cy=".5" r=".60">'
-        f'<stop offset=".42" stop-color="#25120A" stop-opacity="0"/>'
-        f'<stop offset="1" stop-color="#25120A" stop-opacity=".62"/></radialGradient>'
-        f'</defs>'
-        f'<g transform="translate(13 8.5) rotate(-18)">'
-        f'<path id="{uid}Path" d="{MARK_PATH}" fill="url(#{uid}Body)" '
-        f'stroke="#F2C230" stroke-width=".9"/>'
-        f'<use href="#{uid}Path" fill="url(#{uid}Spec)" stroke="none"/>'
-        f'<use href="#{uid}Path" fill="url(#{uid}Vig)" stroke="none"/>'
-        f'<g stroke="#F6F4EE" stroke-linecap="round" fill="none">'
-        f'<path d="M-7.4 .30Q0-.95 7.4 .30" stroke-width=".8" opacity=".92"/>'
-        f'<path d="M-3.18-1.36L-2.82 .91M-1.07-1.73L-.93 1.10M1.07-1.73L.93 1.10'
-        f'M3.18-1.36L2.82 .91" stroke-width="1"/>'
-        f'</g></g></svg>'
-    )
+    return (f'<svg class="{klass}" viewBox="0 0 64 64" aria-hidden="true" '
+            f'focusable="false">{_mark_body(uid, variant)}</svg>')
+
+
+def icon_svg(uid: str = "bylt", standalone: bool = False) -> str:
+    """The small-size form: the gold mark on a navy rounded square, enlarged to
+    fill it. For the browser tab, phone home screens, Google's result icon and
+    Stripe — places where a floating tilted ball would look tiny."""
+    xmlns = ' xmlns="http://www.w3.org/2000/svg"' if standalone else ""
+    return (f'<svg{xmlns} viewBox="0 0 64 64"><rect width="64" height="64" '
+            f'rx="14" fill="{ICON_GROUND}"/><g transform="translate(32 32) '
+            f'scale(1.04) translate(-32 -32)">{_mark_body(uid, "gold")}</g></svg>')
+
+
+def mark_file(variant: str) -> str:
+    """A standalone .svg file of the mark, for the brand kit."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+            f'{_mark_body("m", variant)}</svg>\n')
 
 
 # The tab icon. A deliberately bolder cut of the mark — at 16px the lockup's
@@ -116,10 +149,13 @@ SOCIAL_IMAGE_TAGS = (
     'four roster slots, three with a percentage, one marked start.">\n'
 )
 
-FAVICON_LINK = '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%22.10%22 y1=%220%22 x2=%22.74%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23E0A264%22/%3E%3Cstop offset=%22.28%22 stop-color=%22%23B4692F%22/%3E%3Cstop offset=%22.62%22 stop-color=%22%237A3F1D%22/%3E%3Cstop offset=%221%22 stop-color=%22%233A1C0D%22/%3E%3C/linearGradient%3E%3CradialGradient id=%22s%22 cx=%22.32%22 cy=%22.22%22 r=%22.45%22%3E%3Cstop offset=%220%22 stop-color=%22%23FFE2B8%22 stop-opacity=%22.72%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FFE2B8%22 stop-opacity=%220%22/%3E%3C/radialGradient%3E%3CradialGradient id=%22v%22 cx=%22.5%22 cy=%22.5%22 r=%22.62%22%3E%3Cstop offset=%22.40%22 stop-color=%22%231E0E06%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%231E0E06%22 stop-opacity=%22.70%22/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%23101E33%22/%3E%3Cg transform=%22translate(16 16) rotate(-18)%22%3E%3Cpath id=%22p%22 d=%22M-12.6 0A14.11 14.11 0 0 1 12.6 0A14.11 14.11 0 0 1-12.6 0Z%22 fill=%22url(%23b)%22 stroke=%22%23F2C230%22 stroke-width=%221.05%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23s)%22 stroke=%22none%22/%3E%3Cuse href=%22%23p%22 fill=%22url(%23v)%22 stroke=%22none%22/%3E%3Cg stroke=%22%23F8F5EE%22 stroke-linecap=%22round%22 fill=%22none%22%3E%3Cpath d=%22M-8.2 .35Q0-1.05 8.2 .35%22 stroke-width=%221.15%22 opacity=%22.95%22/%3E%3Cpath d=%22M-3.5-1.5L-3.1 1.0M-1.2-1.9L-1.0 1.25M1.2-1.9L1.0 1.25M3.5-1.5L3.1 1.0%22 stroke-width=%221.35%22/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">'
+FAVICON_LINK = ('<link rel="icon" href="/favicon.ico" sizes="32x32">\n'
+                '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
+                '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
+                '<link rel="manifest" href="/site.webmanifest">')
 
 # Every surface that shows the wordmark styles the mark the same way.
-MARK_CSS = (".brand svg.mark{width:22px;height:15px;flex:none;}"
+MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
             ".brand{display:inline-flex;align-items:center;gap:9px;}")
 
 # Sentences shared verbatim between the browser report (this module) and the

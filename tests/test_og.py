@@ -257,7 +257,7 @@ def test_the_logo_is_drawn_from_the_same_mark_as_every_page() -> None:
     """One drawing of the logo. A second copy is how the invoice header and the
     site's own header end up subtly different."""
     source = (REPO / "render" / "brand.py").read_text(encoding="utf-8")
-    assert "from render.report import mark_svg" in source
+    assert re.search(r"from render\.report import [^\n]*\bmark_svg\b", source)
     # Check for the GEOMETRY, not for "<svg" — brand.py legitimately names the
     # opening tag as a replace() target when it sizes the imported mark.
     for drawing in ("linearGradient", "radialGradient", "<path", "stop-color"):
@@ -271,4 +271,8 @@ def test_one_chrome_pipeline_serves_both_generators() -> None:
     detail that gets fixed in one copy and not the other."""
     brand = (REPO / "render" / "brand.py").read_text(encoding="utf-8")
     assert "render_png" in brand
-    assert "subprocess" not in brand, "brand.py spawns its own browser"
+    # subprocess is allowed for macOS `sips` (resizing the small icons) and
+    # nothing else: no second headless-Chrome launch.
+    assert "--headless" not in brand and "find_chrome()" in brand, \
+        "brand.py spawns its own browser"
+    assert "subprocess.run([\"sips\"" in brand

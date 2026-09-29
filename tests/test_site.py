@@ -1857,8 +1857,9 @@ def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
     for path in surfaces:
         text = path.read_text(encoding="utf-8")
         assert MARK_PATH in text, f"{path.name} is missing the logo mark"
-    # The silhouette must stay a vesica (two arcs), never revert to an ellipse.
-    assert MARK_PATH.count("A13.145 13.145") == 2
+    # The silhouette stays a lens of two arcs (the Sep 29 2026 redraw), never an
+    # ellipse — an ellipse is what made the first mark read as a sticker.
+    assert MARK_PATH.count("A33.5 33.5") == 2
     assert "<ellipse" not in (SITE / "index.html").read_text(
         encoding="utf-8").split('class="brand"')[1].split("</svg>")[0]
 
@@ -2891,3 +2892,22 @@ def test_no_funnel_page_carries_a_launch_date_that_outlives_itself(name: str) ->
         assert not hit, (
             f"{name} carries {hit.group(0)!r} — a date or season phase that will "
             f"be false for most of the year")
+
+
+def test_every_page_points_at_icon_files_that_exist() -> None:
+    """The logo redraw (Sep 29 2026) moved the favicon from a data URI to real
+    files, because the .ico, the Apple icon and the manifest are what browsers,
+    phones and Google's crawler actually fetch. A page linking a file that is
+    not there shows a blank tab icon and a grey square in search results."""
+    from render.report import FAVICON_LINK
+    for href in re.findall(r'href="/([^"]+)"', FAVICON_LINK):
+        assert (SITE / href).is_file(), f"/{href} is linked but not published"
+    pages = [p for p in SITE.rglob("*.html") if p.name != "legal.html"]
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        assert 'href="/favicon.svg"' in text, f"{page.relative_to(SITE)} has no favicon"
+        assert 'href="data:image/svg+xml' not in text, \
+            f"{page.relative_to(SITE)} still embeds the old favicon"
+    # Google reads the brand logo from the landing page's structured data.
+    logo = re.search(r'"logo": "https://beatyourleague\.com/([^"]+)"', LANDING)
+    assert logo and (SITE / logo.group(1)).is_file()

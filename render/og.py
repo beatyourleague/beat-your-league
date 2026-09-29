@@ -144,6 +144,10 @@ def build_html(page: str) -> str:
     """The card, in the site's own palette and type."""
     rows = "\n        ".join(_row_html(row) for row in hero_rows(page))
     head = html.escape(headline(page))
+    # The logo, from the one drawing every page uses (imported here, not at the
+    # top, so render.og stays importable on its own).
+    from render.report import mark_svg
+    mark = mark_svg("og", "ogmark")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -161,7 +165,7 @@ def build_html(page: str) -> str:
                radial-gradient(760px 520px at 6% 96%,rgba(30,122,70,.16),transparent 68%);}}
   .left{{position:relative;width:556px;flex:none;}}
   .mark{{display:flex;align-items:center;gap:12px;margin-bottom:26px;}}
-  .mark i{{display:block;width:44px;height:4px;background:#F2C230;border-radius:2px;}}
+  .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
   .mark span{{font-family:'Barlow Condensed';font-weight:900;font-size:23px;
     letter-spacing:.2em;text-transform:uppercase;color:#F2C230;}}
   h1{{font-family:'Barlow Condensed';font-weight:900;font-size:92px;line-height:.93;
@@ -195,7 +199,7 @@ def build_html(page: str) -> str:
 </style></head>
 <body>
   <div class="left">
-    <div class="mark"><i></i><span>Beat Your League</span></div>
+    <div class="mark">{mark}<span>Beat Your League</span></div>
     <h1>{head}</h1>
     <div class="sub">Your lineup, decided every Tuesday — computed from
       <b>your exact roster</b> and your league's scoring.</div>

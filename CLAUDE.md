@@ -1001,6 +1001,16 @@ pattern: every serious bug in this repo has been a path nobody had executed.
   log that is never pruned or entitlement-checked. Keyed on the purchase now.
 Every fix is mutation-tested; the reproduction is in each test's docstring.
 
+**The logo (Sep 29 2026, owner-approved after three design rounds).** A FLAT gold football on
+the diagonal, navy stripes set in from the tips, and a free-standing check in the middle ("your
+lineup, decided"). One drawing: `render/report.py` `mark_svg` (variants gold/light/black/white),
+`icon_svg` (the navy-tile form for tabs, phones, Google, Stripe), `mark_file`. Every file is
+rendered from it by `make brand` (favicon .ico/.svg, apple-touch, 192/512 + manifest,
+`site/brand/*`); `brand/README.md` says which file goes where. Rules: flat always — depth is the
+page's job, never baked in; the check touches nothing; gold never on a mid-tone or photo (white
+version there); Stripe gets navy, never gold. The landing's JSON-LD names `brand/icon.png` as the
+Organization logo, and the og card carries the mark.
+
 **Selling strategy: sell the win, keep the record off the pitch (owner decision, Sep 29 2026).**
 Supersedes every earlier instruction to show the grading on selling surfaces. A buyer
 decides in seconds, and grades, failing bands, "misses included" and "what free feeds did
