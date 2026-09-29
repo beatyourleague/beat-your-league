@@ -57,7 +57,7 @@ jobs:
       # without access and neither can be rebuilt if it is lost.
       # The nflverse download cache, shared with the Tuesday cron.
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -75,7 +75,7 @@ jobs:
         run: .venv/bin/python -m run.posts all
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
