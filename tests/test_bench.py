@@ -10,6 +10,8 @@ is broken; and benching a star is the boldest call the file makes.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from enum import Enum
 
@@ -278,7 +280,8 @@ def test_the_explanation_says_who_took_the_slot() -> None:
     # No odds pair FLEX with STAR in this fixture, so the line benches STAR
     # and names who plays instead (Sep 29 2026: "Start X over Y" is kept for
     # the pair that actually carries the slot's odds).
-    assert "Bench STAR — FLEX starts at FLEX" in text, text
+    # STAR shares the line with any other bench player FLEX keeps out.
+    assert re.search(r"Bench STAR( and \w+)? — FLEX starts at FLEX", text), text
     assert "FLEX 9.0" in text, text
 
 
@@ -294,3 +297,22 @@ def test_the_form_explanation_asserts_no_judgment() -> None:
     text = next(_said(i) for i in items if "STAR" in _said(i))
     assert " but " not in text, f"a judgment the numbers may contradict: {text}"
     assert "8.5, 14.7, 18.4" in text
+
+
+def test_benched_players_losing_to_one_starter_share_a_line() -> None:
+    """Sep 29 2026, live 2026 build: two lines both read "... — Sam LaPorta
+    starts at FLEX". One decision, one line; each player's facts stay."""
+    from engine.solo_report import _merge_same_starter
+    items = [{"action": "Bench A — X starts at FLEX", "detail": "A: facts.",
+              "deadline": "d", "urgency": "now"},
+             {"action": "Start K over L at TE · 71%", "detail": "L: facts.",
+              "deadline": "d", "urgency": "now"},
+             {"action": "Bench B — X starts at FLEX", "detail": "B: facts.",
+              "deadline": "d", "urgency": "now"}]
+    explained = [{"name": "A"}, {"name": "L"}, {"name": "B"}]
+    got = _merge_same_starter(items, {0: ("X", "FLEX"), 2: ("X", "FLEX")}, explained)
+    assert [i["action"] for i in got] == ["Bench A and B — X starts at FLEX",
+                                          "Start K over L at TE · 71%"]
+    assert got[0]["detail"] == "A: facts. B: facts."
+    # A lone line is untouched.
+    assert _merge_same_starter(items[:2], {0: ("X", "FLEX")}, explained) == items[:2]

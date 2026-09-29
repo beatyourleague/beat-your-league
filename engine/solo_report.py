@@ -420,6 +420,7 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
     # wording printed "Start Chase Brown over Tony Pollard at FLEX" while the
     # same slot's odds were against Courtland Sutton, two different "over"
     # players for one slot.
+    merge_key: dict[int, tuple[str, str]] = {}
     for entry in explained[:MAX_NOTABLE_ITEMS]:
         rank = f"{entry['last_season_rank']} last season."
         doubtful = (availability.classify(entry["player_id"]).status.value
@@ -449,13 +450,46 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
                               f"{round(pick.confidence * 100)}%")
                 else:
                     action = f"Bench {entry['name']} — {who} starts at {slot}"
+                    merge_key[len(items)] = (who, slot)
                 versus = (f" Projects {entry['projected']:.1f}, {who} {proj:.1f}."
                           if entry["projected"] is not None else "")
                 detail = f"{entry['name']}: {rank}{listed} {form}{versus}"
         items.append({"action": action, "detail": detail,
                       "deadline": "before this week's first kickoff",
                       "urgency": "now"})
-    return bench, items
+    return bench, _merge_same_starter(items, merge_key, explained)
+
+
+def _merge_same_starter(items: list[dict[str, str]],
+                        merge_key: dict[int, tuple[str, str]],
+                        explained: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """One line per starter who keeps his slot over several benched players.
+
+    A live 2026 build printed "Bench Saquon Barkley — Sam LaPorta starts at
+    FLEX" and, next line, "Bench Courtland Sutton — Sam LaPorta starts at FLEX"
+    (Sep 29 2026). Same decision, twice. They share a line now, each player's
+    facts kept in the detail. Lines carrying odds are never merged: each names
+    its own head-to-head.
+    """
+    groups: dict[tuple[str, str], list[int]] = {}
+    for index, key in merge_key.items():
+        groups.setdefault(key, []).append(index)
+    out: list[dict[str, str]] = []
+    for index, item in enumerate(items):
+        key = merge_key.get(index)
+        members = groups.get(key, []) if key else []
+        if len(members) < 2:
+            out.append(item)
+            continue
+        if index != members[0]:
+            continue                      # folded into the first one
+        who, slot = key
+        names = [explained[i]["name"] for i in members]
+        listed = ", ".join(names[:-1]) + " and " + names[-1]
+        out.append({**item,
+                    "action": f"Bench {listed} — {who} starts at {slot}",
+                    "detail": " ".join(items[i]["detail"] for i in members)})
+    return out
 
 
 def _scoring_label(scoring: str) -> str:
