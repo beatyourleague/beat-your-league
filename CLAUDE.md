@@ -1636,7 +1636,8 @@ pricing card and bought a window the terms had already closed. It now runs until
 second weekly file's week kicks off (the first game of the week that file covers), on every plan
 and whenever they join (terms §5 `#refunds` defines it: a weekly file is one week's report; the
 day-one ROSTER file is not one, a day-one weekly REPORT is; a season that ends first closes it a
-week after the last file). **Kickoff, not "a week after the second file"** — the later close,
+week after the last file; a second file WE sent after its week kicked off closes it a week after
+that file's `sent_at`, so our own failure never shuts a window before the file arrives). **Kickoff, not "a week after the second file"** — the later close,
 live for a few hours the same day, let a buyer play the second file's lineup, watch it settle
 and refund on the result; `test_the_refund_window_closes_before_the_second_file_is_played`
 bans that wording and the looser "through your first two weekly files" on every surface. The

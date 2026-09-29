@@ -617,11 +617,15 @@ decision): the later close let a buyer play the second file's lineup, watch the 
 and refund on the result. At kickoff both files are in hand and the first file's week has played
 out in full, which is the judgement the window exists for. For an August buyer this closes before
 Week 2's games rather than after them, so it is tighter than the old window; mid-season buyers,
-who previously had none, gain one. Defined in
+who previously had none, gain one. If a send of ours runs late and the second file reaches the
+buyer after its week has kicked off, the window closes a week after it reached them instead — the
+kickoff close exists to stop a file being used and then returned, not to close a window before
+the file it counts has arrived. Defined in
 `site/terms.html` §5 and pinned by `test_the_refund_window_is_counted_from_the_purchase_not_the_calendar`.
 Enforcement stays manual: `data/processed/sent.jsonl` records every weekly file sent, keyed by
 week and subscriber slug; the second weekly key's week number plus that week's first kickoff on
-the NFL schedule is the whole evidence a refund decision needs.
+the NFL schedule is the whole evidence a refund decision needs, and its `sent_at` against that
+kickoff settles the late-send exception.
 
 Why this is the right shape: it is disclosed pre-purchase (so it is a term, not a trap), it costs
 an honest customer nothing, and it removes the only version of the loop worth running. Note the

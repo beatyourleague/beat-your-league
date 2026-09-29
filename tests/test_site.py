@@ -163,6 +163,9 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     assert re.search(r"roster file[^.]*isn't one", section, re.I)
     assert re.search(r"season ends before your second", section, re.I), \
         "a buyer who joins in the last fortnight has a window with no end"
+    assert re.search(r"reaches you after its week has kicked off[^.]*"
+                     r"a week after it reaches you", section, re.I), \
+        "a late send would close the window before the second file arrived"
 
 
 def test_cancellation_is_promised_and_never_obstructed() -> None:
