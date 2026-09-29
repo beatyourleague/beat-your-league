@@ -103,6 +103,24 @@ def _gate(reason: str) -> str:
     )
 
 
+def _bar(fill_pct: float, width: str, height: int = 6, align: str = "") -> str:
+    """A bar as a two-cell table — the one bar every mail client draws.
+
+    ``fill_pct`` is the filled share, 0-100. Callers decide the scale: the
+    lineup's odds run from 50 (a coin flip) like the site's, the closest call
+    shows the pick's whole share of the head-to-head."""
+    fill = max(0, min(100, round(fill_pct)))
+    cell = f'height:{height}px;font-size:0;line-height:0;'
+    filled = (f'<td width="{fill}%" style="{cell}background:{FLAG};">&nbsp;</td>'
+              if fill else "")
+    rest = (f'<td style="{cell}background:{LINE};">&nbsp;</td>'
+            if fill < 100 else "")
+    side = f' align="{align}"' if align else ""
+    return (f'<table role="presentation"{side} width="{width}" cellpadding="0" '
+            f'cellspacing="0" border="0" style="width:{width};"><tr>'
+            f'{filled}{rest}</tr></table>')
+
+
 def _note(inner_html: str) -> str:
     return (
         f'<div style="{BASE}font-size:13px;background:{PAPER};'
@@ -148,27 +166,38 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'Beat Your League</div>'
         f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
         f'letter-spacing:1px;text-transform:uppercase;'
-        f'color:{CARD};padding:6px 0 10px 0;">Week {esc(meta["week"])} · '
+        f'color:{CARD};padding:6px 0 2px 0;">Week {esc(meta["week"])} · '
         f'{"Your Report" if meta.get("solo") else "Rival Report"}</div>'
-        f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
+        + (f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
+           f'color:{FLAG};padding:0 0 10px 0;">Your lineup, decided.</div>'
+           if meta.get("solo") else '<div style="padding:0 0 8px 0;"></div>')
+        + f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
         f'{" &nbsp;—&nbsp; ".join(lines)}</div></td></tr>{banner}'
     )
 
 
 def _checklist(items: list[Mapping[str, Any]]) -> str:
+    # A box to tick beside every item: the site promises "tick the boxes,
+    # done in ninety seconds", so the file carries the boxes.
     rows = []
     for i, item in enumerate(items, 1):
         color = TURF if item.get("urgency") in ("now", "done") else SLATE
+        rule = f'border-top:1px solid {LINE};' if i > 1 else ""
         rows.append(
-            f'<tr><td style="{BASE}font-weight:bold;color:{SLATE};'
-            f'padding:7px 10px 7px 0;vertical-align:top;width:22px;">{i}</td>'
-            f'<td style="{BASE}padding:7px 0;border-bottom:1px solid {LINE};">'
+            f'<tr><td style="padding:10px 12px 10px 0;vertical-align:top;width:18px;'
+            f'{rule}"><div style="width:14px;height:14px;border:2px solid {NAVY};'
+            f'border-radius:3px;background:{CARD};margin-top:2px;"></div></td>'
+            f'<td style="{BASE}padding:10px 0;{rule}">'
             f'<b>{esc(item["action"])}</b><br>'
             f'<span style="{SMALL}color:{color};">{esc(item["deadline"])}</span>'
             f'</td></tr>'
         )
     body = (f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{"".join(rows)}</table>')
+            f'cellspacing="0" border="0" style="background:{FLAG_TINT};'
+            f'border-left:4px solid {FLAG};"><tr><td style="padding:4px 14px;">'
+            f'<table role="presentation" width="100%" cellpadding="0" '
+            f'cellspacing="0" border="0">{"".join(rows)}</table>'
+            f'</td></tr></table>')
     return _sec(1, "The 30-Second Game Plan", body)
 
 
@@ -411,15 +440,20 @@ def _regret(regret: Mapping[str, Any]) -> str:
     drivers = " · ".join(
         f'{esc(d["label"])} <b>{esc(d["value"])}</b>' for d in regret["drivers"])
     body = (
-        f'<div style="background:{PAPER};padding:14px 16px;">'
+        f'<div style="background:{PAPER};border:1px solid {LINE};">'
+        f'<div style="background:{NAVY};color:{CARD};font-family:{DISPLAY};'
+        f'font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;'
+        f'padding:8px 16px;">The week&#x27;s closest call</div>'
+        f'<div style="padding:14px 16px;">'
         f'<div style="font-family:{FONT};font-size:18px;font-weight:bold;'
         f'color:{NAVY};">Start {esc(regret["start_name"])} '
         f'<span style="color:{SLATE};font-weight:normal;">over</span> '
         f'{esc(regret["over_name"])}</div>'
-        f'<div style="font-family:{FONT};font-size:24px;font-weight:bold;'
-        f'color:{TURF};padding:6px 0;">{confidence}%</div>'
+        f'<div style="padding:12px 0 4px 0;">{_bar(confidence, "100%", 10)}</div>'
+        f'<div style="font-family:{DISPLAY};font-size:26px;font-weight:bold;'
+        f'font-style:italic;color:{NAVY};padding:2px 0 6px 0;">{confidence}%</div>'
         f'<p style="{SMALL}margin:0 0 6px 0;">{drivers}</p>'
-        f'<p style="{SMALL}margin:0;">{esc(regret["definition"])}</p></div>'
+        f'<p style="{SMALL}margin:0;">{esc(regret["definition"])}</p></div></div>'
     )
     return _sec(6, "Your Regret Score", body)
 
@@ -797,7 +831,11 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
         flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
         confidence = slot.get("confidence")
         if confidence is not None:
-            call = f'<b style="color:{TURF};">{_pct(confidence)}%</b>'
+            # The number with the site's bar under it: 50% (a coin flip)
+            # is the empty end, because every call is a head-to-head.
+            call = (f'<b style="font-size:16px;color:{NAVY};">{_pct(confidence)}%</b>'
+                    f'<div style="padding-top:4px;">'
+                    f'{_bar((_pct(confidence) - 50) * 2, "56px", align="right")}</div>')
         elif (mixed and slot.get("player_name")
                 and not is_structural_gate(slot.get("confidence_gate"))):
             shown_marker = True
