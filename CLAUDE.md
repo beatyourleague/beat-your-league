@@ -444,6 +444,22 @@ and a new commit (the data exists — `stats_team_week_*` resolves for every sea
 Corrections go in an APPENDED §15 of the method doc, never edited into the frozen text, or nobody
 can tell what was preregistered.
 
+**The number is recalibrated (Sep 29 2026).** Every grading showed the same error in weeks
+4–16: failing bands land ABOVE stated. `reports/recalibration-method.md` was preregistered and
+committed (5846734) before `engine/recalibration.py` ran once: p' = σ(b·logit(p)), one parameter,
+monotone, symmetric, fixed at 0.5, so it changes no pick, only the number printed and recorded.
+b = 1.3714, fitted on 2014–2019 ONLY; on held-out 2020–2024 the raw number grades C (2/6 bands,
+ECE 3.9%) and the corrected one B (6/6, ECE 1.1%); all seven setup arms grade B corrected. All
+three shipping clauses held, so `run/solo.RECALIBRATION_B` is set and `calibrator_for` applies it
+in weeks 4–16 only (never 2–3, which are their own arm; never 17–18, whose one failing band landed
+BELOW stated and would be pushed further wrong). The map rides `optimal_lineup(calibrate=...)`,
+applied after the seat is decided; the frozen harnesses pass nothing and reproduce exactly.
+`SETTING_GRADES` now carries the corrected held-out grades. Grade B lets the figures be stated
+as facts beside the failures; the banned words stay banned (Grade A needs seed-stability checks
+this run did not do). The sample moved accordingly (Chase 65→70, Kittle 66→71, St. Brown 58→61)
+and the landing, og card and pinned tests moved with it. `site/confidence.html` leads with the
+held-out result and keeps the eleven-season uncorrected record beneath it.
+
 **The other setups, graded (Sep 29 2026).** `reports/setups-method.md` was
 preregistered and committed (d4cfe73) before `engine/setups_backtest.py` ran once: half-PPR,
 standard, 8/10/14 teams, superflex, no K or DEF, and weeks 17–18, each one setting away from the

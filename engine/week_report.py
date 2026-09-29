@@ -177,6 +177,7 @@ def optimal_lineup(
     availability: WeekAvailability,
     week: int,
     prior_form: Mapping[str, float] | None = None,
+    calibrate=None,
 ) -> list[SlotPick]:
     """Fill the starting slots with the highest-projected available players.
 
@@ -311,6 +312,11 @@ def optimal_lineup(
                     projection, alt_projection = alt_projection, projection
                     status = statuses[pid]
                     confidence = 1.0 - confidence
+                if calibrate is not None:
+                    # reports/recalibration-method.md §1: a monotone map fixed
+                    # at 0.5, applied after the seat is decided, so it changes
+                    # the number printed and graded and never the pick.
+                    confidence = calibrate(confidence)
             else:
                 gate = reason
 

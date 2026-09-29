@@ -1463,7 +1463,7 @@ REPORTS = SITE.parent / "reports"
     # Two sources: the parent grading and the early-season arm — the page
     # translates both, and a figure must exist in at least one of them.
     (CONFIDENCE, ("nflverse-backtest.md", "early-season-backtest.md",
-                  "setups-backtest.md")),
+                  "setups-backtest.md", "recalibration-backtest.md")),
 ])
 def test_every_figure_on_an_evidence_page_exists_in_its_source(page, source) -> None:
     """These pages are hand-written translations of operator reports into buyer
@@ -1495,7 +1495,7 @@ def test_every_setup_on_the_confidence_page_matches_its_graded_run() -> None:
     arms = re.findall(r"^\| (\w+) \| ([^|]+) \| (\d+) \| \d+ \| ([\d.]+%) \| ([\d.]+%) "
                       r"\| \d+ \| \d+ \| [\d.]+ \| \*\*(\w)\*\* \|$", source, re.M)
     assert len(arms) == 8, "the setups report's summary table changed shape"
-    table = CONFIDENCE.split('class="setups"')[1].split("</table>")[0]
+    table = CONFIDENCE.split('class="setups">')[1].split("</table>")[0]
     rows = re.findall(r"<tr><td>[^<]+</td><td>([\d,]+)</td><td>([\d.]+%)</td>"
                       r"<td>([\d.]+%)</td><td>(\w)</td></tr>", table)
     assert len(rows) == len(arms)
@@ -1503,6 +1503,40 @@ def test_every_setup_on_the_confidence_page_matches_its_graded_run() -> None:
     text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", CONFIDENCE))
     assert re.search(r"its margins are wide", text) and re.search(r"went the other way", text), \
         "weeks 17-18's better grade lost its disclosures"
+
+
+def test_the_corrected_number_is_published_exactly_as_it_was_graded() -> None:
+    """The recalibration shipped (reports/recalibration-method.md §4). The page
+    leads with it, so its figures carry the most weight on the site: every band
+    of the held-out table and every corrected setup row must match the report,
+    the opening must say which seasons fitted it and which graded it, and its
+    stated shortfalls must stay beside it."""
+    report = (REPORTS / "recalibration-backtest.md").read_text(encoding="utf-8")
+    recal = report.split("#### Recalibrated, 2020–2024")[1].split("##")[0]
+    bands = re.findall(r"^\| (\d+)%–(\d+)% \| (\d+) \| (\d+) \| \d+ \| ([\d.]+%) "
+                       r"\| ([\d.]+%) \| (\d+)%–(\d+)% \| (\w+) \|$", recal, re.M)
+    assert len(bands) == 6
+    page_rows = re.findall(r"<tr><td>(\d+)–(\d+)%</td><td>([\d,]+)</td><td>([\d,]+)</td>"
+                           r"<td>([\d.]+%)</td><td>([\d.]+%)</td><td>(\d+)–(\d+)%</td>"
+                           r'<td class="pass">passes</td></tr>', CONFIDENCE)
+    assert sorted(page_rows) == sorted(
+        (lo, hi, f"{int(g):,}", f"{int(d):,}", st, ob, cl, ch)
+        for lo, hi, g, d, st, ob, cl, ch, verdict in bands if verdict == "calibrated")
+    arms = dict(re.findall(r"^\| \w+ \| [^|]+ \| \w \| ([\d.]+%) \| \w \| ([\d.]+%) \|$",
+                           report, re.M))
+    table = CONFIDENCE.split('class="setups recal"')[1].split("</table>")[0]
+    rows = re.findall(r"<tr><td>[^<]+</td><td>([\d.]+%)</td><td>([\d.]+%)</td><td>(\w)</td></tr>",
+                      table)
+    assert sorted(rows) == sorted((before, after, "B") for before, after in
+                                  re.findall(r"^\| \w+ \| [^|]+ \| \w \| ([\d.]+%) \| B \| ([\d.]+%) \|$",
+                                             report, re.M))
+    assert len(rows) == 7 and arms
+    first_screen = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
+                          CONFIDENCE.split("</h1>")[1].split("<h2")[0]))
+    assert "2014–2019" in first_screen and "2020–2024, seasons it never saw" in first_screen
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", CONFIDENCE))
+    assert re.search(r"five seasons, not eleven", text), "the held-out window's width went missing"
+    assert re.search(r"weeks 2–3 and 17–18 are left uncorrected", text)
 
 
 def test_the_projections_page_never_quotes_the_gap_without_its_uncertainty() -> None:
@@ -2126,8 +2160,8 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     # longer publishes is a number the product did not compute.
     import html as _html
     sample_rows = _html.unescape(flat(SAMPLE_REPORT))
-    for name, pct in (("Ja'Marr Chase", "65%"), ("Amon-Ra St. Brown", "58%"),
-                      ("George Kittle", "66%")):
+    for name, pct in (("Ja'Marr Chase", "70%"), ("Amon-Ra St. Brown", "61%"),
+                      ("George Kittle", "71%")):
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))

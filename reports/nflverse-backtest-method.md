@@ -447,3 +447,16 @@ method's §3 the numeral prints in every setting, as a recorded prediction.
 The headline's Grade C is unchanged (§9: arms only downgrade). Still open from
 C2: rookies and the live availability information set.
 
+### C5 — the number is recalibrated, by a separate preregistration (2026-09-29)
+
+`reports/recalibration-method.md` (committed as 5846734 before any number)
+fitted one parameter, p' = σ(b · logit(p)), on 2014–2019 only and graded the
+corrected number on 2020–2024 by §1 through this harness's own code. Result
+(`reports/recalibration-backtest.md`): b = 1.3714; on the held-out seasons the
+raw number grades C (2 of 6 bands, ECE 3.9%) and the corrected one B (6 of 6,
+ECE 1.1%), and every setup arm grades B corrected. All three of that method's
+shipping clauses held, so reports apply the map in weeks 4–16. The map keeps
+every pick; only the printed and recorded number moves. This document's own
+run and its Grade C are unchanged and stay published as the record of the
+model before the correction.
+

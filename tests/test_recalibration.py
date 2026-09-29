@@ -57,3 +57,23 @@ def test_the_split_never_lets_a_graded_season_into_the_fit() -> None:
     assert recal.calls_for_season is parent.calls_for_season
     assert recal.evaluate is parent.evaluate
     assert not any(arm.tail for arm in recal.RECAL_ARMS)
+
+
+def test_the_product_applies_the_published_b_and_only_where_the_method_allows() -> None:
+    """Method §4 shipped: the product's b is the report's b, and the map runs
+    in weeks 4-16 only — never on a seeded week-2-3 report, never in 17-18."""
+    import re
+    from pathlib import Path
+    from run.solo import RECALIBRATION_B, calibrator_for
+    report = (Path(__file__).resolve().parent.parent / "reports"
+              / "recalibration-backtest.md").read_text(encoding="utf-8")
+    assert "**SHIPS.**" in report
+    assert f"b = {RECALIBRATION_B:.4f}" in report
+    assert calibrator_for(10, seeded=False) is not None
+    assert abs(calibrator_for(10, seeded=False)(0.62) - recal.recalibrate(0.62, RECALIBRATION_B)) < 1e-12
+    for week in (1, 2, 3, 17, 18):
+        assert calibrator_for(week, seeded=False) is None, week
+    assert calibrator_for(10, seeded=True) is None
+    headline = re.search(r"recalibrated \*\*Grade (\w)\*\*", report).group(1)
+    from run.solo import SETTING_GRADES
+    assert SETTING_GRADES[("weeks", "4-16")] == headline

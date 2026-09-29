@@ -68,6 +68,7 @@
   td:first-child{text-align:left;font-weight:700;color:var(--navy);}
   .ok{color:var(--turf);font-weight:700;}
   .off{color:var(--brick);font-weight:700;}
+  .pass{color:var(--turf);font-weight:700;}
   .verdict{margin-top:16px;padding:13px 16px;background:var(--card);
     border-left:4px solid var(--gold-bright);border-top:1px solid var(--line);
     border-right:1px solid var(--line);border-bottom:1px solid var(--line);
@@ -96,11 +97,14 @@
   <h1>The number next to a player</h1>
   <p class="standfirst">Every start in your report that carries a percentage is a prediction
   we record and grade. Before we sold a single one, we replayed <b>eleven NFL seasons</b> and
-  graded <b>10,041</b> of those predictions against the real box scores — every miss
-  included, nothing trimmed. We also wrote the grading rule down before the run, so nobody
-  could move the bar after seeing the results. It's a strict bar, and on it the result
-  <b>does not let us tell you the number is right</b>. So here is everything it found:
-  where the number holds up, and where it doesn't.</p>
+  graded <b>10,041</b> of those predictions against the real box scores. That showed our
+  number ran shy: our picks won more often than it said. So we fitted one correction on
+  2014–2019 and graded the corrected number only on <b>2020–2024, seasons it never saw</b>:
+  all six confidence bands landed inside their margins, and the average error fell to
+  <b>1.1%</b> from 3.9%. Under a rule written down before the run, that earns the middle
+  grade: we can state these figures as facts. It still <b>does not let us tell you the
+  number is right</b>, which takes the top grade and checks this run didn't do. So here is
+  everything, including where it falls short.</p>
 
   <h2>What the number means</h2>
   <div class="unit"><b>The unit, exactly</b>
@@ -109,7 +113,36 @@
   scoring, if the two don't both sit out. It is never "a good start" in general. It's this
   player over that player, in your lineup.</div>
 
-  <h2>What was graded</h2>
+  <h2>The number you get: corrected, and graded on seasons it never saw</h2>
+  <p>The correction keeps every pick and every order exactly as it was and moves only the
+  percentage printed beside it, toward how often calls like it have actually won: a 62% the
+  old way prints as about 66%, a 70% as about 76%, and a toss-up stays a toss-up. One number
+  sets it, fitted on 2014–2019. Then the corrected number was graded on 2020–2024 alone.</p>
+  <div class="facts">
+    <div class="fact"><b>4,551</b><span>calls graded, 2020–2024</span></div>
+    <div class="fact"><b>6 of 6</b><span>bands inside their margins</span></div>
+    <div class="fact"><b>1.1%</b><span>average error, from 3.9%</span></div>
+    <div class="fact"><b>B</b><span>the middle grade, held out</span></div>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <tr><th>When we say…</th><th>Calls</th><th>Decided</th><th>We said, on average</th>
+        <th>They landed</th><th>95% interval</th><th>Verdict</th></tr>
+    <tr><td>50–55%</td><td>978</td><td>950</td><td>52.4%</td><td>51.9%</td><td>49–55%</td><td class="pass">passes</td></tr>
+    <tr><td>55–60%</td><td>823</td><td>789</td><td>57.5%</td><td>55.5%</td><td>52–60%</td><td class="pass">passes</td></tr>
+    <tr><td>60–65%</td><td>731</td><td>704</td><td>62.3%</td><td>61.8%</td><td>58–66%</td><td class="pass">passes</td></tr>
+    <tr><td>65–70%</td><td>663</td><td>640</td><td>67.5%</td><td>67.5%</td><td>64–71%</td><td class="pass">passes</td></tr>
+    <tr><td>70–80%</td><td>885</td><td>853</td><td>74.5%</td><td>76.6%</td><td>73–80%</td><td class="pass">passes</td></tr>
+    <tr><td>80–90%</td><td>445</td><td>434</td><td>83.9%</td><td>85.3%</td><td>82–88%</td><td class="pass">passes</td></tr>
+  </table>
+  </div>
+  <p>Where it falls short: five seasons, not eleven, so the margins are wider than the full
+  record's; one fitted number, so the correction is only as good as 2014–2019 was at
+  predicting 2020–2024; and weeks 2–3 and 17–18 are left uncorrected on purpose (below). The
+  rest of this page is the eleven-season record of the number before the correction, kept
+  exactly as it was graded.</p>
+
+  <h2>What was graded before the correction</h2>
   <p>Seasons 2014 through 2024. Each call is the model's first choice at a slot against its
   own second choice, graded on what the two actually scored. Weeks 1–3 are out (a call needs
   three games of record behind both players), weeks 17–18 are out (fantasy seasons are over),
@@ -123,7 +156,7 @@
   <p style="margin-top:12px">That last figure is the one most products would put in a headline.
   Read on for why ours doesn't.</p>
 
-  <h2>Bucket by bucket</h2>
+  <h2>Before the correction, bucket by bucket</h2>
   <p>The question that matters isn't how often we were right overall — it's whether the
   number on each call meant what it said. When we put 60–65% on a call, those calls should
   land about that often. Here is every band, with what we said and what happened. Intervals
@@ -154,12 +187,15 @@
 
   <h2>What the rule lets us say — and what it doesn't</h2>
   <p>The grading rule was written before a single number was computed, and its clauses are
-  all required rather than weighed against each other. This run cleared the error threshold
-  (3.6% expected calibration error) and the spread threshold for a stronger grade, and failed
-  on the count of passing bands. So, on every page of this site: <b>no claim that the number
-  is right.</b> The percentage in your report prints as a recorded prediction, and the
-  <a href="ledger/index.html">public record</a> is where it gets settled — one graded call
-  at a time, from mid-September, never edited after the fact.</p>
+  all required rather than weighed against each other. The uncorrected run cleared the error
+  threshold (3.6% expected calibration error) and the spread threshold for a stronger grade,
+  and failed on the count of passing bands. The correction was preregistered the same way —
+  its fit seasons, its test seasons and the conditions for shipping it were committed before
+  it ran — and it passed all three. The middle grade lets us state the figures above as
+  facts. It still makes <b>no claim that the number is right</b>: that takes the top grade,
+  which needs checks across many random draws that this run didn't do. The
+  <a href="ledger/index.html">public record</a> is where every number gets settled — one
+  graded call at a time, never edited after the fact.</p>
   <p>One limit that travels with the number: a team defense never carries a percentage.
   No defense was graded, so that slot shows a projection and no number.</p>
 
@@ -181,14 +217,30 @@
       <tr><td>Weeks 17–18</td><td>1,168</td><td>65.6%</td><td>3.7%</td><td>B</td></tr>
     </tbody>
   </table></div>
+  <p>That table is before the correction, over all eleven seasons. With the correction, on
+  2020–2024 alone:</p>
+  <div class="tablewrap"><table class="setups recal">
+    <thead><tr><th>Setting</th><th>Error before</th><th>Error after</th><th>Grade after</th></tr></thead>
+    <tbody>
+      <tr><td>Half-PPR scoring</td><td>5.1%</td><td>1.9%</td><td>B</td></tr>
+      <tr><td>Standard scoring</td><td>5.2%</td><td>1.7%</td><td>B</td></tr>
+      <tr><td>8 teams</td><td>3.3%</td><td>2.0%</td><td>B</td></tr>
+      <tr><td>10 teams</td><td>2.1%</td><td>1.6%</td><td>B</td></tr>
+      <tr><td>14 teams</td><td>5.2%</td><td>1.4%</td><td>B</td></tr>
+      <tr><td>Superflex</td><td>4.7%</td><td>1.8%</td><td>B</td></tr>
+      <tr><td>No kicker or defense</td><td>4.4%</td><td>1.3%</td><td>B</td></tr>
+    </tbody>
+  </table></div>
   <p>"Landed" is the share of decided calls where our pick outscored the bench option;
   "error" is the expected calibration error across bands. The pattern is the one above, in
   every setting from week 4 to week 16: <b>where a band missed, the calls landed more often
   than we said, never less.</b> Grade C still means no claim that the number is right.
   Weeks 17–18 reached the middle grade, but on 1,168 calls its margins are wide, and its
   one failing band went the other way — where we wrote 80–90%, the calls landed about 11
-  points lower. Settings you combine, like half-PPR in a 10-team superflex league, weren't
-  graded as combinations; each setting was graded on its own.</p>
+  points lower — which is why weeks 17–18 keep the uncorrected number: a correction that
+  raises numbers would push that band further the wrong way. Settings you combine, like
+  half-PPR in a 10-team superflex league, weren't graded as combinations; each setting was
+  graded on its own.</p>
 
   <h2>The first weeks, graded on their own</h2>
   <p>The excluded weeks got their own preregistered run before launch: for weeks 2 and 3

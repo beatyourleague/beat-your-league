@@ -591,21 +591,43 @@ def _availability(cache_dir: Path, season: str, week: int,
 # product seeds ONLY that. Other presets, sizes and lineup shapes ship no
 # week-2-3 number until their own arms run.
 EARLY_SEASON_LAMBDA = 0.5
-# reports/setups-method.md §3, applied (Sep 29 2026). Each setting the signup
-# page offers was graded on its own by the parent method's rule; a setting that
-# graded D would withhold the numeral in every setup that has it. None did, so
-# the numeral prints everywhere — as a recorded prediction, never a claim.
-# tests/test_setups_backtest.py pins this map to reports/setups-backtest.md and
-# fails if a D ever appears before a withholding path exists.
+# The grade each setting's number carries. A setting that graded D would
+# withhold the numeral in every setup that has it (reports/setups-method.md §3);
+# none did. Weeks 4-16 settings carry their RECALIBRATED held-out grade
+# (reports/recalibration-method.md §4: the corrected 2020-2024 grade governs);
+# weeks 17-18 are not recalibrated and keep their own grade from
+# reports/setups-backtest.md. tests/test_setups_backtest.py and
+# tests/test_recalibration.py pin this map to those reports and fail if a D
+# ever appears before a withholding path exists.
 SETTING_GRADES = {
-    ("scoring", "ppr"): "C", ("scoring", "half_ppr"): "C",
-    ("scoring", "standard"): "C",
-    ("league size", "8"): "C", ("league size", "10"): "C",
-    ("league size", "12"): "C", ("league size", "14"): "C",
-    ("lineup shape", "standard"): "C", ("lineup shape", "superflex"): "C",
-    ("lineup shape", "no K or DEF"): "C",
-    ("weeks", "4-16"): "C", ("weeks", "17-18"): "B",
+    ("scoring", "ppr"): "B", ("scoring", "half_ppr"): "B",
+    ("scoring", "standard"): "B",
+    ("league size", "8"): "B", ("league size", "10"): "B",
+    ("league size", "12"): "B", ("league size", "14"): "B",
+    ("lineup shape", "standard"): "B", ("lineup shape", "superflex"): "B",
+    ("lineup shape", "no K or DEF"): "B",
+    ("weeks", "4-16"): "B", ("weeks", "17-18"): "B",
 }
+
+# reports/recalibration-method.md §4, decided by its one run (Sep 29 2026,
+# reports/recalibration-backtest.md): fitted on 2014-2019 only; on 2020-2024
+# the corrected number graded B with all six bands inside their intervals and
+# ECE 1.1% (raw: C, 2 of 6, 3.9%). All three clauses held, so it ships: every
+# report applies it in weeks 4-16 (never 2-3, never 17-18).
+RECALIBRATION_B: float | None = 1.3714
+RECALIBRATED_WEEKS = range(4, 17)
+
+
+def calibrator_for(week: int, seeded: bool):
+    """The confidence map this report applies, or None. Method §3: weeks 17-18
+    missed in the opposite direction and weeks 2-3 are their own arm, so
+    neither is touched."""
+    if RECALIBRATION_B is None or seeded or week not in RECALIBRATED_WEEKS:
+        return None
+    from engine.recalibration import recalibrate
+    b = RECALIBRATION_B
+    return lambda p: recalibrate(p, b)
+
 
 MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 
@@ -689,7 +711,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                early_calls=seeded_scope(spec, league_size,
                                                         data.week + 1),
                                processed_dir=processed_dir,
-                               last_season_ranks=last_season_ranks)
+                               last_season_ranks=last_season_ranks,
+                               calibrate=calibrator_for(data.week, seeded))
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry
