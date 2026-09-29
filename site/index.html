@@ -531,7 +531,10 @@ document.documentElement.classList.add("js");
 // because the intake page is what attaches the buyer's roster and scoring to
 // the payment. Checkout itself is hosted by Stripe; card data never touches this
 // site, and no payment URL is ever published on this page.
-const CHECKOUT_OPEN = true;
+// Closed again Sep 29 2026 while the join page's payment links are empty
+// (see there): a gold "$39" button that lands on "checkout isn't open" is
+// the cul-de-sac this flag exists to prevent.
+const CHECKOUT_OPEN = false;
 // Whether a purchase can actually FINISH — set to true only once the Stripe
 // payment links exist in site/join/index.html. CHECKOUT_OPEN sells; this says
 // whether selling works. While they disagree, the email capture stays up so a

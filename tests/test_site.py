@@ -329,7 +329,13 @@ def test_an_open_checkout_with_no_links_still_warns_before_the_work() -> None:
         "the closed-checkout message is gone while the links are still empty"
     # And it is decided from the LINKS, not hand-toggled — a hand-set banner
     # is one someone forgets to remove the day the links land.
-    assert re.search(r"STRIPE_LINK[_A-Z]*\s*(\|\||\?|===|!==|&&)|!.*STRIPE_LINK", JOIN), \
+    # The per-plan rewrite derives one link from the three and tests that; the
+    # old pattern here matched the all-or-nothing shape it replaced, and nobody
+    # noticed because the early return above skipped it for as long as the
+    # links were live. Closing checkout again (Sep 29 2026) found it.
+    gate = re.search(r"const (\w+) = [^;]*STRIPE_LINK_[A-Z]+[^;]*;\s*"
+                     r"if \(!\1\) \{(.*?)\n\}", JOIN, re.S)
+    assert gate and "closed-note" in gate.group(2), \
         "the warning must be driven by whether a payment link exists"
 
 
