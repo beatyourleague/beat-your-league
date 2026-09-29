@@ -132,6 +132,7 @@ class SlotPick:
     # confirmed and the call was made against the next confirmed one instead.
     # Presentation only (late news, the if/then) — never graded.
     doubtful_alternative_id: str | None = None
+    doubtful_alternative_projection: Projection | None = None
 
 
 def _slot_restrictiveness(slot: str) -> int:
@@ -289,6 +290,7 @@ def optimal_lineup(
         alternatives = eligible(slot, exclude_out=True)
         alt_id = alternatives[0] if alternatives else None
         doubtful: str | None = None
+        doubtful_projection: Projection | None = None
 
         confidence = None
         gate: str | None = None
@@ -325,7 +327,7 @@ def optimal_lineup(
                             or cand_projection.evidence < MIN_GAMES_FOR_CALL
                             or statuses[cand].status is not Status.ACTIVE):
                         continue
-                    doubtful = alt_id
+                    doubtful, doubtful_projection = alt_id, alt_projection
                     alt_id, alt_projection = cand, cand_projection
                     ok, reason = True, None
                     break
@@ -365,7 +367,7 @@ def optimal_lineup(
             flags.append({"kind": "seeded", "text": "last season counted in"})
         picks_by_index[index] = SlotPick(slot, index, pid, projection, status,
                                          confidence, gate, alt_id, alt_projection,
-                                         flags, doubtful)
+                                         flags, doubtful, doubtful_projection)
     return [picks_by_index[i] for i in sorted(picks_by_index)]
 
 
@@ -904,6 +906,20 @@ def fragility(
     return items[:4]
 
 
+def _doubtful(pick: SlotPick) -> tuple[str | None, Projection | None]:
+    """The bench player whose Sunday news could still change this slot.
+
+    Either the slot is gated on him (no odds), or — since the confirmed-
+    alternative fallback (reports/fallback-method.md) — the odds were called
+    against the next confirmed player and he is kept here. Either way he is
+    named in late news and the if/then; he is never part of a graded call."""
+    if pick.doubtful_alternative_id:
+        return pick.doubtful_alternative_id, pick.doubtful_alternative_projection
+    if pick.confidence is None:
+        return pick.alternative_id, pick.alternative_projection
+    return None, None
+
+
 def late_news(my_picks: list[SlotPick], players: PlayerIndex,
               availability: WeekAvailability | None = None,
               ) -> list[tuple[str, SlotPick, bool]]:
@@ -927,18 +943,17 @@ def late_news(my_picks: list[SlotPick], players: PlayerIndex,
         return out
     closest: dict[str, SlotPick] = {}
     for pick in my_picks:
-        alt = pick.alternative_id
-        if not alt or pick.confidence is not None or pick.projection is None:
+        alt, alt_projection = _doubtful(pick)
+        if not alt or pick.projection is None:
             continue
         if availability.classify(alt).status is not Status.QUESTIONABLE:
             continue
         if any(name == players.name(alt) for name, _, _ in out):
             continue
         held = closest.get(alt)
-        gap = pick.projection.mean - (pick.alternative_projection.mean
-                                      if pick.alternative_projection else 0.0)
-        held_gap = (held.projection.mean - (held.alternative_projection.mean
-                                            if held.alternative_projection else 0.0)
+        gap = pick.projection.mean - (alt_projection.mean if alt_projection else 0.0)
+        held_alt = _doubtful(held)[1] if held else None
+        held_gap = (held.projection.mean - (held_alt.mean if held_alt else 0.0)
                     if held and held.projection else None)
         if held is None or held_gap is None or gap < held_gap:
             closest[alt] = pick
@@ -970,8 +985,9 @@ def pivots(
             # and say plainly that a dead heat is not worth a change.
             starter = players.name(pick.player_id)
             mine = round(pick.projection.mean, 1)
-            theirs = (round(pick.alternative_projection.mean, 1)
-                      if pick.alternative_projection else None)
+            doubt_projection = _doubtful(pick)[1]
+            theirs = (round(doubt_projection.mean, 1)
+                      if doubt_projection else None)
             if theirs is not None and theirs > mine:
                 action = (f"Start {name} at {pick.slot} — he projects {theirs:.1f} "
                           f"to {starter}'s {mine:.1f}")

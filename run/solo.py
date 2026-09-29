@@ -629,6 +629,21 @@ def calibrator_for(week: int, seeded: bool):
     return lambda p: recalibrate(p, b)
 
 
+# reports/fallback-method.md §3, decided by its one run (Sep 29 2026,
+# reports/fallback-backtest.md): the 217 calls the rule adds on 2020-2024 graded
+# C on 3 judgeable bands (every one landing at or above its stated rate), and
+# the full call set stayed B at ECE 1.1%. All three clauses held, so it ships,
+# in weeks 4-16 only.
+CONFIRMED_FALLBACK = True
+FALLBACK_WEEKS = range(4, 17)
+
+
+def fallback_for(week: int, seeded: bool) -> bool:
+    """Method §3: weeks 4-16 only; weeks 2-3 are their own arm and 17-18 were
+    not graded under the rule."""
+    return CONFIRMED_FALLBACK and not seeded and week in FALLBACK_WEEKS
+
+
 # reports/round-two-method.md §2: nine common combinations graded as they ship
 # (recalibrated, 2020-2024). All graded B, so none is withheld; combinations
 # not listed keep the every-setting-C-or-better rule. Pinned to
@@ -725,7 +740,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                                         data.week + 1),
                                processed_dir=processed_dir,
                                last_season_ranks=last_season_ranks,
-                               calibrate=calibrator_for(data.week, seeded))
+                               calibrate=calibrator_for(data.week, seeded),
+                               confirmed_fallback=fallback_for(data.week, seeded))
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry

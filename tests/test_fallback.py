@@ -6,25 +6,23 @@ inert when False. The fallback run itself reads outcomes; nothing here does.
 
 from __future__ import annotations
 
-import functools
-
 import pytest
 
 from engine.fallback_backtest import changed_shared, decide, key, new_calls
 
 
 def _sample(fallback: bool):
-    import engine.solo_report as solo_report
+    """The published sample with the shipped switch forced on or off."""
     import render.sample as sample
-    real = solo_report.optimal_lineup
+    import run.solo as solo
+    real = solo.CONFIRMED_FALLBACK
     try:
-        if fallback:
-            solo_report.optimal_lineup = functools.partial(real, confirmed_fallback=True)
+        solo.CONFIRMED_FALLBACK = fallback
         return sample.build(10)
     except Exception as exc:                       # pragma: no cover
         pytest.skip(f"sample data not cached: {exc}")
     finally:
-        solo_report.optimal_lineup = real
+        solo.CONFIRMED_FALLBACK = real
 
 
 def test_the_switch_is_inert_when_false() -> None:
@@ -78,3 +76,20 @@ def test_new_calls_are_the_slot_weeks_the_frozen_rule_left_empty() -> None:
     fallback = [_C("2020", 4, 1, 0), _C("2020", 4, 1, 1, alt="c"), _C("2020", 4, 1, 2)]
     assert [key(c) for c in new_calls(frozen, fallback)] == [("2020", 4, 1, 2)]
     assert changed_shared(frozen, fallback) == 1
+
+
+def test_it_ships_in_weeks_4_to_16_only() -> None:
+    """Method §3, applied after the run: weeks 2-3 and 17-18 are other arms."""
+    from run.solo import fallback_for
+    assert fallback_for(4, False) and fallback_for(16, False)
+    assert not fallback_for(3, False) and not fallback_for(17, False)
+    assert not fallback_for(10, True)               # a seeded week is its own arm
+
+
+def test_the_doubtful_player_is_still_named_for_sunday() -> None:
+    """With the fallback on, FLEX gets odds against a confirmed receiver — and
+    Pollard, still questionable, must still be the Sunday check."""
+    report = _sample(True)
+    assert any("Tony Pollard" in (i["action"] + i.get("detail", ""))
+               for i in report["checklist"])
+    assert any("Tony Pollard" in p["condition"] for p in report["pivots"])

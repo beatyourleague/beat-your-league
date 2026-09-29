@@ -444,6 +444,18 @@ and a new commit (the data exists — `stats_team_week_*` resolves for every sea
 Corrections go in an APPENDED §15 of the method doc, never edited into the frozen text, or nobody
 can tell what was preregistered.
 
+**The confirmed-alternative fallback ships (Sep 29 2026).** `reports/fallback-method.md` was
+preregistered (6bacdc7) before `engine/fallback_backtest.py` ran once. When a CONFIRMED
+starter's best bench option is questionable or unconfirmed, the call is made against the next
+confirmed bench option at that slot (same projection order, enough games, never a defense);
+otherwise the slot stays gated. On 2020–2024, as shipped: the 217 calls it adds graded **C** on
+3 judgeable bands (81.1% hit, every band at or above stated), the full set stayed **B** at ECE
+1.1%, and no existing call moved — all three clauses held. Coverage 64.8% → 67.9% of slot-weeks.
+`run/solo.CONFIRMED_FALLBACK` is True and `fallback_for` applies it in weeks 4–16 only. The
+doubtful player rides on `SlotPick.doubtful_alternative_id` so late news and the if/then still
+name him (`week_report._doubtful`); he is never part of a graded call. The published sample
+now carries 4 of 9 odds and its closest call is Chase Brown over Sutton, 54%.
+
 **Combinations and defenses, graded (Sep 29 2026).** `reports/round-two-method.md` preregistered
 (6833098) nine combined settings and team defenses, graded on 2020–2024 as they ship (through
 the published recalibration). All nine combinations graded B (ECE 1.5–2.2%); `run/solo.COMBO_GRADES`
