@@ -1147,6 +1147,13 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
     if not record:
         inner = (f'{esc(receipts.get("note", ""))}'
                  f'<br><span class="stamp">Results · from next week</span>')
+    elif receipts.get("last_week_calls") is not None:
+        from engine.own_record import call_line
+        rows = "".join(f'<li>{esc(call_line(c))}</li>'
+                       for c in receipts["last_week_calls"])
+        ask = (f'<br>{esc(receipts["ask"])}' if receipts.get("ask") else "")
+        inner = (f'{esc(receipts.get("note", ""))}<ul class="receipts">{rows}</ul>'
+                 f'<span class="stamp">Graded on real box scores</span>{ask}')
     else:
         parts = [esc(receipts.get("note", ""))]
         best, worst = receipts.get("best_call"), receipts.get("worst_call")

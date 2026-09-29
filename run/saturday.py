@@ -112,6 +112,16 @@ def build_plan(report: Mapping[str, Any], projections: Mapping[str, float],
         "slots": [{"slot": row["slot"], "player_id": row.get("player_id")}
                   for row in report.get("lineup") or []],
         "players": players,
+        # The calls this report printed, for the subscriber's own receipts
+        # (engine/own_record.py) — graded next week against the box scores.
+        "calls": [{"slot": row["slot"], "pick": row["player_id"],
+                   "over": row["alternative_id"],
+                   "pick_name": row.get("player_name") or row["player_id"],
+                   "over_name": row.get("alternative_name") or row["alternative_id"],
+                   "confidence": row["confidence"]}
+                  for row in report.get("lineup") or []
+                  if row.get("confidence") is not None and row.get("player_id")
+                  and row.get("alternative_id")],
     }
 
 
@@ -121,6 +131,20 @@ def write_plan(plans_dir: Path, plan: Mapping[str, Any]) -> Path:
     path.write_text(json.dumps(plan, indent=1, sort_keys=True) + "\n",
                     encoding="utf-8")
     return path
+
+
+def load_plans(plans_dir: Path, season: str, slug: str) -> list[dict[str, Any]]:
+    """Every stored plan for one subscription this season."""
+    folder = Path(plans_dir) / str(season)
+    if not folder.is_dir():
+        return []
+    out = []
+    for path in sorted(folder.glob(f"w*-{slug}.json")):
+        try:
+            out.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            continue                   # one damaged week never hides the rest
+    return out
 
 
 def load_plan(plans_dir: Path, season: str, week: int,

@@ -418,3 +418,47 @@ def test_the_run_folds_a_changed_roster_through_the_real_model(
     captured = capsys.readouterr()
     assert code == 0, captured.err
     assert "NOT CHECKED" not in captured.err
+
+
+# --------------------------------------------------------------------- #
+# The Receipts: this subscriber's own calls, graded (engine/own_record.py)
+# --------------------------------------------------------------------- #
+
+def test_the_receipts_grade_only_the_calls_in_this_subscribers_reports() -> None:
+    from engine.own_record import EMPTY_NOTE, call_line, own_record
+    from engine.scoring import preset
+    rule = preset("ppr")
+    plans = [
+        {"week": 5, "calls": [
+            {"slot": "WR", "pick": "a", "over": "b", "pick_name": "A",
+             "over_name": "B", "confidence": 0.63},
+            {"slot": "RB", "pick": "c", "over": "d", "pick_name": "C",
+             "over_name": "D", "confidence": 0.71}]},
+        {"week": 6, "calls": [
+            {"slot": "TE", "pick": "e", "over": "f", "pick_name": "E",
+             "over_name": "F", "confidence": 0.58},
+            # Neither played: a void, never a result.
+            {"slot": "WR", "pick": "g", "over": "h", "pick_name": "G",
+             "over_name": "H", "confidence": 0.66}]},
+        # The current week is not graded, whatever is on file.
+        {"week": 7, "calls": [
+            {"slot": "WR", "pick": "a", "over": "b", "pick_name": "A",
+             "over_name": "B", "confidence": 0.6}]},
+    ]
+    row = lambda rec: {"receptions": 0, "receiving_yards": rec * 10}  # noqa: E731
+    weekly = {5: {"a": row(8), "b": row(3), "c": row(2), "d": row(9)},
+              6: {"e": row(5), "f": row(1)},
+              7: {"a": row(0), "b": row(9)}}
+    got = own_record(plans, weekly, rule, before_week=7)
+    assert got["record"] == {"graded": 3, "hits": 2, "first_week": 5, "last_week": 6}
+    assert got["note"] == ("Your calls so far: 2 of 3 came in (weeks 5–6). "
+                           "Week 6: 1 of 1.")
+    [line] = got["last_week_calls"]
+    assert call_line(line) == "E over F at TE · 58% — 5.0 to 1.0, came in"
+    assert got["ask"]
+    # A losing week never asks for a quote.
+    lost = own_record(plans[:1], {5: {"a": row(1), "b": row(9),
+                                      "c": row(1), "d": row(9)}}, rule, 6)
+    assert lost["ask"] is None and "0 of 2" in lost["note"]
+    assert "missed" in call_line(lost["last_week_calls"][0])
+    assert own_record([], weekly, rule, 7) == {"record": None, "note": EMPTY_NOTE}

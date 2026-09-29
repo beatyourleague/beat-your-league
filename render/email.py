@@ -577,6 +577,19 @@ def _receipts(receipts: Mapping[str, Any]) -> str:
         inner = (f'{esc(receipts.get("note", ""))}<br>'
                  f'<span style="{SMALL}text-transform:uppercase;'
                  f'letter-spacing:1px;">Results · from next week</span>')
+    elif receipts.get("last_week_calls") is not None:
+        from engine.own_record import HIT, call_line
+        rows = "".join(
+            f'<div style="{SMALL}color:{NAVY};padding:3px 0;">'
+            f'<b style="color:{TURF if c["outcome"] == HIT else BRICK};">'
+            f'{"✓" if c["outcome"] == HIT else "✗"}</b> {esc(call_line(c))}</div>'
+            for c in receipts["last_week_calls"])
+        ask = (f'<div style="{BASE}margin-top:10px;">{esc(receipts["ask"])}</div>'
+               if receipts.get("ask") else "")
+        inner = (f'{esc(receipts.get("note", ""))}'
+                 f'<div style="margin-top:8px;">{rows}</div>'
+                 f'<span style="{SMALL}text-transform:uppercase;letter-spacing:1px;">'
+                 f'Graded on real box scores</span>{ask}')
     else:
         parts = [esc(receipts.get("note", ""))]
         best, worst = receipts.get("best_call"), receipts.get("worst_call")
@@ -743,6 +756,11 @@ def text_summary(report: Mapping[str, Any]) -> str:
         for plan in report["pivots"]:
             lines.append(f"  If {plan['condition']}: {plan['action']}")
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
+    if report["receipts"].get("last_week_calls"):
+        from engine.own_record import call_line
+        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
+    if report["receipts"].get("ask"):
+        lines.append(report["receipts"]["ask"])
     # The gap list is operator bookkeeping (field names, internal reasons) and
     # never goes in a subscriber's email — the report already says, in place and
     # in plain words, wherever it declined to call something.

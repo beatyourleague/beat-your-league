@@ -1011,6 +1011,16 @@ page's job, never baked in; the check touches nothing; gold never on a mid-tone 
 version there); Stripe gets navy, never gold. The landing's JSON-LD names `brand/icon.png` as the
 Organization logo, and the og card carries the mark.
 
+**The Receipts are the subscriber's own (Sep 29 2026).** Section 06 promised "Your results
+start here" and would then have reported every call in the shared preset ledger as if it were
+theirs. Now each stored plan carries the calls that report printed (`build_plan` → `calls`),
+and `engine/own_record.py` grades the subscriber's past weeks against the box scores under
+their rule, by the ledger's rules (no row = 0.0, 0–0 void, tie decides nothing): the season
+tally, last week line by line — misses beside hits — and, only after a winning week, a line
+asking for a reply. Quotes from those replies may be used only under `content/testimonials.md`
+(real, verbatim, written consent to the exact words and name form, no outcome promises). The
+shared ledger remains the public record; it is just never presented as someone's own.
+
 **Roster updates, confirmed by email (Sep 29 2026) — the safe replacement for the pulled token
 link.** Every report's footer carries `SITE/join/?update=1` (`run/updates.public_update_url`,
 rendered only when SITE_URL, UPDATE_SECRET and FORM_ENDPOINT all exist; otherwise the reply

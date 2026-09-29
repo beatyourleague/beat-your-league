@@ -85,7 +85,8 @@ class RunResult:
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    template_html: str, out_dir: Path = SUBSCRIBER_REPORTS,
                    processed_dir: Path = PROCESSED_DIR,
-                   record: bool = True) -> RunResult:
+                   record: bool = True,
+                   plans_dir: Path | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
     ``record`` is False when nothing is being mailed. A call is PUBLISHED when
@@ -108,6 +109,15 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         report["meta"]["update_url"] = public_update_url(
             os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
             os.environ.get("FORM_ENDPOINT", ""))
+        # The Receipts are THIS subscriber's calls (engine/own_record.py),
+        # never the shared preset ledger counted as if it were theirs. With no
+        # plans stored yet it is the honest empty state.
+        from engine.own_record import own_record
+        from run.saturday import load_plans
+        report["receipts"] = own_record(
+            load_plans(plans_dir, data.season, subscriber.slug)
+            if plans_dir is not None else [],
+            data.weekly, subscriber.spec().rule, data.week)
     except SoloError as exc:
         return RunResult(subscriber, ok=False, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — batch contract: one subscriber's
@@ -298,7 +308,8 @@ def main(argv: list[str] | None = None) -> int:
 
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
-                              processed_dir=args.processed_dir, record=sending)
+                              processed_dir=args.processed_dir, record=sending,
+                              plans_dir=args.plans_dir or PLANS_DIR)
                for s in subscribers]
 
     line = "=" * 62
