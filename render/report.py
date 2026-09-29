@@ -686,7 +686,44 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
                    if report["meta"].get("seeded") else "")
     return _section("The Lineup", 3,
                     f'<table class="tape">{LINEUP_COLS}{head}'
-                    f'{"".join(rows)}</table>{seeded_note}{note}')
+                    f'{"".join(rows)}</table>{_bench_table(report)}'
+                    f'{seeded_note}{note}')
+
+
+def _bench_table(report: Mapping[str, Any]) -> str:
+    """Every rostered player who is not starting — nobody vanishes.
+
+    The lineup names each starter and one bench alternative per slot, so any
+    other bench player used to disappear from the file entirely; on a real
+    2026 week-4 roster that was Saquon Barkley, mentioned on no surface at all.
+    Same table idiom as the lineup, so it reads as the rest of the roster
+    rather than as an appendix.
+    """
+    bench = report.get("bench") or []
+    if not bench:
+        return ""
+    rows = []
+    for entry in bench:
+        proj = (f'{entry["projected"]:.1f}' if entry.get("projected") is not None
+                else "—")
+        rank = entry.get("last_season_rank")
+        # NOT .tflag: that is brick, reserved for "cannot play", and a benched
+        # star must not read as an injury. Out players DO take the flag.
+        tag = (f'<span class="tflag">{esc(bench_phrase(entry))}</span>'
+               if entry.get("out") else
+               f'<span class="trank">{esc(rank)} last season</span>'
+               if entry.get("notable") and rank else "")
+        rows.append(
+            f'<tr class="trow bench"><td class="tslot">{esc(entry["position"])}</td>'
+            f'<td class="tside you"><span class="tname">{esc(entry["name"])}</span>'
+            f'{tag}'
+            + ("" if entry.get("out")
+               else f'<span class="tsub">{esc(bench_phrase(entry))}</span>')
+            + '</td>'
+            f'<td class="tpts you">{proj}</td><td class="tcall"></td></tr>')
+    head = (f'<tr class="thead"><td></td><td>{esc(BENCH_HEAD)}</td>'
+            '<td style="text-align:right">Proj</td><td></td></tr>')
+    return f'<table class="tape benchtape">{LINEUP_COLS}{head}{"".join(rows)}</table>'
 
 
 def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
@@ -857,6 +894,30 @@ def section_hype(entries: list[Mapping[str, Any]],
                 f'{esc(shared_gate)}</div>' if shared_gate else "")
         body = f'<div class="hype">{"".join(cards)}</div>{note}'
     return _section("Waiver Hype Meter", 8, body) + section_waiver_market(market)
+
+
+BENCH_HEAD = "On your bench"
+
+
+def bench_phrase(entry: Mapping[str, Any]) -> str:
+    """One bench player, as every surface names him.
+
+    Shared by both renderers for the same reason edge_phrase is: three copies
+    of one sentence is how the browser file, the email and the plain text end
+    up describing a player three different ways.
+    """
+    if entry.get("out"):
+        return "can't play this week"
+    games = entry.get("games") or []
+    if not games:
+        # Before a game is played, last season is the reason he sits — the same
+        # basis the week-1 lineup rows print. Nothing at all is a rookie or a
+        # player the archive never saw: absent, never zero (RULE P1).
+        per_game = entry.get("last_season_per_game")
+        return (f"last season: {per_game:.1f} a game" if per_game is not None
+                else "no games yet this season")
+    shown = ", ".join(f"{v:.1f}" for v in games[-3:])
+    return f"last {min(len(games), 3)}: {shown}"
 
 
 def edge_phrase(slot: Mapping[str, Any]) -> str:

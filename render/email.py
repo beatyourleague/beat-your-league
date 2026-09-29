@@ -26,6 +26,8 @@ from typing import Any, Mapping
 from render.report import (
     AS_SET_BODY,
     AS_SET_HEAD,
+    BENCH_HEAD,
+    bench_phrase,
     BRAND_LINE,
     CANCEL_BODY,
     cancel_destination,
@@ -666,6 +668,19 @@ def text_summary(report: Mapping[str, Any]) -> str:
             and not is_structural_gate(s["confidence_gate"])
             for s in report["lineup"]) and mixed
         lines.append(f"  {no_call_head(shown_marker, mixed)} {' · '.join(gates)}.")
+    # The rest of the roster. Plain text is what many phones preview and what a
+    # screen reader reads, so a benched player missing here is missing, full
+    # stop — the HTML table beside it does not help.
+    bench = report.get("bench") or []
+    if bench:
+        lines += ["", BENCH_HEAD.upper()]
+        for entry in bench:
+            projected = (f"{entry['projected']:.1f}"
+                         if entry.get("projected") is not None else "—")
+            rank = (f"  [{entry['last_season_rank']} last season]"
+                    if entry.get("notable") and entry.get("last_season_rank") else "")
+            lines.append(f"  {entry['position']:<6} {entry['name']:<24} "
+                         f"{projected:>6}  {bench_phrase(entry)}{rank}".rstrip())
     regret = report["regret"]
     lines.append("")
     if "gate" in regret:
@@ -817,7 +832,47 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
              f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
     seeded_note = (_note(esc(SEEDED_SECTION_LINE))
                    if report["meta"].get("seeded") else "")
-    return _sec(3, "The Lineup", table + seeded_note + note)
+    return _sec(3, "The Lineup", table + _bench(report) + seeded_note + note)
+
+
+def _bench(report: Mapping[str, Any]) -> str:
+    """The rest of the roster — the email twin of render.report._bench_table.
+
+    Every rostered player is named. Muted against the lineup so the starters
+    stay what the eye lands on, and an OUT player takes the brick flag the
+    lineup rows use, while a benched starter-calibre player takes navy: a star
+    the file chose to sit must not read as an injury.
+    """
+    bench = report.get("bench") or []
+    if not bench:
+        return ""
+    rows = []
+    for entry in bench:
+        proj = (f'{entry["projected"]:.1f}' if entry.get("projected") is not None
+                else "—")
+        cell = f'{BASE}{SMALL}padding:6px 8px;border-bottom:1px solid {LINE};'
+        rank = entry.get("last_season_rank")
+        tag = ""
+        if entry.get("out"):
+            tag = (f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
+                   f'{esc(bench_phrase(entry))}</span>')
+        elif entry.get("notable") and rank:
+            tag = (f'<br><span style="{SMALL}color:{NAVY};font-weight:bold;'
+                   f'text-transform:uppercase;">{esc(rank)} last season</span>')
+        sub = ("" if entry.get("out") else
+               f'<br><span style="{SMALL}">{esc(bench_phrase(entry))}</span>')
+        rows.append(
+            f'<tr><td style="{cell}font-weight:bold;white-space:nowrap;color:{SLATE};">'
+            f'{esc(entry["position"])}</td>'
+            f'<td style="{cell}">{esc(entry["name"])}{tag}{sub}</td>'
+            f'<td style="{cell}text-align:right;white-space:nowrap;color:{SLATE};">'
+            f'{proj}</td><td style="{cell}"></td></tr>')
+    th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
+          f'color:{SLATE};padding:14px 8px 5px 8px;border-bottom:1px solid {LINE};')
+    head = (f'<tr><td style="{th}"></td><td style="{th}">{esc(BENCH_HEAD)}</td>'
+            f'<td style="{th}text-align:right;">Proj</td><td style="{th}"></td></tr>')
+    return (f'<table role="presentation" width="100%" cellpadding="0" '
+            f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
 
 
 def _compose(report: Mapping[str, Any]) -> list[str]:

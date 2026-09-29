@@ -653,6 +653,11 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     # slot, and a line saying so. It is a record of what happened, never a
     # projection for this week — see _place_without_projections.
     prior_form = _prior_form(data.prior, spec.rule)
+    # Last season's positional rank under THIS subscriber's rule — the same
+    # function the roster file prints, so "RB14" means one thing everywhere.
+    from engine.preseason import positional_ranks, prior_season_form
+    last_season_ranks = positional_ranks(
+        prior_season_form(data.prior, spec.rule), data.directory)
 
     def usage_lookup(player_id: str) -> str | None:
         line = data.usage.get(player_id)
@@ -667,7 +672,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                usage_lookup=usage_lookup, prior_form=prior_form,
                                early_calls=seeded_scope(spec, league_size,
                                                         data.week + 1),
-                               processed_dir=processed_dir)
+                               processed_dir=processed_dir,
+                               last_season_ranks=last_season_ranks)
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry

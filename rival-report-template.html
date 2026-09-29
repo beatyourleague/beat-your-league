@@ -210,6 +210,17 @@
   .tcall .cbar i{display:block;height:100%;background:var(--turf);}
   .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
   .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
+  /* The bench: the rest of the roster, deliberately quieter than the lineup
+     above it — same grid so it reads as one roster, lighter so the starters
+     stay the thing the eye lands on. */
+  .benchtape{margin-top:10px;border-width:1px;border-color:var(--line);}
+  .benchtape .thead td{background:#E9E6DC;color:var(--slate);}
+  .benchtape .tname{font-weight:600;color:var(--ink2);}
+  .benchtape .tpts{color:var(--slate);font-size:15px;}
+  /* A benched starter-calibre player: navy, not brick. Brick means "cannot
+     play", and a star the file chose to sit must not read as an injury. */
+  .trank{display:block;margin-top:2px;font-size:10.5px;font-weight:800;
+    color:var(--navy);letter-spacing:.3px;text-transform:uppercase;}
   .ttotal td{border-top:2px solid var(--navy);background:#F2F0E8;
     font-family:'Barlow Condensed';font-weight:800;}
   @media (max-width:520px){
