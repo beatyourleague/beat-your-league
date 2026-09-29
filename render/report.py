@@ -358,10 +358,25 @@ def header(meta: Mapping[str, Any]) -> str:
                'league\'s real record.' if meta.get("anonymized_demo") else "")
             + '</div>'
         )
+    brand = f'<div class="brand">{mark_svg("bylm")}<span>Beat Your League</span></div>'
+    if meta.get("anonymized_demo"):
+        # The published samples are site pages a visitor reaches from the
+        # landing page, and they had no way back to it. A subscriber's own
+        # report is opened from their inbox and keeps the plain masthead.
+        brand = (
+            '<div style="display:flex;align-items:center;justify-content:space-between;'
+            'gap:12px;flex-wrap:wrap;">'
+            f'<a class="brand" href="index.html" style="text-decoration:none;">'
+            f'{mark_svg("bylm")}<span>Beat Your League</span></a>'
+            '<a class="home" href="index.html" style="font-family:\'Barlow\',sans-serif;'
+            'font-weight:600;font-size:14px;line-height:1;white-space:nowrap;'
+            'text-decoration:none;color:var(--paper);padding:8px 15px;'
+            'border:1.5px solid rgba(246,244,238,.45);border-radius:999px;">'
+            '← Home</a></div>'
+        )
     return (
-        f'<header class="bug"><div class="brand">{mark_svg("bylm")}'
-        f'<span>Beat Your League</span></div>'
-        f'<h1>Week {esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
+        f'<header class="bug">{brand}'
+        f'<h1>Week{esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
         f'<div class="chips">{"".join(chips)}</div></header>{banner}'
     )
 

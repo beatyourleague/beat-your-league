@@ -92,6 +92,41 @@ def _buyer_surfaces() -> dict[str, str]:
     return pages
 
 
+def test_every_page_but_the_home_page_has_a_home_button() -> None:
+    """The only way back to the front page was the wordmark, and on terms,
+    privacy, thanks and join only its WORDS were a link — the logo beside them
+    was not. The two published samples had no way back at all: a buyer who
+    opened one from the landing page left it with the browser's back button or
+    not at all. A wordmark is a convention an experienced visitor knows and a
+    less experienced one does not, so every page carries a labelled button,
+    above its headline, beside a wordmark that is one link logo and all.
+
+    legal.html is a redirect stub and is never seen."""
+    for path in sorted(SITE.rglob("*.html")):
+        rel = path.relative_to(SITE).as_posix()
+        if rel in ("index.html", "legal.html"):
+            continue
+        root = re.escape("../" * rel.count("/") + "index.html")
+        top = (path.read_text(encoding="utf-8")
+               .split("<body", 1)[1].split("<h1", 1)[0])
+        assert re.search(rf'<a class="home" href="{root}"[^>]*>← Home</a>', top), \
+            f"{rel} has no home button above its headline"
+        assert re.search(rf'<a class="brand" href="{root}"', top), \
+            f"{rel}'s wordmark is not one link, logo and all"
+
+
+def test_a_subscribers_own_report_carries_no_home_button() -> None:
+    """The button is for visitors to the site. A subscriber's report is opened
+    from their inbox, and its masthead must stay what it was."""
+    from render.report import header
+    meta = {"league_name": "Your Team", "num_teams": 12, "week": 5, "solo": True}
+    masthead = header(meta)
+    assert 'class="home"' not in masthead
+    assert '<div class="brand">' in masthead
+    assert 'class="home"' in header({**meta, "historical_demo": True,
+                                      "anonymized_demo": True, "season": 2024})
+
+
 def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> None:
     """"Through Week 2" gave a buyer who joined in Week 3 no window at all,
     while the pricing card beside the button still sold them one — the

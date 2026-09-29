@@ -130,7 +130,12 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
   header{{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}}
   header .brand{{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}}
-  header .brand a{{color:inherit;text-decoration:none;}}
+  .topbar{{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}}
+  a.brand{{text-decoration:none;}}
+  .home{{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
+    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}}
+  .home:hover,.home:focus-visible{{color:var(--flag);border-color:var(--flag);}}
   header .brand svg.mark{{width:22px;height:15px;flex:none;}}
   header h1{{font-family:'Barlow Condensed';font-weight:800;font-size:42px;text-transform:uppercase;margin-top:6px;}}
   header p{{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:560px;}}
@@ -165,7 +170,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 <body>
 <div class="sheet">
   <header>
-    <div class="brand">{mark_svg("byll")}<a href="../index.html">Beat Your League</a></div>
+    <div class="topbar"><a class="brand" href="../index.html">{mark_svg("byll")}<span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
     <h1>The Receipts</h1>
     <p>Every call we send is stamped before kickoff and graded against the real box score once
     the games end. The rules that decide it were locked before the season, and nothing is edited
