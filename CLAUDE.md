@@ -1011,6 +1011,21 @@ page's job, never baked in; the check touches nothing; gold never on a mid-tone 
 version there); Stripe gets navy, never gold. The landing's JSON-LD names `brand/icon.png` as the
 Organization logo, and the og card carries the mark.
 
+**Roster updates, confirmed by email (Sep 29 2026) — the safe replacement for the pulled token
+link.** Every report's footer carries `SITE/join/?update=1` (`run/updates.public_update_url`,
+rendered only when SITE_URL, UPDATE_SECRET and FORM_ENDPOINT all exist; otherwise the reply
+route). It GRANTS NOTHING, so the forward line beside it is safe. The page posts
+`{kind:"update_request", email, ref}`; the intake (`validate_requests`) mails a confirmation ONLY
+to the address on the subscription — a stranger's address gets nothing, so the page can't reveal
+who subscribes — carrying a 24-hex HMAC code bound to (address, subscription, roster).
+`join/confirm.html` needs a BUTTON press to post `{kind:"confirm", code}` (mail scanners open
+links; a page that confirmed on load would let a scanner approve a forged request). The code is
+recomputed, never trusted; a confirmed request becomes a normal logged `RosterUpdate`. Several
+teams on one address: the same-setup team with the most overlap, a tie refuses. Capped at
+`CONFIRMS_PER_DAY` = 3 per address per day. The Saturday check folds a changed roster in
+(`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
+a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
+
 **Last season counts all season — the anchor (Sep 29 2026).** Weeks 4–16 projected from
 current-season games only, so a proven starter with three slow games was benched like a
 replacement (Barkley, 2026 w4: RB15 last season, 9/3/9, projected 7.6, benched for LaPorta 9.0).

@@ -203,9 +203,10 @@ def test_no_report_ever_carries_a_roster_write_credential(
     somebody tries. Found Aug 27 2026.
     """
     template = Path("rival-report-template.html").read_text(encoding="utf-8")
-    # WITH the launch secrets set — the state that used to produce the leak.
+    # WITH every launch secret set — the state that used to produce the leak.
     monkeypatch.setenv("SITE_URL", "https://x.test")
     monkeypatch.setenv("UPDATE_SECRET", "s3")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     result = tuesday.run_subscriber(_subscriber(origin="abc123def0"),
                                     _week_data(tmp_path), template,
                                     out_dir=tmp_path / "out",
@@ -219,12 +220,14 @@ def test_no_report_ever_carries_a_roster_write_credential(
     }
     for name, body in surfaces.items():
         assert "token=" not in body, f"{name} carries a roster-write token"
-        assert "?update=" not in body, f"{name} carries an update credential"
-        assert "Roster changed?" not in body, \
-            f"{name} still offers the tokenised update route"
+        assert "abc123def0" not in body, f"{name} names the subscription"
+        # The confirm-by-email link (Sep 29 2026) is the safe replacement:
+        # public, the same for everyone, and useless without the inbox.
+        assert "https://x.test/join/?update=1" in body, \
+            f"{name} lost the roster update route"
 
     # The forward invitation stays — it is the one organic acquisition line,
-    # and it is safe precisely because the file no longer carries a secret.
+    # and it is safe precisely because the file carries no secret.
     assert "leaguemate" in surfaces["email html"], \
         "the forward line went with it; only the credential should have"
 

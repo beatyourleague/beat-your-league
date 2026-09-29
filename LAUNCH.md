@@ -163,8 +163,11 @@ one). Once it's live, the form saves the address on the spot and says so.
 Three features wait on one Cloudflare Worker, in the same account as the domain:
 - **The launch email list** on the homepage and the join page.
 - **League Pass seats.** The League Pass page's button stays hidden until then.
-- **"Roster changed?" links in every report.** Without them, a subscriber's file drifts out of
-  date as waivers change their roster, and they have no way to fix it themselves.
+- **"Roster changed?" links in every report.** Without them, a subscriber's report drifts out of
+  date as waivers change their roster, and every change is a reply you have to apply by hand.
+  With them it's self-serve: the subscriber pastes the new roster, we email the address on
+  their subscription a button to confirm, and the next report — and Saturday's final check —
+  use it. The link is safe to forward: it grants nothing without that inbox.
 
 The Worker ([infra/form-worker.js](infra/form-worker.js), about 60 lines) holds nothing secret
 and decides nothing: every row is checked before it reaches the subscriber list.
@@ -185,8 +188,8 @@ and decides nothing: every row is checked before it reaches the subscriber list.
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
    `UPDATE_SECRET` = step 4's value.
 6. **Tell me the Worker URL** (it isn't a secret). I wire it into the homepage's email form
-   and the join and League Pass pages, switch the League Pass button on, and change the FAQ's
-   roster answer to the link. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
+   and the join, confirm and League Pass pages, switch the League Pass button on, and change
+   the FAQ's roster answer to the link. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
    email list on today.
 
 Until then: the email form falls back to the visitor's own email app, seat claims are

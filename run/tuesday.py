@@ -46,7 +46,7 @@ from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
 from run.solo import (CACHE_DIR, SoloError, WeekData, _prior_form,
                        load_week_data, report_for)
 from run.saturday import PLANS_DIR, build_plan, write_plan
-from run.updates import update_url
+from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -100,20 +100,14 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                             league_size=subscriber.league_size,
                             processed_dir=processed_dir,
                             projections_out=projections)
-        # NO roster-update credential travels in a report. It used to render
-        # directly beneath _forward_line(), which invites the subscriber to
-        # forward this very file to their league — so the product asked people
-        # to hand a leaguemate a token that rewrites their own lineup for every
-        # remaining Tuesday. In a product framed around league rivalry, the
-        # recipient is the most motivated adversary there is.
-        #
-        # Removing it costs nothing today: FORM_ENDPOINT is empty, so self-serve
-        # updates were not running, and the FAQ already answers roster changes
-        # with "reply to any file". Restoring it safely means CONFIRMING the
-        # change — mail the address already on the registry row and apply only
-        # when that is clicked — so a forwarded report grants nothing and the
-        # real subscriber is told when somebody tries. Found Aug 27 2026.
-        report["meta"]["update_url"] = None
+        # The PUBLIC update link (run/updates.py, confirm-by-email): it grants
+        # nothing, so a report forwarded to the league stays safe. The
+        # tokenised link it replaced put a roster-write credential in a file
+        # built to be forwarded (removed Aug 27 2026). None until the site,
+        # the form backend and the signing secret all exist.
+        report["meta"]["update_url"] = public_update_url(
+            os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
+            os.environ.get("FORM_ENDPOINT", ""))
     except SoloError as exc:
         return RunResult(subscriber, ok=False, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — batch contract: one subscriber's

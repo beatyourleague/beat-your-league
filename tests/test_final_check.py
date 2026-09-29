@@ -251,6 +251,21 @@ def test_a_missing_injury_report_refuses_rather_than_reading_as_healthy() -> Non
 # the run
 # --------------------------------------------------------------------- #
 
+ROLES = ("qb", "rb1", "rb2", "wr1", "wr2", "te", "flex", "benchrb")
+
+
+def _registry_plan() -> dict:
+    """The test roster, keyed by the registry row's real player ids — so the
+    run sees the roster it was sent, not a changed one."""
+    from test_tuesday import ROSTER_IDS
+    plan = _roster()
+    rename = dict(zip(ROLES, ROSTER_IDS))
+    plan["players"] = {rename[k]: v for k, v in plan["players"].items() if k in rename}
+    for slot in plan["slots"]:
+        slot["player_id"] = rename.get(slot["player_id"])
+    return plan
+
+
 def _run(tmp_path, monkeypatch, plan, *, listed=None, extra=()):
     from test_tuesday import _registry, _row
     registry = _registry(tmp_path, _row())
@@ -276,14 +291,15 @@ def _run(tmp_path, monkeypatch, plan, *, listed=None, extra=()):
 
 def test_the_run_mails_only_a_lineup_that_has_to_change(tmp_path, monkeypatch,
                                                          capsys) -> None:
-    plan = _roster()
+    from test_tuesday import ROSTER_IDS
+    plan = _registry_plan()
     assert _run(tmp_path, monkeypatch, plan) == 0
     out = capsys.readouterr().out
     assert "0 need a change, 1 unchanged" in out
     assert not list((tmp_path / "outbox").glob("*"))
 
     assert _run(tmp_path, monkeypatch, plan,
-                listed={"rb1": ("out", "ankle")}) == 0
+                listed={ROSTER_IDS[1]: ("out", "ankle")}) == 0
     assert "1 need a change" in capsys.readouterr().out
     drafts = list((tmp_path / "outbox").glob("*"))
     assert drafts and "final" in drafts[0].name
@@ -328,3 +344,77 @@ def test_tuesday_saves_the_lineup_it_sent_and_a_preview_saves_none(
     assert plan["week"] == WEEK and plan["slots"]
     assert {s["player_id"] for s in plan["slots"] if s["player_id"]} <= set(plan["players"])
     assert all("tuesday" in p for p in plan["players"].values())
+
+
+# --------------------------------------------------------------------- #
+# a roster changed since Tuesday (a confirmed self-serve update)
+# --------------------------------------------------------------------- #
+
+def test_a_dropped_starter_is_replaced_and_never_offered_back() -> None:
+    plan = _roster()
+    plan["players"]["wr1"]["dropped"] = True
+    plan["players"]["pickup"] = {"name": "Pickup", "position": "WR",
+                                 "projected": 12.0, "last_season": None,
+                                 "tuesday": None, "added": True}
+    now = _now(plan)
+    changes = final_check(plan, now)
+    swaps = [c for c in changes if c.kind == SWAP]
+    assert swaps and swaps[0].action == "Start Pickup at WR"
+    assert "Wr1 is no longer on your roster" in swaps[0].detail
+    assert worth_sending(changes)
+    assert not any("Wr1" in c.action for c in changes)
+
+
+def test_a_pickup_who_projects_higher_starts() -> None:
+    plan = _roster()
+    plan["players"]["pickup"] = {"name": "Pickup", "position": "WR",
+                                 "projected": 13.0, "last_season": None,
+                                 "tuesday": None, "added": True}
+    changes = final_check(plan, _now(plan))
+    assert [c.kind for c in changes] == [BACK]
+    assert changes[0].action == "Start Pickup at FLEX over Flex"
+    assert "new on your roster" in changes[0].detail
+
+
+def test_the_fold_marks_drops_and_adds_with_the_models_number() -> None:
+    class Names:
+        def name(self, pid): return pid.upper()
+        def position(self, pid): return "WR"
+    plan = _roster()
+    roster = [p for p in plan["players"] if p != "wr2"] + ["newguy"]
+    folded = saturday.fold_roster_change(plan, roster, {"newguy": 7.5},
+                                         {"newguy": 11.04}, Names())
+    assert folded["players"]["wr2"]["dropped"] is True
+    new = folded["players"]["newguy"]
+    assert new["added"] and new["projected"] == 7.5 and new["last_season"] == 11.0
+    assert "dropped" not in plan["players"]["wr2"], "the stored plan was mutated"
+
+
+def test_the_run_folds_a_changed_roster_through_the_real_model(
+        tmp_path, monkeypatch, capsys) -> None:
+    """End to end on the fixture season: a player who joined the roster after
+    Tuesday is projected by the same model and weighed, rather than the
+    subscriber being checked against a roster they no longer have."""
+    from test_solo_run import SEASON, WEEK, _cache
+    from test_tuesday import ROSTER_IDS, _registry, _row
+    plan = _registry_plan()
+    del plan["players"][ROSTER_IDS[7]]                # arrived after Tuesday
+    registry = _registry(tmp_path, _row())
+    from run.rosters import load_rosters
+    plan["slug"] = load_rosters(registry)[0].slug
+    plan["season"], plan["week"] = SEASON, WEEK
+    saturday.write_plan(tmp_path / "plans", plan)
+    teams = ("DET", "GB", "CHI", "MIN")
+    monkeypatch.setattr(saturday, "kickoffs", lambda *a: {t: SUN_1PM for t in teams})
+    monkeypatch.setattr(saturday, "designations", lambda *a: ({}, set(teams)))
+    monkeypatch.setattr(saturday, "roster_statuses",
+                        lambda *a: {pid: ("ACT", "DET") for pid in ROSTER_IDS})
+    monkeypatch.setenv("EMAIL_PROVIDER", "dry")
+    monkeypatch.setattr("run.delivery.DRY_OUTBOX", tmp_path / "outbox")
+    code = saturday.main(["--registry", str(registry), "--season", SEASON,
+                          "--week", str(WEEK), "--plans-dir", str(tmp_path / "plans"),
+                          "--cache", str(_cache(tmp_path)), "--no-paid-check",
+                          "--allow-dry", "--now", SAT.isoformat()])
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    assert "NOT CHECKED" not in captured.err

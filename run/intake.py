@@ -53,8 +53,10 @@ from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
-from run.updates import (UPDATE_LOG_NAME, append_update_log, apply_updates,
-                         latest_per_target, load_update_log, validate_updates)
+from run.updates import (CONFIRMS_PER_DAY, UPDATE_LOG_NAME, PendingRequest,
+                         append_update_log, apply_updates, confirm_url,
+                         confirmation_key, confirmed_updates, latest_per_target,
+                         load_update_log, validate_requests, validate_updates)
 from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
                          load_rosters)
 from render.welcome import welcome_message
@@ -509,6 +511,59 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
               file=sys.stderr)
 
 
+def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
+    """One confirmation per request, to the address on the subscription only.
+
+    Capped per address per day, because the request page is public: a
+    stranger looping requests can put a few emails in somebody's inbox, never
+    a flood. Idempotent through the send log like every other message."""
+    if not awaiting:
+        return
+    from render.roster_update import confirm_email
+    from run.delivery import Message, load_sent
+
+    site = os.environ.get("SITE_URL", "")
+    secret = os.environ.get("UPDATE_SECRET", "")
+    if not site or not secret:
+        print(f"Roster confirmations: {len(awaiting)} pending — SITE_URL or "
+              f"UPDATE_SECRET is not set, so none were sent.")
+        return
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    sent = load_sent()
+    names = getattr(data, "players", None) if data is not None else None
+    messages = []
+    per_address: dict[str, int] = {}
+    for request in awaiting:
+        key = confirmation_key(request, day)
+        prefix = key.rsplit("-", 1)[0] + "-"
+        already = sum(1 for k in sent if k.startswith(prefix))
+        count = per_address.get(prefix, already)
+        if key not in sent and count >= CONFIRMS_PER_DAY:
+            continue
+        per_address[prefix] = count + (key not in sent)
+        from run.refs import decode_roster
+        ids = decode_roster(request.ref).player_ids
+        listed = [names.name(pid) for pid in ids] if names is not None else []
+        subject, html, text = confirm_email(confirm_url(site, request.code), listed)
+        messages.append(Message(to=request.email, subject=subject, html=html,
+                                text=text, key=key))
+    if not messages:
+        return
+    provider = build_provider(None)
+    if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
+        print(f"Roster confirmations: {len(messages)} pending — EMAIL_PROVIDER "
+              f"is not set, so none were sent.")
+        return
+    sends = send_all(messages, provider=provider)
+    delivered = [r for r in sends if r.ok and not r.skipped]
+    failures = [r for r in sends if not r.ok]
+    print(f"Roster confirmations via {provider.name}: {len(delivered)} sent, "
+          f"{len(failures)} failed")
+    for result in failures:
+        print(f"    CONFIRMATION FAILED {result.message.key}: {result.detail}",
+              file=sys.stderr)
+
+
 def _first_file(signup, data, season: str, processed_dir):
     """The file a purchase earns, chosen by WHEN the purchase happened.
 
@@ -706,6 +761,8 @@ def main(argv: list[str] | None = None) -> int:
     # deliver seats rather than delivering unpaid ones.
     seat_rows: list[dict] = []
     update_rows: list[dict] = []
+    request_rows: list[dict] = []
+    confirm_rows: list[dict] = []
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
     if seat_endpoint:
         # Built from what the LINK took, never from what a seat claims.
@@ -724,6 +781,9 @@ def main(argv: list[str] | None = None) -> int:
         # written before updates existed) and a roster update.
         claims = [r for r in form_rows if str(r.get("kind") or "seat") == "seat"]
         update_rows = [r for r in form_rows if str(r.get("kind") or "") == "update"]
+        request_rows = [r for r in form_rows
+                        if str(r.get("kind") or "") == "update_request"]
+        confirm_rows = [r for r in form_rows if str(r.get("kind") or "") == "confirm"]
         seat_rows, seat_problems = seats_to_rows(claims, pass_payers,
                                                  known or None)
         problems.extend(seat_problems)
@@ -736,18 +796,31 @@ def main(argv: list[str] | None = None) -> int:
     # and authenticated by the token that reaches them inside their own
     # reports. Logged on first sight so the order is ours, not the form's.
     update_log_path = registry_dir / UPDATE_LOG_NAME
+    secret = os.environ.get("UPDATE_SECRET", "")
     validated, update_problems = validate_updates(
-        update_rows, candidate, known or None, os.environ.get("UPDATE_SECRET", ""))
+        update_rows, candidate, known or None, secret)
     problems.extend(update_problems)
+    # Confirm-by-email requests (run/updates.py): a request only ever becomes
+    # an update once its code has come back from the subscriber's own inbox.
+    pending, request_problems = validate_requests(request_rows, candidate,
+                                                  known or None, secret)
+    problems.extend(request_problems)
+    confirmed = confirmed_updates(pending, confirm_rows, secret)
+    validated = [*validated, *confirmed]
+    confirmed_codes = {p.code for p in pending
+                       if any(u.ref == p.ref and u.replaces == p.replaces
+                              and u.email == p.email for u in confirmed)}
+    awaiting = [p for p in pending if p.code not in confirmed_codes]
     if not args.dry_run:
         append_update_log(validated, update_log_path)
         update_log = load_update_log(update_log_path)
     else:
         update_log = [*load_update_log(update_log_path), *validated]
     candidate, applied = apply_updates(candidate, latest_per_target(update_log))
-    if update_rows or applied:
-        print(f"Updates: {applied} roster(s) changed from {len(update_rows)} "
-              f"update row(s)")
+    if update_rows or request_rows or applied:
+        print(f"Updates: {applied} roster(s) changed; {len(pending)} request(s) "
+              f"valid, {len(confirmed)} confirmed, {len(awaiting)} awaiting "
+              f"confirmation")
 
     # A PAYMENT ALWAYS BEATS AN UNPAID CLAIM. Someone who bought their own
     # subscription must not have it replaced by a seat row naming them.
@@ -825,6 +898,7 @@ def main(argv: list[str] | None = None) -> int:
     # reports what is pending rather than failing — the registry is this run's
     # contract; the weekly and daily crons set EMAIL_PROVIDER.
     _send_welcomes(servable, seat_rows, known_season)
+    _send_confirmations(awaiting, data)
     _send_first_files(servable, data, known_season)
     if isinstance(newest, int):
         state["watermark"] = newest

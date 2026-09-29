@@ -38,7 +38,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from engine.final_check import Now, final_check, worth_sending
 from render.final_check import render_final_check, subject_for_check, text_for_check
@@ -129,6 +129,35 @@ def load_plan(plans_dir: Path, season: str, week: int,
     if not path.is_file():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def fold_roster_change(plan: Mapping[str, Any], roster: Sequence[str],
+                       projections: Mapping[str, float],
+                       prior_form: Mapping[str, float], players) -> dict[str, Any]:
+    """The plan, with a roster the subscriber changed since Tuesday folded in.
+
+    A self-serve update (run/updates.py) lands in the registry mid-week, most
+    often right after waivers. Saturday is the first chance to act on it: a
+    dropped starter's slot is filled, and a pickup can take a slot the same
+    way a player back from injury can. Tuesday's own numbers stay as printed;
+    only the new players need the model's figure (``projections``, computed
+    for the week on the same data Tuesday used)."""
+    folded = {pid: dict(info) for pid, info in plan["players"].items()}
+    current = set(roster)
+    for pid, info in folded.items():
+        if pid not in current:
+            info["dropped"] = True
+    for pid in roster:
+        if pid in folded:
+            continue
+        folded[pid] = {
+            "name": players.name(pid), "position": players.position(pid),
+            "projected": projections.get(pid),
+            "last_season": (round(prior_form[pid], 1) if pid in prior_form
+                            else None),
+            "tuesday": None, "added": True,
+        }
+    return {**plan, "players": folded}
 
 
 # --------------------------------------------------------------------- #
@@ -319,12 +348,37 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     messages: list[Message] = []
-    missing, quiet = [], []
+    missing, quiet, unreadable = [], [], []
+    week_data: list = []                      # loaded once, only if needed
+
+    def data_for_changes():
+        if not week_data:
+            from run.solo import load_week_data
+            week_data.append(load_week_data(args.cache, season, week))
+        return week_data[0]
+
     for subscriber in subscribers:
         plan = load_plan(args.plans_dir, season, week, subscriber.slug)
         if plan is None:
             missing.append(subscriber.slug)
             continue
+        if set(subscriber.player_ids) != set(plan["players"]):
+            # The roster changed since Tuesday. Checking the old plan would
+            # tell somebody to start a player they dropped, so either the
+            # change is folded in or this subscriber is skipped, loudly.
+            try:
+                from run.solo import _prior_form, report_for
+                data = data_for_changes()
+                projections: dict[str, float] = {}
+                report_for(subscriber.spec(), data,
+                           league_size=subscriber.league_size,
+                           projections_out=projections)
+                plan = fold_roster_change(
+                    plan, subscriber.player_ids, projections,
+                    _prior_form(data.prior, subscriber.spec().rule), data.players)
+            except Exception as exc:  # noqa: BLE001 — one roster, not the run
+                unreadable.append(f"{subscriber.slug} ({exc})")
+                continue
         now = {pid: state_for(pid, starts=starts, listed=listed, filed=filed,
                               roster=roster, at=at)
                for pid in plan["players"]}
@@ -349,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         print("  no plan (joined after Tuesday, or Tuesday did not send): "
               + ", ".join(missing))
+    for note in unreadable:
+        print(f"  ROSTER CHANGED, NOT CHECKED: {note}", file=sys.stderr)
     if subscribers and len(missing) == len(subscribers):
         # Nobody at all having a plan is not a week in which everybody joined
         # on Wednesday: it is a lost cache or a Tuesday that never sent.
@@ -381,6 +437,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    (dry run — drafts in {DRY_OUTBOX})")
         if failures:
             return 1
+    if unreadable:
+        return 1
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
     return 0

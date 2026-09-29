@@ -523,17 +523,23 @@ def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
     assert "leaguemate" in forward, \
         "the forward invitation changed — update this guard, do not delete it"
 
-    assert update_line({}) == ""
-    live = update_line({"update_url": "https://example.com/join/?update=abc&token=deadbeef"})
-    assert "token=" in live, "the fixture no longer exercises a credential"
-
-    footer_src = inspect.getsource(rp)
-    both = "_forward_line()" in footer_src and "update_line(meta)" in footer_src
-    assert not both, (
-        "the report footer renders the forward invitation and the roster-write "
-        "token together — a forwarded report hands a leaguemate the ability to "
-        "rewrite the sender's lineup. Split them, or gate the update on a "
-        "confirmation mailed to the address on file.")
+    # SUPERSEDED (Sep 29 2026) by the permanent design this guard asked for:
+    # the change is CONFIRMED by a button mailed to the address on file, so the
+    # link in a report is public and grants nothing. The invariant that
+    # remains: whatever a report links to carries no credential.
+    from run.updates import public_update_url
+    url = public_update_url("https://example.com", "s3cret", "https://w.test")
+    assert url == "https://example.com/join/?update=1"
+    for secret in ("a", "s3cret", "another"):
+        assert public_update_url("https://example.com", secret,
+                                 "https://w.test") == url, \
+            "the report link varies with the secret, so it carries one"
+    live = update_line({"solo": True, "update_url": url})
+    assert "token" not in live and "?update=1" in live
+    # Until the flow can work, the reply route the FAQ promises — never a
+    # dead link.
+    assert public_update_url("https://example.com", "", "https://w.test") is None
+    assert "Reply to this email" in update_line({"solo": True, "update_url": None})
 
 
 def test_the_plain_text_half_says_what_the_html_says() -> None:

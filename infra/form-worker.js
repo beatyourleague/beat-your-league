@@ -25,6 +25,8 @@
  * Contract (matches run/intake.py fetch_seats + run/updates.py):
  *   POST JSON  {kind:"seat",     email, covered_by, ref}
  *   POST JSON  {kind:"update",   email, ref, replaces, token}
+ *   POST JSON  {kind:"update_request", email, ref}   (confirm-by-email, step 1)
+ *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code)
  *   POST JSON  {kind:"waitlist", email}
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
  */
@@ -33,12 +35,19 @@ const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 const REF = /^[A-Za-z0-9_-]{1,200}$/;
 const SLUG = /^[0-9a-f]{10}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
+const CODE = /^[0-9a-f]{24}$/;
 const MAX_BODY = 2048;
 
 function sanitize(body) {
   if (!body || typeof body !== "object") return null;
-  const kind = body.kind === "update" ? "update"
-             : body.kind === "waitlist" ? "waitlist" : "seat";
+  const kind = ["update", "update_request", "confirm", "waitlist"]
+    .includes(body.kind) ? body.kind : "seat";
+  if (kind === "confirm") {
+    // Only the code. It means something only if it matches a request the
+    // intake itself signed and mailed to the subscriber's own address.
+    const code = String(body.code || "").trim().toLowerCase();
+    return CODE.test(code) ? { kind, code } : null;
+  }
   const email = String(body.email || "").trim().toLowerCase();
   if (!EMAIL.test(email) || email.length > 254) return null;
   if (kind === "waitlist") {
@@ -47,6 +56,11 @@ function sanitize(body) {
   }
   const ref = String(body.ref || "").trim();
   if (!REF.test(ref)) return null;
+  if (kind === "update_request") {
+    // Grants nothing by itself: the intake mails a confirmation to the
+    // address on the subscription, and only that inbox can finish it.
+    return { kind, email, ref };
+  }
   if (kind === "seat") {
     const payer = String(body.covered_by || "").trim().toLowerCase();
     if (!EMAIL.test(payer) || payer.length > 254) return null;

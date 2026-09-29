@@ -176,10 +176,11 @@ jobs:
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
-          # The roster-update link in every report needs both; with either
-          # missing no link renders, which beats a dead one.
+          # The roster-update link in every report needs all three; with any
+          # missing it renders the reply route instead, never a dead link.
           SITE_URL: ${{ secrets.SITE_URL }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
         run: .venv/bin/python -m run.tuesday
       - name: Save subscriber registry
         if: always()

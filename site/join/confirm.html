@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — You're in</title>
-<meta name="description" content="Your subscription is live. Here is what arrives, when, and how to stop it.">
-<meta property="og:title" content="Beat Your League — You're in">
-<meta property="og:description" content="Your subscription is live. Here is what arrives, when, and how to stop it.">
+<title>Beat Your League — Confirm your roster</title>
+<meta name="description" content="Confirm the roster change you asked for.">
+<meta property="og:title" content="Beat Your League — Confirm your roster">
+<meta property="og:description" content="Confirm the roster change you asked for.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -70,68 +70,80 @@
     font-size:14px;line-height:1.6;}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
+  .confirm{margin:22px 0 8px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;}
+  button{font-family:'Barlow',sans-serif;font-weight:800;font-size:16px;color:var(--navy);
+    background:var(--flag);border:0;border-radius:6px;padding:13px 24px;cursor:pointer;}
+  button:disabled{opacity:.55;cursor:default;}
+  .msg{font-size:14.5px;line-height:1.6;}
+  .msg:empty{display:none;}
+  .ok{color:var(--turf);font-weight:700;}
+  .bad{color:var(--brick);font-weight:700;}
 </style>
 <meta name="robots" content="noindex">
 </head>
 <body>
 <div class="sheet">
   <header>
-    <div class="topbar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html">← Home</a></div>
-    <div class="done"><svg class="check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
-    <h1>You&#x27;re in.</h1></div>
-    <p>Payment went through and your subscription is live. Here is exactly what happens
-    next, so nothing about it is a surprise.</p>
+    <div class="topbar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
+    <h1>Confirm your roster</h1>
+    <p>You asked to change the roster your reports are built from. Press the button and
+    your next report uses the new one.</p>
   </header>
   <main>
-
-    <div class="note"><b>Your first report is on its way — allow up to an hour.</b> It is built
-    from the roster you just entered, so it is not a template we had sitting around. If it
-    has not arrived after that, check your spam folder; marking it &quot;not spam&quot; once
-    keeps every future report in your inbox.</div>
-
-    <ol class="steps">
-      <li><b>Today</b>Your first report, built from the roster you just entered.</li>
-      <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
-      <li><b>Saturday, if needed</b>A short final check when injury news changes your lineup.</li>
-    </ol>
-
-    <h2>1. What arrives, and when</h2>
-    <ul>
-      <li><b>Today:</b> your first report. Before the season starts that is your roster report —
-      every bye week on your team, last season&#x27;s numbers under your scoring with each
-      player&#x27;s rank at his position, and the weeks your lineup cannot be filled. Once
-      the season is running you get the current week&#x27;s report instead.</li>
-      <li><b>Every Tuesday morning after that:</b> the week&#x27;s report — the lineup we would
-      set for your exact roster, the odds on every close call, and a plain
-      &quot;no call&quot; wherever we won&#x27;t guess.</li>
-      <li><b>Saturday, only when it matters:</b> if Friday&#x27;s injury report changes
-      your lineup, a short final check tells you the swap. No news, no email.</li>
-      <li><b>A separate email in a moment:</b> a short receipt from us with your renewal
-      terms and the cancel link, to keep.</li>
-    </ul>
-
-    <h2>2. If your roster changes</h2>
-    <p>Rosters churn — that is the point of the waiver run. Reply to any report with your
-    updated roster and the next one follows it.</p>
-
-    <h2>3. Changed your mind</h2>
-    <p>Full refund, no questions, any time until your second weekly report's week kicks off —
-    one per person (<a href="terms.html#refunds">the exact terms</a>). And you can
-    cancel yourself in about fifteen seconds from your billing page, whose link is at the
-    bottom of every report we send; <a href="terms.html#cancel">the steps are here</a>. We do
-    not ask why, and there is no retention call.</p>
-
-    <h2>4. Anything else</h2>
-    <p>Email <b>hello@beatyourleague.com</b> — refunds, deletion, or anything that looks
-    wrong. The full <a href="terms.html">Terms</a> and
-    <a href="privacy.html">Privacy Policy</a> are always one click away.</p>
-
-    <p style="margin-top:22px"><a href="index.html">← Back to the site</a> &middot;
-    <a href="sample-report.html">See a sample report</a></p>
-</main>
-  <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language
-  rather than legalese; it is not legal advice, and it does not limit any right you have under
-  consumer law where you live.</footer>
+    <div class="confirm">
+      <button id="go" type="button">Yes, use my new roster</button>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+    </div>
+    <p>Didn't ask for this? Close this page — nothing changes unless you press the
+    button.</p>
+    <p style="margin-top:22px"><a href="../index.html">← Back to the site</a></p>
+  </main>
+  <footer><b>Beat Your League</b> — analysis, not picks.</footer>
 </div>
+<script>
+// The form backend (infra/form-worker.js). Same constant as join/, and empty
+// until it is deployed (LAUNCH.md step 5) — then this page says so rather
+// than pretending to confirm anything.
+const FORM_ENDPOINT = "";
+// A code the intake signed and mailed to the subscriber's own address
+// (run/updates.py confirm_code). Checked for shape here and recomputed there;
+// nothing on this page can make a change on its own.
+const CODE = new URLSearchParams(location.search).get("c") || "";
+const VALID = /^[0-9a-f]{24}$/.test(CODE);
+const go = document.getElementById("go");
+const msg = document.getElementById("msg");
+function say(text, kind) { msg.textContent = text; msg.className = "msg " + (kind || ""); }
+if (!VALID) {
+  go.disabled = true;
+  say("This link isn't complete. Open the button in the email again — or reply to " +
+      "any report with your roster and we'll update it.", "bad");
+}
+// Nothing happens on load, deliberately: mail scanners open every link in an
+// inbox, and a page that confirmed on load would let a scanner confirm a
+// change the subscriber never saw.
+go.addEventListener("click", () => {
+  if (!VALID) return;
+  if (!FORM_ENDPOINT) {
+    say("Roster updates aren't open just yet. Reply to any report with your roster " +
+        "and your report follows it from the next Tuesday.", "bad");
+    return;
+  }
+  go.disabled = true;
+  say("Confirming…");
+  fetch(FORM_ENDPOINT, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "confirm", code: CODE }),
+    signal: AbortSignal.timeout(15000),
+  }).then((response) => {
+    if (!response.ok) throw new Error("rejected");
+    say("Confirmed. It's applied within the hour, and your next report — and " +
+        "Saturday's final check — are built from your new roster.", "ok");
+  }).catch(() => {
+    go.disabled = false;
+    say("That didn't go through — check your connection and press the button " +
+        "again. Nothing was changed.", "bad");
+  });
+});
+</script>
 </body>
 </html>

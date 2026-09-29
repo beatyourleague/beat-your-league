@@ -2419,7 +2419,7 @@ def test_update_mode_never_reaches_a_payment_and_posts_the_contract() -> None:
     assert "replaces: UPDATE_SLUG" in post and "token: UPDATE_TOKEN" in post
     assert "STRIPE_LINK" not in post
     # A malformed pair is an ordinary visit, never an update.
-    assert re.search(r'UPDATE_MODE = /\^\[0-9a-f\]\{10\}\$/\.test\(UPDATE_SLUG\)', JOIN)
+    assert re.search(r'TOKEN_UPDATE = /\^\[0-9a-f\]\{10\}\$/\.test\(UPDATE_SLUG\)', JOIN)
     assert re.search(r'/\^\[0-9a-f\]\{20\}\$/\.test\(UPDATE_TOKEN\)', JOIN)
     # With no backend it says the roster is NOT saved and names the fallback.
     assert "isn't saved" in post and "reply to any report" in post

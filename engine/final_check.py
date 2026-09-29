@@ -138,7 +138,11 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
     def value(pid: str) -> float | None:
         return _value(players.get(pid, {}), basis)
 
-    bench = [pid for pid in players if pid not in starters]
+    # A roster changed since Tuesday (run/saturday.py folds the update in): a
+    # dropped player is gone from the bench and vacates any slot he held; a
+    # pickup joins the bench and can win a slot like a player back from injury.
+    dropped = {pid for pid, info in players.items() if info.get("dropped")}
+    bench = [pid for pid in players if pid not in starters and pid not in dropped]
     used: set[str] = set()
 
     def best(slot: str) -> str | None:
@@ -187,6 +191,8 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
         if not pid:
             continue
         current = state(pid)
+        if pid in dropped:
+            current = Now("out", "no longer on your roster")
         if current.locked or not current.ruled_out:
             continue
         placed = fill(index)
@@ -222,7 +228,8 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
     # slot of the weakest starter he beats (RULE F2: cleared needs the final).
     back = sorted(
         (pid for pid in bench
-         if pid not in used and players[pid].get("tuesday") == "out"
+         if pid not in used and (players[pid].get("tuesday") == "out"
+                                 or players[pid].get("added"))
          and state(pid).available and state(pid).final
          and state(pid).designation is None and value(pid) is not None),
         key=lambda pid: (-(value(pid) or 0.0), pid))
@@ -244,19 +251,21 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
         used.add(incoming)
         lineup[target] = incoming
         slots[target] = (slot, incoming)
+        why = ("is new on your roster" if players[incoming].get("added")
+               else "is off the injury report")
         changes.append(Change(
             BACK,
             f"Start {name(incoming)} at {slot} over {name(displaced)}",
-            f"{name(incoming)} is off the injury report and "
+            f"{name(incoming)} {why} and "
             f"{_number(players[incoming], basis)}, to {name(displaced)}'s "
             f"{(value(displaced) or 0.0):.1f}."
             if basis == "projected" else
-            f"{name(incoming)} is off the injury report and "
+            f"{name(incoming)} {why} and "
             f"{_number(players[incoming], basis)}, more than {name(displaced)}."))
 
     # 3. Starters in doubt, and 4. starters cleared since Tuesday.
     for index, (slot, pid) in enumerate(slots):
-        if not pid:
+        if not pid or pid in dropped:
             continue
         current = state(pid)
         if current.locked or not current.playing:

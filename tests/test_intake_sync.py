@@ -692,8 +692,17 @@ def test_the_worker_the_picker_and_the_intake_agree_on_the_update_contract() -> 
         assert re.search(token_re, page), f"{name} does not gate the token shape"
     assert len(slug_of(REF)) == 10 and len(update_token("a@b.co", SECRET)) == TOKEN_LENGTH
     # The Worker stores exactly the fields the intake reads, by name.
-    for field in ('kind === "update"', "covered_by", "replaces", "token"):
+    for field in ('"update"', '"update_request"', '"confirm"', "covered_by",
+                  "replaces", "token"):
         assert field in worker
+    # The confirm-by-email code: the Worker, the confirm page and the intake
+    # agree on its shape, or a subscriber presses the button and nothing ever
+    # happens.
+    from run.updates import CONFIRM_CODE_LENGTH
+    confirm_page = (root / "site" / "join" / "confirm.html").read_text(encoding="utf-8")
+    code_re = rf"\^\[0-9a-f\]\{{{CONFIRM_CODE_LENGTH}\}}\$"
+    for name, page in (("worker", worker), ("confirm page", confirm_page)):
+        assert re.search(code_re, page), f"{name} does not gate the code shape"
     # And it never accepts an unauthenticated read.
     assert "Bearer ${env.FORM_API_KEY}" in worker and "401" in worker
 
@@ -744,3 +753,101 @@ def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
     crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
     assert "0 * * * *" in crons, f"the hourly intake sweep is gone: {crons}"
     assert "0 14 * * *" in crons, "the daily run (renewals, reply kit) moved"
+
+
+# --------------------------------------------------------------------- #
+# confirm-by-email: the update route that is safe to forward (Sep 29 2026)
+# --------------------------------------------------------------------- #
+
+from run.updates import confirm_code  # noqa: E402
+
+
+def _request(**over) -> dict:
+    row = {"kind": "update_request", "email": "fan@example.com", "ref": NEW_REF}
+    row.update(over)
+    return row
+
+
+def _confirm_env(monkeypatch, tmp_path):
+    import run.delivery as delivery
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    monkeypatch.setenv("SITE_URL", "https://x.test")
+    return _capture_sends(monkeypatch, tmp_path)
+
+
+def test_a_request_changes_nothing_until_the_inbox_confirms_it(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The public link in a report may be forwarded, so a request by itself
+    must grant nothing: it only mails the address ON THE SUBSCRIPTION a code,
+    and the roster moves when that code comes back."""
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _request())
+    assert _run(tmp_path) == 0, capsys.readouterr().err
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == REF, "a request changed a roster without confirmation"
+    [mail] = [m for m in sends if m.key.startswith("confirm-")]
+    assert mail.to == "fan@example.com"
+    code = confirm_code("fan@example.com", slug_of(REF), NEW_REF, SECRET)
+    assert f"https://x.test/join/confirm.html?c={code}" in mail.html
+    assert "@" not in mail.key and "nothing changes" in mail.text.lower()
+
+    # The same request next hour: no second email.
+    assert _run(tmp_path) == 0
+    assert len([m for m in sends if m.key.startswith("confirm-")]) == 1
+
+    # The inbox presses the button.
+    _updates(monkeypatch, _request(), {"kind": "confirm", "code": code})
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == NEW_REF and row.origin == slug_of(REF)
+
+
+def test_a_request_for_somebody_elses_address_reaches_only_them(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """A leaguemate typing the victim's address sends the VICTIM a
+    confirmation they can ignore, and a made-up code confirms nothing."""
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _request(), {"kind": "confirm", "code": "0" * 24})
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == REF
+    assert {m.to for m in sends if m.key.startswith("confirm-")} == {"fan@example.com"}
+
+
+def test_a_request_naming_a_stranger_sends_nothing_at_all(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """Answering an address with no subscription would tell anyone who
+    subscribes. It is dropped in silence."""
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    _updates(monkeypatch, _request(email="nobody@example.com"))
+    assert _run(tmp_path) == 0
+    assert not [m for m in sends if m.key.startswith("confirm-")]
+
+
+def test_confirmations_are_capped_per_address_per_day(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """The request page is public: a loop of requests can put a few emails in
+    an inbox, never a flood."""
+    from run.updates import CONFIRMS_PER_DAY
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    for i in range(CONFIRMS_PER_DAY + 3):
+        roster = PLAYERS[i:] + PLAYERS[:i]
+        _updates(monkeypatch, _request(ref=encode_roster(
+            "season", "half_ppr", list(SLOTS), roster)))
+        assert _run(tmp_path) == 0
+    assert len([m for m in sends if m.key.startswith("confirm-")]) == CONFIRMS_PER_DAY
+
+
+def test_a_code_is_bound_to_the_address_the_subscription_and_the_roster() -> None:
+    base = confirm_code("fan@example.com", "abc123def0", NEW_REF, SECRET)
+    assert len(base) == 24
+    assert confirm_code("Fan@Example.com ", "abc123def0", NEW_REF, SECRET) == base
+    for changed in (("x@example.com", "abc123def0", NEW_REF, SECRET),
+                    ("fan@example.com", "ffffffffff", NEW_REF, SECRET),
+                    ("fan@example.com", "abc123def0", REF, SECRET),
+                    ("fan@example.com", "abc123def0", NEW_REF, "other")):
+        assert confirm_code(*changed) != base

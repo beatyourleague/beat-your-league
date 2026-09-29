@@ -310,10 +310,10 @@ Baltimore Ravens
         seat comes out of your commissioner's League Pass, so your first report lands
         the Tuesday after their pass goes through. You get your <b>own</b> report,
         built from the roster you just entered.</li>
-        <li id="update-note" style="display:none">Your next report is built from the
-        roster you just entered. It changes only the subscription your report came
-        from — if the address above isn't the one your reports go to, nothing
-        changes.</li>
+        <li id="update-note" style="display:none">We've emailed a button to confirm
+        the change — press it and your next report, and Saturday's final check, use
+        this roster. It only goes to the address your reports go to, and nothing
+        changes until it's pressed.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
@@ -438,8 +438,13 @@ if (!PLAN_LINK) {
 // it is an ordinary visit, so nothing here can be talked into a free change.
 const UPDATE_SLUG = QUERY.get("update") || "";
 const UPDATE_TOKEN = QUERY.get("token") || "";
-const UPDATE_MODE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
-                    /^[0-9a-f]{20}$/.test(UPDATE_TOKEN);
+const TOKEN_UPDATE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
+                     /^[0-9a-f]{20}$/.test(UPDATE_TOKEN);
+// ?update=1 — the link every report carries now. It grants NOTHING, which is
+// why a report can be forwarded to the league: the request only ever becomes
+// a change after the intake mails a confirmation to the address on the
+// subscription and that inbox presses the button (run/updates.py).
+const UPDATE_MODE = TOKEN_UPDATE || QUERY.has("update");
 
 // The sidebar sells a purchase. A seat holder buys nothing and an update comes
 // from somebody already subscribed: neither may read refund terms or "your
@@ -789,15 +794,18 @@ function submitUpdate(email, ref) {
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "update", email: email, ref: ref,
-                           replaces: UPDATE_SLUG, token: UPDATE_TOKEN }),
+    body: JSON.stringify(TOKEN_UPDATE
+      ? { kind: "update", email: email, ref: ref,
+          replaces: UPDATE_SLUG, token: UPDATE_TOKEN }
+      : { kind: "update_request", email: email, ref: ref }),
     signal: AbortSignal.timeout(15000),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     // Received, not yet applied: the intake checks the token against the
     // address and the slug against the subscription before anything changes.
     $("form-email").style.display = "none";
-    $("done-head").textContent = "Your roster update is in.";
+    $("done-head").textContent = TOKEN_UPDATE ? "Your roster update is in."
+                                              : "Check your inbox.";
     $("done").style.display = "block";
   }).catch(() => {
     showError("err-email", "That didn't send — check your connection and try " +
@@ -826,10 +834,10 @@ function showSeatLink() {
 if (UPDATE_MODE) {
   $("header-pitch").textContent =
     "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
-    "and your next report is built from it. Nothing to pay; this changes the " +
-    "roster on the subscription your report came from.";
+    "and your next report is built from it. Nothing to pay. Enter the address " +
+    "your reports go to and we'll email you a button to confirm it.";
   $("header-chips").replaceChildren();
-  ["Roster update", "Nothing to pay", "Applies from the next Tuesday"]
+  ["Roster update", "Nothing to pay", "Confirmed by email"]
     .forEach((text) => {
       const chip = document.createElement("span");
       chip.textContent = text;

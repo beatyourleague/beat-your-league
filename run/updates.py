@@ -242,3 +242,162 @@ def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdat
 
 def _mask(email: str) -> str:
     return re.sub(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})", r"***@\1", email)
+
+
+# --------------------------------------------------------------------- #
+# confirm-by-email requests (Sep 29 2026)
+# --------------------------------------------------------------------- #
+#
+# The token link above was pulled out of every report (run/tuesday.py): a
+# report is written to be forwarded to the league, and a forwarded credential
+# hands the most motivated adversary in the product a way to set somebody's
+# lineup. This replaces it with the pattern that survives forwarding:
+#
+#   1. Every report links a PUBLIC page (`join/?update=1`) that grants nothing.
+#   2. The page posts {kind:"update_request", email, ref}. Anyone can do that.
+#   3. The intake mails a confirmation to the ADDRESS ON THE REGISTRY ROW —
+#      never to anyone else — carrying a code only that inbox receives.
+#   4. The subscriber opens `join/confirm.html?c=<code>` and PRESSES A BUTTON,
+#      which posts {kind:"confirm", code}. A button, not a link that confirms
+#      on load: mail security scanners open every link in an inbox, and a
+#      scanner that "clicks" would confirm a leaguemate's forged request for
+#      the victim without them ever seeing it.
+#   5. The next intake sees the confirm, and the update is logged and applied
+#      exactly as a token update always was.
+#
+# A forwarded report therefore grants nothing, a forged request reaches only
+# the real subscriber's inbox, and ignoring it changes nothing.
+
+CONFIRM_CODE_LENGTH = 24
+# Confirmation emails per address per UTC day — a stranger posting requests
+# in a loop can annoy an inbox a little, never flood it.
+CONFIRMS_PER_DAY = 3
+
+
+@dataclass(frozen=True)
+class PendingRequest:
+    """A validated request waiting for its confirmation."""
+
+    email: str
+    replaces: str
+    ref: str
+    code: str
+
+
+def confirm_code(email: str, replaces: str, ref: str, secret: str) -> str:
+    if not secret:
+        raise ValueError("a confirmation code needs a secret")
+    message = f"confirm|{email.strip().lower()}|{replaces}|{ref}"
+    return hmac.new(secret.encode("utf-8"), message.encode("utf-8"),
+                    hashlib.sha256).hexdigest()[:CONFIRM_CODE_LENGTH]
+
+
+def _target_for(email: str, roster, registry_rows: Iterable[Mapping]) -> str | None:
+    """Which of this address's subscriptions a request changes, or None when
+    that cannot be told. One subscription: that one. Several: the one in the
+    same league setup whose roster overlaps the new one most — and a tie is
+    refused, because changing the wrong team is worse than changing none."""
+    held = [row for row in registry_rows
+            if str(row.get("email", "")).lower() == email]
+    if not held:
+        return None
+    if len(held) > 1:
+        same = [row for row in held
+                if list(row.get("slots") or []) == list(roster.slots)
+                and row.get("scoring") == roster.scoring]
+        new = set(roster.player_ids)
+        ranked = sorted(same, key=lambda r: -len(new & set(r.get("player_ids") or [])))
+        if not ranked or (len(ranked) > 1 and
+                          len(new & set(ranked[0].get("player_ids") or []))
+                          == len(new & set(ranked[1].get("player_ids") or []))):
+            return None
+        held = ranked[:1]
+    row = held[0]
+    return str(row.get("origin") or slug_of(str(row.get("ref", ""))))
+
+
+def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
+                      known_ids: set[str] | None, secret: str,
+                      ) -> tuple[list[PendingRequest], list[str]]:
+    """Public-form requests -> requests worth a confirmation email.
+
+    Nothing here changes a roster. A request naming an address that holds no
+    subscription is dropped in silence: the page is public, and answering it
+    would let anybody learn who subscribes."""
+    problems: list[str] = []
+    rows = list(rows)
+    if not secret:
+        if rows:
+            problems.append(f"{len(rows)} roster update request(s) arrived but "
+                            f"UPDATE_SECRET is not set — no confirmations sent")
+        return [], problems
+    registry_rows = list(registry_rows)
+    out: dict[tuple[str, str], PendingRequest] = {}
+    for row in rows:
+        email = str(row.get("email") or "").strip().lower()
+        ref = str(row.get("ref") or "").strip()
+        if not _EMAIL_RE.match(email):
+            continue
+        try:
+            roster = decode_roster(ref)
+        except RefError:
+            continue
+        replaces = _target_for(email, roster, registry_rows)
+        if replaces is None:
+            if any(str(r.get("email", "")).lower() == email for r in registry_rows):
+                problems.append(f"a roster update request for {_mask(email)} matches "
+                                f"more than one of their teams equally — not sent")
+            continue
+        if known_ids and any(pid not in known_ids for pid in roster.player_ids):
+            problems.append(f"a roster update request for {_mask(email)} names a "
+                            f"player the directory does not have — not sent")
+            continue
+        current = next((r for r in registry_rows
+                        if str(r.get("email", "")).lower() == email
+                        and str(r.get("origin") or slug_of(str(r.get("ref", ""))))
+                        == replaces), None)
+        if current is not None and current.get("ref") == ref:
+            continue                                   # nothing would change
+        # The NEWEST request per subscription wins; the form lists rows in
+        # arrival order, so later rows overwrite earlier ones here.
+        out[(email, replaces)] = PendingRequest(
+            email, replaces, ref, confirm_code(email, replaces, ref, secret))
+    return list(out.values()), problems
+
+
+def confirmed_updates(pending: Iterable[PendingRequest],
+                      confirm_rows: Iterable[Mapping], secret: str,
+                      now: str | None = None) -> list[RosterUpdate]:
+    """The pending requests whose code came back through the confirm page.
+
+    The code is recomputed, never trusted: a confirm row is only a string, and
+    it counts only when it equals the code for a request that is still valid
+    against the registry as it stands."""
+    if not secret:
+        return []
+    codes = {str(r.get("code") or "").strip().lower() for r in confirm_rows}
+    stamp = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return [RosterUpdate(email=p.email, replaces=p.replaces, ref=p.ref, seen_at=stamp)
+            for p in pending if p.code in codes]
+
+
+def confirmation_key(request: PendingRequest, day: str) -> str:
+    """Send-log key: one confirmation per request, and no address in it."""
+    who = hashlib.sha256(request.email.encode("utf-8")).hexdigest()[:8]
+    what = hashlib.sha256(f"{request.replaces}|{request.ref}".encode("utf-8")).hexdigest()[:8]
+    return f"confirm-{who}-{day}-{what}"
+
+
+def confirm_url(site_url: str, code: str) -> str | None:
+    site = (site_url or "").rstrip("/")
+    return f"{site}/join/confirm.html?c={code}" if site else None
+
+
+def public_update_url(site_url: str, secret: str, endpoint: str) -> str | None:
+    """The link every report carries. It grants nothing — which is why it may
+    be forwarded — and it renders only when the whole flow can work: a site to
+    land on, a backend to post to, a secret to sign confirmations with."""
+    site = (site_url or "").rstrip("/")
+    if not site or not secret or not endpoint:
+        return None
+    return f"{site}/join/?update=1"
