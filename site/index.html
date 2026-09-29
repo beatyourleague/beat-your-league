@@ -217,8 +217,14 @@
       0 0 0 1px var(--gold-edge);}
   .leaf.first{border-top:0;}
   .leaf.last{box-shadow:0 40px 60px -34px rgba(0,0,0,.9),0 0 0 1px var(--gold-edge);}
-  .leaf .filecard{border:0;}
-  .note{position:relative;padding:14px 0 26px 26px;border-left:2px solid var(--flag);}
+  .leaf{display:flex;flex-direction:column;}
+  /* The paper is as tall as the taller of card and note. The card fills it and
+     centres its content, so any spare height reads as margin, never as a blank
+     sheet under the widget. */
+  .leaf .filecard{border:0;flex:1;display:flex;flex-direction:column;}
+  .leaf .filecard > :not(.filehead){flex:1;display:flex;flex-direction:column;
+    justify-content:center;}
+  .note{position:relative;padding:12px 0 14px 26px;border-left:2px solid var(--flag);}
   .note::before{content:"";position:absolute;left:-46px;top:27px;width:44px;height:1px;
     background:var(--flag);}
   .note b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;
@@ -339,15 +345,21 @@
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
   }
 
-  @media (max-width:880px){
-    .hero{grid-template-columns:1fr;padding:40px 0 20px;gap:34px;}
-    .rows{grid-template-columns:1fr;}
+  /* A note beside its card needs about 330px or it wraps taller than the card
+     and stretches the paper into a blank sheet (measured: 200px of it at 900px
+     wide). Below that width each note sits above its card instead. */
+  @media (max-width:1099px){
+    .rows{grid-template-columns:minmax(0,680px);}
     .note{order:0;border-left:0;padding:24px 0 10px;}
     .note::before{display:none;}
     .rows > :nth-child(1){order:2;} .rows > :nth-child(2){order:1;}
     .rows > :nth-child(3){order:4;} .rows > :nth-child(4){order:3;}
     .rows > :nth-child(5){order:6;} .rows > :nth-child(6){order:5;}
     .leaf{border-top:0;}
+    .note p{max-width:60ch;}
+  }
+  @media (max-width:880px){
+    .hero{grid-template-columns:1fr;padding:40px 0 20px;gap:34px;}
     .proofline{grid-template-columns:1fr;gap:6px;}
     .timeline{grid-template-columns:1fr;gap:22px;}
     .timeline::before{left:7px;right:auto;top:0;bottom:0;width:2px;height:auto;
