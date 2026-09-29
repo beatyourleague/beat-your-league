@@ -830,7 +830,7 @@ email could set their lineup; **an update names the row it replaces** (the subsc
 stay constant); **order is stamped on first sight**, never read from the row. Welcomes key on
 the signup, so a changed roster is never a second welcome. Every piece fails closed without
 the secret or the endpoint (no link renders; nothing applies). The backend is one pasteable
-Cloudflare Worker (`infra/form-worker.js`, LAUNCH.md step 5b) — it holds nothing secret and
+Cloudflare Worker (`infra/form-worker.js`, LAUNCH.md step 5) — it holds nothing secret and
 decides nothing — and the same paste unblocks League Pass seats. The three-way slug/token
 contract (Worker ↔ picker ↔ Python) is pinned by test. The landing FAQ keeps the
 "reply to any report" answer until the owner wires the endpoint, because the link does not

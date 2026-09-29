@@ -16,7 +16,7 @@
  * It is ~60 lines, costs nothing at this scale (KV free tier: 1,000 writes and
  * 100,000 reads a day), and the whole thing is readable in one sitting.
  *
- * Setup (LAUNCH.md step 5b): Workers & Pages → Create → paste this file →
+ * Setup (LAUNCH.md step 5): Workers & Pages → Create → paste this file →
  * Settings → Bindings → KV namespace, variable name ROWS → Variables:
  *   SITE_ORIGIN   = https://<domain>        (CORS; the only page allowed to POST)
  *   FORM_API_KEY  = <random>                (secret; the intake's read key)

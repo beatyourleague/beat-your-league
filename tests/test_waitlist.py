@@ -205,7 +205,7 @@ def test_an_empty_list_refuses_rather_than_reporting_success(
 
 def test_the_url_defaults_from_site_url_so_the_runbook_command_works(
         export: Path, monkeypatch, capsys) -> None:
-    """LAUNCH.md step 8 says `python -m run.waitlist` with no --url. That works
+    """The runbook command is `run.waitlist` with no --url. That works
     only because the link defaults from the SITE_URL secret that already
     exists — and with neither set, the run refuses rather than announcing a
     signup page at no address."""

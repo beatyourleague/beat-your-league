@@ -675,6 +675,24 @@ def test_no_personal_contact_details_are_published() -> None:
         "the contact placeholder is still there; it was set before launch"
 
 
+def test_no_tracked_file_carries_a_home_folder_path() -> None:
+    """The repo is public and the owner stays anonymous, and a machine path
+    names its user. The mid-season LAUNCH.md rewrite put `cd /Users/<name>/…`
+    into a copy-paste command — the owner's first name, in a public file, in
+    the one doc they follow literally. Every tracked text file is swept."""
+    import subprocess
+    root = SITE.parent
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=root, check=True,
+                             capture_output=True).stdout.decode().split("\0")
+    home = re.compile(r"/(?:Users|home)/[A-Za-z][\w.-]*/")
+    for name in filter(None, tracked):
+        path = root / name
+        if path.suffix in {".png", ".jpg", ".ico", ".csv"} or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        assert not home.search(text), f"{name} carries a home-folder path"
+
+
 def test_signup_degrades_honestly_without_a_contact_route() -> None:
     """With checkout unwired, the form must say so rather than opening an empty
     mailto: that looks like it worked. The join page no longer has a mailto path

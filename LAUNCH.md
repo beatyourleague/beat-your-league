@@ -1,273 +1,271 @@
-# LAUNCH.md — every owner action, in order, with the exact strings
+# LAUNCH.md — opening mid-season
 
-The code is done and tested; nothing below is engineering. Each step says what to click, what
-to paste, and what to tell me so I can wire the result in. Steps 1–4 are the weekend; 5–7 are
-the sell window; 8 is launch week. Strategy and dates live in the "Road to Sep 8" plan — this
-file is the hands-on-keyboard half.
+Every owner action left before a stranger's payment becomes a Tuesday email, in order, with
+the exact strings. The code is done and tested; nothing here is engineering. Rewritten Sep 29
+2026, in Week 4 of 18 — the Sep 8 launch plan it replaces is in git history.
+
+**Why speed matters now:** a buyer who joins today gets a full file on the day they pay. By
+Week 4 the season has three games on record, so the odds print for every league setup, not
+only the one we graded early. Every week spent on steps 1–4 is a week of the season nobody
+can buy.
 
 ---
 
-## 1. Domain (~30 min, ~$15 — start first, DNS is wall-clock time)
+## Where things stand
 
-1. Buy the domain (Cloudflare Registrar sells at cost and its DNS is free).
-2. DNS records for GitHub Pages (type → name → value):
-   - `A` → `@` → `185.199.108.153`
-   - `A` → `@` → `185.199.109.153`
-   - `A` → `@` → `185.199.110.153`
-   - `A` → `@` → `185.199.111.153`
-   - `CNAME` → `www` → `<your-github-username>.github.io`
-   If Cloudflare: set these records to **DNS only** (grey cloud), not proxied.
-3. Cloudflare **Email Routing** (free): create `hello@<domain>` forwarding to your real
-   inbox. That address becomes `CONTACT_EMAIL` and the reply-to on every report.
-4. **Tell me:** the domain and the chosen contact address, plus your legal jurisdiction
-   (state/country). I fill `terms.html`'s two placeholders, `CONTACT_EMAIL` on both funnel
-   pages, and add `site/CNAME`.
+Done:
+- `beatyourleague.com` on GitHub Pages; `hello@beatyourleague.com` forwards to your inbox.
+- Terms (Ontario law) and privacy pages. The refund window is counted from each buyer's own
+  purchase and closes when their second weekly file's week kicks off.
+- Three Stripe products and payment links — $39 season pass, $14.99 monthly, $99 League
+  Pass — wired into the join page.
+- The Stripe customer portal is on; its login link is in the terms and in every report.
+- The restricted key `github-actions-crons` exists.
 
-## 2. GitHub (~30 min)
+**Heads-up: the join page can already take money.** The pricing buttons lead to it and its
+payment links are live, but nothing reads Stripe until step 3's key is set. A buyer who pays
+before then gets no welcome and no file until it is. Nothing is lost — the first run after
+step 3 sweeps every payment ever made — but a late first file is the likeliest refund there
+is. Steps 1–3 take under an hour; do them in one sitting.
 
-1. Create a **public** repo (Pages on the free plan requires public — safe by design:
-   subscriber data lives only in gitignored `data/registry/`, tests block real names and
-   personal addresses from every tracked file, and CI runs the suite on every push).
-2. Push:
-   ```bash
-   git remote add origin git@github.com:<you>/<repo>.git
-   ```
-   ```bash
-   git push -u origin main
-   ```
-3. Settings → Pages → Source: **GitHub Actions**. Then Custom domain: your domain →
-   Enforce HTTPS.
-4. Settings → Secrets and variables → Actions → **Secrets**. Create these names exactly
-   (fill values as later steps produce them — an unset secret degrades safely):
+---
 
-   | Secret | From step | Notes |
+## 1. Finish the payment links (~15 min)
+
+1. Open https://dashboard.stripe.com/payment-links in **live** mode. For each of the three
+   links: open it → **Edit** → switch **Enable Managed Payments** off → **Save**.
+2. While each one is open, check it matches:
+
+   | Setting | Should be | Why |
    |---|---|---|
-   | `STRIPE_API_KEY` | 5 | restricted key, never the full secret key |
-   | `STRIPE_PAYMENT_LINKS` | 5 | `s:plink_…,m:plink_…,p:plink_…` |
-   | `EMAIL_PROVIDER` | 4 | literally `resend` |
-   | `EMAIL_FROM` | 4 | e.g. `reports@<domain>` |
-   | `EMAIL_REPLY_TO` | 1 | `hello@<domain>` |
-   | `RESEND_API_KEY` | 4 | |
-   | `SITE_URL` | 1 | `https://<domain>` |
-   | `BILLING_PORTAL_URL` | 5 | Stripe customer-portal login link |
-   | `FORM_ENDPOINT` | 5b | the Worker URL (seats + roster updates) |
-   | `FORM_API_KEY` | 5b | the Worker's read key, same value as in the Worker |
-   | `UPDATE_SECRET` | 5b | `openssl rand -hex 32` — authenticates roster updates |
+   | Enable Managed Payments | Off | 3.5% on top of the normal fee, and it makes Stripe the seller, which contradicts the terms. Revisit only if EU sales stop being incidental |
+   | Require customers to accept your terms of service | On | |
+   | Collect customer addresses | On | Tax thresholds count per country and per state. The address stays in Stripe; a test keeps it out of everything that builds reports |
+   | Customer names, business names, phone | Off | Nothing uses them |
+   | Collect tax automatically | Off | We're registered for tax nowhere yet |
+   | Let customers adjust quantity | Off | One purchase is one roster; a quantity of 2 charges twice for one report |
+   | Include a free trial | Off | The refund window is the trial |
+   | Limit the number of payments | Off | `run/billing.py` ends monthly billing at season's end from the real schedule |
+   | Promotion codes | Off | The founding rate is the discount, and the terms promise it at every renewal |
+   | After payment | Redirect to `https://beatyourleague.com/thanks.html` | |
 
-## 3. The waitlist — no new vendor (rides step 5b's Worker)
-
-The email capture on the landing page and the join page posts
-`{kind:"waitlist", email}` to the same Cloudflare Worker that takes seats and
-roster updates, and `.venv/bin/python -m run.waitlist` reads it back and sends the one
-promised launch email through Resend. So there is no separate list vendor to
-set up — **do step 5b**, then tell me the Worker URL and I wire
-`WAITLIST_ENDPOINT` (landing) and `NOTIFY_LIST_ENDPOINT` (join) to it and
-verify the capture end to end in a browser. Until then both pages say plainly
-that nothing was recorded, rather than pretending.
-
-One legal note for the broadcast itself: CAN-SPAM requires a valid physical
-postal address in the message. A UPS-store box or a registered-agent address
-works — have one ready before Sep 7 and tell me; I add it to the launch email
-footer (only there — reports to paying subscribers are transactional).
-
-## 4. Resend — the report sender (~20 min)
-
-1. Free account at resend.com → Domains → add `<domain>` → add the DNS records it shows.
-   (Keep Loops and Resend on the same domain; both publish their own DKIM selectors, so
-   they don't collide.)
-2. API key → create. Set `RESEND_API_KEY` and `EMAIL_PROVIDER=resend` secrets.
-   (Resend also carries the waitlist launch email — one sender for everything.)
-3. Free tier is 3,000/month but **100/day** — the Tuesday batch breaks at ~100 subscribers.
-   The $20/mo upgrade triggers at >$500 MRR, so it self-funds; a conditional line for it
-   belongs in PLAN §2's budget table when it happens.
-
-## 5. Stripe (~90 min) — links, terms checkbox, portal, key
-
-1. **Public details** (Settings → Business → Public details): set Terms of service URL to
-   `https://<domain>/terms.html` and Privacy policy URL to
-   `https://<domain>/privacy.html`.
-
-   Two separate documents on purpose: the URL is shown to the buyer at
-   checkout, and "legal.html" told them nothing about which one they were
-   opening. `legal.html` still resolves — it redirects to the terms — so
-   nothing that already points at it breaks.
-2. **Customer portal** (Settings → Billing → Customer portal): activate, allow
-   subscription cancellation. Copy the permanent login link (`https://billing.stripe.com/p/login/…`)
-   → that is the `BILLING_PORTAL_URL` secret. Also paste it into `terms.html` at the marked
-   comment (or tell me and I will).
-3. **Three products/payment links** — on each link, toggle **"Require customers to accept
-   your terms of service"**:
-   - Season pass — subscription, **$39 USD / year**
-   - Monthly — subscription, **$14.99 USD / month**
-   - League Pass — subscription, **$99 USD / year**
-
-   Every option on that screen stays OFF. Decided Aug 27 2026, recorded so it
-   is not re-litigated at the screen:
-   - **Managed Payments** — 3.5% ON TOP of the standard fee ($2.80 rather than
-     $1.43 on a $39 pass; $136.50 per hundred sales). It buys global tax
-     compliance we do not need while registered nowhere, and it makes Stripe
-     the merchant of record, which contradicts `terms.html` naming us as the
-     counterparty. The one thing that would genuinely trigger it is material
-     EU sales — the EU has no registration threshold for non-established
-     suppliers of digital services, so VAT is technically due from the first
-     euro. Watch card country in Stripe; if EU revenue stops being incidental,
-     that is the moment this 3.5% starts being worth it.
-   - **Collect tax automatically** — nothing to collect while registered
-     nowhere, and it adds a per-transaction fee.
-   - **Collect customer addresses — ON** (owner decision, Aug 27 2026). The
-     reason is tax: nexus thresholds are counted per country AND per state, so
-     knowing where sales come from is what makes registering in the right place
-     possible at all. `site/privacy.html` was rewritten FIRST — collecting it
-     falsified three statements there at once (the exhaustive "whole list"
-     note, the lede's "and nothing else", and §2's "no postal address"), and
-     that page is linked from Stripe's own checkout, so a buyer may read it in
-     the same minute they hand the address over. §7 now also says plainly that
-     an address inside a payment record cannot always be deleted on request,
-     because tax law requires those to be kept.
-     **The address stays in Stripe.** It is read in the dashboard and never
-     enters `run/` — pinned by
-     `test_the_address_never_enters_the_system_that_builds_reports`, so it
-     cannot leak through a report, the public ledger, a CI log or an artifact.
-   - **Collect customer names / business names / phone — OFF.** Nothing uses
-     them, and each is one more field on a mobile checkout reached from a link
-     on X. If Stripe's address block turns out to force a name field, add the
-     name to `privacy.html` §1 before the first live sale, not after.
-   - **Include a free trial** — the two-file no-questions refund already is the
-     trial, and it is disclosed on the pricing card, in the contract and in the
-     welcome email. A trial would also land in weeks 1-3, which publish no
-     confidence numbers, so it would show the thinnest version of the product.
-   - **Adjustable quantity** and **Limit the number of payments** — see below.
-
-   These two in particular cost money or break delivery:
-   - **Adjustable quantity** — one purchase is one roster. A quantity of 2
-     charges twice and still produces exactly one `client_reference_id`, so
-     the second one buys nothing and reads as an overcharge.
-   - **Limit the number of payments** — `run/billing.py` owns when a monthly
-     subscription ends, computed from the real schedule. A second mechanism
-     ending it on a count would fight that and win silently.
-   - **Promotion codes** — a founding rate is already the discount, and legal
-     §3 promises that rate at every renewal; a code on top makes the renewal
-     amount something our own constants cannot state.
-   - **Collecting addresses / phone** — CLAUDE.md's minimum-collection rule.
-     We are not registered for tax anywhere, so an address is data we would
-     hold and never use.
-4. **Custom text above the Pay button** (closes the disclosure gap on the one page we
-   don't control — it is API-only, with no Dashboard field). One command, run in Terminal
-   from the repo:
+   If Managed Payments can't be switched off on an existing link, make a replacement link for
+   that product with the settings above, **deactivate** the old one, and send me the new URL
+   and its `plink_` id.
+3. **Settings → Business → Public details:** Terms of service URL
+   `https://beatyourleague.com/terms.html`, Privacy policy URL
+   `https://beatyourleague.com/privacy.html`.
+4. **Put the renewal terms above Stripe's Pay button.** It's API-only, with no Dashboard
+   field. In Terminal, from the repo folder, paste this whole line:
    ```bash
-   .venv/bin/python infra/stripe_paylink_text.py
+   STRIPE_PAYMENT_LINKS='s:plink_1U8yWRQN4gk9bpTQAg1FZS1o,m:plink_1U8yVmQN4gk9bpTQ0Tk89BjH,p:plink_1U8yTVQN4gk9bpTQydWBQFIB' .venv/bin/python infra/stripe_paylink_text.py
    ```
-   It asks for the link map, then for the key (hidden — never in shell history, never in
-   `ps`), writes all three, reads each back to confirm Stripe stored what we sent, and tells
-   you to delete the key. Use the throwaway `setup-payment-link-text` key here, never the
-   cron key.
+   At the prompt, paste the `setup-payment-link-text` key (Developers → API keys → **Reveal
+   live key**; it starts `rk_live_`). **Nothing appears as you paste** — that's normal. Never
+   type your Mac password there.
+   - Success is three `[ok ]` lines, then "All three set and verified."
+   - `You cannot use custom_text with Managed Payments` — that link still has it on; redo 1.
+   - `HTTP 401` — the key was cut off; copy it again. `HTTP 403` — the key lacks Payment
+     Links **Write**.
+   - If Stripe won't reveal the key, create a new restricted key with Payment Links **Write**
+     and everything else None, and use that.
 
-   The prices come from `render/welcome.py`, which a test ties to the pricing page — so the
-   sentence above Stripe's Pay button cannot drift from the one beside the Buy button. That
-   is why this is a script rather than three curls pasted into this file with the prices
-   typed in by hand.
-5. **Restricted API key** (Developers → API keys → Create restricted key):
-   Checkout Sessions **Read** · Subscriptions **Write** · Customers **Write**.
-   Everything else: None. This is `STRIPE_API_KEY`.
+   The sentences come from `render/welcome.py`, which a test ties to the pricing page, so
+   Stripe's page can't disagree with ours.
+5. **Delete the `setup-payment-link-text` key.** A key that can edit payment links can change
+   what buyers pay, and nothing needs it again.
 
-   **The curl commands in step 4 need a DIFFERENT scope: Payment Links Write.**
-   They write to `/v1/payment_links`, which the three scopes above do not
-   cover, so the running key cannot make those calls and would 403. Add
-   Payment Links **Write** to the key, run the three curls once, then edit the
-   key and set it back to None — the shipped key never needs it again, and a
-   key that can rewrite a payment link is a key that can change what a buyer is
-   charged.
+**Tell me** what Terminal printed (it never shows the key).
 
-   Both writes are load-bearing and each is used for exactly one thing.
-   *Customers*: the sweep stamps the roster onto the customer, so we stop
-   depending on Stripe keeping old Checkout Sessions listable. *Subscriptions*:
-   `run/billing.py` sets the end-of-season `cancel_at` on every monthly
-   subscription — with Read only, that write 403s and monthly subscribers are
-   charged straight through the offseason, against the promise printed above
-   Stripe's own Pay button. The daily run fails loudly if it cannot write, so a
-   Read-only key shows up as a red cron rather than as a February chargeback.
-6. `STRIPE_PAYMENT_LINKS` secret: `s:<season plink id>,m:<monthly plink id>,p:<pass plink id>`
-   (the `plink_…` id is in each link's dashboard URL).
-7. **Tell me the three full payment-link URLs.** I paste them into `site/join/index.html`,
-   flip `CHECKOUT_OPEN`, and the funnel goes live on the next push.
+## 2. Resend — the sender (~20 min)
 
-## 5b. The form backend (~20 min) — one paste, unblocks two features
+1. Free account at resend.com → **Domains → Add domain** → `beatyourleague.com`.
+2. Add every record it shows in **Cloudflare → DNS**, each set to **DNS only** (grey cloud).
+   They sit on subdomains, so they don't collide with the email forwarding. Wait for Resend to
+   show **Verified** (minutes, sometimes an hour).
+3. **API Keys → Create:** permission **Sending access**, domain `beatyourleague.com`. Paste it
+   straight into the GitHub secret in step 3 — nowhere else.
 
-League Pass seats and self-serve roster updates both need somewhere for the
-page to post a row and for the intake to read it back. Free form vendors cap
-at ~50 submissions a month or can't be read by a program, so the backend is a
-~60-line Cloudflare Worker in the same account as the DNS — the whole thing is
-[infra/form-worker.js](infra/form-worker.js), and it decides nothing: every
-row is validated by the intake before it reaches the registry.
+The free tier sends 3,000 a month but only **100 a day**, which the Tuesday run outgrows at
+about 100 subscribers. The $20/month plan goes into PLAN §2's budget table the week that
+happens.
 
-1. Cloudflare → Workers & Pages → Create → Worker → paste `infra/form-worker.js`
-   → Deploy.
-2. Storage & Databases → KV → create a namespace (any name). Worker → Settings →
-   Bindings → KV namespace, **variable name `ROWS`**.
-3. Worker → Settings → Variables: `SITE_ORIGIN` = `https://<domain>`;
-   `FORM_API_KEY` = a random string (mark it secret).
-4. Generate the update secret once:
+## 3. GitHub secrets (~10 min)
+
+Open https://github.com/beatyourleague/beat-your-league/settings/secrets/actions → **New
+repository secret**, once per row. Names exactly as written.
+
+| Name | Value |
+|---|---|
+| `STRIPE_API_KEY` | the `github-actions-crons` key (Reveal live key) |
+| `STRIPE_PAYMENT_LINKS` | `s:plink_1U8yWRQN4gk9bpTQAg1FZS1o,m:plink_1U8yVmQN4gk9bpTQ0Tk89BjH,p:plink_1U8yTVQN4gk9bpTQydWBQFIB` |
+| `EMAIL_PROVIDER` | `resend` |
+| `EMAIL_FROM` | `Beat Your League <reports@beatyourleague.com>` |
+| `EMAIL_REPLY_TO` | `hello@beatyourleague.com` |
+| `RESEND_API_KEY` | from step 2 |
+| `SITE_URL` | `https://beatyourleague.com` |
+| `BILLING_PORTAL_URL` | `https://billing.stripe.com/p/login/cNi4gB3Nx3zkcXt1IKaMU00` |
+
+`github-actions-crons` needs exactly three permissions: Checkout Sessions **Read**, Customers
+**Write**, Subscriptions **Write**; everything else None. If Stripe won't reveal it, recreate
+it with those three. Subscriptions must be **Write**: `run/billing.py` sets every monthly
+subscription to stop at season's end, and with Read only, monthly buyers would be billed
+through the offseason (the daily run goes red if it can't write, so you'd hear about it).
+
+Keys go only into these boxes — never into chat, a note or a file. The three remaining
+secrets (`FORM_ENDPOINT`, `FORM_API_KEY`, `UPDATE_SECRET`) come in step 5; until then the
+features that need them stay off rather than half-working.
+
+## 4. The proving run (~1 hour)
+
+This repo's history includes a cron that could never have mailed anybody and still looked
+green. Nobody else's money moves until you've watched your own go all the way through.
+
+1. **Between a Tuesday morning and that week's first kickoff** (table in section 7), buy the
+   **$39 season pass** at https://beatyourleague.com/join/ with your own email and a real
+   card. Enter your real roster.
+2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should finish green.
+3. **Check your inbox for two emails:**
+   - **The welcome:** $39, renews yearly at $39, refunds "until your second weekly file's
+     week kicks off", and the cancel link opens your Stripe billing page.
+   - **Your first file:** this week's report, because you bought before kickoff. Open it on
+     your phone and on a computer.
+4. **Tell me both arrived.** I turn on `CHECKOUT_CAN_COMPLETE`, which retires the "leave your
+   email" box and tells visitors their first file lands today. It's live on the next push.
+5. **Next Tuesday,** confirm the new week's file arrives by about 8:30am ET and the
+   weekly-report run in Actions is green.
+
+Then decide what happens to your subscription (section 9): keep it and it starts the public
+record, or cancel and refund it as section 7 describes. A refund doesn't return Stripe's fee
+(about $1.43).
+
+## 5. The form Worker (~20 min) — League Pass and roster updates
+
+Two features wait on one Cloudflare Worker:
+- **League Pass seats.** The League Pass page's button stays hidden until then.
+- **"Roster changed?" links in every report.** Without them, a subscriber's file drifts out of
+  date as waivers change their roster, and they have no way to fix it themselves.
+
+The Worker ([infra/form-worker.js](infra/form-worker.js), about 60 lines) holds nothing secret
+and decides nothing: every row is checked before it reaches the subscriber list.
+
+1. Cloudflare → **Workers & Pages → Create → Worker** → paste `infra/form-worker.js` →
+   **Deploy**.
+2. **Storage & Databases → KV** → create a namespace (any name). Worker → **Settings →
+   Bindings → KV namespace**, variable name **`ROWS`**.
+3. Worker → **Settings → Variables:** `SITE_ORIGIN` = `https://beatyourleague.com`, and
+   `FORM_API_KEY` = a random string, marked secret. Make one with:
+   ```bash
+   openssl rand -hex 24
+   ```
+4. Make the roster-update secret:
    ```bash
    openssl rand -hex 32
    ```
-5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's
-   value, `UPDATE_SECRET` = step 4's value.
-6. **Tell me the Worker URL.** I set `FORM_ENDPOINT` in `site/join/index.html`
-   and flip the FAQ's roster-change answer from "reply to any report" to the
-   link every report then carries.
+5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
+   `UPDATE_SECRET` = step 4's value.
+6. **Tell me the Worker URL** (it isn't a secret). I wire it into the join and League Pass
+   pages, switch the League Pass button on, and change the FAQ's roster answer to the link.
 
-Until this is done, both features fail closed: seats are refused with a
-reason, and the update link simply does not render in reports.
+Until then both fail closed: seat claims are refused with a reason, and the update link
+simply doesn't appear in reports.
 
-## 6. The proving run (~2 h, after 5) — non-negotiable
+## 6. Selling from Week 4
 
-This repo's own history includes a cron that could never have mailed anybody and looked
-green. Money does not move for strangers until each of these has been watched happening:
+The order is PLAN §5.1's — subscribers per hour of your time — with one channel held back.
 
-1. **One real $39 purchase, end to end:** buy through the live site with a real card →
-   `make intake` → your row appears in `data/registry/rosters.json` → `make tuesday-preview`
-   builds your report → refund yourself in the Stripe dashboard.
-2. **Send rehearsal:** with the secrets set, run the Tuesday workflow by hand
-   (Actions → weekly-report → Run workflow) and open the result in Gmail, Outlook, and
-   Apple Mail. Check the images, the footer links, and that the billing-portal link works.
-3. **Welcome check:** the purchase in (1) should also have produced the welcome email —
-   confirm its renewal terms match what you bought.
-4. **Roster update:** tap "Roster changed?" in the report from (2), change one player,
-   run `make intake`, and confirm `rosters.json` shows the new roster under the same
-   `origin` slug.
+1. **Your own leagues.** A season pass per manager, or the League Pass once step 5 is done.
+   Anyone who sends you their roster can have this week's file on it, free. Copy the roster
+   they sent, then run:
+   ```bash
+   pbpaste | .venv/bin/python -m run.trial --email them@example.com --roster - --print
+   ```
+   Nothing is emailed from your Mac: it writes a draft and prints a text version to paste
+   back into the chat. Add `--scoring half_ppr`, `--template sf` or `--size 10` to match their
+   league. A name it can't place stops the run and names the line — ask them, don't guess.
+2. **Discords and league group chats.** Ask a mod before mentioning the product. The
+   comparison page (`beatyourleague.com/compare/`) is the thing to paste when someone asks
+   what to use.
+3. **X replies, about 20 minutes a day.** A number and one line of reasoning in reply to
+   start/sit questions. No links in replies — the product lives in your profile.
+4. **Reddit.** Read each subreddit's rules yourself and ask the mods first. Answers only, no
+   links.
 
-## 7. The sell window (Aug 25 – Sep 3) — where season one's subscribers actually come from
+**Held back:** the mention campaign in `content/pitches.md` emails other sites, which you've
+ruled out for now (Sep 2026). It stays written for when that changes.
 
-- The free demo is one command — paste whatever they send you:
-  ```bash
-  .venv/bin/python -m run.trial --email them@example.com --roster - --print
-  ```
-  (`--print` gives a paste-ready text version for the group chat; add
-  `--scoring half_ppr`, `--template sf`, `--size 10` to match their league.)
-- The pitch pack is `content/pitches.md` — 16 verified targets, warmest first, template
-  included. **Send only after the site is live**, all in the same week.
-- The League Pass close for your own leagues is the one channel that can finish before
-  Sep 8. Three passes is $297 and the first real demand evidence this product has ever had.
+Everything you post follows the site's rule: no "accurate", "proven", "calibrated", "tested"
+or "we hit X%" — the grading doesn't back any of them yet — and nothing about betting.
 
-## 8. Launch week
+## 7. Every week from here
 
-- **Thu Sep 4:** code freeze.
-- **Mon Sep 7:** the waitlist broadcast — one email, as promised on the page: checkout is
-  open, first file lands tomorrow. Preview first, then send:
-  ```bash
-  .venv/bin/python -m run.waitlist
-  ```
-  ```bash
-  .venv/bin/python -m run.waitlist --send
-  ```
-  (Reads the Worker's waitlist rows; `--list export.csv` if you ever hold a CSV instead.
-  Idempotent — a re-run sends nothing twice, and a second campaign would need its own key.)
-- **Tue Sep 8, ~7:00 ET:** the cron fires on its own. QA one report before opening the
-  group chats.
+| When (ET) | What runs | What you do |
+|---|---|---|
+| Tuesday ~8am, retry at noon | **weekly-report:** new signups, then every subscriber's file | Open your own file |
+| Daily ~10am, plus hourly | **daily-intake:** new purchases, welcomes, first files, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
+| Monday ~9am | **monday-receipts:** grades last week's calls and republishes the public record | Nothing, unless it goes red |
 
----
+Times are an hour earlier from Nov 1, when the clocks change. A red run opens a GitHub issue,
+and GitHub emails you about it.
 
-*Kept out on purpose: There's An AI For That's $49 listing (needs a PLAN §2 budget line
-first). The form backend is no longer kept out — step 5b is the chosen design, and until the
-owner pastes it, seats are refused loudly, the update link does not render, and the waitlist
-says nothing was recorded. Everything fails closed, never silently.*
+**A refund request, in three checks:**
+1. **Is it inside the window?** Find the first week below whose kickoff comes after they paid
+   (Stripe shows the payment time). That week's report was their first weekly file, and their
+   window closes at the kickoff **one row further down**. If they paid within two hours of a
+   kickoff, start from the next row instead — their first file may have been the roster file.
+   *Example: paid Wed Oct 7 → first file Week 5 → window closes Thu Oct 15, 8:15pm ET.*
+   The one exception: if a send of ours ever ran late and their second file reached them after
+   its week kicked off, they have a week from that send. A late send would have opened an
+   issue; ask me and I'll check the send log.
+2. **Is it their first refund?** Search their email under **Customers** for an earlier
+   refund. One per person (one per league for a League Pass); if there's one, this purchase
+   is final.
+3. **Issue it:** their subscription → **Cancel subscription → Immediately**, and refund the
+   last payment in full. A refund on its own leaves the subscription active, and it would bill
+   again. The reports stop by themselves once a payment is fully refunded.
+
+| Week | First kickoff (ET) |
+|---|---|
+| 4 | Thu Oct 1, 8:15pm |
+| 5 | Thu Oct 8, 8:15pm |
+| 6 | Thu Oct 15, 8:15pm |
+| 7 | Thu Oct 22, 8:15pm |
+| 8 | Thu Oct 29, 8:15pm |
+| 9 | Thu Nov 5, 8:15pm |
+| 10 | Thu Nov 12, 8:15pm |
+| 11 | Thu Nov 19, 8:15pm |
+| 12 | **Wed** Nov 25, 8:00pm |
+| 13 | Thu Dec 3, 8:15pm |
+| 14 | Thu Dec 10, 8:15pm |
+| 15 | Thu Dec 17, 8:15pm |
+| 16 | Thu Dec 24, 8:15pm |
+| 17 | Thu Dec 31, 8:15pm |
+| 18 | Sun Jan 10, 1:00pm — Saturday games are usually added late; recheck |
+
+From the published NFL schedule the product itself reads. A flexed game can move a row.
+
+## 8. Dates you pre-committed to (PLAN §6)
+
+The gates were written before the season so results can't move them. Opening in Week 4 puts
+the big one ten days after opening:
+- **Oct 11:** at least 40 paid subscribers, and at least 30% of trials from outside your own
+  network.
+- **The pivot rule:** under 25 subscribers and under 5 from outside your network on Oct 11
+  means stop building product. Spend the rest of the season building the graded public record
+  and publishing the weekly posts, and relaunch in August 2027.
+
+Opening this late makes Oct 11 hard to reach, and PLAN says not to move it. Your own test
+subscription doesn't count toward it.
+
+## 9. Decisions waiting on you
+
+- **Start the public record.** Nothing has been recorded or graded yet, because a call is
+  recorded only when a report is mailed to a subscriber, and there are none. Keeping your test
+  subscription from step 4 starts it: it's a real subscription, so its calls are recorded
+  before kickoff and graded every Monday like anyone's, and the weekly posts (`run/posts.py`)
+  finally have graded rows to draft from.
+- **The report changes from the Week-4 review:** confidence bars drawn from 50%, the Regret
+  Score, the first screen, and "last three games" lines for starters. None of them blocks
+  selling.
+- **A postal address** is needed only if you ever email a list (US anti-spam law). Reports to
+  paying subscribers don't need one, and there's no list today.
