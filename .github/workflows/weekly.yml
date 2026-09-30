@@ -189,6 +189,12 @@ jobs:
       - name: Publish this week's sample report
         if: always()
         run: .venv/bin/python -m render.live_sample
+      # The same report, as posts ready to paste (run/drops.py): one file,
+      # overwritten each Tuesday, so the owner reads a single page on a phone.
+      # Drafts only — nothing posts itself.
+      - name: Draft this week's public posts
+        if: always()
+        run: .venv/bin/python -m run.drops
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
@@ -215,7 +221,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/processed/ledger site/join/players.json site/this-week.html
+          git add -A data/processed/ledger site/join/players.json site/this-week.html content/this-week.md
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Weekly run: ledger, send log, player directory"

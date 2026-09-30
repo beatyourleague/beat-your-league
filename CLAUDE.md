@@ -1036,6 +1036,16 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Tuesday's public posts (`run/drops.py` → `content/this-week.md`, Sep 29 2026).** The graded
+record (`run/posts.py`) is the long game and stays thin until October; what exists every Tuesday is
+the live sample's real report. `weekly.yml` drafts up to three posts from it — the closest call with
+its odds, the if/then, the rising roles — into ONE file overwritten each week (committed by the
+persist step, so the owner reads a single page on a phone). Each says "our sample roster", links
+`/this-week.html`, fits 280 characters (a post that can't fit drops a line rather than truncating)
+and is dropped if it contains a grade-C or betting word. Separate from `run/posts.py` on purpose:
+that module's import walk forbids anything subscriber-adjacent, and this reads the sample only.
+Drafts, never posted: automated posting needs paid API access (Phase 5).
+
 **Email-client safety (Sep 29 2026; `tests/test_email_safety.py`).** Every HTML email is held to
 what Outlook (Word's engine), Gmail (strips <style>, clips over ~102 KB — a 30-player report is
 ~50 KB) and Apple Mail all render: tables with role=presentation, inline styles, no
