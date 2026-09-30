@@ -1311,6 +1311,31 @@ def _forward_line() -> str:
             f'built from their own roster — {esc(site)}/join.<br>')
 
 
+def read_line(meta: Mapping[str, Any]) -> str:
+    """A subscriber's first report can be a lot of new words at once ("proj",
+    "touches", "if/then"). The glossary lives on the How it works page; this
+    puts it one tap from the report, for subscribers only — never the samples,
+    where the reader is not yet a subscriber and the page itself explains. Gated
+    on SITE_URL like the forward line: a link with nowhere to go is worse than
+    none."""
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    if not site or not meta.get("solo") or meta.get("historical_demo") \
+            or meta.get("live_demo") or meta.get("trial"):
+        return ""
+    return (f'<b>New to this report?</b> What each part means: '
+            f'<a href="{esc(site)}/how-it-works.html#read">'
+            f'{esc(site)}/how-it-works.html#read</a><br>')
+
+
+def read_lines(meta: Mapping[str, Any]) -> list[str]:
+    """The plain-text twin."""
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    if not site or not meta.get("solo") or meta.get("historical_demo") \
+            or meta.get("live_demo") or meta.get("trial"):
+        return []
+    return ["", f"NEW TO THIS REPORT? What each part means: {site}/how-it-works.html#read"]
+
+
 UPDATE_HEAD = "Roster changed?"
 UPDATE_BODY = ("Update it here by Saturday morning — your final check and your next "
                "report use it. We'll email you a button to confirm:")
@@ -1359,6 +1384,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'{demo_band(meta)}'
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
+        f'{read_line(meta)}'
         f'{update_line(meta)}'
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'

@@ -561,3 +561,19 @@ def test_the_plain_text_half_says_what_the_html_says() -> None:
     assert "The % is the chance your starter outscores" in text
     assert "questionable · see if/then" in text
     assert "IF/THEN FOR GAMEDAY" in text and "Move Chase Brown into FLEX" in text
+
+
+def test_a_subscribers_report_links_the_glossary_and_the_samples_do_not(monkeypatch) -> None:
+    """A first report is a lot of new words at once. Every real report points at
+    the How it works glossary (both halves, once SITE_URL exists); the samples
+    and free reports do not, and with no site there is no dead link."""
+    from render.report import read_line, read_lines
+    monkeypatch.setenv("SITE_URL", "https://example.test")
+    real = {"solo": True}
+    assert "https://example.test/how-it-works.html#read" in read_line(real)
+    assert "how-it-works.html#read" in "\n".join(read_lines(real))
+    for meta in ({"solo": True, "live_demo": True}, {"solo": True, "trial": True},
+                 {"solo": True, "historical_demo": True}, {"solo": False}):
+        assert read_line(meta) == "" and read_lines(meta) == [], meta
+    monkeypatch.delenv("SITE_URL")
+    assert read_line(real) == "" and read_lines(real) == []

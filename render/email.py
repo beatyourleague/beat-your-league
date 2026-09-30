@@ -45,6 +45,8 @@ from render.report import (
     SEEDED_SECTION_LINE,
     update_line,
     update_lines,
+    read_line,
+    read_lines,
     _generated_stamp,
     _pct,
     availability_basis,
@@ -822,6 +824,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     lines += ["", "Projections are analysis, not guarantees — no betting picks, "
                   "no staking advice. Your decisions are yours.",
               source_line(meta),
+              *read_lines(meta),
               *update_lines(meta),
               *_forward_lines(),
               "",
@@ -873,6 +876,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'margin-top:24px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
+        f'{read_line(meta)}'
         f'{update_line(meta)}'
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'

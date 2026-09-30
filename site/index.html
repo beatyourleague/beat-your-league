@@ -353,6 +353,11 @@
   .finance a{color:var(--flag);}
 
   /* why this exists */
+  .leaguepass{padding-top:var(--gap-section);}
+  .lpcard{border:1px solid rgba(246,244,238,.22);border-left:3px solid var(--flag);
+    padding:26px 28px;max-width:760px;background:rgba(246,244,238,.04);}
+  .lpcard h2{margin:6px 0 10px;}
+  .lpcard p{font-size:15.5px;line-height:1.65;color:var(--dusk2);max-width:60ch;margin-bottom:14px;}
   .why{padding-top:var(--gap-section);}
   .whycard{border-left:3px solid var(--flag);padding:6px 0 6px 28px;max-width:760px;}
   .whyquote{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(26px,3.4vw,36px);
@@ -483,6 +488,7 @@
 <nav>
   <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg>Beat Your League</a>
   <div class="navlinks">
+    <a class="hidesm" href="how-it-works.html">How it works</a>
     <a class="hidesm" href="sample-report.html">See a real report</a>
     <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
          a closed checkout reads as bait. JS rewrites it the day checkout opens;
@@ -720,6 +726,17 @@
   <a href="league-pass.html">One payment can cover every team</a>.</p>
 </section>
 
+<section class="leaguepass">
+  <div class="lpcard">
+    <div class="kicker">Run the league?</div>
+    <h2>One payment covers every manager.</h2>
+    <p>Everyone gets their own report, built from their own roster, and nobody's team is
+    shared. It levels the field, it feeds the group chat, and it's often less than one team's
+    entry fee. Any manager can buy it; you don't have to be the commissioner.</p>
+    <p><a class="btn ghost" href="league-pass.html">See the League Pass</a></p>
+  </div>
+</section>
+
 <section class="why">
   <div class="whycard">
     <div class="kicker">Why this exists</div>
@@ -728,7 +745,9 @@
     it at 12:55 on Sunday.</p>
     <p class="whybody">So we built the report we wanted: every close call on your roster
     decided on Tuesday, the odds on each one, and the plan for late news. One email, a
-    few minutes of your week, and Sunday back to being fun. Questions? Write to
+    few minutes of your week, and Sunday back to being fun. We're independent and small,
+    paid only by subscribers: no ads and no selling your data.
+    Questions? Write to
     <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
   </div>
 </section>
@@ -768,6 +787,14 @@
         <div class="a">That button fills your lineup from the app's projections and stops there. It won't tell you how close a call was, why, or what to do if a questionable player sits. Your report decides every close call with the odds on it, gives the reason in a line, sets the if/then for late news, and checks Friday's injury report for you on Saturday.</div>
       </details>
       <details>
+        <summary>Who's behind this?</summary>
+        <div class="a">Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
+      </details>
+      <details>
+        <summary>Can I check how it decides?</summary>
+        <div class="a">Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the <a href="how-it-works.html">How it works</a> page.</div>
+      </details>
+      <details>
         <summary>How long does it take each week?</summary>
         <div class="a">About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it.</div>
       </details>
@@ -805,6 +832,7 @@
   NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
   settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
   Not affiliated with the NFL.<br>
+  <a href="how-it-works.html">How it works</a> ·
   <a href="sample-report.html">See a real report</a> ·
   <a href="league-pass.html">League Pass</a> ·
   <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a> ·
@@ -848,6 +876,10 @@
          "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
         {"@type": "Question", "name": "My league app already has an “optimize lineup” button. Why this?",
          "acceptedAnswer": {"@type": "Answer", "text": "That button fills your lineup from the app's projections and stops there. It won't tell you how close a call was, why, or what to do if a questionable player sits. Your report decides every close call with the odds on it, gives the reason in a line, sets the if/then for late news, and checks Friday's injury report for you on Saturday."}},
+        {"@type": "Question", "name": "Who's behind this?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to hello@beatyourleague.com."}},
+        {"@type": "Question", "name": "Can I check how it decides?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
         {"@type": "Question", "name": "How long does it take each week?",
          "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?",

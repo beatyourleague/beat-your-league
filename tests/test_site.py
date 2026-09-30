@@ -29,6 +29,7 @@ COMPARE = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
 PROJECTIONS = (SITE / "projections.html").read_text(encoding="utf-8")
 NO_CALL = (SITE / "no-call.html").read_text(encoding="utf-8")
 CONFIDENCE = (SITE / "confidence.html").read_text(encoding="utf-8")
+HOW = (SITE / "how-it-works.html").read_text(encoding="utf-8")
 
 
 def prose(page: str) -> str:
@@ -609,7 +610,7 @@ def test_no_selling_page_links_the_grading_pages() -> None:
     but no page that sells links to them, and search engines are told to leave
     them out. A strong record can be promoted back deliberately, later."""
     selling = {
-        "landing": LANDING, "join": JOIN,
+        "landing": LANDING, "join": JOIN, "how it works": HOW,
         "league pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
         "thanks": (SITE / "thanks.html").read_text(encoding="utf-8"),
         "sample": (SITE / "sample-report.html").read_text(encoding="utf-8"),
@@ -662,7 +663,7 @@ def _demo_report_html() -> str:
 
 @pytest.mark.parametrize("name", ["sample report", "first-week sample", "landing",
                                   "join", "compare", "projections", "no-call",
-                                  "confidence", "live report"])
+                                  "confidence", "how it works", "live report"])
 def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
     if name == "live report":
         page = _demo_report_html()
@@ -671,7 +672,8 @@ def test_no_developer_vocabulary_in_buyer_copy(name: str) -> None:
                 "first-week sample": FIRST_WEEK_SAMPLE,
                 "landing": LANDING, "join": JOIN,
                 "compare": COMPARE, "projections": PROJECTIONS,
-                "no-call": NO_CALL, "confidence": CONFIDENCE}[name]
+                "no-call": NO_CALL, "confidence": CONFIDENCE,
+                "how it works": HOW}[name]
     text = prose(markup_only(page))
     for pattern in _DEV_SPEAK:
         assert not re.search(pattern, text, re.I), \
@@ -1643,7 +1645,7 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
     # the frozen ban is on the word, and reword-not-allowlist is the precedent).
     surfaces = {"landing": LANDING, "join": JOIN,
                 "league-pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
-                "compare": COMPARE,
+                "compare": COMPARE, "how it works": HOW,
                 "sample": SAMPLE_REPORT,
                 "sample-first-week": (SITE / "sample-first-week.html").read_text(encoding="utf-8"),
                 "legal": (SITE / "terms.html").read_text(encoding="utf-8")}
@@ -1679,7 +1681,8 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
                                        (LEDGER, "ledger"), (COMPARE, "compare"),
                                        (PROJECTIONS, "projections"),
                                        (NO_CALL, "no-call"), (CONFIDENCE, "confidence"),
-                                       (FIRST_WEEK_SAMPLE, "first-week sample")])
+                                       (FIRST_WEEK_SAMPLE, "first-week sample"),
+                                       (HOW, "how it works")])
 def test_no_betting_language(page: str, name: str) -> None:
     banned = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager)\b"
     assert not re.search(banned, page, re.I), f"betting language crept into {name}"
@@ -2943,3 +2946,21 @@ def test_the_live_sample_says_what_it_is_and_the_cron_keeps_it_fresh() -> None:
     assert "python -m render.live_sample" in weekly
     assert "site/this-week.html" in weekly.split("Persist the record")[1]
     assert 'href="this-week.html"' in LANDING
+
+
+def test_the_how_it_works_page_answers_who_what_and_how_to_check() -> None:
+    """A skeptical buyer's first questions — who is this, what does the number
+    mean, where does it come from, can I check it, what won't it do — each get a
+    plain answer, with no personal detail and no claim about results. It is
+    reachable from the landing nav and footer, carries the home button and the
+    contact address only, and is indexed (unlike the grading pages)."""
+    page = prose(markup_only(HOW))
+    for needed in ("Who's behind it", "Where the numbers come from", "How to check us",
+                   "What it doesn't do", "chance your starter outscores",
+                   "not a lock", "nflverse", "independent and small"):
+        assert needed in page, f"the how-it-works page lost {needed!r}"
+    assert 'name="robots"' not in HOW, "the page that builds trust must be indexable"
+    assert 'href="how-it-works.html"' in LANDING
+    assert LANDING.count('href="how-it-works.html"') >= 2, "nav and footer both link it"
+    for claim in (r"\bwin \d", r"more (?:often|games) than", r"beat(s)? (?:the )?(?:market|vegas|experts)"):
+        assert not re.search(claim, page, re.I), f"how-it-works makes a results claim: {claim}"

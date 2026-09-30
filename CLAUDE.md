@@ -1036,6 +1036,21 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Persona review and the trust pass (Sep 29 2026).** Seven simulated buyers (casual, veteran,
+Sleeper-native, analyst, high-stakes, free-league, commissioner) averaged ~6.9/10; the recurring
+gaps were "who is this?", "can I check it?", "what does the % mean?", and League Pass buried in a
+sentence. Added: `site/how-it-works.html` (indexed, linked from the landing nav + footer and the
+join page): what arrives when, a glossary of every report section (`#read`), where the numbers
+come from (nflverse, plainly), how to check a call, what it doesn't do (draft/trades/pickups),
+who's behind it (independent, small, paid only by subscribers — no names, no personal detail,
+and NO betting words even in denial: the site guard bans "sportsbook"), and the money. The landing
+gained a League Pass section (price-free, links the page that carries the disclosures), "Who's
+behind this?" and "Can I check how it decides?" FAQs (HTML + JSON-LD), and every subscriber's
+report footer links the glossary (`read_line`, SITE_URL-gated, never on samples or free reports).
+Deliberately NOT done: no "misses included"/track-record claims on selling pages (owner rule),
+no testimonials or customer counts (none exist), the grading pages stay unlinked. Revisit linking
+a Results page in October only if the record is strong.
+
 **Tuesday's public posts (`run/drops.py` → `content/this-week.md`, Sep 29 2026).** The graded
 record (`run/posts.py`) is the long game and stays thin until October; what exists every Tuesday is
 the live sample's real report. `weekly.yml` drafts up to three posts from it — the closest call with
