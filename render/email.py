@@ -593,6 +593,17 @@ def _waiver_market(market: Mapping[str, Any] | None) -> str:
     return _sec(0, "The Waiver Market In Your League", "".join(parts))
 
 
+def _rising(rows) -> str:
+    if not rows:
+        return ""
+    from render.report import RISING_HEAD, RISING_INTRO
+    items = "".join(f'<div style="{SMALL}color:{NAVY};padding:3px 0;">'
+                    f'<b>{esc(r["name"])}</b> — '
+                    f'{esc(r["line"].split(": ", 1)[1])}</div>' for r in rows)
+    return _sec(8, RISING_HEAD,
+                f'<p style="{BASE}margin:0 0 6px 0;">{esc(RISING_INTRO)}</p>{items}')
+
+
 def _receipts(receipts: Mapping[str, Any]) -> str:
     record = receipts.get("record")
     if not record:
@@ -780,6 +791,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines += ["", "IF/THEN FOR GAMEDAY"]
         for plan in report["pivots"]:
             lines.append(f"  If {plan['condition']}: {plan['action']}")
+    if report.get("rising"):
+        from render.report import RISING_HEAD, RISING_INTRO
+        lines += ["", RISING_HEAD.upper(), f"  {RISING_INTRO}"]
+        lines += [f"  - {r['line']}" for r in report["rising"]]
     if meta.get("trial"):
         lines += ["", "Projections are analysis, not guarantees — no betting "
                       "picks, no staking advice. Your decisions are yours.",
@@ -1007,6 +1022,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
             _your_lineup(report),
             _regret(report["regret"]),
             _pivots(report["pivots"]),
+            _rising(report.get("rising") or []),
             "" if meta.get("trial") else _receipts(report["receipts"]),
         ]
     return [

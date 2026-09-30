@@ -26,7 +26,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from ingest.nflverse import ATTRIBUTION
 
@@ -1019,6 +1019,21 @@ def section_pivots(plans: list[Mapping[str, Any]]) -> str:
     return _section("If/Then for Gameday", 7, body)
 
 
+RISING_HEAD = "Rising Roles"
+RISING_INTRO = ("Players getting more of the ball lately. Check whether any is "
+                "free in your league.")
+
+
+def section_rising(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Counted usage, reported (RULE U1). Empty means the section is absent —
+    an empty 'rising roles' block would advertise a feature that found nothing."""
+    if not rows:
+        return ""
+    items = "".join(f'<li>{esc(r["line"])}</li>' for r in rows)
+    return _section(RISING_HEAD, 8, f'<p>{esc(RISING_INTRO)}</p>'
+                                     f'<ul class="receipts">{items}</ul>')
+
+
 def section_hype(entries: list[Mapping[str, Any]],
                  market: Mapping[str, Any] | None = None) -> str:
     if not entries:
@@ -1448,6 +1463,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
             section_your_lineup(report),
             section_regret(report["regret"]),
             section_pivots(report["pivots"]),
+            section_rising(report.get("rising") or []),
             section_receipts(report["receipts"]),
             footer(meta),
         ]

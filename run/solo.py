@@ -36,7 +36,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -46,6 +46,7 @@ import requests
 from engine.availability import WeekAvailability
 from engine.history import PlayerIndex, Season
 from engine.projection import ProjectionModel
+from engine.rising import candidates as rising_candidates, for_roster as rising_for
 from engine.roster import PlayerDirectory, load_directory
 from engine.solo_report import build_solo_report
 from engine.subscriber import (RosterSpec, build_season, merge_defenses,
@@ -312,6 +313,9 @@ class WeekData:
     # when the week is outside 4-16 or an input could not be read — the
     # report then falls back to the model without them, and to ITS b.
     context: dict | None = None
+    # engine/rising.py: the week's risers league-wide, built once; each
+    # subscriber's report filters them to players not on their roster.
+    rising: list = field(default_factory=list)
 
 
 def _statuses(directory: PlayerDirectory,
@@ -538,6 +542,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         usage=_nflverse_usage(weekly, week),
         context=_context_inputs(cache_dir, season, week, directory, weekly,
                                 live=live, session=session),
+        rising=rising_candidates(weekly, week),
     )
 
 
@@ -854,6 +859,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                calibrate=calibrator_for(data.week, seeded,
                                                         anchor, contextual),
                                confirmed_fallback=fallback_for(data.week, seeded))
+    report["rising"] = rising_for(data.rising, spec.player_ids,
+                                  last_season_ranks, data.players)
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry
