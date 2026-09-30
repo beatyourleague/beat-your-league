@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving drops monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving drops sitemap monday monday-preview sample \
         og brand billing billing-preview
 
 week:
@@ -82,6 +82,10 @@ proving:
 # This week's public posts, drafted from the live sample report (content/this-week.md).
 drops:
 	$(PY) -m run.drops
+
+# site/sitemap.xml, derived from which pages say noindex (tests fail if it is stale).
+sitemap:
+	$(PY) -m render.sitemap
 
 # Settle last week's published calls against the real box scores and republish
 # the public record. No secrets, no league — grading reads public data only.

@@ -1559,6 +1559,12 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
             + SOCIAL_IMAGE_TAGS
         )
     favicon = FAVICON_LINK + '\n'
+    # The three public samples are indexable pages with one address each; a
+    # subscriber's private archive is neither, so it carries no canonical.
+    if meta.get("anonymized_demo"):
+        page = ("sample-first-week.html" if meta.get("first_week_demo")
+                else "this-week.html" if meta.get("live_demo") else "sample-report.html")
+        favicon += f'<link rel="canonical" href="{SITE_ORIGIN}/{page}">\n'
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'

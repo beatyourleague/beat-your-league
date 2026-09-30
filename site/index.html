@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — your lineup, decided every Tuesday</title>
+<link rel="canonical" href="https://beatyourleague.com/">
 <meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
 <meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
@@ -42,7 +43,11 @@
     -webkit-font-smoothing:antialiased;overflow-x:hidden;}
   .wrap{max-width:1060px;margin:0 auto;padding:0 22px;}
   a{color:inherit;}
-  a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  /* Skip past the nav to the content: invisible until a keyboard user lands on it. */
+  .skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--flag);color:var(--navy);
+    font-weight:800;padding:10px 16px;text-decoration:none;border-radius:4px;}
+  .skip:focus{top:12px;}
 
   /* ------------------------------------------------ nav */
   nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0 0;}
@@ -52,6 +57,8 @@
   .brand svg.mark{width:24px;height:24px;flex:none;}
   .navlinks{display:flex;align-items:center;gap:18px;font-size:14px;color:var(--dusk2);}
   .navlinks a{text-decoration:none;}
+  /* 24px minimum target: the text links were 17px tall. */
+  .navlinks a:not(.btn){padding:7px 4px;}
   .navlinks a:hover{color:var(--paper);}
   .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
@@ -483,6 +490,7 @@
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <div class="wrap">
 
 <nav>
@@ -497,6 +505,7 @@
   </div>
 </nav>
 
+<main id="main">
 <header class="hero">
   <div>
     <div class="kicker">Fantasy football · start/sit</div>
@@ -548,7 +557,7 @@
             <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
               <span class="fbar"><i data-w="60" style="width:60%"></i></span><span class="fpct" data-n="80">80%</span></div>
             <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
-              <span class="fbar"><i data-w="50" style="width:50%"></i></span><span class="fpct" data-n="75">75%</span></div>
+              <span class="fbar"><i data-w="48" style="width:48%"></i></span><span class="fpct" data-n="74">74%</span></div>
             <div class="frow"><span class="fslot">WR</span><span class="fname">Ja'Marr Chase</span>
               <span class="fbar"><i data-w="46" style="width:46%"></i></span><span class="fpct" data-n="73">73%</span></div>
             <div class="frow"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span>
@@ -824,6 +833,8 @@
 </section>
 
 <div class="stickybar" id="stickybar"><a class="btn gold" id="sticky-cta" href="#watch-form">Tell me when it opens</a></div>
+
+</main>
 
 <footer>
   <b style="color:var(--dusk2)">Beat Your League</b> — the weekly scouting report for

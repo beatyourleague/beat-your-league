@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — Page not found</title>
+<meta name="description" content="That page does not exist. Here is where to go instead.">
+<meta property="og:title" content="Beat Your League — Page not found">
+<meta property="og:description" content="That page does not exist. Here is where to go instead.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://beatyourleague.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Beat Your League lineup report: four roster slots, three with a percentage, one marked questionable.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+  header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--flag);}
+  .brand svg.mark{width:22px;height:22px;flex:none;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  a.brand{text-decoration:none;}
+  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
+    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
+  .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
+  /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
+     and cancellation instructions a nervous buyer came here to read. */
+  main a,p a,li a{color:var(--brick);text-decoration:underline;
+    text-underline-offset:2px;text-decoration-thickness:1px;}
+  main a:hover,p a:hover,li a:hover{color:var(--navy);}
+  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
+  main{padding:10px 28px 34px;}
+  .done{display:flex;align-items:center;gap:16px;margin-top:18px;}
+  .done h1{margin-top:0;}
+  .check{width:52px;height:52px;flex:none;}
+  .check circle{fill:none;stroke:var(--flag);stroke-width:3;stroke-dasharray:152;
+    stroke-dashoffset:152;animation:draw .6s ease-out .15s forwards;}
+  .check path{fill:none;stroke:var(--flag);stroke-width:4;stroke-linecap:round;
+    stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;
+    animation:draw .35s ease-out .7s forwards;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+  @media (prefers-reduced-motion: reduce){.check circle,.check path{animation:none;stroke-dashoffset:0;}}
+  .steps{list-style:none;margin:18px 0 6px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .steps li{margin:0;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--flag);
+    padding:12px 14px;font-size:13.5px;line-height:1.5;}
+  .steps li b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;}
+  @media (max-width:600px){.steps{grid-template-columns:1fr;}}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+    margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
+  p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
+  ul{margin-left:20px;}
+  b{color:var(--navy);}
+  .note{background:var(--card);border-left:5px solid var(--flag);padding:12px 14px;margin:14px 0;
+    font-size:14px;line-height:1.6;}
+  footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
+  .cta a{display:inline-block;font-family:'Barlow Condensed';font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;font-size:15px;padding:11px 20px;text-decoration:none;
+    background:var(--flag);color:var(--navy);border:2px solid var(--flag);}
+  .cta a.ghost{background:transparent;color:var(--navy);border-color:var(--navy);}
+  main .cta a:hover{color:var(--navy);}
+</style>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <div class="topbar"><a class="brand" href="/"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="/">← Home</a></div>
+    <h1>That page isn't here.</h1>
+    <p>The link may be old or mistyped. Here's where most people meant to go.</p>
+  </header>
+  <main>
+    <div class="cta">
+      <a href="/">Back to the front page</a>
+      <a class="ghost" href="/how-it-works.html">How it works</a>
+      <a class="ghost" href="/this-week.html">This week's report</a>
+    </div>
+    <p style="margin-top:22px">Something that should be here? Write to <b>hello@beatyourleague.com</b>.</p>
+  </main>
+  <footer><b>Beat Your League</b> — analysis, not picks. Not affiliated with the NFL.</footer>
+</div>
+</body>
+</html>

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — Set Up Your Team</title>
+<link rel="canonical" href="https://beatyourleague.com/join/">
 <meta name="description" content="Paste your roster, pick your scoring, done. Your weekly report starts with the next one that ships.">
 <meta property="og:title" content="Beat Your League — Set Up Your Team">
 <meta property="og:description" content="Paste your roster, pick your scoring, done. Your weekly report starts with the next one that ships.">
@@ -238,6 +239,7 @@
     </div>
   </header>
 
+  <main id="main">
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
     <div class="note">Scoring and league size decide how every player in your
@@ -332,6 +334,7 @@ Baltimore Ravens
       </ol>
     </div>
   </section>
+  </main>
 
   <footer>
     We store the minimum: your email, your scoring settings and your roster. We never
@@ -361,7 +364,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=bfd0d36316"></script>
+<script src="roster.js?v=1e63a087bc"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -448,7 +451,9 @@ const TOKEN_UPDATE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
 // why a report can be forwarded to the league: the request only ever becomes
 // a change after the intake mails a confirmation to the address on the
 // subscription and that inbox presses the button (run/updates.py).
-const UPDATE_MODE = TOKEN_UPDATE || QUERY.has("update");
+// One mode wins, and the UI and the submit handler read the SAME flags: a URL
+// carrying both ?pass and ?update showed the update UI and posted a seat claim.
+const UPDATE_MODE = !SEAT_MODE && (TOKEN_UPDATE || QUERY.has("update"));
 // ?try=1 — the free first report (run/trials.py): this week's report for the
 // roster entered here, one per person per season, no card. Never a purchase.
 const TRY_MODE = QUERY.get("try") === "1" && !UPDATE_MODE && !SEAT_MODE;

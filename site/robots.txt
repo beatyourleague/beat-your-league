@@ -1,5 +1,6 @@
-# Beat Your League — all public pages are crawlable.
-# The sitemap line lands here the day the domain exists; a sitemap requires
-# absolute URLs, and inventing a domain would be worse than omitting it.
+# Beat Your League — all public pages are crawlable except the ones that say
+# noindex themselves (the grading record, thanks and the roster-confirm page).
 User-agent: *
 Allow: /
+
+Sitemap: https://beatyourleague.com/sitemap.xml
