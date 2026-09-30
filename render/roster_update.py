@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
-from render.report import esc
+from render.report import EMAIL_META, esc, preheader_html
 
 SUBJECT = "Confirm your roster change"
 IGNORE = ("Didn't ask for this? Ignore this email — nothing changes unless "
@@ -27,8 +27,9 @@ def confirm_email(url: str, names: Sequence[str]) -> tuple[str, str, str]:
     html = (
         f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'<title>{esc(SUBJECT)}</title></head>'
+        f'{EMAIL_META}<title>{esc(SUBJECT)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
+        f'{preheader_html("Confirm the roster change you asked for. Nothing changes unless you do.")}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:18px 8px;"><table role="presentation" width="560" '

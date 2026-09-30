@@ -32,6 +32,26 @@ from ingest.nflverse import ATTRIBUTION
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# What every HTML email's <head> carries beyond charset/viewport. Apple Mail
+# and Outlook.com invert an email that doesn't say it handles both colour
+# schemes, turning the navy header and gold rules into something nobody
+# designed; these tell them the email is light-only, and stop iOS reflowing it.
+EMAIL_META = (
+    '<meta name="color-scheme" content="light only">\n'
+    '<meta name="supported-color-schemes" content="light only">\n'
+    '<meta name="x-apple-disable-message-reformatting">\n'
+    '<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">\n')
+
+
+def preheader_html(text: str) -> str:
+    """The inbox preview line, padded. Without the filler an inbox continues
+    the preview into whatever comes next in the body ("BEAT YOUR LEAGUE WEEK
+    4…"), which reads as clutter where the promise should be."""
+    return ('<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;'
+            'font-size:1px;line-height:1px;color:#F6F4EE;">'
+            f'{esc(text)}{"&#847;&zwnj;&nbsp;" * 90}</div>\n')
+
+
 # Slot codes are the engine's identifiers ("SUPER_FLEX"); a buyer reads the
 # name their league app uses. Translated once, at every surface's OUTPUT, so
 # the code keeps meaning one thing everywhere it is compared (eligibility, the

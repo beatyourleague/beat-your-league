@@ -26,6 +26,8 @@ import os
 from typing import Any, Mapping
 
 from render.report import (
+    EMAIL_META,
+    preheader_html,
     AS_SET_BODY,
     AS_SET_HEAD,
     BENCH_HEAD,
@@ -90,6 +92,15 @@ def _trial_line() -> str:
             "Tuesday, plus a final check on Saturday when injury news changes "
             f"your lineup:{where}. This is the only email we'll send you unless "
             "you sign up.")
+
+
+def tick_box() -> str:
+    """The checklist's empty box. A table cell rather than a sized <div>:
+    Outlook's Word engine ignores a div's height and draws it a line tall."""
+    return (f'<table role="presentation" width="14" height="14" cellpadding="0" '
+            f'cellspacing="0" border="0" style="border:2px solid {NAVY};'
+            f'background:{CARD};margin-top:2px;"><tr><td width="14" height="14" '
+            f'style="font-size:0;line-height:0;">&nbsp;</td></tr></table>')
 
 
 def _sec(number: int, title: str, body: str) -> str:
@@ -208,8 +219,7 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
         rule = f'border-top:1px solid {LINE};' if i > 1 else ""
         rows.append(
             f'<tr><td style="padding:10px 12px 10px 0;vertical-align:top;width:18px;'
-            f'{rule}"><div style="width:14px;height:14px;border:2px solid {NAVY};'
-            f'border-radius:3px;background:{CARD};margin-top:2px;"></div></td>'
+            f'{rule}">{tick_box()}</td>'
             f'<td style="{BASE}padding:10px 0;{rule}">'
             f'<b>{esc(item["action"])}</b><br>'
             + (f'<span style="{SMALL}color:{NAVY};">{esc(item["detail"])}</span><br>'
@@ -1066,10 +1076,9 @@ def render_email(report: Mapping[str, Any]) -> str:
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'<title>{title}</title>\n</head>\n'
+        f'{EMAIL_META}<title>{title}</title>\n</head>\n'
         f'<body style="margin:0;padding:0;background:{PAPER};">\n'
-        f'<div style="display:none;max-height:0;overflow:hidden;">'
-        f'{esc(preheader)}</div>\n'
+        f'{preheader_html(preheader)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:18px 8px;">'

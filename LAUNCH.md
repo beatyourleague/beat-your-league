@@ -144,6 +144,10 @@ green. Nobody else's money moves until you've watched your own go all the way th
      week kicks off", and the cancel link opens your Stripe billing page.
    - **Your first file:** this week's report, because you bought before kickoff. Open it on
      your phone and on a computer.
+   - **Open it in the clients we can't test from here:** Gmail (phone and web, with your
+     phone in dark mode), Apple Mail and Outlook if you have them. Look for a header that's
+     lost its navy, tick boxes that vanished, a preview line that reads as clutter, or a
+     message ending in "View entire message". Tell me what you see and I'll fix it.
 4. **Tell me both arrived.** I turn on `CHECKOUT_CAN_COMPLETE`, which retires the "leave your
    email" box and tells visitors their first file lands today. It's live on the next push.
 5. **Next Tuesday,** confirm the new week's file arrives by about 8:30am ET and the

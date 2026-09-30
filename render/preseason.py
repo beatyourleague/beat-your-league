@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from engine.preseason import NO_RECORD
-from render.report import (BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAVICON_LINK,
+from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAVICON_LINK,
                            MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE,
                            SECTION_MARK, TEMPLATE_PATH, cancel_destination, esc,
                            extract_design, mark_svg, number_sections)
@@ -395,8 +395,9 @@ def email_html(report: Mapping[str, Any]) -> str:
     scoring = {"ppr": "Full PPR", "half_ppr": "Half PPR",
                "standard": "Standard"}.get(meta.get("scoring"), meta.get("scoring"))
     return (
-        f'<!DOCTYPE html><html><head><meta charset="utf-8">'
-        f'<title>{esc(title)}</title></head>'
+        f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'{EMAIL_META}<title>{esc(title)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center">'

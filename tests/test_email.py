@@ -397,7 +397,8 @@ def test_the_preheader_is_true_of_the_report_it_previews() -> None:
     promises this product does not keep. Caught by a test asserting no report
     anywhere says "None"."""
     solo = render_email(_solo_report())
-    preview = solo.split('max-height:0;overflow:hidden;">')[1].split("</div>")[0]
+    preview = solo.split('mso-hide:all;')[1].split(">", 1)[1].split("</div>")[0]
+    preview = preview.split("&#847;")[0]           # the padding is filler, not promise
     assert "None" not in preview
     for absent in ("fragile", "rival", "opponent"):
         assert absent not in preview.lower(), \

@@ -1036,6 +1036,17 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Email-client safety (Sep 29 2026; `tests/test_email_safety.py`).** Every HTML email is held to
+what Outlook (Word's engine), Gmail (strips <style>, clips over ~102 KB — a 30-player report is
+~50 KB) and Apple Mail all render: tables with role=presentation, inline styles, no
+style/media/flex/grid/var()/position/url()/img/svg, absolute https links, `lang`, a `<title>`.
+Added: `EMAIL_META` (light-only colour scheme, stops Outlook.com/Apple Mail inverting the navy
+header; no reflow/auto-link) and `preheader_html` (padded, mso-hide, so the inbox preview isn't
+continued into the header) on every email head; the checklist box is a sized TABLE (`tick_box`)
+because Word ignores a div's height; the welcome email is now a full centred document instead of a
+bare div. Not testable without the clients: Gmail's forced dark-mode colour rewriting — send
+yourself one report through Gmail/Outlook/Apple Mail before launch (LAUNCH.md).
+
 **Roster paste battery (Sep 29 2026).** Pastes from Yahoo, CBS, NFL.com, Sleeper, ESPN and a
 generic copy (tests/test_intake.py `PASTES`) found the parsers' worst failure so far — and it
 looked like success: the two-line layout (Yahoo "Buf - QB", Sleeper "QB - BUF") silently ADDED a

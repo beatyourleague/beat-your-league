@@ -16,9 +16,9 @@ from typing import Any, Mapping
 
 from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP, WATCH,
                                 Change)
-from render.email import (BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
+from render.email import (tick_box, BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
                           NAVY, PAPER, SLATE, SMALL, TURF, TURF_TINT, _sec)
-from render.report import (CANCEL_BODY, CANCEL_HEAD, NFLVERSE_LINE,
+from render.report import (EMAIL_META, preheader_html, CANCEL_BODY, CANCEL_HEAD, NFLVERSE_LINE,
                            NO_BETTING_LINE, cancel_destination, esc)
 
 ACT = (SWAP, NO_FILL, BACK)
@@ -68,9 +68,7 @@ def _items(items: list[Change], tint: str, rule_colour: str, box: bool) -> str:
     for i, item in enumerate(items):
         rule = f"border-top:1px solid {LINE};" if i else ""
         tick = (f'<td style="padding:10px 12px 10px 0;vertical-align:top;'
-                f'width:18px;{rule}"><div style="width:14px;height:14px;'
-                f'border:2px solid {NAVY};border-radius:3px;background:{CARD};'
-                f'margin-top:2px;"></div></td>' if box else "")
+                f'width:18px;{rule}">{tick_box()}</td>' if box else "")
         rows.append(
             f'<tr>{tick}<td style="{BASE}padding:10px 0;{rule}">'
             f'<b>{esc(item.action)}</b><br>'
@@ -125,10 +123,9 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'<title>Beat Your League — Week {week} Final Check</title>\n</head>\n'
+        f'{EMAIL_META}<title>Beat Your League — Week {week} Final Check</title>\n</head>\n'
         f'<body style="margin:0;padding:0;background:{PAPER};">\n'
-        f'<div style="display:none;max-height:0;overflow:hidden;">'
-        f'{esc(PREHEADER)}</div>\n'
+        f'{preheader_html(PREHEADER)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:18px 8px;">'

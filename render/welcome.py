@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 
-from render.report import CANCEL_HEAD, cancel_destination, esc
+from render.report import CANCEL_HEAD, EMAIL_META, cancel_destination, esc
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
@@ -129,7 +129,14 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                    "Tuesday.")
 
     html = (
-        f'<div style="{_BODY}max-width:560px;margin:0 auto;padding:8px 4px;">'
+        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'{EMAIL_META}<title>Welcome to Beat Your League</title></head>'
+        f'<body style="margin:0;padding:0;"><table role="presentation" width="100%" '
+        f'cellpadding="0" cellspacing="0" border="0"><tr><td align="center" '
+        f'style="padding:8px 8px;"><table role="presentation" width="560" '
+        f'cellpadding="0" cellspacing="0" border="0" style="max-width:560px;'
+        f'width:100%;"><tr><td style="{_BODY}text-align:left;">'
         f'<p style="{_HEAD}margin-top:0;">You&#x27;re in.</p>'
         f'<p style="{_BODY}margin:0 0 10px;">You bought {esc(bought)}. '
         f'{esc(what_next)}</p>'
@@ -140,7 +147,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'<p style="{_BODY}margin:0 0 8px;">{cancel_line} {esc(UNSUB_LINE)}</p>'
         f'<p style="{_BODY}margin:14px 0 0;color:#5A6B80;font-size:13px;">'
         f'{esc(roster_line)}</p>'
-        f'</div>'
+        f'</td></tr></table></td></tr></table></body></html>\n'
     )
     text = "\n".join([
         "YOU'RE IN.",
