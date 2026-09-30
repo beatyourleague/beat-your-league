@@ -22,6 +22,13 @@ on:
     - cron: "0 16 * * 6"
   workflow_dispatch: {}
 
+# One run at a time: two runs reading the same committed send log can mail the
+# same message twice (the 14:00 UTC daily run fires from BOTH its crons at
+# once; found by review, Sep 29 2026).
+concurrency:
+  group: saturday-final-check
+  cancel-in-progress: false
+
 permissions:
   contents: write   # persist sent.jsonl — it is what stops a second send
   issues: write

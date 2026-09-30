@@ -123,3 +123,22 @@ already reads.
 ## 8. Corrections
 
 (none)
+
+**Note 1 (Sep 29 2026, after the run — a data-vocabulary bug, not a change of
+method).** An adversarial review found that `engine/context.py` compared the
+schedule's team codes with the stat rows' without translating the three
+relocated franchises (schedule: OAK until 2019, SD until 2016, STL until 2015;
+stat rows: LV, LAC, LA). On 2014–2019 every player on those teams read as "on
+bye" all season and the market lookup missed the team, so **the run in this
+document's first results was fitted (§3.2) on flawed 2014–2019 inputs.** 2020–
+2024, the held-out seasons, have no such mismatch and were unaffected. The
+same review found that the harness's `team_in_week` could read a stat row from
+a week AFTER the one being projected (which the product never has). Both are
+fixed in code, with no change to §2's definitions, and **the run is repeated
+under the same frozen §3–§5 rules** (report regenerated; the first results are
+recorded in the git history at 3f224ae..c2b86e9). Not fixed here, and recorded
+so it is not rediscovered as new: `ingest.nflverse.bye_teams` has the same code
+mismatch in 2014–2019, so the SHIPPED baseline's own bye gate was blind for
+relocated franchises in those fit seasons, and the earlier recalibrations
+(`RECALIBRATION_B`, `ANCHOR_B`) were fitted through it. Changing that would
+alter every earlier frozen run and needs its own preregistered refit.

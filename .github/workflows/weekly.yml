@@ -52,6 +52,13 @@ on:
     - cron: "0 16 * * 2"
   workflow_dispatch: {}
 
+# One run at a time: two runs reading the same committed send log can mail the
+# same message twice (the 14:00 UTC daily run fires from BOTH its crons at
+# once; found by review, Sep 29 2026).
+concurrency:
+  group: weekly-report
+  cancel-in-progress: false
+
 permissions:
   contents: write   # commit the record (ledger, send log, player directory) back
   issues: write     # raise an issue when a run fails, so it is never silent

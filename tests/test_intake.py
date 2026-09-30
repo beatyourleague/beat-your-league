@@ -422,3 +422,94 @@ def test_an_initial_that_fits_two_players_is_a_choice_not_a_guess() -> None:
             f"console.log(JSON.stringify(m.player ? 'resolved' : "
             f"m.candidates.length ? 'ambiguous' : 'unknown'))")
         assert got == kind, f"browser {typed}"
+
+
+# --------------------------------------------------------------------- #
+# reviewer-found inputs (adversarial review, Sep 29 2026)
+# --------------------------------------------------------------------- #
+
+# (typed, expected). "UNRESOLVED" is ONE row reported back to the person; []
+# is a line that is not a roster entry. Every case runs through both languages.
+REVIEW_CASES = [
+    # A desktop copy is tab-separated: the player beats the team and opponent
+    # cells. The longest cell used to win, so the OPPONENT became a phantom
+    # defense and Josh Allen vanished.
+    ("Josh Allen\tQB\tBUF\tvs. Miami Dolphins Sun 1:00 PM", ["Josh Allen"]),
+    ("Justin Jefferson\tMinnesota Vikings\tWR", ["Justin Jefferson"]),
+    ("Denver Broncos\tDEF\tvs. KC", ["Denver Broncos"]),
+    # A lone team code beside an opponent, bye, status or projection is NOT a
+    # roster entry; a bare code or a code with DEF still is a defense.
+    ("vs. MIA", []), ("@ NYG", []), ("vs MIA Sun 1:00 PM", []),
+    ("Buf - Bye 9", []), ("BUF (Bye 7)", []), ("Buf - Q", []), ("BUF OUT", []),
+    ("KC", ["Kansas City Chiefs"]), ("KC D/ST", ["Kansas City Chiefs"]),
+    ("Den - DEF", ["Denver Broncos"]),
+    # After a comma only a FULL team name or a code is an annotation. A bare
+    # nickname is a second roster entry and must not be swallowed.
+    ("Josh Allen, Buffalo Bills", ["Josh Allen"]), ("Josh Allen, BUF", ["Josh Allen"]),
+    ("Josh Allen, Ravens", ["UNRESOLVED"]),
+    # A team code that leads a NAME.
+    ("KC Concepcion WR CLE", ["KC Concepcion"]),
+    # Blank means no LETTER survives; letters of any script are reported back.
+    ("🏈", []), ("•", []), ("Патрик", ["UNRESOLVED"]),
+    # Whitespace the two languages disagree about.
+    ("Josh Allen\x85Q", ["Josh Allen"]), ("Josh Allen\x1cQ", ["Josh Allen"]),
+    ("Josh Allen QB BUF", ["Josh Allen"]),
+]
+# Decoration words glued to accented letters: the two languages must AGREE.
+AGREE_ONLY = ["Josh Allen éNA", "Allenéout", "ÉPM", "Josh Allen Ñ", "Zoë Kravitz"]
+
+
+def _both(text):
+    directory = _python_directory()
+    py = [m.player.name if m.resolved else "UNRESOLVED"
+          for m in directory.resolve_all(text.split("\n"))]
+    js = run_js(
+        f"const fs = require('fs');\n"
+        f"const d = R.buildDirectory(JSON.parse(fs.readFileSync({str(INDEX)!r},'utf8')));\n"
+        f"console.log(JSON.stringify(R.resolveAll(d, {json.dumps(text)})"
+        f".map(m => m.player ? m.player.name : 'UNRESOLVED')))")
+    return py, js
+
+
+@pytest.mark.parametrize("typed,expected", REVIEW_CASES)
+def test_every_reviewer_found_input_resolves_the_same_in_both_languages(typed, expected) -> None:
+    if not INDEX.is_file():
+        pytest.skip("players.json not built — run `make index`")
+    py, js = _both(typed)
+    assert py == expected, f"python: {typed!r} -> {py}"
+    assert js == expected, f"browser: {typed!r} -> {js}"
+
+
+@pytest.mark.parametrize("typed", AGREE_ONLY)
+def test_the_two_parsers_agree_on_accented_and_glued_decoration(typed) -> None:
+    if not INDEX.is_file():
+        pytest.skip("players.json not built — run `make index`")
+    py, js = _both(typed)
+    assert py == js, f"{typed!r}: python {py} vs browser {js}"
+
+
+def test_no_directory_player_is_mangled_by_the_decoration_stripping() -> None:
+    """Every plain full name in the shipped directory must still resolve to
+    that player in BOTH languages (a new stripped word — OUT, NA, PM, SUN — must
+    never eat part of a real name). Names that resolve to a DIFFERENT player or
+    to a choice are reported, since two players may legitimately share one."""
+    if not INDEX.is_file():
+        pytest.skip("players.json not built — run `make index`")
+    directory = _python_directory()
+    payload = json.loads(INDEX.read_text(encoding="utf-8"))
+    in_python = {p.name for p in directory.players}
+    # The shipped players.json and the freshly built Python directory are two
+    # snapshots (a signing between them is not a parser difference).
+    names = [row[0] for row in payload["players"] if row[0] in in_python]
+    got = run_js(
+        f"const fs = require('fs');\n"
+        f"const d = R.buildDirectory(JSON.parse(fs.readFileSync({str(INDEX)!r},'utf8')));\n"
+        f"console.log(JSON.stringify({json.dumps(names)}.map(n => {{\n"
+        f"  const m = R.resolveLine(d, n); return m.player ? m.player.name : null; }})))")
+    py = [(m.player.name if (m := directory.resolve(n)).resolved else None) for n in names]
+    both_wrong = [n for n, a, b in zip(names, py, got) if a != n and b != n]
+    disagree = [(n, a, b) for n, a, b in zip(names, py, got) if a != b]
+    assert not disagree, f"python and browser disagree on real names: {disagree[:5]}"
+    # Only a name shared with another player (or a defense alias) may fail to
+    # resolve to itself, and then both languages say so.
+    assert len(both_wrong) <= 12, f"stripping mangles real names: {both_wrong}"

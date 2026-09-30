@@ -145,10 +145,17 @@ class PlayerDirectory:
         # "Los Angeles", which are genuinely ambiguous between two live teams
         # and must come back as a choice.
         self._defense_alias: dict[str, list[Player]] = {}
+        # What may follow a comma as a team ANNOTATION on a player's line: a
+        # full team name or a code. A bare nickname ("Josh Allen, Ravens") is a
+        # second roster entry and must not be swallowed.
+        self._team_annotation_keys: set[str] = set()
         for player in players:
             if player.is_defense and player.team:
                 for alias in _defense_aliases(player):
                     self._defense_alias.setdefault(alias, []).append(player)
+                self._team_annotation_keys |= {
+                    normalize(player.name), normalize(player.team),
+                    *(normalize(a) for a, t in TEAM_ALIASES.items() if t == player.team)}
 
     def __len__(self) -> int:
         return len(self.players)
@@ -156,10 +163,14 @@ class PlayerDirectory:
     def resolve(self, typed: str) -> Match:
         """One typed line -> a Match. Never guesses (RULE R3).
 
-        Three shapes beyond a plain name, each a lookup that must come back
-        unique: "Last, First" (CBS), "Name, Team Name" (a comma then a full
-        team name) and "J. Mixon" (initial + surname). The plain reading always
-        goes first, so nothing that resolved before resolves differently."""
+        Shapes beyond a plain name, each a lookup that must come back unique:
+        "Last, First" (CBS), "Name, Team Name" (a comma then a FULL team name or
+        code — a bare nickname after a comma is a second roster entry, not an
+        annotation), a leading team code that is really part of a name ("KC
+        Concepcion"), NFL.com's leading "K Jake Bates", and "J. Mixon" (initial
+        + surname). The plain reading always goes first, so nothing that
+        resolved before resolves differently."""
+        typed = _tidy(typed)
         first = self._resolve_plain(typed)
         if first.resolved or first.candidates:
             return first
@@ -168,13 +179,18 @@ class PlayerDirectory:
             a = _strip_decoration(left, self._teams)
             b = _strip_decoration(right, self._teams)
             if a and b:
-                if normalize(b) in self._defense_alias:
-                    retry = self._resolve_plain(a)         # "Chase Brown, Cincinnati Bengals"
+                if normalize(b) in self._team_annotation_keys:
+                    retry = self._resolve_plain(left)      # "Chase Brown, Cincinnati Bengals"
                     if retry.resolved:
                         return Match(typed=typed, player=retry.player)
                 found = self._by_name.get(normalize(f"{b} {a}"), [])
                 if len(found) == 1:                        # "Kittle, George"
                     return Match(typed=typed, player=found[0])
+        # A team code that leads a NAME ("KC Concepcion WR CLE") is stripped as
+        # decoration by the plain reading; keep the lead and try once more.
+        retry = self._resolve_plain(typed, keep_lead=True)
+        if retry.resolved:
+            return retry
         cleaned = _strip_decoration(typed, self._teams)
         # NFL.com leads a kicker's row with the position: "K Jake Bates". A
         # bare leading K followed by TWO more words is a tag; "K Walker" (one
@@ -193,33 +209,58 @@ class PlayerDirectory:
                 return Match(typed=typed, player=None, candidates=tuple(found))
         return first
 
-    def _resolve_plain(self, typed: str) -> Match:
-        cleaned = _strip_decoration(typed, self._teams)
-        if not cleaned:
-            return Match(typed=typed, player=None)
+    def _resolve_plain(self, typed: str, keep_lead: bool = False) -> Match:
+        cleaned = _strip_decoration(typed, self._teams, keep_lead=keep_lead)
         key = normalize(cleaned)
         if not key:
             return Match(typed=typed, player=None)
-        defenses = self._defense_alias.get(key, [])
-        if len(defenses) == 1:
-            return Match(typed=typed, player=defenses[0])
-        if defenses:
-            return Match(typed=typed, player=None, candidates=tuple(defenses))
-        found = self._by_name.get(key, [])
+        # Defense aliases and display names are ONE pool, like the browser's
+        # index: an alias that collides with a player's name comes back as a
+        # choice on both sides, never a silent pick of the defense.
+        pool: dict[str, Player] = {}
+        for candidate in self._defense_alias.get(key, []) + self._by_name.get(key, []):
+            pool.setdefault(candidate.player_id, candidate)
+        found = list(pool.values())
         if len(found) == 1:
             return Match(typed=typed, player=found[0])
         return Match(typed=typed, player=None, candidates=tuple(found))
 
+    def _resolve_row(self, line: str) -> Match | None:
+        """One pasted row -> a Match, or None for a blank row.
+
+        A desktop copy of a roster table arrives tab-separated, and the name is
+        one cell among several ("Josh Allen QB BUF vs. Miami Dolphins ..."). The
+        longest cell used to win, which made an OPPONENT cell into a phantom
+        defense and silently dropped the player. Every cell is resolved; a
+        player beats a defense (the defense cell is the player's team or
+        opponent), and the longest of the resolved cells breaks a tie."""
+        cells = [c for c in (part.strip() for part in line.split("\t")) if c]
+        if len(cells) <= 1:
+            text = cells[0] if cells else line.strip()
+            if _is_blank(_strip_decoration(text, self._teams)):
+                return None
+            return self.resolve(text)
+        results = [(cell, self.resolve(cell)) for cell in cells
+                   if not _is_blank(_strip_decoration(cell, self._teams))]
+        if not results:
+            return None
+        resolved = [(c, m) for c, m in results if m.resolved]
+        players = [(c, m) for c, m in resolved if not m.player.is_defense]
+        pool = players or resolved or results
+        return max(pool, key=lambda pair: len(pair[0]))[1]
+
     def resolve_all(self, lines: list[str]) -> list[Match]:
-        """Every non-blank line, in order. Blank means nothing survives
+        """Every non-blank line, in order. Blank means no LETTER survives
         stripping WITH the team set — a "Buf - QB" line is a player's team and
-        position, not a roster entry. The same player on consecutive lines is
-        one entry: Yahoo prints a defense's name and then its "Den - DEF" row."""
+        position, not a roster entry, and a line of emoji or bullets is not
+        one either; but a line of letters in ANY script is reported back, never
+        dropped. The same player on consecutive lines is one entry: Yahoo prints
+        a defense's name and then its "Den - DEF" row."""
         out: list[Match] = []
         for line in lines:
-            if not _strip_decoration(line, self._teams):
+            match = self._resolve_row(line)
+            if match is None:
                 continue
-            match = self.resolve(line)
             if (match.resolved and out and out[-1].resolved
                     and out[-1].player.player_id == match.player.player_id):
                 continue
@@ -259,18 +300,40 @@ TEAM_ALIASES = {"LAR": "LA", "WSH": "WAS", "JAC": "JAX", "LVR": "LV", "ARZ": "AR
 # "Sun 1:00 PM", "AM"/"PM") and the punctuation those carry.
 _DECORATION = re.compile(
     r"\b(?:W/R/T|R/W/T|W/R|W/T|OP)\b"
-    r"|\b(?:QB|RB|WR|TE|DEF|DST|D/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX"
+    r"|\b(?:QB|RB|WR|TE|FB|DEF|DST|D/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX"
     r"|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b"
     r"|\bVS\.?(?=\s|$)"
     r"|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$"
     r"|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?",
-    re.I)
+    # ASCII: the browser's \b is ASCII-only, and the two parsers must agree
+    # character for character on what a word boundary is.
+    re.I | re.A)
 
-_POSITION_TAG = re.compile(r"\b(?:QB|RB|WR|TE|K)\b", re.I)
-_DEFENSE_TAG = re.compile(r"\b(?:DEF|DST|D/ST)\b", re.I)
+_POSITION_TAG = re.compile(r"\b(?:QB|RB|WR|TE|FB|K)\b", re.I | re.A)
+_DEFENSE_TAG = re.compile(r"\b(?:DEF|DST|D/ST)\b", re.I | re.A)
+# Words and marks that only ever sit on a PLAYER's row or a status line: matchup
+# ("vs.", "@"), kickoff time, bye, an injury tag, a projection number. A lone
+# team code beside any of them is that team as an OPPONENT or a bye note, never
+# a roster entry ("vs. MIA", "BUF (Bye 7)", "Buf - Q").
+_NOISE = re.compile(
+    r"\bVS\b|@|\bBYE\b|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b"
+    r"|\b(?:OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA)\b|\d", re.I | re.A)
+# Every kind of whitespace the browser's \s does not know about is a plain space.
+_WHITESPACE = re.compile(r"[\s\u0085\u001c-\u001f\u00a0\u2028\u2029\ufeff]+")
 
 
-def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
+def _tidy(line: str) -> str:
+    return _WHITESPACE.sub(" ", line or "").strip()
+
+
+def _is_blank(cleaned: str) -> bool:
+    """Nothing to resolve: no LETTER of any script survives. (Emoji and bullets
+    are blank; a line of Cyrillic is not — it is reported back.)"""
+    return not re.search(r"[^\W\d_]", cleaned or "")
+
+
+def _strip_decoration(line: str, teams: set[str] | None = None,
+                      keep_lead: bool = False) -> str:
     """Pull the human name out of one pasted line.
 
     Team abbreviations are stripped LAST, and only if something survives:
@@ -284,15 +347,21 @@ def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
     "Jake Bates K DET" is how a kicker's row pastes out of every league app,
     and refusing it made every pasted kicker an unresolved line. An initial
     only ever leads a name, so position matters more than the letter.
+
+    ``keep_lead`` keeps a team code that LEADS the line: "KC Concepcion WR CLE"
+    is a player named KC, and stripping both codes leaves "Concepcion".
     """
-    text = re.sub(r"\s+", " ", _DECORATION.sub(" ", line or "")).strip()
+    raw = _tidy(line)
+    text = re.sub(r"\s+", " ", _DECORATION.sub(" ", raw)).strip()
     text = re.sub(r"(?<=[^\s.]) K(?= |$)", "", text, flags=re.I).strip()
     # Single-letter injury tags (Q, O, D, P) trail a name or stand alone on a
     # line, and a lone "K" is a kicker slot header; an INITIAL leads a name
     # and carries its dot, so neither is touched.
     tokens = text.split()
-    tokens = [t for i, t in enumerate(tokens)
-              if not (re.fullmatch(r"[QODPqodp]", t) and (i > 0 or len(tokens) == 1))]
+    kept_tokens = [t for i, t in enumerate(tokens)
+                   if not (re.fullmatch(r"[QODPqodp]", t) and (i > 0 or len(tokens) == 1))]
+    removed_tag = len(kept_tokens) != len(tokens)
+    tokens = kept_tokens
     if len(tokens) == 1 and tokens[0].upper() == "K":
         tokens = []
     text = " ".join(tokens)
@@ -300,13 +369,16 @@ def _strip_decoration(line: str, teams: set[str] | None = None) -> str:
         def is_team(word: str) -> bool:
             return word.upper() in teams or word.upper() in TEAM_ALIASES
         # A team code beside a position tag is a PLAYER's team line ("Buf - QB",
-        # "QB - BUF", "Den - WR" — how Yahoo and Sleeper lay a roster out), not
-        # a defense: read as one it silently added a defense the subscriber
-        # does not own. A defense carries DEF/DST or stands alone ("KC").
-        if (len(tokens) == 1 and is_team(tokens[0]) and _POSITION_TAG.search(line or "")
-                and not _DEFENSE_TAG.search(line or "")):
+        # "QB - BUF", "Den - WR" — how Yahoo and Sleeper lay a roster out), and
+        # beside matchup, bye, status or projection text it is an opponent or a
+        # note ("vs. MIA", "BUF (Bye 7)", "Buf - Q") — not a defense. Read as
+        # one it silently added a defense the subscriber does not own. A defense
+        # carries DEF/DST/D/ST or stands alone ("KC").
+        if (len(tokens) == 1 and is_team(tokens[0]) and not _DEFENSE_TAG.search(raw)
+                and (_POSITION_TAG.search(raw) or _NOISE.search(raw) or removed_tag)):
             return ""
-        kept = [w for w in text.split() if not is_team(w)]
+        kept = [w for i, w in enumerate(tokens)
+                if not (is_team(w) and not (keep_lead and i == 0))]
         if kept:
             text = " ".join(kept)
     return text

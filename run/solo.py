@@ -557,7 +557,14 @@ def _context_inputs(cache_dir: Path, season: str, week: int,
     §6: the backtest read closing lines; the product reads these)."""
     if CONTEXT_ARM is None or week not in CONTEXT_WEEKS:
         return None
-    from engine.context import excused_weeks, games_by_week, multiplier_for
+    if "M" in CONTEXT_ARM:
+        # The opponent component needs a per-subscriber scoring rule and was
+        # never shipped: naming it here would silently ship AV under an AMV
+        # label, so refuse rather than mislabel.
+        raise SoloError("CONTEXT_ARM names the matchup component, which the "
+                        "live path does not build")
+    from engine.context import (_teams_playing, excused_weeks, games_by_week,
+                                market_table, multiplier_for)
     try:
         schedule_path = fetch("schedules", "games.csv", cache_dir, live=live,
                               session=session)
@@ -571,6 +578,15 @@ def _context_inputs(cache_dir: Path, season: str, week: int,
         return None
     if not schedule.get(week):
         return None
+    if "V" in CONTEXT_ARM:
+        # The graded arm used the market's expected score. A week with no (or
+        # patchy) lines would silently run arm A alone while publishing AV's
+        # recalibration — a model nobody graded. Fall back to the previous
+        # model, and ITS recalibration, instead.
+        covered = len(market_table(schedule[week]))
+        playing = len(_teams_playing(schedule[week]))
+        if not playing or covered < 0.75 * playing:
+            return None
     ids = {p.player_id for p in directory.players}
     for rows in weekly.values():
         ids.update(rows)
@@ -685,7 +701,9 @@ def calibrator_for(week: int, seeded: bool, anchored: bool = False,
 
 
 # reports/context-method.md §5, decided by its one run (Sep 29 2026,
-# reports/context-backtest.md). Chosen on 2014-2019 from four arms: AV —
+# reports/context-backtest.md; repeated Sep 29 2026 after a team-code fix,
+# method §8 note 1 — b' moved 1.2289 -> 1.2064, nothing else did).
+# Chosen on 2014-2019 from four arms: AV —
 # announced absences forgiven in availability, and the market's expected team
 # score. On held-out 2020-2024 its lineups went 243-226-16 against the shipped
 # ones where they differed (+0.74 points, p = 0.46: a modest gain, not a
@@ -695,7 +713,7 @@ def calibrator_for(week: int, seeded: bool, anchored: bool = False,
 # every setup whenever the context does. The opponent component (M) lost on
 # the fit seasons and is not shipped.
 CONTEXT_ARM: str | None = "AV"
-CONTEXT_B = 1.2289
+CONTEXT_B = 1.2064
 CONTEXT_WEEKS = range(4, 17)
 
 

@@ -111,7 +111,9 @@ def test_every_page_but_the_home_page_has_a_home_button() -> None:
         rel = path.relative_to(SITE).as_posix()
         if rel in ("index.html", "legal.html"):
             continue
-        root = re.escape("../" * rel.count("/") + "index.html")
+        # 404.html is served for a mistyped URL at ANY depth, so its links are
+        # root-absolute; every other page is reached at a known place.
+        root = "/" if rel == "404.html" else re.escape("../" * rel.count("/") + "index.html")
         top = (path.read_text(encoding="utf-8")
                .split("<body", 1)[1].split("<h1", 1)[0])
         assert re.search(rf'<a class="home" href="{root}"[^>]*>← Home</a>', top), \
@@ -2185,7 +2187,7 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     # longer publishes is a number the product did not compute.
     import html as _html
     sample_rows = _html.unescape(flat(SAMPLE_REPORT))
-    for name, pct in (("Amon-Ra St. Brown", "80%"), ("Saquon Barkley", "75%"),
+    for name, pct in (("Amon-Ra St. Brown", "80%"), ("Saquon Barkley", "74%"),
                       ("Ja'Marr Chase", "73%")):
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"

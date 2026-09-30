@@ -22,6 +22,11 @@
  *   FORM_API_KEY  = <random>                (secret; the intake's read key)
  * Then FORM_ENDPOINT = the Worker URL, in both the page and the GitHub secret.
  *
+ * Limits worth knowing (Cloudflare free tier): 1,000 KV writes a day, so a
+ * determined stranger can exhaust the day's writes and make seats, updates and
+ * the waitlist refuse until tomorrow — nothing is lost that was already stored,
+ * and the intake (which only READS) is unaffected.
+ *
  * Contract (matches run/intake.py fetch_seats + run/updates.py):
  *   POST JSON  {kind:"seat",     email, covered_by, ref}
  *   POST JSON  {kind:"update",   email, ref, replaces, token}
@@ -98,10 +103,20 @@ export default {
       try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
       const row = sanitize(body);
       if (!row) return json({ error: "bad row" }, 400);
-      // The key orders rows by arrival; the intake re-stamps on first sight
-      // anyway, so nothing downstream trusts this clock.
+      // The key orders rows by arrival. `received_at` is stamped HERE, by this
+      // Worker's own clock — sanitize() drops any field the caller invents, so a
+      // request cannot choose its own timestamp — and it is what a roster-update
+      // confirmation code binds to (run/updates.py).
       const key = `${Date.now().toString().padStart(14, "0")}-${crypto.randomUUID()}`;
-      await env.ROWS.put(key, JSON.stringify({ ...row, received_at: new Date().toISOString() }));
+      const stored = { ...row, received_at: new Date().toISOString() };
+      // The whole row lives in the key's METADATA (1 KB), not in a value that
+      // must be fetched one row at a time: reading N rows was N+1 KV calls per
+      // hourly intake, which a free-tier Worker may refuse past ~50 — and a
+      // failed read makes run/intake.py refuse to write the registry at all.
+      // One list() call now returns everything. The longest legitimate row (a
+      // seat: two addresses and a ref) is ~750 bytes.
+      if (JSON.stringify(stored).length > 1000) return json({ error: "too large" }, 413);
+      await env.ROWS.put(key, "1", { metadata: stored });
       return json({ ok: true });
     }
 
@@ -115,8 +130,7 @@ export default {
       do {
         const page = await env.ROWS.list({ cursor });
         for (const entry of page.keys) {
-          const value = await env.ROWS.get(entry.name);
-          if (value) rows.push(JSON.parse(value));
+          if (entry.metadata) rows.push(entry.metadata);
         }
         cursor = page.list_complete ? undefined : page.cursor;
       } while (cursor);

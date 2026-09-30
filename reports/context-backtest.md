@@ -1,11 +1,11 @@
 # Who he plays, and whether he was really missing — results
 
-Generated 2026-09-29 23:51 UTC by `engine/context_backtest.py` at commit 3f224ae, under the
+Generated 2026-09-30 01:37 UTC by `engine/context_backtest.py` at commit 82868bd, under the
 preregistration in `reports/context-method.md` (frozen before this ran).
 
 ## Decision
 
-**Arm AV ships** in weeks 4–16 with b′ = 1.2289, in the headline setup and every setup marked below.
+**Arm AV ships** in weeks 4–16 with b′ = 1.2064, in the headline setup and every setup marked below.
 
 ## 1. The choice, made on 2014–2019 only (method §3.1)
 
@@ -13,10 +13,10 @@ Each arm's lineups against the shipped lineups, where they differed.
 
 | Arm | W–L–T | Margin |
 |---|---|---|
-| A | 195–191–17 | +4 |
-| AM | 296–321–13 | -25 |
-| AV | 279–258–16 | +21 |
-| AMV | 331–328–9 | +3 |
+| A | 179–154–15 | +25 |
+| AM | 288–316–10 | -28 |
+| AV | 274–241–15 | +33 |
+| AMV | 332–320–9 | +12 |
 
 Chosen: **AV**.
 
@@ -24,8 +24,8 @@ Chosen: **AV**.
 
 - **C1 (lineups):** won **243**, lost **226**, tied 16 of the
   485 differing team-weeks (of 780). Exact two-sided
-  sign test p = 0.4601. Mean points per differing team-week +0.74
-  (95% interval -0.35 to +1.89, clustered by season-week).
+  sign test p = 0.4601. Mean points per differing team-week +0.75
+  (95% interval -0.34 to +1.91, clustered by season-week).
   **Held.**
 - **C2 (the number):** corrected grade **B**.
   **Held.**
@@ -33,7 +33,7 @@ Chosen: **AV**.
 | Model | Calls | Hit rate | ECE | Judgeable bands | Calibrated | Resolution | Grade |
 |---|---|---|---|---|---|---|---|
 | Shipped (anchor), b = 1.467 | 4750 | 65.3% | 1.2% | 7 | 7 | 35.8 | **B** |
-| Arm AV, b′ = 1.2289 | 4712 | 66.1% | 1.9% | 7 | 7 | 35.9 | **B** |
+| Arm AV, b′ = 1.2064 | 4713 | 66.0% | 1.9% | 7 | 7 | 36.1 | **B** |
 
 Star benchings (reported): shipped benched 870 available stars, who
 outscored the weakest starter they could have replaced 297 times; the arm
@@ -47,17 +47,17 @@ benched 831 (268 outscored).
 | AM | 243–253–18 | 0.6862 |
 | AMV | 290–294–13 | 0.9012 |
 
-## 4. The setups (method §4d), with b′ = 1.2289
+## 4. The setups (method §4d), with b′ = 1.2064
 
 | Arm | Setting | Lineups W–L–T | Sign test p | Calls | ECE | Grade | Decision |
 |---|---|---|---|---|---|---|---|
-| S1 | scoring: half_ppr | 228–220–14 | 0.741 | 4720 | 1.9% | **B** | ships |
-| S2 | scoring: standard | 220–202–19 | 0.408 | 4718 | 2.3% | **B** | ships |
-| L10 | league size: 10 | 240–225–11 | 0.516 | 4120 | 2.0% | **B** | ships |
-| L14 | league size: 14 | 277–263–17 | 0.576 | 5365 | 1.3% | **B** | ships |
-| L8 | league size: 8 | 194–164–4 | 0.125 | 3381 | 2.6% | **B** | ships |
-| TSF | lineup shape: superflex | 293–270–22 | 0.354 | 5591 | 2.7% | **B** | ships |
-| TNKD | lineup shape: no K or DEF | 212–196–15 | 0.458 | 4256 | 1.8% | **B** | ships |
+| S1 | scoring: half_ppr | 228–220–14 | 0.741 | 4723 | 2.0% | **B** | ships |
+| S2 | scoring: standard | 220–202–19 | 0.408 | 4718 | 2.4% | **B** | ships |
+| L10 | league size: 10 | 240–225–11 | 0.516 | 4121 | 1.7% | **B** | ships |
+| L14 | league size: 14 | 276–263–17 | 0.605 | 5365 | 1.6% | **B** | ships |
+| L8 | league size: 8 | 194–164–4 | 0.125 | 3381 | 2.8% | **B** | ships |
+| TSF | lineup shape: superflex | 292–271–22 | 0.399 | 5591 | 3.0% | **B** | ships |
+| TNKD | lineup shape: no K or DEF | 212–196–15 | 0.458 | 4257 | 1.8% | **B** | ships |
 
 ## What this is not
 

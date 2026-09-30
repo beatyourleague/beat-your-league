@@ -47,30 +47,50 @@ const TEAM_ALIASES = {LAR: "LA", WSH: "WAS", JAC: "JAX", LVR: "LV", ARZ: "ARI",
 // multi-position slot labels, injury and status tags, matchup and kickoff
 // text. Mirrors engine/roster.py _DECORATION exactly.
 const DECORATION =
-  /\b(?:W\/R\/T|R\/W\/T|W\/R|W\/T|OP)\b|\b(?:QB|RB|WR|TE|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b|\bVS\.?(?=\s|$)|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?/gi;
-const POSITION_TAG = /\b(?:QB|RB|WR|TE|K)\b/i;
+  /\b(?:W\/R\/T|R\/W\/T|W\/R|W\/T|OP)\b|\b(?:QB|RB|WR|TE|FB|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b|\bVS\.?(?=\s|$)|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?/gi;
+const POSITION_TAG = /\b(?:QB|RB|WR|TE|FB|K)\b/i;
 const DEFENSE_TAG = /\b(?:DEF|DST|D\/ST)\b/i;
+// A lone team code beside any of these is an OPPONENT or a note, never a
+// roster entry ("vs. MIA", "BUF (Bye 7)", "Buf - Q"). Mirrors engine/roster.py.
+const NOISE = /\bVS\b|@|\bBYE\b|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b|\b(?:OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA)\b|\d/i;
+// Whitespace the two languages disagree about is a plain space in both.
+const WHITESPACE = /[\s\u0085\u001c-\u001f\u00a0\u2028\u2029\ufeff]+/g;
 
-function stripDecoration(line, teams) {
-  let text = (line || "").replace(DECORATION, " ").replace(/\s+/g, " ").trim();
+function tidy(line) {
+  return (line || "").replace(WHITESPACE, " ").trim();
+}
+
+// Nothing to resolve: no LETTER of any script survives (emoji and bullets are
+// blank; a line of Cyrillic is not — it is reported back).
+function isBlank(cleaned) {
+  return !/\p{L}/u.test(cleaned || "");
+}
+
+function stripDecoration(line, teams, keepLead) {
+  const raw = tidy(line);
+  let text = raw.replace(DECORATION, " ").replace(/\s+/g, " ").trim();
   // A NON-LEADING bare K is the kicker position tag ("Jake Bates K DET");
   // a leading K is an initial ("K. Walker", "K Walker") and stays.
   text = text.replace(/(?<=[^\s.]) K(?= |$)/gi, "").trim();
   // Single-letter injury tags (Q, O, D, P) trail a name or stand alone; a lone
   // "K" is a kicker slot header. An initial leads a name and carries its dot.
-  let tokens = text ? text.split(" ") : [];
-  tokens = tokens.filter((t, i) => !(/^[QODPqodp]$/.test(t) && (i > 0 || tokens.length === 1)));
+  const before = text ? text.split(" ") : [];
+  let tokens = before.filter((t, i) => !(/^[QODPqodp]$/.test(t) && (i > 0 || before.length === 1)));
+  const removedTag = tokens.length !== before.length;
   if (tokens.length === 1 && tokens[0].toUpperCase() === "K") tokens = [];
   text = tokens.join(" ");
   if (teams && teams.size) {
     const isTeam = (w) => teams.has(w.toUpperCase()) || (w.toUpperCase() in TEAM_ALIASES);
-    // A team code beside a position tag is a PLAYER's team line ("Buf - QB",
-    // "QB - BUF"), not a defense; a defense carries DEF/DST or stands alone.
-    if (tokens.length === 1 && isTeam(tokens[0]) && POSITION_TAG.test(line || "") &&
-        !DEFENSE_TAG.test(line || "")) {
+    // A team code beside a position tag, or beside matchup / bye / status /
+    // projection text, is a PLAYER's line or a note, not a defense; a defense
+    // carries DEF/DST/D/ST or stands alone.
+    if (tokens.length === 1 && isTeam(tokens[0]) && !DEFENSE_TAG.test(raw) &&
+        (POSITION_TAG.test(raw) || NOISE.test(raw) || removedTag)) {
       return "";
     }
-    const kept = text.split(" ").filter((w) => !isTeam(w));
+    // keepLead keeps a team code that LEADS the line: "KC Concepcion WR CLE" is
+    // a player named KC, and stripping both codes leaves "Concepcion".
+    const kept = text.split(" ").filter((w, i) => !(isTeam(w) && !(keepLead && i === 0)));
     // Only if something survives: "KC" alone IS the Chiefs defense, while the
     // same token inside "Mahomes QB KC" is noise.
     if (kept.length) text = kept.join(" ");
@@ -119,6 +139,17 @@ function buildDirectory(payload) {
     if (!byInitial.has(key)) byInitial.set(key, []);
     byInitial.get(key).push(byId.get(id));
   }
+  // What may follow a comma as a team ANNOTATION on a player's line: a full team
+  // name or a code. A bare nickname ("Josh Allen, Ravens") is a second roster
+  // entry and must not be swallowed. Mirrors PlayerDirectory._team_annotation_keys.
+  const teamKeys = new Set();
+  for (const [name, id, position, team] of payload.players) {
+    if (position !== "DEF" || !team) continue;
+    teamKeys.add(normalize(name));
+    teamKeys.add(normalize(team));
+    Object.keys(TEAM_ALIASES).filter((a) => TEAM_ALIASES[a] === team)
+      .forEach((a) => teamKeys.add(normalize(a)));
+  }
   const confusable = new Map();
   for (const [a, b] of payload.confusable || []) {
     if (!confusable.has(a)) confusable.set(a, []);
@@ -126,18 +157,22 @@ function buildDirectory(payload) {
     confusable.get(a).push(b);
     confusable.get(b).push(a);
   }
-  return { byName, byId, byInitial, teams, confusable, season: payload.season };
+  return { byName, byId, byInitial, teamKeys, teams, confusable, season: payload.season };
 }
 
 // ---------------------------------------------------------------- //
 // resolution — RULE R3: ambiguity is RETURNED, never resolved
 // ---------------------------------------------------------------- //
 
-// "Last, First", "Name, Team Name", "K Jake Bates" and "J. Mixon": lookups that
-// must come back unique, tried only after the plain reading fails, so nothing
-// that resolved before resolves differently. Mirrors PlayerDirectory.resolve.
+// Shapes beyond a plain name — "Last, First", "Name, Team Name" (a FULL team
+// name or code after the comma; a bare nickname is a second roster entry), a
+// leading team code that is really part of a name ("KC Concepcion"), NFL.com's
+// leading "K Jake Bates" and "J. Mixon" — are lookups that must come back
+// unique, tried only after the plain reading fails, so nothing that resolved
+// before resolves differently. Mirrors PlayerDirectory.resolve.
 function resolveLine(directory, typed) {
-  const first = resolvePlain(directory, typed);
+  typed = tidy(typed);
+  const first = resolvePlain(directory, typed, false);
   if (first.player || first.candidates.length) return first;
   const ok = (player) => ({ typed, player, candidates: [], twins: [] });
   if (typed.includes(",")) {
@@ -145,16 +180,18 @@ function resolveLine(directory, typed) {
     const a = stripDecoration(typed.slice(0, at), directory.teams);
     const b = stripDecoration(typed.slice(at + 1), directory.teams);
     if (a && b) {
-      const nb = normalize(b);
-      const asDefense = (directory.byName.get(nb) || []).filter((p) => p.position === "DEF");
-      if (asDefense.length) {
-        const retry = resolvePlain(directory, a);
+      if (directory.teamKeys.has(normalize(b))) {
+        const retry = resolvePlain(directory, typed.slice(0, at), false);
         if (retry.player) return ok(retry.player);
       }
       const found = directory.byName.get(normalize(b + " " + a)) || [];
       if (found.length === 1) return ok(found[0]);
     }
   }
+  // A team code that leads a NAME is stripped as decoration by the plain
+  // reading; keep the lead and try once more.
+  const lead = resolvePlain(directory, typed, true);
+  if (lead.player) return lead;
   const cleaned = stripDecoration(typed, directory.teams);
   const tag = /^K\s+(\S+\s+\S.*)$/.exec(cleaned);
   if (tag) {
@@ -170,11 +207,15 @@ function resolveLine(directory, typed) {
   return first;
 }
 
-function resolvePlain(directory, typed) {
-  const cleaned = stripDecoration(typed, directory.teams);
+function resolvePlain(directory, typed, keepLead) {
+  const cleaned = stripDecoration(typed, directory.teams, keepLead);
+  // Blank means no LETTER survives; letters of any script are reported back.
+  if (isBlank(cleaned)) return { typed, player: null, candidates: [], reason: "blank" };
   const key = normalize(cleaned);
-  if (!key) return { typed, player: null, candidates: [], reason: "blank" };
-  const found = directory.byName.get(key) || [];
+  if (!key) return { typed, player: null, candidates: [], reason: "unknown" };
+  // Defense aliases and display names are ONE pool (byName holds both), so an
+  // alias colliding with a player's name comes back as a choice, never a pick.
+  const found = [...new Map((directory.byName.get(key) || []).map((p) => [p.id, p])).values()];
   if (found.length === 1) {
     const player = found[0];
     return {
@@ -195,19 +236,34 @@ function resolvePlain(directory, typed) {
   return { typed, player: null, candidates: [], reason: "unknown" };
 }
 
+// One pasted row -> a match. A desktop copy of a roster table arrives
+// tab-separated, and the name is one cell among several ("Josh Allen QB BUF
+// vs. Miami Dolphins ..."). The longest cell used to win, which turned an
+// OPPONENT cell into a phantom defense and silently dropped the player. Every
+// cell is resolved; a player beats a defense (the defense cell is the player's
+// team or opponent), and the longest resolved cell breaks a tie. Mirrors
+// PlayerDirectory._resolve_row.
+function resolveRow(directory, line) {
+  const cells = line.split("\t").map((c) => c.trim()).filter(Boolean);
+  if (cells.length <= 1) return resolveLine(directory, cells[0] || line.trim());
+  const results = cells.map((cell) => [cell, resolveLine(directory, cell)])
+    .filter(([, match]) => match.reason !== "blank");
+  if (!results.length) return { typed: line, player: null, candidates: [], reason: "blank" };
+  const resolved = results.filter(([, m]) => m.player);
+  const players = resolved.filter(([, m]) => m.player.position !== "DEF");
+  const pool = players.length ? players : resolved.length ? resolved : results;
+  return pool.reduce((best, cur) => (cur[0].length > best[0].length ? cur : best))[1];
+}
+
 function resolveAll(directory, text) {
-  // Split on newlines AND tabs: a desktop copy of a roster table arrives
-  // tab-separated, and treating the whole row as one name fails every time.
   return (text || "")
     .split(/[\r\n]+/)
-    .map((line) => line.split("\t").map((c) => c.trim()).filter(Boolean).sort(
-      (a, b) => b.length - a.length)[0] || line)
     .map((line) => line.trim())
-    // Blank lines are dropped; anything with characters is REPORTED BACK, even
-    // if unreadable. Pasting fifteen and silently getting thirteen is the same
+    // Blank lines are dropped; anything with LETTERS is REPORTED BACK, even if
+    // unreadable. Pasting fifteen and silently getting thirteen is the same
     // failure as guessing, wearing a different hat.
     .filter((line) => line.length > 0)
-    .map((line) => resolveLine(directory, line))
+    .map((line) => resolveRow(directory, line))
     .filter((match) => match.reason !== "blank")
     // The same player on consecutive lines is one entry: Yahoo prints a
     // defense's name and then its "Den - DEF" row.

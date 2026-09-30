@@ -759,13 +759,32 @@ def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
 # confirm-by-email: the update route that is safe to forward (Sep 29 2026)
 # --------------------------------------------------------------------- #
 
-from run.updates import confirm_code  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from run.updates import confirm_code, same_roster  # noqa: E402
+
+NOW = datetime.now(timezone.utc)
 
 
-def _request(**over) -> dict:
-    row = {"kind": "update_request", "email": "fan@example.com", "ref": NEW_REF}
+def _ts(minutes_ago: int = 5) -> str:
+    """The Worker's own stamp (`new Date().toISOString()`): a request's identity."""
+    return (NOW - timedelta(minutes=minutes_ago)).isoformat(timespec="milliseconds") \
+        .replace("+00:00", "Z")
+
+
+def _request(ts=None, **over) -> dict:
+    row = {"kind": "update_request", "email": "fan@example.com", "ref": NEW_REF,
+           "received_at": ts or _ts()}
     row.update(over)
     return row
+
+
+def _code(ref=NEW_REF, ts=None, email="fan@example.com", replaces=None):
+    return confirm_code(email, replaces or slug_of(REF), ref, SECRET, ts or _ts())
+
+
+def _confirm(code: str) -> dict:
+    return {"kind": "confirm", "code": code}
 
 
 def _confirm_env(monkeypatch, tmp_path):
@@ -775,6 +794,10 @@ def _confirm_env(monkeypatch, tmp_path):
     return _capture_sends(monkeypatch, tmp_path)
 
 
+def _confirms(sends):
+    return [m for m in sends if m.key.startswith("confirm-")]
+
+
 def test_a_request_changes_nothing_until_the_inbox_confirms_it(
         tmp_path, stripe, directory, monkeypatch, capsys) -> None:
     """The public link in a report may be forwarded, so a request by itself
@@ -782,25 +805,128 @@ def test_a_request_changes_nothing_until_the_inbox_confirms_it(
     and the roster moves when that code comes back."""
     sends = _confirm_env(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
-    _updates(monkeypatch, _request())
+    ts = _ts()
+    _updates(monkeypatch, _request(ts))
     assert _run(tmp_path) == 0, capsys.readouterr().err
     [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
     assert row.ref == REF, "a request changed a roster without confirmation"
-    [mail] = [m for m in sends if m.key.startswith("confirm-")]
-    assert mail.to == "fan@example.com"
-    code = confirm_code("fan@example.com", slug_of(REF), NEW_REF, SECRET)
+    [mail] = _confirms(sends)
+    assert mail.to == "fan@example.com" and "@" not in mail.key
+    code = _code(ts=ts)
     assert f"https://x.test/join/confirm.html?c={code}" in mail.html
-    assert "@" not in mail.key and "nothing changes" in mail.text.lower()
+    assert "nothing changes" in mail.text.lower()
 
-    # The same request next hour: no second email.
+    # The same request every hour after: still ONE email — and the key carries
+    # no date, so a request row that never expires cannot mail the victim of a
+    # forged request every day forever.
     assert _run(tmp_path) == 0
-    assert len([m for m in sends if m.key.startswith("confirm-")]) == 1
+    assert len(_confirms(sends)) == 1
+    import run.updates as updates_module
+    real_datetime = updates_module.datetime
+    monkeypatch.setattr(updates_module, "datetime", type("D", (datetime,), {
+        "now": classmethod(lambda cls, tz=None: NOW + timedelta(days=1))}))
+    assert _run(tmp_path) == 0
+    assert len(_confirms(sends)) == 1, "a new day mailed the same request again"
+    monkeypatch.setattr(updates_module, "datetime", real_datetime)
 
     # The inbox presses the button.
-    _updates(monkeypatch, _request(), {"kind": "confirm", "code": code})
+    _updates(monkeypatch, _request(ts), _confirm(code))
     assert _run(tmp_path) == 0
     [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
     assert row.ref == NEW_REF and row.origin == slug_of(REF)
+
+
+def test_a_strangers_request_never_kills_the_code_already_in_the_inbox(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """Reproduced by review: the newest request per subscription overwrote the
+    pending one, so a junk request from anyone made the emailed code stop
+    confirming. Every live request keeps its own code."""
+    _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    real_ts = _ts(30)
+    junk = encode_roster("season", "standard", list(SLOTS), PLAYERS[::-1])
+    _updates(monkeypatch, _request(real_ts), _request(_ts(5), ref=junk),
+             _confirm(_code(ts=real_ts)))
+    assert _run(tmp_path) == 0
+    [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+    assert row.ref == NEW_REF, "the real subscriber's confirmed request was overwritten"
+
+
+def test_a_code_is_single_use_and_an_older_email_cannot_reapply_an_old_roster(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """Once any request for a subscription is applied, that request and every
+    OLDER one is dead: a stale or forwarded email must not re-apply a roster
+    the subscriber has since moved on from."""
+    _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    old_ts, new_ts = _ts(300), _ts(200)
+    third = encode_roster("season", "standard", list(SLOTS), PLAYERS)
+    # B applied first...
+    _updates(monkeypatch, _request(old_ts), _confirm(_code(ts=old_ts)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == NEW_REF
+    # ...then C requested and confirmed...
+    _updates(monkeypatch, _request(old_ts), _confirm(_code(ts=old_ts)),
+             _request(new_ts, ref=third), _confirm(_code(third, new_ts)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == third
+    # ...and B's confirm row (which the Worker keeps forever) does not undo it.
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == third
+
+
+def test_reverting_to_an_earlier_roster_works_and_asking_to_keep_what_you_have_cancels(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """Reproduced by review: requests were judged against the roster BEFORE
+    updates applied, so 'go back to A' after A -> B was dropped as 'nothing
+    would change' and the roster silently stayed B; and re-requesting the
+    current roster could not withdraw an unconfirmed request for another."""
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    b_ts = _ts(500)
+    _updates(monkeypatch, _request(b_ts), _confirm(_code(ts=b_ts)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == NEW_REF
+    # Now ask for A again: it must be a real request, mailed, and confirmable.
+    a_ts = _ts(100)
+    _updates(monkeypatch, _request(b_ts), _confirm(_code(ts=b_ts)), _request(a_ts, ref=REF))
+    assert _run(tmp_path) == 0
+    assert any(m.to == "fan@example.com" for m in _confirms(sends)[-1:])
+    _updates(monkeypatch, _request(b_ts), _confirm(_code(ts=b_ts)), _request(a_ts, ref=REF),
+             _confirm(_code(REF, a_ts)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == REF, \
+        "A -> B -> A silently stayed B"
+    # An unconfirmed request for C, then 'keep what I have' (the current roster):
+    # the C email is withdrawn, so pressing its button changes nothing.
+    c = encode_roster("season", "standard", list(SLOTS), PLAYERS)
+    c_ts, keep_ts = _ts(60), _ts(30)
+    _updates(monkeypatch, _request(b_ts), _confirm(_code(ts=b_ts)), _request(a_ts, ref=REF),
+             _confirm(_code(REF, a_ts)), _request(c_ts, ref=c), _request(keep_ts, ref=REF),
+             _confirm(_code(c, c_ts)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == REF
+
+
+def test_a_code_expires_and_is_bound_to_the_moment_of_its_request(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    stale = (NOW - timedelta(days=8)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    _updates(monkeypatch, _request(stale), _confirm(_code(ts=stale)))
+    assert _run(tmp_path) == 0
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == REF, "an 8-day-old code applied"
+    ts = _ts()
+    base = _code(ts=ts)
+    assert base != _code(ts=_ts(6)), "the code does not bind the request's timestamp"
+
+
+def test_a_request_for_the_same_roster_by_content_is_not_a_change() -> None:
+    """A monthly subscriber's re-submission builds a ref with a different plan
+    prefix; it is still the same roster, so no pointless confirmation."""
+    monthly = encode_roster("monthly", "ppr", list(SLOTS), PLAYERS)
+    assert monthly != REF and same_roster(monthly, REF)
+    assert not same_roster(NEW_REF, REF) and not same_roster("garbage", REF)
 
 
 def test_a_request_for_somebody_elses_address_reaches_only_them(
@@ -809,45 +935,51 @@ def test_a_request_for_somebody_elses_address_reaches_only_them(
     confirmation they can ignore, and a made-up code confirms nothing."""
     sends = _confirm_env(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
-    _updates(monkeypatch, _request(), {"kind": "confirm", "code": "0" * 24})
+    _updates(monkeypatch, _request(), _confirm("0" * 24))
     assert _run(tmp_path) == 0
     [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
     assert row.ref == REF
-    assert {m.to for m in sends if m.key.startswith("confirm-")} == {"fan@example.com"}
+    assert {m.to for m in _confirms(sends)} == {"fan@example.com"}
 
 
-def test_a_request_naming_a_stranger_sends_nothing_at_all(
+def test_a_request_naming_a_stranger_or_carrying_no_worker_stamp_sends_nothing(
         tmp_path, stripe, directory, monkeypatch) -> None:
     """Answering an address with no subscription would tell anyone who
-    subscribes. It is dropped in silence."""
+    subscribes; a row with no Worker timestamp has no identity to bind a code to."""
     sends = _confirm_env(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
-    _updates(monkeypatch, _request(email="nobody@example.com"))
+    unstamped = _request()
+    del unstamped["received_at"]
+    _updates(monkeypatch, _request(email="nobody@example.com"), unstamped)
     assert _run(tmp_path) == 0
-    assert not [m for m in sends if m.key.startswith("confirm-")]
+    assert not _confirms(sends)
 
 
 def test_confirmations_are_capped_per_address_per_day(
         tmp_path, stripe, directory, monkeypatch) -> None:
     """The request page is public: a loop of requests can put a few emails in
-    an inbox, never a flood."""
+    an inbox, never a flood — and the cap never invalidates an earlier code."""
     from run.updates import CONFIRMS_PER_DAY
     sends = _confirm_env(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
+    rows = []
     for i in range(CONFIRMS_PER_DAY + 3):
         roster = PLAYERS[i:] + PLAYERS[:i]
-        _updates(monkeypatch, _request(ref=encode_roster(
+        rows.append(_request(_ts(50 - i), ref=encode_roster(
             "season", "half_ppr", list(SLOTS), roster)))
-        assert _run(tmp_path) == 0
-    assert len([m for m in sends if m.key.startswith("confirm-")]) == CONFIRMS_PER_DAY
+    _updates(monkeypatch, *rows)
+    assert _run(tmp_path) == 0
+    assert len(_confirms(sends)) == CONFIRMS_PER_DAY
 
 
 def test_a_code_is_bound_to_the_address_the_subscription_and_the_roster() -> None:
-    base = confirm_code("fan@example.com", "abc123def0", NEW_REF, SECRET)
+    ts = _ts()
+    base = confirm_code("fan@example.com", "abc123def0", NEW_REF, SECRET, ts)
     assert len(base) == 24
-    assert confirm_code("Fan@Example.com ", "abc123def0", NEW_REF, SECRET) == base
-    for changed in (("x@example.com", "abc123def0", NEW_REF, SECRET),
-                    ("fan@example.com", "ffffffffff", NEW_REF, SECRET),
-                    ("fan@example.com", "abc123def0", REF, SECRET),
-                    ("fan@example.com", "abc123def0", NEW_REF, "other")):
+    assert confirm_code("Fan@Example.com ", "abc123def0", NEW_REF, SECRET, ts) == base
+    for changed in (("x@example.com", "abc123def0", NEW_REF, SECRET, ts),
+                    ("fan@example.com", "ffffffffff", NEW_REF, SECRET, ts),
+                    ("fan@example.com", "abc123def0", REF, SECRET, ts),
+                    ("fan@example.com", "abc123def0", NEW_REF, "other", ts),
+                    ("fan@example.com", "abc123def0", NEW_REF, SECRET, _ts(9))):
         assert confirm_code(*changed) != base

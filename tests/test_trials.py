@@ -36,19 +36,85 @@ def test_one_per_person_never_a_subscriber_newest_request_wins() -> None:
     assert "@" not in trials.trial_key("2026", "fan@example.com")
 
 
-def test_a_flood_is_bounded() -> None:
+def test_one_person_is_one_address_however_it_is_spelled() -> None:
+    """`+tag` aliases and Gmail dots are the same mailbox: without this a free
+    report could be had again and again, and a subscriber could get one."""
+    c = trials.canonical_email
+    assert c(" Fan+promo@Example.com ") == "fan@example.com"
+    assert c("f.a.n@gmail.com") == c("fan+x@googlemail.com") == "fan@gmail.com"
+    assert c("f.a.n@example.com") == "f.a.n@example.com"      # dots only matter to Gmail
+    sent = {trials.trial_key("2026", "real@fan.com")}
+    rows = [_row("real+2@fan.com"), _row("sub+x@fan.com"), _row("new@fan.com")]
+    assert trials.pending(rows, {"sub@fan.com"}, sent, "2026") == [("new@fan.com", REF)]
+    assert trials.trial_key("2026", "R.E.A.L+1@gmail.com") == trials.trial_key("2026", "real@gmail.com")
+
+
+def test_the_cap_counts_built_reports_so_junk_cannot_starve_real_requests() -> None:
     rows = [_row(f"u{i}@example.com") for i in range(trials.MAX_PER_RUN + 20)]
-    assert len(trials.pending(rows, set(), set(), "2026")) == trials.MAX_PER_RUN
+    assert len(trials.pending(rows, set(), set(), "2026")) == trials.MAX_PER_RUN + 20, \
+        "pending() must not slice: the cap belongs after the build, on built reports"
+    import inspect
+    body = inspect.getsource(trials.main)
+    assert "len(messages) >= MAX_PER_RUN" in body and "not in known" in body
 
 
-def test_the_week_is_underway_from_the_main_sunday_slate() -> None:
+def test_the_week_is_underway_from_its_first_kickoff() -> None:
+    """A Thursday-night game means a Friday request is about a week already
+    underway; the cutoff used to be Sunday 1 PM and mailed it anyway."""
     from run.solo import CACHE_DIR
-    start = trials.main_slate_start(CACHE_DIR, "2024", 10)
+    start = trials.week_underway_from(CACHE_DIR, "2024", 10)
     if start is None:                                   # pragma: no cover
         import pytest
         pytest.skip("schedule not cached")
-    # 2024 week 10: Thursday night was Nov 7; the main slate Sunday Nov 10, 1 PM ET.
-    assert start == datetime(2024, 11, 10, 18, tzinfo=timezone.utc)
+    # 2024 week 10: Thursday Nov 7, 8:15 PM ET.
+    assert start == datetime(2024, 11, 8, 1, 15, tzinfo=timezone.utc)
+
+
+def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscription_headers(
+        tmp_path, monkeypatch, capsys) -> None:
+    """The public form makes a bad row remotely triggerable, and the hourly cron
+    files an issue for every failed run: an unbuildable roster is skipped and
+    named, exit 0. And a free report has no list to leave, so no
+    List-Unsubscribe header pointing at the subscription-cancel page."""
+    import run.delivery as delivery
+    import run.intake as intake
+    from test_solo_run import SEASON, WEEK, _cache
+    from test_tuesday import REF as FIXTURE_REF, ROSTER_IDS
+    from test_tuesday import SLOTS as FIXTURE_SLOTS
+    ghost = encode_roster("season", "ppr", list(FIXTURE_SLOTS),
+                          list(ROSTER_IDS[:-1]) + ["00-0099999"])
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setattr(intake, "fetch_seats", lambda *a, **k: [
+        _row("bad@example.com", ref=ghost),
+        _row("good@example.com", ref=FIXTURE_REF)])
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    sent = []
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            sent.append(message)
+            return "id"
+    monkeypatch.setattr(delivery, "build_provider", lambda *a, **k: Fake())
+    monkeypatch.setattr(trials, "current_season", lambda *a, **k: SEASON, raising=False)
+    monkeypatch.setattr("run.solo.current_season", lambda *a, **k: SEASON)
+    monkeypatch.setattr("run.solo.current_week", lambda *a, **k: WEEK)
+    monkeypatch.setattr(trials, "week_underway_from",
+                        lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
+    reg = tmp_path / "rosters.json"
+    reg.write_text("[]")
+    code = trials.main(["--registry", str(reg), "--now", "2026-01-01T00:00:00+00:00"])
+    out = capsys.readouterr()
+    assert code == 0, out.err
+    assert "skipped as unbuildable" in out.out
+    assert [m.to for m in sent] == ["good@example.com"], (out.out, out.err)
+    assert all(m.unsubscribe is None for m in sent)
+    # An unreadable registry fails CLOSED: nobody may be treated as a non-subscriber.
+    reg.write_text("{not json")
+    assert trials.main(["--registry", str(reg)]) == 1
 
 
 def test_the_free_report_says_what_it_is_and_asks_nothing_of_a_non_subscriber() -> None:

@@ -46,6 +46,12 @@ def _lower_first(text: str) -> str:
 @buyer_slots
 def subject_for_check(week: int, changes: list[Change]) -> str:
     moves = [c for c in changes if c.kind in (SWAP, BACK)]
+    holes = [c for c in changes if c.kind == NO_FILL]
+    if moves and holes:
+        # A swap must not hide an unfilled slot: the subscriber reads only the
+        # subject in an inbox.
+        return (f"Week {week}: {len(moves)} change{'s' if len(moves) > 1 else ''} "
+                f"and a hole in your lineup before kickoff")
     if len(moves) == 1:
         return (f"Week {week}: one change before kickoff — "
                 f"{_lower_first(moves[0].action)}")

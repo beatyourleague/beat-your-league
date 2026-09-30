@@ -102,7 +102,7 @@ def _value(info: Mapping[str, Any], basis: str) -> float | None:
 def _number(info: Mapping[str, Any], basis: str) -> str:
     value = _value(info, basis)
     if value is None:
-        return ""
+        return "has no projection yet"
     if basis == "projected":
         return f"projects {value:.1f}"
     return f"averaged {value:.1f} a game last season"
@@ -152,10 +152,13 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
     def best(slot: str) -> str | None:
         candidates = [pid for pid in bench
                       if pid not in used and state(pid).available
-                      and eligible(position(pid), slot) and value(pid) is not None]
-        # Highest first; a questionable player loses a tie to a healthy one,
-        # and the id keeps the answer the same on every run.
-        candidates.sort(key=lambda pid: (-(value(pid) or 0.0),
+                      and eligible(position(pid), slot)]
+        # Highest projection first; a player the model has no number on (a
+        # rookie) sorts LAST but is still an option — dropping him told a
+        # subscriber "nobody on your bench can cover" while a healthy player
+        # sat there. A questionable player loses a tie to a healthy one, and
+        # the id keeps the answer the same on every run.
+        candidates.sort(key=lambda pid: (value(pid) is None, -(value(pid) or 0.0),
                                          state(pid).designation == QUESTIONABLE, pid))
         return candidates[0] if candidates else None
 
@@ -167,14 +170,14 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
         options: list[tuple[float, str, int | None]] = []
         direct = best(slot)
         if direct:
-            options.append((value(direct) or 0.0, direct, None))
+            options.append((-1.0 if value(direct) is None else value(direct), direct, None))
         for j, (other, pid) in enumerate(slots):
-            if (j == index or not pid or other not in FLEX_ELIGIBILITY
+            if (j == index or not pid or pid in dropped or other not in FLEX_ELIGIBILITY
                     or not state(pid).available or not eligible(position(pid), slot)):
                 continue
             via = best(other)
             if via:
-                options.append((value(via) or 0.0, via, j))
+                options.append((-1.0 if value(via) is None else value(via), via, j))
         if not options:
             return None
         options.sort(key=lambda o: (-o[0], o[2] is not None, o[1]))

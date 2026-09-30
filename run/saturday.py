@@ -152,7 +152,11 @@ def load_plan(plans_dir: Path, season: str, week: int,
     path = plan_path(plans_dir, season, week, slug)
     if not path.is_file():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        plan = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None               # damaged: reported as "no plan", never a crash
+    return plan if isinstance(plan, dict) and "players" in plan and "slots" in plan else None
 
 
 def fold_roster_change(plan: Mapping[str, Any], roster: Sequence[str],
@@ -188,8 +192,16 @@ def fold_roster_change(plan: Mapping[str, Any], roster: Sequence[str],
 # what is known now
 # --------------------------------------------------------------------- #
 
-def _fetch(asset: str, name: str, cache_dir: Path) -> Path:
+def _fetch(asset: str, name: str, cache_dir: Path, *, fresh: bool = False) -> Path:
+    """``fresh`` bypasses the six-hour cache. nflverse rebuilds the injury and
+    player releases around 14:00 UTC, and the hourly intake cron keeps a copy
+    warm — one fetched at 10:00-13:59 UTC Saturday would be reused at the 16:00
+    run WITHOUT Friday's final report, missing real Out designations and
+    reading a still-listed player as cleared. Deleting the cached copy first
+    means a failed download REFUSES the run instead of falling back to it."""
     from ingest.nflverse import NflverseError, fetch
+    if fresh:
+        (Path(cache_dir) / name).unlink(missing_ok=True)
     try:
         return fetch(asset, name, cache_dir, live=True)
     except NflverseError as exc:
@@ -233,7 +245,7 @@ def designations(cache_dir: Path, season: str, week: int
     reading "listed doubtful" wants the real word."""
     found: dict[str, tuple[str, str]] = {}
     filed: set[str] = set()
-    path = _fetch("injuries", f"injuries_{season}.csv", cache_dir)
+    path = _fetch("injuries", f"injuries_{season}.csv", cache_dir, fresh=True)
     with path.open(encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             if str(row.get("season") or "") != str(season):
@@ -259,7 +271,7 @@ def designations(cache_dir: Path, season: str, week: int
 def roster_statuses(cache_dir: Path) -> dict[str, tuple[str, str | None]]:
     """gsis -> (roster status, latest team) from the daily players release."""
     out: dict[str, tuple[str, str | None]] = {}
-    path = _fetch("players", "players.csv", cache_dir)
+    path = _fetch("players", "players.csv", cache_dir, fresh=True)
     with path.open(encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             gsis = (row.get("gsis_id") or "").strip()
@@ -330,6 +342,45 @@ def check_report_is_in(starts: Mapping[str, datetime], filed: set[str],
 # the run
 # --------------------------------------------------------------------- #
 
+
+def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster,
+               data_for_changes):
+    """One subscriber -> ("missing"|"unreadable"|"quiet"|"send", payload)."""
+    plan = load_plan(args.plans_dir, season, week, subscriber.slug)
+    if plan is None:
+        return "missing", None
+    if set(subscriber.player_ids) != set(plan["players"]):
+        # The roster changed since Tuesday. Checking the old plan would tell
+        # somebody to start a player they dropped, so either the change is
+        # folded in or this subscriber is skipped, loudly.
+        try:
+            from run.solo import _prior_form, report_for
+            data = data_for_changes()
+            projections: dict[str, float] = {}
+            report_for(subscriber.spec(), data,
+                       league_size=subscriber.league_size,
+                       projections_out=projections)
+            plan = fold_roster_change(
+                plan, subscriber.player_ids, projections,
+                _prior_form(data.prior, subscriber.spec().rule), data.players)
+        except Exception as exc:  # noqa: BLE001 — one roster, not the run
+            return "unreadable", f"{subscriber.slug} ({exc})"
+    now = {pid: state_for(pid, starts=starts, listed=listed, filed=filed,
+                          roster=roster, at=at)
+           for pid in plan["players"]}
+    changes = final_check(plan, now)
+    if not worth_sending(changes):
+        return "quiet", None
+    return "send", Message(
+        to=subscriber.email,
+        subject=subject_for_check(week, changes),
+        html=render_final_check(plan, changes, at),
+        text=text_for_check(plan, changes, at),
+        # Its own key, distinct from Tuesday's, and once per week.
+        key=f"{season}-w{week:02d}-final-{subscriber.slug}",
+        unsubscribe=cancel_destination()[0] or None)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--week", type=int, help="default: the current NFL week")
@@ -386,43 +437,27 @@ def main(argv: list[str] | None = None) -> int:
             week_data.append(load_week_data(args.cache, season, week))
         return week_data[0]
 
+    from run.delivery import load_sent
+    sent_keys = load_sent()
+    lost: list[str] = []            # Tuesday SENT to them, yet no plan on file
     for subscriber in subscribers:
-        plan = load_plan(args.plans_dir, season, week, subscriber.slug)
-        if plan is None:
+        try:
+            outcome = _check_one(subscriber, args, season, week, at, starts, listed,
+                                 filed, roster, data_for_changes)
+        except Exception as exc:  # noqa: BLE001 — one subscriber, never the run
+            unreadable.append(f"{subscriber.slug} ({type(exc).__name__}: {exc})")
+            continue
+        kind, payload = outcome
+        if kind == "missing":
             missing.append(subscriber.slug)
-            continue
-        if set(subscriber.player_ids) != set(plan["players"]):
-            # The roster changed since Tuesday. Checking the old plan would
-            # tell somebody to start a player they dropped, so either the
-            # change is folded in or this subscriber is skipped, loudly.
-            try:
-                from run.solo import _prior_form, report_for
-                data = data_for_changes()
-                projections: dict[str, float] = {}
-                report_for(subscriber.spec(), data,
-                           league_size=subscriber.league_size,
-                           projections_out=projections)
-                plan = fold_roster_change(
-                    plan, subscriber.player_ids, projections,
-                    _prior_form(data.prior, subscriber.spec().rule), data.players)
-            except Exception as exc:  # noqa: BLE001 — one roster, not the run
-                unreadable.append(f"{subscriber.slug} ({exc})")
-                continue
-        now = {pid: state_for(pid, starts=starts, listed=listed, filed=filed,
-                              roster=roster, at=at)
-               for pid in plan["players"]}
-        changes = final_check(plan, now)
-        if not worth_sending(changes):
+            if f"{season}-w{week:02d}-{subscriber.slug}" in sent_keys:
+                lost.append(subscriber.slug)
+        elif kind == "unreadable":
+            unreadable.append(payload)
+        elif kind == "quiet":
             quiet.append(subscriber.slug)
-            continue
-        messages.append(Message(
-            to=subscriber.email,
-            subject=subject_for_check(week, changes),
-            html=render_final_check(plan, changes, at),
-            text=text_for_check(plan, changes, at),
-            # Its own key, distinct from Tuesday's, and once per week.
-            key=f"{season}-w{week:02d}-final-{subscriber.slug}",
-            unsubscribe=cancel_destination()[0] or None))
+        else:
+            messages.append(payload)
 
     line = "=" * 62
     print(f"\n{line}\nFINAL CHECK — {season} week {week} · as of "
@@ -434,12 +469,15 @@ def main(argv: list[str] | None = None) -> int:
               + ", ".join(missing))
     for note in unreadable:
         print(f"  ROSTER CHANGED, NOT CHECKED: {note}", file=sys.stderr)
-    if subscribers and len(missing) == len(subscribers):
-        # Nobody at all having a plan is not a week in which everybody joined
-        # on Wednesday: it is a lost cache or a Tuesday that never sent.
-        print("NO PLANS FOUND for anybody — the plans cache is missing or "
-              "Tuesday's run did not send. Nothing was checked.", file=sys.stderr)
-        return 1
+    if lost:
+        # Tuesday's send log says this report WAS mailed, so a missing plan is a
+        # lost cache or a plan that failed to save — not somebody who joined on
+        # Wednesday. That subscriber would never hear about Friday's news, and
+        # nothing else would say so. (Nobody having a Tuesday send at all — a
+        # lone late joiner — is a quiet Saturday, not an alarm.)
+        print(f"NO PLAN for {len(lost)} subscriber(s) Tuesday DID mail "
+              f"({', '.join(lost[:5])}) — the plans cache is missing or a plan "
+              f"failed to save. They were not checked.", file=sys.stderr)
 
     if messages:
         try:
@@ -466,7 +504,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    (dry run — drafts in {DRY_OUTBOX})")
         if failures:
             return 1
-    if unreadable:
+    if unreadable or lost:
         return 1
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)

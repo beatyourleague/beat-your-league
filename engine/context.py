@@ -21,6 +21,19 @@ from typing import Any, Callable, Iterable, Mapping
 
 from engine.scoring import ScoringRule, score
 
+# The schedule archive spells relocated franchises with the code they had THAT
+# year (OAK until 2019, SD until 2016, STL until 2015) while the stat rows use
+# today's (LV, LAC, LA). Compared raw, every player on one of those teams read as
+# "on bye" all season in 2014-2019 and the market lookup missed the team (found by
+# the adversarial review, Sep 29 2026: it inflated the fitted recalibration).
+# Everything here speaks the STAT ROW vocabulary.
+SCHEDULE_TEAM_ALIASES = {"OAK": "LV", "SD": "LAC", "STL": "LA"}
+
+
+def team_code(code: str | None) -> str:
+    return SCHEDULE_TEAM_ALIASES.get((code or "").strip(), (code or "").strip())
+
+
 MATCHUP_K = 6.0           # §2 M: games of league average in the shrink
 MARKET_POWER = 0.5        # §2 V: square root
 ADJUSTED = frozenset({"QB", "RB", "WR", "TE", "K"})
@@ -51,7 +64,8 @@ def games_by_week(schedule: Iterable[Mapping[str, str]], season: str
 
 
 def _teams_playing(games: Iterable[Mapping[str, str]]) -> set[str]:
-    return {t for g in games for t in (g.get("home_team"), g.get("away_team")) if t}
+    return {team_code(t) for g in games
+            for t in (g.get("home_team"), g.get("away_team")) if t}
 
 
 def team_in_week(player_id: str, week: int,
@@ -90,6 +104,11 @@ def excused_weeks(players: Iterable[str],
                   ) -> dict[str, frozenset[int]]:
     """§2 A, for weeks 1..through_week-1: byes and out designations."""
     playing = {w: _teams_playing(games) for w, games in schedule_weeks.items()}
+    # Only weeks BEFORE the report week exist for the product; the backtest
+    # passes the whole season, and team_in_week's "first row after" fallback
+    # would then hand a player a team from a future week that the product could
+    # never have (103-140 players a season differed).
+    weekly = {w: rows for w, rows in weekly.items() if w < through_week}
     out: dict[str, frozenset[int]] = {}
     for pid in players:
         skip = set()
@@ -142,7 +161,7 @@ def market_table(games: Iterable[Mapping[str, str]]) -> dict[str, float]:
     implied: dict[str, float] = {}
     for g in games:
         spread, total = _float(g.get("spread_line")), _float(g.get("total_line"))
-        home, away = g.get("home_team"), g.get("away_team")
+        home, away = team_code(g.get("home_team")), team_code(g.get("away_team"))
         if spread is None or total is None or not home or not away:
             continue
         implied[home] = (total + spread) / 2
@@ -162,7 +181,7 @@ def multiplier_for(week: int, weekly: Mapping[int, Mapping[str, Mapping[str, Any
     games = list(week_games)
     opponent: dict[str, str] = {}
     for g in games:
-        home, away = g.get("home_team"), g.get("away_team")
+        home, away = team_code(g.get("home_team")), team_code(g.get("away_team"))
         if home and away:
             opponent[home], opponent[away] = away, home
     allowed, played, league = (matchup_table(weekly, rule, week)

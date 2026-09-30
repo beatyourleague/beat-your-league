@@ -185,13 +185,18 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
             {pid: data.availability.classify(pid).status.value
              for pid in spec.player_ids},
             subscriber.slug)
-    except Exception:  # noqa: BLE001 — the report is built; Saturday can do without
+    except Exception as exc:  # noqa: BLE001 — the report is built; Saturday can do without
         plan = None
+        # Said out loud: a subscriber with no plan never hears about Friday's
+        # news, and nothing else would tell anyone.
+        plan_note = f" · PLAN NOT SAVED ({type(exc).__name__}: {exc})"
+    else:
+        plan_note = ""
 
     published = sum(1 for slot in report["lineup"]
                     if slot.get("confidence") is not None)
     detail = (f"{published}/{len(report['lineup'])} confidences · "
-              f"{len(report['meta'].get('gaps') or [])} gaps" + ledger_note)
+              f"{len(report['meta'].get('gaps') or [])} gaps" + ledger_note + plan_note)
     return RunResult(subscriber, ok=True, detail=detail, html_path=html_path,
                      message=message, plan=plan)
 

@@ -9,6 +9,7 @@ disconnects the public ledger's republish.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -361,3 +362,16 @@ def test_the_report_refuses_a_week_whose_box_scores_are_missing() -> None:
         "the completeness guard exists but the loader never calls it"
     # Week 1 has no prior week and must never trip.
     solo.assert_week_is_complete(solo.CACHE_DIR, "2024", 1, {})
+
+
+def test_every_sending_cron_runs_one_at_a_time() -> None:
+    """The 14:00 UTC daily run fires from BOTH its crons at once, and two runs
+    reading the same committed send log can mail the same welcome or free report
+    twice (found by review, Sep 29 2026). Each sending workflow declares a
+    concurrency group that queues rather than cancels — cancelling a send
+    half-way is how a message goes out unrecorded."""
+    for name, group in (("daily.yml", "daily-intake"), ("weekly.yml", "weekly-report"),
+                        ("saturday.yml", "saturday-final-check")):
+        text = (WORKFLOWS / name).read_text(encoding="utf-8")
+        assert re.search(rf"concurrency:\s*\n\s+group: {group}\s*\n\s+cancel-in-progress: false", text), \
+            f"{name} can run twice at once"

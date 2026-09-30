@@ -89,11 +89,11 @@ def _trial_line() -> str:
     """run/trials.py: the one free report. Says what it is and how to get
     one every week, and promises nothing further lands uninvited."""
     site = os.environ.get("SITE_URL", "").rstrip("/")
-    where = f" {site}/join" if site else ""
-    return ("This one's on us, built from the roster you sent. Get one every "
-            "Tuesday, plus a final check on Saturday when injury news changes "
-            f"your lineup:{where}. This is the only email we'll send you unless "
-            "you sign up.")
+    get_one = ("Get one every Tuesday, plus a final check on Saturday when injury "
+               "news changes your lineup" + (f": {site}/join." if site else "."))
+    return ("This one's on us, built from the roster you sent. " + get_one +
+            " This is the only email we'll send you unless you sign up. Didn't "
+            "ask for it? Ignore it — you won't hear from us again.")
 
 
 def tick_box() -> str:

@@ -1036,6 +1036,49 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Adversarial review of the Sep 29 work — 5 reviewers, ~30 reproduced defects, all fixed (Sep 29 2026).**
+Each reviewer took one area, reproduced before reporting, and edited nothing. What mattered:
+- **Model (`reports/context-method.md` §8 note 1).** The schedule archive says OAK/SD/STL where stat
+  rows say LV/LAC/LA, so in 2014–2019 every player on those teams read as "on bye" all season and the
+  market lookup missed them: **the shipped recalibration was fitted on flawed inputs.** Fixed
+  (`engine.context.team_code`), plus a lookahead in the harness's `team_in_week`, and the run was
+  REPEATED under the same frozen rules: AV still chosen, held-out unchanged (243–226–16, grade B),
+  **CONTEXT_B 1.2289 → 1.2064**; the sample/landing moved by ≤1 point (Barkley 75 → 74). The live path
+  now falls back to the previous model (and ITS b) when the week has no market lines, instead of
+  running arm A alone under AV's b. NOT fixed, recorded: `ingest.nflverse.bye_teams` has the same
+  code mismatch in 2014–2019, so `RECALIBRATION_B` and `ANCHOR_B` were fitted with the bye gate blind
+  for relocated franchises (now only fallbacks; a corrected refit needs its own preregistration).
+  `reports/context-combos-check.md`: the nine combined setups graded on the model they now ship: all B.
+- **Roster updates** (`run/updates.py`): every request keeps its own timestamp-bound code (a stranger's
+  junk request used to kill the code already in the subscriber's inbox), codes are single-use and
+  expire in 7 days, requests are judged against the roster AS IT NOW STANDS and compared by content
+  (so A→B→A works and "keep what I have" withdraws pending requests), one email per request ever
+  (the key had a date, so one forged row mailed the victim daily forever). Residual, stated: a stranger
+  can spend an address's daily allowance of 3, delaying the real request a day. The Worker stores rows
+  in key METADATA so the hourly read is one `list()` call, not N+1 (a failed read makes the intake
+  refuse to write the registry). The legacy token path (`kind:"update"`) is still honoured but no link
+  has ever carried a token.
+- **Saturday check:** a dropped player was used as a swap "mover"; the injury/player files could be a
+  cached copy from BEFORE nflverse's 14:00 UTC rebuild (now always refetched; a failed download refuses);
+  one corrupt plan killed the run (now per-subscriber); a subscriber Tuesday mailed but with no plan is an
+  alarm, a late joiner is not; unprojected rookies still count as cover; a swap no longer hides a hole
+  in the subject.
+- **Free report:** the cutoff is the week's FIRST kickoff (it was Sunday 1 PM, mailing "before this week's
+  first kickoff" about a Thursday game); junk or unbuildable rows are skipped without failing the hourly
+  cron or starving real requests; `+tag`/Gmail-dot aliases can't get a second free report or one for a
+  subscriber; the registry unreadable fails closed; no List-Unsubscribe on a one-off. Accepted risk: no
+  proof the address is the requester's (one email per address per season, capped 50/run).
+- **Paste parsers:** tab-separated rows resolve the PLAYER cell (an opponent cell used to become a phantom
+  defense and silently drop the player); a lone team code beside vs./@/bye/status/number is not a
+  defense; a comma then a bare nickname is a second entry, only a FULL team name or code is an
+  annotation; a leading team code that is part of a name ("KC Concepcion"); lines of letters in any script
+  are reported back, emoji/bullets are blank, in both languages; ASCII word boundaries and one whitespace
+  definition in both. Every reviewer input is a test asserted in Python AND the browser.
+- **Workflows** now declare `concurrency` groups (the 14:00 UTC daily run fires from both its crons).
+- **Site:** `sitemap.xml` (derived from which pages say noindex; `make sitemap`), canonical tags, a 404,
+  `<main>` landmarks, skip link, keyboard focus on FAQ summaries and 24px nav targets. Contrast and load
+  weight were measured and needed no change.
+
 **Persona review and the trust pass (Sep 29 2026).** Seven simulated buyers (casual, veteran,
 Sleeper-native, analyst, high-stakes, free-league, commissioner) averaged ~6.9/10; the recurring
 gaps were "who is this?", "can I check it?", "what does the % mean?", and League Pass buried in a
@@ -1112,7 +1155,7 @@ ran: A (byes and out designations excused from availability), M (opponent points
 position, six-game shrink), V (market implied team score, square-root ratio), four arms, CHOSEN on
 2014–2019 by lineup margin and CONFIRMED on held-out 2020–2024. **AV** was chosen (M lost on the
 fit seasons); held out it went **243–226–16** vs shipped lineups (+0.74 pts, p = 0.46 — modest,
-not proven), hit rate 65.3% → 66.1%, grade B at **b′ = 1.2289**, and every setup arm won more than
+not proven), hit rate 65.3% → 66.1%, grade B at **b′ = 1.2064** (first run 1.2289; see the review note below), and every setup arm won more than
 it lost, so it ships in EVERY setup — with the anchor, since it was measured with it
 (`run/solo.CONTEXT_ARM`, `WeekData.context` built once per week; if an input can't be read the
 report falls back to the previous model and ITS b). Caveat that travels: the backtest read closing

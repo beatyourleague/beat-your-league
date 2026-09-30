@@ -327,10 +327,94 @@ def test_the_run_mails_only_a_lineup_that_has_to_change(tmp_path, monkeypatch,
     assert drafts and "final" in drafts[0].name
 
 
-def test_nobody_having_a_plan_is_a_lost_cache_not_a_quiet_week(
+def test_a_missing_plan_is_an_alarm_only_when_tuesday_actually_mailed_that_report(
         tmp_path, monkeypatch, capsys) -> None:
-    assert _run(tmp_path, monkeypatch, None) == 1
-    assert "NO PLANS FOUND" in capsys.readouterr().err
+    """Somebody who joined on Wednesday has no Tuesday plan and that is a quiet
+    Saturday; a subscriber Tuesday DID mail but who has no plan (a lost cache, a
+    plan that failed to save) would never hear about Friday's news, and nothing
+    else would say so."""
+    import run.delivery as delivery
+    from run.rosters import load_rosters
+    from test_tuesday import _registry, _row
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    assert _run(tmp_path, monkeypatch, None) == 0                    # late joiner
+    assert "NO PLAN" not in capsys.readouterr().err
+    slug = load_rosters(_registry(tmp_path, _row()))[0].slug
+    (tmp_path / "sent.jsonl").write_text(json.dumps({"key": f"2024-w10-{slug}"}) + "\n")
+    assert _run(tmp_path, monkeypatch, None) == 1                    # mailed, no plan
+    assert "NO PLAN for 1 subscriber" in capsys.readouterr().err
+
+
+def test_one_damaged_plan_never_stops_the_other_subscribers(tmp_path, monkeypatch, capsys) -> None:
+    """A truncated plan file used to raise out of main(): nobody after it was
+    checked or mailed and nothing was reported but a traceback."""
+    from test_tuesday import ROSTER_IDS
+    plan = _registry_plan()
+    assert _run(tmp_path, monkeypatch, plan, listed={ROSTER_IDS[1]: ("out", "ankle")}) == 0
+    path = next((tmp_path / "plans").rglob("*.json"))
+    path.write_text('{"season": "2024", "wee')
+    assert saturday.load_plan(tmp_path / "plans", "2024", 10, path.stem.split("-", 1)[1]) is None
+    assert _run(tmp_path, monkeypatch, None) == 0
+
+
+def test_a_dropped_player_is_never_the_mover_in_a_swap() -> None:
+    """The flex slide checked availability but not 'dropped': a subscriber who
+    dropped their FLEX was told to 'move' him to RB."""
+    plan = _roster(flex=("RB", 10.0, "active", 6), benchwr=("WR", 9.5, "active", None))
+    plan["players"]["flex"]["dropped"] = True
+    changes = final_check(plan, _now(plan, rb1=OUT))
+    assert not any("Flex" in c.action and "Move" in c.action for c in changes), \
+        [c.action for c in changes]
+
+
+def test_a_player_with_no_projection_still_covers_and_sorts_last() -> None:
+    """A rookie the model has no number on used to vanish, so 'nobody on your
+    bench can cover' was said with a healthy player on the bench."""
+    none_else = dict(benchwr=Now(playing=False), benchte=Now(playing=False))
+    plan = _roster(benchrb=("RB", None, "active", None))
+    [swap] = [c for c in final_check(plan, _now(plan, rb1=OUT, **none_else))
+              if c.kind == SWAP]
+    assert "Benchrb" in swap.action and "has no projection yet" in swap.detail
+    better = _roster(benchrb=("RB", None, "active", None), extra=("RB", 6.0, "active", None))
+    [swap] = [c for c in final_check(better, _now(better, rb1=OUT, **none_else))
+              if c.kind == SWAP]
+    assert "Extra" in swap.action, "a projected option must beat an unprojected one"
+
+
+def test_the_subject_never_hides_a_hole_behind_a_swap() -> None:
+    plan = _roster()
+    changes = final_check(plan, _now(plan, rb1=OUT, te=OUT, benchte=Now(playing=False)))
+    assert {c.kind for c in changes} >= {SWAP, NO_FILL}
+    assert subject_for_check(10, changes).endswith("1 change and a hole in your lineup before kickoff")
+
+
+def test_saturday_never_reuses_a_cached_injury_report(tmp_path, monkeypatch) -> None:
+    """A copy fetched at 10:00 UTC (before nflverse's ~14:00 rebuild carrying
+    Friday's report) sat inside the six-hour window and was reused at 16:00 —
+    missing real Out designations and reading a listed player as cleared."""
+    import ingest.nflverse as nv
+    stale = tmp_path / "injuries_2024.csv"
+    stale.write_text("season,game_type,team,week,gsis_id,report_status\n2024,REG,KC,10,x,\n")
+    seen = {}
+
+    def fake_fetch(asset, name, cache_dir, live=True, **kw):
+        seen["existed"] = (Path(cache_dir) / name).exists()
+        raise nv.NflverseError("offline")
+    monkeypatch.setattr(nv, "fetch", fake_fetch)
+    with pytest.raises(saturday.SaturdayError):
+        saturday.designations(tmp_path, "2024", 10)
+    assert seen["existed"] is False, "the cached copy was still there to be reused"
+
+
+def test_a_plan_that_failed_to_save_is_said_on_tuesdays_line(tmp_path, monkeypatch) -> None:
+    import run.tuesday as tuesday
+    from test_tuesday import _subscriber, _week_data
+    monkeypatch.setattr(tuesday, "build_plan", lambda *a, **k: (_ for _ in ()).throw(KeyError("x")))
+    result = tuesday.run_subscriber(
+        _subscriber(), _week_data(tmp_path),
+        Path("rival-report-template.html").read_text(encoding="utf-8"),
+        out_dir=tmp_path / "out", processed_dir=tmp_path / "processed", record=False)
+    assert result.ok and result.plan is None and "PLAN NOT SAVED" in result.detail
 
 
 def test_tuesday_saves_the_lineup_it_sent_and_a_preview_saves_none(

@@ -40,7 +40,7 @@ import hmac
 import json
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -86,10 +86,16 @@ class RosterUpdate:
     replaces: str            # slug of the registry row being changed
     ref: str                 # the new roster
     seen_at: str             # first seen by the intake, ISO
+    # Confirm-by-email updates only: the request's own code and the Worker's
+    # timestamp for it. Two different requests for the SAME roster (A -> B -> A)
+    # are two different updates; without the nonce the second collided with the
+    # first in the log, was deduped away, and the roster silently stayed B.
+    nonce: str = ""
+    request_ts: str = ""
 
     @property
-    def key(self) -> tuple[str, str, str]:
-        return (self.email.lower(), self.replaces, self.ref)
+    def key(self) -> tuple[str, str, str, str]:
+        return (self.email.lower(), self.replaces, self.ref, self.nonce)
 
 
 def load_update_log(path: Path) -> list[RosterUpdate]:
@@ -254,24 +260,43 @@ def _mask(email: str) -> str:
 # lineup. This replaces it with the pattern that survives forwarding:
 #
 #   1. Every report links a PUBLIC page (`join/?update=1`) that grants nothing.
-#   2. The page posts {kind:"update_request", email, ref}. Anyone can do that.
+#   2. The page posts {kind:"update_request", email, ref}. Anyone can do that;
+#      the Worker stamps it (`received_at`, its own clock — the row cannot).
 #   3. The intake mails a confirmation to the ADDRESS ON THE REGISTRY ROW —
 #      never to anyone else — carrying a code only that inbox receives.
 #   4. The subscriber opens `join/confirm.html?c=<code>` and PRESSES A BUTTON,
 #      which posts {kind:"confirm", code}. A button, not a link that confirms
-#      on load: mail security scanners open every link in an inbox, and a
-#      scanner that "clicks" would confirm a leaguemate's forged request for
-#      the victim without them ever seeing it.
-#   5. The next intake sees the confirm, and the update is logged and applied
-#      exactly as a token update always was.
+#      on load: mail security scanners open every link in an inbox.
+#   5. The next intake sees the confirm, and the update is logged and applied.
 #
 # A forwarded report therefore grants nothing, a forged request reaches only
 # the real subscriber's inbox, and ignoring it changes nothing.
+#
+# Rules bought by the adversarial review of Sep 29 2026 (each reproduced):
+# - **Every request keeps its own code.** The newest request used to overwrite
+#   the pending one, so a stranger's junk request killed the code already in the
+#   subscriber's inbox. The code binds (address, subscription, roster) AND the
+#   request's timestamp; all live requests stay valid until one is applied.
+# - **A code is single-use and expires.** Once any request for a subscription is
+#   applied, that request and every OLDER one is dead; a request is dead after
+#   EXPIRY_DAYS. A stale or forwarded email can never re-apply an old roster.
+# - **Requests are judged against the roster AS IT NOW STANDS**, compared by
+#   content (players, slots, scoring, size — not the ref string, whose plan
+#   prefix differs for a monthly subscriber). A request equal to the current
+#   roster changes nothing and cancels every earlier pending request: it is how
+#   a subscriber says "never mind, keep what I have".
+# - **One confirmation email per request, ever** (not per day: a request row
+#   never expires in the Worker, so a per-day key mailed the victim of one
+#   forged request every day forever). The daily cap counts requests by the
+#   Worker's own date.
 
 CONFIRM_CODE_LENGTH = 24
 # Confirmation emails per address per UTC day — a stranger posting requests
-# in a loop can annoy an inbox a little, never flood it.
+# in a loop can annoy an inbox a little, never flood it. Residual, stated: a
+# stranger can spend the day's allowance, delaying the real subscriber's request
+# to tomorrow (their earlier codes stay valid, and nothing else is harmed).
 CONFIRMS_PER_DAY = 3
+EXPIRY_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -282,14 +307,34 @@ class PendingRequest:
     replaces: str
     ref: str
     code: str
+    ts: str = ""
 
 
-def confirm_code(email: str, replaces: str, ref: str, secret: str) -> str:
+def confirm_code(email: str, replaces: str, ref: str, secret: str, ts: str = "") -> str:
     if not secret:
         raise ValueError("a confirmation code needs a secret")
-    message = f"confirm|{email.strip().lower()}|{replaces}|{ref}"
+    message = f"confirm|{email.strip().lower()}|{replaces}|{ref}|{ts}"
     return hmac.new(secret.encode("utf-8"), message.encode("utf-8"),
                     hashlib.sha256).hexdigest()[:CONFIRM_CODE_LENGTH]
+
+
+def same_roster(ref_a: str, ref_b: str) -> bool:
+    """Do two refs describe the same roster? By CONTENT: a monthly subscriber
+    re-submitting an identical roster builds a ref with a different plan prefix,
+    which is not a change."""
+    try:
+        a, b = decode_roster(ref_a), decode_roster(ref_b)
+    except RefError:
+        return False
+    return ((a.player_ids, a.slots, a.scoring, a.league_size)
+            == (b.player_ids, b.slots, b.scoring, b.league_size))
+
+
+def _parse_ts(ts: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _target_for(email: str, roster, registry_rows: Iterable[Mapping]) -> str | None:
@@ -316,14 +361,28 @@ def _target_for(email: str, roster, registry_rows: Iterable[Mapping]) -> str | N
     return str(row.get("origin") or slug_of(str(row.get("ref", ""))))
 
 
+def applied_request_ts(log: Iterable[RosterUpdate]) -> dict[tuple[str, str], str]:
+    """Newest confirmed request already applied, per (address, subscription)."""
+    out: dict[tuple[str, str], str] = {}
+    for update in log:
+        if update.request_ts:
+            key = (update.email.lower(), update.replaces)
+            out[key] = max(out.get(key, ""), update.request_ts)
+    return out
+
+
 def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                       known_ids: set[str] | None, secret: str,
+                      now: datetime | None = None,
+                      applied: Mapping[tuple[str, str], str] | None = None,
                       ) -> tuple[list[PendingRequest], list[str]]:
     """Public-form requests -> requests worth a confirmation email.
 
-    Nothing here changes a roster. A request naming an address that holds no
-    subscription is dropped in silence: the page is public, and answering it
-    would let anybody learn who subscribes."""
+    ``registry_rows`` must be the roster AS IT NOW STANDS (updates already
+    applied): "nothing would change" is judged against that. Nothing here
+    changes a roster. A request naming an address that holds no subscription is
+    dropped in silence: the page is public, and answering it would let anybody
+    learn who subscribes."""
     problems: list[str] = []
     rows = list(rows)
     if not secret:
@@ -332,11 +391,20 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                             f"UPDATE_SECRET is not set — no confirmations sent")
         return [], problems
     registry_rows = list(registry_rows)
-    out: dict[tuple[str, str], PendingRequest] = {}
-    for row in rows:
+    applied = dict(applied or {})
+    now = now or datetime.now(timezone.utc)
+    live: list[PendingRequest] = []
+    cancelled: dict[tuple[str, str], str] = {}
+    for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
         email = str(row.get("email") or "").strip().lower()
         ref = str(row.get("ref") or "").strip()
-        if not _EMAIL_RE.match(email):
+        ts = str(row.get("received_at") or "")
+        when = _parse_ts(ts)
+        if not _EMAIL_RE.match(email) or when is None:
+            continue                       # no Worker stamp: not a request we can identify
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        if now - when > timedelta(days=EXPIRY_DAYS):
             continue
         try:
             roster = decode_roster(ref)
@@ -354,38 +422,52 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
             continue
         current = next((r for r in registry_rows
                         if str(r.get("email", "")).lower() == email
-                        and str(r.get("origin") or slug_of(str(r.get("ref", ""))))
-                        == replaces), None)
-        if current is not None and current.get("ref") == ref:
-            continue                                   # nothing would change
-        # The NEWEST request per subscription wins; the form lists rows in
-        # arrival order, so later rows overwrite earlier ones here.
-        out[(email, replaces)] = PendingRequest(
-            email, replaces, ref, confirm_code(email, replaces, ref, secret))
-    return list(out.values()), problems
+                        and str(r.get("origin") or slug_of(str(r.get("ref", "")))) == replaces),
+                       None)
+        target = (email, replaces)
+        if current is not None and same_roster(str(current.get("ref", "")), ref):
+            # "Keep what I have": nothing to change, and every earlier pending
+            # request for this subscription is withdrawn.
+            cancelled[target] = max(cancelled.get(target, ""), ts)
+            continue
+        live.append(PendingRequest(email, replaces, ref,
+                                   confirm_code(email, replaces, ref, secret, ts), ts))
+    pending = [r for r in live
+               if r.ts > applied.get((r.email, r.replaces), "")
+               and r.ts > cancelled.get((r.email, r.replaces), "")]
+    # The daily cap, by the Worker's own date, oldest first — deterministic.
+    per_day: dict[tuple[str, str], int] = {}
+    capped: list[PendingRequest] = []
+    for request in sorted(pending, key=lambda r: r.ts):
+        bucket = (request.email, request.ts[:10])
+        per_day[bucket] = per_day.get(bucket, 0) + 1
+        if per_day[bucket] <= CONFIRMS_PER_DAY:
+            capped.append(request)
+    return capped, problems
 
 
 def confirmed_updates(pending: Iterable[PendingRequest],
                       confirm_rows: Iterable[Mapping], secret: str,
                       now: str | None = None) -> list[RosterUpdate]:
-    """The pending requests whose code came back through the confirm page.
+    """The pending requests whose code came back through the confirm page,
+    oldest first (so that, if a subscriber pressed two buttons, the NEWEST
+    request is the one that stands).
 
     The code is recomputed, never trusted: a confirm row is only a string, and
-    it counts only when it equals the code for a request that is still valid
-    against the registry as it stands."""
+    it counts only when it equals the code of a request that is still live."""
     if not secret:
         return []
     codes = {str(r.get("code") or "").strip().lower() for r in confirm_rows}
     stamp = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    return [RosterUpdate(email=p.email, replaces=p.replaces, ref=p.ref, seen_at=stamp)
-            for p in pending if p.code in codes]
+    return [RosterUpdate(email=p.email, replaces=p.replaces, ref=p.ref, seen_at=stamp,
+                         nonce=p.code, request_ts=p.ts)
+            for p in sorted(pending, key=lambda r: r.ts) if p.code in codes]
 
 
-def confirmation_key(request: PendingRequest, day: str) -> str:
-    """Send-log key: one confirmation per request, and no address in it."""
+def confirmation_key(request: PendingRequest) -> str:
+    """Send-log key: ONE confirmation per request, ever, and no address in it."""
     who = hashlib.sha256(request.email.encode("utf-8")).hexdigest()[:8]
-    what = hashlib.sha256(f"{request.replaces}|{request.ref}".encode("utf-8")).hexdigest()[:8]
-    return f"confirm-{who}-{day}-{what}"
+    return f"confirm-{who}-{hashlib.sha256(request.code.encode('utf-8')).hexdigest()[:10]}"
 
 
 def confirm_url(site_url: str, code: str) -> str | None:

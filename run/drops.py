@@ -52,7 +52,7 @@ def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str,
 
     regret = report.get("regret") or {}
     if regret.get("confidence") is not None:
-        proj = next((d["value"] for d in regret.get("drivers", [])
+        proj = next((d["value"] for d in (regret.get("drivers") or [])
                      if d.get("label") == "proj"), "")
         out.append({"name": "The closest call", "text": (
             f"Week {week}'s closest call on our sample roster: start "

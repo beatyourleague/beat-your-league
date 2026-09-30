@@ -53,8 +53,8 @@ from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
-from run.updates import (CONFIRMS_PER_DAY, UPDATE_LOG_NAME, PendingRequest,
-                         append_update_log, apply_updates, confirm_url,
+from run.updates import (UPDATE_LOG_NAME, PendingRequest, append_update_log,
+                         applied_request_ts, apply_updates, confirm_url,
                          confirmation_key, confirmed_updates, latest_per_target,
                          load_update_log, validate_requests, validate_updates)
 from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
@@ -512,15 +512,15 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
 
 
 def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
-    """One confirmation per request, to the address on the subscription only.
-
-    Capped per address per day, because the request page is public: a
-    stranger looping requests can put a few emails in somebody's inbox, never
-    a flood. Idempotent through the send log like every other message."""
+    """One confirmation per request, ever, to the address on the subscription
+    only. The per-address daily allowance is applied where requests are
+    validated (run/updates.py), so what arrives here is already bounded; the
+    send-log key carries no date, so a request row that lives on in the Worker
+    is never mailed twice. Idempotent through the send log like every message."""
     if not awaiting:
         return
     from render.roster_update import confirm_email
-    from run.delivery import Message, load_sent
+    from run.delivery import Message
 
     site = os.environ.get("SITE_URL", "")
     secret = os.environ.get("UPDATE_SECRET", "")
@@ -528,27 +528,15 @@ def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
         print(f"Roster confirmations: {len(awaiting)} pending — SITE_URL or "
               f"UPDATE_SECRET is not set, so none were sent.")
         return
-    day = datetime.now(timezone.utc).strftime("%Y%m%d")
-    sent = load_sent()
     names = getattr(data, "players", None) if data is not None else None
     messages = []
-    per_address: dict[str, int] = {}
     for request in awaiting:
-        key = confirmation_key(request, day)
-        prefix = key.rsplit("-", 1)[0] + "-"
-        already = sum(1 for k in sent if k.startswith(prefix))
-        count = per_address.get(prefix, already)
-        if key not in sent and count >= CONFIRMS_PER_DAY:
-            continue
-        per_address[prefix] = count + (key not in sent)
         from run.refs import decode_roster
         ids = decode_roster(request.ref).player_ids
         listed = [names.name(pid) for pid in ids] if names is not None else []
         subject, html, text = confirm_email(confirm_url(site, request.code), listed)
         messages.append(Message(to=request.email, subject=subject, html=html,
-                                text=text, key=key))
-    if not messages:
-        return
+                                text=text, key=confirmation_key(request)))
     provider = build_provider(None)
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
         print(f"Roster confirmations: {len(messages)} pending — EMAIL_PROVIDER "
@@ -802,14 +790,19 @@ def main(argv: list[str] | None = None) -> int:
     problems.extend(update_problems)
     # Confirm-by-email requests (run/updates.py): a request only ever becomes
     # an update once its code has come back from the subscriber's own inbox.
-    pending, request_problems = validate_requests(request_rows, candidate,
-                                                  known or None, secret)
+    # Requests are judged against the roster AS IT NOW STANDS — updates already
+    # logged (and this run's token updates) applied first — so "nothing would
+    # change" and "revert to what I had" mean what they say, and a request that
+    # was already applied is dead (single-use).
+    base_log = [*load_update_log(update_log_path), *validated]
+    current, _ = apply_updates(candidate, latest_per_target(base_log))
+    pending, request_problems = validate_requests(
+        request_rows, current, known or None, secret,
+        applied=applied_request_ts(base_log))
     problems.extend(request_problems)
     confirmed = confirmed_updates(pending, confirm_rows, secret)
     validated = [*validated, *confirmed]
-    confirmed_codes = {p.code for p in pending
-                       if any(u.ref == p.ref and u.replaces == p.replaces
-                              and u.email == p.email for u in confirmed)}
+    confirmed_codes = {u.nonce for u in confirmed}
     awaiting = [p for p in pending if p.code not in confirmed_codes]
     if not args.dry_run:
         append_update_log(validated, update_log_path)
