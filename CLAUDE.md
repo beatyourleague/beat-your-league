@@ -1036,6 +1036,24 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Context: announced absences and the market (Sep 29 2026).** The proving run (`make proving`,
+2025 weeks 4–8, twelve made-up subscribers through every runner) benched Jayden Daniels (QB6,
+20/20/17) at 10.6 because availability counted two injured weeks — and every BYE — as missed
+games. `reports/context-method.md` was preregistered (3f224ae) before `engine/context_backtest.py`
+ran: A (byes and out designations excused from availability), M (opponent points allowed to the
+position, six-game shrink), V (market implied team score, square-root ratio), four arms, CHOSEN on
+2014–2019 by lineup margin and CONFIRMED on held-out 2020–2024. **AV** was chosen (M lost on the
+fit seasons); held out it went **243–226–16** vs shipped lineups (+0.74 pts, p = 0.46 — modest,
+not proven), hit rate 65.3% → 66.1%, grade B at **b′ = 1.2289**, and every setup arm won more than
+it lost, so it ships in EVERY setup — with the anchor, since it was measured with it
+(`run/solo.CONTEXT_ARM`, `WeekData.context` built once per week; if an input can't be read the
+report falls back to the previous model and ITS b). Caveat that travels: the backtest read closing
+lines; the product reads Tuesday's. The market is an input only — no surface cites a line (P4).
+Daniels now projects 16.7 and starts. The sample moved again: St. Brown 80, Barkley 75, Chase 73,
+Robinson 70, Kittle 72; closest call Robinson over Chase Brown 70% (15.1 vs 10.3); landing, og and
+pins moved with it. Also from the proving run: Saturday no longer mails questionable-only news,
+its backup plan names both moves, injury notes read as reasons, and SUPER_FLEX prints as SFLEX.
+
 **Last season counts all season — the anchor (Sep 29 2026).** Weeks 4–16 projected from
 current-season games only, so a proven starter with three slow games was benched like a
 replacement (Barkley, 2026 w4: RB15 last season, 9/3/9, projected 7.6, benched for LaPorta 9.0).

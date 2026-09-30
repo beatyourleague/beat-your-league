@@ -306,6 +306,12 @@ class WeekData:
     availability: WeekAvailability
     usage: dict[str, Usage]
     attribution: str = ATTRIBUTION
+    # reports/context-method.md (arm AV): the week's ProjectionModel inputs for
+    # announced-absence availability and the market's expected score. They do
+    # not depend on whose roster it is, so they are built once per week. None
+    # when the week is outside 4-16 or an input could not be read — the
+    # report then falls back to the model without them, and to ITS b.
+    context: dict | None = None
 
 
 def _statuses(directory: PlayerDirectory,
@@ -530,7 +536,49 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         # whole season: the counted-usage columns are in SEASON_COLUMNS for
         # exactly this reason.
         usage=_nflverse_usage(weekly, week),
+        context=_context_inputs(cache_dir, season, week, directory, weekly,
+                                live=live, session=session),
     )
+
+
+def _context_inputs(cache_dir: Path, season: str, week: int,
+                    directory: PlayerDirectory, weekly, *, live: bool = True,
+                    session: requests.Session | None = None) -> dict | None:
+    """The context arm's inputs for this week, or None (see WeekData.context).
+
+    The injury reports used are weeks 1..W-1 — every one published before the
+    report goes out — and the lines are the schedule's as they stand today,
+    which on a Tuesday are the week's current lines (reports/context-method.md
+    §6: the backtest read closing lines; the product reads these)."""
+    if CONTEXT_ARM is None or week not in CONTEXT_WEEKS:
+        return None
+    from engine.context import excused_weeks, games_by_week, multiplier_for
+    try:
+        schedule_path = fetch("schedules", "games.csv", cache_dir, live=live,
+                              session=session)
+        with schedule_path.open(encoding="utf-8", newline="") as handle:
+            schedule = games_by_week(csv.DictReader(handle), season)
+        injury_path = fetch("injuries", f"injuries_{season}.csv", cache_dir,
+                            live=live, session=session)
+        injury_weeks = {w: r for w, r in
+                        injuries_feed.load_weeks(injury_path, season).items() if w < week}
+    except (NflverseError, OSError):
+        return None
+    if not schedule.get(week):
+        return None
+    ids = {p.player_id for p in directory.players}
+    for rows in weekly.values():
+        ids.update(rows)
+    context: dict = {}
+    if "A" in CONTEXT_ARM:
+        context["excused"] = excused_weeks(ids, weekly, schedule, injury_weeks, week)
+    if "V" in CONTEXT_ARM or "M" in CONTEXT_ARM:
+        # The market needs no scoring rule; the matchup component (not
+        # shipped) would, and would have to be built per subscriber.
+        context["multiplier"] = multiplier_for(
+            week, weekly, None, schedule[week],
+            use_matchup=False, use_market="V" in CONTEXT_ARM)
+    return context
 
 
 def _availability(cache_dir: Path, season: str, week: int,
@@ -618,7 +666,8 @@ RECALIBRATION_B: float | None = 1.3714
 RECALIBRATED_WEEKS = range(4, 17)
 
 
-def calibrator_for(week: int, seeded: bool, anchored: bool = False):
+def calibrator_for(week: int, seeded: bool, anchored: bool = False,
+                   context: bool = False):
     """The confidence map this report applies, or None. Method §3: weeks 17-18
     missed in the opposite direction and weeks 2-3 are their own arm, so
     neither is touched. An anchored report (below) uses the b refitted for the
@@ -626,8 +675,23 @@ def calibrator_for(week: int, seeded: bool, anchored: bool = False):
     if RECALIBRATION_B is None or seeded or week not in RECALIBRATED_WEEKS:
         return None
     from engine.recalibration import recalibrate
-    b = ANCHOR_B if anchored else RECALIBRATION_B
+    b = CONTEXT_B if context else ANCHOR_B if anchored else RECALIBRATION_B
     return lambda p: recalibrate(p, b)
+
+
+# reports/context-method.md §5, decided by its one run (Sep 29 2026,
+# reports/context-backtest.md). Chosen on 2014-2019 from four arms: AV —
+# announced absences forgiven in availability, and the market's expected team
+# score. On held-out 2020-2024 its lineups went 243-226-16 against the shipped
+# ones where they differed (+0.74 points, p = 0.46: a modest gain, not a
+# proven one), hit rate 65.3% -> 66.1%, grade B (b' = 1.2289), and every one
+# of the seven setup arms won more than it lost. It ships in every setup, and
+# because the arm was measured WITH the anchor, the anchor now applies in
+# every setup whenever the context does. The opponent component (M) lost on
+# the fit seasons and is not shipped.
+CONTEXT_ARM: str | None = "AV"
+CONTEXT_B = 1.2289
+CONTEXT_WEEKS = range(4, 17)
 
 
 # reports/anchor-method.md §5, decided by its one run (Sep 29 2026,
@@ -739,7 +803,9 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     # three real games do. The model itself refuses to seed any other week,
     # so this wiring can only ever narrow the regime, never widen it.
     seeded = seeded_scope(spec, league_size, data.week)
-    anchor = anchored(spec, league_size, data.week, seeded)
+    contextual = (data.context is not None and not seeded
+                  and data.week in CONTEXT_WEEKS)
+    anchor = contextual or anchored(spec, league_size, data.week, seeded)
     if seeded or anchor:
         from engine.nflverse_backtest import prior_self_observations
         model = ProjectionModel(season, data.players,
@@ -747,8 +813,9 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                     data.prior, spec.rule),
                                 prior_self_weight=(EARLY_SEASON_LAMBDA
                                                    if seeded else 0.0),
-                                late_self_weight=(ANCHOR_WEIGHT or 0.0)
-                                if anchor else 0.0)
+                                late_self_weight=(ANCHOR_WEIGHT or 0.25)
+                                if anchor else 0.0,
+                                **(data.context if contextual else {}))
     else:
         model = ProjectionModel(season, data.players)
 
@@ -785,7 +852,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                processed_dir=processed_dir,
                                last_season_ranks=last_season_ranks,
                                calibrate=calibrator_for(data.week, seeded,
-                                                        anchor),
+                                                        anchor, contextual),
                                confirmed_fallback=fallback_for(data.week, seeded))
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the

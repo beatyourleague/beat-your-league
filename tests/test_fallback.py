@@ -15,17 +15,21 @@ def _sample(fallback: bool):
     """The published sample with the shipped switch forced on or off."""
     import render.sample as sample
     import run.solo as solo
-    real, anchor = solo.CONFIRMED_FALLBACK, solo.ANCHOR_WEIGHT
+    real, anchor, context = (solo.CONFIRMED_FALLBACK, solo.ANCHOR_WEIGHT,
+                             solo.CONTEXT_ARM)
     try:
         solo.CONFIRMED_FALLBACK = fallback
         # The fallback is pinned on the model it was graded on; the season-
-        # long anchor (reports/anchor-method.md) came later and moves seats.
+        # long anchor and the context arm (reports/anchor-method.md,
+        # reports/context-method.md) came later and move seats.
         solo.ANCHOR_WEIGHT = None
+        solo.CONTEXT_ARM = None
         return sample.build(10)
     except Exception as exc:                       # pragma: no cover
         pytest.skip(f"sample data not cached: {exc}")
     finally:
-        solo.CONFIRMED_FALLBACK, solo.ANCHOR_WEIGHT = real, anchor
+        solo.CONFIRMED_FALLBACK, solo.ANCHOR_WEIGHT, solo.CONTEXT_ARM = (
+            real, anchor, context)
 
 
 def test_the_switch_is_inert_when_false() -> None:
