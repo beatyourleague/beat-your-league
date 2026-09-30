@@ -139,7 +139,7 @@ def test_the_join_sidebar_sells_only_to_a_buyer_and_quotes_the_real_count() -> N
     holder never spent. Since Sep 29 2026 (owner direction) it sells the file,
     not the grading: no backtest count and no link to a grading page."""
     assert '<aside class="side">' in JOIN
-    guard = re.search(r"if \(SEAT_MODE \|\| UPDATE_MODE\) \{(.*?)\n\}", JOIN, re.S)
+    guard = re.search(r"if \(SEAT_MODE \|\| UPDATE_MODE \|\| TRY_MODE\) \{(.*?)\n\}", JOIN, re.S)
     assert guard and "side.hidden = true" in guard.group(1), \
         "the sidebar's purchase copy shows to seat holders and updaters"
     side = JOIN.split('<aside class="side">')[1].split("</aside>")[0]

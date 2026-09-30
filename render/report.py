@@ -1293,7 +1293,8 @@ def update_line(meta: Mapping[str, Any]) -> str:
     flow can work (site, backend, secret — run/updates.public_update_url);
     until then, the reply route the FAQ already promises."""
     url = meta.get("update_url")
-    if not meta.get("solo") or meta.get("historical_demo") or meta.get("live_demo"):
+    if (not meta.get("solo") or meta.get("historical_demo")
+            or meta.get("live_demo") or meta.get("trial")):
         return ""
     if not url:
         return f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_REPLY)}<br>'
@@ -1303,7 +1304,8 @@ def update_line(meta: Mapping[str, Any]) -> str:
 
 def update_lines(meta: Mapping[str, Any]) -> list[str]:
     """The plain-text twin."""
-    if not meta.get("solo") or meta.get("historical_demo") or meta.get("live_demo"):
+    if (not meta.get("solo") or meta.get("historical_demo")
+            or meta.get("live_demo") or meta.get("trial")):
         return []
     url = meta.get("update_url")
     return ["", f"{UPDATE_HEAD.upper()} "

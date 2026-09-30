@@ -188,8 +188,9 @@ and decides nothing: every row is checked before it reaches the subscriber list.
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
    `UPDATE_SECRET` = step 4's value.
 6. **Tell me the Worker URL** (it isn't a secret). I wire it into the homepage's email form
-   and the join, confirm and League Pass pages, switch the League Pass button on, and change
-   the FAQ's roster answer to the link. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
+   and the join, confirm and League Pass pages, switch the League Pass button on, change
+   the FAQ's roster answer to the link, and — once email sending (step 2) works too — turn on
+   the homepage's "Try it free on your roster" button (`TRIAL_OPEN`). Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
    email list on today.
 
 Until then: the email form falls back to the visitor's own email app, seat claims are

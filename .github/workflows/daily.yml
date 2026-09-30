@@ -91,6 +91,23 @@ jobs:
           .venv/bin/python -m run.intake
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
+      # The free first report (run/trials.py): one per person per season, this
+      # week's report for the roster they sent, recording nothing. Hourly is
+      # the point — a free report that lands the next day loses the moment.
+      # Reads the form Worker; with FORM_ENDPOINT or EMAIL_PROVIDER unset it
+      # sends nothing and exits 0.
+      - name: Send free reports
+        if: always()
+        env:
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
+          FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
+        run: .venv/bin/python -m run.trials
       # The pre-renewal notice (Cal. B&P §17602(b) and a promise this site
       # makes in seven places). The window is 15-45 days wide, so a missed day
       # costs nothing and the send log makes a duplicate impossible. Runs even

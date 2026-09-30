@@ -27,6 +27,7 @@
  *   POST JSON  {kind:"update",   email, ref, replaces, token}
  *   POST JSON  {kind:"update_request", email, ref}   (confirm-by-email, step 1)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code)
+ *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
  *   POST JSON  {kind:"waitlist", email}
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
  */
@@ -40,7 +41,7 @@ const MAX_BODY = 2048;
 
 function sanitize(body) {
   if (!body || typeof body !== "object") return null;
-  const kind = ["update", "update_request", "confirm", "waitlist"]
+  const kind = ["update", "update_request", "confirm", "waitlist", "trial"]
     .includes(body.kind) ? body.kind : "seat";
   if (kind === "confirm") {
     // Only the code. It means something only if it matches a request the
@@ -56,6 +57,10 @@ function sanitize(body) {
   }
   const ref = String(body.ref || "").trim();
   if (!REF.test(ref)) return null;
+  if (kind === "trial") {
+    // One free report per address per season, enforced by run/trials.py.
+    return { kind, email, ref };
+  }
   if (kind === "update_request") {
     // Grants nothing by itself: the intake mails a confirmation to the
     // address on the subscription, and only that inbox can finish it.

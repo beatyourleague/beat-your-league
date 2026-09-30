@@ -205,7 +205,8 @@ def test_ci_runs_the_test_suite() -> None:
 def test_the_daily_sweep_runs_intake_and_only_intake() -> None:
     """Its two jobs are the welcome email and the blocked-signup alarm, both of
     which the weekly cadence serves six days late. It must never build or send
-    reports — that is Tuesday's job, with Tuesday's guards."""
+    SUBSCRIBER reports — that is Tuesday's job, with Tuesday's guards. (The
+    one free report, run.trials, is its own runner with its own guards.)"""
     commands = _commands("daily.yml")
     assert "run.intake" in commands
     for heavy in ("run.tuesday", "run.monday", "run.batch", "run.week",

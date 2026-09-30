@@ -515,6 +515,7 @@
     open — nothing else, no card, unsubscribe in one click.</p>
     <div class="cta-row">
       <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
+      <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
       <a class="btn ghost" href="sample-report.html">See a real report</a>
     </div>
   </div>
@@ -876,6 +877,15 @@ const CHECKOUT_OPEN = false;
 // whether selling works. While they disagree, the email capture stays up so a
 // visitor who cannot pay can still leave an address.
 const CHECKOUT_CAN_COMPLETE = false;
+// The free first report (join/?try=1 -> run/trials.py). Flip to true only once
+// the form Worker AND email sending are live (LAUNCH.md steps 2 and 5): until
+// then the button would lead to "free reports aren't open", so it stays hidden
+// — the static page is the closed state, as with checkout.
+const TRIAL_OPEN = false;
+if (TRIAL_OPEN) {
+  const tryCta = document.getElementById("try-cta");
+  if (tryCta) tryCta.hidden = false;
+}
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
 // (infra/form-worker.js, kind "waitlist") — one backend for every form on the

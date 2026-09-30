@@ -78,6 +78,20 @@ BASE = f"font-family:{FONT};font-size:14px;line-height:1.55;color:{NAVY};"
 SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
 
+TRIAL_HEAD = "Your free report"
+
+
+def _trial_line() -> str:
+    """run/trials.py: the one free report. Says what it is and how to get
+    one every week, and promises nothing further lands uninvited."""
+    site = os.environ.get("SITE_URL", "").rstrip("/")
+    where = f" {site}/join" if site else ""
+    return ("This one's on us, built from the roster you sent. Get one every "
+            "Tuesday, plus a final check on Saturday when injury news changes "
+            f"your lineup:{where}. This is the only email we'll send you unless "
+            "you sign up.")
+
+
 def _sec(number: int, title: str, body: str) -> str:
     """One report section: numbered case-file title bar, then the body.
 
@@ -152,6 +166,12 @@ def _header(meta: Mapping[str, Any]) -> str:
         lines.append(f'Rival: <b>{esc(meta["named_rival_label"])}</b>')
     lines.append(esc(_generated_stamp(meta)))
     banner = ""
+    if meta.get("trial"):
+        banner = (
+            f'<tr><td style="padding:0 28px;">'
+            f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
+            f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
+            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(_trial_line())}</div></td></tr>')
     if meta.get("historical_demo"):
         banner = (
             f'<tr><td style="padding:0 28px;">'
@@ -647,8 +667,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
         f"season {meta['season']} week {meta['week']}",
         meta['my_label'] if solo else f"{meta['my_label']} vs {meta['rival_label']}",
         "",
-        "GAME PLAN",
     ]
+    if meta.get("trial"):
+        lines += [f"{TRIAL_HEAD.upper()}. {_trial_line()}", ""]
+    lines += ["GAME PLAN"]
     for item in report["checklist"]:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
         if item.get("detail"):
@@ -758,6 +780,11 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines += ["", "IF/THEN FOR GAMEDAY"]
         for plan in report["pivots"]:
             lines.append(f"  If {plan['condition']}: {plan['action']}")
+    if meta.get("trial"):
+        lines += ["", "Projections are analysis, not guarantees — no betting "
+                      "picks, no staking advice. Your decisions are yours.",
+                  source_line(meta), "", _trial_line()]
+        return "\n".join(lines) + "\n"
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
     if report["receipts"].get("last_week_calls"):
         from engine.own_record import call_line
@@ -809,6 +836,13 @@ def subject_for(report: Mapping[str, Any]) -> str:
 def _footer(meta: Mapping[str, Any]) -> str:
     basis = availability_basis(meta)
     _cancel_href, _cancel_label = cancel_destination()
+    if meta.get("trial"):
+        return (
+            f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;">'
+            f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
+            f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
+            f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}<br>'
+            f'{esc(_trial_line())}</p></td></tr>')
     return (
         f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;'
         f'margin-top:24px;">'
@@ -973,7 +1007,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
             _your_lineup(report),
             _regret(report["regret"]),
             _pivots(report["pivots"]),
-            _receipts(report["receipts"]),
+            "" if meta.get("trial") else _receipts(report["receipts"]),
         ]
     return [
         _header(meta),

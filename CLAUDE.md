@@ -1036,6 +1036,16 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**The free first report (`run/trials.py`, Sep 29 2026).** `join/?try=1` takes a roster and an
+email and posts `{kind:"trial"}` to the form Worker; the hourly daily cron builds that roster's
+report for the current week through the real pipeline and mails it. One per address per season
+(send-log key `trial-{season}-{sha12}`, no address), never to a registry address, NOTHING recorded
+(no ledger, no plan), at most 50 a run, and never about games underway: from the week's main
+Sunday slate (1 PM ET) until the next week's data is in, requests wait. The email says it's free,
+how to get one every week, and that nothing else comes unless they sign up — no cancel, roster
+or receipts lines (there's no subscription). The landing's "Try it free on your roster" button
+ships HIDDEN behind `TRIAL_OPEN = false`; flip it once the Worker and email sending are live.
+
 **The live sample (`render/live_sample.py` → `site/this-week.html`, Sep 29 2026).** The published
 sample is a pinned 2024 week, which quietly says "not running yet". Its live twin is the same
 roster rebuilt for the current week by `weekly.yml` every Tuesday (committed by the persist

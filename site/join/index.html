@@ -314,6 +314,10 @@ Baltimore Ravens
         the change — press it and your next report, and Saturday's final check, use
         this roster. It only goes to the address your reports go to, and nothing
         changes until it's pressed.</li>
+        <li id="trial-note" style="display:none">It's built from the roster you just
+        entered and usually lands within the hour. From Sunday afternoon to Monday
+        night it waits for the next week's build, so it's never about games already
+        underway. One free report per person — nothing to pay, no card.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
@@ -445,12 +449,15 @@ const TOKEN_UPDATE = /^[0-9a-f]{10}$/.test(UPDATE_SLUG) &&
 // a change after the intake mails a confirmation to the address on the
 // subscription and that inbox presses the button (run/updates.py).
 const UPDATE_MODE = TOKEN_UPDATE || QUERY.has("update");
+// ?try=1 — the free first report (run/trials.py): this week's report for the
+// roster entered here, one per person per season, no card. Never a purchase.
+const TRY_MODE = QUERY.get("try") === "1" && !UPDATE_MODE && !SEAT_MODE;
 
 // The sidebar sells a purchase. A seat holder buys nothing and an update comes
 // from somebody already subscribed: neither may read refund terms or "your
 // first report today" about money they are not spending — the same mistake the
 // seat flow's own copy was once fixed for.
-if (SEAT_MODE || UPDATE_MODE) {
+if (SEAT_MODE || UPDATE_MODE || TRY_MODE) {
   const side = document.querySelector(".side");
   if (side) side.hidden = true;
 }
@@ -713,6 +720,11 @@ $("form-email").addEventListener("submit", (event) => {
     submitUpdate(email, ref);
     return;
   }
+  // A FREE REPORT IS NOT A PAYMENT either; the payment path is never reached.
+  if (TRY_MODE) {
+    submitTrial(email, ref);
+    return;
+  }
 
   const link = WANTS_PASS ? STRIPE_LINK_PASS
              : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
@@ -813,6 +825,27 @@ function submitUpdate(email, ref) {
   });
 }
 
+function submitTrial(email, ref) {
+  if (!FORM_ENDPOINT) {
+    showError("err-email", "Free reports aren't open just yet — we're finishing " +
+      "setup. Your roster isn't saved, so please come back in a day or two.");
+    return;
+  }
+  fetch(FORM_ENDPOINT, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "trial", email: email, ref: ref }),
+    signal: AbortSignal.timeout(15000),
+  }).then((response) => {
+    if (!response.ok) throw new Error("rejected");
+    $("form-email").style.display = "none";
+    $("done-head").textContent = "Your free report is on its way.";
+    $("done").style.display = "block";
+  }).catch(() => {
+    showError("err-email", "That didn't send — check your connection and try " +
+      "again. Nothing was saved.");
+  });
+}
+
 function showSeatLink() {
   // Only on the way to Stripe. Rendered earlier it is a shareable link before
   // any payment, so an abandoned checkout leaves a league of people each told
@@ -831,7 +864,26 @@ function showSeatLink() {
   share.style.display = "block";
 }
 
-if (UPDATE_MODE) {
+if (TRY_MODE) {
+  $("header-pitch").textContent =
+    "Try it free. Enter your league's settings and your roster, and we'll email " +
+    "you this week's report for your team — every close call decided, with the " +
+    "odds. One per person, no card.";
+  $("header-chips").replaceChildren();
+  ["Free — no card", "This week's report", "One per person"].forEach((text) => {
+    const chip = document.createElement("span");
+    chip.textContent = text;
+    $("header-chips").appendChild(chip);
+  });
+  $("submit").textContent = "Email me my free report";
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+  $("terms-line").style.display = "none";
+  $("closed-note").style.display = "none";
+  $("first-note").style.display = "none";
+  $("trial-note").style.display = "list-item";
+  document.querySelector(".secure").style.display = "none";
+} else if (UPDATE_MODE) {
   $("header-pitch").textContent =
     "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
     "and your next report is built from it. Nothing to pay. Enter the address " +
