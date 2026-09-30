@@ -334,3 +334,91 @@ def test_an_unrecognised_seat_payload_refuses_instead_of_reading_it_as_empty() -
     intake.urllib.request.urlopen = fake(_json.dumps("a string"))
     with _pytest.raises(intake.IntakeError, match="not a row list"):
         intake.fetch_seats("https://x.test", None)
+
+
+# --------------------------------------------------------------------- #
+# what each league app actually copies out (Sep 29 2026 battery)
+# --------------------------------------------------------------------- #
+#
+# The first battery found that Yahoo's and Sleeper's two-line layout ("Buf - QB",
+# "QB - BUF") silently ADDED a team defense the subscriber did not own — the
+# most dangerous kind of parse failure, because it looks like success — and
+# that stray injury tags, "Last, First" order, initials and NFL.com's matchup
+# and kickoff text each stopped a signup. Both parsers now handle them, and
+# these pin the outcome on both sides against the shipped directory.
+
+PASTES = {
+    "yahoo": ("QB\nJosh Allen\nBuf - QB\nQ\nRB\nSaquon Barkley\nPhi - RB\nO\nWR\n"
+              "Ja'Marr Chase\nCin - WR\nAmon-Ra St. Brown\nDet - WR\nTE\nGeorge Kittle\n"
+              "SF - TE\nW/R/T\nTony Pollard\nTen - RB\nK\nJake Bates\nDet - K\nDEF\n"
+              "Denver Broncos\nDen - DEF\nBN\nCourtland Sutton\nDen - WR\nIR\n"
+              "Jayden Reed\nGB - WR   IR",
+              ["Josh Allen", "Saquon Barkley", "Ja'Marr Chase", "Amon-Ra St. Brown",
+               "George Kittle", "Tony Pollard", "Jake Bates", "Denver Broncos",
+               "Courtland Sutton", "Jayden Reed"]),
+    "cbs": ("Josh Allen, QB BUF\nBarkley, Saquon RB PHI\nSt. Brown, Amon-Ra WR DET\n"
+            "Kittle, George TE SF\nBroncos D/ST\nJake Bates, K DET\nRavens D/ST",
+            ["Josh Allen", "Saquon Barkley", "Amon-Ra St. Brown", "George Kittle",
+             "Denver Broncos", "Jake Bates", "Baltimore Ravens"]),
+    "nfl": ("QB Josh Allen BUF vs. MIA Sun 1:00 PM  21.3\n"
+            "RB Saquon Barkley PHI @ NYG  Mon 8:15 PM 18.1\nWR Ja'Marr Chase CIN Bye 12\n"
+            "TE George Kittle SF Q\nDEF Denver Broncos DEN\nK Jake Bates DET --",
+            ["Josh Allen", "Saquon Barkley", "Ja'Marr Chase", "George Kittle",
+             "Denver Broncos", "Jake Bates"]),
+    "sleeper": ("Josh Allen\nQB - BUF\nSaquon Barkley\nRB - PHI\nBroncos\nDEF - DEN\n"
+                "Chase Brown\nRB - CIN\nJ. Mixon\nRB - HOU\nD. Adams\nWR",
+                ["Josh Allen", "Saquon Barkley", "Denver Broncos", "Chase Brown",
+                 "Joe Mixon", "Davante Adams"]),
+    "espn": ("Josh Allen  QB BUF  OUT\nSaquon Barkley  RB PHI  DTD\n"
+             "Ja'Marr Chase  WR CIN  P: 15.2 22.1\nSam LaPorta  TE DET  Q\n"
+             "Ravens D/ST  D/ST\nJake Bates  K DET  IR\nJayden Reed  WR GB  SSPD",
+             ["Josh Allen", "Saquon Barkley", "Ja'Marr Chase", "Sam LaPorta",
+              "Baltimore Ravens", "Jake Bates", "Jayden Reed"]),
+    "copy-paste": ("Josh Allen 🏈\n1. Saquon Barkley\n2) Ja'Marr Chase\n• Amon-Ra St. Brown\n"
+                   "Sam LaPorta (TE - DET) *\nBijan Robinson — ATL RB\n"
+                   "Chase Brown, Cincinnati Bengals\nD.J. Moore\nKenneth Walker III\n"
+                   "Michael Pittman Jr.\nMarvin Harrison Jr. WR ARI\nBrian Thomas Jr., WR JAC",
+                   ["Josh Allen", "Saquon Barkley", "Ja'Marr Chase", "Amon-Ra St. Brown",
+                    "Sam LaPorta", "Bijan Robinson", "Chase Brown", "DJ Moore",
+                    "Kenneth Walker III", "Michael Pittman", "Marvin Harrison Jr.",
+                    "Brian Thomas Jr."]),
+}
+
+
+@pytest.mark.parametrize("app", sorted(PASTES))
+def test_a_paste_from_each_league_app_resolves_to_exactly_the_roster(app) -> None:
+    """Every line resolves, to exactly the players on the roster — no phantom
+    defense from a team code, no unresolved tag — in Python AND in the browser."""
+    if not INDEX.is_file():
+        pytest.skip("players.json not built — run `make index`")
+    text, expected = PASTES[app]
+    directory = _python_directory()
+    py = directory.resolve_all([line for line in text.splitlines() if line.strip()])
+    assert [m.player.name if m.resolved else f"UNRESOLVED {m.typed!r}"
+            for m in py] == expected, f"python, {app}"
+    got = run_js(
+        f"const fs = require('fs');\n"
+        f"const d = R.buildDirectory(JSON.parse(fs.readFileSync({str(INDEX)!r},'utf8')));\n"
+        f"console.log(JSON.stringify(R.resolveAll(d, {json.dumps(text)})"
+        f".map(m => m.player ? m.player.name : 'UNRESOLVED ' + m.typed)))")
+    assert got == expected, f"browser, {app}"
+
+
+def test_an_initial_that_fits_two_players_is_a_choice_not_a_guess() -> None:
+    """RULE R3 for "J. Smith": a unique initial-plus-surname is a lookup; two
+    of them come back as a choice in BOTH languages."""
+    both = [["John Smith", "00-0000001", "WR", "MIN"],
+            ["Jane Smith", "00-0000002", "WR", "CHI"],
+            ["Josh Allen", "00-0000003", "QB", "BUF"]]
+    directory = PlayerDirectory([Player(i, n, pos, team) for n, i, pos, team in both])
+    for typed, kind in (("J. Smith", "ambiguous"), ("J. Allen", "resolved"),
+                        ("D. Smith", "unknown")):
+        m = directory.resolve(typed)
+        assert ("resolved" if m.resolved else "ambiguous" if m.candidates
+                else "unknown") == kind, typed
+        got = run_js(
+            f"const d = R.buildDirectory({{players: {json.dumps(both)}, confusable: []}});\n"
+            f"const m = R.resolveLine(d, {json.dumps(typed)});\n"
+            f"console.log(JSON.stringify(m.player ? 'resolved' : "
+            f"m.candidates.length ? 'ambiguous' : 'unknown'))")
+        assert got == kind, f"browser {typed}"

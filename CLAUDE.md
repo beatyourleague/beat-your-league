@@ -1036,6 +1036,20 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**Roster paste battery (Sep 29 2026).** Pastes from Yahoo, CBS, NFL.com, Sleeper, ESPN and a
+generic copy (tests/test_intake.py `PASTES`) found the parsers' worst failure so far — and it
+looked like success: the two-line layout (Yahoo "Buf - QB", Sleeper "QB - BUF") silently ADDED a
+team defense the subscriber did not own (Yahoo's "Den - WR" became the Broncos defense), because
+a lone team code reads as a defense. **A team code beside a position tag (QB/RB/WR/TE/K) is a
+player's team line and is dropped; a defense carries DEF/DST/D/ST or stands alone.** Also now
+handled, identically in `engine/roster.py` and `site/join/roster.js`: multi-position labels
+(W/R/T), injury/status tags (OUT, DTD, SSPD…, single-letter Q/O/D/P after a name or alone, lone
+K), matchup and kickoff text (vs., @, Sun 1:00 PM), "Last, First" (CBS), "Name, Team Name", NFL.com's
+leading "K Jake Bates", and initial + surname ("J. Mixon") — each a lookup tried only after the
+plain reading fails, unique or it is a choice (R3). The same player on consecutive lines is one
+entry (Yahoo prints a defense's name and then "Den - DEF"). Every paste is asserted in both
+languages against the shipped directory. `roster.js` carries a `?v=<digest>` (pinned by test).
+
 **The free first report (`run/trials.py`, Sep 29 2026).** `join/?try=1` takes a roster and an
 email and posts `{kind:"trial"}` to the form Worker; the hourly daily cron builds that roster's
 report for the current week through the real pipeline and mails it. One per address per season

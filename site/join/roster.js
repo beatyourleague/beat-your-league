@@ -43,17 +43,34 @@ const TEAM_ALIASES = {LAR: "LA", WSH: "WAS", JAC: "JAX", LVR: "LV", ARZ: "ARI",
   BLT: "BAL", CLV: "CLE"};
 
 // "Bench", "Starters", "Reserve(s)": section headers a copied roster carries.
+// Also stripped (a battery of Yahoo / CBS / NFL.com / Sleeper / ESPN pastes):
+// multi-position slot labels, injury and status tags, matchup and kickoff
+// text. Mirrors engine/roster.py _DECORATION exactly.
 const DECORATION =
-  /\b(?:QB|RB|WR|TE|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?)\b|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,]+|\d+(?:\.\d+)?/gi;
+  /\b(?:W\/R\/T|R\/W\/T|W\/R|W\/T|OP)\b|\b(?:QB|RB|WR|TE|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b|\bVS\.?(?=\s|$)|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?/gi;
+const POSITION_TAG = /\b(?:QB|RB|WR|TE|K)\b/i;
+const DEFENSE_TAG = /\b(?:DEF|DST|D\/ST)\b/i;
 
 function stripDecoration(line, teams) {
   let text = (line || "").replace(DECORATION, " ").replace(/\s+/g, " ").trim();
   // A NON-LEADING bare K is the kicker position tag ("Jake Bates K DET");
   // a leading K is an initial ("K. Walker", "K Walker") and stays.
   text = text.replace(/(?<=[^\s.]) K(?= |$)/gi, "").trim();
+  // Single-letter injury tags (Q, O, D, P) trail a name or stand alone; a lone
+  // "K" is a kicker slot header. An initial leads a name and carries its dot.
+  let tokens = text ? text.split(" ") : [];
+  tokens = tokens.filter((t, i) => !(/^[QODPqodp]$/.test(t) && (i > 0 || tokens.length === 1)));
+  if (tokens.length === 1 && tokens[0].toUpperCase() === "K") tokens = [];
+  text = tokens.join(" ");
   if (teams && teams.size) {
-    const kept = text.split(" ").filter(
-      (w) => !teams.has(w.toUpperCase()) && !(w.toUpperCase() in TEAM_ALIASES));
+    const isTeam = (w) => teams.has(w.toUpperCase()) || (w.toUpperCase() in TEAM_ALIASES);
+    // A team code beside a position tag is a PLAYER's team line ("Buf - QB",
+    // "QB - BUF"), not a defense; a defense carries DEF/DST or stands alone.
+    if (tokens.length === 1 && isTeam(tokens[0]) && POSITION_TAG.test(line || "") &&
+        !DEFENSE_TAG.test(line || "")) {
+      return "";
+    }
+    const kept = text.split(" ").filter((w) => !isTeam(w));
     // Only if something survives: "KC" alone IS the Chiefs defense, while the
     // same token inside "Mahomes QB KC" is noise.
     if (kept.length) text = kept.join(" ");
@@ -90,6 +107,18 @@ function buildDirectory(payload) {
         .forEach((form) => push(normalize(form)));
     }
   }
+  // (first initial, normalised surname) -> players: "J. Mixon". A unique match
+  // is a lookup, two are a choice (RULE R3). Mirrors PlayerDirectory._by_initial.
+  const byInitial = new Map();
+  for (const [name, id, position, team] of payload.players) {
+    if (position === "DEF") continue;
+    const at = name.trim().indexOf(" ");
+    if (at < 0) continue;
+    const key = name.trim()[0].toLowerCase() + "|" + normalize(name.trim().slice(at + 1));
+    if (key.endsWith("|")) continue;
+    if (!byInitial.has(key)) byInitial.set(key, []);
+    byInitial.get(key).push(byId.get(id));
+  }
   const confusable = new Map();
   for (const [a, b] of payload.confusable || []) {
     if (!confusable.has(a)) confusable.set(a, []);
@@ -97,14 +126,51 @@ function buildDirectory(payload) {
     confusable.get(a).push(b);
     confusable.get(b).push(a);
   }
-  return { byName, byId, teams, confusable, season: payload.season };
+  return { byName, byId, byInitial, teams, confusable, season: payload.season };
 }
 
 // ---------------------------------------------------------------- //
 // resolution — RULE R3: ambiguity is RETURNED, never resolved
 // ---------------------------------------------------------------- //
 
+// "Last, First", "Name, Team Name", "K Jake Bates" and "J. Mixon": lookups that
+// must come back unique, tried only after the plain reading fails, so nothing
+// that resolved before resolves differently. Mirrors PlayerDirectory.resolve.
 function resolveLine(directory, typed) {
+  const first = resolvePlain(directory, typed);
+  if (first.player || first.candidates.length) return first;
+  const ok = (player) => ({ typed, player, candidates: [], twins: [] });
+  if (typed.includes(",")) {
+    const at = typed.indexOf(",");
+    const a = stripDecoration(typed.slice(0, at), directory.teams);
+    const b = stripDecoration(typed.slice(at + 1), directory.teams);
+    if (a && b) {
+      const nb = normalize(b);
+      const asDefense = (directory.byName.get(nb) || []).filter((p) => p.position === "DEF");
+      if (asDefense.length) {
+        const retry = resolvePlain(directory, a);
+        if (retry.player) return ok(retry.player);
+      }
+      const found = directory.byName.get(normalize(b + " " + a)) || [];
+      if (found.length === 1) return ok(found[0]);
+    }
+  }
+  const cleaned = stripDecoration(typed, directory.teams);
+  const tag = /^K\s+(\S+\s+\S.*)$/.exec(cleaned);
+  if (tag) {
+    const found = directory.byName.get(normalize(tag[1])) || [];
+    if (found.length === 1) return ok(found[0]);
+  }
+  const init = /^([A-Za-z])\.?\s+(.+)$/.exec(cleaned);
+  if (init) {
+    const found = directory.byInitial.get(init[1].toLowerCase() + "|" + normalize(init[2])) || [];
+    if (found.length === 1) return ok(found[0]);
+    if (found.length) return { typed, player: null, candidates: found, reason: "ambiguous" };
+  }
+  return first;
+}
+
+function resolvePlain(directory, typed) {
   const cleaned = stripDecoration(typed, directory.teams);
   const key = normalize(cleaned);
   if (!key) return { typed, player: null, candidates: [], reason: "blank" };
@@ -142,7 +208,11 @@ function resolveAll(directory, text) {
     // failure as guessing, wearing a different hat.
     .filter((line) => line.length > 0)
     .map((line) => resolveLine(directory, line))
-    .filter((match) => match.reason !== "blank");
+    .filter((match) => match.reason !== "blank")
+    // The same player on consecutive lines is one entry: Yahoo prints a
+    // defense's name and then its "Den - DEF" row.
+    .filter((match, i, all) => !(match.player && i > 0 && all[i - 1].player &&
+                                 all[i - 1].player.id === match.player.id));
 }
 
 // ---------------------------------------------------------------- //
