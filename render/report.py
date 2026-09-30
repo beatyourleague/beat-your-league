@@ -456,7 +456,16 @@ def header(meta: Mapping[str, Any]) -> str:
         chips.insert(2, f'<span class="chip">Rival: '
                         f'<b>{esc(meta["named_rival_label"])}</b></span>')
     banner = ""
-    if meta.get("historical_demo") and meta.get("solo"):
+    if meta.get("live_demo"):
+        # The live sample (render/live_sample.py): this week's report for the
+        # published sample roster, rebuilt every Tuesday by the weekly cron.
+        banner = (
+            '<div class="regret-note" style="margin:0;border-left:none;">'
+            f'THIS WEEK\'S REPORT — Week {esc(meta["week"])} of the '
+            f'{esc(meta["season"])} season, built {esc(_built_on(meta))} for a '
+            f'sample roster, exactly the way yours is built. Rebuilt every '
+            f'Tuesday.</div>')
+    elif meta.get("historical_demo") and meta.get("solo"):
         # The solo sample is built from the nflverse record, where past-season
         # injury reports ARE available — so confidences print, and the old
         # "numbers are left off" sentence would be false of the page it sits on.
@@ -501,12 +510,27 @@ def header(meta: Mapping[str, Any]) -> str:
     )
 
 
+def _built_on(meta: Mapping[str, Any]) -> str:
+    try:
+        stamp = datetime.fromisoformat(meta.get("generated_at", ""))
+        from zoneinfo import ZoneInfo
+        stamp = stamp.astimezone(ZoneInfo("America/New_York"))   # the buyer's clock
+    except (TypeError, ValueError, KeyError):
+        return "this week"
+    return stamp.strftime("%A, %B ") + str(stamp.day)
+
+
 def _generated_stamp(meta: Mapping[str, Any]) -> str:
     raw = meta.get("generated_at", "")
     try:
         stamp = datetime.fromisoformat(raw).astimezone(timezone.utc)
     except (TypeError, ValueError):
         return "Generated (timestamp unavailable)"
+    if meta.get("live_demo"):
+        from zoneinfo import ZoneInfo
+        local = stamp.astimezone(ZoneInfo("America/New_York"))
+        return local.strftime("Built %a %b ") + f"{local.day} · " + \
+            local.strftime("%I:%M %p ET").lstrip("0")
     if meta.get("historical_demo"):
         # The sample is a replay: say so in the stamp itself, or the build
         # date and the season it replays look like a contradiction.
@@ -1201,6 +1225,13 @@ def demo_band(meta: Mapping[str, Any]) -> str:
     """
     if not meta.get("anonymized_demo"):
         return ""
+    if meta.get("solo") and meta.get("live_demo"):
+        return (
+            '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
+            'This is this week\'s report for a sample roster. Yours is built from '
+            'your own roster, scored your league\'s way — '
+            '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
+            'set it up</a> and your first report lands the day you join.</div>')
     if meta.get("solo"):
         season = esc(str(meta.get("season", "a past")))
         # The two published samples point at each other on purpose. A buyer
@@ -1262,7 +1293,7 @@ def update_line(meta: Mapping[str, Any]) -> str:
     flow can work (site, backend, secret — run/updates.public_update_url);
     until then, the reply route the FAQ already promises."""
     url = meta.get("update_url")
-    if not meta.get("solo") or meta.get("historical_demo"):
+    if not meta.get("solo") or meta.get("historical_demo") or meta.get("live_demo"):
         return ""
     if not url:
         return f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_REPLY)}<br>'
@@ -1272,7 +1303,7 @@ def update_line(meta: Mapping[str, Any]) -> str:
 
 def update_lines(meta: Mapping[str, Any]) -> list[str]:
     """The plain-text twin."""
-    if not meta.get("solo") or meta.get("historical_demo"):
+    if not meta.get("solo") or meta.get("historical_demo") or meta.get("live_demo"):
         return []
     url = meta.get("update_url")
     return ["", f"{UPDATE_HEAD.upper()} "

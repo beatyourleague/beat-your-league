@@ -1036,6 +1036,14 @@ teams on one address: the same-setup team with the most overlap, a tie refuses. 
 (`fold_roster_change`): a dropped starter's slot is filled, a pickup who projects higher starts;
 a changed roster it can't project is skipped loudly (exit 1), never checked against the old one.
 
+**The live sample (`render/live_sample.py` → `site/this-week.html`, Sep 29 2026).** The published
+sample is a pinned 2024 week, which quietly says "not running yet". Its live twin is the same
+roster rebuilt for the current week by `weekly.yml` every Tuesday (committed by the persist
+step, redeployed by pages.yml), through the real pipeline, recording nothing. Banner and stamp say
+what it is and when it was built, in Eastern time. A week that can't be built leaves the last
+page up and exits 0. The landing links it under the hero and under the proof cards; the pinned
+2024 sample keeps carrying the landing's quoted figures.
+
 **Context: announced absences and the market (Sep 29 2026).** The proving run (`make proving`,
 2025 weeks 4–8, twelve made-up subscribers through every runner) benched Jayden Daniels (QB6,
 20/20/17) at 10.6 because availability counted two injured weeks — and every BYE — as missed

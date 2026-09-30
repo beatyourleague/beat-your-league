@@ -182,6 +182,13 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
         run: .venv/bin/python -m run.tuesday
+      # The live sample (render/live_sample.py): this week's report for the
+      # published sample roster, so the site shows the product running now,
+      # not a 2024 replay. Records nothing, and keeps the last page on any
+      # failure rather than failing the run.
+      - name: Publish this week's sample report
+        if: always()
+        run: .venv/bin/python -m render.live_sample
       - name: Save subscriber registry
         if: always()
         uses: actions/cache/save@v4
@@ -208,7 +215,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/processed/ledger site/join/players.json
+          git add -A data/processed/ledger site/join/players.json site/this-week.html
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Weekly run: ledger, send log, player directory"

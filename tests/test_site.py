@@ -2929,3 +2929,17 @@ def test_the_join_page_loads_the_roster_parser_it_was_tested_with() -> None:
     digest = hashlib.sha256((SITE / "join" / "roster.js").read_bytes()).hexdigest()[:10]
     assert f'<script src="roster.js?v={digest}"></script>' in JOIN, \
         f"roster.js changed; its script tag needs ?v={digest}"
+
+
+def test_the_live_sample_says_what_it_is_and_the_cron_keeps_it_fresh() -> None:
+    """site/this-week.html is this week's report for the sample roster, so the
+    site shows the product running now rather than only a 2024 replay. It must
+    say what it is, carry no internal slot code, record nothing, and be
+    rebuilt and committed by the weekly cron."""
+    page = (SITE / "this-week.html").read_text(encoding="utf-8")
+    assert "THIS WEEK'S REPORT" in page and "sample roster" in page
+    assert "SUPER_FLEX" not in page and "Reply to this email" not in page
+    weekly = (SITE.parent / ".github" / "workflows" / "weekly.yml").read_text()
+    assert "python -m render.live_sample" in weekly
+    assert "site/this-week.html" in weekly.split("Persist the record")[1]
+    assert 'href="this-week.html"' in LANDING

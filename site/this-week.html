@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beat Your League — 2026 Week 4 Report</title>
+<meta name="description" content="A complete weekly report built from a real NFL season — every number from actual box scores, nothing invented.">
+<meta property="og:title" content="Beat Your League — a real weekly report">
+<meta property="og:description" content="A complete weekly report built from a real NFL season — every number from actual box scores, nothing invented.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://beatyourleague.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Beat Your League lineup report: four roster slots, three with a percentage, one marked questionable.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#101E33;
+    --navy2:#182A45;
+    --paper:#F6F4EE;
+    --card:#FFFFFF;
+    --turf:#1E7A46;
+    --turf-tint:#DFF0E4;
+    --flag:#F2C230;
+    --flag-tint:#FBF3D9;
+    --brick:#B3402F;
+    --brick-tint:#F7E3DE;
+    --slate:#5A6B80;
+    --ink2:#33445C;
+    --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    background:#E7E4DA;
+    font-family:'Barlow',-apple-system,sans-serif;
+    color:var(--navy);
+    padding:14px 8px 44px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .report{max-width:680px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
+    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+
+  /* ================= header ================= */
+  .bug{
+    background:
+      repeating-linear-gradient(-55deg, rgba(246,244,238,.045) 0 2px, transparent 2px 14px),
+      linear-gradient(180deg,var(--navy2),var(--navy));
+    color:var(--paper);padding:24px 24px 22px;
+  }
+  .bug .brand{display:inline-flex;align-items:center;gap:9px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
+  .brand svg.mark{width:22px;height:22px;flex:none;}
+  .bug h1{font-family:'Barlow Condensed';font-weight:800;font-size:46px;line-height:.95;
+    text-transform:uppercase;margin-top:8px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .chip{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid rgba(246,244,238,.35);color:#C9D4E2;padding:4px 9px;border-radius:2px;}
+  .chip b{color:var(--paper);}
+
+  /* ================= section scaffolding ================= */
+  section{padding:24px 24px 28px;border-top:3px double var(--line);}
+  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--slate);display:flex;align-items:center;gap:10px;}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--line);}
+  .eyebrow .tag{color:var(--navy);}
+  .eyebrow .n{color:var(--slate);font-size:12px;letter-spacing:.14em;}
+
+  /* ================= 30-second game plan ================= */
+  .plan{margin-top:16px;display:grid;gap:10px;}
+  .task{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;
+    background:var(--card);border:1px solid var(--line);padding:13px 14px;}
+  .task .box{width:20px;height:20px;border:2.5px solid var(--navy);margin-top:1px;background:#fff;}
+  .task .do{font-weight:700;font-size:15px;line-height:1.35;}
+  .task .why{font-size:13px;line-height:1.45;color:var(--ink2);margin-top:3px;}
+  .task .dl{margin-top:3px;font-size:12.5px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;color:var(--brick);}
+  .task .dl.ok{color:var(--turf);}
+
+  /* ================= matchup ================= */
+  .board{display:flex;align-items:flex-end;justify-content:space-between;margin-top:18px;gap:8px;}
+  .team{flex:1;}
+  .team .name{font-family:'Barlow Condensed';font-weight:800;font-size:20px;text-transform:uppercase;line-height:1.05;}
+  .team .sub{font-size:12px;color:var(--slate);margin-top:2px;font-weight:600;}
+  .team .pts{font-family:'Barlow Condensed';font-weight:800;font-size:54px;line-height:1;
+    font-variant-numeric:tabular-nums;margin-top:6px;}
+  .team.you .pts{color:var(--turf);}
+  .team.rival{text-align:right;}
+  .team.rival .pts{color:var(--brick);}
+  .pts small{font-size:13px;letter-spacing:.08em;color:var(--slate);font-family:'Barlow';font-weight:700;}
+  .vs{font-family:'Barlow Condensed';font-weight:800;font-size:15px;color:var(--slate);padding-bottom:14px;}
+  /* The projection gap. Deliberately smaller than the two totals it sits
+     between: it is a subtraction of two projections, not a predicted result. */
+  .gap{display:flex;flex-direction:column;align-items:center;gap:2px;padding-bottom:6px;}
+  .gap .gnum{font-family:'Barlow Condensed';font-weight:800;font-size:26px;line-height:1;
+    font-variant-numeric:tabular-nums;color:var(--ink2);}
+  .gap .glab{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--slate);text-align:center;line-height:1.25;}
+  .gap .gswing{font-size:9px;font-weight:700;letter-spacing:.05em;color:var(--slate);
+    text-align:center;opacity:.85;}
+
+  .field-wrap{margin-top:20px;}
+  .field-label{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
+    letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .field-label .l{color:var(--turf);} .field-label .r{color:var(--brick);}
+  .field{position:relative;height:56px;border:2px solid var(--navy);
+    background:
+      repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgba(16,30,51,.30) calc(10% - 1px) 10%),
+      linear-gradient(90deg,#DCEEE2 0 61%, #F5E0DB 61% 100%);}
+  .field .endzone{position:absolute;top:0;bottom:0;width:16px;}
+  .field .endzone.l{left:0;background:var(--turf);}
+  .field .endzone.r{right:0;background:var(--brick);}
+  /* The fourth football. This was a CSS ellipse with a border-radius and a 2px
+     bar for a seam — the exact shape the mark redraw replaced — sitting ~200px
+     below the real mark in the same document, in a brown used nowhere else. */
+  .field .ball{position:absolute;left:61%;top:50%;transform:translate(-50%,-50%);
+    width:30px;height:20px;line-height:0;}
+  .field .ball svg.fieldball{width:100%;height:100%;display:block;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.55));}
+  .yards{display:flex;justify-content:space-between;padding:3px 14px 0;
+    font-family:'Barlow Condensed';font-weight:600;font-size:11px;color:var(--slate);
+    font-variant-numeric:tabular-nums;}
+  .field-read{margin-top:12px;font-size:15px;line-height:1.55;color:var(--ink2);}
+  .field-read b.win{color:var(--turf);font-variant-numeric:tabular-nums;}
+  .mkt{margin-top:12px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:13px;font-weight:600;color:var(--slate);line-height:1.55;}
+  .mkt b{color:var(--ink2);}
+  .drivers{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+  .drv{font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--ink2);background:#F2F0E8;border:1px solid var(--line);padding:4px 9px;}
+  .drv b{color:var(--turf);font-variant-numeric:tabular-nums;}
+  /* Counted usage — what he was actually given. Set in the numeric voice
+     because every value in it is a count, not an estimate. */
+  .usage{margin-top:6px;font-size:12.5px;font-weight:700;color:var(--ink2);
+    font-variant-numeric:tabular-nums;}
+
+  /* What we will not put a number on. Stated once, quietly, AFTER the
+     numbers we do stand behind — never in the scoreboard slot. */
+  .withheldline{margin-top:10px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+
+  /* The week just gone. No verdict colour on the loss case — this resolves
+     the week, it does not score the reader. */
+  .lastread{font-size:15.5px;line-height:1.55;color:var(--ink2);margin-top:16px;}
+  .lastread.win{color:var(--navy);font-weight:600;}
+
+  /* One shared axis. Scaled to the union of both bands each team fills 91-96%
+     of its own track, so two separate tracks showed two near-identical bars and
+     hid the only thing worth seeing: how much the two weeks OVERLAP. */
+  .rangeaxis{margin-top:18px;}
+  .rlab{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;
+    letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;}
+  .rlab .you{color:var(--turf);} .rlab .rival{color:var(--brick);}
+  /* The team's own floor-ceiling, beside its own name. The axis ends below
+     are the union of both bands and belong to neither team. */
+  .rlab b{font-family:'Barlow Condensed';font-size:14px;letter-spacing:.02em;
+          font-variant-numeric:tabular-nums;}
+  .rtrack{position:relative;height:40px;background:#EAE7DE;border:1px solid var(--line);}
+  .rover{position:absolute;top:0;bottom:0;background:#DCD8CC;}
+  .rband{position:absolute;height:14px;border:1px solid;}
+  .rband.you{top:4px;background:var(--turf-tint);border-color:var(--turf);}
+  .rband.rival{bottom:4px;background:var(--brick-tint);border-color:var(--brick);}
+  .rmed{position:absolute;width:3px;background:var(--navy);}
+  .rmed.you{top:1px;height:20px;} .rmed.rival{bottom:1px;height:20px;}
+  .rends{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+  .rread{margin-top:10px;font-size:13px;line-height:1.55;color:var(--ink2);}
+  .ranges{margin-top:18px;display:grid;gap:12px;}
+  .range .rl{display:flex;justify-content:space-between;font-size:12px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;color:var(--ink2);}
+  .range .track{position:relative;height:14px;background:#EAE7DE;border:1px solid var(--line);}
+  .range .band{position:absolute;top:0;bottom:0;}
+  .range.you .band{left:38%;right:9%;background:var(--turf-tint);border:1px solid var(--turf);}
+  .range.rival .band{left:31%;right:11%;background:var(--brick-tint);border:1px solid var(--brick);}
+  .range .med{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--navy);}
+  .range.you .med{left:61%;} .range.rival .med{left:56%;}
+  .range .nums{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-variant-numeric:tabular-nums;font-weight:600;}
+
+  /* ================= the tape ================= */
+  /* One row per slot, your player against theirs, the position badge on the
+     spine. The winning half is TINTED — that is the verdict, so no words are
+     spent saying it. This is the layout Sleeper's own matchup screen uses. */
+  /* table-layout:fixed so the two halves are SYMMETRIC. On auto layout the
+     rival's long fragility flag pulled its column wide and squeezed yours to
+     two-thirds the width, so the same length of text wrapped on your side and
+     not on theirs — in a grid whose whole argument is that the two sides are
+     directly comparable. */
+  .tape{width:100%;margin-top:16px;border-collapse:collapse;background:var(--card);
+    border:2px solid var(--navy);table-layout:fixed;}
+  .tape col:nth-child(1),.tape col:nth-child(4){width:38%;}
+  .tape col:nth-child(2),.tape col:nth-child(5){width:9%;}
+  .tape col:nth-child(3){width:6%;}
+  .tape td{padding:9px 8px;border-top:1px solid #EDEAE1;vertical-align:top;}
+  .thead td{background:var(--navy);color:#C9D4E2;font-size:10.5px;font-weight:800;
+    letter-spacing:.14em;text-transform:uppercase;padding:8px;border:none;}
+  .thead td:last-child{text-align:right;}
+  .tslot{text-align:center;font-family:'Barlow Condensed';font-weight:800;
+    font-size:13px;color:var(--slate);background:#F2F0E8;}
+  .tname{display:block;font-weight:700;font-size:14px;line-height:1.2;}
+  .tsub{display:block;margin-top:2px;font-size:10.5px;color:var(--slate);line-height:1.3;}
+  /* Availability is the one thing on a row a reader must not skim past. */
+  .tflag{display:block;margin-top:2px;font-size:10.5px;font-weight:700;
+         color:var(--brick);line-height:1.3;letter-spacing:.2px;}
+  .tpts{font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+    font-variant-numeric:tabular-nums;}
+  .tside.rival{text-align:right;} .tpts.rival{text-align:right;}
+  /* The solo lineup's call column. No tint anywhere in that grid: a tint is a
+     comparison, and with no opponent there is nothing to compare against. */
+  .tcall{font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+    text-align:right;font-variant-numeric:tabular-nums;color:var(--navy);}
+  .tcall .tsub{display:inline;font-family:var(--sans);font-weight:600;}
+  /* The numeral drawn: the same bar the Regret Score uses, scaled to a row.
+     The fill IS the percentage — no rescaling, or the picture and the number
+     would disagree about the same call. */
+  .tcall .cbar{display:block;height:4px;background:#EAE7DE;margin-top:5px;
+    border-radius:2px;overflow:hidden;}
+  .tcall .cbar i{display:block;height:100%;background:linear-gradient(90deg,#D9A81B,var(--flag));}
+  .trow.alead .tside.you,.trow.alead .tpts.you{background:var(--turf-tint);}
+  .trow.blead .tside.rival,.trow.blead .tpts.rival{background:var(--brick-tint);}
+  /* The bench: the rest of the roster, deliberately quieter than the lineup
+     above it — same grid so it reads as one roster, lighter so the starters
+     stay the thing the eye lands on. */
+  .benchtape{margin-top:10px;border-width:1px;border-color:var(--line);}
+  .benchtape .thead td{background:#E9E6DC;color:var(--slate);}
+  .benchtape .tname{font-weight:600;color:var(--ink2);}
+  .benchtape .tpts{color:var(--slate);font-size:15px;}
+  /* A benched starter-calibre player: navy, not brick. Brick means "cannot
+     play", and a star the file chose to sit must not read as an injury. */
+  .trank{display:block;margin-top:2px;font-size:10.5px;font-weight:800;
+    color:var(--navy);letter-spacing:.3px;text-transform:uppercase;}
+  .ttotal td{border-top:2px solid var(--navy);background:#F2F0E8;
+    font-family:'Barlow Condensed';font-weight:800;}
+  @media (max-width:520px){
+    .tname{font-size:12.5px;} .tpts{font-size:15px;width:38px;}
+    /* A narrow screen needs the numbers to fit before it needs long names. */
+    .tape col:nth-child(1),.tape col:nth-child(4){width:32%;}
+    .tape col:nth-child(2),.tape col:nth-child(5){width:15%;}
+    .tsub,.tflag{font-size:9.5px;} .tape td{padding:7px 5px;}
+    .tname{font-size:13px;} .tpts{font-size:15px;}
+  }
+
+  /* The as-set note under the Tape. The lineup-grid block that used to live
+     here went with the two stacked grids the Tape replaced — CSS for markup
+     nothing emits is a trap: an edit to it silently does nothing. */
+  .benchnote{padding:11px 14px;border-top:1px dashed var(--line);font-size:13px;color:var(--ink2);
+    background:#FBFAF6;line-height:1.5;}
+  .benchnote b{color:var(--brick);}
+  .withheld{margin-top:16px;background:#F2F0E8;border:1px solid var(--line);
+    border-left:4px solid var(--slate);padding:13px 15px;font-size:13.5px;
+    line-height:1.5;color:var(--ink2);}
+  .withheld .lab{display:block;margin-bottom:3px;font-family:'Barlow Condensed';
+    font-weight:800;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--slate);}
+
+  /* ================= scouting ================= */
+  .scout{margin-top:16px;display:grid;gap:12px;}
+  .srow{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;}
+  .srow .x{font-family:'Barlow Condensed';font-weight:800;font-size:18px;color:var(--brick);
+    border:2px solid var(--brick);width:26px;height:26px;display:flex;align-items:center;
+    justify-content:center;border-radius:50%;}
+  .srow .who{font-weight:700;font-size:15.5px;}
+  .srow .why{font-size:14.5px;color:var(--ink2);line-height:1.55;margin-top:2px;}
+
+  /* ================= regret ================= */
+  .call{margin-top:16px;background:var(--card);border:2px solid var(--navy);padding:18px 18px 16px;}
+  .call .verdict{font-family:'Barlow Condensed';font-weight:800;font-size:27px;
+    text-transform:uppercase;line-height:1.05;}
+  .call .verdict .over{color:var(--slate);font-size:19px;}
+  .conf{display:flex;align-items:center;gap:10px;margin-top:12px;}
+  .conf .bar{flex:1;height:10px;background:#EAE7DE;border:1px solid var(--line);}
+  .conf .bar i{display:block;height:100%;width:64%;background:linear-gradient(90deg,#D9A81B,var(--flag));}
+  .conf .num{font-family:'Barlow Condensed';font-weight:800;font-size:22px;
+    font-variant-numeric:tabular-nums;color:var(--navy);}
+  .call .why{margin-top:12px;font-size:14.5px;line-height:1.55;color:var(--ink2);}
+  .regret-note{margin-top:14px;padding:10px 12px;background:var(--brick-tint);
+    border-left:4px solid var(--brick);font-size:13.5px;line-height:1.5;color:#7A2C1F;font-weight:500;}
+
+  /* ================= hype ================= */
+  .hype{margin-top:16px;display:grid;gap:14px;}
+  .hcard{background:var(--card);border:1px solid var(--line);padding:16px 16px 14px;}
+  .hcard .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .hcard .player{font-weight:700;font-size:15.5px;}
+  .badge{font-family:'Barlow Condensed';font-weight:800;font-size:13px;letter-spacing:.14em;
+    text-transform:uppercase;padding:4px 10px;white-space:nowrap;}
+  .badge.real{background:var(--turf);color:#fff;}
+  .badge.mirage{background:var(--flag);color:var(--navy);}
+  .gauge{margin-top:10px;height:8px;background:#EAE7DE;border:1px solid var(--line);}
+  .gauge i{display:block;height:100%;}
+  .gauge.g1 i{width:82%;background:var(--turf);}
+  .gauge.g2 i{width:88%;background:var(--flag);}
+  .gauge-label{display:flex;justify-content:space-between;font-size:11px;color:var(--slate);
+    margin-top:4px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+  .hcard .read{margin-top:10px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .hcard .action{margin-top:8px;font-size:13.5px;font-weight:700;}
+  .hcard .action.go{color:var(--turf);} .hcard .action.no{color:#8A6A10;}
+
+  /* ================= pivot plan ================= */
+  .pivots{margin-top:16px;display:grid;gap:12px;}
+  .pivot{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--navy);
+    padding:14px 16px;}
+  .pivot .if{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--slate);}
+  .pivot .cond{font-weight:700;font-size:15px;margin-top:3px;}
+  .pivot .then{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .pivot .then b{color:var(--turf);}
+
+  /* ================= receipts ================= */
+  .ledger{margin-top:16px;background:var(--navy);color:#C9D4E2;padding:18px 20px;
+    font-size:14.5px;line-height:1.6;}
+  .ledger b{color:var(--flag);}
+  .ledger .stamp{display:inline-block;margin-top:10px;border:2px solid var(--flag);color:var(--flag);
+    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.18em;font-size:13px;
+    text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
+  .ledger ul.receipts{margin:10px 0 4px 18px;}
+  .ledger ul.receipts li{margin:3px 0;}
+
+  footer{padding:18px 24px 26px;font-size:12px;color:var(--slate);line-height:1.6;
+    border-top:3px double var(--line);}
+  footer b{color:var(--navy);}
+
+  @media (max-width:430px){
+    .bug h1{font-size:36px;}
+    .team .pts{font-size:42px;}
+    .call .verdict{font-size:23px;}
+    section{padding:20px 14px 24px;}
+    .bug{padding:20px 16px 18px;}
+  }
+.brand svg.mark{width:22px;height:22px;flex:none;}.brand{display:inline-flex;align-items:center;gap:9px;}</style>
+</head>
+<body>
+<div class="report">
+<header class="bug"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"><a class="brand" href="index.html" style="text-decoration:none;"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylmClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylmClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html" style="font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;white-space:nowrap;text-decoration:none;color:var(--paper);padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;">← Home</a></div><h1>Week 4 · Your Report</h1><div class="chips"><span class="chip"><b>Your league</b> · 12 teams · Full PPR</span><span class="chip">Built Tue Sep 29 · 8:05 PM ET</span></div></header><div class="regret-note" style="margin:0;border-left:none;">THIS WEEK'S REPORT — Week 4 of the 2026 season, built Tuesday, September 29 for a sample roster, exactly the way yours is built. Rebuilt every Tuesday.</div><section><div class="eyebrow"><span class="tag">Your Game Plan</span><span class="n">01</span></div><div class="plan"><div class="task"><div class="box"></div><div><div class="do">Bench Saquon Barkley and Courtland Sutton — Sam LaPorta starts at FLEX</div><div class="why">Saquon Barkley: RB15 last season. Last three games: 9.0, 3.0, 9.0. Projects 9.0, Sam LaPorta 10.6. Courtland Sutton: WR19 last season. Last three games: 3.1, 5.5, 7.6. Projects 9.4, Sam LaPorta 10.6.</div><div class="dl ok">before this week&#x27;s first kickoff</div></div></div><div class="task"><div class="box"></div><div><div class="do">Set this lineup</div><div class="why">QB Josh Allen · RB Bijan Robinson · RB Chase Brown · WR Amon-Ra St. Brown · WR Ja&#x27;Marr Chase · TE George Kittle · FLEX Sam LaPorta · K Jake Bates · DEF Denver Broncos</div><div class="dl ok">before this week&#x27;s first kickoff</div></div></div></div></section><section><div class="eyebrow"><span class="tag">Your Week</span><span class="n">02</span></div><div class="team"><div class="name">Sample roster</div><div class="pts">127.6 <small>PROJ</small></div><div class="yards">93 – 163 realistic range</div></div><p class="withheldline">Every call below is your starter against your own bench.</p></section><section><div class="eyebrow"><span class="tag">The Lineup</span><span class="n">03</span></div><table class="tape"><colgroup><col style="width:9%"><col style="width:58%"><col style="width:12%"><col style="width:21%"></colgroup><tr class="thead"><td></td><td>Your lineup</td><td style="text-align:right">Proj</td><td>Call</td></tr><tr class="trow"><td class="tslot">QB</td><td class="tside you"><span class="tname">Josh Allen</span><span class="tsub">last 3 games: 1 target (0.3 a game), 28 carries</span></td><td class="tpts you">25.5</td><td class="tcall"></td></tr><tr class="trow"><td class="tslot">RB</td><td class="tside you"><span class="tname">Bijan Robinson</span><span class="tsub">+7.4 over Saquon Barkley on your bench · last 3 games: 16 targets (5.3 a game), 66 carries</span></td><td class="tpts you">16.4</td><td class="tcall"><b>73%</b><span class="cbar" title="Bar starts at 50%, a coin flip"><i style="width:46%"></i></span></td></tr><tr class="trow"><td class="tslot">RB</td><td class="tside you"><span class="tname">Chase Brown</span><span class="tsub">+3.7 over Saquon Barkley on your bench · last 3 games: 13 targets (4.3 a game), 49 carries</span></td><td class="tpts you">12.7</td><td class="tcall"><b>66%</b><span class="cbar" title="Bar starts at 50%, a coin flip"><i style="width:31%"></i></span></td></tr><tr class="trow"><td class="tslot">WR</td><td class="tside you"><span class="tname">Amon-Ra St. Brown</span><span class="tsub">+8.8 over Rome Odunze on your bench · last 3 games: 35 targets (11.7 a game)</span></td><td class="tpts you">18.5</td><td class="tcall"><b>78%</b><span class="cbar" title="Bar starts at 50%, a coin flip"><i style="width:57%"></i></span></td></tr><tr class="trow"><td class="tslot">WR</td><td class="tside you"><span class="tname">Ja&#x27;Marr Chase</span><span class="tsub">+6.9 over Rome Odunze on your bench · last 3 games: 25 targets (8.3 a game)</span></td><td class="tpts you">16.6</td><td class="tcall"><b>73%</b><span class="cbar" title="Bar starts at 50%, a coin flip"><i style="width:47%"></i></span></td></tr><tr class="trow"><td class="tslot">TE</td><td class="tside you"><span class="tname">George Kittle</span><span class="tsub">last 3 games: 16 targets (5.3 a game)</span></td><td class="tpts you">12.3</td><td class="tcall"></td></tr><tr class="trow"><td class="tslot">FLEX</td><td class="tside you"><span class="tname">Sam LaPorta</span><span class="tsub">+0.9 over Rome Odunze on your bench · last 3 games: 19 targets (6.3 a game)</span></td><td class="tpts you">10.6</td><td class="tcall"><b>55%</b><span class="cbar" title="Bar starts at 50%, a coin flip"><i style="width:9%"></i></span></td></tr><tr class="trow"><td class="tslot">K</td><td class="tside you"><span class="tname">Jake Bates</span></td><td class="tpts you">8.6</td><td class="tcall"></td></tr><tr class="trow"><td class="tslot">DEF</td><td class="tside you"><span class="tname">Denver Broncos</span><span class="tsub">+2.9 over Baltimore Ravens on your bench</span></td><td class="tpts you">6.5</td><td class="tcall"><span class="tsub">projection only</span></td></tr></table><table class="tape benchtape"><colgroup><col style="width:9%"><col style="width:58%"><col style="width:12%"><col style="width:21%"></colgroup><tr class="thead"><td></td><td>On your bench</td><td style="text-align:right">Proj</td><td></td></tr><tr class="trow bench"><td class="tslot">WR</td><td class="tside you"><span class="tname">Rome Odunze</span><span class="tsub">last 3: 7.2, 7.3, 7.4</span></td><td class="tpts you">9.7</td><td class="tcall"></td></tr><tr class="trow bench"><td class="tslot">WR</td><td class="tside you"><span class="tname">Courtland Sutton</span><span class="trank">WR19 last season</span><span class="tsub">last 3: 3.1, 5.5, 7.6</span></td><td class="tpts you">9.4</td><td class="tcall"></td></tr><tr class="trow bench"><td class="tslot">RB</td><td class="tside you"><span class="tname">Saquon Barkley</span><span class="trank">RB15 last season</span><span class="tsub">last 3: 9.0, 3.0, 9.0</span></td><td class="tpts you">9.0</td><td class="tcall"></td></tr><tr class="trow bench"><td class="tslot">RB</td><td class="tside you"><span class="tname">Tony Pollard</span><span class="tsub">last 3: 4.4, 7.5, 13.6</span></td><td class="tpts you">7.4</td><td class="tcall"></td></tr><tr class="trow bench"><td class="tslot">DEF</td><td class="tside you"><span class="tname">Baltimore Ravens</span><span class="tsub">last 3: 4.0, 3.0, 0.0</span></td><td class="tpts you">3.6</td><td class="tcall"></td></tr><tr class="trow bench"><td class="tslot">WR</td><td class="tside you"><span class="tname">Jayden Reed</span><span class="tflag">can&#x27;t play this week</span></td><td class="tpts you">—</td><td class="tcall"></td></tr></table><div class="withheld"><b>How to read the odds.</b> The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up). We only give odds when both players are confirmed to play. Rows without odds this week: defenses get a projection only · no bench player at that position.</div></section><section><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">04</span></div><div class="call"><div class="verdict">Start Sam LaPorta <span class="over">over</span> Rome Odunze</div><div class="conf"><div class="bar"><i style="width:55%"></i></div><div class="num">55%</div></div><div class="drivers"><span class="drv">proj <b>10.6 vs 9.7</b></span><span class="drv">games this season <b>3 vs 3</b></span></div><p class="why">That&#x27;s the chance Sam LaPorta outscores Rome Odunze this week.</p></div></section><section><div class="eyebrow"><span class="tag">If/Then for Gameday</span><span class="n">05</span></div><div class="withheld"><span class="lab">Heads up</span>no pivots this week — no starter we can check is listed questionable</div></section><section><div class="eyebrow"><span class="tag">The Receipts</span><span class="n">06</span></div><div class="ledger">Your results start here: once this week&#x27;s games are final, every call shows up with how it played out.<br><span class="stamp">Results · from next week</span></div></section><div class="regret-note" style="margin:14px 0 0;text-align:center;">This is this week's report for a sample roster. Yours is built from your own roster, scored your league's way — <a href="join/index.html" style="color:var(--brick);font-weight:700;">set it up</a> and your first report lands the day you join.</div><footer><b>Beat Your League</b> — the weekly scouting report for your fantasy roster, every Tuesday.<br>Injury and inactive data as of the week 3 injury report, the last complete one before this file goes out.<br>Projections are analysis, not guarantees — no betting picks, no staking advice. Fantasy decisions are yours to make.<br>NFL data: nflverse (nflverse-data), CC-BY-4.0. Aggregated and scored to your league&#x27;s settings by us. Not affiliated with the NFL.<br><b>Done with this?</b> Cancel it yourself from your own billing page — it takes about fifteen seconds and stops the billing immediately; the exact steps are on our terms page. Unsubscribing from emails alone does not stop a subscription, so cancel there if you want the charges to end.</footer>
+</div>
+</body>
+</html>
