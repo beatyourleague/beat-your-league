@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats drops sitemap monday monday-preview sample \
         og brand billing billing-preview
 
 week:
@@ -78,6 +78,11 @@ saturday-preview:
 # a fake mail provider. Writes only to a temp folder.
 proving:
 	$(PY) -m run.proving
+
+# The owner's demand summary: form Worker rows + the committed send log (+ the
+# registry if a copy is here). Counts only, never an address. Read-only.
+stats:
+	$(PY) -m run.stats
 
 # This week's public posts, drafted from the live sample report (content/this-week.md).
 drops:

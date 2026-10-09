@@ -76,6 +76,15 @@ class SoloError(RuntimeError):
     """The week could not be built for this roster."""
 
 
+class SeasonOver(SoloError):
+    """Today is past the season's last game: there is no week to build.
+
+    Without it ``current_week`` answers the last week forever, so every
+    offseason Tuesday rebuilt Week 18 and mailed it to anyone who joined after
+    it went out — "decided, before this week's first kickoff" about games
+    played months ago. Runners treat it as a quiet exit, not a failure."""
+
+
 def _final_teams_for_week(cache_dir: Path, season: str, week: int) -> set[str]:
     """Teams whose REG game that week has a final score in the schedule.
 
@@ -272,6 +281,20 @@ def current_season(cache_dir: Path, today: date | None = None, *,
     return sorted(ends)[-1]
 
 
+def season_over(cache_dir: Path, season: str, today: date | None = None, *,
+                session: requests.Session | None = None) -> bool:
+    """True once the season's last regular-season game is behind us."""
+    end = season_ends(cache_dir, session=session).get(str(season))
+    when = (today or datetime.now(timezone.utc).date()).isoformat()
+    return bool(end) and end < when
+
+
+def last_week(cache_dir: Path, season: str, *,
+              session: requests.Session | None = None) -> int | None:
+    weeks = _weeks(_schedule(cache_dir, session=session), season)
+    return max(weeks) if weeks else None
+
+
 def current_week(cache_dir: Path, season: str, today: date | None = None, *,
                  session: requests.Session | None = None) -> int:
     """The week a report written today is ABOUT.
@@ -313,6 +336,9 @@ class WeekData:
     # when the week is outside 4-16 or an input could not be read — the
     # report then falls back to the model without them, and to ITS b.
     context: dict | None = None
+    # The season's last regular-season week (18 today), for the season-end
+    # notes a report carries in its final two weeks. None if unknown.
+    last_week: int | None = None
     # engine/rising.py: the week's risers league-wide, built once; each
     # subscriber's report filters them to players not on their roster.
     rising: list = field(default_factory=list)
@@ -447,12 +473,18 @@ def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
 
 def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
                    week: int | None = None, *, live: bool = True,
-                   session: requests.Session | None = None) -> WeekData:
+                   session: requests.Session | None = None,
+                   today: date | None = None) -> WeekData:
     """Fetch and assemble one week. Costs the same for one subscriber or a
     hundred — nothing in here depends on a particular roster."""
     cache_dir = Path(cache_dir)
-    season = str(season) if season else current_season(cache_dir, session=session)
-    week = int(week) if week else current_week(cache_dir, season, session=session)
+    season = (str(season) if season
+              else current_season(cache_dir, today, session=session))
+    if not week and season_over(cache_dir, season, today, session=session):
+        raise SeasonOver(f"the {season} season is over; nothing to build until "
+                         f"the next season's schedule")
+    week = int(week) if week else current_week(cache_dir, season, today,
+                                               session=session)
     if week < 1:
         raise SoloError(f"week {week} is not a week")
 
@@ -543,6 +575,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         context=_context_inputs(cache_dir, season, week, directory, weekly,
                                 live=live, session=session),
         rising=rising_candidates(weekly, week),
+        last_week=last_week(cache_dir, season, session=session),
     )
 
 
@@ -884,6 +917,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # lineup (seating, projections, edges), not only the calls that carry
         # a row-level flag, so the section says so once.
         report["meta"]["seeded"] = True
+    report["meta"]["last_week"] = data.last_week
     return report
 
 

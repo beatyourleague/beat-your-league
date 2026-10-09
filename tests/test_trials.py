@@ -101,6 +101,7 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
     monkeypatch.setattr(trials, "current_season", lambda *a, **k: SEASON, raising=False)
     monkeypatch.setattr("run.solo.current_season", lambda *a, **k: SEASON)
     monkeypatch.setattr("run.solo.current_week", lambda *a, **k: WEEK)
+    monkeypatch.setattr("run.solo.season_over", lambda *a, **k: False)
     monkeypatch.setattr(trials, "week_underway_from",
                         lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
     monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))

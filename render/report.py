@@ -507,6 +507,10 @@ def header(meta: Mapping[str, Any]) -> str:
                'league\'s real record.' if meta.get("anonymized_demo") else "")
             + '</div>'
         )
+    if season_end_lines(meta):
+        banner += ('<div class="regret-note" style="margin:0;border-left:none;">'
+                   f'<b>{esc(SEASON_END_HEAD)}.</b> '
+                   f'{esc(" ".join(season_end_lines(meta)))}</div>')
     brand = f'<div class="brand">{mark_svg("bylm")}<span>Beat Your League</span></div>'
     if meta.get("anonymized_demo"):
         # The published samples are site pages a visitor reaches from the
@@ -1336,11 +1340,64 @@ def read_lines(meta: Mapping[str, Any]) -> list[str]:
     return ["", f"NEW TO THIS REPORT? What each part means: {site}/how-it-works.html#read"]
 
 
+SEASON_END_HEAD = "The season's end"
+
+
+def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
+    """What a report says in the season's last two weeks (both renderers).
+
+    Week 17 is championship week under ESPN's, Yahoo's and Sleeper's default
+    playoffs, so a subscriber may be reading their last report a week early
+    without knowing whether another is coming. Week 18 is when teams with
+    nothing left to play for rest starters — news that mostly lands after the
+    Friday injury report the Saturday check reads — and nothing told a
+    subscriber the reports were ending or what happens to their billing.
+    The billing sentence is the plan's own promise, repeated; it renders only
+    for a subscriber (``meta["plan"]``, set by run/tuesday.py), never on a
+    sample or a free report."""
+    week, last = meta.get("week"), meta.get("last_week")
+    if not meta.get("solo") or meta.get("historical_demo") \
+            or not isinstance(week, int) or not isinstance(last, int):
+        return []
+    if week == last - 1:
+        return [f"Week {week} is championship week under ESPN's, Yahoo's and "
+                f"Sleeper's default settings. If your league plays Week {last}, "
+                f"next Tuesday's report covers it, and it's the season's last."]
+    if week != last:
+        return []
+    lines = [f"Week {last} is when NFL teams with nothing left to play for rest "
+             f"starters, and many of those calls come after Friday's injury "
+             f"report. Check each team's inactives, posted 90 minutes before "
+             f"kickoff."]
+    plan = meta.get("plan")
+    billing = {
+        "monthly": "Your monthly plan stops billing on its own at season's end, "
+                   "so there's nothing to cancel.",
+        "season": "Your season pass renews once a year, on the day you bought it, "
+                  "and we email you before it does. Reports start again with "
+                  "Week 1 next September.",
+        "league_pass": "Reports start again with Week 1 next September if your "
+                       "league's pass is renewed.",
+    }.get(plan)
+    if billing:
+        lines.append("This is the season's last report. Thanks for playing it "
+                     "with us. " + billing)
+    return lines
+
+
 UPDATE_HEAD = "Roster changed?"
 UPDATE_BODY = ("Update it here by Saturday morning — your final check and your next "
                "report use it. We'll email you a button to confirm:")
 UPDATE_REPLY = ("Reply to this email with your updated roster and your next report "
                 "follows it.")
+# The season's last report has no next report to follow a change, so the reply
+# route goes and the link keeps only what is still true of it.
+UPDATE_BODY_LAST = ("Update it here by Saturday morning — your final check uses "
+                    "it. We'll email you a button to confirm:")
+
+
+def _last_report(meta: Mapping[str, Any]) -> bool:
+    return meta.get("last_week") is not None and meta.get("week") == meta.get("last_week")
 
 
 # The update link is PUBLIC and grants nothing (run/updates.py, confirm-by-
@@ -1357,8 +1414,10 @@ def update_line(meta: Mapping[str, Any]) -> str:
             or meta.get("live_demo") or meta.get("trial")):
         return ""
     if not url:
-        return f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_REPLY)}<br>'
-    return (f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_BODY)} '
+        return ("" if _last_report(meta)
+                else f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_REPLY)}<br>')
+    body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
+    return (f'<b>{esc(UPDATE_HEAD)}</b> {esc(body)} '
             f'<a href="{esc(url)}">{esc(url)}</a><br>')
 
 
@@ -1368,8 +1427,11 @@ def update_lines(meta: Mapping[str, Any]) -> list[str]:
             or meta.get("live_demo") or meta.get("trial")):
         return []
     url = meta.get("update_url")
+    if not url and _last_report(meta):
+        return []
+    body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
     return ["", f"{UPDATE_HEAD.upper()} "
-            + (f"{UPDATE_BODY} {url}" if url else UPDATE_REPLY)]
+            + (f"{body} {url}" if url else UPDATE_REPLY)]
 
 
 def footer(meta: Mapping[str, Any]) -> str:

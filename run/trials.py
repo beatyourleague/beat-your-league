@@ -125,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     from run.delivery import (DRY_PROVIDER, Message, build_provider, load_sent,
                               send_all)
     from run.rosters import RosterRegistryError, load_rosters
-    from run.solo import CACHE_DIR, SoloError, current_season, current_week
+    from run.solo import (CACHE_DIR, SoloError, current_season, current_week,
+                          season_over)
     try:
         registry_emails = {s.email.lower() for s in load_rosters(args.registry)}
     except RosterRegistryError as exc:
@@ -138,6 +139,9 @@ def main(argv: list[str] | None = None) -> int:
     todo = pending(rows, registry_emails, load_sent(), season)
     if not todo:
         print("Free reports: none pending.")
+        return 0
+    if season_over(CACHE_DIR, season, now.date()):
+        print(f"Free reports: {len(todo)} waiting — the {season} season is over.")
         return 0
     week = current_week(CACHE_DIR, season, today=now.date())
     cutoff = week_underway_from(CACHE_DIR, season, week)

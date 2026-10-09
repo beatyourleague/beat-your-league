@@ -1,5 +1,7 @@
 """The proving run — `make proving`: weeks 4-8 of 2025, twelve subscribers, every runner.
 
+`python -m run.proving <dir> 14-18` runs other weeks (the season's end).
+
 Every serious bug in this repo lived in a path nobody had executed, so this
 executes all of them in sequence on a real past season.
 
@@ -17,7 +19,8 @@ ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix=
 # log are never touched.
 shutil.rmtree(ROOT, ignore_errors=True); ROOT.mkdir(parents=True)
 SEASON = "2025"
-WEEKS = [4, 5, 6, 7, 8]
+_span = sys.argv[2] if len(sys.argv) > 2 else "4-8"
+WEEKS = list(range(int(_span.split("-")[0]), int(_span.split("-")[-1]) + 1))
 
 import run.delivery as delivery
 import run.tuesday as tuesday

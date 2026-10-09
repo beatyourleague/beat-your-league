@@ -43,7 +43,7 @@ from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
-from run.solo import (CACHE_DIR, SoloError, WeekData, _prior_form,
+from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
                        load_week_data, report_for)
 from run.saturday import PLANS_DIR, build_plan, write_plan
 from run.updates import public_update_url
@@ -106,6 +106,9 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # tokenised link it replaced put a roster-write credential in a file
         # built to be forwarded (removed Aug 27 2026). None until the site,
         # the form backend and the signing secret all exist.
+        # The plan decides the season-end billing sentence the last report
+        # carries (render/report.season_end_lines).
+        report["meta"]["plan"] = subscriber.plan
         report["meta"]["update_url"] = public_update_url(
             os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
             os.environ.get("FORM_ENDPOINT", ""))
@@ -296,6 +299,10 @@ def main(argv: list[str] | None = None) -> int:
     # per-subscriber, which is the cost NFR made structural.
     try:
         data = load_week_data(args.cache, args.season, args.week)
+    except SeasonOver as exc:
+        # Not a failure: the cron keeps firing every Tuesday of the offseason.
+        print(f"No reports this week: {exc}.")
+        return 0
     except SoloError as exc:
         print(f"could not load this week's data: {exc}", file=sys.stderr)
         return 1

@@ -1079,6 +1079,31 @@ Each reviewer took one area, reproduced before reporting, and edited nothing. Wh
   `<main>` landmarks, skip link, keyboard focus on FAQ summaries and 24px nav targets. Contrast and load
   weight were measured and needed no change.
 
+**The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
+2025's last five weeks through every runner: all green, and two gaps no test could see.
+**The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever
+once a season is over, so anyone who joined after Week 18 went out was mailed "decided, before
+this week's first kickoff" about games months old, and the Saturday check exited 1 (an issue
+filed) every offseason Saturday. A DERIVED week past the season's last game is now
+`run.solo.SeasonOver` (a `SoloError`; `season_over()` reads the same `season_ends` billing
+uses): Tuesday, Saturday and the free report exit 0 and say so; the live sample and posts keep
+last week's page. An explicit `--week` still builds (backfills, the proving run). **The last
+two reports now say what's happening** (`render.report.season_end_lines`, all three renderers,
+`meta["last_week"]` from `WeekData.last_week`, `meta["plan"]` set by `run/tuesday.py`): Week 17
+says it's championship week under ESPN/Yahoo/Sleeper defaults and that a Week 18 report follows;
+Week 18 warns that resting starters are mostly announced after Friday's report (inactives come
+90 minutes before kickoff), says it's the last report, and repeats the plan's own promise
+(monthly stops itself; the pass renews on its anniversary after a notice; a seat follows its
+league's pass). No billing sentence on samples or free reports. The last report drops the
+"your next report follows it" roster line (there is none).
+
+**`make stats` (`run/stats.py`, Oct 9 2026)** — the owner's demand view, since the site has no
+analytics by promise: Worker rows by kind (ever / 7 days / 24 h / distinct mailboxes, counted
+the way the free report canonicalises them), the committed send log by week, and, when a
+registry copy is present, how many free-report and waitlist mailboxes subscribe now. Counts
+only, never an address; read-only; an unreadable Worker exits 1 rather than printing zeros.
+Not a CI step on purpose: the repo is public, so a job summary would publish subscriber counts.
+
 **Persona review and the trust pass (Sep 29 2026).** Seven simulated buyers (casual, veteran,
 Sleeper-native, analyst, high-stakes, free-league, commissioner) averaged ~6.9/10; the recurring
 gaps were "who is this?", "can I check it?", "what does the % mean?", and League Pass buried in a

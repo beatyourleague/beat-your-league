@@ -46,7 +46,7 @@ from render.report import cancel_destination
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import RosterRegistryError, load_rosters
-from run.solo import CACHE_DIR, current_season, current_week
+from run.solo import CACHE_DIR, current_season, current_week, season_over
 from run.subscriptions import DEFAULT_EXPORT
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -417,6 +417,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     season = str(args.season or current_season(args.cache, today=at.date()))
+    if not args.week and season_over(args.cache, season, at.date()):
+        print(f"No final check: the {season} season is over.")
+        return 0
     week = int(args.week or current_week(args.cache, season, today=at.date()))
     try:
         starts = kickoffs(args.cache, season, week)

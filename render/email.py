@@ -27,6 +27,8 @@ from typing import Any, Mapping
 
 from render.report import (
     EMAIL_META,
+    SEASON_END_HEAD,
+    season_end_lines,
     preheader_html,
     AS_SET_BODY,
     AS_SET_HEAD,
@@ -185,6 +187,14 @@ def _header(meta: Mapping[str, Any]) -> str:
             f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
             f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
             f'<b>{esc(TRIAL_HEAD)}.</b> {esc(_trial_line())}</div></td></tr>')
+    season_end = season_end_lines(meta)
+    if season_end:
+        banner += (
+            f'<tr><td style="padding:0 28px;">'
+            f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
+            f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
+            f'<b>{esc(SEASON_END_HEAD)}.</b> {esc(" ".join(season_end))}'
+            f'</div></td></tr>')
     if meta.get("historical_demo"):
         banner = (
             f'<tr><td style="padding:0 28px;">'
@@ -693,6 +703,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
     ]
     if meta.get("trial"):
         lines += [f"{TRIAL_HEAD.upper()}. {_trial_line()}", ""]
+    if season_end_lines(meta):
+        lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
     for item in report["checklist"]:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")

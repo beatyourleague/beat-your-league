@@ -234,9 +234,24 @@ or "we hit X%" — the grading doesn't back any of them yet — and nothing abou
 | Tuesday ~8am, retry at noon | **weekly-report:** new signups, then every subscriber's file | Open your own file |
 | Daily ~10am, plus hourly | **daily-intake:** new purchases, welcomes, first files, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
 | Monday ~9am | **monday-receipts:** grades last week's calls and republishes the public record | Nothing, unless it goes red |
+| Saturday ~noon | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
 
 Times are an hour earlier from Nov 1, when the clocks change. A red run opens a GitHub issue,
 and GitHub emails you about it.
+
+**How's demand?** Pull, then run:
+```bash
+make stats
+```
+It prints counts only (waitlist, free-report requests, roster updates, seat claims, and what
+went out each week) and never an address. The form rows need `FORM_ENDPOINT` and
+`FORM_API_KEY` in your shell; without them it prints the rest.
+
+**The season's end.** Week 17's report tells subscribers it's championship week on the big
+platforms' default settings and that a Week 18 report follows for leagues that play it. Week
+18's says it's the last, warns about rested starters, and repeats what their plan does next
+(monthly stops billing itself; season pass renews on its anniversary with a notice first).
+After the last game every weekly job exits quietly until the next season's schedule is out.
 
 **A refund request, in three checks:**
 1. **Is it inside the window?** Find the first week below whose kickoff comes after they paid
