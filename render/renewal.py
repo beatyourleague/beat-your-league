@@ -86,25 +86,28 @@ def renewal_message(renewal: Renewal) -> Message:
     href, label = _cancel_destination()
     when = renewal.renews_on.strftime("%B %-d, %Y")
     cancel_line = (
-        "If you'd rather not renew, cancel it yourself in about fifteen "
-        "seconds — "
+        "If you'd rather not renew, cancel it yourself in about a minute — "
         + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>. '
            if href else "the steps are on our site's terms page. ")
         + "Cancel before that date and you are not charged."
     )
     cancel_text = (
-        "If you'd rather not renew, cancel it yourself in about fifteen "
-        "seconds — "
+        "If you'd rather not renew, cancel it yourself in about a minute — "
         + (f"{label}: {href}. " if href else
            "the steps are on our site's terms page. ")
         + "Cancel before that date and you are not charged.")
 
-    lede = (f"Your subscription renews on {when}, and the card on file will be "
-            f"charged {renewal.amount}. Nothing is due before then, and this "
-            f"is the only notice we send about it.")
+    # The product, how often it renews and a contact: what Cal. B&P §17602
+    # names besides the date and amount, and what the first version left out
+    # (launch audit L5). The amount is still Stripe's, never our constant.
+    lede = (f"Your Beat Your League subscription renews on {when}, and the card "
+            f"on file will be charged {renewal.amount} — it renews once a year "
+            f"until you cancel. Nothing is due before then, and this is the only "
+            f"notice we send about it.")
     what = ("Renewing keeps the Tuesday report coming for the season ahead — "
             "the lineup we'd set for your roster under your scoring, with "
-            "the odds on every close call.")
+            "the odds on the close calls.")
+    contact = "Questions? Write to hello@beatyourleague.com."
 
     html = (
         f'<div style="{_BODY}max-width:560px;margin:0 auto;padding:8px 4px;">'
@@ -113,6 +116,7 @@ def renewal_message(renewal: Renewal) -> Message:
         f'<p style="{_BODY}margin:0 0 10px;">{esc(what)}</p>'
         f'<p style="{_HEAD}">{esc(CANCEL_HEAD)}</p>'
         f'<p style="{_BODY}margin:0 0 8px;">{cancel_line} {esc(UNSUB_LINE)}</p>'
+        f'<p style="{_BODY}margin:0 0 8px;">{esc(contact)}</p>'
         f'</div>'
     )
     text = "\n".join([
@@ -123,8 +127,10 @@ def renewal_message(renewal: Renewal) -> Message:
         "",
         CANCEL_HEAD.upper(),
         f"{cancel_text} {UNSUB_LINE}",
+        "",
+        contact,
     ]) + "\n"
 
     return Message(to=renewal.email,
-                   subject=f"Heads up: your subscription renews {when}",
+                   subject=f"Beat Your League: your subscription renews {when}",
                    html=html, text=text, key=renewal.key)

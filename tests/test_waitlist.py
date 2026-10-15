@@ -81,7 +81,7 @@ def test_the_announcement_promises_only_what_exists() -> None:
     no longer read, and the self-updating report is not built. This test exists
     because the first draft of this email promised two of those — inherited
     from BRAND_LINE, which still described the Sleeper product."""
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/").lower()
+    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com").lower()
     for claim in FORBIDDEN_CLAIMS:
         assert claim not in body, (
             f"the launch email promises {claim!r}, which this product does not "
@@ -96,7 +96,7 @@ def test_the_brand_line_no_longer_describes_the_sleeper_product() -> None:
 
 
 def test_the_announcement_states_its_own_volume_and_exit() -> None:
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/")
+    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com")
     assert "only one you are getting" in body
     assert "unsubscribe" in body.lower()
 
@@ -104,7 +104,7 @@ def test_the_announcement_states_its_own_volume_and_exit() -> None:
 def test_the_signup_url_is_the_only_link() -> None:
     """A launch email with several destinations converts worse and looks like
     marketing. One address, one thing to do."""
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/")
+    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com")
     assert body.count("http") == 1
 
 
@@ -191,8 +191,29 @@ def test_asking_to_send_with_nothing_configured_fails_loudly(
     """The lesson run/batch.py learned: a misconfigured send that prints a
     success and exits 0 is a launch that silently did not happen."""
     monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1, Somewhere")
     assert main(["--list", str(export), "--url", "https://x/join/", "--send"]) == 1
     assert "NOTHING WAS SENT" in capsys.readouterr().err
+
+
+def test_the_launch_email_carries_a_sender_address_and_an_opt_out(
+        export: Path, monkeypatch, capsys) -> None:
+    """Launch audit L2/L3: the one commercial email had no postal address and
+    no opt-out it explained (CAN-SPAM; CASL — the sender is in Ontario), and
+    the brand line read "every tuesday". Without SENDER_POSTAL_ADDRESS a real
+    send refuses; with it, every message carries the sender line, a reply
+    opt-out and a mailto List-Unsubscribe."""
+    from run.waitlist import messages
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS", raising=False)
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    assert main(["--list", str(export), "--url", "https://x/join/", "--send"]) == 1
+    assert "SENDER_POSTAL_ADDRESS" in capsys.readouterr().err
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1, Somewhere")
+    message = messages(["fan@example.com"], "https://x/join/")[0]
+    assert "Beat Your League · PO Box 1, Somewhere · hello@beatyourleague.com" in message.text
+    assert 'reply "unsubscribe"' in message.text
+    assert message.unsubscribe == "mailto:hello@beatyourleague.com?subject=unsubscribe"
+    assert "every Tuesday" in message.text and "every tuesday" not in message.text
 
 
 def test_an_empty_list_refuses_rather_than_reporting_success(

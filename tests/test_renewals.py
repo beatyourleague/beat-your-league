@@ -147,6 +147,12 @@ def test_the_notice_carries_everything_the_statute_names(monkeypatch) -> None:
                          doc, re.I)
         assert re.search(r"unsubscribing from emails alone", doc, re.I)
     assert "renews" in message.subject.lower()
+    # What the statute names besides date and amount (launch audit L5): the
+    # product, how often it renews, and a way to reach the business.
+    assert "Beat Your League" in message.subject
+    for doc in (message.html, message.text):
+        assert "Beat Your League subscription" in doc and "once a year" in doc
+        assert "hello@beatyourleague.com" in doc
 
 
 def test_without_a_portal_the_notice_still_names_a_route(monkeypatch) -> None:
@@ -154,7 +160,7 @@ def test_without_a_portal_the_notice_still_names_a_route(monkeypatch) -> None:
     monkeypatch.delenv("SITE_URL", raising=False)
     message = renewal_message(_renewal())
     assert "terms page" in message.text
-    assert "href" not in message.html.split("fifteen")[1].split(".")[0]
+    assert "href" not in message.html.split("about a minute")[1].split(".")[0]
 
 
 def test_the_notice_is_email_safe() -> None:

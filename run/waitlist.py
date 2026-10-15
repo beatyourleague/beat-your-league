@@ -67,7 +67,10 @@ real target and carry counts, not adjectives.
   {url}
 
 That is the only email you asked for, so it is the only one you are getting.
-Unsubscribe any time; we do not ask why.
+To be taken off the list anyway, reply "unsubscribe" (or use your mail app's
+Unsubscribe button) and you're off within 10 business days; we do not ask why.
+
+{sender}
 """
 
 # What the body must NOT promise, and why — this list is a test, not a comment:
@@ -142,11 +145,20 @@ def messages(addresses: list[str], signup_url: str) -> list[Message]:
     committed (the crons persist it, merge=union), and a committed log must
     never hold the list itself.
     """
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url=signup_url)
+    from render.sender import CONTACT, sender_line
+    # The brand line, sentence-cased properly: .capitalize() lowered every
+    # other letter, so it read "every tuesday" (launch audit L2).
+    brand = BRAND_LINE[:1].upper() + BRAND_LINE[1:]
+    # Commercial email: sender identity with a postal address (CAN-SPAM,
+    # CASL). main() refuses a real send without one; a preview shows the gap.
+    sender = sender_line() or "[sender postal address not configured]"
+    body = BODY.format(brand=brand, url=signup_url, sender=sender)
     return [Message(to=address, subject=SUBJECT, html=_html(body, signup_url),
                     text=body,
                     key=f"{CAMPAIGN}-"
-                        f"{hashlib.sha256(address.encode()).hexdigest()[:10]}")
+                        f"{hashlib.sha256(address.encode()).hexdigest()[:10]}",
+                    # Gmail and Apple Mail show an Unsubscribe button for this.
+                    unsubscribe=f"mailto:{CONTACT}?subject=unsubscribe")
             for address in addresses]
 
 
@@ -212,6 +224,14 @@ def main(argv: list[str] | None = None) -> int:
         print("The waitlist is empty — nothing to announce.", file=sys.stderr)
         return 1
 
+    from render.sender import sender_line
+    if args.send and not sender_line():
+        # A commercial email without the sender's postal address breaks
+        # CAN-SPAM and CASL, and a list can only be burned once.
+        print("REFUSING TO SEND: SENDER_POSTAL_ADDRESS is not set. The launch "
+              "email must carry a postal address (a rented mailbox, never a "
+              "home) — see LAUNCH.md.", file=sys.stderr)
+        return 1
     provider = build_provider(None if args.send else DRY_PROVIDER)
     implicit_dry = args.send and provider.name == DRY_PROVIDER
     if implicit_dry:
