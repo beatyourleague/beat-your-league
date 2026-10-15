@@ -6,7 +6,7 @@ Usage:
     python -m run.trial --email ... --roster ... --scoring half_ppr --print
 
 The close that works in a group chat is not a link, it is THEIR team: "send me
-your roster, tonight you get this week's file on it, free." This turns that
+your roster, tonight you get this week's report on it, free." This turns that
 promise into ninety seconds of operator work: paste whatever they sent —
 positions, bye weeks, app junk and all — and out comes the same report a
 subscriber gets, mailed (or drafted) plus printed to the console so the text
@@ -90,6 +90,36 @@ def trial_key(email: str, ids: list[str], season: str, week: int) -> str:
     return f"trial-{season}-w{week:02d}-{hashlib.sha256(raw.encode()).hexdigest()[:10]}"
 
 
+def trial_message(report: dict, email: str, ids: list[str], season: str,
+                  week: int) -> tuple[str, Message]:
+    """The free report as (plain text, Message), marked as what it is.
+
+    ``meta["trial"]`` is the flag every renderer reads to drop the lines that
+    only a subscriber's report may carry — cancel your billing, change your
+    roster for "your next report", your results start here — and to add the
+    free report's own footer. run/trials.py (the hourly free report) always
+    set it; this operator copy never did, so the paste-ready text LAUNCH §6
+    sends straight into a group chat told a prospect who had paid nothing to
+    cancel their billing (RQ-02). And no plan: a trial has none, and the
+    season-end note reads one.
+    """
+    report["meta"]["trial"] = True
+    report["meta"].pop("plan", None)
+    plain = text_summary(report)
+    return plain, Message(
+        to=email,
+        # "report", never "file" (owner rule) — and the same words the hourly
+        # free report's subject uses.
+        subject="Your free report — " + subject_for(report),
+        html=render_email(report),
+        text=plain,
+        key=trial_key(email, ids, season, week),
+        # No subscription to cancel and no list to leave: a header pointing at
+        # the subscription-cancel page would be wrong for this reader.
+        unsubscribe=None,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--email", required=True,
@@ -128,14 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    plain = text_summary(report)
-    message = Message(
-        to=args.email,
-        subject="Your free file — " + subject_for(report),
-        html=render_email(report),
-        text=plain,
-        key=trial_key(args.email, ids, data.season, data.week),
-    )
+    plain, message = trial_message(report, args.email, ids, data.season, data.week)
 
     try:
         provider = build_provider(None)

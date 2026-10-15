@@ -28,25 +28,34 @@ payment link is visible in the page source and ``client_reference_id`` is a URL
 parameter, so a ``p`` prefix is a CLAIM. With no ``STRIPE_PAYMENT_LINKS`` map
 configured, no purchase grants a League Pass — fail closed.
 
-**Known limitation, deliberate:** the key is (email, ref), so one purchase is one
-subscription and a customer who buys twice gets two reports. There is no path
-for a subscriber to CHANGE their roster mid-season — re-running the picker
-builds a new ref, which only reaches here attached to a new payment. Reported
-when it happens; a real fix needs a self-serve edit and belongs with the
-customer portal, not here.
+The key is (email, ref), so one purchase is one subscription and a customer
+who buys twice gets two reports (reported when it happens). A roster CHANGE
+is not a purchase: it arrives as a confirmed self-serve update, or as the
+operator's update for a change emailed in (``make roster-update``, both in
+run/updates.py), and moves the roster under the subscription's first slug.
+
+**League Pass seats** come from the form Worker and pay nothing, so they are
+validated harder than anything else here: a seat names its pass by the
+per-pass seat link's token or the payer's typed address, and is honoured
+only when that address really bought a pass (``sweep_seats``). One seat per
+(address, pass) — a re-claim is a roster change. A claim that matches no
+pass is told so, once (LP-D1). A new seat gets its first email by the same
+rules as a purchase (LP-I4).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import sys
 import urllib.parse
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           parse_link_plans, post as _stripe_post,
@@ -56,9 +65,10 @@ from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
 from run.updates import (UPDATE_LOG_NAME, PendingRequest, append_update_log,
                          applied_request_ts, apply_updates, confirm_url,
                          confirmation_key, confirmed_updates, latest_per_target,
-                         load_update_log, validate_requests, validate_updates)
-from run.rosters import (_EMAIL_RE, RosterRegistryError, drop_unloadable,
-                         load_rosters)
+                         load_update_log, seat_token, seat_url, slug_of,
+                         validate_requests, validate_updates)
+from run.rosters import (_EMAIL_RE, MONTHLY, PASS_BILLING, SEASON,
+                         RosterRegistryError, drop_unloadable, load_rosters)
 from render.welcome import welcome_message
 from run.delivery import DRY_PROVIDER, build_provider, send_all
 from run.solo import CACHE_DIR, SoloError, load_week_data, spec_from_ref
@@ -74,6 +84,34 @@ REGISTRY_NAME = "rosters.json"
 # sets by hand in the Stripe dashboard.
 META_REF = "byl_roster_ref"
 META_PLAN = "byl_plan"
+# Which channel brought the buyer (contract C5): the join page's ?via= tag,
+# carried on the payment's own reference so a PURCHASE can be counted by
+# channel, which is the number every partner or affiliate decision needs.
+META_VIA = "byl_via"
+
+# "<ref>_via-<tag>" — the join page appends the tag only when the whole stays
+# within Stripe's 200 characters (contract C5). The tag's shape is the form
+# Worker's, so it cannot carry an address or markup.
+_VIA_SUFFIX = re.compile(r"^(?P<ref>.+)_via-(?P<via>[a-z0-9-]{1,24})$")
+
+
+def split_via(ref: str) -> tuple[str, str | None]:
+    """A payment's reference -> (the roster ref, the channel tag or None).
+
+    Stripped BEFORE anything else reads the ref, because everything keyed on a
+    ref — the slug, the send-log keys, report filenames, the registry's
+    agreement rule — must not move with the channel a buyer arrived from. The
+    roster's base64url payload uses the same alphabet, so a suffix is taken
+    only when what is left is still a whole, decodable roster ref; otherwise
+    the ref is returned untouched for the normal checks to judge."""
+    match = _VIA_SUFFIX.match(ref or "")
+    if not match or not is_roster_ref(match.group("ref")):
+        return ref, None
+    try:
+        decode_roster(match.group("ref"))
+    except RefError:
+        return ref, None
+    return match.group("ref"), match.group("via")
 
 # Exit codes. 1 means something is WRONG and a human should look; 2 means the
 # pipeline simply is not switched on yet, which is not a failure to alert about.
@@ -103,6 +141,12 @@ class RosterSignup:
     league_size: int = 12
     label: str = "Your Team"
     source: str = "stripe"
+    via: str | None = None
+    # A League Pass SEAT, never logged (seats are rebuilt from the form Worker
+    # every run): who pays for it, and the slug it was first claimed under,
+    # which a re-claim with a new roster does not move (LP-D4).
+    covered_by: str | None = None
+    origin: str | None = None
 
     @property
     def key(self) -> tuple[str, str]:
@@ -110,8 +154,7 @@ class RosterSignup:
 
     @property
     def slug(self) -> str:
-        import hashlib
-        return hashlib.sha256(self.ref.encode("utf-8")).hexdigest()[:10]
+        return self.origin or hashlib.sha256(self.ref.encode("utf-8")).hexdigest()[:10]
 
     def roster(self) -> RosterRef:
         return decode_roster(self.ref)
@@ -224,6 +267,7 @@ def sweep(api_key: str, since: int | None = None,
             # other's refs is what lets them coexist without either reporting
             # every one of the other's payments as broken.
             continue
+        ref, via = split_via(ref)
         try:
             decode_roster(ref)
         except RefError as exc:
@@ -264,12 +308,12 @@ def sweep(api_key: str, since: int | None = None,
             # their address, not anything stored on this row.
             plan=plan or "season",
             seen_at=str(created) if isinstance(created, int) else "",
-            stripe_customer_id=customer))
+            stripe_customer_id=customer, via=via))
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
                 _promote(api_key, customer, ref, plan or "season",
-                         consent=_consent(session))
+                         consent=_consent(session), via=via)
             except SubscriptionError as exc:
                 # Promotion is a durability optimisation, not the signup — the
                 # signup is already in hand.
@@ -297,16 +341,20 @@ def _consent(session: dict) -> dict[str, str]:
 
 
 def _promote(api_key: str, customer: str, ref: str, plan: str,
-             consent: dict[str, str] | None = None) -> None:
+             consent: dict[str, str] | None = None, via: str | None = None) -> None:
     """Copy the roster onto the Customer, where it lives as long as they do.
 
     Stripe documents no retention guarantee for old Checkout Sessions, so this
     caps our dependence on session listability at one week instead of a season.
     Metadata writes MERGE, so this is additive and idempotent. The consent
-    record rides along (``_consent``).
+    record rides along (``_consent``), and so does the channel tag the
+    purchase carried (``split_via``) — written only when there is one, so a
+    later untagged purchase never erases the channel an earlier one recorded.
     """
     form = {f"metadata[{META_REF}]": ref, f"metadata[{META_PLAN}]": plan}
     form.update({f"metadata[{k}]": v for k, v in (consent or {}).items()})
+    if via:
+        form[f"metadata[{META_VIA}]"] = via
     _stripe_post(f"{CUSTOMERS_API}/{urllib.parse.quote(customer)}", api_key, form)
 
 
@@ -389,8 +437,38 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
-                  known_ids: set[str] | None) -> tuple[list[dict], list[str]]:
+_SEAT_TOKEN = re.compile(r"^[0-9a-f]{20}$")
+
+
+def _received(row: Mapping) -> datetime | None:
+    """The form Worker's own stamp on a row (a caller cannot set it), or None."""
+    raw = str(row.get("received_at") or "").strip()
+    try:
+        at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+@dataclass
+class SeatSweep:
+    """Every seat claim, judged. ``rows`` are registry rows; ``unmatched`` are
+    well-formed claims that name no League Pass (LP-D1); ``first_claimed`` and
+    ``last_claimed`` are keyed (email, origin slug)."""
+
+    rows: list[dict] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
+    unmatched: list[dict] = field(default_factory=list)
+    first_claimed: dict[tuple[str, str], datetime] = field(default_factory=dict)
+    last_claimed: dict[tuple[str, str], datetime] = field(default_factory=dict)
+    # Seats whose roster a later claim replaced. Counted in the summary rather
+    # than reported per seat: the claims live in the Worker for ~400 days, so
+    # a per-seat line would repeat every hourly run as if it were news.
+    reclaimed: int = 0
+
+
+def sweep_seats(rows: Iterable[dict], pass_payers: set[str],
+                known_ids: set[str] | None, secret: str = "") -> SeatSweep:
     """Validate seat claims into registry rows.
 
     ``pass_payers`` is the set of addresses that ACTUALLY BOUGHT a League Pass,
@@ -398,64 +476,251 @@ def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
     what a seat claims. The seat form is public by necessity, so without that
     check it is a free-report generator for anyone who finds the URL.
 
-    Under the roster architecture there is no league id to match a seat against.
-    The seat holder types their commissioner's address, and entitlement flows
-    through `covered_by` — which is what ``PaidList.entitles`` already reads.
+    A claim names its pass one of two ways. The per-pass seat link (contract
+    C4) carries ``pass_token``, recomputed here over those payers with
+    ``secret`` and never trusted from the row. The older route has the
+    leaguemate type the payer's address as ``covered_by``. Entitlement then
+    flows through `covered_by`, which is what ``PaidList.entitles`` reads.
+
+    ONE SEAT PER (address, pass) — LP-D4. The group-chat link is reusable, so a
+    leaguemate who claims again after a trade used to get a SECOND seat and two
+    weekly reports, old roster and new, with nothing said to anyone. A re-claim
+    is now a roster change: the newest claim by the Worker's own stamp wins,
+    and the seat keeps the slug it was FIRST claimed under (``origin``), so its
+    send keys, its stored plans and its update link never move.
 
     ``known_ids`` is None when the directory could not be loaded at all. That
     must mean "not checked", never "nothing is known" — an empty set would
     reject every seat with a confident, wrong reason on the one day a data
     release is unavailable.
     """
-    out: list[dict] = []
-    problems: list[str] = []
-    seen: set[tuple[str, str]] = set()
-    for row in rows:
+    out = SeatSweep()
+    by_token = ({seat_token(payer, secret): payer for payer in pass_payers}
+                if secret else {})
+    groups: dict[tuple[str, str], list[tuple[dict, Any]]] = {}
+    # Oldest first by the Worker's stamp; a stable sort keeps the Worker's own
+    # arrival order (its keys are timestamp-prefixed) for rows that tie.
+    ordered = sorted(rows, key=lambda r: _received(r) or datetime.min.replace(
+        tzinfo=timezone.utc))
+    for row in ordered:
         email = str(row.get("email") or "").strip().lower()
-        payer = str(row.get("covered_by") or "").strip().lower()
+        typed = str(row.get("covered_by") or "").strip().lower()
+        token = str(row.get("pass_token") or "").strip().lower()
         ref = str(row.get("ref") or "").strip()
         # Validated to run/rosters.py's own standard HERE, because this endpoint
         # is public and the registry loader fails the WHOLE file on one bad row.
         # Accepting "not an email" would let any stranger stop every
         # subscriber's Tuesday.
-        if not _EMAIL_RE.match(email) or not _EMAIL_RE.match(payer):
-            problems.append("a seat claim arrived with unusable addresses")
-            continue
-        if payer not in pass_payers:
-            problems.append(
-                f"seat claim from {_no_email(email)} names a payer with no "
-                f"League Pass — not honoured")
-            continue
-        if email == payer:
-            # The commissioner already has their own paid row; a seat for
-            # themselves would be a second report for one purchase.
-            problems.append(
-                f"seat claim from {_no_email(email)} names ITSELF as the payer "
-                f"— the pass buyer already has their own subscription")
+        named = _SEAT_TOKEN.match(token) or _EMAIL_RE.match(typed)
+        if not _EMAIL_RE.match(email) or not named:
+            out.problems.append("a seat claim arrived with unusable addresses")
             continue
         try:
             roster = decode_roster(ref)
         except RefError as exc:
-            problems.append(f"seat claim from {_no_email(email)} carries an "
-                            f"unreadable roster ({exc})")
+            out.problems.append(f"seat claim from {_no_email(email)} carries an "
+                                f"unreadable roster ({exc})")
+            continue
+        payer = (by_token.get(token) if _SEAT_TOKEN.match(token)
+                 else typed if typed in pass_payers else None)
+        if payer is None:
+            out.problems.append(
+                f"seat claim from {_no_email(email)} "
+                + ("carries a seat link that matches no League Pass"
+                   if _SEAT_TOKEN.match(token) else
+                   "names a payer with no League Pass")
+                + " — not honoured")
+            out.unmatched.append(row)
+            continue
+        if email == payer:
+            # The commissioner already has their own paid row; a seat for
+            # themselves would be a second report for one purchase.
+            out.problems.append(
+                f"seat claim from {_no_email(email)} names ITSELF as the payer "
+                f"— the pass buyer already has their own subscription")
             continue
         missing = ([pid for pid in roster.player_ids if pid not in known_ids]
                    if known_ids else [])
         if missing:
-            problems.append(
+            out.problems.append(
                 f"seat claim from {_no_email(email)} names {len(missing)} "
                 f"player id(s) the directory does not have")
             continue
-        if (email, ref) in seen:
-            continue
-        seen.add((email, ref))
-        out.append({
+        groups.setdefault((email, payer), []).append((row, roster))
+
+    for (email, payer), claims in groups.items():
+        first, (latest, roster) = claims[0][0], claims[-1]
+        origin = slug_of(str(first.get("ref")).strip())
+        ref = str(latest.get("ref")).strip()
+        if len({str(row.get("ref")).strip() for row, _ in claims}) > 1:
+            out.reclaimed += 1
+        claimed = _received(latest)
+        out.rows.append({
             "email": email, "ref": ref,
             "player_ids": list(roster.player_ids), "slots": list(roster.slots),
             "scoring": roster.scoring, "league_size": roster.league_size,
             "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": payer,
+            "origin": origin,
+            **({"roster_as_of": claimed.date().isoformat()} if claimed else {}),
         })
-    return out, problems
+        for stamp, into in ((_received(first), out.first_claimed),
+                            (claimed, out.last_claimed)):
+            if stamp is not None:
+                into[(email, origin)] = stamp
+    return out
+
+
+def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
+                  known_ids: set[str] | None,
+                  secret: str = "") -> tuple[list[dict], list[str]]:
+    """``sweep_seats`` as (registry rows, problems)."""
+    swept = sweep_seats(rows, pass_payers, known_ids, secret)
+    return swept.rows, swept.problems
+
+
+def seat_signups_from(rows: Iterable[Mapping],
+                      first_claimed: Mapping[tuple[str, str], datetime],
+                      ) -> list[RosterSignup]:
+    """The seats a registry is about to hold, as signups for the mail a
+    purchase gets (welcome, first report). Their "purchase" moment is the
+    FIRST claim (the Worker's stamp), which keys both the welcome and the
+    served-since check, so neither repeats when the roster moves (LP-D4)."""
+    out: list[RosterSignup] = []
+    for row in rows:
+        if row.get("plan") != LEAGUE_PASS:
+            continue
+        email = str(row.get("email", "")).lower()
+        origin = str(row.get("origin") or slug_of(str(row.get("ref", ""))))
+        claimed = first_claimed.get((email, origin))
+        out.append(RosterSignup(
+            email=email, ref=str(row["ref"]), plan="seat",
+            seen_at=str(int(claimed.timestamp())) if claimed else "",
+            league_size=int(row.get("league_size") or 12), source="seat",
+            covered_by=str(row.get("covered_by") or "").lower() or None,
+            origin=origin))
+    return out
+
+
+def seat_counts(rows: Iterable[Mapping]) -> dict[str, int]:
+    """payer address -> the seats their pass carries in this registry
+    (contract C2: a count, never who)."""
+    counts: dict[str, int] = {}
+    for row in rows:
+        if row.get("plan") == LEAGUE_PASS and row.get("covered_by"):
+            payer = str(row["covered_by"]).lower()
+            counts[payer] = counts.get(payer, 0) + 1
+    return counts
+
+
+# --------------------------------------------------------------------- #
+# a claim that matched no pass is told so — once (LP-D1)
+# --------------------------------------------------------------------- #
+#
+# A claim naming a payer with no League Pass (a typo, swapped fields, the
+# wrong buyer) was dropped with a line in a CI log, while the page had told
+# the leaguemate "Your seat request is in". Nobody else could ever tell them.
+# Now the claimer hears it once per claim, from here, with what to check.
+#
+# - A grace period first: a leaguemate can claim from the group chat minutes
+#   before the buyer's payment is swept, and telling them "no pass" then
+#   would be false an hour later.
+# - Never a stale claim: Worker rows live ~400 days, and a claim from last
+#   season answered now is unrequested mail.
+# - Capped per address per day: the seat form is public, so a stranger can
+#   type somebody else's address — at most this many notes reach that inbox
+#   a day, each saying it is safe to ignore.
+# - The buyer's report says nothing about any of it: a stranger's claim is
+#   not the buyer's business, and naming it would put addresses in front of
+#   somebody who did not ask.
+
+UNMATCHED_GRACE = timedelta(hours=6)
+UNMATCHED_MAX_AGE = timedelta(days=14)
+UNMATCHED_PER_DAY = 2
+
+
+def unmatched_key(row: Mapping) -> str:
+    """Send-log key: one note per claim, ever, with no address in it."""
+    email = str(row.get("email") or "").strip().lower()
+    claim = "|".join(str(row.get(k) or "") for k in
+                     ("received_at", "ref", "covered_by", "pass_token"))
+    return (f"seat-unmatched-{hashlib.sha256(email.encode()).hexdigest()[:8]}-"
+            f"{hashlib.sha256(claim.encode()).hexdigest()[:10]}")
+
+
+def unmatched_due(unmatched: Iterable[Mapping], now: datetime) -> list[Mapping]:
+    """The unmatched claims to tell, oldest first: past the grace period,
+    within the age limit, at most UNMATCHED_PER_DAY per address per Worker
+    date. A claim with no readable Worker stamp cannot be shown to be fresh,
+    so it is not mailed. Pure."""
+    due: list[tuple[datetime, Mapping]] = []
+    for row in unmatched:
+        at = _received(row)
+        if at is None or not (UNMATCHED_GRACE <= now - at <= UNMATCHED_MAX_AGE):
+            continue
+        due.append((at, row))
+    per_day: dict[tuple[str, str], int] = {}
+    out: list[Mapping] = []
+    for at, row in sorted(due, key=lambda item: item[0]):
+        bucket = (str(row.get("email") or "").strip().lower(), at.date().isoformat())
+        per_day[bucket] = per_day.get(bucket, 0) + 1
+        if per_day[bucket] <= UNMATCHED_PER_DAY:
+            out.append(row)
+    return out
+
+
+def _send_unmatched_notes(unmatched: list[Mapping], now: datetime) -> None:
+    """One note per unmatched claim, idempotent through the send log."""
+    due = unmatched_due(unmatched, now)
+    if not due:
+        return
+    from render.report import seat_stop_href
+    from render.seat_claim import unmatched_email
+    from run.delivery import Message
+    messages = []
+    for row in due:
+        subject, html, text = unmatched_email(os.environ.get("SITE_URL", ""))
+        messages.append(Message(to=str(row.get("email")).strip().lower(),
+                                subject=subject, html=html, text=text,
+                                key=unmatched_key(row),
+                                unsubscribe=seat_stop_href()))
+    provider = build_provider(None)
+    if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
+        print(f"Unmatched seat claims: {len(messages)} note(s) pending — "
+              f"EMAIL_PROVIDER is not set, so none were sent.")
+        return
+    sends = send_all(messages, provider=provider)
+    delivered = [r for r in sends if r.ok and not r.skipped]
+    failures = [r for r in sends if not r.ok]
+    print(f"Unmatched seat claims via {provider.name}: {len(delivered)} note(s) "
+          f"sent, {len(failures)} failed")
+    for result in failures:
+        print(f"    SEAT NOTE FAILED {result.message.key}: {result.detail}",
+              file=sys.stderr)
+
+
+def registry_plan(purchase: str) -> tuple[str, str | None]:
+    """A purchase's plan word -> (the registry row's ``plan``, its ``billing``).
+
+    LEAGUE_PASS on a registry row means a SEAT, not a payer: a pass payer is an
+    ordinary subscriber who also covers other people, and recording them as a
+    seat would demand a covered_by they do not have and fail the load. So the
+    payer is a "season" row whose BILLING is the pass (LP-D3) — before that
+    field, the payer and every monthly buyer were flattened to "season" and
+    told at the season's end that a season pass renews once a year."""
+    if purchase == "seat":
+        return LEAGUE_PASS, None
+    if purchase == MONTHLY:
+        return MONTHLY, MONTHLY
+    if purchase == LEAGUE_PASS:
+        return SEASON, PASS_BILLING
+    return SEASON, SEASON
+
+
+def _purchase_day(seen_at: str) -> str | None:
+    """Stripe's `created` (epoch seconds, as a string) -> YYYY-MM-DD in UTC."""
+    if not str(seen_at).isdigit():
+        return None
+    return datetime.fromtimestamp(int(seen_at), tz=timezone.utc).date().isoformat()
 
 
 def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
@@ -463,6 +728,8 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
     rows: list[dict] = []
     for signup in signups:
         roster = signup.roster()
+        plan, billing = registry_plan(signup.plan)
+        day = _purchase_day(signup.seen_at)
         rows.append({
             "email": signup.email,
             "ref": signup.ref,
@@ -474,11 +741,11 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
             # would silently re-impose 12 on everybody (the bug this fixed).
             "league_size": roster.league_size,
             "label": signup.label,
-            # LEAGUE_PASS on a registry row means a SEAT, not a payer: a pass
-            # payer is an ordinary subscriber who also covers other people, and
-            # recording them as a seat would demand a covered_by they do not
-            # have and fail the load.
-            "plan": "season",
+            "plan": plan,
+            "billing": billing,
+            # Contract C3: the roster in use was set when it was bought, until
+            # a confirmed update moves it (run/updates.apply_updates).
+            **({"roster_as_of": day} if day else {}),
             **({"stripe_customer_id": signup.stripe_customer_id}
                if signup.stripe_customer_id else {}),
         })
@@ -494,7 +761,30 @@ def write_registry(rows: list[dict], path: Path) -> None:
 # the welcome email
 # --------------------------------------------------------------------- #
 
-def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
+def pass_seat_link(signup: RosterSignup) -> str | None:
+    """The one link a League Pass payer shares (contract C4), or None when
+    the site or the signing secret is missing — then the welcome keeps the
+    generic link and the "tell them your email" instruction."""
+    if signup.plan != LEAGUE_PASS:
+        return None
+    return seat_url(os.environ.get("SITE_URL", ""),
+                    os.environ.get("UPDATE_SECRET", ""), signup.email,
+                    signup.roster())
+
+
+def _welcome(signup: RosterSignup, season: str):
+    """One signup's acknowledgment. A pass payer's carries their seat link
+    when there is one; the keyword is passed only then, so every other plan
+    calls exactly what it always called."""
+    extra = {}
+    link = pass_seat_link(signup)
+    if link:
+        extra["seat_link"] = link
+    return welcome_message(signup.email, signup.plan, signup.slug, season,
+                           purchased_at=str(signup.seen_at or ""), **extra)
+
+
+def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
                    season: str) -> None:
     """One acknowledgment per subscription, idempotent forever.
 
@@ -502,15 +792,13 @@ def _send_welcomes(servable: list[RosterSignup], seat_rows: list[dict],
     deliberately flattens a League Pass payer to a season row — and the renewal
     terms in the email must describe the purchase that actually happened. A
     $99 payer welcomed with $39 renewal terms is a wrong legal disclosure.
-    """
-    import hashlib
 
-    messages = [welcome_message(s.email, s.plan, s.slug, season,
-                                purchased_at=str(s.seen_at or ""))
-                for s in servable]
-    for row in seat_rows:
-        slug = hashlib.sha256(row["ref"].encode("utf-8")).hexdigest()[:10]
-        messages.append(welcome_message(row["email"], "seat", slug, season))
+    A seat is keyed on the slug it was FIRST claimed under and the moment of
+    that claim, so a re-claim with a new roster (LP-D4) is never a second
+    welcome, and a season roll — seat rows are rebuilt from the Worker every
+    run — never re-welcomes anybody.
+    """
+    messages = [_welcome(s, season) for s in [*servable, *seats]]
     if not messages:
         return
 
@@ -626,8 +914,26 @@ def _sent_entries() -> list[dict]:
     return out
 
 
+def subscriber_for(signup: RosterSignup):
+    """The registry row a signup becomes, as a RosterSubscriber — the same
+    plan/billing mapping ``to_rows`` writes, so a first report and every later
+    Tuesday describe the same purchase (contract C1)."""
+    from run.rosters import RosterSubscriber
+    roster = signup.roster()
+    plan, billing = registry_plan(signup.plan)
+    return RosterSubscriber(
+        email=signup.email, ref=signup.ref,
+        player_ids=tuple(roster.player_ids), slots=tuple(roster.slots),
+        scoring=roster.scoring, league_size=roster.league_size,
+        plan=plan, billing=billing,
+        covered_by=signup.covered_by if plan == LEAGUE_PASS else None,
+        origin=signup.slug, roster_as_of=_purchase_day(signup.seen_at))
+
+
 def _first_file(signup, data, season: str, processed_dir, record: bool = True,
-                out_dir: Path | None = None, sent: set[str] | None = None):
+                out_dir: Path | None = None, sent: set[str] | None = None,
+                seat_counts: Mapping[str, int] | None = None,
+                payers: Mapping[str, Any] | None = None):
     """The file a purchase earns, chosen by WHEN the purchase happened.
     -> the week's report as a ``run.tuesday.RunResult``, or None for the
     roster file.
@@ -655,19 +961,12 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 
     if getattr(data, "week", 1) > 1 and not week_has_kicked_off(
             CACHE_DIR, season, data.week):
-        from run.rosters import RosterSubscriber
-        from run.tuesday import report_key, run_subscriber
+        from run.tuesday import league_seat_link, report_key, run_subscriber
         if report_key(data.season, data.week, signup.slug) in (sent or set()):
             return None
-        roster = signup.roster()
-        subscriber = RosterSubscriber(
-            email=signup.email, ref=signup.ref,
-            player_ids=tuple(roster.player_ids), slots=tuple(roster.slots),
-            scoring=roster.scoring, league_size=roster.league_size,
-            # The registry flattens a League Pass payer to a season row; a
-            # monthly buyer is monthly (the season-end note reads it).
-            plan="monthly" if signup.plan == "monthly" else "season",
-            origin=signup.slug)
+        # The same plan/billing mapping the registry row gets, so the first
+        # report and every Tuesday after it describe the same purchase.
+        subscriber = subscriber_for(signup)
         template = (REPO_ROOT / "rival-report-template.html").read_text(
             encoding="utf-8")
         # record: a call is PUBLISHED when it reaches someone; a report that a
@@ -676,7 +975,9 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
         from run.tuesday import SUBSCRIBER_REPORTS
         result = run_subscriber(subscriber, data, template,
                                 out_dir=out_dir or SUBSCRIBER_REPORTS,
-                                processed_dir=processed_dir, record=record)
+                                processed_dir=processed_dir, record=record,
+                                seat_counts=seat_counts,
+                                seat_link=league_seat_link(subscriber, payers or {}))
         if result.ok and result.message is not None:
             return result
         # Fall through to the roster file rather than sending nothing.
@@ -685,7 +986,8 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 
 def _send_first_files(servable: list[RosterSignup], data, season: str,
                       processed_dir=None, first_plans: Path | None = None,
-                      out_dir: Path | None = None) -> None:
+                      out_dir: Path | None = None,
+                      seat_counts: Mapping[str, int] | None = None) -> None:
     """The file they get for paying, on the day they pay.
 
     The weekly product cannot say anything until box scores exist, so a buyer
@@ -694,6 +996,12 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
 
     One file per purchase, never two — three emails at once (welcome, roster
     file, weekly report) reads as a mailing list rather than a product.
+
+    A League Pass SEAT is served by the same rules (LP-I4): a leaguemate who
+    claims from the group chat on a Wednesday gets that week's report the same
+    day, not next Tuesday, when the chat has moved on. Its "purchase" is the
+    first claim, which is what the served-since check reads; its report and
+    roster report carry the seat's stop route, never a billing page.
     """
     from engine.preseason import build_preseason_report, bye_by_team
     from render.preseason import preseason_message
@@ -701,6 +1009,10 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     from run.tuesday import PROCESSED_DIR
 
     processed_dir = processed_dir or PROCESSED_DIR
+    # The pass payers in hand, so a seat's report and a payer's carry their
+    # league's own seat link with the payer's setup (contract C4).
+    payers = {s.email.lower(): subscriber_for(s) for s in servable
+              if s.plan == LEAGUE_PASS}
     # Only purchases that have not been served yet. Everyone else is the
     # Tuesday run's, which checks entitlement and reads the current roster.
     entries = _sent_entries()
@@ -734,7 +1046,8 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     for signup in servable:
         try:
             weekly = _first_file(signup, data, season, processed_dir, record=sending,
-                                 out_dir=out_dir, sent=sent)
+                                 out_dir=out_dir, sent=sent, seat_counts=seat_counts,
+                                 payers=payers)
             if weekly is not None:
                 messages.append(weekly.message)
                 weeklies.append(weekly)
@@ -749,9 +1062,13 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
                 # The week this run already derived, so the roster report's
                 # "weeks ahead" and this run agree on what "now" is.
                 from_week=getattr(data, "week", None))
+            # A seat's roster report must carry the seat's stop route, not the
+            # billing page a seat has no account on (render.preseason's
+            # `seat`); only a seat passes the keyword.
+            extra = {"seat": True} if signup.plan == "seat" else {}
             messages.append(preseason_message(
                 signup.email, signup.slug, report,
-                purchased_at=str(signup.seen_at or "")))
+                purchased_at=str(signup.seen_at or ""), **extra))
         except Exception as exc:  # noqa: BLE001 — batch contract
             print(f"    FIRST FILE FAILED for {signup.slug}: {exc!r}",
                   file=sys.stderr)
@@ -886,9 +1203,11 @@ def main(argv: list[str] | None = None) -> int:
     # validated backend exists, and empty means the tier simply does not
     # deliver seats rather than delivering unpaid ones.
     seat_rows: list[dict] = []
+    seats = SeatSweep()
     update_rows: list[dict] = []
     request_rows: list[dict] = []
     confirm_rows: list[dict] = []
+    secret = os.environ.get("UPDATE_SECRET", "")
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
     if seat_endpoint:
         # Built from what the LINK took, never from what a seat claims.
@@ -910,10 +1229,15 @@ def main(argv: list[str] | None = None) -> int:
         request_rows = [r for r in form_rows
                         if str(r.get("kind") or "") == "update_request"]
         confirm_rows = [r for r in form_rows if str(r.get("kind") or "") == "confirm"]
-        seat_rows, seat_problems = seats_to_rows(claims, pass_payers,
-                                                 known or None)
-        problems.extend(seat_problems)
-        print(f"Seats: {len(seat_rows)} honoured of {len(claims)} claim(s)")
+        seats = sweep_seats(claims, pass_payers, known or None, secret)
+        seat_rows = seats.rows
+        problems.extend(seats.problems)
+        # Counted, so a run where claims are going nowhere is visible in the
+        # log; each claimer is told by email (_send_unmatched_notes).
+        print(f"Seats: {len(seat_rows)} honoured of {len(claims)} claim(s); "
+              f"{seats.reclaimed} re-claimed with a new roster (one seat each, "
+              f"the newest roster stands); {len(seats.unmatched)} matched no "
+              f"League Pass")
 
     candidate = to_rows(servable) + seat_rows
 
@@ -922,7 +1246,6 @@ def main(argv: list[str] | None = None) -> int:
     # and authenticated by the token that reaches them inside their own
     # reports. Logged on first sight so the order is ours, not the form's.
     update_log_path = registry_dir / UPDATE_LOG_NAME
-    secret = os.environ.get("UPDATE_SECRET", "")
     validated, update_problems = validate_updates(
         update_rows, candidate, known or None, secret)
     problems.extend(update_problems)
@@ -933,7 +1256,10 @@ def main(argv: list[str] | None = None) -> int:
     # change" and "revert to what I had" mean what they say, and a request that
     # was already applied is dead (single-use).
     base_log = [*load_update_log(update_log_path), *validated]
-    current, _ = apply_updates(candidate, latest_per_target(base_log))
+    # A seat re-claimed through its link after an update was logged: the
+    # claim is the newer roster, and the older update must not undo it.
+    current, _ = apply_updates(candidate, latest_per_target(base_log),
+                               since=seats.last_claimed)
     pending, request_problems = validate_requests(
         request_rows, current, known or None, secret,
         applied=applied_request_ts(base_log))
@@ -947,7 +1273,8 @@ def main(argv: list[str] | None = None) -> int:
         update_log = load_update_log(update_log_path)
     else:
         update_log = [*load_update_log(update_log_path), *validated]
-    candidate, applied = apply_updates(candidate, latest_per_target(update_log))
+    candidate, applied = apply_updates(candidate, latest_per_target(update_log),
+                                       since=seats.last_claimed)
     if update_rows or request_rows or applied:
         print(f"Updates: {applied} roster(s) changed; {len(pending)} request(s) "
               f"valid, {len(confirmed)} confirmed, {len(awaiting)} awaiting "
@@ -1040,11 +1367,17 @@ def main(argv: list[str] | None = None) -> int:
         print("Mail: none from this run (--no-mail). Welcomes, roster-update "
               "confirmations and first reports go out from the daily run.")
     else:
-        _send_welcomes(servable, seat_rows, known_season)
+        # Seats as the registry now holds them — after the payment-beats-seat
+        # collision and any update — so nobody is welcomed or sent a first
+        # report for a seat that was not written.
+        seat_signups = seat_signups_from(rows, seats.first_claimed)
+        _send_welcomes(servable, seat_signups, known_season)
         _send_confirmations(awaiting, data)
+        _send_unmatched_notes(seats.unmatched, datetime.now(timezone.utc))
         from run.saturday import FIRST_PLANS_NAME
-        _send_first_files(servable, data, known_season,
-                          first_plans=registry_dir / FIRST_PLANS_NAME)
+        _send_first_files([*servable, *seat_signups], data, known_season,
+                          first_plans=registry_dir / FIRST_PLANS_NAME,
+                          seat_counts=seat_counts(rows))
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered

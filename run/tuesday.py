@@ -56,7 +56,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping
 
 import render.report as render_report
 from render.report import unsubscribe_target
@@ -119,12 +119,61 @@ class RunResult:
     store: str | None = None
 
 
+def subscriber_meta(subscriber: RosterSubscriber,
+                    seat_counts: Mapping[str, int] | None = None,
+                    seat_link: str | None = None) -> dict:
+    """What a report says about the SUBSCRIPTION rather than the week:
+
+    - ``plan`` (contract C1): season | monthly | pass | league_pass — from the
+      registry row's billing, so a League Pass payer and a monthly buyer are
+      no longer told at the season's end that a season pass renews yearly.
+    - ``seats_claimed`` (C2), on a pass PAYER's report only: the league's
+      teams the pass is serving — the payer's own and every leaguemate's seat
+      it carries — out of the payer's own league size, so "N of 12 seats" is
+      out of every team in it. A count, never who, and never a stranger's
+      unmatched claim.
+    - ``roster_as_of`` (C3): the day the roster in use was set, so a
+      subscriber can see which roster the report read.
+    - ``seat_link`` (C4), in a pass league only (payer or seat): the league's
+      own seat link, so a report forwarded to the group chat points a
+      leaguemate at the seat already paid for, never the $39 checkout."""
+    meta: dict = {"plan": subscriber.report_plan}
+    if subscriber.is_pass_payer:
+        meta["seats_claimed"] = {
+            "claimed": 1 + int((seat_counts or {}).get(subscriber.email.lower(), 0)),
+            "size": int(subscriber.league_size)}
+    if subscriber.roster_as_of:
+        meta["roster_as_of"] = subscriber.roster_as_of
+    if seat_link and (subscriber.is_pass_payer or subscriber.is_league_seat):
+        meta["seat_link"] = seat_link
+    return meta
+
+
+def league_seat_link(subscriber: RosterSubscriber,
+                     payers: Mapping[str, RosterSubscriber]) -> str | None:
+    """The seat link of the pass that covers ``subscriber`` (their own, for a
+    payer), with the PAYER's scoring, size and lineup when the payer's row is
+    at hand. None outside a pass league, or without the site and the secret."""
+    from run.updates import seat_url
+    if subscriber.is_pass_payer:
+        payer_email, setup = subscriber.email, subscriber
+    elif subscriber.is_league_seat and subscriber.covered_by:
+        payer_email = subscriber.covered_by
+        setup = payers.get(payer_email.lower(), subscriber)
+    else:
+        return None
+    return seat_url(os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
+                    payer_email, setup)
+
+
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    template_html: str, out_dir: Path = SUBSCRIBER_REPORTS,
                    processed_dir: Path = PROCESSED_DIR,
                    record: bool = True,
                    plans_dir: Path | None = None,
-                   first_plans: Path | None = None) -> RunResult:
+                   first_plans: Path | None = None,
+                   seat_counts: Mapping[str, int] | None = None,
+                   seat_link: str | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
     Writes nothing to the public ledger. ``record`` says whether this report's
@@ -149,8 +198,9 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # built to be forwarded (removed Aug 27 2026). None until the site,
         # the form backend and the signing secret all exist.
         # The plan decides the season-end billing sentence the last report
-        # carries (render/report.season_end_lines).
-        report["meta"]["plan"] = subscriber.plan
+        # carries (render/report.season_end_lines); with it ride the pass
+        # payer's seat count and the day the roster was set.
+        report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link))
         report["meta"]["update_url"] = public_update_url(
             os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
             os.environ.get("FORM_ENDPOINT", ""))
@@ -461,10 +511,17 @@ def main(argv: list[str] | None = None) -> int:
     done = {s.key for s in already}
 
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
+    # The seats each pass is carrying THIS week (entitled ones, which is every
+    # seat whose payer is still paying), for the payer's own report.
+    seat_counts = {payer: len(seats)
+                   for payer, seats in league_pass_seats(subscribers).items()}
+    payers = {s.email.lower(): s for s in subscribers if s.is_pass_payer}
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
                               processed_dir=args.processed_dir, record=sending,
                               plans_dir=args.plans_dir or PLANS_DIR,
-                              first_plans=first_plans_dir(args.registry))
+                              first_plans=first_plans_dir(args.registry),
+                              seat_counts=seat_counts,
+                              seat_link=league_seat_link(s, payers))
                for s in subscribers if s.key not in done]
 
     line = "=" * 62

@@ -8,7 +8,7 @@
 #      have is somebody paying for nothing; discovering that within a day
 #      instead of a week is the difference between a quick fix and a refund.
 #
-# The once-a-day run (14:00) also checks the OTHER crons happened at all
+# The once-a-day run (14:17) also checks the OTHER crons happened at all
 # (run/watchdog.py): a run GitHub never starts files nothing on its own.
 #
 # The weekly reports are Tuesday's job; the only reports built here are the
@@ -20,8 +20,8 @@ name: daily-intake
 
 on:
   schedule:
-    # 14:00 UTC daily — mid-morning US either side of the DST change.
-    - cron: "0 14 * * *"
+    # 14:17 UTC daily — mid-morning US either side of the DST change.
+    - cron: "17 14 * * *"
     # AND every hour. A purchase is the moment a subscriber is most engaged and
     # least patient: buying on Wednesday and holding nothing until Thursday
     # afternoon is the "I paid and got nothing" gap that drives refunds at this
@@ -30,7 +30,7 @@ on:
     #
     # Safe to run hourly for the same reason the Tuesday retry is safe: every
     # message carries an idempotency key checked against sent.jsonl, so a run
-    # with no new payments finds nothing to do and mails nobody. The 14:00 run
+    # with no new payments finds nothing to do and mails nobody. The 14:17 run
     # above is the one that also sends renewal notices and drafts the reply
     # kit; those steps are cheap and idempotent too.
     #
@@ -38,16 +38,18 @@ on:
     # can trigger this workflow directly and the wait drops from an hour to a
     # minute — same pipeline, better trigger.
     #
-    # On the HALF hour (Oct 9 2026): on the hour it fired together with the
-    # Tuesday runs (12:00, 16:00) and the Saturday check (16:00), each in its
-    # own concurrency group and each reading the send log from its own
-    # checkout, so a purchase in that window could be welcomed or mailed twice.
-    - cron: "30 * * * *"
+    # Half an hour from the others (Oct 9 2026): at the same minute it fired
+    # together with the Tuesday runs and the Saturday check, each in its own
+    # concurrency group and each reading the send log from its own checkout,
+    # so a purchase in that window could be welcomed or mailed twice. And off
+    # the top of the hour (OPS-01, Oct 15 2026): every cron here sits at :17
+    # or :47, because :00 is when GitHub's scheduler is busiest and latest.
+    - cron: "47 * * * *"
   # The form Worker (infra/form-worker.js) dispatches this workflow on the
   # same two schedules, because GitHub's own scheduler ran 5-7 hours late and
   # dropped most hourly runs in October 2026; the crons above are the backup.
   # A dispatch carries no `github.event.schedule`, so `daily` says which of
-  # the two it is: "true" only on the 14:00 dispatch. The default is false on
+  # the two it is: "true" only on the 14:17 dispatch. The default is false on
   # purpose — a dispatch that forgets the input must never walk every Stripe
   # subscription 24 times a day. Tick it to run the once-a-day steps by hand.
   workflow_dispatch:
@@ -58,7 +60,7 @@ on:
         default: false
 
 # One run at a time: two runs reading the same committed send log can mail the
-# same message twice (the 14:00 UTC daily run fires from BOTH its crons at
+# same message twice (the 14:17 UTC daily run fires from BOTH its crons at
 # once; found by review, Sep 29 2026).
 concurrency:
   group: daily-intake
@@ -129,8 +131,9 @@ jobs:
       # The free first report (run/trials.py): one per person per season, this
       # week's report for the roster they sent, recording nothing. Hourly is
       # the point — a free report that lands the next day loses the moment.
-      # Reads the form Worker; with FORM_ENDPOINT or EMAIL_PROVIDER unset it
-      # sends nothing and exits 0.
+      # Reads the form Worker; with FORM_ENDPOINT unset, or nothing pending, it
+      # sends nothing and exits 0. Requests waiting while EMAIL_PROVIDER is
+      # unset exit 1 (OPS-08): the page promised them a report within the hour.
       #
       # STRIPE_API_KEY is load-bearing here though nothing is billed: it is
       # how run.trials tells "before launch" (no registry and no key, so nobody
@@ -180,14 +183,14 @@ jobs:
       # renewal notice has it: a Stripe hiccup during intake must not swallow a
       # promise made above Stripe's own Pay button.
       #
-      # ONCE A DAY, not hourly. This job carries two crons ("0 14 * * *" and
-      # "30 * * * *") and no step is schedule-gated, so an ungated step here
+      # ONCE A DAY, not hourly. This job carries two crons ("17 14 * * *" and
+      # "47 * * * *") and no step is schedule-gated, so an ungated step here
       # would walk every subscription on the account 24 times a day to write
       # nothing. The stop dates do not move between hours. A DISPATCH has no
       # schedule to compare, so it runs these only when it says `daily`: the
-      # Worker's 14:00 dispatch does, its hourly ones do not.
+      # Worker's 14:17 dispatch does, its hourly ones do not.
       #
-      # And once a day means ONCE: the 14:00 run fires twice by design (the
+      # And once a day means ONCE: the 14:17 run fires twice by design (the
       # Worker's dispatch and GitHub's own cron, which can land hours apart),
       # and both passed the gate above — two "a scheduled run did not happen"
       # comments a day and two Stripe walks (launch review OPS-7). The first
@@ -198,14 +201,14 @@ jobs:
       # claim itself fails it prints nothing, and the steps run anyway:
       # running twice is the nuisance, not running is the failure.
       - name: Claim today's once-a-day steps
-        if: always() && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        if: always() && github.event.schedule != '47 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: today
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
         run: .venv/bin/python -m run.watchdog --claim-day >> "$GITHUB_OUTPUT" || true
 
       - name: Stop monthly billing at the end of the season
-        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '47 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: billing
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -224,7 +227,7 @@ jobs:
       # Quiet before launch and with an empty registry. Once a day (claimed
       # above): an hourly alarm about the same missed Tuesday is 24 comments.
       - name: Check this week's scheduled runs happened
-        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '47 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: watchdog
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}

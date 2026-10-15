@@ -333,7 +333,7 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     text = _text("weekly.yml")
     crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
     assert len(crons) == 2, f"the Tuesday retry is gone: {crons}"
-    main = "0 12 * * 2"
+    main = "17 12 * * 2"
     assert main in crons, f"the main Tuesday send moved: {crons}"
     # Never earlier than 12:00 UTC. Below that the November send drifts to
     # 06:00 ET, and more importantly it closes on nflverse's own publish

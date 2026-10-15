@@ -66,6 +66,65 @@ def slug_of(ref: str) -> str:
     return hashlib.sha256(ref.encode("utf-8")).hexdigest()[:10]
 
 
+# --------------------------------------------------------------------- #
+# the per-pass seat link (LP-I1, contract C4, Oct 15 2026)
+# --------------------------------------------------------------------- #
+#
+# Every League Pass used to share ONE link (join/?pass=1), and a seat was
+# matched to its pass by the payer's address, typed by the leaguemate from a
+# group-chat message. A typo, a swapped field or the wrong address (anyone in
+# the league may buy the pass, not only the commissioner) dropped the seat
+# with nothing said to anyone (LP-D1). The link now names the pass itself: a
+# digest of the payer's address under UPDATE_SECRET, so it keeps the address
+# out of the group chat, cannot be mistyped, and is recomputed at intake over
+# the addresses that really bought a pass — never trusted from the row.
+
+SEAT_TOKEN_LENGTH = 20
+# The join page's scoring radio values. With the size and the lineup
+# (template_code), a seat link carries the payer's own setup so eleven
+# leaguemates do not each re-pick it (LP-I3) — still editable on the page.
+_SCORING_PARAMS = ("ppr", "half_ppr", "standard")
+
+
+def seat_token(payer_email: str, secret: str) -> str:
+    """hmac_sha256(UPDATE_SECRET, b"seat:" + canonical(payer)) as hex, first 20.
+    Canonical as the free report canonicalises a mailbox (run/trials), so a
+    payer's `+tag` or Gmail dots never make two passes out of one."""
+    if not secret:
+        raise ValueError("a seat token needs a secret")
+    from run.trials import canonical_email
+    message = b"seat:" + canonical_email(payer_email).encode("utf-8")
+    return hmac.new(secret.encode("utf-8"), message,
+                    hashlib.sha256).hexdigest()[:SEAT_TOKEN_LENGTH]
+
+
+def template_code(slots: Iterable[str]) -> str | None:
+    """The join page's radio value for a lineup shape, or None for a shape the
+    page does not offer (the link then leaves the template for them to pick)."""
+    from run.trial import TEMPLATES
+    shape = tuple(slots)
+    return next((code for code, slots_of in TEMPLATES.items()
+                 if tuple(slots_of) == shape), None)
+
+
+def seat_url(site_url: str, secret: str, payer_email: str, roster) -> str | None:
+    """The one link a pass payer shares: SITE_URL/join/?pass=<token>&s=&n=&t=
+    with the payer's own scoring, league size and lineup. None without a site
+    or a secret — then the welcome keeps the generic link and the email
+    instruction, rather than printing a link that cannot be matched."""
+    site = (site_url or "").rstrip("/")
+    if not site or not secret:
+        return None
+    params = [f"pass={seat_token(payer_email, secret)}"]
+    if roster.scoring in _SCORING_PARAMS:
+        params.append(f"s={roster.scoring}")
+    params.append(f"n={int(roster.league_size)}")
+    code = template_code(roster.slots)
+    if code:
+        params.append(f"t={code}")
+    return f"{site}/join/?" + "&".join(params)
+
+
 def update_url(site_url: str, email: str, slug: str, secret: str) -> str | None:
     """Where a subscriber changes their roster — or None, so a report never
     carries a dead link. Gated on both the site and the secret existing.
@@ -178,15 +237,36 @@ def validate_updates(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
             problems.append("a roster update carried a token that does not match "
                             "its address — not applied")
             continue
-        if (email, replaces) not in targets:
-            problems.append(f"a roster update for {_mask(email)} names a subscription "
-                            f"it does not hold — not applied")
-            continue
         try:
             roster = decode_roster(ref)
         except RefError as exc:
             problems.append(f"a roster update for {_mask(email)} carries an "
                             f"unreadable roster ({exc}) — not applied")
+            continue
+        if not replaces:
+            # The OPERATOR's update (`make roster-update`, below): a subscriber
+            # emailed a new roster, which is names and nothing else. Which of
+            # their teams it changes is decided here, by overlap, and the new
+            # ref keeps that team's own scoring, lineup and size — the person
+            # typing it cannot know them, and guessing would quietly change
+            # how every player is valued.
+            target = _operator_target(email, roster.player_ids, targets.values())
+            if target is None:
+                problems.append(f"an operator roster update for {_mask(email)} "
+                                f"matches none, or more than one, of their teams "
+                                f"— not applied")
+                continue
+            replaces = str(target.get("origin") or slug_of(str(target.get("ref", ""))))
+            try:
+                ref, roster = _with_settings_of(target, roster.player_ids)
+            except RefError as exc:
+                problems.append(f"an operator roster update for {_mask(email)} "
+                                f"does not fit that team's lineup ({exc}) — not "
+                                f"applied")
+                continue
+        if (email, replaces) not in targets:
+            problems.append(f"a roster update for {_mask(email)} names a subscription "
+                            f"it does not hold — not applied")
             continue
         missing = ([pid for pid in roster.player_ids if pid not in known_ids]
                    if known_ids else [])
@@ -203,6 +283,33 @@ def validate_updates(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
     return out, problems
 
 
+def _operator_target(email: str, player_ids: Iterable[str],
+                     registry_rows: Iterable[Mapping]) -> Mapping | None:
+    """The one subscription of ``email`` an emailed roster changes: the only
+    one, or the one whose players it overlaps most. A tie is refused —
+    changing the wrong team is worse than changing none, and the operator can
+    ask which team they meant."""
+    held = [row for row in registry_rows
+            if str(row.get("email", "")).lower() == email]
+    if len(held) <= 1:
+        return held[0] if held else None
+    new = set(player_ids)
+    ranked = sorted(held, key=lambda r: -len(new & set(r.get("player_ids") or [])))
+    first, second = (len(new & set(r.get("player_ids") or [])) for r in ranked[:2])
+    return ranked[0] if first > second else None
+
+
+def _with_settings_of(row: Mapping, player_ids: Iterable[str]):
+    """A ref for ``player_ids`` under the row's own plan, scoring, lineup and
+    league size. -> (ref, decoded). Raises RefError when the players cannot
+    fill that lineup."""
+    from run.refs import encode_roster
+    held = decode_roster(str(row.get("ref", "")))
+    ref = encode_roster(held.plan, held.scoring, held.slots, tuple(player_ids),
+                        league_size=held.league_size)
+    return ref, decode_roster(ref)
+
+
 def latest_per_target(log: Iterable[RosterUpdate]) -> dict[tuple[str, str], RosterUpdate]:
     """Newest first-seen update per (email, replaces)."""
     latest: dict[tuple[str, str], RosterUpdate] = {}
@@ -215,6 +322,7 @@ def latest_per_target(log: Iterable[RosterUpdate]) -> dict[tuple[str, str], Rost
 
 
 def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdate],
+                  since: Mapping[tuple[str, str], datetime] | None = None,
                   ) -> tuple[list[dict], int]:
     """Replace the roster on the targeted rows. Both copies move from one
     decoded object, so the registry's agreement rule holds by construction.
@@ -223,14 +331,27 @@ def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdat
     under — and an update targets that slug, because that is the slug every
     report the subscriber has ever received carries. So a chain of changes
     (A -> B -> C) resolves to the newest one against a target that never
-    moved."""
+    moved.
+
+    ``since`` (email, origin) -> when that row's roster was last SET some other
+    way: a League Pass seat re-claimed through its seat link (LP-D4). An
+    update first seen before that moment is older than the roster it would
+    replace, and applying it would silently undo the newer claim.
+
+    An applied update stamps ``roster_as_of`` with the day it was first seen
+    (contract C3: the date the roster in use was set)."""
     out: list[dict] = []
     applied = 0
     for row in rows:
         email = str(row.get("email", "")).lower()
         origin = str(row.get("origin") or slug_of(str(row.get("ref", ""))))
         update = latest.get((email, origin))
-        if update is None or update.ref == row.get("ref"):
+        newer_claim = (since or {}).get((email, origin))
+        seen = _parse_ts(update.seen_at) if update is not None else None
+        if seen is not None and seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        if (update is None or update.ref == row.get("ref")
+                or (newer_claim is not None and seen is not None and seen < newer_claim)):
             out.append({**row, "origin": origin})
             continue
         roster = decode_roster(update.ref)
@@ -241,6 +362,12 @@ def apply_updates(rows: list[dict], latest: Mapping[tuple[str, str], RosterUpdat
             "player_ids": list(roster.player_ids),
             "slots": list(roster.slots),
             "scoring": roster.scoring,
+            # From the new ref, like scoring: the update page asks for the
+            # size, and keeping the old one would value every player in a
+            # league the subscriber said they are no longer in.
+            "league_size": roster.league_size,
+            **({"roster_as_of": update.seen_at[:10]}
+               if re.match(r"^\d{4}-\d{2}-\d{2}", update.seen_at or "") else {}),
         })
         applied += 1
     return out, applied
@@ -483,3 +610,120 @@ def public_update_url(site_url: str, secret: str, endpoint: str) -> str | None:
     if not site or not secret or not endpoint:
         return None
     return f"{site}/join/?update=1"
+
+
+# --------------------------------------------------------------------- #
+# the operator's route: a roster change that arrived by email (G12, OPS-04)
+# --------------------------------------------------------------------- #
+#
+# Every welcome, the thanks page and the landing FAQ say "reply with your
+# updated roster and your report follows it", and nothing could apply that
+# reply: the registry lives in the Actions cache, not on the owner's machine,
+# and neither this module nor the intake had a command. This is the command.
+# It does not write the registry — it cannot reach it — it posts the same
+# authenticated kind:"update" row a self-serve update is, to the same form
+# Worker, and the next hourly intake validates it on the same path (token,
+# subscription held, every player in the directory) before a byte moves. The
+# token is computed here from UPDATE_SECRET, which the owner holds; the
+# subscriber's own email asking for the change is the authorisation.
+
+def operator_row(email: str, player_ids: Iterable[str], secret: str) -> dict:
+    """The form row for an emailed roster change. It names no subscription
+    (``replaces``) and its ref's settings are placeholders: the intake picks
+    the subscriber's team by overlap and keeps that team's scoring, lineup and
+    size (``validate_updates``), because an emailed list of names says nothing
+    about either."""
+    from run.refs import encode_roster
+    ids = tuple(player_ids)
+    ref = encode_roster("season", "ppr", ("QB",), ids)
+    address = email.strip().lower()
+    return {"kind": "update", "email": address, "ref": ref,
+            "token": update_token(address, secret)}
+
+
+def post_row(endpoint: str, row: Mapping) -> None:
+    """POST one row to the form Worker; raises RuntimeError on any refusal, so
+    the operator is never told a change is on its way when it is not."""
+    import urllib.error
+    import urllib.request
+    request = urllib.request.Request(
+        endpoint, data=json.dumps(dict(row)).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"the form Worker refused the row (HTTP {exc.code})") from None
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(f"could not reach the form Worker: {exc}") from None
+    if status >= 300:
+        raise RuntimeError(f"the form Worker answered HTTP {status}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`make roster-update EMAIL=... ROSTER=...`: queue an emailed roster
+    change for the next intake. Prints no address."""
+    import argparse
+    import os
+    import sys
+
+    parser = argparse.ArgumentParser(
+        description="Apply a roster change a subscriber sent by email, through "
+                    "the same validated path as a confirmed self-serve update.")
+    parser.add_argument("--email", required=True,
+                        help="the subscriber's address (the one on the subscription)")
+    parser.add_argument("--roster", required=True,
+                        help="a text file of the names they sent, or '-' for stdin")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="resolve the names and show the change; post nothing")
+    args = parser.parse_args(argv)
+
+    secret = os.environ.get("UPDATE_SECRET", "")
+    endpoint = os.environ.get("FORM_ENDPOINT", "")
+    if not _EMAIL_RE.match(args.email.strip().lower()):
+        print("That is not an address. Nothing was posted.", file=sys.stderr)
+        return 1
+    if not secret or not endpoint:
+        # Said, never worked around: without the Worker and the secret there
+        # is no authenticated path into the registry, and writing one by hand
+        # is how a registry ends up unloadable for everybody.
+        print("UPDATE_SECRET and FORM_ENDPOINT must both be set in this shell "
+              "(the same values as the GitHub secrets). Nothing was posted.",
+              file=sys.stderr)
+        return 1
+
+    from run.solo import CACHE_DIR, SoloError, load_week_data
+    from run.trial import TrialError, resolve_roster
+    text = (sys.stdin.read() if args.roster == "-"
+            else Path(args.roster).read_text(encoding="utf-8"))
+    try:
+        data = load_week_data(CACHE_DIR)
+        ids = resolve_roster(text, data.directory)
+    except (SoloError, TrialError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not ids:
+        print("No names in that roster. Nothing was posted.", file=sys.stderr)
+        return 1
+    row = operator_row(args.email, ids, secret)
+    names = ", ".join(data.players.name(pid) for pid in ids)
+    who = _mask(row["email"])
+    if args.dry_run:
+        print(f"Would queue a roster change for {who}: {len(ids)} players — {names}")
+        return 0
+    try:
+        post_row(endpoint, row)
+    except RuntimeError as exc:
+        print(f"Not queued: {exc}", file=sys.stderr)
+        return 1
+    print(f"Queued a roster change for {who}: {len(ids)} players — {names}.\n"
+          f"The next intake (within the hour) checks it against their "
+          f"subscription and the player directory, keeps their team's scoring, "
+          f"lineup and league size, and their next report uses it. If it is "
+          f"refused, the intake's log says why.")
+    return 0
+
+
+if __name__ == "__main__":
+    import sys as _sys
+    _sys.exit(main())
