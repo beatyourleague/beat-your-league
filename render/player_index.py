@@ -21,6 +21,15 @@ position and team on sight. **Bijan Robinson and Brian Robinson are the same
 position on the same team**, which is the one case a confirm row cannot
 disambiguate visually — so the page shows the twin inline and the subscriber
 resolves it deliberately rather than by not noticing.
+
+**Relevance (launch audit PC-09).** Each row carries a fifth field: the PPR
+points the player scored across last season and this one so far, or null when
+there is no record (a rookie before his first game, a defense — we do not score
+defenses). It is a SORT KEY for the type-to-add box and nothing else: it is
+never shown, never projects anything, and never reaches a report. Without it a
+search for "Allen" listed players in alphabetical order of first name, and the
+quarterback everybody meant came fourth. The payload stays readable by the old
+page: ``buildDirectory`` reads the first four fields and ignores the rest.
 """
 
 from __future__ import annotations
@@ -30,9 +39,12 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Mapping
 
 from engine.roster import PlayerDirectory, load_directory, normalize
-from ingest.nflverse import ATTRIBUTION, NflverseError, fetch, season_teams
+from engine.scoring import PPR, preset, score
+from ingest.nflverse import (ATTRIBUTION, NflverseError, fetch, season_rows,
+                             season_teams)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = REPO_ROOT / "data" / "raw" / "nflverse"
@@ -104,8 +116,28 @@ def confusable_pairs(directory: PlayerDirectory) -> list[list[str]]:
     return sorted(pairs)
 
 
+def relevance(seasons: list[Mapping[int, Mapping[str, Mapping[str, str]]]]
+              ) -> dict[str, int]:
+    """player -> whole PPR points across these seasons' regular-season weeks.
+
+    TOTAL points, not points per game: this answers "who is somebody most
+    likely typing", and one garbage-time appearance at 20 points must not
+    outrank a starter's season. PPR whatever the subscriber's own scoring,
+    because the directory is one file for everybody and only the ORDER of a
+    handful of suggestions rides on it. A player with no row in any season is
+    simply absent — never a zero (the same rule as engine/preseason.py P1)."""
+    rule = preset(PPR)
+    totals: dict[str, float] = {}
+    for weeks in seasons:
+        for rows in weeks.values():
+            for player_id, row in rows.items():
+                totals[player_id] = totals.get(player_id, 0.0) + score(row, rule)
+    return {pid: round(points) for pid, points in totals.items()}
+
+
 def build(directory: PlayerDirectory, season: str,
-          generated_at: str | None = None) -> dict:
+          generated_at: str | None = None,
+          points: Mapping[str, int] | None = None) -> dict:
     """The whole payload, deterministic given the same inputs."""
     return {
         "season": str(season),
@@ -113,14 +145,32 @@ def build(directory: PlayerDirectory, season: str,
                      .replace(microsecond=0).isoformat(),
         # RULE N1: the licence term travels with the data it licenses.
         "attribution": ATTRIBUTION,
-        "players": [list(row) for row in _sorted_players(directory)],
+        "players": [list(row) for row in _sorted_players(directory, points or {})],
         "confusable": confusable_pairs(directory),
     }
 
 
-def _sorted_players(directory: PlayerDirectory) -> list[list[str]]:
-    return [[p.name, p.player_id, p.position, p.team or ""]
+def _sorted_players(directory: PlayerDirectory,
+                    points: Mapping[str, int]) -> list[list]:
+    # [name, id, position, team, relevance]. Relevance is null, not 0, for a
+    # player with no record, and always null for a defense.
+    return [[p.name, p.player_id, p.position, p.team or "",
+             None if p.is_defense else points.get(p.player_id)]
             for p in sorted(directory.players, key=lambda p: (p.name, p.player_id))]
+
+
+def _relevance_seasons(raw: Path, season: str) -> list[dict]:
+    """Last season (complete, cached for good) and this one so far (live, on
+    the 6h window). Either may be missing — before kickoff this season's file
+    is a 404 — and that only thins the ordering: relevance enriches the
+    typeahead, it must never be the reason the directory fails to build."""
+    out = []
+    for year, live in ((str(int(season) - 1), False), (str(season), True)):
+        try:
+            out.append(season_rows(raw, year, live=live))
+        except NflverseError as exc:
+            print(f"  (no {year} stats for the typeahead order: {exc})")
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,7 +215,8 @@ def main(argv: list[str] | None = None) -> int:
     directory = load_directory(players_csv, teams_csv,
                                min_last_season=int(args.season) - 1,
                                eligible_teams=teams)
-    payload = build(directory, args.season)
+    payload = build(directory, args.season,
+                    points=relevance(_relevance_seasons(args.raw, args.season)))
     body = json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
     if args.check:
@@ -192,6 +243,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  season          : {args.season} ({len(teams)} teams)")
     print(f"  entries         : {len(payload['players'])}")
     print(f"  confusable pairs: {len(payload['confusable'])}")
+    print(f"  with a record   : "
+          f"{sum(1 for row in payload['players'] if row[4] is not None)} "
+          f"(typeahead order: PPR points, {int(args.season) - 1} + {args.season} so far)")
     print(f"  size            : {len(body) / 1024:.0f} KB raw, "
           f"{size / 1024:.0f} KB gzipped")
     print(f"  {ATTRIBUTION}")

@@ -91,6 +91,12 @@ function stripDecoration(line, teams, keepLead) {
     // keepLead keeps a team code that LEADS the line: "KC Concepcion WR CLE" is
     // a player named KC, and stripping both codes leaves "Concepcion".
     const kept = text.split(" ").filter((w, i) => !(isTeam(w) && !(keepLead && i === 0)));
+    // A bare K left once a team code is gone is a kicker's TEAM line, laid out
+    // position-first the way Sleeper writes it ("K - PIT", "K DAL"). Only when
+    // a team code was actually stripped. Mirrors engine/roster.py.
+    if (kept.length < tokens.length && kept.length === 1 && kept[0].toUpperCase() === "K") {
+      return "";
+    }
     // Only if something survives: "KC" alone IS the Chiefs defense, while the
     // same token inside "Mahomes QB KC" is noise.
     if (kept.length) text = kept.join(" ");
@@ -106,8 +112,12 @@ function buildDirectory(payload) {
   const byName = new Map();
   const byId = new Map();
   const teams = new Set();
-  for (const [name, id, position, team] of payload.players) {
-    const player = { name, id, position, team };
+  // A fifth field, when present, is the typeahead's sort key (PPR points
+  // across last season and this one; render/player_index.py). An older
+  // four-field payload still loads: the key is simply unknown.
+  for (const [name, id, position, team, points] of payload.players) {
+    const player = { name, id, position, team,
+                     relevance: typeof points === "number" ? points : null };
     byId.set(id, player);
     if (team) teams.add(team.toUpperCase());
     const push = (key) => {
@@ -272,6 +282,59 @@ function resolveAll(directory, text) {
 }
 
 // ---------------------------------------------------------------- //
+// type-to-add suggestions
+// ---------------------------------------------------------------- //
+
+// Where a typed query may begin inside a name: the start of each word,
+// hyphenated halves included, so "Brown" finds "Amon-Ra St. Brown" and
+// "Njigba" finds "Jaxon Smith-Njigba" at a word start rather than mid-word.
+function wordStarts(name) {
+  const words = (name || "").split(/[\s-]+/).filter(Boolean);
+  return words.map((_, i) => normalize(words.slice(i).join(" "))).filter(Boolean);
+}
+
+// Launch audit PC-09: the directory is alphabetical by FIRST name, so a
+// surname search listed whoever came first ("Allen" put the quarterback
+// everybody meant fourth) and Enter took the top one. Ranked now: the exact
+// name, then a match at the start of a word (first name or surname), then one
+// inside a word; within each, the player who has actually scored the most
+// (relevance; unknown sorts last); then the name and id, so the order is the
+// same on every visit. Ordering only — what can be added is unchanged.
+function suggestPlayers(directory, query, limit) {
+  const q = normalize(query);
+  if (!directory || q.length < 2) return [];
+  const ranked = [];
+  for (const player of directory.byId.values()) {
+    const full = normalize(player.name);
+    const tier = full === q ? 0
+               : wordStarts(player.name).some((key) => key.startsWith(q)) ? 1
+               : full.includes(q) ? 2 : -1;
+    if (tier >= 0) ranked.push({ tier, player });
+  }
+  const points = (p) => (p.relevance === null || p.relevance === undefined
+                         ? -Infinity : p.relevance);
+  ranked.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    const pa = points(a.player), pb = points(b.player);
+    if (pa !== pb) return pb > pa ? 1 : -1;
+    if (a.player.name !== b.player.name) return a.player.name < b.player.name ? -1 : 1;
+    return a.player.id < b.player.id ? -1 : a.player.id > b.player.id ? 1 : 0;
+  });
+  return ranked.slice(0, limit || 8).map((entry) => entry.player);
+}
+
+// Enter adds a suggestion only when it cannot be the wrong one: the query IS a
+// player's name, or exactly one suggestion is left. Otherwise null — Enter
+// taking the top of a list the person has not read added players they never
+// chose (PC-09).
+function enterPick(suggested, query) {
+  const q = normalize(query);
+  const exact = suggested.find((player) => normalize(player.name) === q);
+  if (exact) return exact;
+  return suggested.length === 1 ? suggested[0] : null;
+}
+
+// ---------------------------------------------------------------- //
 // the signup reference — mirrors run/refs.py encode_roster
 // ---------------------------------------------------------------- //
 
@@ -351,7 +414,8 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
 // the global scope and a second `const REF_RE` is a SyntaxError that kills the
 // whole file silently from the page's point of view.
 const R = { normalize, stripDecoration, buildDirectory, resolveLine, resolveAll,
-            encodeRoster, packOne, REF_RE, MAX_ROSTER, SIZE_CODE };
+            suggestPlayers, enterPick, encodeRoster, packOne, REF_RE, MAX_ROSTER,
+            SIZE_CODE };
 if (typeof module !== "undefined" && module.exports) {
   module.exports = R;
 } else {

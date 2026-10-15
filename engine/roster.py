@@ -379,6 +379,13 @@ def _strip_decoration(line: str, teams: set[str] | None = None,
             return ""
         kept = [w for i, w in enumerate(tokens)
                 if not (is_team(w) and not (keep_lead and i == 0))]
+        # A bare K left once a team code is gone is a kicker's TEAM line, laid
+        # out position-first the way Sleeper writes it ("K - PIT", "K DAL").
+        # Read as a name it was an unknown player that blocked checkout. Only
+        # when a team code was actually stripped: a lone "K" is already blank
+        # above, and "K Walker" never loses a word here.
+        if len(kept) < len(tokens) and [w.upper() for w in kept] == ["K"]:
+            return ""
         if kept:
             text = " ".join(kept)
     return text

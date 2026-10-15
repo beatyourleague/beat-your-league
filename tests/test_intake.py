@@ -85,6 +85,9 @@ PASTED = [
     # Sep 29 2026, a real ESPN paste: the app's own team spellings and its
     # section headers must not stop a signup.
     "Puka Nacua LAR WR", "Terry McLaurin WSH WR", "Bench", "Starters", "LAR D/ST",
+    # Sleeper's kicker team line, position first (launch audit PC-07): it
+    # stripped to a bare "K" and blocked checkout as an unknown player.
+    "K - SF", "K KC", "k - min",
 ]
 
 
@@ -98,6 +101,26 @@ def test_decoration_stripping_agrees() -> None:
     expected = [_strip_decoration(line, set(teams)) for line in PASTED]
     mismatches = [(a, b, c) for a, b, c in zip(PASTED, got, expected) if b != c]
     assert not mismatches, f"decoration strippers disagree: {mismatches}"
+
+
+def test_a_sleeper_kicker_team_line_is_blank_in_both_languages() -> None:
+    """Launch audit PC-07, reproduced: Sleeper lays a roster out two lines per
+    player, the second position-first ("QB - BUF"). For a kicker that line is
+    "K - PIT", which stripped to a bare "K" — K is deliberately not slot
+    decoration, because it is also an initial — and came back as "we don't have
+    anybody by that name", blocking checkout for every Sleeper user with a
+    kicker. Agreement alone would pass with both parsers still returning "K",
+    so the VALUE is asserted, and the initials it must not eat ride along."""
+    from engine.roster import _strip_decoration
+    teams = ["PIT", "DAL", "DET", "KC"]
+    lines = ["K - PIT", "K DAL", "k - det", "K Walker", "K. Walker", "KC"]
+    want = ["", "", "", "K Walker", "K. Walker", "KC"]
+    assert [_strip_decoration(line, set(teams)) for line in lines] == want
+    got = run_js(
+        f"const teams = new Set({json.dumps(teams)});\n"
+        f"console.log(JSON.stringify({json.dumps(lines)}"
+        f".map(l => R.stripDecoration(l, teams))))")
+    assert got == want, f"browser: {got}"
 
 
 # --------------------------------------------------------------------- #
@@ -365,10 +388,13 @@ PASTES = {
             "TE George Kittle SF Q\nDEF Denver Broncos DEN\nK Jake Bates DET --",
             ["Josh Allen", "Saquon Barkley", "Ja'Marr Chase", "George Kittle",
              "Denver Broncos", "Jake Bates"]),
+    # The kicker's line is "K - DET": position first, then team. It used to
+    # strip to a bare "K" and block checkout as an unknown player (PC-07).
     "sleeper": ("Josh Allen\nQB - BUF\nSaquon Barkley\nRB - PHI\nBroncos\nDEF - DEN\n"
-                "Chase Brown\nRB - CIN\nJ. Mixon\nRB - HOU\nD. Adams\nWR",
+                "Chase Brown\nRB - CIN\nJ. Mixon\nRB - HOU\nD. Adams\nWR\n"
+                "Jake Bates\nK - DET",
                 ["Josh Allen", "Saquon Barkley", "Denver Broncos", "Chase Brown",
-                 "Joe Mixon", "Davante Adams"]),
+                 "Joe Mixon", "Davante Adams", "Jake Bates"]),
     "espn": ("Josh Allen  QB BUF  OUT\nSaquon Barkley  RB PHI  DTD\n"
              "Ja'Marr Chase  WR CIN  P: 15.2 22.1\nSam LaPorta  TE DET  Q\n"
              "Ravens D/ST  D/ST\nJake Bates  K DET  IR\nJayden Reed  WR GB  SSPD",
@@ -443,6 +469,9 @@ REVIEW_CASES = [
     ("Buf - Bye 9", []), ("BUF (Bye 7)", []), ("Buf - Q", []), ("BUF OUT", []),
     ("KC", ["Kansas City Chiefs"]), ("KC D/ST", ["Kansas City Chiefs"]),
     ("Den - DEF", ["Denver Broncos"]),
+    # A kicker's team line, position first (Sleeper): not a player, not a
+    # defense. Either reading blocks or corrupts the signup (PC-07).
+    ("K - PIT", []), ("K DAL", []), ("K - LAR", []),
     # After a comma only a FULL team name or a code is an annotation. A bare
     # nickname is a second roster entry and must not be swallowed.
     ("Josh Allen, Buffalo Bills", ["Josh Allen"]), ("Josh Allen, BUF", ["Josh Allen"]),
@@ -513,3 +542,24 @@ def test_no_directory_player_is_mangled_by_the_decoration_stripping() -> None:
     # Only a name shared with another player (or a defense alias) may fail to
     # resolve to itself, and then both languages say so.
     assert len(both_wrong) <= 12, f"stripping mangles real names: {both_wrong}"
+
+
+def test_the_typeahead_ranks_by_who_people_mean_and_enter_never_guesses() -> None:
+    """Launch audit PC-09, in the browser's own code: a surname search lists the
+    player who has actually scored first, and Enter adds only an exact name or
+    the single remaining suggestion."""
+    got = run_js(
+        "const d = R.buildDirectory({players: ["
+        "['Josh Allen','00-1','QB','BUF',900],['Allen Lazard','00-2','WR','NYJ',80],"
+        "['Keenan Allen','00-3','WR','LAC',400],['Brandon Allen','00-4','QB','SF',null]]});\n"
+        "const s = R.suggestPlayers(d, 'allen', 8).map(p => p.name);\n"
+        "const one = R.suggestPlayers(d, 'keenan', 8);\n"
+        "console.log(JSON.stringify({s, enterMany: R.enterPick(R.suggestPlayers(d,'allen',8),'allen'),"
+        " enterOne: (R.enterPick(one,'keenan')||{}).name,"
+        " enterExact: (R.enterPick(R.suggestPlayers(d,'josh allen',8),'Josh Allen')||{}).name}))")
+    assert got["s"][0] == "Allen Lazard" or got["s"][0] == "Josh Allen"
+    # Word-start matches outrank, then points: Josh Allen (900) before Keenan (400).
+    assert got["s"].index("Josh Allen") < got["s"].index("Keenan Allen") < got["s"].index("Brandon Allen")
+    assert got["enterMany"] is None
+    assert got["enterOne"] == "Keenan Allen"
+    assert got["enterExact"] == "Josh Allen"

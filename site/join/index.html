@@ -292,13 +292,13 @@
   <section id="step-roster">
     <div class="eyebrow">2 · Your roster</div>
     <div class="note">Type a name and tap to add it, or paste your whole roster straight from
-    your league app. Extra text like positions and bye weeks is fine.</div>
+    ESPN, Yahoo, Sleeper or CBS. Extra text like positions and bye weeks is fine.</div>
     <form id="form-roster" novalidate>
       <div class="addwrap">
         <input type="text" id="player-search" autocomplete="off"
                placeholder="Add a player — start typing a name"
                aria-label="Add a player by name">
-        <div class="suggest" id="suggest" role="listbox" aria-label="Matching players"></div>
+        <div class="suggest" id="suggest" role="group" aria-label="Matching players"></div>
       </div>
     <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
 Bijan Robinson
@@ -307,10 +307,12 @@ Baltimore Ravens
 ..."></textarea>
     <button id="resolve" type="submit">Check my roster</button>
     </form>
-    <div class="err" id="err-roster"></div>
+    <div class="err" id="err-roster" role="alert"></div>
     <button type="button" id="retry-dir" class="retry" style="display:none">Try loading the player list again</button>
+    <!-- Above the list, so a problem shows under the button that found it
+         rather than a screen further down on a phone (launch audit PC-08). -->
+    <div class="tally" id="tally" role="status" aria-live="polite" tabindex="-1"></div>
     <div id="rows"></div>
-    <div class="tally" id="tally"></div>
   </section>
 
   <section id="step-email" class="hidden">
@@ -340,7 +342,7 @@ Baltimore Ravens
       <button id="submit" type="submit">Continue to checkout — $39</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
     </form>
-    <div class="err" id="err-email"></div>
+    <div class="err" id="err-email" role="alert" tabindex="-1"></div>
     <div class="done" id="done">
       <b id="done-head">You're all set.</b>
       <ol>
@@ -353,9 +355,9 @@ Baltimore Ravens
         this roster. It only goes to the address your reports go to, and nothing
         changes until it's pressed.</li>
         <li id="trial-note" style="display:none">It's built from the roster you just
-        entered and usually lands within the hour. From Sunday afternoon to Monday
-        night it waits for the next week's build, so it's never about games already
-        underway. One free report per person — nothing to pay, no card.</li>
+        entered and usually lands within the hour. From Thursday night's first kickoff
+        until Tuesday it waits for the next week's report, so it's never about games
+        already underway. One free report per person — nothing to pay, no card.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
@@ -365,7 +367,7 @@ Baltimore Ravens
         until your second report's week kicks off — one per person, and a
         re-subscription after a refund is final.
         Changed your mind later?
-        <a href="../terms.html#cancel">Cancelling takes about fifteen seconds</a> in your
+        <a href="../terms.html#cancel">Cancelling takes about a minute</a> in your
         own account — you never have to ask us.</li>
       </ol>
     </div>
@@ -395,12 +397,12 @@ Baltimore Ravens
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
     <span>Risk-free: full refund, no questions, until your second report's week kicks off</span>
-    <span>Cancel yourself in one click, any time</span>
+    <span>Cancel yourself online, any time</span>
     <span>No league login, no password — just your roster</span>
   </div>
 </aside>
 </div>
-<script src="roster.js?v=1e63a087bc"></script>
+<script src="roster.js?v=93f71adc76"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -527,7 +529,12 @@ function template() { return TEMPLATES[radio("template")] || TEMPLATES.std; }
 // subscriber got a 12-team report and a 12-team ledger bucket regardless of
 // what they picked. Found Aug 24 2026 by running the intake path for real.
 function leagueSize() { return Number(radio("size")) || 12; }
-function showError(id, message) { $(id).textContent = message; }
+function showError(id, message) {
+  $(id).textContent = message;
+  // A refusal at submit is announced (role=alert) and focused, so neither a
+  // screen reader nor a phone user is left on a button that did nothing.
+  if (message && id === "err-email") $(id).focus({ preventScroll: false });
+}
 
 // Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
 // innerHTML: the roster box is arbitrary typed input and a name is not markup.
@@ -574,17 +581,10 @@ loadDirectory();
 const searchBox = $("player-search");
 const suggestBox = $("suggest");
 
+// Ranked in roster.js (R.suggestPlayers): exact name, then a word start
+// (surnames included), then inside a word, each by who has actually scored.
 function suggestions(query) {
-  const q = R.normalize(query);
-  if (!state.directory || !q || q.length < 2) return [];
-  const starts = [], contains = [];
-  for (const player of state.directory.byId.values()) {
-    const n = R.normalize(player.name);
-    if (n.startsWith(q)) starts.push(player);
-    else if (n.includes(q)) contains.push(player);
-    if (starts.length >= 8) return starts.slice(0, 8);
-  }
-  return starts.concat(contains).slice(0, 8);
+  return R.suggestPlayers(state.directory, query, 8);
 }
 
 function addPlayer(player) {
@@ -614,8 +614,10 @@ if (searchBox) {
   searchBox.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      const first = suggestions(searchBox.value)[0];
-      if (first) addPlayer(first);
+      // Only a pick that can't be the wrong player: an exact name or the one
+      // suggestion left. Otherwise the list stays up to tap (launch audit PC-09).
+      const pick = R.enterPick(suggestions(searchBox.value), searchBox.value);
+      if (pick) addPlayer(pick);
     }
   });
 }
@@ -628,6 +630,8 @@ $("resolve").addEventListener("click", () => {
     showError("err-roster", state.dirFailed
       ? directoryFailedMessage()
       : "Still loading the player list — one moment.");
+    $("err-roster").setAttribute("tabindex", "-1");
+    $("err-roster").focus();
     if (state.dirFailed) $("retry-dir").style.display = "block";
     return;
   }
@@ -649,15 +653,31 @@ $("roster-text").addEventListener("input", () => {
   tally.textContent = 'Your roster changed — hit "Check my roster" again.';
 });
 
-function draw() {
+// ``focusAt``: after a remove or a choice, keyboard focus goes to the row now
+// at that display position (or the tally), rather than falling to the page.
+function draw(focusAt) {
   const list = $("rows");
   list.replaceChildren();
   if (!state.matches.length) { $("tally").textContent = ""; return; }
   const wrap = document.createElement("div");
   wrap.className = "rows";
 
+  // Duplicates are judged in the order the roster was entered; rows that need
+  // attention are then SHOWN first, so a problem sits under the button that
+  // found it (launch audit PC-08). The stored order — what the ref encodes —
+  // never changes.
   const seen = new Map();
-  state.matches.forEach((match, index) => {
+  const dupOf = state.matches.map((match, index) => {
+    if (!match.player) return undefined;
+    const first = seen.get(match.player.id);
+    if (first === undefined) seen.set(match.player.id, index);
+    return first;
+  });
+  const needsWork = (i) => !state.matches[i].player || dupOf[i] !== undefined;
+  const order = state.matches.map((_, i) => i)
+    .sort((a, b) => (needsWork(b) - needsWork(a)) || (a - b));
+  order.forEach((index, position) => {
+    const match = state.matches[index];
     const row = document.createElement("div");
     row.className = "row" + (match.player ? "" : " bad");
     const left = document.createElement("div");
@@ -671,13 +691,11 @@ function draw() {
       (match.twins || []).forEach((twin) => {
         left.appendChild(textCell("twin", "not " + twin.name + "? tap to swap"));
       });
-      const duplicate = seen.get(match.player.id);
+      const duplicate = dupOf[index];
       if (duplicate !== undefined) {
         row.className = "row bad";
         left.appendChild(textCell("why",
           "you already listed this player on line " + (duplicate + 1)));
-      } else {
-        seen.set(match.player.id, index);
       }
     } else {
       // Shown back verbatim — never dropped.
@@ -700,7 +718,7 @@ function draw() {
       button.addEventListener("click", () => {
         state.matches[index] = { typed: match.typed, player: option,
                                  candidates: [], twins: [] };
-        draw();
+        draw(position);
       });
       fix.appendChild(button);
     });
@@ -708,9 +726,12 @@ function draw() {
     drop.type = "button";
     drop.className = "drop";
     drop.textContent = "remove";
+    // Every button named for its row: "remove" twelve times tells a screen
+    // reader nothing (launch audit W4).
+    drop.setAttribute("aria-label", "Remove " + (match.player ? match.player.name : match.typed));
     drop.addEventListener("click", () => {
       state.matches.splice(index, 1);
-      draw();
+      draw(position);
     });
     fix.appendChild(drop);
     row.appendChild(fix);
@@ -744,6 +765,12 @@ function draw() {
   tally.textContent = problem ||
     (ids.length + " players read, " + slots.length + " starting spots. Looks right.");
   $("step-email").classList.toggle("hidden", !state.ready);
+  if (Number.isInteger(focusAt)) {
+    const rows = list.querySelectorAll(".row");
+    const target = rows[Math.min(focusAt, rows.length - 1)];
+    const control = target && target.querySelector("button");
+    (control || tally).focus();
+  }
 }
 
 function wireEnter(formId, buttonId) {
@@ -995,9 +1022,15 @@ function noteClosedFor(link, other) {
   // A closed tier's button says so on the button: on a phone the header note
   // is several screens above it, and "Continue to checkout — $39" over a
   // checkout that cannot open read as bait (QA, Oct 9 2026).
-  if (!link) $("submit").textContent = "Checkout opens soon";
-  $("submit").classList.toggle("is-closed", !link);
-  $("submit").setAttribute("aria-disabled", link ? "false" : "true");
+  // With the email list connected, the closed button does something useful —
+  // the handler already posts kind:"waitlist" — so it says so and looks live
+  // (launch audit PC-13). Without it, it looks switched off, as before.
+  const listening = !link && Boolean(NOTIFY_LIST_ENDPOINT);
+  if (!link) {
+    $("submit").textContent = listening ? "Email me when checkout opens" : "Checkout opens soon";
+  }
+  $("submit").classList.toggle("is-closed", !link && !listening);
+  $("submit").setAttribute("aria-disabled", link || listening ? "false" : "true");
   document.querySelector(".secure").style.display = link ? "" : "none";
 }
 
@@ -1034,8 +1067,8 @@ function seasonPlan() {
 if (TRY_MODE) {
   $("header-pitch").textContent =
     "Try it free. Enter your league's settings and your roster, and we'll email " +
-    "you this week's report for your team — every close call decided, with the " +
-    "odds. One per person, no card.";
+    "you this week's report for your team — your lineup decided, with the odds " +
+    "wherever both players are confirmed to play. One per person, no card.";
   $("header-chips").replaceChildren();
   ["Free — no card", "This week's report", "One per person"].forEach((text) => {
     const chip = document.createElement("span");

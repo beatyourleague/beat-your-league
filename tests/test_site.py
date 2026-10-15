@@ -2208,7 +2208,7 @@ def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
     what actually happened rather than that they are entitled."""
     # The roster step is where a commissioner would be tempted to reveal it,
     # so that is what must stay clean.
-    pick = JOIN.split("function draw()")[1].split("\n$(")[0]
+    pick = JOIN.split("function draw(")[1].split("\n$(")[0]
     assert "showSeatLink" not in pick, \
         "the seat link is shown before the commissioner reaches checkout"
     # Comment lines stripped: this function's comment explains where the link

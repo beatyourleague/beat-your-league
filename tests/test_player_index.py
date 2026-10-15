@@ -189,7 +189,7 @@ def test_the_asset_the_generator_ACTUALLY_produces_is_collision_free(
     payload = json.loads(out.read_text(encoding="utf-8"))
 
     seen: dict[str, list[str]] = collections.defaultdict(list)
-    for name, player_id, _position, _team in payload["players"]:
+    for name, player_id, _position, _team, *_relevance in payload["players"]:
         seen[normalize(name)].append(player_id)
     clashes = {key: ids for key, ids in seen.items() if len(ids) > 1}
     assert not clashes, (
@@ -205,6 +205,25 @@ def test_the_published_asset_is_collision_free_too() -> None:
         pytest.skip("players.json not built — run `make index`")
     payload = json.loads(SITE_ASSET.read_text(encoding="utf-8"))
     seen: dict[str, list[str]] = collections.defaultdict(list)
-    for name, player_id, _position, _team in payload["players"]:
+    for name, player_id, _position, _team, *_relevance in payload["players"]:
         seen[normalize(name)].append(player_id)
     assert not {k: v for k, v in seen.items() if len(v) > 1}
+
+
+def test_the_directory_carries_a_relevance_key_for_the_typeahead() -> None:
+    """Launch audit PC-09: the typeahead listed players alphabetically by first
+    name, so "Allen" put the quarterback everybody meant fourth, and Enter took
+    the top one. Each row now carries a fifth field — PPR points across last
+    season and this one — used only to ORDER suggestions. It is never a zero
+    for a player with no record (RULE P1) and always null for a defense."""
+    import json as _json
+    from pathlib import Path as _Path
+    payload = _json.loads((_Path(__file__).resolve().parent.parent / "site" / "join"
+                           / "players.json").read_text(encoding="utf-8"))
+    rows = payload["players"]
+    assert all(len(row) == 5 for row in rows)
+    assert all(row[4] is None for row in rows if row[1].startswith("DEF-"))
+    assert any(isinstance(row[4], int) and row[4] > 0 for row in rows)
+    # A player with no stat row at all (a rookie before his first game) is
+    # null, never 0 — absence is not a score.
+    assert any(row[4] is None for row in rows if not row[1].startswith("DEF-"))
