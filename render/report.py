@@ -232,6 +232,14 @@ def source_line(meta: Mapping[str, Any]) -> str:
     """
     return NFLVERSE_LINE if meta.get("solo") else SLEEPER_LINE
 CANCEL_HEAD = "Done with this?"
+# What cancelling does to the reports. Terms §4 keeps access to the end of the
+# period already paid for, and run/subscriptions.py keeps a cancel_at_period_end
+# subscription entitled until then — so the text half's old "the reports stop
+# on their own once you do" was false for every cancel (launch audit C13,
+# Oct 15 2026). One sentence: in CANCEL_BODY (so every surface that prints
+# it), the text half's CANCEL_TEXT, and the welcome.
+CANCEL_PERIOD = ("Reports continue to the end of the period you've already "
+                 "paid for, then stop.")
 # The real flow (launch audit L4): Stripe's billing page emails a sign-in LINK,
 # and the whole thing takes about a minute — "fifteen seconds" and "a sign-in
 # code" were misstatements of how the reader gets out.
@@ -239,7 +247,77 @@ CANCEL_BODY = ("Cancel it yourself from your own billing page — enter your ema
                "open the link Stripe sends, press Cancel. About a minute, and no "
                "further charges; the exact steps are on our terms page. "
                "Unsubscribing from emails alone does not stop a subscription, "
-               "so cancel there if you want the charges to end.")
+               "so cancel there if you want the charges to end. " + CANCEL_PERIOD)
+# The plain-text half's own wording of the same block (it shouts the NOT,
+# because a text client has no bold to carry it).
+CANCEL_TEXT = ("DONE WITH THIS? Cancel it yourself from your own billing page — "
+               "enter your email, open the link Stripe sends, press Cancel. About "
+               "a minute, and no further charges. Note that unsubscribing from "
+               "emails alone does NOT stop a subscription; cancel there if you "
+               "want the charges to end. " + CANCEL_PERIOD)
+# A League Pass SEAT pays nothing and has no Stripe subscription, yet every
+# surface sent it to a billing page where its address finds no customer — the
+# welcome, every weekly footer, the Saturday check and the List-Unsubscribe
+# header (launch audit C4, Oct 15 2026). A seat had no working way out at all,
+# in an email that also said "nothing bills you for this seat, ever". Its way
+# out is the one any unpaid reader has: say stop, and the address goes on the
+# suppression list run/delivery.py checks before every send (run/suppress.py).
+# Ten business days is CAN-SPAM's ceiling. The operator is in this loop only
+# because no money is: a PAID subscription still cancels itself.
+SEAT_STOP_BODY = ("Reply \"stop\" to any of our emails, or use your mail app's "
+                  "unsubscribe — you're off within 10 business days. Your "
+                  "commissioner's pass isn't affected.")
+# On a registry row, and so in a report's meta["plan"] (run/tuesday.py), this
+# word means a SEAT: a pass PAYER is written as an ordinary season row and
+# never carries it (run/intake.py). The welcome email has its own vocabulary,
+# where a seat is "seat" and "league_pass" is the payer — so the helpers below
+# take a yes/no, never a plan word that means opposite things in two places.
+SEAT_PLAN = "league_pass"
+
+
+def is_seat(meta: Mapping[str, Any]) -> bool:
+    """A weekly report addressed to a League Pass seat holder."""
+    return meta.get("plan") == SEAT_PLAN
+
+
+def seat_stop_href() -> str:
+    """The seat's List-Unsubscribe target: a stop request to the inbox that
+    reads it. mailto, so it works with no endpoint of ours."""
+    from render.sender import CONTACT
+    return f"mailto:{CONTACT}?subject=stop"
+
+
+def unsubscribe_target(seat: bool = False) -> str | None:
+    """The List-Unsubscribe header for a report or a Saturday check. For a
+    PAID subscription unsubscribing and cancelling are the same act, so it is
+    where the money stops; a seat has no money to stop."""
+    if seat:
+        return seat_stop_href()
+    return cancel_destination()[0] or None
+
+
+def cancel_html(seat: bool = False, link_style: str = "") -> str:
+    """The footer's way out, as an HTML fragment — one block, every surface.
+    No mailto anchor for a seat: every href in an email is https
+    (tests/test_email_safety.py), and "reply" needs no link."""
+    if seat:
+        return f'<b>{esc(CANCEL_HEAD)}</b> {esc(SEAT_STOP_BODY)}'
+    href, label = cancel_destination()
+    style = f' style="{link_style}"' if link_style else ""
+    return (f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
+            + (f' <a href="{esc(href)}"{style}>{esc(label)}</a>.' if href else ""))
+
+
+def cancel_lines(seat: bool = False) -> list[str]:
+    """The plain-text twin. The route is spelled out as a URL because a text
+    half cannot carry an anchor (found Aug 24 2026: the footer promised a
+    cancel with no way to reach it, on either half)."""
+    if seat:
+        return [f"{CANCEL_HEAD.upper()} {SEAT_STOP_BODY}"]
+    href, label = cancel_destination()
+    return ([f"CANCEL: {label} — {href}", ""] if href else []) + [CANCEL_TEXT]
+
+
 def sender_html() -> str:
     """Who sent this, with a postal address once one is configured (CASL and
     CAN-SPAM identification; render/sender.py). Empty until then."""
@@ -1507,7 +1585,6 @@ def footer(meta: Mapping[str, Any]) -> str:
     # The gap COUNT is operator bookkeeping; a buyer only needs to know that
     # anything unproven was withheld, which the report already says in place.
     gap_line = ""
-    _cancel_href, _cancel_label = cancel_destination()
     return (
         f'{demo_band(meta)}'
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
@@ -1518,15 +1595,14 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
-        # Every commercial email needs a working way out. It points at the
-        # self-serve cancel because that costs the reader ~15 seconds and the
-        # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
-        # distinction stays: stopping emails while billing continues is how you
-        # earn a chargeback and deserve it.
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
-        + (f' <a href="{esc(_cancel_href)}">{esc(_cancel_label)}</a>.'
-           if _cancel_href else "")
-        + '</footer>'
+        # Every commercial email needs a working way out. For a paid
+        # subscription it is the self-serve cancel, which costs the reader
+        # about a minute and the operator nothing — no inbox to watch. The
+        # unsubscribe-vs-cancel distinction stays: stopping emails while
+        # billing continues is how you earn a chargeback and deserve it. A
+        # seat has nothing to cancel, so it gets its stop route instead.
+        f'{cancel_html(is_seat(meta))}'
+        '</footer>'
     )
 
 

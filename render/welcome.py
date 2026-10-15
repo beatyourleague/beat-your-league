@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import os
 
-from render.report import CANCEL_HEAD, EMAIL_META, cancel_destination, esc
+from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, SEAT_STOP_BODY,
+                           cancel_destination, esc, seat_stop_href)
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
@@ -115,15 +116,27 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "") -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat."""
     bought, terms = _plan_terms(plan)
-    href, label = _cancel_destination()
-    cancel_line = (
-        "Cancel any time, yourself, in about a minute — "
-        + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>.'
-           if href else "the steps are on our site's terms page.")
-    )
-    cancel_text = ("Cancel any time, yourself, in about a minute — "
-                   + (f"{label}: {href}" if href else
-                      "the steps are on our site's terms page."))
+    # A seat CLAIMED a place on somebody else's pass and has no Stripe
+    # subscription, so "you bought" and a billing-page cancel were both false
+    # for it: the portal finds no customer at that address, which left a seat
+    # with no way out at all (launch audit C4, Oct 15 2026). Its way out is a
+    # stop request, backed by the suppression list (run/suppress.py).
+    seat = plan == "seat"
+    verb = "claimed" if seat else "bought"
+    if seat:
+        stop_html, stop_text = esc(SEAT_STOP_BODY), SEAT_STOP_BODY
+    else:
+        href, label = _cancel_destination()
+        cancel_line = (
+            "Cancel any time, yourself, in about a minute — "
+            + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>.'
+               if href else "the steps are on our site's terms page.")
+        )
+        cancel_text = ("Cancel any time, yourself, in about a minute — "
+                       + (f"{label}: {href}" if href else
+                          "the steps are on our site's terms page."))
+        stop_html = f"{cancel_line} {esc(UNSUB_LINE)} {esc(CANCEL_PERIOD)}"
+        stop_text = f"{cancel_text} {UNSUB_LINE} {CANCEL_PERIOD}"
 
     what_next = ("Every Tuesday morning, one email: the lineup we'd set for "
                  "your roster under your scoring, the odds on every call worth "
@@ -145,13 +158,13 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'cellpadding="0" cellspacing="0" border="0" style="max-width:560px;'
         f'width:100%;"><tr><td style="{_BODY}text-align:left;">'
         f'<p style="{_HEAD}margin-top:0;">You&#x27;re in.</p>'
-        f'<p style="{_BODY}margin:0 0 10px;">You bought {esc(bought)}. '
+        f'<p style="{_BODY}margin:0 0 10px;">You {verb} {esc(bought)}. '
         f'{esc(what_next)}</p>'
         f'<p style="{_HEAD}">The terms, in writing</p>'
         + "".join(f'<p style="{_BODY}margin:0 0 8px;">{esc(term)}</p>'
                   for term in terms)
         + f'<p style="{_HEAD}">{esc(CANCEL_HEAD)}</p>'
-        f'<p style="{_BODY}margin:0 0 8px;">{cancel_line} {esc(UNSUB_LINE)}</p>'
+        f'<p style="{_BODY}margin:0 0 8px;">{stop_html}</p>'
         f'<p style="{_BODY}margin:14px 0 0;color:#5A6B80;font-size:13px;">'
         f'{esc(roster_line)}</p>'
         f'</td></tr></table></td></tr></table></body></html>\n'
@@ -159,14 +172,14 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text = "\n".join([
         "YOU'RE IN.",
         "",
-        f"You bought {bought}.",
+        f"You {verb} {bought}.",
         what_next,
         "",
         "THE TERMS, IN WRITING",
         *terms,
         "",
         CANCEL_HEAD.upper(),
-        f"{cancel_text} {UNSUB_LINE}",
+        stop_text,
         "",
         roster_line,
     ]) + "\n"
@@ -190,5 +203,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     # next season is a new purchase with a new key and IS acknowledged. It
     # falls back to the season only when the timestamp is missing, which is the
     # old behaviour for the one case that has no purchase clock.
+    #
+    # A seat's List-Unsubscribe is its stop request; a paid welcome carries
+    # none, as before — it is the acknowledgment the law owes the buyer.
     return Message(to=email, subject=subject, html=html, text=text,
-                   key=f"welcome-{purchased_at or season}-{slug}")
+                   key=f"welcome-{purchased_at or season}-{slug}",
+                   unsubscribe=seat_stop_href() if seat else None)

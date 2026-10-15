@@ -259,3 +259,87 @@ def test_an_unconfigured_send_fails_loudly_instead_of_reporting_success(
     monkeypatch.setattr(batch, "SUBSCRIBER_REPORTS", tmp_path / "out2")
     assert batch.main([*argv, "--allow-dry"]) == 0, \
         "the deliberate preview path must still work"
+
+
+# --------------------------------------------------------------------- #
+# never to somebody who asked us to stop
+# --------------------------------------------------------------------- #
+
+def _stop_list(tmp_path: Path, *emails: str) -> Path:
+    from run.suppress import add
+    path = tmp_path / "suppressed.txt"
+    add(list(emails), path)
+    return path
+
+
+def test_an_address_that_asked_to_stop_is_never_mailed(tmp_path: Path) -> None:
+    """Reproduction (launch audit C4, Oct 15 2026): every League Pass seat and
+    the waitlist are promised "you're off within 10 business days", and
+    nothing could keep it — send_all mailed any address it was handed. A stop
+    is SKIPPED, not failed (nobody should retry it), and never logged as sent,
+    so a later --remove lets the next run mail them again."""
+    log = tmp_path / "sent.jsonl"
+    stop = _stop_list(tmp_path, "seat@example.com")
+    provider = _CountingProvider()
+    results = send_all([_message(to="seat@example.com", key="2026-w06-aaa"),
+                        _message(to="payer@example.com", key="2026-w06-bbb")],
+                       provider=provider, sent_log=log, suppress_file=stop)
+    assert [m.to for m in provider.sent] == ["payer@example.com"]
+    stopped = results[0]
+    assert stopped.ok and stopped.skipped and stopped.suppressed
+    assert "asked us to stop" in stopped.detail
+    assert not results[1].suppressed
+    assert load_sent(log) == {"2026-w06-bbb"}
+
+
+def test_a_stop_holds_however_the_address_is_spelled(tmp_path: Path) -> None:
+    """One mailbox, one entry: the free report's canonical form (no +tag, no
+    Gmail dots, any case) — or "stop" from F.an+x@Gmail.com leaves
+    fan@gmail.com on the list."""
+    stop = _stop_list(tmp_path, "F.an+league@Gmail.com")
+    provider = _CountingProvider()
+    results = send_all([_message(to="fan@gmail.com")], provider=provider,
+                       sent_log=tmp_path / "s.jsonl", suppress_file=stop)
+    assert provider.sent == [] and results[0].suppressed
+
+
+def test_resending_a_week_never_re_mails_a_stop(tmp_path: Path) -> None:
+    stop = _stop_list(tmp_path, "seat@example.com")
+    provider = _CountingProvider()
+    send_all([_message(to="seat@example.com")], provider=provider,
+             sent_log=tmp_path / "s.jsonl", resend_anyway=True, suppress_file=stop)
+    assert provider.sent == []
+
+
+def test_the_pre_renewal_notice_still_reaches_a_stopped_address(tmp_path: Path) -> None:
+    """The one exception: a notice about a charge on the reader's own card,
+    which the law requires and which carries the cancel route. Suppressing it
+    would renew a pass with no warning."""
+    stop = _stop_list(tmp_path, "payer@example.com")
+    provider = _CountingProvider()
+    send_all([_message(to="payer@example.com", key="renewal-2027-09-29-abc"),
+              _message(to="payer@example.com", key="welcome-2026-abc")],
+             provider=provider, sent_log=tmp_path / "s.jsonl", suppress_file=stop)
+    assert [m.key for m in provider.sent] == ["renewal-2027-09-29-abc"]
+
+
+def test_an_unreadable_stop_list_sends_nothing(tmp_path: Path) -> None:
+    """Fail closed: with the list unknown, anybody might be on it. Every
+    message fails (so the run goes red and retries) and none is sent."""
+    unreadable = tmp_path / "suppressed.txt"
+    unreadable.mkdir()                       # reading a directory raises OSError
+    provider = _CountingProvider()
+    results = send_all([_message(), _message(to="b@example.com", key="k2")],
+                       provider=provider, sent_log=tmp_path / "s.jsonl",
+                       suppress_file=unreadable)
+    assert provider.sent == []
+    assert [r.ok for r in results] == [False, False]
+    assert all("stop list" in r.detail for r in results)
+    assert all("@" not in r.detail for r in results), "no address in a CI log"
+
+
+def test_a_missing_stop_list_is_an_empty_one(tmp_path: Path) -> None:
+    provider = _CountingProvider()
+    send_all([_message()], provider=provider, sent_log=tmp_path / "s.jsonl",
+             suppress_file=tmp_path / "nothing-here.txt")
+    assert len(provider.sent) == 1

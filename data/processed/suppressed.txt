@@ -1,0 +1,4 @@
+# The stop list: addresses that asked us to stop emailing them.
+# One digest per line (sha256 of the canonical address, 12 hex) - never an
+# address; this file is public. Add with `python -m run.suppress <email>`,
+# then commit it. Checked by run/delivery.send_all before every send.
