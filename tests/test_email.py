@@ -277,12 +277,13 @@ def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:
     status unconfirmed" on Saquon Barkley, whose own status was confirmed:
     the doubt was about his bench alternative, Tony Pollard (Questionable).
     The start was right either way, and the row read as if Barkley were the
-    problem. A row now says what is true of it."""
+    problem. A row now says what is true of it — dated, and never "waiting
+    on" a backup who could not take the slot (launch review BE-D3/RQ-18)."""
     from render.report import row_label
     q = "availability in doubt (designated Questionable)"
     assert row_label({"confidence_gate": q, "status": "active",
                       "alternative_name": "Tony Pollard"}) \
-        == "start · waiting on Tony Pollard"
+        == "start · Tony Pollard was questionable"
     assert row_label({"confidence_gate": q, "status": "questionable",
                       "alternative_name": "Tony Pollard"}) \
         == "questionable · see if/then"

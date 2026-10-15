@@ -37,9 +37,16 @@ Three rules, each one a way this could have been confidently wrong:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 from engine.history import FLEX_ELIGIBILITY
+
+# The inactive list is posted 90 minutes before each kickoff — the moment a
+# player still questionable on his final report is ruled in or out
+# (engine.solo_report.INACTIVES_LEAD; the same clock on both days).
+INACTIVES_LEAD = timedelta(minutes=90)
+NFL_TIME = "America/New_York"
 
 # A designation that means he is not playing. Doubtful players almost never
 # suit up, and the product has always read it this way (ingest/injuries.py).
@@ -70,6 +77,9 @@ class Now:
     playing: bool = True             # his team has a game this week
     locked: bool = False             # that game has kicked off (RULE F1)
     final: bool = True               # his team's final report is in (RULE F2)
+    # When that game kicks off (timezone-aware). None when unknown, which never
+    # rules anybody out of a plan — an unknown clock is not an early one.
+    kickoff: datetime | None = None
 
     @property
     def ruled_out(self) -> bool:
@@ -149,10 +159,16 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
     bench = [pid for pid in players if pid not in starters and pid not in dropped]
     used: set[str] = set()
 
-    def best(slot: str) -> str | None:
+    def starts_after(pid: str, after: datetime | None) -> bool:
+        """RULE F1 at the moment the news lands, not only at the check: a
+        player whose game kicks off before ``after`` is locked by then."""
+        kick = state(pid).kickoff
+        return after is None or kick is None or kick >= after
+
+    def best(slot: str, after: datetime | None = None) -> str | None:
         candidates = [pid for pid in bench
                       if pid not in used and state(pid).available
-                      and eligible(position(pid), slot)]
+                      and eligible(position(pid), slot) and starts_after(pid, after)]
         # Highest projection first; a player the model has no number on (a
         # rookie) sorts LAST but is still an option — dropping him told a
         # subscriber "nobody on your bench can cover" while a healthy player
@@ -162,20 +178,23 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
                                          state(pid).designation == QUESTIONABLE, pid))
         return candidates[0] if candidates else None
 
-    def fill(index: int) -> tuple[str, int | None] | None:
+    def fill(index: int, after: datetime | None = None) -> tuple[str, int | None] | None:
         """Who takes slot ``index``: straight off the bench, or by sliding a
         flex starter across and filling the flex from the bench — whichever
-        puts the higher-projected bench player in. (bench id, flex index)."""
+        puts the higher-projected bench player in. (bench id, flex index).
+        ``after``: everyone moved must kick off no earlier (launch review
+        RQ-01 — a plan for a game-day ruling can only move unlocked players)."""
         slot = slots[index][0]
         options: list[tuple[float, str, int | None]] = []
-        direct = best(slot)
+        direct = best(slot, after)
         if direct:
             options.append((-1.0 if value(direct) is None else value(direct), direct, None))
         for j, (other, pid) in enumerate(slots):
             if (j == index or not pid or pid in dropped or other not in FLEX_ELIGIBILITY
-                    or not state(pid).available or not eligible(position(pid), slot)):
+                    or not state(pid).available or not eligible(position(pid), slot)
+                    or not starts_after(pid, after)):
                 continue
-            via = best(other)
+            via = best(other, after)
             if via:
                 options.append((-1.0 if value(via) is None else value(via), via, j))
         if not options:
@@ -279,11 +298,20 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
             continue
         was = players.get(pid, {}).get("tuesday")
         if current.designation == QUESTIONABLE:
-            placed = fill(index)
-            if placed:
+            # Still questionable on the final report means a game-day call:
+            # he is ruled in or out at the inactives, 90 minutes before HIS
+            # kickoff, and only someone whose game has not started can go in
+            # then (launch review RQ-01: "If he's ruled out, start Ladd
+            # McConkey at FLEX" — a Sunday 4:25 PM player — about Terry
+            # McLaurin on Monday night).
+            news = (current.kickoff - INACTIVES_LEAD
+                    if current.kickoff is not None else None)
+            placed = fill(index, news)
+            early = fill(index) if placed is None and news is not None else None
+            if placed or early:
                 # Named once: two questionable starters must not both be
                 # told the same bench player is their cover.
-                used.add(placed[0])
+                used.add((placed or early)[0])
             # The mover and the slot the newcomer takes are both named: "start
             # X and move Y to WR — he projects 12.3" left "he" and X's slot
             # to guesswork (proving run, 2025 week 4).
@@ -294,6 +322,8 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
                        f"If he's ruled out, start {name(placed[0])} at {slot}")
                       + f" ({_number(players[placed[0]], basis)})."
                       if placed else
+                      _decide_first(name(pid), slot, early, slots, name, state, news)
+                      if early else
                       f"Every other {slot} option on your roster is out or "
                       f"on bye, so keep him in.")
             kind = REMINDER if was == QUESTIONABLE else WATCH
@@ -309,6 +339,33 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
 
     rank = {SWAP: 0, NO_FILL: 0, BACK: 1, WATCH: 2, REMINDER: 3, CLEARED: 4}
     return sorted(changes, key=lambda c: rank[c.kind])
+
+
+def _et(moment: datetime) -> str:
+    """"Sun 1:00 PM ET" for a timezone-aware moment."""
+    from zoneinfo import ZoneInfo
+    local = moment.astimezone(ZoneInfo(NFL_TIME)) if moment.tzinfo else moment
+    return (f"{local.strftime('%a')} {local.hour % 12 or 12}:{local.minute:02d} "
+            f"{'AM' if local.hour < 12 else 'PM'} ET")
+
+
+def _decide_first(starter: str, slot: str, placed: tuple[str, int | None],
+                  slots: list[tuple[str, str | None]], name, state,
+                  news: datetime) -> str:
+    """The only cover kicks off before the game-day ruling: the call an
+    expert makes (RQ-01) — decide before that kickoff, with no number on
+    either side."""
+    incoming, via = placed
+    moving = [incoming] + ([slots[via][1]] if via is not None else [])
+    starts = [state(pid).kickoff for pid in moving if state(pid).kickoff]
+    first = min(starts) if starts else None
+    move = (f"start {name(incoming)}" if via is None else
+            f"move {name(slots[via][1])} to {slot} and start {name(incoming)} "
+            f"at {slots[via][0]}")
+    when = f" at {_et(first)}" if first else " first"
+    return (f"{name(incoming)} kicks off{when}, before {starter}'s inactives "
+            f"(about {_et(news)}). Decide before then: {move}, or keep {starter} "
+            f"and take a zero if he sits.")
 
 
 def worth_sending(changes: list[Change]) -> bool:

@@ -509,3 +509,28 @@ Measured on the same 240 rosters: the published odds are a strict subset of the
 gate's (0 added, 9 removed), and the 2025 proving weeks 4–5 record the identical
 111 calls. This harness is untouched, and the rule still needs no arm, because
 it now really can only withhold.
+
+
+### C9 — the practice squad, and players not with their team (2026-10-15)
+
+The launch review found the live sample printing "Travis Kelce … over Zach
+Ertz on your bench … 80%" with Ertz on the Eagles' practice squad
+(`players.csv` status DEV, "PS; Vet"): elevated three weeks running, so he
+cleared the three-game bar, and never on an injury report, so §6's gate read
+him ACTIVE. An unelevated player scores 0.0, which the ledger grades as a HIT
+for whoever was called over him — a call that flatters the record. The same
+gap held for status NWT (not with his team) and RET (retired), which
+`engine.availability.ROSTER_OUT` (C7) never listed.
+
+Per C8, none of this goes into the gate. In the week being played now only,
+the REPORT layer reads them (`engine.availability.PRACTICE_SQUAD`,
+`LIVE_ONLY_OUT`): a practice-squad player keeps his seat and his place in a
+plan's order (he can be elevated as late as Saturday afternoon, and the plan
+says to check), but any odds whose pair includes him are withheld with the
+reason (`engine.solo_report.hold_unconfirmed`); a player not with his team or
+retired comes off the lineup like a released one (`live_availability`), with
+`keep_frozen_odds` keeping only odds the frozen gate already published.
+Measured on 240 seeded live week-6 rosters, with and without the rule: 202
+odds kept, 5 withheld, 0 added. Replayed weeks are untouched (the release
+holds today's status), this harness is untouched, and no arm is needed for a
+rule that can only withhold.

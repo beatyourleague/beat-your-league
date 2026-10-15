@@ -8,8 +8,8 @@ leave "is he on my league's free-agent list" to the one person who can see it.
 RULE U1 (engine/usage.py) governs: this is a REPORT of counted usage, never a
 projection and never a probability. Nothing here is a call, so nothing is
 graded and nothing enters the ledger. The line a reader gets is a sentence
-about what already happened: "9.5 touches a game over his last two games, up
-from 3.0 before."
+about what already happened: "9.5 touches a game over his last two, up from
+3.0 in Weeks 1–3."
 
 Definitions, frozen here and pinned by tests:
 - **touches** = targets + carries, from the weekly stat rows.
@@ -20,7 +20,16 @@ Definitions, frozen here and pinned by tests:
 - Sorted by the size of the jump, then by id, so a report is byte-identical
   across runs. Starters last season (the top of his position, under the
   subscriber's own scoring) are left out — nobody needs telling a top-24 back
-  is "rising" — as are players already on the subscriber's roster.
+  is "rising".
+- "Before" names its weeks (launch review SS-I13, Oct 2026): "up from 0.0
+  before" read as a role grown from nothing, with no way to tell which weeks
+  it covered — and a player with weeks out of the box score (his team played,
+  he had no row) says so, rather than passing a return off as a bigger role.
+- A riser ON the subscriber's roster comes first, marked "on your roster"
+  (launch review BE-I7): his projection is built on the old role, so the
+  counted change is news the manager can use this week. One who shares a team
+  and position with a rostered player says so — "same team and position as
+  your Breece Hall" — which is usually why he is rising.
 """
 
 from __future__ import annotations
@@ -55,6 +64,13 @@ def candidates(weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
     recent_weeks = (week - 2, week - 1)
     if week < 4:
         return []
+    # Which teams played each week, read off the same rows: a week his team
+    # sat out is a bye, never a game he missed.
+    played: dict[int, set[str]] = {}
+    for w, rows in weekly.items():
+        for row in rows.values():
+            if row.get("team"):
+                played.setdefault(w, set()).add(str(row["team"]))
     out: list[dict[str, Any]] = []
     for pid, last in (weekly.get(week - 1) or {}).items():
         if not pid.startswith("00-"):
@@ -64,45 +80,82 @@ def candidates(weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
         if position not in POSITIONS or prev is None:
             continue
         recent = [touches(last), touches(prev)]
-        earlier = [touches(rows[pid]) for w, rows in weekly.items()
-                   if w < recent_weeks[0] and pid in rows]
+        earlier_weeks = sorted(w for w, rows in weekly.items()
+                               if w < recent_weeks[0] and pid in rows)
+        earlier = [touches(weekly[w][pid]) for w in earlier_weeks]
         if not earlier:
             continue
         recent_avg = sum(recent) / 2
         earlier_avg = sum(earlier) / len(earlier)
         if recent_avg < MIN_RECENT or recent_avg - earlier_avg < MIN_JUMP:
             continue
-        out.append({"player_id": pid, "position": position,
-                    "team": str(last.get("team") or ""),
+        team = str(last.get("team") or "")
+        out.append({"player_id": pid, "position": position, "team": team,
                     "recent": round(recent_avg, 1),
                     "earlier": round(earlier_avg, 1),
-                    "jump": round(recent_avg - earlier_avg, 1)})
+                    "jump": round(recent_avg - earlier_avg, 1),
+                    "earlier_weeks": earlier_weeks,
+                    # Weeks his team played and he did not, before the recent
+                    # two: a return, not a bigger role.
+                    "missed": [w for w in range(1, recent_weeks[0])
+                               if w not in earlier_weeks
+                               and team in played.get(w, set())]})
     out.sort(key=lambda c: (-c["jump"], c["player_id"]))
     return out[:POOL]
 
 
 def for_roster(pool: Sequence[Mapping[str, Any]], roster: Sequence[str],
                ranks: Mapping[str, tuple[str, int, int]],
-               names: Any) -> list[dict[str, Any]]:
-    """The lines one subscriber sees: not on their roster, not last season's
-    starters under their scoring."""
-    held = set(roster)
+               names: Any, teams: Mapping[str, str] | None = None
+               ) -> list[dict[str, Any]]:
+    """The lines one subscriber sees, never last season's starters under
+    their scoring: their own risers first, marked "on your roster", then up
+    to KEEP others — each tied, when ``teams`` (player -> team) says so, to a
+    rostered player at his team and position."""
+    held = list(roster)
+    teams = teams or {}
+    mine: list[dict[str, Any]] = []
     out: list[dict[str, Any]] = []
     for cand in pool:
         pid = cand["player_id"]
-        if pid in held:
-            continue
         ranked = ranks.get(pid)
         if ranked and ranked[1] <= STARTER_CUT.get(cand["position"], 0):
             continue
-        out.append({**cand, "name": names.name(pid),
-                    "line": line(names.name(pid), cand)})
+        name = names.name(pid)
+        if pid in held:
+            if len(mine) < KEEP:
+                mine.append({**cand, "name": name, "on_roster": True,
+                             "line": line(name, cand, on_roster=True)})
+            continue
         if len(out) == KEEP:
-            break
-    return out
+            continue
+        mate = next((names.name(other) for other in held
+                     if teams.get(other) == cand["team"]
+                     and names.position(other) == cand["position"]), None)
+        out.append({**cand, "name": name, "line": line(name, cand, teammate=mate)})
+    return mine + out
 
 
-def line(name: str, cand: Mapping[str, Any]) -> str:
-    return (f"{name} ({cand['team']}, {cand['position']}): "
+def _weeks(weeks: Sequence[int]) -> str:
+    """[1, 2, 3] -> "Weeks 1–3"; [2] -> "Week 2"; [1, 3] -> "Weeks 1 and 3"."""
+    weeks = sorted(weeks)
+    if len(weeks) == 1:
+        return f"Week {weeks[0]}"
+    if weeks == list(range(weeks[0], weeks[-1] + 1)):
+        return f"Weeks {weeks[0]}–{weeks[-1]}"
+    return "Weeks " + ", ".join(str(w) for w in weeks[:-1]) + f" and {weeks[-1]}"
+
+
+def line(name: str, cand: Mapping[str, Any], *, on_roster: bool = False,
+         teammate: str | None = None) -> str:
+    earlier = cand.get("earlier_weeks")
+    before = f"in {_weeks(earlier)}" if earlier else "before"
+    missed = cand.get("missed") or []
+    # "Not in the box score", not "didn't play": a stat row is the fact, and a
+    # player who only covered kicks has none.
+    back = f" He wasn't in the box score in {_weeks(missed)}." if missed else ""
+    mark = ", on your roster" if on_roster else ""
+    tie = f" Same team and position as your {teammate}." if teammate else ""
+    return (f"{name} ({cand['team']}, {cand['position']}){mark}: "
             f"{cand['recent']:.1f} touches a game over his last two, "
-            f"up from {cand['earlier']:.1f} before.")
+            f"up from {cand['earlier']:.1f} {before}.{back}{tie}")
