@@ -1,11 +1,11 @@
-"""Render the pre-season file — the same design system, in both dialects.
+"""Render the pre-season report — the same design system, in both dialects.
 
 Two surfaces, like every other report here: the browser-grade HTML that goes to
 disk as the archive, and the table-based, inline-styled email that actually
 lands in an inbox. Every pinned sentence comes from ``render.report`` rather
 than being retyped, because a copy per entry point is how two surfaces drift.
 
-The register is deliberately not the weekly report's. This file makes no calls
+The register is deliberately not the weekly report's. This report makes no calls
 and states no odds, so nothing in it should sound like one: it says what
 happened last season and what the schedule already says about this one. The
 verbs are past tense on purpose.
@@ -30,7 +30,7 @@ from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAV
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The one sentence that sets expectations for everything after it. It has to do
-# real work: a buyer who paid for weekly start/sit calls is opening a file that
+# real work: a buyer who paid for weekly start/sit calls is opening a report that
 # deliberately contains none, and if that reads as "the product is broken" the
 # refund it prevents becomes the refund it causes.
 IN_SEASON_OPENER = (
@@ -45,7 +45,7 @@ OPENER = ("Your season doesn't start for a couple of weeks, so this report makes
           "already decided: where the schedule leaves you short, and what your "
           "roster actually did last season under your scoring.")
 
-WEEKLY_PROMISE = ("From your first Tuesday you get the weekly file: your lineup "
+WEEKLY_PROMISE = ("From your first Tuesday you get the weekly report: your lineup "
                   "set slot by slot, and the odds on every call we'll stand "
                   "behind — each one recorded before kickoff and graded in "
                   "public afterwards.")
@@ -53,6 +53,28 @@ WEEKLY_PROMISE = ("From your first Tuesday you get the weekly file: your lineup 
 BYE_HEAD = "Where the schedule leaves you short"
 BYE_NONE = ("No week leaves a starting slot empty — every bye on your roster is "
             "covered by somebody else who can fill in.")
+# Sent after the season has started, the report covers only the weeks still
+# ahead (launch audit C7), and says so — including when every bye is behind.
+BYE_NONE_AHEAD = ("No week from here on leaves a starting slot empty — every "
+                  "bye still ahead on your roster is covered by somebody else "
+                  "who can fill in.")
+BYE_ALL_BEHIND = ("Every bye week on your roster is behind you, so the schedule "
+                  "leaves no week short from here on.")
+
+
+def _byes_behind(meta: Mapping[str, Any]) -> bool:
+    """Season under way and no bye on the roster still to come."""
+    return bool(meta.get("season_started") and meta.get("from_week")
+                and meta.get("byes_ahead") is False)
+
+
+def bye_none(meta: Mapping[str, Any]) -> str:
+    """What the bye section says when no week ahead leaves a slot empty."""
+    if _byes_behind(meta):
+        return BYE_ALL_BEHIND
+    return BYE_NONE_AHEAD if meta.get("season_started") else BYE_NONE
+
+
 BYE_BASIS = ("Straight off the published NFL schedule, so these are fixed. A "
              "week is only listed when nothing on your roster can fill the "
              "slot — a bye somebody else covers isn't your problem.")
@@ -73,7 +95,7 @@ FORM_BASIS = ("Where each of your players finished last season at his position, 
 
 
 # The same content is useful all season — a Week-6 buyer still wants to know
-# their Week 11 leaves two slots empty — but a file headed "Pre-Season" in
+# their Week 11 leaves two slots empty — but a report headed "Pre-Season" in
 # October is the small wrongness that makes a reader distrust the rest of it.
 PRESEASON_TITLE = "Your Pre-Season Report"
 INSEASON_TITLE = "Your Roster Report"
@@ -115,7 +137,7 @@ def _record_cell(row: Mapping[str, Any]) -> str:
 def section_byes(report: Mapping[str, Any]) -> str:
     collisions = report["collisions"]
     if not collisions:
-        body = f'<p class="withheldline">{esc(BYE_NONE)}</p>'
+        body = f'<p class="withheldline">{esc(bye_none(report["meta"]))}</p>'
     else:
         items = []
         for hit in collisions:
@@ -244,7 +266,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
              (IN_SEASON_OPENER if meta.get("season_started") else OPENER),
              "", BYE_HEAD.upper()]
     if not report["collisions"]:
-        lines.append(f"  {BYE_NONE}")
+        lines.append(f"  {bye_none(meta)}")
     else:
         for hit in report["collisions"]:
             lines.append(f'  Week {hit["week"]}: no one to start at '
@@ -281,7 +303,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Build one pre-season file from a roster, for eyeballing it locally."""
+    """Build one pre-season report from a roster, for eyeballing it locally."""
     from engine.nflverse_backtest import TEMPLATE_T1
     from engine.preseason import build_preseason_report
     from engine.subscriber import RosterSpec
@@ -361,7 +383,7 @@ def email_html(report: Mapping[str, Any]) -> str:
             f'</span></td></tr>'
             for hit in report["collisions"])
     else:
-        bye_rows = (f'<tr><td style="{cell}">{esc(BYE_NONE)}</td></tr>')
+        bye_rows = (f'<tr><td style="{cell}">{esc(bye_none(meta))}</td></tr>')
 
     thin_rows = "".join(
         f'<tr><td style="{slot_cell}">{esc(spot["slot"])}</td>'
@@ -431,24 +453,29 @@ def email_html(report: Mapping[str, Any]) -> str:
 
 def preseason_message(email: str, slug: str, report: Mapping[str, Any],
                       purchased_at: str = ""):
-    """The pre-season file as a Message, keyed so it can only be sent once.
+    """The pre-season report as a Message, keyed so it can only be sent once.
 
     Keyed on the PURCHASE, exactly like the welcome and for the same reason: a
     season-keyed idempotency key moves every August, and the sender's recipient
     set is a projection of an append-only signup log that is never pruned — so
     a season roll would mail this to everybody the product ever had, cancelled
     subscribers included. A genuine re-purchase is a new key and does get a new
-    file, which is right: new byes, new prior season.
+    report, which is right: new byes, new prior season.
+
+    Once the season has started the subject counts only the weeks still ahead,
+    the same ones the body lists (launch audit C7: a Week-6 buyer's subject
+    counted Week 5).
     """
     from run.delivery import Message
 
     meta = report["meta"]
-    title = file_title(report)
     hits = len(report["collisions"])
+    ahead = " ahead" if meta.get("season_started") else ""
     subject = (f'Your {meta["season"]} roster: '
-               + ("every bye is covered" if not hits else
-                  "one week leaves a slot empty" if hits == 1 else
-                  f"{hits} weeks leave a slot empty"))
+               + ("every bye week is behind you" if _byes_behind(meta) else
+                  f"every bye{ahead} is covered" if not hits else
+                  f"one week{ahead} leaves a slot empty" if hits == 1 else
+                  f"{hits} weeks{ahead} leave a slot empty"))
     return Message(
         to=email,
         subject=subject,

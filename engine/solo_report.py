@@ -49,15 +49,15 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from engine.availability import Status, WeekAvailability
-from engine.history import PlayerIndex, Season
+from engine.history import FLEX_ELIGIBILITY, PlayerIndex, Season
 from engine.projection import ProjectionModel
 from engine.roster import DEFENSE
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
                                _team_week)
 from engine.ledger import GRADED, ledger_path, load_ledger
-from engine.week_report import (TEAM_RANGE_GATE,
-                                WeekReportError, _join_words, _team_range,
-                                checklist, late_news, team_range_gate,
+from engine.week_report import (TEAM_RANGE_GATE, SlotPick,
+                                WeekReportError, _join_words, _ruled_out_last_week,
+                                _team_range, checklist, late_news, team_range_gate,
                                 _slot_json, optimal_lineup, pivots,
                                 regret_call)
 
@@ -139,6 +139,8 @@ def build_solo_report(
     schedule: Mapping[str, Mapping[str, Any]] | None = None,
     teams: Mapping[str, str] | None = None,
     injury_report: Mapping[str, Any] | None = None,
+    live_teams: Mapping[str, str] | None = None,
+    live_out: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data.
 
@@ -147,6 +149,12 @@ def build_solo_report(
     gsis -> (designation, injury)}, the report the gate reads, in its own
     words) are FACTS the rows print, never model inputs: nothing here moves a
     projection, a confidence or the publish gate. Absent, the rows say less.
+
+    ``live_teams`` (player -> TODAY's team) and ``live_out`` (player -> why
+    today's release says he can't play), the week being played now only, may
+    only REMOVE: such a player loses his seat and any odds he was part of (see
+    ``live_availability``), and no odds appear that the frozen gate did not
+    already publish (``keep_frozen_odds``).
     """
     if not re.fullmatch(r"\d{4}", str(season.season)):
         raise WeekReportError(
@@ -176,10 +184,36 @@ def build_solo_report(
     # suppressed by keeping players a week short of MIN_GAMES_FOR_CALL, and the
     # matched head-to-heads the correction reorders go 133-100 in its favour
     # (two-sided sign test p = 0.036).
-    picks = optimal_lineup(season, team_week, model, players, availability, week,
-                           prior_form=prior_form, calibrate=calibrate,
-                           confirmed_fallback=confirmed_fallback)
+    def lineup(using: WeekAvailability) -> list[SlotPick]:
+        return optimal_lineup(season, team_week, model, players, using, week,
+                              prior_form=prior_form, calibrate=calibrate,
+                              confirmed_fallback=confirmed_fallback)
+
+    picks = lineup(availability)
+    # Today's facts (launch audit R1/R5, Oct 2026). The gate places a player on
+    # the team of his last stat row, so a player with no row this season — a
+    # released kicker, an injured-reserve tight end — or one traded since, whose
+    # CURRENT team is on bye, started unflagged, with another team's game on his
+    # row, counted in the total. He is out for the lineup now, so the seat goes
+    # to whoever can play; but the odds stay the frozen gate's. Applied at the
+    # gate instead, it published nine new percentages across 240 live rosters
+    # (a released player had been the bench option blocking a slot's call).
+    live = live_availability(availability, live_teams, players, live_out)
+    if live is not availability:
+        picks = keep_frozen_odds(picks, lineup(live))
+        availability = live
     my_range = _team_range(picks)
+
+    # Every rostered player accounted for. Week 1 has no projections, so the
+    # bench is still listed but nothing is explained — a line built on zero
+    # games of this season would be a claim with nothing under it.
+    bench, notable = bench_report(spec, picks, players, model, availability,
+                                  week, len(season.teams) or 12,
+                                  last_season_ranks, prior_form,
+                                  injury_report=injury_report, season=season)
+    if all(p.projection is None for p in picks):
+        notable = []
+    standins = stand_ins(picks, bench)
 
     gaps: list[dict[str, str]] = []
     if not availability.has_snapshot:
@@ -193,7 +227,8 @@ def build_solo_report(
                                f"week {week} — bye status unknowable, so ACTIVE "
                                "cannot be concluded for anyone"})
     if my_range is None:
-        gaps.append({"field": "team_ranges", "reason": team_range_gate(picks)})
+        gaps.append({"field": "team_ranges",
+                     "reason": team_range_gate(picks, standins)})
     # Operator-facing. Recorded so a future session does not mistake the
     # absence for an oversight and try to "restore" a section that cannot exist.
     gaps.append({"field": "opponent",
@@ -215,16 +250,6 @@ def build_solo_report(
                                f"before week {week}, so that slot carries no "
                                f"projection"})
 
-    # Every rostered player accounted for. Week 1 has no projections, so the
-    # bench is still listed but nothing is explained — a line built on zero
-    # games of this season would be a claim with nothing under it.
-    bench, notable = bench_report(spec, picks, players, model, availability,
-                                  week, len(season.teams) or 12,
-                                  last_season_ranks, prior_form,
-                                  injury_report=injury_report, season=season)
-    if all(p.projection is None for p in picks):
-        notable = []
-
     schedule = schedule or {}
     teams = teams or {}
 
@@ -233,13 +258,39 @@ def build_solo_report(
         return schedule.get(team) if team else None
 
     sunday = _week_sunday(schedule)
+    # Every plan below waits for news, and names nobody whose game kicks off
+    # before that news is in (launch audit R2/R3, Oct 2026): "move Chase Brown
+    # in if Tony Pollard is ruled out" named a Thursday-night back on Sunday
+    # news, and "start Breece Hall over RJ Harvey if he's cleared" benched a
+    # Thursday starter on Friday's report — a plan nobody can carry out.
+    news = late_news(picks, players, availability,
+                     seat_ok=lambda bench_id, pick: in_time(
+                         game_of(pick.player_id), game_of(bench_id), sunday))
+    stand_in_for: dict[str, tuple[str, float | None]] = {}
+    unplanned: dict[str, str] = {}
+    for name, pick, is_starter, pid in news:
+        if not is_starter:
+            continue
+        found, early = stand_in(pick, spec, picks, players, model, availability,
+                                week, game_of, sunday)
+        if found is not None:
+            stand_in_for[pid] = found
+        else:
+            unplanned[pid] = no_stand_in_line(name, pick.slot,
+                                              [players.name(e) for e in early])
     watch_items, watch_plans = cleared_plans(bench, picks, players, game_of,
                                              sunday)
-    # Who must be decided before Sunday: every starter, and every bench player
-    # whose news could still move a seat (late_news names only those, F4).
-    deciding = [p.player_id for p in picks if p.player_id]
-    deciding += [pid for _, _, starter, pid in
-                 late_news(picks, players, availability) if not starter]
+    plans = pivots(picks, [], players, availability, news=news,
+                   stand_in=lambda pick: stand_in_for.get(pick.player_id or ""),
+                   limit=None) + watch_plans
+    planned = {plan["about"] for plan in plans if plan.get("about")}
+    # Who must be decided before Sunday: every starter who might play, and
+    # every bench player whose news could still move a seat (late_news names
+    # only those, F4). A starter on bye or a reserve list is not one (R6): "kick
+    # off at 8:15 PM ET — check their status" two lines after "aren't playing
+    # this week" asked the reader to check on somebody already decided.
+    deciding = [p.player_id for p in picks if p.player_id and not _certainly_out(p)]
+    deciding += [pid for _, _, starter, pid in news if not starter]
     early_items, early_ids = early_kickoff_items(deciding, players, game_of, sunday)
 
     report: dict[str, Any] = {
@@ -279,15 +330,19 @@ def build_solo_report(
                                          availability=availability,
                                          early_calls=early_calls,
                                          extra=early_items + watch_items,
-                                         late_news_skip=early_ids),
-        "matchup": _matchup(spec, my_range, team_range_gate(picks)),
+                                         late_news_skip=early_ids,
+                                         news=news, planned=planned,
+                                         unplanned=unplanned, standins=standins),
+        "matchup": _matchup(spec, my_range, team_range_gate(picks, standins)),
         "lineup": [_slot(p, players, usage_lookup,
                          game=game_label(game_of(p.player_id)),
                          absent=(absence(p.player_id, availability, injury_report)
                                  if p.player_id else None),
                          questionable=(questionable_note(p.player_id, availability,
                                                          injury_report, season)
-                                       if p.player_id else None))
+                                       if p.player_id else None),
+                         if_then=bool(p.player_id) and p.player_id in planned,
+                         held=bench_option_held(p, bench))
                    for p in picks],
         "bench": bench,
         "regret": regret_call(picks, players),
@@ -295,12 +350,218 @@ def build_solo_report(
         # only MY picks' questionable statuses and their alternatives, and the
         # rival half was never used for anything the subscriber acts on.
         # A player out on last week's report comes after the questionable ones:
-        # three in four of them stay out.
-        "pivots": (pivots(picks, [], players, availability) + watch_plans)[:3],
+        # three in four of them stay out. Uncapped (launch audit R7): every
+        # player the game plan names has his plan printed; the old cap of three
+        # dropped plans the checklist still promised.
+        "pivots": plans,
         "receipts": solo_receipts(season.league_id, processed_dir),
         "no_opponent": NO_OPPONENT_NOTE,
     }
     return report
+
+
+# --------------------------------------------------------------------- #
+# today's facts, and who a plan may name
+# --------------------------------------------------------------------- #
+
+# The reason a slot prints no odds when today's facts moved its pair: the gate
+# never made that call, and a fix that may only remove numbers cannot make it
+# now. True whether the starter or the bench option changed.
+HELD_GATE = "held: the lineup changed around a player who can't play this week"
+
+# The reason a slot's bench option is no option: he is on the bench, eligible,
+# and out (last week's report, a bye, a reserve list). "No bench player at
+# that position" was false — the live sample's QB row said it with Lamar
+# Jackson on the bench (launch audit F11).
+BENCH_HELD_GATE = "bench option not cleared"
+
+
+def live_availability(availability: WeekAvailability,
+                      live_teams: Mapping[str, str] | None,
+                      players: PlayerIndex,
+                      live_out: Mapping[str, str] | None = None,
+                      ) -> WeekAvailability:
+    """``availability`` with today's facts applied to the players it missed.
+
+    - A player today's release puts on a reserve list or releases, whom the gate
+      could not place on a team (no stat row this season), gets the record a
+      placed one gets — no team, not active, the plain reason — which
+      ``classify`` reads as OUT ("released", "on injured reserve").
+    - A player whose CURRENT team is on bye gets that team on his record, which
+      ``classify`` reads as OUT — the same sentence any other bye gets.
+    Only with a snapshot (without one nobody is ACTIVE anyway, and adding
+    records would invent one). Returns the SAME object when nothing changes,
+    so callers can tell."""
+    if (not live_teams and not live_out) or availability.statuses is None:
+        return availability
+    byes = availability.bye_teams or frozenset()
+    statuses = dict(availability.statuses)
+    changed = False
+    for pid, reason in (live_out or {}).items():
+        if pid in statuses:
+            continue                     # placed: the gate already read it
+        statuses[pid] = {"team": None, "position": players.position(pid),
+                         "active": False, "out_reason": reason,
+                         "injury_status": None}
+        changed = True
+    for pid, team in (live_teams or {}).items():
+        if team not in byes:
+            continue
+        record = statuses.get(pid)
+        if record is not None and (record.get("team") == team
+                                   or record.get("active") is False):
+            continue
+        updated = dict(record or {"position": players.position(pid), "active": True,
+                                  "out_reason": None, "injury_status": None})
+        updated["team"] = team
+        statuses[pid] = updated
+        changed = True
+    if not changed:
+        return availability
+    return WeekAvailability(season=availability.season, week=availability.week,
+                            snapshot_as_of=availability.snapshot_as_of,
+                            statuses=statuses, bye_teams=availability.bye_teams)
+
+
+def keep_frozen_odds(frozen: Sequence[SlotPick],
+                     moved: Sequence[SlotPick]) -> list[SlotPick]:
+    """The lineup today's facts produce, carrying only odds the frozen gate
+    published.
+
+    A slot keeps its odds when that lineup has the same two players in it
+    with the same number; any other number is a call the frozen gate never
+    made, and principle 1 says a fix like this one may only remove numbers. So
+    it is withheld, with the reason, and the seeded-call flag goes with it."""
+    out: list[SlotPick] = []
+    for before, after in zip(frozen, moved):
+        if after.confidence is not None and (
+                (before.player_id, before.alternative_id, before.confidence)
+                != (after.player_id, after.alternative_id, after.confidence)):
+            after.confidence = None
+            after.confidence_gate = HELD_GATE
+            after.flags = [f for f in after.flags if f.get("kind") != "seeded"]
+        out.append(after)
+    return out
+
+
+def _fits(position: str | None, slot: str) -> bool:
+    allowed = FLEX_ELIGIBILITY.get(slot)
+    return (position in allowed) if allowed else position == slot
+
+
+def _certainly_out(pick: SlotPick) -> bool:
+    """Out for a certain reason — a bye, a reserve list — not merely on last
+    week's injury report."""
+    return bool(pick.player_id and pick.status
+                and pick.status.status is Status.OUT
+                and not _ruled_out_last_week(pick))
+
+
+def stand_ins(picks: Sequence[SlotPick],
+              bench: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
+    """Seated starter who can't (or may not) play -> the bench players out only
+    on last week's report who could start in his slot (launch audit R4).
+
+    optimal_lineup seats an out player only when every eligible bench player
+    is out too, so these are the only bench players left who might take the
+    slot — and "nobody eligible" is false while one sits there."""
+    out: dict[str, list[str]] = {}
+    for pick in picks:
+        if not (pick.player_id and pick.status and pick.status.status is Status.OUT):
+            continue
+        names = [entry["name"] for entry in bench
+                 if entry.get("out_kind") == "designation"
+                 and _fits(entry.get("position"), pick.slot)]
+        if names:
+            out[pick.player_id] = names
+    return out
+
+
+def bench_option_held(pick: SlotPick,
+                      bench: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    """The bench player a slot's "no bench player" gate actually means.
+
+    optimal_lineup gates a slot "nobody on your bench is eligible here" when no
+    bench player is eligible AND playable, so the reason read as an empty
+    bench beside a bench row naming one (launch audit F11). The best such
+    player, and why he is no option, or None when the bench really is empty."""
+    if not pick.player_id or not (pick.confidence_gate or "").startswith(
+            "nobody on your bench"):
+        return None
+    for entry in bench:                       # best first, as the table prints
+        if entry.get("out") and _fits(entry.get("position"), pick.slot):
+            return {"name": entry["name"], "kind": entry.get("out_kind"),
+                    "text": entry.get("out_text") or "out"}
+    return None
+
+
+def _news_day(watched: Mapping[str, Any] | None, sunday: date | None) -> date | None:
+    """When the news a plan waits for is in: the reader checks on Sunday
+    morning, or before the watched player's own kickoff when that is earlier
+    (the game plan says so for a Thursday game)."""
+    days = [d for d in (_game_day(watched), sunday) if d is not None]
+    return min(days) if days else None
+
+
+def in_time(other: Mapping[str, Any] | None, watched: Mapping[str, Any] | None,
+            sunday: date | None) -> bool:
+    """Does ``other``'s game kick off no earlier than the news on the watched
+    player is in? A player whose game comes first is locked before the plan
+    can be carried out. No game (a bye, a reserve list) never locks first; an
+    unknown kickoff is not evidence that it does."""
+    day = _game_day(other)
+    news = _news_day(watched, sunday)
+    return day is None or news is None or day >= news
+
+
+def stand_in(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
+             players: PlayerIndex, model: ProjectionModel,
+             availability: WeekAvailability, week: int,
+             game_of: Callable[[str], Mapping[str, Any] | None],
+             sunday: date | None,
+             ) -> tuple[tuple[str, float | None] | None, list[str]]:
+    """((who moves in, his projection) or None, the eligible ones too early).
+
+    The slot's own alternative when his game comes after the starter's news —
+    exactly the plan printed before — else the next bench player who can play
+    there, in the same order optimal_lineup ranks them (projection, then id).
+    Nobody in time: no plan, and the game plan says so (launch audit R3/C1:
+    the published sample moved Chase Brown, Thursday night, into Tony
+    Pollard's slot on Sunday-morning news)."""
+    watched = game_of(pick.player_id or "")
+    if pick.alternative_id and in_time(game_of(pick.alternative_id), watched, sunday):
+        projection = pick.alternative_projection
+        return (pick.alternative_id, projection.mean if projection else None), []
+    seated = {p.player_id for p in picks if p.player_id}
+    ready: list[tuple[float, str]] = []
+    early: list[str] = []
+    for pid in spec.player_ids:
+        info = players.get(pid)
+        if pid in seated or info is None or not info.eligible_for(pick.slot):
+            continue
+        if availability.classify(pid).status is Status.OUT:
+            continue
+        projection = model.project(pid, week)
+        if projection is None:
+            continue
+        if in_time(game_of(pid), watched, sunday):
+            ready.append((-projection.mean, pid))
+        else:
+            early.append(pid)
+    if not ready:
+        return None, early
+    mean, pid = min(ready)
+    return (pid, -mean), early
+
+
+def no_stand_in_line(name: str, slot: str, early: Sequence[str]) -> str:
+    """The game plan's sentence for a questionable starter with no if/then —
+    never "your if/then already has the answer" (launch audit R7)."""
+    if early:
+        return (f"If {name} is out, nobody on your bench can step in at {slot} "
+                f"in time — {_join_words(list(early))} "
+                f"{'plays' if len(early) == 1 else 'play'} before his news is in.")
+    return f"If {name} is out, nobody on your bench can play {slot}."
 
 
 # --------------------------------------------------------------------- #
@@ -585,7 +846,9 @@ def _matchup(spec: RosterSpec, my_range: Mapping[str, Any] | None,
 def _slot(pick, players: PlayerIndex, usage_lookup, *,
           game: str | None = None,
           absent: Mapping[str, str] | None = None,
-          questionable: str | None = None) -> dict[str, Any]:
+          questionable: str | None = None,
+          if_then: bool = False,
+          held: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One lineup row.
 
     Delegates to ``_slot_json`` rather than rebuilding the dict: the renderers
@@ -597,20 +860,27 @@ def _slot(pick, players: PlayerIndex, usage_lookup, *,
     replace the engine's terse availability flag with the sentence the bench
     rows use. Flags are rebuilt as new dicts — the pick's own list is shared
     with the ledger-facing code and is never edited in place.
+
+    ``if_then`` says whether the if/then names this row's player, so a row
+    never points at a plan that is not printed (launch audit R7); ``held`` is
+    the bench player behind a "no bench player" gate (F11, bench_option_held).
     """
     row = dict(_slot_json(pick, players))
     if usage_lookup and pick.player_id:
         line = usage_lookup(pick.player_id)
         if line:
             row["usage"] = line
-    if game:
+    certain = bool(absent) and absent["kind"] != "designation"
+    # A starter on bye or a reserve list is in no game this week, so the row
+    # names none (R1: a released kicker's row printed his old team's).
+    if game and not certain:
         row["game"] = game
     flags = [dict(f) for f in row.get("flags") or []]
     if absent:
         for flag in flags:
             if flag.get("kind") == "out":
                 flag["text"] = absent["flag"]
-        if absent["kind"] != "designation":
+        if certain:
             # PC-14: a starter who certainly is not playing prints a dash, like
             # the bench rows — "OUT — on bye" beside "8.4" was a number about a
             # game he is not in. (Seated only when nobody eligible was left;
@@ -622,6 +892,11 @@ def _slot(pick, players: PlayerIndex, usage_lookup, *,
             if flag.get("kind") == "questionable":
                 flag["text"] = questionable
     row["flags"] = flags
+    row["if_then"] = bool(if_then)
+    if held:
+        row["confidence_gate"] = (f"{BENCH_HELD_GATE} ({held['name']}: "
+                                  f"{held['text']})")
+        row["bench_held"] = dict(held)
     return row
 
 
@@ -705,10 +980,14 @@ def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,
         when = day.strftime("%A") + (" night" if hour is not None and hour >= 17 else "")
         one = len(pids) == 1
         at = f" at {_clock(clock)} ET" if _clock(clock) else ""
+        # A team defense is "its", not "his" (launch audit R8: "Seattle
+        # Seahawks kicks off ... check his status").
+        whose = ("their" if not one else
+                 "its" if pids[0].startswith(f"{DEFENSE}-") else "his")
         items.append({
             "action": (f"{when}: {_join_words([players.name(p) for p in pids])} "
                        f"{'kicks off' if one else 'kick off'}{at} — check "
-                       f"{'his' if one else 'their'} status before then."),
+                       f"{whose} status before then."),
             "deadline": f"before {day.strftime('%A')}'s kickoff",
             "urgency": "deadline",
         })
@@ -801,37 +1080,90 @@ def cleared_plans(bench: Sequence[Mapping[str, Any]], picks: Sequence[Any],
     the one Saturday's check weighs him by), the starter's is the lineup row's,
     and no percentage is ever attached to him. Only when clearing him changes
     a seat — a watch line for a player who sits either way is a chore (F4).
-    The Saturday sentence rides only on a Sunday game: that check runs after
-    Friday's final report and before Sunday's kickoffs, and is too early for a
-    Monday game's final report and too late for a Thursday game."""
-    healthy = [p for p in picks
-               if not (p.status and p.status.status is Status.OUT)]
+
+    Which seat (launch audit R2/R4, Oct 2026):
+    - never a starter whose game kicks off before this player's news is in.
+      "If he's cleared, start him over RJ Harvey" named a Thursday-night back
+      on news that lands Friday, and promised a Saturday check that never
+      moves a locked starter (RULE F1);
+    - a starter on bye or a reserve list is a seat worth 0, not skipped: Breece
+      Hall sat on the bench at 9.6 under a bye-week Jahmyr Gibbs while the plan
+      said nobody could replace him;
+    - a starter out only on last week's report is skipped — his own news is
+      open too, and a plan on two unknowns is not a plan.
+    The deadline is the earlier of the two kickoffs. The Saturday sentence
+    rides only on a Sunday game whose seat is still open when that check runs:
+    the check reads Friday's final report before Sunday's kickoffs, is too
+    early for a Monday game's final report and too late for a Thursday one."""
     items: list[dict[str, str]] = []
     plans: list[dict[str, Any]] = []
     for entry in bench:
         if entry.get("out_kind") != "designation" or entry.get("projected") is None:
             continue
-        seat = _displaced_by(entry["position"], healthy, players)
+        watched = game_of(entry["player_id"])
+        seat = _seat_if_cleared(entry["position"], picks, players, watched,
+                                game_of, sunday)
         if seat is None:
             continue
-        who, slot, theirs, _ = seat
+        pick, theirs, gone = seat
+        who, slot = players.name(pick.player_id), pick.slot
         mine = entry["projected"]
         if round(mine, 1) <= round(theirs, 1):
             continue
-        game = game_of(entry["player_id"])
-        figures = f"{mine:.1f} vs {theirs:.1f}"
+        starter_game = game_of(pick.player_id)
+        if gone:
+            detail = (f"{entry['out_text']}. He projects {mine:.1f}; {who} "
+                      f"can't play this week.")
+            then = f"Start him at {slot} over {who}, who can't play this week"
+        else:
+            detail = f"{entry['out_text']}. He projects {mine:.1f}, {who} {theirs:.1f}."
+            then = f"Start him at {slot} over {who} ({mine:.1f} vs {theirs:.1f})"
         items.append({
             "action": f"Watch {entry['name']}: if he's cleared, start him at "
                       f"{slot} over {who}",
-            "detail": f"{entry['out_text']}. He projects {mine:.1f}, "
-                      f"{who} {theirs:.1f}.",
-            "deadline": _deadline(game),
+            "detail": detail,
+            "deadline": _deadline(_earliest(watched, starter_game)),
             "urgency": "deadline",
         })
-        day = _game_day(game)
+        day, seat_day = _game_day(watched), _game_day(starter_game)
         plans.append({
             "condition": f"{entry['name']} is cleared",
-            "action": f"Start him at {slot} over {who} ({figures})",
-            "saturday": bool(day and sunday and day == sunday),
+            "action": then,
+            "saturday": bool(day and sunday and day == sunday
+                             and (seat_day is None or seat_day >= sunday)),
+            "about": entry["player_id"],
         })
     return items, plans
+
+
+def _seat_if_cleared(position: str, picks: Sequence[Any], players: PlayerIndex,
+                     watched: Mapping[str, Any] | None,
+                     game_of: Callable[[str], Mapping[str, Any] | None],
+                     sunday: date | None) -> tuple[Any, float, bool] | None:
+    """(the starter he would replace, that starter's number, whether that
+    starter certainly can't play) — the lowest seat he is eligible for whose
+    game comes after his news, a certain absence counting as 0. Ties go to the
+    name then the slot, as _displaced_by breaks them."""
+    candidates = []
+    for pick in picks:
+        if not getattr(pick, "player_id", None) or not _fits(position, pick.slot):
+            continue
+        out = bool(pick.status and pick.status.status is Status.OUT)
+        if out and _ruled_out_last_week(pick):
+            continue
+        if not out and pick.projection is None:
+            continue
+        if not in_time(game_of(pick.player_id), watched, sunday):
+            continue
+        value = 0.0 if out else round(pick.projection.mean, 1)
+        candidates.append((value, players.name(pick.player_id), pick.slot, pick, out))
+    if not candidates:
+        return None
+    value, _, _, pick, out = min(candidates, key=lambda c: c[:3])
+    return pick, value, out
+
+
+def _earliest(*games: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
+    """The game, of those given, that kicks off on the earliest day."""
+    dated = [(_game_day(game), game) for game in games if _game_day(game) is not None]
+    return min(dated, key=lambda pair: pair[0])[1] if dated else None

@@ -394,3 +394,69 @@ def test_a_rank_makes_the_number_mean_something_and_is_the_buyers_own() -> None:
             f"{name} does not show a positional rank"
     # And adding it did not smuggle in a prediction.
     assert "%" not in _prose(text_summary(ppr))
+
+
+# --------------------------------------------------------------------- #
+# launch audit C7 — sent mid-season, it covers the weeks still ahead
+# --------------------------------------------------------------------- #
+
+def test_a_mid_season_roster_report_lists_only_the_weeks_ahead() -> None:
+    """The reproduction: the roster report a Week-6 buyer gets on purchase day
+    said "Week 5: no one to start at DEF" under an opener promising "the weeks
+    ahead", and its subject counted Week 5. A week already played is not a
+    problem anyone can plan around. The subject counts what the body lists."""
+    from render.preseason import email_html, preseason_message, text_summary
+
+    full = _report()
+    assert {hit["week"] for hit in full["collisions"]} == {8, 11, 13}
+    later = _report(season_started=True, from_week=11)
+    assert {hit["week"] for hit in later["collisions"]} == {11, 13}
+    # Week 8's hole is the kicker (NO's bye); nothing later leaves K empty.
+    assert any("K" in hit["slots"] for hit in full["collisions"] if hit["week"] == 8)
+    for name, page in (("email", _prose(email_html(later))),
+                       ("text", text_summary(later))):
+        assert "no one to start at k" not in page.lower(), name
+    subject = preseason_message("a@b.co", "s", later).subject
+    assert subject == "Your 2026 roster: 2 weeks ahead leave a slot empty"
+    # A report sent after the last bye says so, rather than "every bye is
+    # covered" about byes that are behind.
+    done = _report(season_started=True, from_week=14)
+    assert done["collisions"] == []
+    assert preseason_message("a@b.co", "s", done).subject == \
+        "Your 2026 roster: every bye week is behind you"
+    assert "Every bye week on your roster is behind you" in text_summary(done)
+
+
+def test_mid_season_the_first_week_defaults_to_the_one_being_played(monkeypatch) -> None:
+    """run/intake.py passes only season_started; the week comes off the same
+    schedule run.solo reads, so the two reports cannot disagree about which
+    weeks are behind us. An unreadable schedule drops nothing."""
+    import run.solo as solo
+    monkeypatch.setattr(solo, "current_week", lambda cache, season: 12)
+    assert {h["week"] for h in _report(season_started=True)["collisions"]} == {13}
+
+    def broken(cache, season):
+        raise solo.SoloError("no schedule")
+    monkeypatch.setattr(solo, "current_week", broken)
+    assert {h["week"] for h in _report(season_started=True)["collisions"]} == \
+        {8, 11, 13}
+
+
+def test_the_product_is_a_report_never_a_file_on_any_surface() -> None:
+    """Owner decision (Sep 29 2026): the product is a "report". The roster
+    report promised "the weekly file" on both halves of the email, and the
+    launch check's report-not-file gate only reads site pages, so nothing saw
+    it (launch audit C7). This is that gate, on every surface of this email."""
+    from render.preseason import email_html, render, text_summary
+    from render.report import TEMPLATE_PATH
+
+    pattern = re.compile(
+        r"\b(?:this|your|the|weekly|first|roster|a) files?\b(?! (?:a|an) )", re.I)
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    for report in (_report(), _report(season_started=True, from_week=9)):
+        for name, page in (("email", _prose(email_html(report))),
+                           ("text", text_summary(report)),
+                           ("browser", _prose(render(report, template)))):
+            hits = [m.group(0) for m in pattern.finditer(page)
+                    if "on file" not in page[max(0, m.start() - 5):m.end() + 8]]
+            assert not hits, f"{name} calls the product a file: {hits}"

@@ -574,6 +574,20 @@ def test_the_email_says_usage_at_a_phones_width_and_the_page_keeps_the_count(
     assert "34 targets (8.5 a game)" in browser
 
 
+def test_the_samples_if_then_names_nobody_who_played_thursday(sample10) -> None:
+    """Launch audit R3/C1: the published sample said "If Tony Pollard (FLEX)
+    is ruled out: Move Chase Brown into FLEX" — Brown's Bengals were at
+    Baltimore on THURSDAY, before Pollard's Sunday news existed, and the same
+    page said "Thursday night: Ja'Marr Chase kicks off". The plan now moves
+    the next FLEX option who plays after the news: Sam LaPorta (DET, Sunday)."""
+    [plan] = [p for p in sample10["pivots"] if "Tony Pollard" in p["condition"]]
+    assert plan["action"] == "Move Sam LaPorta into FLEX (projects 9.5)"
+    assert not any("Chase Brown" in p["action"] for p in sample10["pivots"])
+    sunday = next(i for i in sample10["checklist"]
+                  if i["action"].startswith("Sunday morning"))
+    assert sunday["detail"] == "Your if/then below already has the answer either way."
+
+
 def test_the_sample_dates_pollards_questionable(sample10) -> None:
     pollard = _row(sample10, "Tony Pollard")
     assert [f["text"] for f in pollard["flags"]] == \

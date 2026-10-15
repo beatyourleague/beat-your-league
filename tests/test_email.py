@@ -560,7 +560,9 @@ def test_the_plain_text_half_says_what_the_html_says() -> None:
     assert "THE WEEK'S CLOSEST CALL" in text
     assert "The % is the chance your starter outscores" in text
     assert "questionable · see if/then" in text
-    assert "IF/THEN FOR GAMEDAY" in text and "Move Chase Brown into FLEX" in text
+    # Sam LaPorta, not Chase Brown: Brown's Bengals played THURSDAY, before
+    # Pollard's Sunday news could exist (launch audit R3).
+    assert "IF/THEN FOR GAMEDAY" in text and "Move Sam LaPorta into FLEX" in text
 
 
 def test_a_subscribers_report_links_the_glossary_and_the_samples_do_not(monkeypatch) -> None:
