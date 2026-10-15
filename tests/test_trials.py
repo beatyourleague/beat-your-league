@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import run.trials as trials
@@ -16,10 +16,17 @@ SLOTS = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]
 from render.sample import SAMPLE_ROSTER  # noqa: E402
 
 REF = encode_roster("season", "ppr", SLOTS, list(SAMPLE_ROSTER))
+# The Worker's own stamp on a request, a day before the tests' THURSDAY: fresh
+# for every `now` below. SINCE is what not_before() answers around then.
+FRESH = "2025-12-31T12:00:00.000Z"
+SINCE = datetime(2025, 12, 20, tzinfo=timezone.utc)
 
 
-def _row(email="fan@example.com", ref=REF, kind="trial"):
-    return {"kind": kind, "email": email, "ref": ref}
+def _row(email="fan@example.com", ref=REF, kind="trial", received_at=FRESH):
+    row = {"kind": kind, "email": email, "ref": ref}
+    if received_at is not None:
+        row["received_at"] = received_at
+    return row
 
 
 def test_one_per_person_never_a_subscriber_newest_request_wins() -> None:
@@ -27,12 +34,12 @@ def test_one_per_person_never_a_subscriber_newest_request_wins() -> None:
     rows = [_row(), _row(ref=other), _row("sub@example.com"),
             _row("bad-address"), _row("x@example.com", ref="garbage"),
             _row("w@example.com", kind="waitlist")]
-    got = trials.pending(rows, {"sub@example.com"}, set(), "2026")
+    got = trials.pending(rows, {"sub@example.com"}, set(), "2026", since=SINCE)
     assert got == [("fan@example.com", other)]
     sent = {trials.trial_key("2026", "Fan@Example.com ")}
-    assert trials.pending(rows, {"sub@example.com"}, sent, "2026") == []
+    assert trials.pending(rows, {"sub@example.com"}, sent, "2026", since=SINCE) == []
     # A new season is a new free report; the key carries no address.
-    assert trials.pending(rows, set(), sent, "2027")
+    assert trials.pending(rows, set(), sent, "2027", since=SINCE)
     assert "@" not in trials.trial_key("2026", "fan@example.com")
 
 
@@ -45,13 +52,54 @@ def test_one_person_is_one_address_however_it_is_spelled() -> None:
     assert c("f.a.n@example.com") == "f.a.n@example.com"      # dots only matter to Gmail
     sent = {trials.trial_key("2026", "real@fan.com")}
     rows = [_row("real+2@fan.com"), _row("sub+x@fan.com"), _row("new@fan.com")]
-    assert trials.pending(rows, {"sub@fan.com"}, sent, "2026") == [("new@fan.com", REF)]
+    assert trials.pending(rows, {"sub@fan.com"}, sent, "2026", since=SINCE) == \
+        [("new@fan.com", REF)]
     assert trials.trial_key("2026", "R.E.A.L+1@gmail.com") == trials.trial_key("2026", "real@gmail.com")
+
+
+def test_only_a_fresh_request_made_this_season_is_ever_mailed() -> None:
+    """Launch review OPS-3, reproduced: a request stamped 2025-10-20 whose
+    `trial-2025-…` key was already in the send log was mailed AGAIN by a run
+    on 2026-06-03 — "Your free report: Week 1, decided", eight months after
+    anyone asked, from last season's roster — because the key is per season
+    and the Worker keeps rows ~400 days. A request is mailed within
+    TRIAL_MAX_AGE of arriving, never before the current season's first game,
+    and never without the Worker's stamp (it cannot be shown to be fresh)."""
+    assert trials.TRIAL_MAX_AGE.days == 14
+    now = datetime(2026, 10, 15, 15, 0, tzinfo=timezone.utc)
+    opener = datetime(2026, 9, 11, 0, 20, tzinfo=timezone.utc)
+    since = trials.not_before(now, opener)
+    assert since == now - trials.TRIAL_MAX_AGE
+    for days, kept in ((13, True), (14, True), (15, False), (240, False)):
+        stamp = (now - timedelta(days=days)).isoformat().replace("+00:00", "Z")
+        got = trials.pending([_row(received_at=stamp)], set(), set(), "2026",
+                             since=since)
+        assert bool(got) is kept, (days, got)
+    # The repro, exactly: served last season, keyed for last season.
+    stale = _row(received_at="2025-10-20T18:00:00.000Z")
+    served = {trials.trial_key("2025", "fan@example.com")}
+    june = datetime(2026, 6, 3, 15, 30, tzinfo=timezone.utc)
+    assert trials.pending([stale], set(), served, "2026",
+                          since=trials.not_before(june, opener)) == []
+    # Early in a season the opener is the floor, not the fortnight.
+    week2 = datetime(2026, 9, 16, 15, 0, tzinfo=timezone.utc)
+    assert trials.not_before(week2, opener) == opener
+    before_opener = _row(received_at="2026-09-08T12:00:00.000Z")
+    assert trials.pending([before_opener], set(), set(), "2026",
+                          since=trials.not_before(week2, opener)) == []
+    # No readable stamp, or no readable opener: nothing is fresh.
+    for bad in (None, "", "yesterday"):
+        assert trials.pending([_row(received_at=bad)], set(), set(), "2026",
+                              since=since) == [], bad
+    assert trials.not_before(now, None) is None
+    assert trials.pending([_row(received_at=now.isoformat())], set(), set(),
+                          "2026", since=None) == []
 
 
 def test_the_cap_counts_built_reports_so_junk_cannot_starve_real_requests() -> None:
     rows = [_row(f"u{i}@example.com") for i in range(trials.MAX_PER_RUN + 20)]
-    assert len(trials.pending(rows, set(), set(), "2026")) == trials.MAX_PER_RUN + 20, \
+    assert len(trials.pending(rows, set(), set(), "2026", since=SINCE)) == \
+        trials.MAX_PER_RUN + 20, \
         "pending() must not slice: the cap belongs after the build, on built reports"
     import inspect
     body = inspect.getsource(trials.main)
@@ -107,6 +155,7 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
     monkeypatch.setattr("run.solo.season_over", lambda *a, **k: False)
     monkeypatch.setattr(trials, "week_underway_from",
                         lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr(trials, "season_start", lambda *a: SINCE)
     monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
     reg = tmp_path / "rosters.json"
     reg.write_text("[]")
@@ -118,7 +167,7 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
     assert all(m.unsubscribe is None for m in sent)
     # An unreadable registry fails CLOSED: nobody may be treated as a non-subscriber.
     reg.write_text("{not json")
-    assert trials.main(["--registry", str(reg)]) == 1
+    assert trials.main(["--registry", str(reg), "--now", "2026-01-01T00:00:00+00:00"]) == 1
 
 
 def test_the_free_report_says_what_it_is_and_asks_nothing_of_a_non_subscriber() -> None:
@@ -197,6 +246,7 @@ def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=()):
     monkeypatch.setattr("run.solo.season_over", lambda *a, **k: False)
     monkeypatch.setattr(trials, "week_underway_from",
                         lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr(trials, "season_start", lambda *a: SINCE)
     monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
     reg = tmp_path / "reg" / "rosters.json"
     reg.unlink(missing_ok=True)
@@ -272,6 +322,25 @@ def test_on_tuesday_paying_subscribers_go_first(tmp_path, monkeypatch, capsys) -
     *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=TUESDAY_1PM,
                         registry=None)                          # before launch
     assert len(mailed) == 1
+
+
+def test_a_stale_request_is_never_mailed_and_never_spends_the_allowance(
+        tmp_path, monkeypatch, capsys) -> None:
+    """OPS-3 end to end. The Worker hands back every row it still holds,
+    oldest first: a request from months ago was mailed again as if new, and a
+    backlog of them took the day's allowance ahead of the person who asked an
+    hour ago. With one slot left today, the fresh request gets it."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    stale = _row("old@example.com", ref=_fixture_ref(),
+                 received_at="2025-10-20T18:00:00.000Z")
+    fresh = _row("new@example.com", ref=_fixture_ref())
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=[stale], now=THURSDAY)
+    assert mailed == [], "a request from October was mailed in January"
+    today = [(f"trial-2024-{i:012x}", "2026-01-01T09:00:00+00:00")
+             for i in range(trials.TRIAL_DAILY_CAP - 1)]
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=[stale, fresh],
+                        now=THURSDAY, sent=today)
+    assert [m.to for m in mailed] == ["new@example.com"]
 
 
 def test_free_reports_stop_at_the_daily_allowance(tmp_path, monkeypatch, capsys) -> None:

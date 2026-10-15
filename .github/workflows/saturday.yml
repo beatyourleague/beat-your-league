@@ -87,6 +87,7 @@ jobs:
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
         run: .venv/bin/python -m run.saturday
       - name: Persist the send log
         if: always()

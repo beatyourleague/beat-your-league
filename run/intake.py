@@ -1,7 +1,7 @@
 """Payments become subscribers: the roster half of the signup pipeline.
 
 Usage:
-    python -m run.intake [--dry-run] [--full] [--registry-dir PATH]
+    python -m run.intake [--dry-run] [--full] [--registry-dir PATH] [--no-mail]
 
 ``run/sync.py`` does this for the Sleeper-era refs (a league id, a user id, a
 rival) and verifies each one against Sleeper. There is nothing to verify here
@@ -627,8 +627,10 @@ def _sent_entries() -> list[dict]:
 
 
 def _first_file(signup, data, season: str, processed_dir, record: bool = True,
-                out_dir: Path | None = None):
+                out_dir: Path | None = None, sent: set[str] | None = None):
     """The file a purchase earns, chosen by WHEN the purchase happened.
+    -> the week's report as a ``run.tuesday.RunResult``, or None for the
+    roster file.
 
     Pre-season, or mid-week: the roster file — byes, thin spots and last
     season's record under their own scoring. Facts only, no calls.
@@ -642,13 +644,21 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
     records them as such (principle 2), so publishing a report after kickoff
     would put a "prediction" about a finished game on the public record. When
     in doubt week_has_kicked_off answers True, and they get the roster file.
+
+    A week's report already in the send log (``sent``) is never rebuilt — the
+    same rule as the Tuesday run: send_all would skip it, so the rebuild could
+    only ever be a report nobody receives. The purchase gets the roster file.
+    Nothing here touches the ledger: the caller records the calls once the
+    message is delivered (``run.tuesday.record_delivered``).
     """
     from run.solo import week_has_kicked_off
 
     if getattr(data, "week", 1) > 1 and not week_has_kicked_off(
             CACHE_DIR, season, data.week):
         from run.rosters import RosterSubscriber
-        from run.tuesday import run_subscriber
+        from run.tuesday import report_key, run_subscriber
+        if report_key(data.season, data.week, signup.slug) in (sent or set()):
+            return None
         roster = signup.roster()
         subscriber = RosterSubscriber(
             email=signup.email, ref=signup.ref,
@@ -660,15 +670,15 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
             origin=signup.slug)
         template = (REPO_ROOT / "rival-report-template.html").read_text(
             encoding="utf-8")
-        # record: a call is PUBLISHED when it reaches someone; building a report
-        # that a dry or unconfigured run will never send must not write
-        # permanent ledger rows (the rule run/tuesday.py follows).
+        # record: a call is PUBLISHED when it reaches someone; a report that a
+        # dry or unconfigured run will never send carries no calls at all (the
+        # rule run/tuesday.py follows).
         from run.tuesday import SUBSCRIBER_REPORTS
         result = run_subscriber(subscriber, data, template,
                                 out_dir=out_dir or SUBSCRIBER_REPORTS,
                                 processed_dir=processed_dir, record=record)
         if result.ok and result.message is not None:
-            return result.message, result.plan
+            return result
         # Fall through to the roster file rather than sending nothing.
     return None
 
@@ -716,19 +726,20 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
         return
 
     # Decided BEFORE anything is built, because it decides whether a week's
-    # report built here enters the public record.
+    # report built here may ever enter the public record.
     provider = build_provider(None)
     sending = not (provider.name == DRY_PROVIDER)
-    messages, plans = [], {}
+    sent = {str(entry.get("key") or "") for entry in entries}
+    messages, plans, weeklies = [], {}, []
     for signup in servable:
         try:
             weekly = _first_file(signup, data, season, processed_dir, record=sending,
-                                 out_dir=out_dir)
+                                 out_dir=out_dir, sent=sent)
             if weekly is not None:
-                message, plan = weekly
-                messages.append(message)
-                if plan is not None:
-                    plans[message.key] = plan
+                messages.append(weekly.message)
+                weeklies.append(weekly)
+                if weekly.plan is not None:
+                    plans[weekly.message.key] = weekly.plan
                 continue
             roster = signup.roster()
             spec = spec_from_ref(roster)
@@ -754,6 +765,18 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     print(f"First files via {provider.name}: {len(delivered)} sent, "
           f"{len(sends) - len(delivered) - len(failures)} already sent, "
           f"{len(failures)} failed")
+    # A week's report mailed today publishes its calls — so they reach the
+    # ledger now, for the messages that were DELIVERED and no others (the
+    # Tuesday run's rule, in its one copy). Recording at build time put a
+    # report that a failed or skipped send never delivered on the record.
+    if sending and weeklies:
+        from run.tuesday import record_delivered
+        added, problems = record_delivered(
+            weeklies, [r.message.key for r in delivered], processed_dir)
+        if added:
+            print(f"    {added} new ledger row(s) from this week's reports")
+        for problem in problems:
+            print(f"    LEDGER RECORD FAILED {problem}", file=sys.stderr)
     # A week's report mailed today is what Saturday's final check and next
     # week's receipts must read, exactly as sent — so its plan is stored only
     # for a send that really happened, the same rule run/tuesday.py follows.
@@ -788,6 +811,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="ignore the watermark and sweep every session")
     parser.add_argument("--clear-unresolved", action="store_true",
                         help="forget the payments reported every run as unattributable")
+    parser.add_argument("--no-mail", action="store_true",
+                        help="write the registry and send nothing (the Tuesday "
+                             "run's intake; the daily run does the mailing)")
     args = parser.parse_args(argv)
 
     api_key = os.environ.get("STRIPE_API_KEY", "")
@@ -998,12 +1024,24 @@ def main(argv: list[str] | None = None) -> int:
     # can never welcome anyone twice, and a failed send retries next run
     # because only successes are logged. With no provider configured this
     # reports what is pending rather than failing — the registry is this run's
-    # contract; the weekly and daily crons set EMAIL_PROVIDER.
-    _send_welcomes(servable, seat_rows, known_season)
-    _send_confirmations(awaiting, data)
-    from run.saturday import FIRST_PLANS_NAME
-    _send_first_files(servable, data, known_season,
-                      first_plans=registry_dir / FIRST_PLANS_NAME)
+    # contract.
+    #
+    # ONE intake mails: daily.yml's. The Tuesday job runs this too, with
+    # --no-mail, because the two workflows sit in different concurrency groups
+    # and each reads the send log from its own checkout — so a late GitHub
+    # backup of the weekly run landing beside an hourly daily run mailed the
+    # same buyer two welcomes and two first reports (reproduced, launch review
+    # OPS-6). Everything here is keyed and retried, so the daily run's next
+    # half-hour sends whatever this run leaves.
+    if args.no_mail:
+        print("Mail: none from this run (--no-mail). Welcomes, roster-update "
+              "confirmations and first reports go out from the daily run.")
+    else:
+        _send_welcomes(servable, seat_rows, known_season)
+        _send_confirmations(awaiting, data)
+        from run.saturday import FIRST_PLANS_NAME
+        _send_first_files(servable, data, known_season,
+                          first_plans=registry_dir / FIRST_PLANS_NAME)
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered

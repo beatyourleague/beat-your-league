@@ -117,6 +117,7 @@ jobs:
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
@@ -146,6 +147,7 @@ jobs:
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
         run: .venv/bin/python -m run.trials
@@ -166,6 +168,7 @@ jobs:
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
         run: |
           set +e
           .venv/bin/python -m run.renewals --send
@@ -183,8 +186,26 @@ jobs:
       # nothing. The stop dates do not move between hours. A DISPATCH has no
       # schedule to compare, so it runs these only when it says `daily`: the
       # Worker's 14:00 dispatch does, its hourly ones do not.
-      - name: Stop monthly billing at the end of the season
+      #
+      # And once a day means ONCE: the 14:00 run fires twice by design (the
+      # Worker's dispatch and GitHub's own cron, which can land hours apart),
+      # and both passed the gate above — two "a scheduled run did not happen"
+      # comments a day and two Stripe walks (launch review OPS-7). The first
+      # run claims the UTC day with a `run-daily-<date>` marker in the send log
+      # (persisted below, and read by the second run, which checks out the
+      # branch tip); the second sees it and skips. The claim carries the same
+      # schedule gate, so an hourly run can never claim the day first. If the
+      # claim itself fails it prints nothing, and the steps run anyway:
+      # running twice is the nuisance, not running is the failure.
+      - name: Claim today's once-a-day steps
         if: always() && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        id: today
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+        run: .venv/bin/python -m run.watchdog --claim-day >> "$GITHUB_OUTPUT" || true
+
+      - name: Stop monthly billing at the end of the season
+        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: billing
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -197,12 +218,13 @@ jobs:
       # The dead-man's switch (run/watchdog.py). A scheduled run GitHub never
       # started fails nothing and so files nothing, and the Saturday check
       # mails only on change, so its silence reads as "fine". From the
-      # Wednesday after a send Tuesday this goes red if that week's reports
-      # are not in the send log; from the Sunday, if the final check never
-      # finished. Quiet before launch and with an empty registry. Once a day:
-      # an hourly alarm about the same missed Tuesday is 24 comments, not one.
+      # Wednesday after a send Tuesday this goes red if no Tuesday run for that
+      # week left its marker; from the Sunday, if the final check left none —
+      # but only when somebody who bought before the run was due was owed it.
+      # Quiet before launch and with an empty registry. Once a day (claimed
+      # above): an hourly alarm about the same missed Tuesday is 24 comments.
       - name: Check this week's scheduled runs happened
-        if: always() && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        if: always() && steps.today.outputs.due != 'false' && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: watchdog
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}

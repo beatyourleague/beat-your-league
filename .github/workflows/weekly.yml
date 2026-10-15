@@ -15,6 +15,8 @@
 #   STRIPE_PAYMENT_LINKS  — s:plink_A,m:plink_B,p:plink_C (the plan is a FACT)
 #   EMAIL_PROVIDER + that provider's key — unset means dry-run, which FAILS the
 #                           job rather than silently mailing nobody.
+#   SENDER_POSTAL_ADDRESS — the sender line every commercial email carries;
+#                           mapped into every step that can mail.
 
 name: weekly-report
 
@@ -152,6 +154,15 @@ jobs:
       # paid and cannot be served — and swallowing that would be a green run
       # with a buried log line. So the send proceeds either way and the job is
       # failed afterwards, below, once everybody who COULD be mailed has been.
+      #
+      # --no-mail, and no email secrets at all: this intake writes the registry
+      # and mails NOBODY. Welcomes, roster-update confirmations and first
+      # reports go from daily.yml's intake only. The two workflows sit in
+      # different concurrency groups and each reads the send log from its own
+      # checkout, so when GitHub's late backup of this run landed beside an
+      # hourly daily run, both mailed the same new buyer a welcome and a first
+      # report (reproduced, launch review OPS-6, Oct 2026). The daily run's
+      # next half-hour sends whatever this one leaves.
       - name: Turn payments into subscribers
         id: intake
         if: always()
@@ -159,15 +170,6 @@ jobs:
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
-          # Welcome emails ride the sweep (idempotent — the daily cron usually
-          # got there first, and sent.jsonl means nobody is welcomed twice).
-          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
-          SITE_URL: ${{ secrets.SITE_URL }}
-          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
           # The form backend (League Pass seats + self-serve roster updates)
           # and the secret that authenticates an update. All three unset means
           # neither feature delivers — never that either delivers unverified.
@@ -176,7 +178,7 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
         run: |
           set +e
-          .venv/bin/python -m run.intake
+          .venv/bin/python -m run.intake --no-mail
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
       # `if: always()` so a failed intake cannot hold up a paying subscriber's
@@ -204,6 +206,10 @@ jobs:
           # it both fell back to the terms page's cancel section — a page that
           # explains cancelling instead of the button that does it.
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          # The sender's postal address every commercial email must carry
+          # (render/sender.py reads only the environment, so a secret no step
+          # maps reaches no email).
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
         run: .venv/bin/python -m run.tuesday
       # The live sample (render/live_sample.py): this week's report for the
       # published sample roster, so the site shows the product running now,

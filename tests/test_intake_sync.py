@@ -536,6 +536,26 @@ def test_with_no_provider_welcomes_are_reported_pending_not_sent(
     assert "none were sent and none were recorded" in out
 
 
+def test_the_tuesday_intake_writes_the_registry_and_mails_nobody(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """Launch review OPS-6, reproduced: weekly.yml and daily.yml both ran the
+    intake with email secrets, in different concurrency groups, each checking
+    its own checkout of sent.jsonl — so GitHub's late backup of the Tuesday
+    run beside an hourly daily run sent `welcome-…` to one buyer twice (and
+    the first report with it). Now one intake mails: the Tuesday job passes
+    --no-mail, which still writes the registry Tuesday's send needs and leaves
+    every message to the daily run, which sends it exactly once."""
+    sent = _capture_sends(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]
+    assert _run(tmp_path, "--no-mail") == 0
+    assert sent == [], "the Tuesday intake mailed somebody"
+    assert [s.email for s in load_rosters(tmp_path / intake.REGISTRY_NAME)] == \
+        ["fan@example.com"], "--no-mail stopped writing the registry"
+    assert "--no-mail" in capsys.readouterr().out
+    assert _run(tmp_path) == 0                       # the daily run, next
+    assert [m.key.startswith("welcome-") for m in sent] == [True]
+
+
 # --------------------------------------------------------------------- #
 # self-serve roster updates — authenticated, targeted, stamped on receipt
 # --------------------------------------------------------------------- #
@@ -723,9 +743,11 @@ def test_a_row_that_says_where_it_came_from_is_read_exactly_as_one_that_does_not
     seats = [r for r in load_rosters(tmp_path / intake.REGISTRY_NAME)
              if r.is_league_seat]
     assert [s.email for s in seats] == ["member@example.com"]
-    trial = {"kind": "trial", "email": "t@example.com", "ref": REF}
-    assert pending([dict(trial, via="x")], set(), set(), "2026") == \
-        pending([trial], set(), set(), "2026") == [("t@example.com", REF)]
+    trial = {"kind": "trial", "email": "t@example.com", "ref": REF,
+             "received_at": "2026-10-14T18:00:00.000Z"}
+    since = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    assert pending([dict(trial, via="x")], set(), set(), "2026", since=since) == \
+        pending([trial], set(), set(), "2026", since=since) == [("t@example.com", REF)]
 
 
 def test_a_purchase_before_kickoff_gets_the_week_it_paid_for() -> None:
@@ -1030,3 +1052,93 @@ def test_a_code_is_bound_to_the_address_the_subscription_and_the_roster() -> Non
                     ("fan@example.com", "abc123def0", NEW_REF, "other", ts),
                     ("fan@example.com", "abc123def0", NEW_REF, SECRET, _ts(9))):
         assert confirm_code(*changed) != base
+
+
+# --------------------------------------------------------------------- #
+# the week's report mailed at purchase: on the record only once delivered
+# (launch review OPS-1, Oct 2026)
+# --------------------------------------------------------------------- #
+
+def _first_email_env(tmp_path, monkeypatch, provider):
+    """The fixture week, before its kickoff, with ``provider`` doing the
+    sending and a send log of the test's own."""
+    import run.delivery as delivery
+    from test_solo_run import OFFLINE, SEASON as FIXTURE_SEASON, WEEK, _cache
+    data = intake.load_week_data(_cache(tmp_path), FIXTURE_SEASON, WEEK,
+                                 session=OFFLINE)
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    monkeypatch.setattr(intake, "CACHE_DIR", _cache(tmp_path))
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setattr(intake, "build_provider", lambda *a, **k: provider)
+    return data, FIXTURE_SEASON, WEEK
+
+
+def _ledger(processed: Path) -> list[dict]:
+    return [json.loads(line) for path in sorted(processed.rglob("calls.jsonl"))
+            for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+class _Sink:
+    name = "sink"
+
+    def __init__(self, down: bool = False) -> None:
+        self.down, self.sent = down, []
+
+    def send(self, message, sender, reply_to):
+        from run.delivery import DeliveryError
+        if self.down:
+            raise DeliveryError("provider down")
+        self.sent.append(message)
+        return "id"
+
+
+def test_a_first_email_that_never_left_puts_nothing_on_the_record(
+        tmp_path, monkeypatch) -> None:
+    """The intake's first email mails a buyer between Tuesday and kickoff THE
+    WEEK'S REPORT, and its calls went on the public ledger when it was BUILT
+    (`record=sending`, before delivery) — so a provider outage recorded calls
+    no email carried, and every hourly retry until it landed built again.
+    Same defect, same fix as the Tuesday run: record what was delivered."""
+    from run.intake import RosterSignup
+    data, season, week = _first_email_env(tmp_path, monkeypatch, _Sink(down=True))
+    signup = RosterSignup(email="fan@example.com", ref=REF, plan="season",
+                          seen_at="1791500000")
+    processed = tmp_path / "processed"
+    intake._send_first_files([signup], data, season, processed_dir=processed,
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert not _ledger(processed), "a week's report that never left was recorded"
+
+    up = _Sink()
+    monkeypatch.setattr(intake, "build_provider", lambda *a, **k: up)
+    intake._send_first_files([signup], data, season, processed_dir=processed,
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert [m.key for m in up.sent] == [f"{season}-w{week:02d}-{signup.slug}"]
+    assert _ledger(processed), "the delivered week's report recorded nothing"
+
+
+def test_a_first_email_never_rebuilds_a_week_already_in_the_log(
+        tmp_path, monkeypatch) -> None:
+    """The Tuesday run's other rule, in the intake: a week's report whose key
+    is already in the send log (this roster was mailed it before this
+    purchase) is not rebuilt — send_all would skip it, so the rebuild could
+    only be a report nobody receives. The purchase gets the roster report."""
+    import run.tuesday as tuesday
+    from run.intake import RosterSignup
+    up = _Sink()
+    data, season, week = _first_email_env(tmp_path, monkeypatch, up)
+    signup = RosterSignup(email="fan@example.com", ref=REF, plan="season",
+                          seen_at="1791500000")
+    (tmp_path / "sent.jsonl").write_text(json.dumps({
+        "key": tuesday.report_key(season, week, signup.slug), "provider": "sink",
+        "message_id": "x", "sent_at": "2026-10-01T12:00:00+00:00"}) + "\n")
+    builds = []
+    real = tuesday.run_subscriber
+    monkeypatch.setattr(tuesday, "run_subscriber",
+                        lambda *a, **k: builds.append(1) or real(*a, **k))
+    processed = tmp_path / "processed"
+    intake._send_first_files([signup], data, season, processed_dir=processed,
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert builds == [], "a week's report already in the log was rebuilt"
+    assert [m.key.startswith("preseason-") for m in up.sent] == [True]
+    assert not _ledger(processed)

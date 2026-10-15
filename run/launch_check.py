@@ -69,9 +69,14 @@ BROWSER_PAGES = (
 BANNED = r"\b(calibrated|tested|proven|accurate)\b"
 BETTING = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager|bookmaker)\b"
 PERSONAL_DOMAINS = r"@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|aol|proton|protonmail)\.(com|me)"
+# SENDER_POSTAL_ADDRESS is here as a SECRET, not just a shell variable: the
+# crons are what send, render/sender.py reads only the environment, and every
+# mail-sending step maps it (tests/test_workflows.py) — so a value set only in
+# the owner's shell reaches no email at all.
 REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", "EMAIL_FROM",
                     "EMAIL_REPLY_TO", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
-                    "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET")
+                    "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
+                    "SENDER_POSTAL_ADDRESS")
 
 
 @dataclass

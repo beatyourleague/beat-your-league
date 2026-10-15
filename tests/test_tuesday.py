@@ -232,20 +232,33 @@ def test_no_report_ever_carries_a_roster_write_credential(
         "the forward line went with it; only the credential should have"
 
 
-def test_published_calls_are_recorded_the_week_they_are_published(tmp_path) -> None:
+def _ledger_rows(processed: Path) -> list[dict]:
+    return [json.loads(line) for path in sorted(processed.rglob("calls.jsonl"))
+            for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_published_calls_are_recorded_the_week_they_are_published(
+        tmp_path, monkeypatch) -> None:
     """Principle 2. A call not recorded at publication cannot be recovered
-    later — there is no record of what the subscriber was shown."""
+    later — there is no record of what the subscriber was shown. Publication
+    is DELIVERY: building a report records nothing; the run that delivers it
+    records every call it carried."""
+    import run.delivery as delivery
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
     processed = tmp_path / "processed"
-    result = tuesday.run_subscriber(
+    built = tuesday.run_subscriber(
         _subscriber(), _week_data(tmp_path),
         Path("rival-report-template.html").read_text(encoding="utf-8"),
         out_dir=tmp_path / "out", processed_dir=processed)
-    assert "LEDGER RECORD FAILED" not in result.detail
-    rows = list((processed / "ledger").rglob("calls.jsonl"))
-    assert rows, "nothing was recorded"
-    calls = [json.loads(line) for line in
-             rows[0].read_text(encoding="utf-8").splitlines()]
-    assert calls and all(call["status"] == "pending" for call in calls)
+    assert built.ok and built.calls, built.detail
+    assert not _ledger_rows(processed), "building a report wrote to the ledger"
+
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
+    assert tuesday.main(_main_args(tmp_path, _registry(tmp_path, _row()))
+                        + ["--plans-dir", str(tmp_path / "plans")]) == 0
+    calls = _ledger_rows(processed)
+    assert calls, "a delivered report recorded nothing"
+    assert all(call["status"] == "pending" for call in calls)
     assert all(call["confidence"] is not None for call in calls)
 
 
@@ -259,12 +272,16 @@ def test_the_same_call_from_two_subscribers_is_one_ledger_row(tmp_path) -> None:
     first = tuesday.run_subscriber(_subscriber(), data, template,
                                    out_dir=tmp_path / "out",
                                    processed_dir=processed)
-    second = tuesday.run_subscriber(_subscriber(email="other@example.com"), data,
+    second = tuesday.run_subscriber(_subscriber(email="other@example.com",
+                                                origin="0123456789"), data,
                                     template, out_dir=tmp_path / "out",
                                     processed_dir=processed)
     assert first.ok and second.ok
-    assert "new ledger row" in first.detail
-    assert "new ledger row" not in second.detail, "the same call was recorded twice"
+    added, problems = tuesday.record_delivered(
+        [first, second], [first.message.key, second.message.key], processed)
+    assert not problems
+    assert added == len(first.calls) > 0, "the same call was recorded twice"
+    assert len(_ledger_rows(processed)) == len(first.calls)
 
 
 def test_one_broken_roster_never_sinks_the_others(tmp_path) -> None:
@@ -401,15 +418,146 @@ def test_a_preview_never_writes_to_the_public_record(tmp_path, capsys,
         "a preview wrote permanent rows into the public record"
 
 
-def test_a_real_send_still_records_every_published_call(tmp_path) -> None:
-    """The other half — the gate must not silence the record itself."""
+def test_a_real_send_still_records_every_published_call(tmp_path, monkeypatch,
+                                                        capsys) -> None:
+    """The other half — the gate must not silence the record itself. And a
+    report built with record=False carries no calls, so nothing downstream
+    could record them even if it tried."""
+    import run.delivery as delivery
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
     processed = tmp_path / "processed"
-    result = tuesday.run_subscriber(
+    assert tuesday.main(_main_args(tmp_path, _registry(tmp_path, _row()))
+                        + ["--plans-dir", str(tmp_path / "plans")]) == 0
+    assert "new ledger row(s) from 1 delivered report(s)" in capsys.readouterr().out
+    assert _ledger_rows(processed)
+    preview = tuesday.run_subscriber(
         _subscriber(), _week_data(tmp_path),
         Path("rival-report-template.html").read_text(encoding="utf-8"),
-        out_dir=tmp_path / "out", processed_dir=processed, record=True)
-    assert result.ok and "new ledger row" in result.detail
-    assert list(processed.rglob("calls.jsonl"))
+        out_dir=tmp_path / "out", processed_dir=processed, record=False)
+    assert preview.ok and preview.calls == [] and preview.store is None
+
+
+# --------------------------------------------------------------------- #
+# what a retry may and may not put on the record (launch review OPS-1)
+# --------------------------------------------------------------------- #
+
+def _flip_first_call(report: dict) -> dict:
+    """A line move's worth of difference: the first published call reversed —
+    the pick becomes the alternative — as a Tuesday market update or a stat
+    correction overnight can do to a close call."""
+    for slot in report["lineup"]:
+        if slot.get("confidence") is not None and slot.get("alternative_id"):
+            slot["player_id"], slot["alternative_id"] = (slot["alternative_id"],
+                                                         slot["player_id"])
+            slot["player_name"], slot["alternative_name"] = (
+                slot["alternative_name"], slot["player_name"])
+            slot["confidence"] = 0.509
+            return report
+    raise AssertionError("the fixture week publishes no call to flip")
+
+
+def _flipping(monkeypatch) -> list:
+    """Make every report built from now on carry a reversed first call, and
+    count the builds."""
+    real = tuesday.report_for
+    builds: list = []
+
+    def flipped(*a, **k):
+        builds.append(1)
+        return _flip_first_call(real(*a, **k))
+    monkeypatch.setattr(tuesday, "report_for", flipped)
+    return builds
+
+
+def test_a_retry_puts_nothing_on_the_record_it_did_not_deliver(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Launch review OPS-1, reproduced: run 1 mailed "Drake Maye over Dak
+    Prescott 0.501" and recorded it. The 16:00 retry — or GitHub's backup,
+    routinely 5-7 hours late — rebuilt every report after a normal Tuesday
+    line move (NYJ@NE total 43.5 -> 42.0), sent nothing ("0 sent, 1 already
+    sent"), and still wrote "1 new ledger row": "Dak Prescott over Drake Maye
+    0.509". The inbox held one call; the public record held both, and one of
+    them was bound to hit. `record_calls` ran inside the build, before
+    `send_all` decided to skip. Now the record follows the inbox exactly."""
+    import run.delivery as delivery
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    mailed = []
+
+    class Sink(_Fake):
+        def send(self, message, sender, reply_to):
+            mailed.append(message)
+            return "id-1"
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: Sink())
+    args = _main_args(tmp_path, _registry(tmp_path, _row())) + [
+        "--plans-dir", str(tmp_path / "plans")]
+    processed = tmp_path / "processed"
+
+    assert tuesday.main(args) == 0
+    first = {row["call_id"] for row in _ledger_rows(processed)}
+    assert first and len(mailed) == 1
+
+    _flipping(monkeypatch)
+    assert tuesday.main(args) == 0
+    assert "already sent" in capsys.readouterr().out
+    assert len(mailed) == 1, "the retry mailed again"
+    assert {row["call_id"] for row in _ledger_rows(processed)} == first, \
+        "the retry recorded calls that no email carried"
+
+
+def test_a_report_already_sent_this_week_is_not_rebuilt_unless_asked(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Guard one of two (OPS-1): a subscriber whose report key is in the send
+    log is skipped BEFORE the build — no archive, no plan, no calls — because
+    the rebuild is a different report from the one in their inbox. A
+    deliberate --resend rebuilds, re-sends and records what it sent."""
+    import run.delivery as delivery
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
+    args = _main_args(tmp_path, _registry(tmp_path, _row())) + [
+        "--plans-dir", str(tmp_path / "plans")]
+    sub = rosters.load_rosters(_registry(tmp_path, _row()))[0]
+    log.write_text(json.dumps({"key": tuesday.report_key(SEASON, WEEK, sub.slug),
+                               "provider": "fake", "message_id": "x",
+                               "sent_at": "2026-10-13T12:05:00+00:00"}) + "\n")
+    builds = _flipping(monkeypatch)
+    assert tuesday.main(args) == 0
+    assert builds == [], "a report already in an inbox was rebuilt"
+    assert "1 already sent this week (not rebuilt)" in capsys.readouterr().out
+    assert not _ledger_rows(tmp_path / "processed")
+
+    assert tuesday.main(args + ["--resend"]) == 0
+    assert builds == [1]
+    flipped = _ledger_rows(tmp_path / "processed")
+    assert any(row["confidence"] == 0.509 for row in flipped), \
+        "a deliberate resend delivered a report and recorded nothing"
+
+
+def test_a_send_that_fails_records_nothing(tmp_path, monkeypatch, capsys) -> None:
+    """Guard two of two (OPS-1): only messages DELIVERED in this run reach the
+    ledger. A provider outage used to leave every call recorded at build time
+    with no email behind any of them. The run still leaves its marker (it ran,
+    and says what failed) and exits 1, which files the issue."""
+    import run.delivery as delivery
+    from run.delivery import DeliveryError
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+
+    class Down(_Fake):
+        def send(self, message, sender, reply_to):
+            raise DeliveryError("provider down")
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: Down())
+    code = tuesday.main(_main_args(tmp_path, _registry(tmp_path, _row()))
+                        + ["--plans-dir", str(tmp_path / "plans")])
+    assert code == 1
+    assert not _ledger_rows(tmp_path / "processed"), \
+        "a report that never left recorded its calls"
+    [marker] = [json.loads(line) for line in log.read_text().splitlines()]
+    assert marker["key"] == run_key("tuesday", SEASON, WEEK)
+    assert "send failed 1" in marker["message_id"]
 
 
 # --------------------------------------------------------------------- #
@@ -451,14 +599,20 @@ class _Fake:
         return "id-1"
 
 
-def test_a_clean_real_run_leaves_the_marker_and_a_preview_or_a_failure_does_not(
+def test_a_real_run_leaves_the_marker_with_its_counts_and_a_preview_does_not(
         tmp_path, monkeypatch) -> None:
     """The watchdog tells "Tuesday ran" from "GitHub never started it" by the
-    send log. A run that mailed for real and finished clean leaves
-    `run-tuesday-<season>-wNN` there — once, however many retries. A preview
-    must not (it proves nothing about the real run, the same rule that keeps
-    a dry run out of the ledger), and neither may a run with a report that
-    could not be built: the watchdog's silence would then cover it."""
+    send log, and only by the marker (launch review OPS-2: a report key there
+    is shared with a new buyer's first email, so it proved nothing). A run
+    that got as far as sending for real leaves `run-tuesday-<season>-wNN` —
+    once, however many retries. A preview must not (it proves nothing about
+    the real run, the same rule that keeps a dry run out of the ledger).
+
+    A run with a report that could not be built DOES leave it now, saying so
+    in its counts: it ran, it exits 1, and that files "Weekly run failed".
+    The old rule (no marker on any failure) made the marker's absence mean two
+    different things, and with report keys no longer evidence, one subscriber's
+    broken roster would have read as a Tuesday GitHub never started."""
     import run.delivery as delivery
     from run.watchdog import run_key
     log = tmp_path / "sent.jsonl"
@@ -475,6 +629,10 @@ def test_a_clean_real_run_leaves_the_marker_and_a_preview_or_a_failure_does_not(
     assert marker in delivery.load_sent(log)
     assert tuesday.main(args + ["--plans-dir", str(tmp_path / "plans")]) == 0
     assert sum(marker in line for line in log.read_text().splitlines()) == 1
+    entry = next(json.loads(line) for line in log.read_text().splitlines()
+                 if marker in line)
+    assert entry["message_id"] == ("sent 1, already sent 0, send failed 0, "
+                                   "not built 0")
 
     log.unlink()
     missing = [f"00-99999{i:02d}" for i in range(len(ROSTER_IDS))]
@@ -482,7 +640,9 @@ def test_a_clean_real_run_leaves_the_marker_and_a_preview_or_a_failure_does_not(
                ref=encode_roster("season", "ppr", list(SLOTS), missing))
     args = _main_args(tmp_path, _registry(tmp_path, _row(), bad))
     assert tuesday.main(args + ["--plans-dir", str(tmp_path / "plans")]) == 1
-    assert marker not in delivery.load_sent(log)
+    entry = next(json.loads(line) for line in log.read_text().splitlines()
+                 if marker in line)
+    assert "not built 1" in entry["message_id"]
 
 
 def test_a_tuesday_with_nobody_to_mail_still_says_it_ran(tmp_path, monkeypatch) -> None:

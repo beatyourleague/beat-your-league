@@ -195,10 +195,13 @@ def test_without_its_token_the_worker_dispatches_nothing_and_a_refusal_is_loud(
 
 
 def _evaluate(condition: str, *, event: str, schedule: str | None = None,
-              daily: str | None = None) -> bool:
+              daily: str | None = None, due: str | None = "true") -> bool:
     """A step's `if:` under one trigger. Only the names daily.yml's gate uses
-    are substituted; anything left over fails the test rather than guessing."""
+    are substituted; anything left over fails the test rather than guessing.
+    ``due`` is what the once-a-day claim step printed ("" when it did not run
+    or printed nothing)."""
     expr = (condition.replace("always()", "True")
+            .replace("steps.today.outputs.due", repr(due or ""))
             .replace("github.event.inputs.daily", repr(daily or ""))
             .replace("github.event.schedule", repr(schedule or ""))
             .replace("github.event_name", repr(event))
@@ -211,8 +214,8 @@ def _evaluate(condition: str, *, event: str, schedule: str | None = None,
 def _once_a_day_steps() -> list[dict]:
     steps = list(_yaml("daily.yml")["jobs"].values())[0]["steps"]
     gated = [s for s in steps if "github.event.schedule" in str(s.get("if", ""))]
-    assert {s.get("id") for s in gated} >= {"billing", "watchdog"}, \
-        "the billing stop or the watchdog is no longer once-a-day"
+    assert {s.get("id") for s in gated} >= {"today", "billing", "watchdog"}, \
+        "the day's claim, the billing stop or the watchdog is no longer once-a-day"
     return gated
 
 
@@ -252,6 +255,64 @@ def test_the_once_a_day_steps_run_on_the_14_00_dispatch_and_never_hourly(tmp_pat
         assert _evaluate(step["if"], event="workflow_dispatch", daily="true")
     triggers = _yaml("daily.yml").get(True) or _yaml("daily.yml").get("on")
     assert triggers["workflow_dispatch"]["inputs"]["daily"]["default"] is False
+
+
+def test_the_once_a_day_steps_run_once_however_many_times_14_00_fires(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Launch review OPS-7, evaluated: the gate above passes BOTH GitHub's
+    `0 14 * * *` run and the Worker's 14:00 dispatch (daily=true), and the
+    Worker fires every day beside the unchanged GitHub cron — so the watchdog
+    commented on a missed run twice a day (the second possibly hours later)
+    and the billing stop walked Stripe twice. The first 14:00 run now claims
+    the UTC day (`run-daily-<date>` in the send log, which the second run reads
+    from the branch tip) and the second skips.
+
+    The claim carries the SAME schedule gate as the steps it guards, so an
+    hourly run can never claim the day before 14:00. And it fails OPEN: a
+    claim that printed nothing leaves the steps running, because running twice
+    is a nuisance and not running is the failure the watchdog exists for."""
+    import run.delivery as delivery
+    steps = _once_a_day_steps()
+    claim = next(s for s in steps if s.get("id") == "today")
+    names = [s.get("id") for s in list(_yaml("daily.yml")["jobs"].values())[0]["steps"]]
+    assert names.index("today") < names.index("billing") < names.index("watchdog")
+    assert "steps.today" not in claim["if"], "the claim gates on itself"
+    assert "-m run.watchdog --claim-day" in claim["run"]
+    assert '>> "$GITHUB_OUTPUT"' in claim["run"]
+    for step in steps:
+        if step.get("id") == "today":
+            continue
+        for event, kw in (("schedule", {"schedule": "0 14 * * *"}),
+                          ("workflow_dispatch", {"daily": "true"})):
+            assert _evaluate(step["if"], event=event, due="true", **kw)
+            assert not _evaluate(step["if"], event=event, due="false", **kw), \
+                f"{step.get('id')} runs again on a day already claimed"
+            assert _evaluate(step["if"], event=event, due="", **kw), \
+                f"{step.get('id')} is skipped when the claim printed nothing"
+
+    # The claim itself, run for real against a send log.
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    from test_tuesday import _registry, _row
+    registry = str(_registry(tmp_path, _row()))
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+
+    def claim_at(now: str) -> str:
+        capsys.readouterr()
+        assert watchdog.main(["--claim-day", "--now", now, "--registry", registry]) == 0
+        return capsys.readouterr().out
+    assert claim_at("2026-10-15T14:00:00+00:00") == "due=true\n"
+    assert claim_at("2026-10-15T19:12:00+00:00") == "due=false\n"   # GitHub, late
+    assert claim_at("2026-10-16T14:00:00+00:00") == "due=true\n"
+    keys = [json.loads(line)["key"] for line in log.read_text().splitlines()]
+    assert keys == ["run-daily-2026-10-15", "run-daily-2026-10-16"]
+    # Before launch both steps are no-ops: nothing is claimed, so the
+    # committed send log does not become a calendar of empty days.
+    log.unlink()
+    absent = str(tmp_path / "nowhere" / "rosters.json")
+    capsys.readouterr()
+    assert watchdog.main(["--claim-day", "--registry", absent]) == 0
+    assert capsys.readouterr().out == "due=true\n" and not log.exists()
 
 
 def test_a_queued_second_run_reads_what_the_first_one_pushed() -> None:
@@ -375,12 +436,23 @@ def _calendar(tmp_path: Path) -> Path:
     return cache
 
 
-def _watch(tmp_path, monkeypatch, now: str, keys=(), *, registry="one") -> int:
+def _watch(tmp_path, monkeypatch, now: str, keys=(), *, registry="one",
+           bought: str | None = None) -> int:
+    """The watchdog at ``now`` over a send log holding ``keys``. ``bought``
+    (ISO, UTC) writes the subscriber's purchase into the signup log beside the
+    registry; without it there is no log, so the purchase is unknown — owed."""
     import run.delivery as delivery
-    from test_tuesday import _registry, _row
+    from run.intake import SIGNUP_LOG_NAME
+    from test_tuesday import REF, _registry, _row
     log = tmp_path / "sent.jsonl"
     log.write_text("".join(json.dumps({"key": k, "sent_at": now}) + "\n" for k in keys))
     monkeypatch.setattr(delivery, "SENT_LOG", log)
+    signups = tmp_path / SIGNUP_LOG_NAME
+    signups.unlink(missing_ok=True)
+    if bought is not None:
+        stamp = int(datetime.fromisoformat(bought).timestamp())
+        signups.write_text(json.dumps({"email": "fan@example.com", "ref": REF,
+                                       "plan": "season", "seen_at": str(stamp)}) + "\n")
     path = {"one": lambda: _registry(tmp_path, _row()),
             "empty": lambda: _registry(tmp_path),
             "absent": lambda: tmp_path / "no-such" / "rosters.json"}[registry]()
@@ -397,16 +469,15 @@ def _slug(tmp_path) -> str:
 
 def test_a_tuesday_that_never_ran_turns_the_next_day_red(tmp_path, monkeypatch, capsys) -> None:
     """GitHub dropping the Tuesday cron files no issue — nothing failed. The
-    send log is the evidence: from Wednesday, no week-6 report and no Tuesday
-    marker means nobody got one, and the run says so instead of a subscriber."""
+    Tuesday run's marker is the evidence: from Wednesday, no marker means no
+    Tuesday run got as far as sending, and the run says so instead of a
+    subscriber."""
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
     assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00") == 1
     err = capsys.readouterr().err
     assert "Tuesday's reports for 2026 week 6" in err and "@" not in err
-    slug = _slug(tmp_path)
-    for evidence in (f"2026-w06-{slug}", "run-tuesday-2026-w06"):
-        assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00",
-                      [evidence]) == 0, evidence
+    assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00",
+                  ["run-tuesday-2026-w06"]) == 0
     # Before the first kickoff the fix is a by-hand run; after it, re-running
     # would publish calls on a game already played, so the alarm says not to.
     assert "Run the weekly-report workflow by hand" in err
@@ -415,26 +486,138 @@ def test_a_tuesday_that_never_ran_turns_the_next_day_red(tmp_path, monkeypatch, 
     assert "do NOT re-run" in late and "by hand" not in late
     # Not due on the Tuesday itself: the 16:00 retry is still to come.
     assert _watch(tmp_path, monkeypatch, "2026-10-13T14:00:00+00:00") == 0
-    # The wrong week, and a final-check key, are not this week's reports.
-    for wrong in (f"2026-w05-{slug}", f"2026-w06-final-{slug}", "run-tuesday-2026-w05"):
+    # Another week's marker, or any send at all, is not this Tuesday's run.
+    slug = _slug(tmp_path)
+    for wrong in (f"2026-w05-{slug}", f"2026-w06-final-{slug}", "run-tuesday-2026-w05",
+                  "run-saturday-2026-w06"):
         assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00", [wrong]) == 1, wrong
+
+
+def test_a_new_buyers_first_email_is_not_proof_that_tuesday_ran(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Launch review OPS-2, reproduced: the send log held only `2026-w07-<slug>`
+    sent Tue 2026-10-20 09:30 UTC — an hourly intake's first email to a NEW
+    buyer, keyed exactly like a Tuesday report — and no `run-tuesday-2026-w07`.
+    `run.watchdog --now 2026-10-21T14:00Z` printed "everything due has run:
+    Tuesday's reports" and exited 0, while every other subscriber had missed
+    the week. This test used to ACCEPT a report key as evidence; only the
+    marker counts now, and run.tuesday writes it on every run that got as far
+    as sending."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    slug = _slug(tmp_path)
+    for evidence in (f"2026-w06-{slug}", f"2026-w06-final-{slug}"):
+        assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00",
+                      [evidence]) == 1, f"{evidence} was taken as Tuesday's run"
+    assert "Tuesday's reports for 2026 week 6" in capsys.readouterr().err
+
+
+def test_nobody_is_owed_a_run_that_was_due_before_they_bought(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Launch review OPS-5, reproduced: secrets set AFTER a launch-week Tuesday
+    that ran unconfigured (no marker), the first purchase — perhaps the
+    owner's own proving one — on the Friday, the Saturday check run for real.
+    The watchdog then reported "Subscribers missed this week; find out why"
+    every day until the next Tuesday, about a report nobody was owed. A run is
+    only missing if somebody bought before it was due: 12:00 UTC on the send
+    Tuesday for the reports, the week's first kickoff for the final check (a
+    buyer before kickoff was sent that week's lineup at purchase)."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    sunday = "2026-10-18T14:00:00+00:00"
+    friday = "2026-10-16T15:00:00+00:00"          # after Thursday's kickoff
+    assert _watch(tmp_path, monkeypatch, sunday, bought=friday) == 0
+    out = capsys.readouterr().out
+    assert out.count("nobody was owed it") == 2 and "everything due has run" not in out
+    # Bought on the Tuesday, AFTER the 12:00 send: not owed Tuesday, but owed
+    # the final check (Tuesday's buyers get the week's report at purchase).
+    afternoon = "2026-10-13T15:00:00+00:00"
+    assert _watch(tmp_path, monkeypatch, sunday, ["run-saturday-2026-w06"],
+                  bought=afternoon) == 0
+    assert _watch(tmp_path, monkeypatch, sunday, ["run-tuesday-2026-w06"],
+                  bought=afternoon) == 1
+    assert "final check for 2026 week 6" in capsys.readouterr().err
+    # Bought before the send: owed both, exactly as before.
+    monday = "2026-10-12T15:00:00+00:00"
+    assert _watch(tmp_path, monkeypatch, sunday, ["run-saturday-2026-w06"],
+                  bought=monday) == 1
+    assert _watch(tmp_path, monkeypatch, sunday,
+                  ["run-tuesday-2026-w06", "run-saturday-2026-w06"],
+                  bought=monday) == 0
+
+
+def test_purchase_times_err_toward_owed() -> None:
+    """Pure. Unknown is never "not owed": a row with no purchase in the log
+    (hand-added, or a lost log) alarms; a League Pass seat — which never
+    transacts — takes its payer's purchase, since it cannot predate the pass;
+    a roster update keeps the slug it was bought under (`origin`)."""
+    from run.intake import RosterSignup
+    from run.rosters import RosterSubscriber
+    from test_tuesday import REF
+    cutoff = datetime(2026, 10, 13, 12, tzinfo=timezone.utc)
+    late = str(int(datetime(2026, 10, 16, tzinfo=timezone.utc).timestamp()))
+    early = str(int(datetime(2026, 9, 1, tzinfo=timezone.utc).timestamp()))
+    payer = RosterSignup(email="Pay@Example.com", ref=REF, plan="league_pass",
+                         seen_at=late)
+    sub = RosterSubscriber(email="pay@example.com", ref=REF, player_ids=("a",),
+                           slots=("QB",), scoring="ppr")
+    seat = RosterSubscriber(email="m@example.com", ref="s3-other", player_ids=("a",),
+                            slots=("QB",), scoring="ppr", plan="league_pass",
+                            covered_by="pay@example.com")
+    updated = RosterSubscriber(email="pay@example.com", ref="s3-new", player_ids=("a",),
+                               slots=("QB",), scoring="ppr", origin=payer.slug)
+    times = watchdog.purchase_times([sub, seat, updated], [payer])
+    assert times[0] == times[1] == times[2] == datetime.fromtimestamp(int(late), tz=timezone.utc)
+    assert not watchdog.owed(times, cutoff)
+    assert watchdog.owed([None], cutoff), "an unknown purchase read as not owed"
+    # The earliest purchase of a subscription counts.
+    again = RosterSignup(email="pay@example.com", ref=REF, plan="season", seen_at=early)
+    assert watchdog.owed(watchdog.purchase_times([sub], [payer, again]), cutoff)
 
 
 def test_a_saturday_check_that_never_ran_is_not_mistaken_for_a_quiet_one(
         tmp_path, monkeypatch, capsys) -> None:
     """The final check mails only on change, so its sends prove nothing about
-    a quiet week; its marker does. From Sunday, neither = red."""
+    a quiet week; its marker does — and only its marker (a final-check key
+    proves no more than a report key does). From Sunday, no marker = red."""
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
     slug = _slug(tmp_path)
-    tuesday = [f"2026-w06-{slug}"]
+    tuesday = ["run-tuesday-2026-w06"]
     assert _watch(tmp_path, monkeypatch, "2026-10-17T14:00:00+00:00", tuesday) == 0
     assert _watch(tmp_path, monkeypatch, "2026-10-18T14:00:00+00:00", tuesday) == 1
     assert "final check for 2026 week 6" in capsys.readouterr().err
-    for evidence in ("run-saturday-2026-w06", f"2026-w06-final-{slug}"):
-        assert _watch(tmp_path, monkeypatch, "2026-10-18T14:00:00+00:00",
-                      tuesday + [evidence]) == 0, evidence
+    assert _watch(tmp_path, monkeypatch, "2026-10-18T14:00:00+00:00",
+                  tuesday + ["run-saturday-2026-w06"]) == 0
+    assert _watch(tmp_path, monkeypatch, "2026-10-18T14:00:00+00:00",
+                  tuesday + [f"2026-w06-final-{slug}"]) == 1
     # Monday of the same week still reads week 6, and still knows.
     assert _watch(tmp_path, monkeypatch, "2026-10-19T14:00:00+00:00", tuesday) == 1
+
+
+def test_a_saturday_check_that_ran_and_failed_still_says_it_ran(
+        tmp_path, monkeypatch, capsys) -> None:
+    """The marker answers "did it run", so the Saturday check leaves it at the
+    end of any run that got as far as sending — a failed send included, with
+    the counts saying so. That run exits 1 and files "Saturday final check
+    failed"; a second, contradictory alarm the next day ("never finished")
+    would send the owner looking for a run that did happen."""
+    import run.delivery as delivery
+    import run.saturday as saturday
+    from run.delivery import DeliveryError
+    from test_final_check import _registry_plan, _run
+    from test_tuesday import ROSTER_IDS
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+
+    class Down:
+        name = "down"
+
+        def send(self, message, sender, reply_to):
+            raise DeliveryError("provider down")
+    monkeypatch.setattr(saturday, "build_provider", lambda *a: Down())
+    assert _run(tmp_path, monkeypatch, _registry_plan(),
+                listed={ROSTER_IDS[1]: ("out", "ankle")}) == 1
+    [entry] = [json.loads(line) for line in log.read_text().splitlines()]
+    assert entry["key"] == watchdog.run_key("saturday", "2024", 10)
+    assert "send failed 1" in entry["message_id"]
 
 
 def test_the_watchdog_is_quiet_when_nobody_is_owed_anything(tmp_path, monkeypatch, capsys) -> None:

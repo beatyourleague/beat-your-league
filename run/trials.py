@@ -12,6 +12,14 @@ Rules, each a way a free report could cost more than it earns:
 
 - **One per address per season.** Keyed in the send log on a digest of the
   address, never the address itself (the log is committed).
+- **Only a fresh request, made this season.** A request older than
+  TRIAL_MAX_AGE, or received before the current season's first game, is
+  never mailed. The Worker keeps rows ~400 days and the key is per season, so
+  without this a request served last October came back the next June as a
+  "Week 1, decided" email to someone who asked eight months earlier, built
+  from last season's roster — and the stale backlog spent the daily allowance
+  ahead of real requests (reproduced, launch review OPS-3). A row with no
+  readable Worker stamp cannot be shown to be fresh, so it is not mailed.
 - **Never a subscriber.** An address already on the registry has reports.
 - **Nothing is recorded.** A trial is not a published call to a subscriber, so
   none of its probabilities enter the public ledger (the same rule run/trial.py
@@ -36,7 +44,7 @@ Rules, each a way a free report could cost more than it earns:
 - **Paying subscribers go first on Tuesday.** Requests held from Thursday's
   kickoff to the next week's build all come due on Tuesday morning, the same
   morning as every subscriber's report. Until the Tuesday run has left its
-  "finished" marker in the send log (``run.watchdog``) — or until 20:00 UTC,
+  marker in the send log (``run.watchdog``) — or until 20:00 UTC,
   whichever is first — free reports wait, so a weekend's backlog can never
   spend the day's sending allowance before the reports people paid for.
 - **Before launch is not a failure.** The registry is read only when there
@@ -63,6 +71,11 @@ from pathlib import Path
 
 MAX_PER_RUN = 50
 TRIAL_DAILY_CAP = 40
+# A request is acted on within days or not at all: past this it is somebody
+# who asked about a different week, and mailing them now is unrequested mail.
+# Two weeks covers the longest wait a real request has (held from Thursday's
+# kickoff to the next build, or behind a full daily allowance) with room left.
+TRIAL_MAX_AGE = timedelta(days=14)
 # On a Tuesday (UTC), free reports wait for the subscriber run's marker or
 # this hour, whichever comes first. The retry runs at 16:00 and is done well
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
@@ -125,15 +138,48 @@ def sent_today(entries, now: datetime) -> int:
     return count
 
 
-def pending(rows, registry_emails: set[str], sent: set[str], season: str
-            ) -> list[tuple[str, str]]:
-    """(email, ref) worth a free report: valid, not a subscriber, not already
-    given one this season — newest request per address wins."""
+def received(row) -> datetime | None:
+    """When the Worker stamped this row (its own clock — a caller cannot set
+    it), or None when there is no readable stamp."""
+    raw = str(row.get("received_at") or "").strip()
+    try:
+        at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+def season_start(cache_dir: Path, season: str) -> datetime | None:
+    """The current season's first kickoff (week 1's first game), or None when
+    it cannot be told — which the caller reads as "no request is fresh"."""
+    return week_underway_from(cache_dir, season, 1)
+
+
+def not_before(now: datetime, start: datetime | None) -> datetime | None:
+    """The oldest a request may be and still be mailed: TRIAL_MAX_AGE ago, and
+    never before this season's first game. None (the season's start unknown)
+    means nothing is fresh enough. Pure."""
+    if start is None:
+        return None
+    return max(now - TRIAL_MAX_AGE, start)
+
+
+def pending(rows, registry_emails: set[str], sent: set[str], season: str, *,
+            since: datetime | None) -> list[tuple[str, str]]:
+    """(email, ref) worth a free report: received at or after ``since`` (see
+    :func:`not_before`; None admits nothing), valid, not a subscriber, not
+    already given one this season — newest request per address wins.
+
+    ``since`` is required on purpose: a caller that forgot it would bring
+    back every row the Worker still holds, which is the stale-request bug."""
     from run.refs import RefError, decode_roster
     chosen: dict[str, str] = {}
     held = {canonical_email(e) for e in registry_emails}
     for row in rows:
         if str(row.get("kind") or "") != "trial":
+            continue
+        stamp = received(row)
+        if since is None or stamp is None or stamp < since:
             continue
         email = canonical_email(str(row.get("email") or ""))
         ref = str(row.get("ref") or "").strip()
@@ -180,9 +226,13 @@ def main(argv: list[str] | None = None) -> int:
     from run.watchdog import not_configured
     season = current_season(CACHE_DIR, today=now.date())
     sent = load_sent()
+    since = not_before(now, season_start(CACHE_DIR, season))
+    if since is None and any(str(r.get("kind") or "") == "trial" for r in rows):
+        print(f"Free reports: the {season} schedule's first game can't be read, "
+              f"so no request can be shown to be from this season; none sent.")
     # Is there anything to do at all? Asked BEFORE the registry is read: an
     # hourly run with no requests has no business failing on the registry.
-    if not pending(rows, set(), sent, season):
+    if not pending(rows, set(), sent, season, since=since):
         print("Free reports: none pending.")
         return 0
     prelaunch = not_configured(args.registry)
@@ -197,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Free reports: the subscriber registry is unreadable ({exc}); "
                   f"nothing was sent.", file=sys.stderr)
             return 1
-    todo = pending(rows, registry_emails, sent, season)
+    todo = pending(rows, registry_emails, sent, season, since=since)
     if not todo:
         print("Free reports: none pending.")
         return 0
