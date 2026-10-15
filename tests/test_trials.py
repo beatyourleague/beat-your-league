@@ -55,7 +55,10 @@ def test_the_cap_counts_built_reports_so_junk_cannot_starve_real_requests() -> N
         "pending() must not slice: the cap belongs after the build, on built reports"
     import inspect
     body = inspect.getsource(trials.main)
-    assert "len(messages) >= MAX_PER_RUN" in body and "not in known" in body
+    # The per-run and the per-day caps both bound BUILT reports (`limit` is
+    # the smaller of the two); the daily-cap test below pins the behaviour.
+    assert "len(messages) >= limit" in body and "not in known" in body
+    assert "min(MAX_PER_RUN, room)" in body
 
 
 def test_the_week_is_underway_from_its_first_kickoff() -> None:
@@ -155,3 +158,141 @@ def test_the_try_mode_never_reaches_a_payment_and_the_contract_matches() -> None
     assert "const TRIAL_OPEN = false;" in landing
     privacy = (ROOT / "site" / "privacy.html").read_text(encoding="utf-8")
     assert "free report" in privacy
+
+
+# --------------------------------------------------------------------- #
+# before launch, Tuesday, and the daily allowance (Oct 2026)
+# --------------------------------------------------------------------- #
+
+THURSDAY = "2026-01-01T15:00:00+00:00"
+TUESDAY_1PM = "2026-01-06T13:00:00+00:00"
+
+
+def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=()):
+    """run.trials.main end to end on the fixture week, with a fake provider.
+    `registry` is the file's text, or None for no file at all; `sent` is
+    (key, sent_at) pairs already in the send log. -> (code, out, err, mailed)."""
+    import run.delivery as delivery
+    import run.intake as intake
+    from test_solo_run import SEASON, WEEK, _cache
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setattr(intake, "fetch_seats", lambda *a, **k: list(rows))
+    log = tmp_path / "sent.jsonl"
+    log.write_text("".join(json.dumps({"key": k, "provider": "resend",
+                                       "message_id": "x", "sent_at": at}) + "\n"
+                           for k, at in sent))
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    mailed = []
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            mailed.append(message)
+            return "id"
+    monkeypatch.setattr(delivery, "build_provider", lambda *a, **k: Fake())
+    monkeypatch.setattr("run.solo.current_season", lambda *a, **k: SEASON)
+    monkeypatch.setattr("run.solo.current_week", lambda *a, **k: WEEK)
+    monkeypatch.setattr("run.solo.season_over", lambda *a, **k: False)
+    monkeypatch.setattr(trials, "week_underway_from",
+                        lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
+    reg = tmp_path / "reg" / "rosters.json"
+    reg.unlink(missing_ok=True)
+    if registry is not None:
+        reg.parent.mkdir(parents=True, exist_ok=True)
+        reg.write_text(registry)
+    capsys.readouterr()
+    code = trials.main(["--registry", str(reg), "--now", now])
+    captured = capsys.readouterr()
+    return code, captured.out, captured.err, mailed
+
+
+def _fixture_ref() -> str:
+    from test_tuesday import REF as FIXTURE_REF
+    return FIXTURE_REF
+
+
+def test_with_the_form_live_before_checkout_opens_the_hourly_run_stays_green(
+        tmp_path, monkeypatch, capsys) -> None:
+    """FORM_ENDPOINT set while checkout is still closed: the registry file does
+    not exist yet, and run.trials loaded it FIRST — so every hourly daily-intake
+    run went red over a file nobody could have written. Now the registry is
+    read only when there is a request to check, and a missing one while no
+    Stripe key exists reads as nobody subscribing (nobody can have paid)."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    waitlist_only = [{"kind": "waitlist", "email": "w@example.com"}]
+    for registry in (None, "{not json"):        # not even read: nothing pending
+        code, out, err, _ = _drive(tmp_path, monkeypatch, capsys, rows=waitlist_only,
+                                   now=THURSDAY, registry=registry)
+        assert code == 0 and "none pending" in out, err
+    code, _, err, mailed = _drive(
+        tmp_path, monkeypatch, capsys, rows=[_row("fan@example.com", ref=_fixture_ref())],
+        now=THURSDAY, registry=None)
+    assert code == 0, err
+    assert [m.to for m in mailed] == ["fan@example.com"]
+
+
+def test_a_missing_registry_after_launch_still_fails_closed(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Once a Stripe key exists the intake writes the registry every run, so a
+    missing one is a lost cache — and reading it as empty would offer every
+    paying subscriber a "free" report. Corrupt fails closed regardless."""
+    rows = [_row("fan@example.com", ref=_fixture_ref())]
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test_x")
+    code, _, err, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                                  now=THURSDAY, registry=None)
+    assert code == 1 and not mailed and "unreadable" in err
+    monkeypatch.delenv("STRIPE_API_KEY")
+    code, _, _, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                                now=THURSDAY, registry="{not json")
+    assert code == 1 and not mailed
+
+
+def test_on_tuesday_paying_subscribers_go_first(tmp_path, monkeypatch, capsys) -> None:
+    """Requests held from Thursday's kickoff all come due on Tuesday morning —
+    the same morning as every paid report, on a sending allowance of 100 a day.
+    Until the Tuesday run's "finished" marker is in the send log, or 20:00 UTC,
+    free reports wait. Before launch there is nothing to wait for."""
+    from run.watchdog import run_key
+    from test_solo_run import SEASON, WEEK
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    rows = [_row("fan@example.com", ref=_fixture_ref())]
+    code, out, _, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                                  now=TUESDAY_1PM)
+    assert code == 0 and not mailed and "go out first" in out
+    finished = [(run_key("tuesday", SEASON, WEEK), TUESDAY_1PM)]
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=TUESDAY_1PM,
+                        sent=finished)
+    assert len(mailed) == 1
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                        now="2026-01-06T20:00:00+00:00")
+    assert len(mailed) == 1, "a Tuesday that never finished holds them all day"
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=TUESDAY_1PM,
+                        registry=None)                          # before launch
+    assert len(mailed) == 1
+
+
+def test_free_reports_stop_at_the_daily_allowance(tmp_path, monkeypatch, capsys) -> None:
+    """At most TRIAL_DAILY_CAP a UTC day, counted from the send log — so the
+    hourly runs together cannot spend the provider's free tier (100 a day) that
+    welcomes, roster reports and Tuesday's paid reports also need. Yesterday's
+    sends do not count against today."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    cap = trials.TRIAL_DAILY_CAP
+    assert 0 < cap <= 40
+    rows = [_row(f"new{i}@example.com", ref=_fixture_ref()) for i in range(3)]
+    today = [(f"trial-2024-{i:012x}", "2026-01-01T09:00:00+00:00")
+             for i in range(cap - 1)]
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=THURSDAY,
+                        sent=today)
+    assert len(mailed) == 1
+    full = today + [("trial-2024-ffffffffffff", "2026-01-01T10:00:00+00:00")]
+    code, out, _, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                                  now=THURSDAY, sent=full)
+    assert code == 0 and not mailed and "have gone out" in out
+    yesterday = [(k, "2025-12-31T23:59:59+00:00") for k, _ in full]
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=THURSDAY,
+                        sent=yesterday)
+    assert len(mailed) == 3

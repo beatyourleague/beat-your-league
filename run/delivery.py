@@ -300,6 +300,24 @@ def load_sent(path: Path | None = None) -> set[str]:
     return keys
 
 
+def sent_entries(path: Path | None = None) -> list[dict]:
+    """Every readable line of the send log, with its ``sent_at`` — for the
+    questions a key alone cannot answer ("how many free reports went out
+    today?"). A damaged line is skipped, as in :func:`load_sent`."""
+    path = path or SENT_LOG
+    if not path.is_file():
+        return []
+    entries: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("key"):
+            entries.append(entry)
+    return entries
+
+
 def record_sent(key: str, provider: str, message_id: str,
                 path: Path | None = None) -> None:
     path = path or SENT_LOG

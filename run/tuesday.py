@@ -26,6 +26,15 @@ Shape of a run:
 
 Dry-run is the default and never the right accident: with no ``EMAIL_PROVIDER``
 this writes drafts and exits 1 unless ``--allow-dry`` was passed.
+
+Before launch is not a failure: with no registry file AND no Stripe key nobody
+can have paid, so the run says so and exits 0 (``run.watchdog.not_configured``)
+instead of filing a "failed" issue every Tuesday until checkout opens. A
+registry that exists but cannot be read still fails.
+
+A run that could mail and finished clean leaves a marker in the send log
+(``run.watchdog.mark_run``), so the daily watchdog can tell a Tuesday that ran
+with nobody to mail from a Tuesday GitHub never started.
 """
 
 from __future__ import annotations
@@ -44,10 +53,12 @@ from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
 from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
 from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
-                       load_week_data, report_for)
+                       current_season, current_week, load_week_data, report_for,
+                       season_over)
 from run.saturday import PLANS_DIR, build_plan, first_plans_dir, write_plan
 from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
+from run.watchdog import NOT_CONFIGURED_NOTE, TUESDAY, mark_run, not_configured
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUBSCRIBER_REPORTS = REPO_ROOT / "reports" / "subscribers"
@@ -252,6 +263,48 @@ def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
     return subscribers
 
 
+def _mails_for_real(args) -> bool:
+    """Would this run put messages in inboxes? Not for --no-send, a dry
+    provider, or a provider that cannot be built. Decides both whether calls
+    enter the public record and whether the run may leave its marker."""
+    if args.no_send:
+        return False
+    try:
+        return build_provider(args.email_provider).name != DRY_PROVIDER
+    except DeliveryError:
+        return False
+
+
+def _mark_finished(season: str, week: int) -> None:
+    """Best effort: a marker that fails to write costs a false alarm from the
+    watchdog tomorrow, never a send, so it is said and the run carries on."""
+    try:
+        if mark_run(TUESDAY, season, week):
+            print(f"Marked {season} week {week}'s Tuesday run as finished.")
+    except OSError as exc:
+        print(f"could not mark the Tuesday run as finished ({exc}); the "
+              f"watchdog may report this week as missed", file=sys.stderr)
+
+
+def _mark_nobody_to_mail(args) -> None:
+    """A Tuesday with an empty registry still RAN. Without its marker, the
+    first subscriber who joins after that week's kickoff (and so gets the
+    roster report, not this week's) makes the watchdog report a run that was
+    never missed."""
+    if not _mails_for_real(args):
+        return
+    try:
+        season = str(args.season or current_season(args.cache))
+        if not args.week and season_over(args.cache, season):
+            return
+        week = int(args.week or current_week(args.cache, season))
+    except Exception as exc:  # noqa: BLE001 — a marker never fails the run
+        print(f"could not tell which week this was, so no marker was left "
+              f"({exc})", file=sys.stderr)
+        return
+    _mark_finished(season, week)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--week", type=int, help="default: the current NFL week")
@@ -282,6 +335,9 @@ def main(argv: list[str] | None = None) -> int:
                              "sent (default: data/plans/, real sends only)")
     args = parser.parse_args(argv)
 
+    if not_configured(args.registry):
+        print(f"No reports this week: {NOT_CONFIGURED_NOTE}")
+        return 0
     try:
         subscribers = load_rosters(args.registry)
     except RosterRegistryError as exc:
@@ -289,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not subscribers:
         print("roster registry is empty — nothing to do")
+        _mark_nobody_to_mail(args)
         return 0
 
     subscribers = paid_subscribers(subscribers, args.paid_list,
@@ -312,12 +369,7 @@ def main(argv: list[str] | None = None) -> int:
     # built, because it decides whether their calls enter the public record.
     # A preview must leave no trace: RULE L4 makes a recorded call immutable,
     # so a dry run that records claims we published calls nobody received.
-    sending = not args.no_send
-    if sending:
-        try:
-            sending = build_provider(args.email_provider).name != DRY_PROVIDER
-        except DeliveryError:
-            sending = False
+    sending = _mails_for_real(args)
 
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
@@ -400,6 +452,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if ok:
         print(f"Reports under: {_display(Path(args.out))}")
+    # Clean, and for real: every report built and every send landed (a send
+    # failure returned above). A run that built nothing leaves no marker, so
+    # the watchdog says so too.
+    if sending and not failed:
+        _mark_finished(data.season, data.week)
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
     return 0 if not failed else 1

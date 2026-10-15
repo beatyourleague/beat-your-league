@@ -410,3 +410,90 @@ def test_a_real_send_still_records_every_published_call(tmp_path) -> None:
         out_dir=tmp_path / "out", processed_dir=processed, record=True)
     assert result.ok and "new ledger row" in result.detail
     assert list(processed.rglob("calls.jsonl"))
+
+
+# --------------------------------------------------------------------- #
+# before launch, and the marker the watchdog reads (Oct 2026)
+# --------------------------------------------------------------------- #
+
+def _main_args(tmp_path, registry: Path) -> list[str]:
+    return ["--registry", str(registry), "--season", SEASON, "--week", str(WEEK),
+            "--cache", str(_cache(tmp_path)), "--no-paid-check",
+            "--out", str(tmp_path / "out"),
+            "--processed-dir", str(tmp_path / "processed")]
+
+
+def test_before_launch_a_missing_registry_is_not_a_failure(tmp_path, capsys,
+                                                          monkeypatch) -> None:
+    """With no registry file and no Stripe key nobody can have paid, and the
+    Tuesday cron failed on every run anyway — 16 "failed" issues about a
+    checkout that was simply not open, which is how the one real failure gets
+    ignored. Narrow on purpose: once a Stripe key exists a missing registry is
+    a lost cache and fails, and a registry that exists but cannot be read
+    fails whatever the key."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    absent = tmp_path / "nowhere" / "rosters.json"
+    assert tuesday.main(_main_args(tmp_path, absent)) == 0
+    assert "not set up yet" in capsys.readouterr().out
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test_x")
+    assert tuesday.main(_main_args(tmp_path, absent)) == 1
+    monkeypatch.delenv("STRIPE_API_KEY")
+    corrupt = tmp_path / "rosters.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    assert tuesday.main(_main_args(tmp_path, corrupt)) == 1
+    assert "not valid JSON" in capsys.readouterr().err
+
+
+class _Fake:
+    name = "fake"
+
+    def send(self, message, sender, reply_to):
+        return "id-1"
+
+
+def test_a_clean_real_run_leaves_the_marker_and_a_preview_or_a_failure_does_not(
+        tmp_path, monkeypatch) -> None:
+    """The watchdog tells "Tuesday ran" from "GitHub never started it" by the
+    send log. A run that mailed for real and finished clean leaves
+    `run-tuesday-<season>-wNN` there — once, however many retries. A preview
+    must not (it proves nothing about the real run, the same rule that keeps
+    a dry run out of the ledger), and neither may a run with a report that
+    could not be built: the watchdog's silence would then cover it."""
+    import run.delivery as delivery
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    marker = run_key("tuesday", SEASON, WEEK)
+    args = _main_args(tmp_path, _registry(tmp_path, _row()))
+
+    monkeypatch.setenv("EMAIL_PROVIDER", "dry")
+    assert tuesday.main(args + ["--allow-dry"]) == 0
+    assert marker not in delivery.load_sent(log)
+
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
+    assert tuesday.main(args + ["--plans-dir", str(tmp_path / "plans")]) == 0
+    assert marker in delivery.load_sent(log)
+    assert tuesday.main(args + ["--plans-dir", str(tmp_path / "plans")]) == 0
+    assert sum(marker in line for line in log.read_text().splitlines()) == 1
+
+    log.unlink()
+    missing = [f"00-99999{i:02d}" for i in range(len(ROSTER_IDS))]
+    bad = _row(email="second@example.com", player_ids=missing,
+               ref=encode_roster("season", "ppr", list(SLOTS), missing))
+    args = _main_args(tmp_path, _registry(tmp_path, _row(), bad))
+    assert tuesday.main(args + ["--plans-dir", str(tmp_path / "plans")]) == 1
+    assert marker not in delivery.load_sent(log)
+
+
+def test_a_tuesday_with_nobody_to_mail_still_says_it_ran(tmp_path, monkeypatch) -> None:
+    """The first subscriber who joins after a week's kickoff gets the roster
+    report, not that week's — so the send log holds no week-W report, and
+    without this marker the watchdog would call a Tuesday that ran (to an
+    empty registry) a Tuesday that never happened."""
+    import run.delivery as delivery
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
+    assert tuesday.main(_main_args(tmp_path, _registry(tmp_path))) == 0
+    assert run_key("tuesday", SEASON, WEEK) in delivery.load_sent(log)

@@ -680,3 +680,64 @@ def test_the_hourly_intake_never_mails_an_existing_subscriber_their_week(tmp_pat
                              first_plans=tmp_path / "first", out_dir=tmp_path / "out")
     assert len(sent) == 1, "the first email went out twice"
     assert saturday.load_plan(tmp_path / "first", SEASON, WEEK, new.slug) is not None
+
+
+# --------------------------------------------------------------------- #
+# before launch, and the marker the watchdog reads (Oct 2026)
+# --------------------------------------------------------------------- #
+
+def test_before_launch_the_saturday_check_is_not_configured_not_failed(
+        tmp_path, monkeypatch, capsys) -> None:
+    """No registry and no Stripe key: nobody can have paid, so the check has
+    nobody to check. It used to fail every Saturday on the missing file and
+    file a "failed" issue each time. A registry that exists but cannot be
+    read, or a missing one once a key is set, still fails."""
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    args = ["--season", "2024", "--week", "10", "--plans-dir", str(tmp_path / "plans"),
+            "--no-paid-check", "--now", SAT.isoformat()]
+    absent = tmp_path / "nowhere" / "rosters.json"
+    assert saturday.main(["--registry", str(absent)] + args) == 0
+    assert "not set up yet" in capsys.readouterr().out
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test_x")
+    assert saturday.main(["--registry", str(absent)] + args) == 1
+    monkeypatch.delenv("STRIPE_API_KEY")
+    corrupt = tmp_path / "rosters.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    assert saturday.main(["--registry", str(corrupt)] + args) == 1
+
+
+def test_a_quiet_saturday_still_leaves_proof_it_ran(tmp_path, monkeypatch, capsys) -> None:
+    """The check mails only on change, so a Saturday GitHub never started looks
+    exactly like a week with no news. A check that finished, for real, leaves
+    `run-saturday-<season>-wNN` in the send log for the watchdog — whether or
+    not it mailed anyone. A dry preview leaves none, and neither does a check
+    that refused (the week's injury report not in)."""
+    import run.delivery as delivery
+    from run.watchdog import run_key
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    marker = run_key("saturday", "2024", 10)
+    plan = _registry_plan()
+
+    assert _run(tmp_path, monkeypatch, plan) == 0                      # dry preview
+    assert marker not in delivery.load_sent(log)
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            return "id-1"
+    monkeypatch.setattr(saturday, "build_provider", lambda *a: Fake())
+    assert _run(tmp_path, monkeypatch, plan) == 0                      # quiet, real
+    assert "0 need a change" in capsys.readouterr().out
+    assert marker in delivery.load_sent(log)
+
+    log.unlink()
+    monkeypatch.setattr(saturday, "designations", lambda *a: ({}, set()))
+    from test_tuesday import _registry, _row
+    code = saturday.main(["--registry", str(_registry(tmp_path, _row())),
+                          "--season", "2024", "--week", "10",
+                          "--plans-dir", str(tmp_path / "plans"),
+                          "--no-paid-check", "--now", SAT.isoformat()])
+    assert code == 1 and "isn't in yet" in capsys.readouterr().err
+    assert marker not in delivery.load_sent(log)

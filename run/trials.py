@@ -30,7 +30,22 @@ Rules, each a way a free report could cost more than it earns:
   job (the public form makes a bad row remotely triggerable, and the hourly
   cron files an issue for every failed run).
 - **Bounded.** At most MAX_PER_RUN a run, so a flood of requests costs a
-  bounded amount of compute and email.
+  bounded amount of compute and email — and at most TRIAL_DAILY_CAP a day,
+  counted from the send log. The email provider's free tier is 100 messages a
+  day, and that allowance belongs to the people paying first.
+- **Paying subscribers go first on Tuesday.** Requests held from Thursday's
+  kickoff to the next week's build all come due on Tuesday morning, the same
+  morning as every subscriber's report. Until the Tuesday run has left its
+  "finished" marker in the send log (``run.watchdog``) — or until 20:00 UTC,
+  whichever is first — free reports wait, so a weekend's backlog can never
+  spend the day's sending allowance before the reports people paid for.
+- **Before launch is not a failure.** The registry is read only when there
+  are requests to check against it, and a MISSING registry while no Stripe key
+  is set reads as nobody subscribing (nobody can have paid). Setting
+  FORM_ENDPOINT before checkout opened used to turn every hourly run red,
+  because the registry was loaded first and did not exist. A registry that
+  exists but cannot be read still fails CLOSED: with the subscriber list
+  unknown, every subscriber would read as eligible for a "free" report.
 
 Every piece fails closed: no endpoint, no provider or no data means nothing is
 sent and the log says why.
@@ -47,6 +62,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 MAX_PER_RUN = 50
+TRIAL_DAILY_CAP = 40
+# On a Tuesday (UTC), free reports wait for the subscriber run's marker or
+# this hour, whichever comes first. The retry runs at 16:00 and is done well
+# before 20:00, so the fallback only fires when Tuesday failed outright — and
+# then the watchdog says so separately.
+TUESDAY_RELEASE_HOUR = 20
 _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 
@@ -75,6 +96,33 @@ def week_underway_from(cache_dir: Path, season: str, week: int) -> datetime | No
     except Exception:  # noqa: BLE001 — unknown means "underway"; hold
         return None
     return min(starts.values()) if starts else None
+
+
+def held_for_tuesday(now: datetime, sent: set[str], season: str, week: int) -> bool:
+    """True while today's subscriber reports may still be going out."""
+    from run.watchdog import tuesday_finished
+    now = now.astimezone(timezone.utc)
+    return (now.weekday() == 1 and now.hour < TUESDAY_RELEASE_HOUR
+            and not tuesday_finished(sent, season, week))
+
+
+def sent_today(entries, now: datetime) -> int:
+    """Free reports the send log says went out on ``now``'s UTC date."""
+    day = now.astimezone(timezone.utc).date()
+    count = 0
+    for entry in entries:
+        if not str(entry.get("key") or "").startswith("trial-"):
+            continue
+        try:
+            at = datetime.fromisoformat(str(entry.get("sent_at") or ""))
+        except ValueError:
+            count += 1                 # unreadable: count it, never free a slot
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if at.astimezone(timezone.utc).date() == day:
+            count += 1
+    return count
 
 
 def pending(rows, registry_emails: set[str], sent: set[str], season: str
@@ -107,8 +155,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--now")
     parser.add_argument("--registry", type=Path, default=None)
     args = parser.parse_args(argv)
-    now = (datetime.fromisoformat(args.now) if args.now
+    now = (datetime.fromisoformat(args.now.replace("Z", "+00:00")) if args.now
            else datetime.now(timezone.utc))
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
 
     endpoint = os.environ.get("FORM_ENDPOINT", "")
     if not endpoint:
@@ -123,20 +173,31 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     from run.delivery import (DRY_PROVIDER, Message, build_provider, load_sent,
-                              send_all)
+                              send_all, sent_entries)
     from run.rosters import RosterRegistryError, load_rosters
     from run.solo import (CACHE_DIR, SoloError, current_season, current_week,
                           season_over)
-    try:
-        registry_emails = {s.email.lower() for s in load_rosters(args.registry)}
-    except RosterRegistryError as exc:
-        # Fail CLOSED: with the subscriber list unreadable, every subscriber
-        # would read as eligible for a "free" report.
-        print(f"Free reports: the subscriber registry is unreadable ({exc}); "
-              f"nothing was sent.", file=sys.stderr)
-        return 1
+    from run.watchdog import not_configured
     season = current_season(CACHE_DIR, today=now.date())
-    todo = pending(rows, registry_emails, load_sent(), season)
+    sent = load_sent()
+    # Is there anything to do at all? Asked BEFORE the registry is read: an
+    # hourly run with no requests has no business failing on the registry.
+    if not pending(rows, set(), sent, season):
+        print("Free reports: none pending.")
+        return 0
+    prelaunch = not_configured(args.registry)
+    if prelaunch:
+        registry_emails: set[str] = set()      # nobody can have paid yet
+    else:
+        try:
+            registry_emails = {s.email.lower() for s in load_rosters(args.registry)}
+        except RosterRegistryError as exc:
+            # Fail CLOSED: with the subscriber list unreadable, every
+            # subscriber would read as eligible for a "free" report.
+            print(f"Free reports: the subscriber registry is unreadable ({exc}); "
+                  f"nothing was sent.", file=sys.stderr)
+            return 1
+    todo = pending(rows, registry_emails, sent, season)
     if not todo:
         print("Free reports: none pending.")
         return 0
@@ -149,6 +210,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Free reports: {len(todo)} waiting — week {week} is underway, so "
               f"they go out with the next week's build.")
         return 0
+    # Before launch there are no subscriber reports to go first.
+    if not prelaunch and held_for_tuesday(now, sent, season, week):
+        print(f"Free reports: {len(todo)} waiting — subscribers' Tuesday reports "
+              f"go out first (until that run finishes, or "
+              f"{TUESDAY_RELEASE_HOUR}:00 UTC).")
+        return 0
+    room = TRIAL_DAILY_CAP - sent_today(sent_entries(), now)
+    if room <= 0:
+        print(f"Free reports: {len(todo)} waiting — today's {TRIAL_DAILY_CAP} "
+              f"have gone out; the rest go tomorrow.")
+        return 0
+    limit = min(MAX_PER_RUN, room)
 
     from render.email import render_email, text_summary
     from run.refs import decode_roster
@@ -163,8 +236,8 @@ def main(argv: list[str] | None = None) -> int:
     messages, failed, skipped = [], 0, []
     known = {p.player_id for p in data.directory.players}
     for email, ref in todo:
-        if len(messages) >= MAX_PER_RUN:
-            break                       # the cap counts BUILT reports only
+        if len(messages) >= limit:
+            break                       # the caps count BUILT reports only
         roster = decode_roster(ref)
         if any(pid not in known for pid in roster.player_ids):
             # A ref that decodes but names a player the directory has never

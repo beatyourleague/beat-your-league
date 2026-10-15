@@ -8,7 +8,11 @@
 #      have is somebody paying for nothing; discovering that within a day
 #      instead of a week is the difference between a quick fix and a refund.
 #
-# No reports are built here and nothing is mailed except welcomes. The name is
+# The once-a-day run (14:00) also checks the OTHER crons happened at all
+# (run/watchdog.py): a run GitHub never starts files nothing on its own.
+#
+# The weekly reports are Tuesday's job; the only reports built here are the
+# free one and the one a purchase earns, each with its own guards. The name is
 # load-bearing the same way monday-receipts is NOT: pages.yml does not watch
 # this workflow, because it never touches site/.
 
@@ -39,7 +43,19 @@ on:
     # own concurrency group and each reading the send log from its own
     # checkout, so a purchase in that window could be welcomed or mailed twice.
     - cron: "30 * * * *"
-  workflow_dispatch: {}
+  # The form Worker (infra/form-worker.js) dispatches this workflow on the
+  # same two schedules, because GitHub's own scheduler ran 5-7 hours late and
+  # dropped most hourly runs in October 2026; the crons above are the backup.
+  # A dispatch carries no `github.event.schedule`, so `daily` says which of
+  # the two it is: "true" only on the 14:00 dispatch. The default is false on
+  # purpose — a dispatch that forgets the input must never walk every Stripe
+  # subscription 24 times a day. Tick it to run the once-a-day steps by hand.
+  workflow_dispatch:
+    inputs:
+      daily:
+        description: "Also run the once-a-day steps (end-of-season billing stop, missed-run watchdog)"
+        type: boolean
+        default: false
 
 # One run at a time: two runs reading the same committed send log can mail the
 # same message twice (the 14:00 UTC daily run fires from BOTH its crons at
@@ -57,8 +73,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # ref = the branch TIP, not the commit this run was triggered on. A run
+      # queued behind another in the concurrency group would otherwise check
+      # out the send log as it was when it was QUEUED — before the run ahead
+      # of it pushed — and mail everything that run just mailed. (A double
+      # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -108,15 +130,22 @@ jobs:
       # the point — a free report that lands the next day loses the moment.
       # Reads the form Worker; with FORM_ENDPOINT or EMAIL_PROVIDER unset it
       # sends nothing and exits 0.
+      #
+      # STRIPE_API_KEY is load-bearing here though nothing is billed: it is
+      # how run.trials tells "before launch" (no registry and no key, so nobody
+      # can be a subscriber) from "the registry is missing" (fail closed, or
+      # every subscriber reads as eligible for a free report).
       - name: Send free reports
         if: always()
         env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
         run: .venv/bin/python -m run.trials
@@ -151,9 +180,11 @@ jobs:
       # ONCE A DAY, not hourly. This job carries two crons ("0 14 * * *" and
       # "30 * * * *") and no step is schedule-gated, so an ungated step here
       # would walk every subscription on the account 24 times a day to write
-      # nothing. The stop dates do not move between hours.
+      # nothing. The stop dates do not move between hours. A DISPATCH has no
+      # schedule to compare, so it runs these only when it says `daily`: the
+      # Worker's 14:00 dispatch does, its hourly ones do not.
       - name: Stop monthly billing at the end of the season
-        if: always() && github.event.schedule != '30 * * * *'
+        if: always() && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
         id: billing
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -161,6 +192,26 @@ jobs:
           set +e
           .venv/bin/python -m run.billing --send
           echo "code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # The dead-man's switch (run/watchdog.py). A scheduled run GitHub never
+      # started fails nothing and so files nothing, and the Saturday check
+      # mails only on change, so its silence reads as "fine". From the
+      # Wednesday after a send Tuesday this goes red if that week's reports
+      # are not in the send log; from the Sunday, if the final check never
+      # finished. Quiet before launch and with an empty registry. Once a day:
+      # an hourly alarm about the same missed Tuesday is 24 comments, not one.
+      - name: Check this week's scheduled runs happened
+        if: always() && github.event.schedule != '30 * * * *' && (github.event_name != 'workflow_dispatch' || github.event.inputs.daily == 'true')
+        id: watchdog
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+        run: |
+          set +e
+          .venv/bin/python -m run.watchdog > "$RUNNER_TEMP/watchdog.txt" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/watchdog.txt"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
           exit 0
 
       # The reply kit: the day's defensible numbers, all of them from the
@@ -225,14 +276,57 @@ jobs:
           echo "run.renewals exited 1 — a legally-owed pre-renewal notice was"
           echo "not sent. See that step's log."
           exit 1
+      # ONE open issue per kind of failure: a later failure comments on the
+      # open one instead of opening another. Before launch these crons filed
+      # 16 near-identical issues, which teaches exactly the wrong habit. The
+      # title carries no date for that reason; each comment does. Listed, not
+      # searched: the search index can lag a fresh issue by minutes.
       - name: Raise an issue if the sweep failed
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: Daily signup sweep failed
         run: |
-          gh issue create \
-            --title "Daily signup sweep failed: $(date -u +%Y-%m-%d)" \
-            --body "A paid signup may be blocked, or Stripe was unreadable.
+          body="$(date -u +%Y-%m-%d): a paid signup may be blocked, Stripe was
+          unreadable, a renewal notice or a free report was not sent, or monthly billing could
+          not be stopped. See the run.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --label bug || true
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body" --label bug \
+              || gh issue create --title "$TITLE" --body "$body" || true
+          fi
+      # AFTER the general issue step, deliberately: that step fires on
+      # failure(), and failing the job first would also file a misleading
+      # "signup sweep failed" issue for a run that was merely missed.
+      - name: Raise an issue if a scheduled run did not happen
+        if: always() && steps.watchdog.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: A scheduled run did not happen
+        run: |
+          body="$(date -u +%Y-%m-%d):
+
+          $(cat "$RUNNER_TEMP/watchdog.txt")
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body" --label bug \
+              || gh issue create --title "$TITLE" --body "$body" || true
+          fi
+      - name: Fail the run if a scheduled run did not happen
+        if: always() && steps.watchdog.outputs.code == '1'
+        run: |
+          echo "::error::A scheduled run this week left no trace. See the"
+          echo "::error::'Check this week's scheduled runs happened' step."
+          exit 1
