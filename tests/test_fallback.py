@@ -95,8 +95,20 @@ def test_it_ships_in_weeks_4_to_16_only() -> None:
 
 def test_the_doubtful_player_is_still_named_for_sunday() -> None:
     """With the fallback on, FLEX gets odds against a confirmed receiver — and
-    Pollard, still questionable, must still be the Sunday check."""
+    Pollard, still questionable, is still named in the game plan.
+
+    Since launch audit F4 (Oct 2026) he becomes a Sunday check and an if/then
+    only when clearing him would change a seat. On this week he projects dead
+    even with the FLEX starter (11.2 each), and the plan used to read "Sunday
+    morning: check Tony Pollard's status" beside an if/then saying "Keep Chase
+    Brown … if he's out, nothing changes" — a chore whose answer was the same
+    either way. Pinned both ways: named iff he out-projects the starter."""
     report = _sample(True)
     assert any("Tony Pollard" in (i["action"] + i.get("detail", ""))
                for i in report["checklist"])
-    assert any("Tony Pollard" in p["condition"] for p in report["pivots"])
+    flex = next(s for s in report["lineup"] if s["slot"] == "FLEX")
+    pollard = next(b for b in report["bench"] if b["name"] == "Tony Pollard")
+    moves = pollard["projected"] > flex["projected"]
+    assert any("Tony Pollard" in p["condition"] for p in report["pivots"]) == moves
+    assert any("Sunday morning" in i["action"] and "Tony Pollard" in i["action"]
+               for i in report["checklist"]) == moves
