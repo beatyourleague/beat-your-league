@@ -497,3 +497,26 @@ def test_a_tuesday_with_nobody_to_mail_still_says_it_ran(tmp_path, monkeypatch) 
     monkeypatch.setattr(tuesday, "build_provider", lambda *a: _Fake())
     assert tuesday.main(_main_args(tmp_path, _registry(tmp_path))) == 0
     assert run_key("tuesday", SEASON, WEEK) in delivery.load_sent(log)
+
+
+def test_the_tuesday_run_never_reports_on_a_week_already_underway(tmp_path, capsys,
+                                                                  monkeypatch) -> None:
+    """Launch audit (ops): the Worker starts the Tuesday run on time and
+    GitHub's schedule is the backup, which can fire hours late; a hand re-run
+    after Thursday's kickoff would publish and permanently record calls about
+    a game being played. A DERIVED week that has kicked off sends nothing and
+    exits 0; an explicit --week is a deliberate rebuild and still builds."""
+    import run.tuesday as t
+    monkeypatch.setattr(t, "week_has_kicked_off", lambda *a, **k: True)
+    real = t.load_week_data
+    monkeypatch.setattr(t, "load_week_data",
+                        lambda cache, season, week, **k: real(cache, SEASON, WEEK, session=OFFLINE))
+    args = ["--registry", str(_registry(tmp_path, _row())), "--cache", str(_cache(tmp_path)),
+            "--no-paid-check", "--no-send", "--out", str(tmp_path / "out"),
+            "--processed-dir", str(tmp_path / "processed")]
+    assert t.main(args) == 0
+    assert "already kicked off" in capsys.readouterr().out
+    assert not (tmp_path / "out").exists()
+    # Explicit week: built (a backfill or the proving run).
+    assert t.main(args + ["--season", SEASON, "--week", str(WEEK)]) == 0
+    assert (tmp_path / "out").exists()

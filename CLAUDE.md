@@ -1079,6 +1079,44 @@ Each reviewer took one area, reproduced before reporting, and edited nothing. Wh
   `<main>` landmarks, skip link, keyboard focus on FAQ summaries and 24px nav targets. Contrast and load
   weight were measured and needed no change.
 
+**Launch-readiness audit (Oct 15 2026) — `reports/launch-readiness.md`, held true by
+`make launch-check`.** Research (who pays, competitors, conversion, costs and compliance), eight
+buyer personas on real devices, and product/site/ops/economics/legal/go-to-market audits, every
+serious finding adversarially verified (93 confirmed). Verdict: viable for the busy money-league
+manager on ESPN/Yahoo/CBS (sell the $39 pass; commissioners the $99 League Pass), not ready to
+take money until LAUNCH.md's owner steps are done; treat 2026 as a proof season. Rules it left:
+- **Roster status is availability, for the live week only.** Injured reserve, PUP, NFI,
+  suspended, exempt and released (players.csv) are OUT in the Tuesday report — they stop
+  appearing on the injury report, and the live sample once started an IR receiver at FLEX with
+  odds. One table, `engine.availability.ROSTER_OUT`, shared with Saturday. Never applied to a
+  replayed week (today's status on a 2024 week is fabrication). Method §15 C7.
+- **The live sample has its own roster** (`render/live_sample.LIVE_ROSTER`), chosen once by a
+  stated pre-season rule (2025 PPR per-game target ranks, staggered byes), never by results;
+  `week.json` records how many odds it shows and the hero links "this week's" only at 3+.
+- **Renewal consent is recorded.** Payment links require the terms box, whose text names the
+  yearly renewal, its amount and 18+ (`infra/stripe_paylink_text.py`); the intake copies
+  Stripe's `consent.terms_of_service` onto the Customer with `TERMS_VERSION`
+  (render/welcome.py), which must equal terms.html's "Last updated" date (tested).
+- **Commercial email carries a sender address** from `SENDER_POSTAL_ADDRESS` (render/sender.py
+  — a rented mailbox, never a home); the launch announcement refuses to send without one.
+- **Crons start from the form Worker** (scheduled(), `0,30 * * * *`, secret GH_DISPATCH_TOKEN),
+  GitHub's schedules as backup; `run/watchdog.py` goes red when a Tuesday send or Saturday check
+  never happened; pre-launch (no registry, no Stripe key) Tuesday/Saturday exit 0 "not set up
+  yet". The hourly intake runs at :30, never alongside Tuesday/Saturday.
+- **The Tuesday run refuses a derived week that has kicked off** (a late backup run or a hand
+  re-run would publish calls about games underway); "week underway" is the first kickoff to the
+  minute, not the UTC date. A first email belongs to an unserved PURCHASE — the hourly intake
+  once mailed every subscriber their week's report early.
+- **Each lineup row carries schedule facts** (opponent and kickoff, Eastern), a Thursday-night
+  line, dated injury wording ("Questionable in Week 9 (foot) — played, 18.4"), an "if he's
+  cleared" plan built from Tuesday's own projections (never a %), and no Sunday check that
+  changes no seat.
+- **Marketing tools stay inside principle 2:** `make ask` prints a head-to-head % only with
+  `--publish`, which records it in the public ledger; drafts lead with the question, one fact
+  line, then the %. `?via=` tags ride form rows (cookie-free) and `make stats` counts them.
+- **Money:** Stripe costs about 7% of a $39 pass on this account ($2.72, kept on a refund) —
+  `run/economics.py`; PLAN §2 corrected.
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

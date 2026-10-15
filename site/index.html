@@ -973,6 +973,12 @@
 <script>
 "use strict";
 document.documentElement.classList.add("js");
+// A cookie-free source tag: a link posted somewhere can carry ?via=<channel>,
+// and the tag rides along in the form row so `make stats` can count signups by
+// channel. Nothing is stored in the browser; the Worker keeps only
+// ^[a-z0-9-]{1,24}$ and drops anything else without refusing the row.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
 
 // Flip to true the day the Stripe Payment Links are pasted into site/join/.
 // It turns the pricing cards into live CTAs — both of which point at join/,
@@ -1033,7 +1039,7 @@ if (watchForm) {
       try {
         const res = await fetch(WAITLIST_ENDPOINT, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "waitlist", email: email }),
+          body: JSON.stringify({ kind: "waitlist", email: email, via: VIA }),
           signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
         });
         if (!res.ok) throw new Error(String(res.status));

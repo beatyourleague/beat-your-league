@@ -49,15 +49,15 @@ that shows a real close call.
 
 | Area | Audit | Status now |
 |---|---|---|
-| Product value | 6, at risk | Opponent and kickoff on each row, Thursday-night lock line, out-last-week if/then, dated injury wording and a phone layout fix are in progress (report work) |
+| Product value | 6, at risk | **Fixed:** opponent and kickoff on every row, a Thursday-night line, an "if he's cleared" plan for players ruled out last week, dated injury wording, no pointless Sunday checks, an email that fits a 390px phone |
 | Decision quality | 5, **no-go** | **Fixed:** injured reserve, PUP, suspended and released players are out in the weekly report (they were started with odds) |
 | Website appeal | 7, at risk | **Fixed:** apps named in the hero; FAQs for "more than one league" and "why not a chatbot"; honest scoring coverage; the false "nobody answers who do I start" line gone |
 | Conversion funnel | 3, **no-go** | Code side **fixed** (Sleeper kicker line, ranked search, problems first, the live sample shows odds again); checkout, waitlist and free report wait on owner steps |
 | Trust | 5, at risk | Live sample rebuilt on a rule-chosen 2026 roster; "file" wording fixed at the source |
 | Pricing & economics | 7, go | Fee figures corrected (about 7%, not 3.7%); League Pass's false "cheaper than one buy-in" replaced with the dues split |
-| Operations | 5, at risk | Worker-triggered crons, a dead-man's switch and quiet pre-launch alarms in progress (ops work); DMARC is an owner step |
+| Operations | 5, at risk | **Fixed in code:** the form Worker starts the crons on time (GitHub's schedule as backup), a watchdog alarms when a Tuesday or Saturday run never happened, pre-launch runs stop filing false issues, the Tuesday run refuses a week already underway, free reports can't crowd out paid ones. Owner: deploy the Worker with its token, DMARC |
 | Legal & compliance | 4, **no-go** | **Fixed:** Pay-button text matches the terms; required terms box names the renewal and 18+; consent recorded on the customer; privacy names every processor; renewal notice complete; launch email has a sender and opt-out. Owner: mailbox address |
-| Go-to-market | 3, at risk | Post drafts and a reply helper in progress; a League Pass group-chat line and a pass-buyer thank-you page **added** |
+| Go-to-market | 3, at risk | **Added:** posts that lead with the manager's question and one fact; `make ask` for the product's own answer to "A or B?" (the % only when it's recorded publicly); `?via=` channel tags counted by `make stats`; a League Pass group-chat line and a pass-buyer thank-you page. Owner: one pseudonymous handle, Reddit answers only |
 | Brand | 7, go | — |
 
 ## Must be true before the first payment (owner)

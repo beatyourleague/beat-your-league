@@ -237,6 +237,23 @@ and decides nothing: every row is checked before it reaches the subscriber list.
    the homepage's "Try it free on your roster" button (`TRIAL_OPEN`). Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
    email list on today.
 
+7. **Put it on your own domain (5 min):** Worker → **Settings → Domains & Routes → Add →
+   Custom domain** → `forms.beatyourleague.com`. Use that as the Worker URL everywhere: a
+   `*.workers.dev` address is easy for browsers and filters to block, and `make launch-check`
+   warns about it.
+8. **Start the crons on time (5 min, same Worker).** GitHub started the Tuesday runs 5–7
+   hours late on Oct 6 and Oct 13, so the Worker now starts them itself and GitHub's own
+   schedules stay as the backup. (a) GitHub → Settings → Developer settings → Personal access
+   tokens → **Fine-grained tokens → Generate new token**: resource owner `beatyourleague`,
+   **Only select repositories → beat-your-league**, Repository permissions → **Actions: Read
+   and write**, nothing else; the longest expiry offered, and put that date in your calendar.
+   (b) Worker → **Settings → Variables and Secrets → Add**, type **Secret**, name
+   `GH_DISPATCH_TOKEN`, value = that token. (c) Worker → **Settings → Triggers → Cron
+   Triggers → Add** → `0,30 * * * *`. Re-pasting the current `infra/form-worker.js` and
+   deploying also turns on automatic deletion of form rows after about 400 days (the privacy
+   policy promises it). Nothing is sent twice if both GitHub and the Worker start a run: every
+   email is keyed.
+
 Until then: the email form falls back to the visitor's own email app, seat claims are
 refused with a reason, and the update link simply doesn't appear in reports.
 
@@ -278,12 +295,24 @@ or "we hit X%" — the grading doesn't back any of them yet — and nothing abou
 | Saturday ~noon | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
 
 Times are an hour earlier from Nov 1, when the clocks change. A red run opens a GitHub issue,
-and GitHub emails you about it.
+and GitHub emails you about it. A run that fails the same way again comments on the open issue
+instead of opening another, so close each issue once it's fixed.
+
+**If an issue titled "A scheduled run did not happen" appears,** it names the run and the
+week (the daily watchdog checks that each Tuesday's reports and each Saturday's check really
+ran). Before that week's first kickoff, run that workflow by hand from the Actions tab —
+nobody is mailed twice. After kickoff, don't: the Tuesday run now refuses to build a report
+about games already underway, and that week is lost.
 
 **How's demand?** Pull, then run:
 ```bash
 make stats
 ```
+To see a link's signups by channel, post it with `?via=<name>` on the end (for example
+`beatyourleague.com/?via=reddit`): the tag is stored with the form row, never in a cookie.
+For the payments section, export `STRIPE_API_KEY` in your own terminal using a separate
+restricted key with **Read** on Subscriptions, Checkout Sessions and Refunds (nothing else);
+the cron key has no Refunds permission, and without it that one line says so.
 It prints counts only (waitlist, free-report requests, roster updates, seat claims, and what
 went out each week) and never an address. The form rows need `FORM_ENDPOINT` and
 `FORM_API_KEY` in your shell; without them it prints the rest.

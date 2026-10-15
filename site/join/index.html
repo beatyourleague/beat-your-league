@@ -449,6 +449,12 @@ const CONTACT_EMAIL = "hello@beatyourleague.com";
 // pattern also keeps the check identical to the one the encoder applies.
 
 const QUERY = new URLSearchParams(location.search);
+// A cookie-free source tag: a link posted somewhere can carry ?via=<channel>,
+// and the tag rides along in the form row so `make stats` can count signups by
+// channel. Nothing is stored in the browser; the Worker keeps only
+// ^[a-z0-9-]{1,24}$ and drops anything else without refusing the row.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
 // season pass, so a mangled link can never silently downgrade the sale.
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
@@ -846,7 +852,7 @@ $("form-email").addEventListener("submit", (event) => {
     if (NOTIFY_LIST_ENDPOINT) {
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "waitlist", email: email }),
+        body: JSON.stringify({ kind: "waitlist", email: email, via: VIA }),
         signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
       // fetch resolves on a 400 too — "we kept your email" after the backend
       // rejected the row would be this page claiming a save that didn't happen.
@@ -895,7 +901,7 @@ function submitSeat(email, ref) {
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email, covered_by: payer, ref: ref }),
+    body: JSON.stringify({ email: email, covered_by: payer, ref: ref, via: VIA }),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
@@ -946,7 +952,7 @@ function submitTrial(email, ref) {
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "trial", email: email, ref: ref }),
+    body: JSON.stringify({ kind: "trial", email: email, ref: ref, via: VIA }),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");

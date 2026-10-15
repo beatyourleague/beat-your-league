@@ -54,7 +54,7 @@ from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
 from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
                        current_season, current_week, load_week_data, report_for,
-                       season_over)
+                       season_over, week_has_kicked_off)
 from run.saturday import PLANS_DIR, build_plan, first_plans_dir, write_plan
 from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
@@ -364,6 +364,19 @@ def main(argv: list[str] | None = None) -> int:
     except SoloError as exc:
         print(f"could not load this week's data: {exc}", file=sys.stderr)
         return 1
+
+    # Never a report about games already underway. The Worker starts this run
+    # on time and GitHub's own schedule is the backup — which can fire hours
+    # late — and a hand re-run after Thursday night's kickoff would publish
+    # (and record, permanently) "predictions" about a game being played. A
+    # derived week that has kicked off is a quiet exit; the watchdog is what
+    # alarms if the on-time run never happened. An explicit --week is a
+    # deliberate rebuild and is allowed (launch audit, Oct 2026).
+    if args.week is None and week_has_kicked_off(args.cache, data.season, data.week):
+        print(f"No reports sent: week {data.week} has already kicked off, so a "
+              f"report now would be about games underway. If this week's reports "
+              f"never went out, the watchdog says so.")
+        return 0
 
     # Is anything actually going to be mailed? Decided BEFORE the reports are
     # built, because it decides whether their calls enter the public record.
