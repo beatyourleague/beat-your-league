@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og brand billing billing-preview
 
 week:
@@ -83,6 +83,12 @@ proving:
 # registry if a copy is here). Counts only, never an address. Read-only.
 stats:
 	$(PY) -m run.stats
+
+# The product's own answer to "A or B this week?", for replying in public:
+# facts for both, and the report's % only with ARGS=--publish, which records
+# it on the public record first (graded Monday). Also --scoring, --size.
+ask:
+	$(PY) -m run.ask "$(A)" "$(B)" $(ARGS)
 
 # Launch readiness: the site, the funnel, this week's product, compliance text,
 # email DNS, owner setup and the economics, as PASS/FAIL/WARN/OWNER gates.
