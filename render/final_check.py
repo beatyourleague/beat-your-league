@@ -19,7 +19,9 @@ from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP, WATCH,
 from render.email import (tick_box, BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
                           NAVY, PAPER, SLATE, SMALL, TURF, TURF_TINT, _sec)
 from render.report import (EMAIL_META, preheader_html, NFLVERSE_LINE,
-                           NO_BETTING_LINE, cancel_html, cancel_lines, esc)
+                           NO_BETTING_LINE, cancel_html, cancel_lines, esc,
+                           sender_html)
+from render.sender import sender_line
 
 ACT = (SWAP, NO_FILL, BACK)
 KEEP_AN_EYE = (WATCH, REMINDER)
@@ -123,6 +125,9 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — injury '
         f'designations from each team\'s official report, as published.<br>'
         f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
+        # Who sent it, like the Tuesday report (CAN-SPAM, CASL; launch audit
+        # L3, GATE-9): the Saturday check carried no sender block at all.
+        f'{sender_html()}'
         f'{cancel_html(seat, f"color:{NAVY};")}'
         '</p></td></tr>')
     return (
@@ -152,5 +157,6 @@ def text_for_check(plan: Mapping[str, Any], changes: list[Change],
             lines.append(f"    {item.detail}")
         lines.append("")
     lines += [STANDS, "", NO_BETTING_LINE, NFLVERSE_LINE, "",
-              *cancel_lines(seat)]
+              *cancel_lines(seat),
+              *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"

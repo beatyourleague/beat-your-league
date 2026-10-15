@@ -76,7 +76,10 @@ def test_a_seats_report_stops_by_asking_never_at_a_billing_page(base_report, env
         assert not re.search(r"billing page|further charges|charges to end", doc), name
         assert re.search(r"Reply (&quot;|\")stop(&quot;|\")", doc), name
         assert re.search(r"within 10 business days", doc), name
-        assert re.search(r"commissioner(&#x27;|')s pass isn(&#x27;|')t affected", doc), name
+        # "Your league's pass", never "your commissioner's": any manager may
+        # buy it (panel review LP-D7).
+        assert re.search(r"league(&#x27;|')s pass isn(&#x27;|')t affected", doc), name
+        assert "commissioner" not in doc.lower(), name
 
 
 def test_a_paying_subscribers_report_still_cancels_itself(base_report, env) -> None:
