@@ -27,6 +27,13 @@ What it deliberately does not do:
 Plans live under ``data/plans/`` — gitignored (they are private rosters), and
 cached across CI runs under their own key so the hourly intake cron can never
 save a registry snapshot over them.
+
+Two things about the run itself. Before launch (no registry file and no Stripe
+key) it is not configured rather than failed, and exits 0 — a "failed" issue
+every Saturday for a checkout that is not open yet is how the real one gets
+ignored. And a check that finished clean, for real, leaves a marker in the send
+log (``run.watchdog``): this run mails only on change, so without the marker a
+Saturday GitHub never started is indistinguishable from a quiet one.
 """
 
 from __future__ import annotations
@@ -48,6 +55,7 @@ from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
 from run.rosters import RosterRegistryError, load_rosters
 from run.solo import CACHE_DIR, current_season, current_week, season_over
 from run.subscriptions import DEFAULT_EXPORT
+from run.watchdog import NOT_CONFIGURED_NOTE, SATURDAY, mark_run, not_configured
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLANS_DIR = REPO_ROOT / "data" / "plans"
@@ -397,6 +405,28 @@ def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster
         unsubscribe=cancel_destination()[0] or None)
 
 
+def _could_mail(args) -> bool:
+    """A preview (no provider, or a dry one) proves nothing about whether the
+    real check ran, and must leave no record claiming it did."""
+    try:
+        return build_provider(args.email_provider).name != DRY_PROVIDER
+    except DeliveryError:
+        return False
+
+
+def _mark_finished(args, season: str, week: int) -> None:
+    """Leave the watchdog's marker — only for a run that could have mailed.
+    Best effort: a marker that cannot be written costs a false alarm
+    tomorrow, never a send."""
+    if not _could_mail(args):
+        return
+    try:
+        mark_run(SATURDAY, season, week)
+    except OSError as exc:
+        print(f"could not mark the final check as finished ({exc}); the "
+              f"watchdog may report this week as missed", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--week", type=int, help="default: the current NFL week")
@@ -418,6 +448,9 @@ def main(argv: list[str] | None = None) -> int:
     if at.tzinfo is None:
         at = at.replace(tzinfo=timezone.utc)
 
+    if not_configured(args.registry):
+        print(f"No final check this week: {NOT_CONFIGURED_NOTE}")
+        return 0
     try:
         subscribers = load_rosters(args.registry)
     except RosterRegistryError as exc:
@@ -425,6 +458,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not subscribers:
         print("roster registry is empty — nothing to do")
+        # It still ran: without the marker, a first subscriber who joins on
+        # Saturday evening reads to the watchdog as a check that never happened.
+        if not _could_mail(args):
+            return 0
+        try:
+            season = str(args.season or current_season(args.cache, today=at.date()))
+            if args.week or not season_over(args.cache, season, at.date()):
+                _mark_finished(args, season, int(
+                    args.week or current_week(args.cache, season, today=at.date())))
+        except Exception as exc:  # noqa: BLE001 — a marker never fails the run
+            print(f"could not tell which week this was, so no marker was left "
+                  f"({exc})", file=sys.stderr)
         return 0
 
     from run.tuesday import paid_subscribers
@@ -525,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     if unreadable or lost:
         return 1
+    _mark_finished(args, season, week)
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
     return 0

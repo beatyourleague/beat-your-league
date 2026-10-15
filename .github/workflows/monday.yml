@@ -28,7 +28,18 @@ on:
     # and the MNF calls settle next week, because RULE L1 refuses to grade a
     # call whose game is not final rather than guessing at it.
     - cron: "0 13 * * 1"
+  # The form Worker (infra/form-worker.js) also dispatches this at 13:00 UTC
+  # on Mondays, because GitHub's scheduler runs late or not at all; the cron
+  # above is the backup.
   workflow_dispatch: {}
+
+# One run at a time, queued rather than cancelled. Grading twice is harmless —
+# a settled call is immutable (RULE L4) and the second run, checking out the
+# tip, finds it settled — but two runs committing the ledger at once is a push
+# race for nothing.
+concurrency:
+  group: monday-receipts
+  cancel-in-progress: false
 
 jobs:
   receipts:
@@ -42,8 +53,14 @@ jobs:
       # shallow clone, and `git pull --rebase` against a shallow history
       # can fail — which would break the persist step whose whole job is
       # keeping the record safe.
+      # ref = the branch TIP, not the commit this run was triggered on. A run
+      # queued behind another in the concurrency group would otherwise check
+      # out the ledger as it was when it was QUEUED — before the run ahead
+      # of it pushed — and grade from a stale record. (A double trigger is
+      # routine now: the Worker's dispatch plus GitHub's backup.)
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -118,15 +135,27 @@ jobs:
           git commit -m "Monday grading run: ledger settled"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push
+      # ONE open issue per kind of failure: a later failure comments on the
+      # open one instead of opening another (before launch these crons filed
+      # 16 near-identical issues, which teaches exactly the wrong habit). The
+      # title carries no date for that reason; each comment does. Listed, not
+      # searched: the search index can lag a fresh issue by minutes.
       - name: Raise an issue if grading failed
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: Monday grading failed
         run: |
-          gh issue create \
-            --title "Monday grading failed: $(date -u +%Y-%m-%d)" \
-            --body "Grading did not complete, so published calls stay pending and the
+          body="$(date -u +%Y-%m-%d): grading did not complete, so published calls stay pending and the
           public record is stale.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --label bug || true
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body" --label bug \
+              || gh issue create --title "$TITLE" --body "$body" || true
+          fi

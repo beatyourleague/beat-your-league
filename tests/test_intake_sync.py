@@ -707,6 +707,27 @@ def test_the_worker_the_picker_and_the_intake_agree_on_the_update_contract() -> 
     assert "Bearer ${env.FORM_API_KEY}" in worker and "401" in worker
 
 
+def test_a_row_that_says_where_it_came_from_is_read_exactly_as_one_that_does_not(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """The Worker now stores an optional `via` tag on every kind (cookie-free
+    source attribution, infra/form-worker.js). It is the Worker's only new
+    field, and the readers must treat it as noise: a seat claim carrying one
+    is honoured exactly like the same claim without, and a free-report request
+    carrying one is still pending. An intake that choked on an unknown key
+    would drop every tagged signup the day the picker starts sending them."""
+    from run.trials import pending
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    stripe["sessions"] = [_pass_session()]
+    _seats(monkeypatch, _seat(via="reply-kit"))
+    assert _run(tmp_path) == 0, capsys.readouterr().err
+    seats = [r for r in load_rosters(tmp_path / intake.REGISTRY_NAME)
+             if r.is_league_seat]
+    assert [s.email for s in seats] == ["member@example.com"]
+    trial = {"kind": "trial", "email": "t@example.com", "ref": REF}
+    assert pending([dict(trial, via="x")], set(), set(), "2026") == \
+        pending([trial], set(), set(), "2026") == [("t@example.com", REF)]
+
+
 def test_a_purchase_before_kickoff_gets_the_week_it_paid_for() -> None:
     """A mid-season buyer used to get the roster file — byes and last season's
     record — and wait until the next Tuesday for the product they actually

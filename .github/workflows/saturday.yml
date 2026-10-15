@@ -20,6 +20,9 @@ on:
     # refuses outright if the week's report is not in yet, rather than
     # reading a missing report as a healthy league.
     - cron: "0 16 * * 6"
+  # The form Worker (infra/form-worker.js) also dispatches this at 16:00 UTC
+  # on Saturdays, because GitHub's scheduler runs late or not at all; the
+  # cron above is the backup. A double trigger is safe: see the checkout.
   workflow_dispatch: {}
 
 # One run at a time: two runs reading the same committed send log can mail the
@@ -38,8 +41,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # ref = the branch TIP, not the commit this run was triggered on. A run
+      # queued behind another in the concurrency group would otherwise check
+      # out the send log as it was when it was QUEUED — before the run ahead
+      # of it pushed — and mail everything that run just mailed. (A double
+      # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -89,18 +98,30 @@ jobs:
           git commit -m "Saturday final check: send log"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push
+      # ONE open issue per kind of failure: a later failure comments on the
+      # open one instead of opening another (before launch these crons filed
+      # 16 near-identical issues, which teaches exactly the wrong habit). The
+      # title carries no date for that reason; each comment does. Listed, not
+      # searched: the search index can lag a fresh issue by minutes.
       - name: Raise an issue if the check failed
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: Saturday final check failed
         run: |
-          gh issue create \
-            --title "Saturday final check failed: $(date -u +%Y-%m-%d)" \
-            --body "The Saturday final check failed, so subscribers whose lineup changed may not have been told.
+          body="$(date -u +%Y-%m-%d): the Saturday final check failed, so subscribers whose lineup changed may not have been told.
 
           Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
           Check in this order: whether this week's injury report was published
           (the log says so), whether the plans cache was restored, the email
-          provider credentials." \
-            --label bug || true
+          provider credentials."
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body" --label bug \
+              || gh issue create --title "$TITLE" --body "$body" || true
+          fi

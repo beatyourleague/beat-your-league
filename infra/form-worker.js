@@ -13,8 +13,9 @@
  * Why a Worker and not a form vendor: free-tier form products cap at ~50
  * submissions a month or offer no machine-readable read-back, and this is the
  * same Cloudflare account the domain's DNS and email routing already live in.
- * It is ~60 lines, costs nothing at this scale (KV free tier: 1,000 writes and
- * 100,000 reads a day), and the whole thing is readable in one sitting.
+ * The mailbox is ~60 lines, costs nothing at this scale (KV free tier: 1,000
+ * writes and 100,000 reads a day), and the whole file — the scheduler below
+ * included — is readable in one sitting.
  *
  * Setup (LAUNCH.md step 5): Workers & Pages → Create → paste this file →
  * Settings → Bindings → KV namespace, variable name ROWS → Variables:
@@ -35,6 +36,51 @@
  *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
  *   POST JSON  {kind:"waitlist", email}
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
+ * Every kind may also carry an optional `via` (^[a-z0-9-]{1,24}$, e.g. "x" or
+ * "reply-kit"): where the visitor came from, read off the page's own URL, so
+ * the owner can see which channel brings people without a cookie or a
+ * tracker anywhere. Anything else in that field is dropped, never refused —
+ * a bad attribution tag must not cost a signup.
+ *
+ * Rows EXPIRE about 400 days after they arrive (ROW_TTL_SECONDS). The privacy
+ * page says we keep what we hold while it is in use and for a short period
+ * after, then delete it — and nothing here ever deleted anything; every row
+ * lived in KV forever. 400 days is the longest any row is needed: a
+ * seat claim is re-read every week of the season it was made for (the roster
+ * it names is that season's), a waitlist address waits at most one offseason
+ * for its launch email, and everything else is acted on within days — a
+ * confirmed roster update is copied into the intake's own log, a trial is
+ * keyed in the send log, a confirmation code dies after 7 days.
+ *
+ * ── THE SCHEDULER (Oct 2026) ──────────────────────────────────────────────
+ * GitHub's own cron is best-effort, and in practice it was not good enough:
+ * it started the Tuesday runs 5-7 hours late on Oct 6 and Oct 13 2026 and
+ * dropped most of the hourly ones, so "Tuesday morning" and "within the hour"
+ * were promises nothing kept. Cloudflare's Cron Triggers are free and fire on
+ * time, so this Worker also starts the workflows itself, through GitHub's
+ * workflow_dispatch API, at exactly the UTC times the workflows' own
+ * `schedule:` blocks name (SCHEDULE below — tests/test_scheduling.py fails if
+ * the two lists ever disagree). The GitHub schedules stay as the backup.
+ *
+ * Firing a workflow twice is safe, and that is checked rather than hoped: each
+ * workflow queues in its own concurrency group (never cancelling a run in
+ * progress), checks out the branch TIP rather than the commit it was
+ * triggered on (so a queued second run reads the send log the first one
+ * pushed), and every message carries a key in data/processed/sent.jsonl that
+ * a second run finds and skips.
+ *
+ * Setup for the scheduler (after the steps above):
+ *   Worker → Settings → Triggers → Cron Triggers → add ONE trigger:
+ *     0,30 * * * *        (UTC — every half hour; the handler picks what is due)
+ *   Worker → Settings → Variables → add, marked SECRET:
+ *     GH_DISPATCH_TOKEN = a fine-grained GitHub token: Resource owner
+ *                         beatyourleague, Repository access "Only select
+ *                         repositories" → beat-your-league, Repository
+ *                         permissions → Actions: Read and write. Nothing else.
+ *                         It expires (a year at most) — diary the date.
+ * With GH_DISPATCH_TOKEN unset the scheduler does nothing at all and the
+ * GitHub schedules carry on alone. A failed dispatch shows as an error under
+ * the Worker's Cron Events; the next tick and the GitHub backup both still run.
  */
 
 const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -42,10 +88,11 @@ const REF = /^[A-Za-z0-9_-]{1,200}$/;
 const SLUG = /^[0-9a-f]{10}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
 const CODE = /^[0-9a-f]{24}$/;
+const VIA = /^[a-z0-9-]{1,24}$/;
 const MAX_BODY = 2048;
+const ROW_TTL_SECONDS = 400 * 24 * 60 * 60;
 
-function sanitize(body) {
-  if (!body || typeof body !== "object") return null;
+function sanitizeKind(body) {
   const kind = ["update", "update_request", "confirm", "waitlist", "trial"]
     .includes(body.kind) ? body.kind : "seat";
   if (kind === "confirm") {
@@ -82,6 +129,76 @@ function sanitize(body) {
   return { kind, email, ref, replaces, token };
 }
 
+function sanitize(body) {
+  if (!body || typeof body !== "object") return null;
+  const row = sanitizeKind(body);
+  if (!row) return null;
+  // Attribution rides along on any kind and decides nothing. Validated to a
+  // shape that cannot carry an address or markup into the owner's stats.
+  const via = String(body.via || "").trim().toLowerCase();
+  return VIA.test(via) ? { ...row, via } : row;
+}
+
+// ── the scheduler ────────────────────────────────────────────────────────
+
+const REPO = "beatyourleague/beat-your-league";
+const BRANCH = "main";
+
+// Each `cron` is the LITERAL string from that workflow's own `schedule:` block
+// (UTC). Only daily.yml takes an input: its once-a-day steps (stopping monthly
+// billing at season's end, the missed-run watchdog) run on the 14:00 dispatch
+// and never on the hourly ones — a dispatch has no `github.event.schedule` to
+// tell them apart, so the input does.
+const SCHEDULE = [
+  { cron: "0 12 * * 2", workflow: "weekly.yml" },     // Tuesday's reports
+  { cron: "0 16 * * 2", workflow: "weekly.yml" },     // ...the same-morning retry
+  { cron: "0 14 * * *", workflow: "daily.yml", inputs: { daily: "true" } },
+  { cron: "30 * * * *", workflow: "daily.yml", inputs: { daily: "false" } },
+  { cron: "0 16 * * 6", workflow: "saturday.yml" },   // the final check
+  { cron: "0 13 * * 1", workflow: "monday.yml" },     // grading
+];
+
+// Plain numbers, comma lists and `*` — the only syntax the workflows use. A
+// field this does not understand matches nothing, and the test that compares
+// SCHEDULE with the workflows refuses any such field before it can ship.
+function fieldMatches(field, value) {
+  return field === "*" || field.split(",").some((part) => Number(part) === value);
+}
+
+function due(at) {
+  return SCHEDULE.filter(({ cron }) => {
+    const [minute, hour, day, month, weekday] = cron.split(" ");
+    return fieldMatches(minute, at.getUTCMinutes())
+      && fieldMatches(hour, at.getUTCHours())
+      && fieldMatches(day, at.getUTCDate())
+      && fieldMatches(month, at.getUTCMonth() + 1)
+      && fieldMatches(weekday, at.getUTCDay());
+  });
+}
+
+async function dispatch(entry, env) {
+  const repo = env.GH_REPO || REPO;
+  const url = `https://api.github.com/repos/${repo}/actions/workflows/${entry.workflow}/dispatches`;
+  // Inputs are strings: the API refuses a JSON boolean for a boolean input.
+  const body = entry.inputs ? { ref: BRANCH, inputs: entry.inputs } : { ref: BRANCH };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.GH_DISPATCH_TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      // GitHub's API refuses a request that names no User-Agent.
+      "User-Agent": "beat-your-league-scheduler",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`${entry.workflow} (${entry.cron}): HTTP ${response.status}`);
+  }
+  return `${entry.workflow} (${entry.cron})`;
+}
+
 export default {
   async fetch(request, env) {
     const cors = {
@@ -114,9 +231,9 @@ export default {
       // hourly intake, which a free-tier Worker may refuse past ~50 — and a
       // failed read makes run/intake.py refuse to write the registry at all.
       // One list() call now returns everything. The longest legitimate row (a
-      // seat: two addresses and a ref) is ~750 bytes.
+      // seat: two addresses, a ref and a `via`) is ~790 bytes.
       if (JSON.stringify(stored).length > 1000) return json({ error: "too large" }, 413);
-      await env.ROWS.put(key, "1", { metadata: stored });
+      await env.ROWS.put(key, "1", { metadata: stored, expirationTtl: ROW_TTL_SECONDS });
       return json({ ok: true });
     }
 
@@ -138,5 +255,25 @@ export default {
     }
 
     return json({ error: "method" }, 405);
+  },
+
+  // The Cron Trigger. `scheduledTime` is the minute the trigger was due, not
+  // when this invocation happened to start, so a slow start can never shift a
+  // run into the wrong slot.
+  async scheduled(controller, env) {
+    if (!env.GH_DISPATCH_TOKEN) {
+      console.log("scheduler: GH_DISPATCH_TOKEN is not set; nothing dispatched "
+        + "(the GitHub schedules still run)");
+      return;
+    }
+    const entries = due(new Date(controller.scheduledTime));
+    const results = await Promise.allSettled(entries.map((entry) => dispatch(entry, env)));
+    const failed = results.filter((r) => r.status === "rejected").map((r) => String(r.reason));
+    for (const r of results) {
+      if (r.status === "fulfilled") console.log(`scheduler: dispatched ${r.value}`);
+    }
+    // Thrown, so the miss shows as an error under the Worker's Cron Events
+    // rather than as a quiet log line. The GitHub schedule is still the backup.
+    if (failed.length) throw new Error(`scheduler: ${failed.join("; ")}`);
   },
 };

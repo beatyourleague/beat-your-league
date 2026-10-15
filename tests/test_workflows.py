@@ -375,3 +375,82 @@ def test_every_sending_cron_runs_one_at_a_time() -> None:
         text = (WORKFLOWS / name).read_text(encoding="utf-8")
         assert re.search(rf"concurrency:\s*\n\s+group: {group}\s*\n\s+cancel-in-progress: false", text), \
             f"{name} can run twice at once"
+
+
+# --------------------------------------------------------------------- #
+# what every mail-sending step carries (OPS-10, Oct 2026)
+# --------------------------------------------------------------------- #
+
+# Every runner that can put a message in an inbox.
+MAIL_SENDERS = ("run.intake", "run.tuesday", "run.saturday", "run.trials",
+                "run.renewals", "run.waitlist")
+SCHEDULED = ("weekly.yml", "daily.yml", "saturday.yml", "monday.yml")
+
+
+def _sending_steps():
+    for name in SCHEDULED:
+        for step in _steps(name):
+            command = "\n".join(line.split("#", 1)[0]
+                                for line in str(step.get("run", "")).splitlines())
+            env = step.get("env") or {}
+            # `-m <module>`: what the step RUNS, not a message that names it.
+            if "EMAIL_PROVIDER" in env or any(
+                    re.search(rf"-m {re.escape(m)}\b", command) for m in MAIL_SENDERS):
+                yield name, step, command
+
+
+def test_every_mail_sending_step_carries_the_cancel_route() -> None:
+    """The Tuesday send step passed no BILLING_PORTAL_URL, so every weekly
+    report's cancel link AND its List-Unsubscribe header pointed at the terms
+    page's cancel section — a page explaining how to cancel, sent to someone
+    who wanted the button — while the welcome and the renewal notice, on
+    steps that did pass it, linked the billing page. Same subscriber, two
+    routes. Every step that can mail now carries the provider, the site and
+    the billing page, whichever runner it calls."""
+    found = list(_sending_steps())
+    assert len(found) >= 6, [s.get("name") for _, s, _ in found]
+    for name, step, _ in found:
+        env = step.get("env") or {}
+        for needed in ("EMAIL_PROVIDER", "SITE_URL", "BILLING_PORTAL_URL"):
+            assert needed in env, f"{name}: {step.get('name')!r} is missing {needed}"
+
+
+def test_every_runner_that_can_say_not_set_up_yet_can_see_the_stripe_key() -> None:
+    """run.tuesday, run.saturday, run.trials and run.watchdog read "no
+    registry AND no STRIPE_API_KEY" as before-launch and exit quietly. A step
+    that does not pass the key reads EVERY missing registry that way: the
+    free-report run would then treat a lost registry as "nobody subscribes"
+    and offer paying subscribers a free report, and the watchdog would stay
+    quiet about a Tuesday that mailed nobody."""
+    checked = 0
+    for name in SCHEDULED:
+        for step in _steps(name):
+            command = "\n".join(line.split("#", 1)[0]
+                                for line in str(step.get("run", "")).splitlines())
+            if any(f"-m {m}" in command for m in ("run.tuesday", "run.saturday",
+                                                   "run.trials", "run.watchdog")):
+                checked += 1
+                assert "STRIPE_API_KEY" in (step.get("env") or {}), \
+                    f"{name}: {step.get('name')!r} cannot tell launch from a lost registry"
+    assert checked >= 4
+
+
+def test_a_repeated_failure_comments_on_the_open_issue_instead_of_filing_another() -> None:
+    """Before launch the Tuesday and Saturday crons failed every run for want of
+    a registry that could not exist yet, and filed 16 near-identical "failed"
+    issues — the alarm fatigue that hides the real one. The not-configured
+    exits stop the false failures; this stops a REAL repeated failure turning
+    into a wall of issues: one open issue per kind, a comment per run. The
+    title can carry no date, or "the same title" would be a new one daily."""
+    filers = [(name, step) for name in SCHEDULED
+              for step in _steps(name) if "gh issue" in str(step.get("run", ""))]
+    assert len({n for n, _ in filers}) == len(SCHEDULED)
+    for name, step in filers:
+        run = str(step["run"])
+        title = str((step.get("env") or {}).get("TITLE", ""))
+        assert title and not re.search(r"\d{4}|date", title), (name, title)
+        assert "gh issue list" in run and "gh issue comment" in run, \
+            f"{name}: {step.get('name')!r} opens a new issue every run"
+        assert "select(.title == env.TITLE)" in run, \
+            f"{name}: matches issues by something other than their exact title"
+        assert run.index("gh issue comment") < run.index("gh issue create")
