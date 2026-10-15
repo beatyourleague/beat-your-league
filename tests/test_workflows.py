@@ -239,13 +239,33 @@ def test_the_daily_sweep_carries_the_welcome_env() -> None:
     assert guard, "a blocked paid signup would not fail the daily sweep"
 
 
-def test_the_weekly_intake_step_can_send_welcomes_too() -> None:
-    """Belt over the daily braces: if the daily cron is ever disabled, Tuesday
-    still delivers the acknowledgment (idempotently)."""
-    steps = _steps("weekly.yml")
-    intake = next(s for s in steps if s.get("id") == "intake")
-    env = intake.get("env") or {}
-    assert "EMAIL_PROVIDER" in env and "BILLING_PORTAL_URL" in env
+def test_only_the_daily_intake_mails() -> None:
+    """This test used to require the OPPOSITE ("belt over the daily braces":
+    the weekly intake carrying the email secrets so it could welcome people
+    too). Launch review OPS-6 reproduced what that costs: weekly.yml and
+    daily.yml sit in different concurrency groups, each reads sent.jsonl from
+    its own checkout, and GitHub's backup of the Tuesday run lands 5-7 hours
+    late at an arbitrary minute — so beside an hourly daily run, both mailed
+    one buyer `welcome-…` (and the first report). Now the Tuesday intake runs
+    with --no-mail and holds no email secret at all, so it cannot mail even if
+    the flag is lost; the daily run sends what it leaves within the hour."""
+    intakes = {name: [s for s in _steps(name)
+                      if re.search(r"-m run\.intake\b", str(s.get("run", "")))]
+               for name in ("weekly.yml", "daily.yml", "saturday.yml", "monday.yml")}
+    [weekly] = intakes["weekly.yml"]
+    assert re.search(r"-m run\.intake --no-mail\b", weekly["run"]), \
+        "the Tuesday intake can mail"
+    env = weekly.get("env") or {}
+    leaked = sorted(k for k in env if k.startswith("EMAIL_") or k in (
+        "RESEND_API_KEY", "POSTMARK_TOKEN", "SENDER_POSTAL_ADDRESS"))
+    assert not leaked, f"the Tuesday intake still holds mail secrets: {leaked}"
+    # It still writes what Tuesday's send needs: payments, seats, updates.
+    for needed in ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT",
+                   "FORM_API_KEY", "UPDATE_SECRET"):
+        assert needed in env, f"the Tuesday intake lost {needed}"
+    [daily] = intakes["daily.yml"]
+    assert "--no-mail" not in daily["run"], "nothing mails new buyers at all"
+    assert not intakes["saturday.yml"] and not intakes["monday.yml"]
 
 
 def test_the_daily_cron_sends_the_promised_pre_renewal_notice() -> None:
@@ -394,8 +414,10 @@ def _sending_steps():
                                 for line in str(step.get("run", "")).splitlines())
             env = step.get("env") or {}
             # `-m <module>`: what the step RUNS, not a message that names it.
-            if "EMAIL_PROVIDER" in env or any(
-                    re.search(rf"-m {re.escape(m)}\b", command) for m in MAIL_SENDERS):
+            # `run.intake --no-mail` writes the registry and mails nobody.
+            runs = [m for m in MAIL_SENDERS
+                    if re.search(rf"-m {re.escape(m)}\b(?! --no-mail)", command)]
+            if "EMAIL_PROVIDER" in env or runs:
                 yield name, step, command
 
 
@@ -406,13 +428,23 @@ def test_every_mail_sending_step_carries_the_cancel_route() -> None:
     who wanted the button — while the welcome and the renewal notice, on
     steps that did pass it, linked the billing page. Same subscriber, two
     routes. Every step that can mail now carries the provider, the site and
-    the billing page, whichever runner it calls."""
+    the billing page, whichever runner it calls.
+
+    And the sender's postal address (launch review OPS-4, Oct 2026): LAUNCH.md
+    tells the owner to store SENDER_POSTAL_ADDRESS as a GitHub secret, and no
+    step mapped it — render/sender.py reads only the environment, so every
+    report, welcome and free report sent from CI went out with no sender line
+    even after setup. Reproduced by parsing the YAML: every step carrying
+    EMAIL_PROVIDER had it mapped = False."""
     found = list(_sending_steps())
-    assert len(found) >= 6, [s.get("name") for _, s, _ in found]
+    assert len(found) >= 5, [s.get("name") for _, s, _ in found]
     for name, step, _ in found:
         env = step.get("env") or {}
-        for needed in ("EMAIL_PROVIDER", "SITE_URL", "BILLING_PORTAL_URL"):
+        for needed in ("EMAIL_PROVIDER", "SITE_URL", "BILLING_PORTAL_URL",
+                       "SENDER_POSTAL_ADDRESS"):
             assert needed in env, f"{name}: {step.get('name')!r} is missing {needed}"
+        assert env["SENDER_POSTAL_ADDRESS"] == "${{ secrets.SENDER_POSTAL_ADDRESS }}", \
+            f"{name}: {step.get('name')!r} maps the sender address from somewhere else"
 
 
 def test_every_runner_that_can_say_not_set_up_yet_can_see_the_stripe_key() -> None:

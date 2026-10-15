@@ -21,8 +21,18 @@ Shape of a run:
    itself.
 3. Load the week ONCE. Every download is per-week, not per-subscriber, so a
    hundred subscribers cost what one does.
-4. Build, render, record, send — per subscriber, with failures contained. One
-   subscriber's malformed roster must never sink everybody else's Tuesday.
+4. Build and render per subscriber, with failures contained. One subscriber's
+   malformed roster must never sink everybody else's Tuesday. A subscriber
+   whose report is already in the send log is not rebuilt at all (unless
+   ``--resend``): the 16:00 retry and GitHub's late backup run make a second
+   Tuesday run routine, and a rebuild after a line move or a stat correction
+   is a DIFFERENT report from the one in the inbox.
+5. Send, then record. A call is published when the email carrying it is
+   DELIVERED, so only the calls of messages delivered in this run reach the
+   ledger (``record_delivered``). Recording at build time put a retry's
+   rebuilt, never-sent picks on the public record beside the ones that were
+   mailed — reproduced: "Maye over Prescott" mailed, "Prescott over Maye"
+   recorded too, one of them bound to hit (launch review OPS-1, Oct 2026).
 
 Dry-run is the default and never the right accident: with no ``EMAIL_PROVIDER``
 this writes drafts and exits 1 unless ``--allow-dry`` was passed.
@@ -32,9 +42,11 @@ can have paid, so the run says so and exits 0 (``run.watchdog.not_configured``)
 instead of filing a "failed" issue every Tuesday until checkout opens. A
 registry that exists but cannot be read still fails.
 
-A run that could mail and finished clean leaves a marker in the send log
-(``run.watchdog.mark_run``), so the daily watchdog can tell a Tuesday that ran
-with nobody to mail from a Tuesday GitHub never started.
+A run that could mail leaves a marker in the send log (``run.watchdog.mark_run``)
+once it gets as far as sending — with what it sent and what failed — so the
+daily watchdog can tell a Tuesday that ran from a Tuesday GitHub never started.
+A run that failed still marks: it has filed its own issue, and the watchdog's
+question is only whether it ran.
 """
 
 from __future__ import annotations
@@ -42,8 +54,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterable
 
 import render.report as render_report
 from render.report import cancel_destination
@@ -82,6 +95,14 @@ def _mask(email: str) -> str:
     return f"{name[:1]}***@{domain}"
 
 
+def report_key(season: str, week: int, slug: str) -> str:
+    """A subscriber's weekly report in the send log: per (season, week,
+    subscription), carrying no address. One definition, because the send, the
+    don't-rebuild check here and the first email intake sends at purchase
+    must all agree on it."""
+    return f"{season}-w{int(week):02d}-{slug}"
+
+
 @dataclass
 class RunResult:
     subscriber: RosterSubscriber
@@ -91,6 +112,11 @@ class RunResult:
     message: Message | None = None
     # The lineup as sent, for the Saturday final check (run/saturday.py).
     plan: dict | None = None
+    # What this report publishes, and the ledger store it belongs in. Nothing
+    # here is recorded until the message carrying it is delivered
+    # (record_delivered); a report built for a preview carries none at all.
+    calls: list = field(default_factory=list)
+    store: str | None = None
 
 
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
@@ -101,11 +127,15 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    first_plans: Path | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
-    ``record`` is False when nothing is being mailed. A call is PUBLISHED when
-    it reaches a subscriber, and the ledger is the record of what was published
-    — so a preview that writes rows claims we published calls nobody received,
-    permanently, because RULE L4 makes a graded entry immutable. Reproduced:
-    `--no-send` on an arbitrary week wrote 4 rows into the real store.
+    Writes nothing to the public ledger. ``record`` says whether this report's
+    calls may EVER be recorded: False when nothing is being mailed, and then
+    the result carries no calls for anything downstream to record. A call is
+    PUBLISHED when it reaches a subscriber, and the ledger is the record of
+    what was published — so a preview that writes rows claims we published
+    calls nobody received, permanently, because RULE L4 makes a graded entry
+    immutable. Reproduced: `--no-send` on an arbitrary week wrote 4 rows into
+    the real store. With ``record`` True the calls ride on the result and the
+    caller records them once the send has landed (``record_delivered``).
     """
     projections: dict[str, float] = {}
     try:
@@ -161,7 +191,7 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         text=text,
         # Idempotent per (season, week, subscription), so a re-run, a resumed
         # workflow or a double-fired cron cannot mail the same week twice.
-        key=f"{data.season}-w{week:02d}-{subscriber.slug}",
+        key=report_key(data.season, week, subscriber.slug),
         # Every commercial email needs a machine-readable way out, and this
         # product had none: a delivered draft carried only From/To/Subject/MIME.
         # For a PAID subscription there is no free list to leave — unsubscribing
@@ -171,27 +201,28 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     )
 
     # Every published probability lands on the ledger (principle 2) at the
-    # moment it is published — a call not recorded now cannot be recovered
-    # later. Guarded separately: the report above is already built, and a
-    # corrupt shared ledger must not sink this or anybody else's Tuesday.
+    # moment it is published — which is DELIVERY, so they are carried out of
+    # here and recorded after the send. Read here because the report is in
+    # hand; guarded separately, because the report above is already built and
+    # an unreadable call must not sink this or anybody else's Tuesday.
+    calls: list = []
+    store: str | None = None
     if not record:
         ledger_note = " · nothing recorded (not sending)"
     else:
         try:
-            from engine.ledger import (extract_published_calls, ledger_path,
-                                       record_calls)
-            # One store per SCORING PRESET, not one per subscriber. Two
-            # subscribers on the same preset who make the same call made ONE
-            # call and their ids agree by construction; two on different presets
-            # did NOT — the probabilities differ and so does the answer — which
-            # is why the store name carries the preset (engine/ledger.py
-            # _call_id, engine/subscriber.py build_season).
-            added = record_calls(
-                ledger_path(Path(processed_dir), report["meta"]["league_id"]),
-                extract_published_calls(report))
-            ledger_note = f" · {added} new ledger row(s)" if added else ""
+            from engine.ledger import extract_published_calls
+            # One store per SCORING PRESET (and size), not one per subscriber.
+            # Two subscribers on the same preset who make the same call made
+            # ONE call and their ids agree by construction; two on different
+            # presets did NOT — the probabilities differ and so does the answer
+            # — which is why the store name carries the preset
+            # (engine/ledger.py _call_id, engine/subscriber.py build_season).
+            calls = extract_published_calls(report)
+            store = str(report["meta"]["league_id"])
+            ledger_note = ""
         except Exception as exc:  # noqa: BLE001 — batch contract
-            ledger_note = f" · LEDGER RECORD FAILED: {exc!r}"
+            ledger_note = f" · LEDGER CALLS UNREADABLE: {exc!r}"
 
     try:
         spec = subscriber.spec()
@@ -213,7 +244,34 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     detail = (f"{published}/{len(report['lineup'])} confidences · "
               f"{len(report['meta'].get('gaps') or [])} gaps" + ledger_note + plan_note)
     return RunResult(subscriber, ok=True, detail=detail, html_path=html_path,
-                     message=message, plan=plan)
+                     message=message, plan=plan, calls=calls, store=store)
+
+
+def record_delivered(results: Iterable[RunResult], delivered: Iterable[str],
+                     processed_dir: Path) -> tuple[int, list[str]]:
+    """Put on the public ledger the calls of every report whose email was
+    DELIVERED in this run, and nothing else. -> (rows added, problems).
+
+    ``delivered`` is the keys of messages that left in THIS run — never the
+    ones skipped as already sent, because a skipped message's report was
+    rebuilt now and may not be the one in the inbox. A store that cannot be
+    written is reported per report and never stops the others; record_calls
+    is idempotent by call id, so two subscribers making the same call record
+    one row. Shared with run/intake.py's first email, the other place a
+    week's report is mailed."""
+    from engine.ledger import ledger_path, record_calls
+    keys = set(delivered)
+    added, problems = 0, []
+    for result in results:
+        if (result.message is None or result.message.key not in keys
+                or not result.calls or not result.store):
+            continue
+        try:
+            added += record_calls(ledger_path(Path(processed_dir), result.store),
+                                  result.calls)
+        except Exception as exc:  # noqa: BLE001 — batch contract
+            problems.append(f"{result.message.key}: {exc!r}")
+    return added, problems
 
 
 def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
@@ -275,12 +333,13 @@ def _mails_for_real(args) -> bool:
         return False
 
 
-def _mark_finished(season: str, week: int) -> None:
+def _mark_finished(season: str, week: int, summary: str = "") -> None:
     """Best effort: a marker that fails to write costs a false alarm from the
     watchdog tomorrow, never a send, so it is said and the run carries on."""
     try:
-        if mark_run(TUESDAY, season, week):
-            print(f"Marked {season} week {week}'s Tuesday run as finished.")
+        if mark_run(TUESDAY, season, week, summary=summary):
+            print(f"Marked {season} week {week}'s Tuesday run as having run"
+                  + (f" ({summary})." if summary else "."))
     except OSError as exc:
         print(f"could not mark the Tuesday run as finished ({exc}); the "
               f"watchdog may report this week as missed", file=sys.stderr)
@@ -302,7 +361,7 @@ def _mark_nobody_to_mail(args) -> None:
         print(f"could not tell which week this was, so no marker was left "
               f"({exc})", file=sys.stderr)
         return
-    _mark_finished(season, week)
+    _mark_finished(season, week, "nobody to mail")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -384,19 +443,36 @@ def main(argv: list[str] | None = None) -> int:
     # so a dry run that records claims we published calls nobody received.
     sending = _mails_for_real(args)
 
+    # Never rebuild a report that is already in an inbox. The 16:00 retry and
+    # GitHub's late backup make a second run every Tuesday routine, and by
+    # then the market lines (games.csv) or a stat correction may have moved:
+    # the rebuilt report is a different report, with different picks, and
+    # nothing about it was published. Skipped before the build, so it costs
+    # nothing and cannot leak into the ledger, the archive or a plan. A
+    # deliberate --resend rebuilds; --no-send is a build for inspection.
+    already: list[RosterSubscriber] = []
+    if not (args.no_send or args.resend):
+        from run.delivery import load_sent
+        in_log = load_sent()
+        already = [s for s in subscribers
+                   if report_key(data.season, data.week, s.slug) in in_log]
+    done = {s.key for s in already}
+
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
                               processed_dir=args.processed_dir, record=sending,
                               plans_dir=args.plans_dir or PLANS_DIR,
                               first_plans=first_plans_dir(args.registry))
-               for s in subscribers]
+               for s in subscribers if s.key not in done]
 
     line = "=" * 62
     ok = [r for r in results if r.ok]
     failed = [r for r in results if not r.ok]
     print(f"\n{line}\nTUESDAY RUN — {data.season} week {data.week}\n{line}")
-    print(f"Subscribers: {len(results)}; {len(ok)} reports written, "
-          f"{len(failed)} failed")
+    print(f"Subscribers: {len(results) + len(already)}; {len(ok)} reports "
+          f"written, {len(failed)} failed"
+          + (f", {len(already)} already sent this week (not rebuilt)"
+             if already else ""))
     for result in results:
         marker = "ok " if result.ok else "FAIL"
         print(f"  [{marker}] {result.subscriber.slug}: {result.detail}")
@@ -408,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     for payer, seats in sorted(league_pass_seats(subscribers).items()):
         print(f"League Pass · {_mask(payer)}: {len(seats)} seat(s) claimed")
 
+    delivered, skipped, send_failures = [], [], []
     if ok and not args.no_send:
         try:
             provider = build_provider(args.email_provider)
@@ -439,6 +516,18 @@ def main(argv: list[str] | None = None) -> int:
         if provider.name == DRY_PROVIDER:
             print(f"    (dry run — nothing left this machine; drafts in "
                   f"{_display(DRY_OUTBOX)})")
+        # The public record: the calls of what was DELIVERED just now, and
+        # nothing else — not a draft, not a failed send, and not a message
+        # skipped as already sent, whose report was rebuilt now and may differ
+        # from the one in the inbox. `sending` is the second gate: a dry
+        # provider's "delivered" drafts carry no calls in the first place.
+        if sending:
+            added, problems = record_delivered(
+                ok, [s.message.key for s in delivered], args.processed_dir)
+            print(f"    {added} new ledger row(s) from {len(delivered)} "
+                  f"delivered report(s)")
+            for problem in problems:
+                print(f"    LEDGER RECORD FAILED {problem}", file=sys.stderr)
         # The lineup each subscriber was actually SENT, for Saturday's final
         # check. Only for a send that happened now: a retry that skipped an
         # earlier send may have rebuilt a slightly different report (a stat
@@ -460,19 +549,22 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"    plan not saved for {send.message.key}: {exc}",
                           file=sys.stderr)
             print(f"    {written} lineup(s) saved for Saturday's final check")
-        if send_failures:
-            return 1
 
     if ok:
         print(f"Reports under: {_display(Path(args.out))}")
-    # Clean, and for real: every report built and every send landed (a send
-    # failure returned above). A run that built nothing leaves no marker, so
-    # the watchdog says so too.
-    if sending and not failed:
-        _mark_finished(data.season, data.week)
+    # This run got as far as sending, for real: it leaves the watchdog's
+    # marker, failures included — the counts say what happened, and a run that
+    # failed exits 1 below and files its own issue. Only the marker tells the
+    # watchdog a Tuesday ran; a report key in the log does not (a new buyer's
+    # first email shares it). A preview leaves none.
+    if sending:
+        _mark_finished(data.season, data.week,
+                       f"sent {len(delivered)}, already sent "
+                       f"{len(skipped) + len(already)}, send failed "
+                       f"{len(send_failures)}, not built {len(failed)}")
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
-    return 0 if not failed else 1
+    return 0 if not (failed or send_failures) else 1
 
 
 if __name__ == "__main__":

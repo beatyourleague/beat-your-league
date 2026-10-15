@@ -96,6 +96,18 @@ def test_the_real_tree_raises_no_failure() -> None:
     assert not failing, failing
 
 
+def test_the_secrets_gate_asks_for_every_secret_the_mail_needs() -> None:
+    """Launch review OPS-4: the crons map SENDER_POSTAL_ADDRESS into every
+    step that can mail (tests/test_workflows.py), but the launch check's
+    secrets gate did not list it — so launch morning could read "all present"
+    with every commercial email about to go out with no sender line. Any
+    secret a mail-sending step needs, other than a provider's alternative
+    token, is on the list."""
+    assert "SENDER_POSTAL_ADDRESS" in lc.REQUIRED_SECRETS
+    for name in ("EMAIL_PROVIDER", "EMAIL_FROM", "SITE_URL", "BILLING_PORTAL_URL"):
+        assert name in lc.REQUIRED_SECRETS, name
+
+
 def test_the_report_reads_and_the_verdict_follows_the_gates() -> None:
     gates = [lc.Gate("Site", "a", "PASS"), lc.Gate("Owner", "b", "OWNER", "do it")]
     assert "waiting on owner setup" in lc.render(gates)

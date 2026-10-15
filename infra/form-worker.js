@@ -49,8 +49,13 @@
  * seat claim is re-read every week of the season it was made for (the roster
  * it names is that season's), a waitlist address waits at most one offseason
  * for its launch email, and everything else is acted on within days — a
- * confirmed roster update is copied into the intake's own log, a trial is
- * keyed in the send log, a confirmation code dies after 7 days.
+ * confirmed roster update is copied into the intake's own log, a confirmation
+ * code dies after 7 days, and a trial request is mailed within 14 days of
+ * arriving or never (run/trials.py TRIAL_MAX_AGE, which also refuses one from
+ * before the current season's first game). The row itself keeps the shared
+ * TTL, which is harmless only because of that refusal: the trial key is per
+ * SEASON, so a runner that re-read every stored row once mailed last
+ * October's request again the next June.
  *
  * ── THE SCHEDULER (Oct 2026) ──────────────────────────────────────────────
  * GitHub's own cron is best-effort, and in practice it was not good enough:

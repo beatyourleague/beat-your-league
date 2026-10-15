@@ -31,8 +31,9 @@ save a registry snapshot over them.
 Two things about the run itself. Before launch (no registry file and no Stripe
 key) it is not configured rather than failed, and exits 0 — a "failed" issue
 every Saturday for a checkout that is not open yet is how the real one gets
-ignored. And a check that finished clean, for real, leaves a marker in the send
-log (``run.watchdog``): this run mails only on change, so without the marker a
+ignored. And a check that ran for real — got past its checks to the send,
+failures included, with the counts — leaves a marker in the send log
+(``run.watchdog``): this run mails only on change, so without the marker a
 Saturday GitHub never started is indistinguishable from a quiet one.
 """
 
@@ -414,14 +415,17 @@ def _could_mail(args) -> bool:
         return False
 
 
-def _mark_finished(args, season: str, week: int) -> None:
-    """Leave the watchdog's marker — only for a run that could have mailed.
-    Best effort: a marker that cannot be written costs a false alarm
-    tomorrow, never a send."""
+def _mark_finished(args, season: str, week: int, summary: str = "") -> None:
+    """Leave the watchdog's marker — only for a run that could have mailed,
+    and for any such run that got as far as sending, failures included: the
+    watchdog asks whether the check RAN (its marker is the only evidence it
+    reads), and a run that failed exits 1 and files its own issue. ``summary``
+    says what happened. Best effort: a marker that cannot be written costs a
+    false alarm tomorrow, never a send."""
     if not _could_mail(args):
         return
     try:
-        mark_run(SATURDAY, season, week)
+        mark_run(SATURDAY, season, week, summary=summary)
     except OSError as exc:
         print(f"could not mark the final check as finished ({exc}); the "
               f"watchdog may report this week as missed", file=sys.stderr)
@@ -466,7 +470,8 @@ def main(argv: list[str] | None = None) -> int:
             season = str(args.season or current_season(args.cache, today=at.date()))
             if args.week or not season_over(args.cache, season, at.date()):
                 _mark_finished(args, season, int(
-                    args.week or current_week(args.cache, season, today=at.date())))
+                    args.week or current_week(args.cache, season, today=at.date())),
+                    "nobody to check")
         except Exception as exc:  # noqa: BLE001 — a marker never fails the run
             print(f"could not tell which week this was, so no marker was left "
                   f"({exc})", file=sys.stderr)
@@ -543,6 +548,7 @@ def main(argv: list[str] | None = None) -> int:
               f"({', '.join(lost[:5])}) — the plans cache is missing or a plan "
               f"failed to save. They were not checked.", file=sys.stderr)
 
+    delivered, skipped, failures = [], [], []
     if messages:
         try:
             provider = build_provider(args.email_provider)
@@ -558,19 +564,22 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         sends = send_all(messages, provider=provider, resend_anyway=args.resend)
         delivered = [s for s in sends if s.ok and not s.skipped]
+        skipped = [s for s in sends if s.skipped]
         failures = [s for s in sends if not s.ok]
         print(f"Delivery via {provider.name}: {len(delivered)} sent, "
-              f"{sum(1 for s in sends if s.skipped)} already sent, "
-              f"{len(failures)} failed")
+              f"{len(skipped)} already sent, {len(failures)} failed")
         for send in failures:
             print(f"    FAILED {send.message.key}: {send.detail}", file=sys.stderr)
         if provider.name == DRY_PROVIDER:
             print(f"    (dry run — drafts in {DRY_OUTBOX})")
-        if failures:
-            return 1
-    if unreadable or lost:
+    # The check RAN: the marker goes down whatever it found, with the counts.
+    # A failure below still exits 1, and that run files its own issue.
+    _mark_finished(args, season, week,
+                   f"sent {len(delivered)}, already sent {len(skipped)}, send "
+                   f"failed {len(failures)}, unchanged {len(quiet)}, no plan "
+                   f"{len(missing)}, not checked {len(unreadable)}")
+    if failures or unreadable or lost:
         return 1
-    _mark_finished(args, season, week)
     print("LLM tokens this run: 0 (deterministic layer only)")
     print(line)
     return 0
