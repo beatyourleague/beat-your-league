@@ -716,7 +716,8 @@ def test_a_quarterbacks_usage_is_his_passing_volume() -> None:
     assert usage_line(usage, "QB") == ("last 4 games: 142 pass attempts (35.5 a game), "
                                        "37 carries")
     assert usage_line(usage, "WR") == "last 4 games: 1 target (0.2 a game), 37 carries"
-    assert short_usage(usage_line(usage, "QB")) == "last 4: 35.5 att/g, 9.2 car/g"
+    assert short_usage(usage_line(usage, "QB")) == ("last 4: 35.5 pass attempts · "
+                                                   "9.2 carries a game")
 
 
 def test_the_superflex_row_lines_up_in_plain_text() -> None:

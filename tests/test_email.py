@@ -427,7 +427,10 @@ def test_the_week_one_subject_does_not_call_an_ordering_a_decision() -> None:
     for slot in report["lineup"]:
         slot["projected"] = None
         slot["confidence"] = None
-    assert _subject(report) == f"Week {report['meta']['week']}: your opening lineup"
+    # The team name sits between the week and the promise (BE-I5); the rule
+    # is the promise.
+    assert re.fullmatch(rf"Week {report['meta']['week']}( — .+'s team)?: "
+                        r"your opening lineup", _subject(report)), _subject(report)
     report["lineup"][0]["projected"] = 12.3
     assert "your lineup, decided" in _subject(report)
 

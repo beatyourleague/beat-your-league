@@ -43,6 +43,52 @@ EMAIL_META = (
     '<meta name="format-detection" content="telephone=no,date=no,address=no,email=no">\n')
 
 
+# What a generated report PAGE's <head> carries (samples, the live sample, a
+# subscriber's archive, the roster report). The pages are paper-light by
+# design and said nothing, so a phone in dark mode drew dark native scrollbars
+# and controls over a cream page and Safari left its bar untinted (launch
+# review I12, Oct 2026). Light only, and the masthead's navy for the bar.
+PAGE_META = ('<meta name="color-scheme" content="light">\n'
+             '<meta name="theme-color" content="#101E33">\n')
+
+# The faces above the fold on every report page: the masthead's condensed
+# display face and the body face. Preloaded so the first paint already has
+# them; read out of fonts.css rather than named here, so the filenames live in
+# one place (site/fonts/fonts.css) and a renamed file cannot leave a preload
+# fetching a 404 beside the real one.
+FONTS_CSS = REPO_ROOT / "site" / "fonts" / "fonts.css"
+PRELOAD_FACES = (("Barlow Condensed", "800"), ("Barlow", "400"))
+
+
+def font_preloads(css_path: Path | None = None) -> str:
+    """<link rel="preload"> tags for PRELOAD_FACES, page-relative like the
+    stylesheet link the template carries. Empty when fonts.css is absent or
+    names neither face: a preload is an optimisation, never a dependency."""
+    path = css_path or FONTS_CSS
+    try:
+        css = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    found: dict[tuple[str, str], str] = {}
+    for block in re.findall(r"@font-face\s*{([^}]*)}", css):
+        family = re.search(r"font-family\s*:\s*['\"]?([^;'\"]+)", block)
+        weight = re.search(r"font-weight\s*:\s*(\d+)", block)
+        style = re.search(r"font-style\s*:\s*(\w+)", block)
+        src = re.search(r"url\(\s*['\"]?([^'\")]+\.woff2)['\"]?\s*\)", block)
+        if not (family and weight and src) or (style and style.group(1) != "normal"):
+            continue
+        key = (family.group(1).strip(), weight.group(1))
+        url = src.group(1).strip()
+        if not url.startswith(("/", "http:", "https:")):
+            import posixpath
+            url = posixpath.normpath(posixpath.join("fonts", url))
+        found.setdefault(key, url)
+    return "".join(
+        f'<link rel="preload" href="{esc(found[face])}" as="font" '
+        f'type="font/woff2" crossorigin>\n'
+        for face in PRELOAD_FACES if face in found)
+
+
 def preheader_html(text: str) -> str:
     """The inbox preview line, padded. Without the filler an inbox continues
     the preview into whatever comes next in the body ("BEAT YOUR LEAGUE WEEK
@@ -264,14 +310,18 @@ CANCEL_TEXT = ("DONE WITH THIS? Cancel it yourself from your own billing page �
 # suppression list run/delivery.py checks before every send (run/suppress.py).
 # Ten business days is CAN-SPAM's ceiling. The operator is in this loop only
 # because no money is: a PAID subscription still cancels itself.
+# "Your league's pass", never "your commissioner's": any manager may buy the
+# League Pass (league-pass.html), and a seat told it belongs to the
+# commissioner's pass goes looking for the wrong person (panel review LP-D7).
 SEAT_STOP_BODY = ("Reply \"stop\" to any of our emails, or use your mail app's "
                   "unsubscribe — you're off within 10 business days. Your "
-                  "commissioner's pass isn't affected.")
+                  "league's pass isn't affected.")
 # On a registry row, and so in a report's meta["plan"] (run/tuesday.py), this
-# word means a SEAT: a pass PAYER is written as an ordinary season row and
-# never carries it (run/intake.py). The welcome email has its own vocabulary,
-# where a seat is "seat" and "league_pass" is the payer — so the helpers below
-# take a yes/no, never a plan word that means opposite things in two places.
+# word means a SEAT; the pass PAYER is "pass" (PASS_PLAN below — before Oct
+# 2026 a payer's row was flattened to "season"). The welcome email has its own
+# vocabulary, where a seat is "seat" and "league_pass" is the payer — so the
+# helpers below take a yes/no, never a plan word that means opposite things in
+# two places.
 SEAT_PLAN = "league_pass"
 
 
@@ -542,8 +592,9 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
     availability = meta.get("availability_as_of")
     if availability:
         try:
-            stamp = datetime.fromisoformat(str(availability)).astimezone(timezone.utc)
-            availability = stamp.strftime("%a %b %d, %H:%M UTC")
+            stamp = datetime.fromisoformat(str(availability))
+            # The buyer's clock, the one every kickoff in the report uses.
+            availability = eastern(stamp)
         except (TypeError, ValueError):
             pass
         return f"Injury and inactive data as of {availability}."
@@ -589,9 +640,75 @@ def gate_note(reason: str) -> str:
 # sections
 # --------------------------------------------------------------------- #
 
-def header(meta: Mapping[str, Any]) -> str:
+def is_subscriber_report(meta: Mapping[str, Any]) -> bool:
+    """A weekly report addressed to one subscriber: solo, and neither a
+    published sample nor a free report. The chrome that names a team, counts
+    seats or dates a roster belongs only here."""
+    return bool(meta.get("solo")) and not (
+        meta.get("historical_demo") or meta.get("live_demo") or meta.get("trial"))
+
+
+# Slots that make a poor name for a team: "the Denver Broncos's team".
+_UNNAMED_SLOTS = ("K", "DEF")
+
+
+def team_name(report: Mapping[str, Any]) -> str | None:
+    """"Josh Allen's team" — the roster named by its highest-projected starter.
+
+    A manager with two teams got two identical emails, "Week 6: your lineup,
+    decided" over "Your league · 12 teams · Full PPR", and could not tell which
+    league either was for (panel review BE-I5, Oct 2026). The join flow asks
+    for no team name, so the name is one every manager already uses for a
+    team: its best player. Facts only: he is on the roster and he leads its
+    projections. Week 1 has no projections, so the first starter named in
+    lineup order stands in (the quarterback, on every template). Kickers and
+    defenses never name a team. Subscriber reports only: a sample or a free
+    report goes to nobody with two teams.
+    """
+    meta = report.get("meta") or {}
+    if not is_subscriber_report(meta):
+        return None
+    starters = [s for s in (report.get("lineup") or [])
+                if s.get("player_name") and s.get("slot") not in _UNNAMED_SLOTS]
+    if not starters:
+        return None
+    projected = [s for s in starters if s.get("projected") is not None]
+    lead = (max(projected, key=lambda s: s["projected"]) if projected
+            else starters[0])
+    return f"{lead['player_name']}'s team"
+
+
+def _site_bar() -> str:
+    """The published samples' masthead row: the wordmark home, the site's own
+    routes, and the labelled Home button every site page carries above its
+    headline (tests/test_site.py). Relative links: the samples sit at the site
+    root, and the live sample's ?via= carry rewrites exactly these."""
+    return (
+        '<div class="sitebar">'
+        f'<a class="brand" href="index.html">{mark_svg("bylm")}'
+        '<span>Beat Your League</span></a>'
+        '<nav class="sitenav" aria-label="Site">'
+        '<a href="how-it-works.html">How it works</a>'
+        '<a href="index.html#pricing">Pricing</a>'
+        '<a class="home" href="index.html">← Home</a></nav></div>')
+
+
+# The samples' one ask, at the top and at the end. It points at the join page
+# in every state: open, that page sells; closed, it says so before anyone
+# pastes a roster and keeps the roster for launch day. So the button is never a
+# dead end, and it never names a price (the hero rule).
+SAMPLE_CTA = "Get this for your team"
+
+
+def sample_cta() -> str:
+    return f'<a class="btn" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
+
+
+def header(meta: Mapping[str, Any], team: str | None = None) -> str:
+    """The masthead. ``team`` names a subscriber's roster (``team_name``), so
+    a manager with two teams can tell the two reports apart."""
     chips = [
-        f'<span class="chip"><b>{esc(meta["league_name"])}</b>'
+        f'<span class="chip"><b>{esc(team or meta["league_name"])}</b>'
         f' · {esc(meta["num_teams"])} teams'
         + (f' · {esc(meta["scoring"])}' if meta.get("scoring") else "") + "</span>",
         f'<span class="chip">{esc(_generated_stamp(meta))}</span>',
@@ -607,13 +724,15 @@ def header(meta: Mapping[str, Any]) -> str:
     elif meta.get("named_rival_label"):
         chips.insert(2, f'<span class="chip">Rival: '
                         f'<b>{esc(meta["named_rival_label"])}</b></span>')
+    # Notices, not alarms: these wore .regret-note's brick alert tint, so the
+    # most-linked page of the site opened on what read as an error box.
     banner = ""
     if meta.get("live_demo"):
         # The live sample (render/live_sample.py): this week's report for the
         # published sample roster, rebuilt every Tuesday by the weekly cron.
         banner = (
-            '<div class="regret-note" style="margin:0;border-left:none;">'
-            f'THIS WEEK\'S REPORT — Week {esc(meta["week"])} of the '
+            '<div class="notice">'
+            f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
             f'{esc(meta["season"])} season, built {esc(_built_on(meta))} for a '
             f'sample roster, exactly the way yours is built. Rebuilt every '
             f'Tuesday.</div>')
@@ -622,14 +741,14 @@ def header(meta: Mapping[str, Any]) -> str:
         # injury reports ARE available — so confidences print, and the old
         # "numbers are left off" sentence would be false of the page it sits on.
         banner = (
-            '<div class="regret-note" style="margin:0;border-left:none;">'
-            f'SAMPLE REPORT — a real week from the {esc(meta["season"])} NFL season, '
-            f'built exactly the way yours will be: one roster, scored its league\'s '
-            f'way, from that week\'s box scores and injury reports.</div>'
+            '<div class="notice">'
+            f'<b>SAMPLE REPORT</b> — a real week from the {esc(meta["season"])} NFL '
+            f'season, built exactly the way yours will be: one roster, scored its '
+            f'league\'s way, from that week\'s box scores and injury reports.</div>'
         )
     elif meta.get("historical_demo"):
         banner = (
-            '<div class="regret-note" style="margin:0;border-left:none;">'
+            '<div class="notice">'
             f'SAMPLE REPORT — real data from the {esc(meta["season"])} season of '
             f'{esc(meta["league_name"])}, built to show exactly what lands in your inbox '
             f'on a Tuesday. Because it\'s a past season we can\'t check who was hurt or '
@@ -640,30 +759,36 @@ def header(meta: Mapping[str, Any]) -> str:
             + '</div>'
         )
     if season_end_lines(meta):
-        banner += ('<div class="regret-note" style="margin:0;border-left:none;">'
+        banner += ('<div class="notice">'
                    f'<b>{esc(SEASON_END_HEAD)}.</b> '
                    f'{esc(" ".join(season_end_lines(meta)))}</div>')
     brand = f'<div class="brand">{mark_svg("bylm")}<span>Beat Your League</span></div>'
+    cta = ""
     if meta.get("anonymized_demo"):
         # The published samples are site pages a visitor reaches from the
-        # landing page, and they had no way back to it. A subscriber's own
-        # report is opened from their inbox and keeps the plain masthead.
-        brand = (
-            '<div style="display:flex;align-items:center;justify-content:space-between;'
-            'gap:12px;flex-wrap:wrap;">'
-            f'<a class="brand" href="index.html" style="text-decoration:none;">'
-            f'{mark_svg("bylm")}<span>Beat Your League</span></a>'
-            '<a class="home" href="index.html" style="font-family:\'Barlow\',sans-serif;'
-            'font-weight:600;font-size:14px;line-height:1;white-space:nowrap;'
-            'text-decoration:none;color:var(--paper);padding:8px 15px;'
-            'border:1.5px solid rgba(246,244,238,.45);border-radius:999px;">'
-            '← Home</a></div>'
-        )
+        # landing page or a shared link, and they offered no way back and no
+        # route to pricing or setup — only a Home pill (panel review I3, I5).
+        # A subscriber's own report is opened from their inbox and keeps the
+        # plain masthead.
+        brand = _site_bar()
+        if meta.get("solo"):
+            cta = f'<p class="headcta">{sample_cta()}</p>'
     return (
         f'<header class="bug">{brand}'
         f'<h1>Week {esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
-        f'<div class="chips">{"".join(chips)}</div></header>{banner}'
+        f'<div class="chips">{"".join(chips)}</div>{cta}</header>{banner}'
     )
+
+
+def eastern(stamp: datetime) -> str:
+    """'Thu Oct 15 · 7:02 AM ET' — the buyer's clock, the one every kickoff in
+    the report is printed in. A naive stamp is read as UTC."""
+    from zoneinfo import ZoneInfo
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    local = stamp.astimezone(ZoneInfo("America/New_York"))
+    return (local.strftime("%a %b ") + f"{local.day} · "
+            + local.strftime("%I:%M %p ET").lstrip("0"))
 
 
 def _built_on(meta: Mapping[str, Any]) -> str:
@@ -677,22 +802,21 @@ def _built_on(meta: Mapping[str, Any]) -> str:
 
 
 def _generated_stamp(meta: Mapping[str, Any]) -> str:
+    """When this report was built, in the buyer's words and on the buyer's
+    clock. A subscriber's report said "Generated Thu Oct 15 · 18:51 UTC" — the
+    operator's word on the operator's clock, above kickoffs printed in ET
+    (panel review BE-I10, I11, RQ-19)."""
     raw = meta.get("generated_at", "")
     try:
         stamp = datetime.fromisoformat(raw).astimezone(timezone.utc)
     except (TypeError, ValueError):
-        return "Generated (timestamp unavailable)"
-    if meta.get("live_demo"):
-        from zoneinfo import ZoneInfo
-        local = stamp.astimezone(ZoneInfo("America/New_York"))
-        return local.strftime("Built %a %b ") + f"{local.day} · " + \
-            local.strftime("%I:%M %p ET").lstrip("0")
+        return "Built this week"
     if meta.get("historical_demo"):
         # The sample is a replay: say so in the stamp itself, or the build
         # date and the season it replays look like a contradiction.
         return stamp.strftime(f"Rebuilt %b %d, %Y from the {meta.get('season')} "
                               f"season archive")
-    return stamp.strftime("Generated %a %b %d · %H:%M UTC")
+    return "Built " + eastern(stamp)
 
 
 def section_checklist(items: list[Mapping[str, Any]]) -> str:
@@ -1070,6 +1194,24 @@ def _bench_table(report: Mapping[str, Any]) -> str:
     return f'<table class="tape benchtape">{LINEUP_COLS}{head}{"".join(rows)}</table>'
 
 
+# Principle 5: every number shown has a definition. "94 – 158 realistic range"
+# printed on every report with none, anywhere (panel review SS-I1). This says
+# what engine.week_report._team_range computes — the starters' projections
+# summed, plus or minus 1.28 times their combined spread — in the buyer's
+# words, and claims no coverage: the frozen method (§10.8) withholds the
+# "about 78%" sentence until the band is measured on this data, so the
+# definition may not smuggle one back in as "8 weeks in 10".
+RANGE_LABEL = "realistic range"
+RANGE_DEFINITION = ("your projected total, give or take the week-to-week swing "
+                    "in your starters' scoring, combined. It shows how far the "
+                    "week can move, not where it will land.")
+
+
+def range_text(team: Mapping[str, Any]) -> str:
+    """"94 – 158": the band, rounded the way every surface prints it."""
+    return f'{team["floor"]:.0f} – {team["ceiling"]:.0f}'
+
+
 def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
     """Your projected week — a total and a band, with no opponent to beat.
 
@@ -1084,8 +1226,10 @@ def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> st
     else:
         body = (f'<div class="team"><div class="name">{esc(you["label"])}</div>'
                 f'<div class="pts">{you["projected_total"]:.1f} <small>PROJ</small></div>'
-                f'<div class="yards">{you["floor"]:.0f} – {you["ceiling"]:.0f} '
-                f'realistic range</div></div>')
+                f'<div class="wkrange">{range_text(you)} '
+                f'<span>{esc(RANGE_LABEL)}</span></div></div>'
+                f'<p class="rangedef"><b>{esc(RANGE_LABEL.capitalize())}:</b> '
+                f'{esc(RANGE_DEFINITION)}</p>')
         basis = matchup.get("range_basis")
         if basis:
             body += f'<div class="yards">{esc(basis)}</div>'
@@ -1550,16 +1694,18 @@ def demo_band(meta: Mapping[str, Any]) -> str:
     has just finished due diligence — and it used to end at a footer with zero
     links to the picker. Never rendered in a live subscriber report: selling a
     subscriber the thing they already own reads as spam.
+
+    A navy card with the landing's gold button (panel review I3): the ask used
+    to be one underlined "set it up" inside a box tinted like an error.
     """
     if not meta.get("anonymized_demo"):
         return ""
     if meta.get("solo") and meta.get("live_demo"):
         return (
-            '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
-            'This is this week\'s report for a sample roster. Yours is built from '
-            'your own roster, scored your league\'s way — '
-            '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
-            'set it up</a> and your first report lands the day you join.</div>')
+            '<div class="ctacard"><p>This is this week\'s report for a sample '
+            'roster. Yours is built from your own roster, scored your league\'s '
+            'way, and your first report lands the day you join.</p>'
+            f'{sample_cta()}</div>')
     if meta.get("solo"):
         season = esc(str(meta.get("season", "a past")))
         # The two published samples point at each other on purpose. A buyer
@@ -1569,18 +1715,15 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         # what the other one shows.
         companion = (
             'A mid-season report, once the season has a record to read, looks '
-            'like <a href="sample-report.html" style="color:var(--brick);'
-            'font-weight:700;">this</a>. '
+            'like <a href="sample-report.html">this</a>. '
             if meta.get("first_week_demo") else
             ''
         )
         return (
-            '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
-            f'This report is from the {season} season. {companion}'
-            'Yours is built from your own '
-            'roster, scored your league\'s way — '
-            '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
-            'set it up</a> and your first report lands the day you join.</div>'
+            f'<div class="ctacard"><p>This report is from the {season} season. '
+            f'{companion}Yours is built from your own roster, scored your '
+            f'league\'s way, and your first report lands the day you join.</p>'
+            f'{sample_cta()}</div>'
         )
     return (
         '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
@@ -1590,18 +1733,131 @@ def demo_band(meta: Mapping[str, Any]) -> str:
     )
 
 
-def _forward_line() -> str:
+# On a registry row, and so in meta["plan"] (run/tuesday.py), this word means
+# the League Pass PAYER: billed $99 a year, covering their league's seats.
+# Before Oct 2026 a payer's row was flattened to "season" and their report
+# could not tell (panel review LP-D3); SEAT_PLAN above is the seat.
+PASS_PLAN = "pass"
+
+
+def in_pass_league(meta: Mapping[str, Any]) -> bool:
+    """A weekly report for somebody in a league its League Pass covers: the
+    payer, or a seat."""
+    return meta.get("plan") in (PASS_PLAN, SEAT_PLAN)
+
+
+def _site() -> str:
+    return os.environ.get("SITE_URL", "").rstrip("/")
+
+
+def league_seat_link(meta: Mapping[str, Any]) -> tuple[str, bool] | None:
+    """(where a leaguemate claims the seat their league's pass already paid
+    for, whether that link names the pass).
+
+    The per-pass link (``meta["seat_link"]``, set by the run when it can sign
+    one) needs nothing typed; the generic seat page needs the payer's address,
+    and the line says so. None without a site to link to."""
+    link = meta.get("seat_link")
+    if isinstance(link, str) and link.startswith("https://"):
+        return link, True
+    site = _site()
+    return (f"{site}/join/?pass=1", False) if site else None
+
+
+# The generic seat page matches a seat to its pass by the payer's address, so
+# a leaguemate sent there must know to ask for it — or their claim matches no
+# pass and is dropped.
+SEAT_ADDRESS_NOTE = ("you'll need the email address the pass was bought with; "
+                     "it's how your seat is matched.")
+
+
+def _forward_text(meta: Mapping[str, Any]) -> str:
+    """The forward line's words, shared by every surface (both HTML footers
+    escape it; the text half prints it as is). Empty when there is nowhere to
+    send anyone."""
+    site = _site()
+    if in_pass_league(meta):
+        # A seat's or a payer's report, forwarded to the league: the reader's
+        # seat is already paid for. It used to send them to the $39 checkout
+        # (panel review LP-D2).
+        seat = league_seat_link(meta)
+        if not seat:
+            return ""
+        link, named = seat
+        return ("Got this from a leaguemate? Your league's pass already covers "
+                f"your seat — claim it, free, with your own roster: {link}"
+                + ("" if named else f" — {SEAT_ADDRESS_NOTE}"))
+    if not site:
+        return ""
+    return (f"Got this from a leaguemate? Every manager gets their own report, "
+            f"built from their own roster — {site}/join.")
+
+
+def _linked(words: str, link: str | None = None) -> str:
+    """``words`` escaped, with ``link`` (when it appears) made tappable: a
+    seat link a leaguemate has to copy out of running text is one fewer seat
+    claimed. Every href here is https (tests/test_email_safety.py)."""
+    text = esc(words)
+    if link and link.startswith("https://") and esc(link) in text:
+        text = text.replace(esc(link), f'<a href="{esc(link)}">{esc(link)}</a>', 1)
+    return text
+
+
+def _forward_line(meta: Mapping[str, Any] | None = None) -> str:
     """The standing acquisition line, above the cancellation block.
 
     A forwarded report is the one organic touch with the eleven best prospects
     a subscriber knows. Gated on SITE_URL (set at launch, with the domain):
-    a call to action with nowhere to go is worse than none.
+    a call to action with nowhere to go is worse than none. A pass payer whose
+    report carries the seat count already shows the seat link there.
     """
-    site = os.environ.get("SITE_URL", "").rstrip("/")
-    if not site:
+    meta = meta or {}
+    if seats_text(meta) or meta.get("historical_demo") or meta.get("live_demo"):
+        # A published sample is not forwarded by anybody: its own ask is the
+        # closing card (demo_band).
         return ""
-    return (f'Got this from a leaguemate? Every manager gets their own report, '
-            f'built from their own roster — {esc(site)}/join.<br>')
+    words = _forward_text(meta)
+    if not words:
+        return ""
+    seat = league_seat_link(meta) if in_pass_league(meta) else None
+    link = seat[0] if seat else f"{_site()}/join"
+    return f"{_linked(words, link)}<br>"
+
+
+def seats_text(meta: Mapping[str, Any]) -> str:
+    """The League Pass payer's one count line (``meta["seats_claimed"]``, set
+    by the run): how many of the league's seats are claimed, and where the
+    rest claim theirs. Counts only — never a name or an address. Empty for
+    anybody but a payer, or when the count is unreadable."""
+    seats = meta.get("seats_claimed")
+    if meta.get("plan") != PASS_PLAN or not isinstance(seats, Mapping):
+        return ""
+    claimed, size = seats.get("claimed"), seats.get("size")
+    if (not isinstance(claimed, int) or not isinstance(size, int)
+            or isinstance(claimed, bool) or isinstance(size, bool)
+            or claimed < 0 or size < 1):
+        return ""
+    count = f"League Pass: {claimed} of {size} seats claimed."
+    if claimed > size:
+        count = (f"League Pass: {claimed} seats claimed — more than your "
+                 f"league's {size} teams.")
+    seat = league_seat_link(meta)
+    if claimed >= size or not seat:
+        return count
+    link, named = seat
+    return (f"{count} Your leaguemates claim theirs, free, with their own "
+            f"roster: {link}" + ("" if named else f" — {SEAT_ADDRESS_NOTE}"))
+
+
+def seats_line(meta: Mapping[str, Any]) -> str:
+    """The HTML twin of seats_text, for the footer."""
+    words = seats_text(meta)
+    if not words:
+        return ""
+    seat = league_seat_link(meta)
+    label, _, rest = words.partition(": ")
+    return (f"<b>{esc(label)}:</b> "
+            f"{_linked(rest, seat[0] if seat else None)}<br>")
 
 
 def read_line(meta: Mapping[str, Any]) -> str:
@@ -1631,6 +1887,26 @@ def read_lines(meta: Mapping[str, Any]) -> list[str]:
 
 SEASON_END_HEAD = "The season's end"
 
+# What the season's last report says about money and next season, per plan
+# (meta["plan"], render/report.PASS_PLAN and SEAT_PLAN). Each is that plan's
+# own promise, repeated. A League Pass seat is CLAIMED, each season, with that
+# season's roster — so a seat is never told its reports simply start again
+# (panel review LP-D3, LP-D5).
+SEASON_END_BILLING = {
+    "monthly": "Your monthly plan stops billing on its own at season's end, "
+               "so there's nothing to cancel.",
+    "season": "Your season pass renews once a year, on the day you bought it, "
+              "and we email you before it does. Reports start again with "
+              "Week 1 next September.",
+    PASS_PLAN: "Your League Pass renews once a year, on the day you bought it, "
+               "and we email you before it does. Your league's seats come back "
+               "with it: each manager claims theirs again next season, with "
+               "their new roster.",
+    SEAT_PLAN: "Reports for this seat end here; if your league's pass is "
+               "renewed, claim your seat again next season with your new "
+               "roster.",
+}
+
 
 def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
     """What a report says in the season's last two weeks (both renderers).
@@ -1658,16 +1934,7 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
              f"starters, and many of those calls come after Friday's injury "
              f"report. Check each team's inactives, posted 90 minutes before "
              f"kickoff."]
-    plan = meta.get("plan")
-    billing = {
-        "monthly": "Your monthly plan stops billing on its own at season's end, "
-                   "so there's nothing to cancel.",
-        "season": "Your season pass renews once a year, on the day you bought it, "
-                  "and we email you before it does. Reports start again with "
-                  "Week 1 next September.",
-        "league_pass": "Reports start again with Week 1 next September if your "
-                       "league's pass is renewed.",
-    }.get(plan)
+    billing = SEASON_END_BILLING.get(meta.get("plan"))
     if billing:
         lines.append("This is the season's last report. Thanks for playing it "
                      "with us. " + billing)
@@ -1689,6 +1956,23 @@ def _last_report(meta: Mapping[str, Any]) -> bool:
     return meta.get("last_week") is not None and meta.get("week") == meta.get("last_week")
 
 
+def roster_as_of(meta: Mapping[str, Any]) -> str:
+    """"This report used your roster as of Oct 3." — the day the roster in use
+    was set (``meta["roster_as_of"]``: the signup, or the last confirmed
+    update). A subscriber whose trade has not reached us can see at a glance
+    that this report predates it, beside the route that fixes it. Empty when
+    the run did not say, or said something that is not a date."""
+    from datetime import date
+    raw = meta.get("roster_as_of")
+    try:
+        day = date.fromisoformat(str(raw)) if raw else None
+    except ValueError:
+        day = None
+    if day is None or not is_subscriber_report(meta):
+        return ""
+    return f"This report used your roster as of {day:%b} {day.day}."
+
+
 # The update link is PUBLIC and grants nothing (run/updates.py, confirm-by-
 # email). The tokenised link it replaced sat right under the forward line and
 # asked subscribers to forward a credential to the league it was framed
@@ -1702,11 +1986,14 @@ def update_line(meta: Mapping[str, Any]) -> str:
     if (not meta.get("solo") or meta.get("historical_demo")
             or meta.get("live_demo") or meta.get("trial")):
         return ""
+    as_of = roster_as_of(meta)
+    dated = f" {esc(as_of)}" if as_of else ""
     if not url:
-        return ("" if _last_report(meta)
-                else f'<b>{esc(UPDATE_HEAD)}</b> {esc(UPDATE_REPLY)}<br>')
+        if _last_report(meta):
+            return f"{esc(as_of)}<br>" if as_of else ""
+        return f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(UPDATE_REPLY)}<br>'
     body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
-    return (f'<b>{esc(UPDATE_HEAD)}</b> {esc(body)} '
+    return (f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(body)} '
             f'<a href="{esc(url)}">{esc(url)}</a><br>')
 
 
@@ -1716,10 +2003,12 @@ def update_lines(meta: Mapping[str, Any]) -> list[str]:
             or meta.get("live_demo") or meta.get("trial")):
         return []
     url = meta.get("update_url")
+    as_of = roster_as_of(meta)
+    dated = f" {as_of}" if as_of else ""
     if not url and _last_report(meta):
-        return []
+        return ["", as_of] if as_of else []
     body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
-    return ["", f"{UPDATE_HEAD.upper()} "
+    return ["", f"{UPDATE_HEAD.upper()}{dated} "
             + (f"{body} {url}" if url else UPDATE_REPLY)]
 
 
@@ -1736,7 +2025,8 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{read_line(meta)}'
         f'{update_line(meta)}'
-        f'{_forward_line()}'
+        f'{seats_line(meta)}'
+        f'{_forward_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
@@ -1853,7 +2143,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     meta = report["meta"]
     if meta.get("solo"):
         return [
-            header(meta),
+            header(meta, team_name(report)),
             section_checklist(report["checklist"]),
             section_your_week(report["matchup"], report.get("no_opponent")),
             section_your_lineup(report),
@@ -1918,9 +2208,28 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'<title>{esc(title)}</title>\n{social}{favicon}{links}\n<style>{style}</style>\n'
-        f'</head>\n<body>\n<div class="report">\n{body}\n</div>\n</body>\n</html>\n'
+        f'{PAGE_META}<title>{esc(title)}</title>\n{social}{favicon}'
+        f'{font_preloads()}{links}\n<style>{style}</style>\n'
+        f'</head>\n<body>\n<div class="report">\n{landmarks(body)}\n</div>\n'
+        f'</body>\n</html>\n'
     )
+
+
+def landmarks(body: str) -> str:
+    """The page body with its landmarks: the masthead stays the banner, the
+    footer the contentinfo, and everything between them is <main>.
+
+    The generated pages had no <main> at all, so a screen reader's "skip to
+    main content" had nowhere to go and axe flagged every section as content
+    outside a landmark (panel review D9). The notices and the closing ask sit
+    inside main: they are the page's content, not its chrome."""
+    head, sep, rest = body.partition("</header>")
+    if not sep:
+        return f'<main id="main">{body}</main>'
+    middle, foot_sep, foot = rest.rpartition("<footer>")
+    if not foot_sep:
+        return f'{head}{sep}<main id="main">{rest}</main>'
+    return f'{head}{sep}<main id="main">{middle}</main>{foot_sep}{foot}'
 
 
 def main(argv: list[str] | None = None) -> int:

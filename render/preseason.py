@@ -23,9 +23,11 @@ from typing import Any, Mapping
 
 from engine.preseason import NO_RECORD
 from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAVICON_LINK,
-                           MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE,
+                           MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE, PAGE_META,
                            SECTION_MARK, TEMPLATE_PATH, cancel_destination, esc,
-                           extract_design, mark_svg, number_sections)
+                           extract_design, font_preloads, landmarks, mark_svg,
+                           number_sections, sender_html)
+from render.sender import sender_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -104,6 +106,17 @@ INSEASON_TITLE = "Your Roster Report"
 def file_title(report: Mapping[str, Any]) -> str:
     return (INSEASON_TITLE if report["meta"].get("season_started")
             else PRESEASON_TITLE)
+
+
+# The scoring preset in the buyer's words. The plain-text half printed the raw
+# code ("Your Team · ppr") while the HTML said "Full PPR" (panel review BE-D5);
+# one mapping now serves all three surfaces.
+SCORING_NAMES = {"ppr": "Full PPR", "half_ppr": "Half PPR", "standard": "Standard"}
+
+
+def scoring_name(meta: Mapping[str, Any]) -> str:
+    code = meta.get("scoring")
+    return SCORING_NAMES.get(code, code or "")
 
 
 def _stamp() -> str:
@@ -198,8 +211,7 @@ def _pre_section(title: str, body: str) -> str:
 
 
 def _header(meta: Mapping[str, Any]) -> str:
-    scoring = {"ppr": "Full PPR", "half_ppr": "Half PPR",
-               "standard": "Standard"}.get(meta.get("scoring"), meta.get("scoring"))
+    scoring = scoring_name(meta)
     return (
         f'<header class="bug"><div class="brand">{mark_svg()}'
         f'<span>Beat Your League</span></div>'
@@ -222,6 +234,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}<br>'
         f'{esc(WEEKLY_PROMISE)}<br>'
         f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
+        f'{sender_html()}'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}</footer>'
     )
 
@@ -247,9 +260,10 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     return (
         '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'<title>{esc(title)}</title>\n{FAVICON_LINK}\n{links}\n'
+        f'{PAGE_META}<title>{esc(title)}</title>\n{FAVICON_LINK}\n'
+        f'{font_preloads()}{links}\n'
         f'<style>{style}</style>\n</head>\n<body>\n'
-        f'<div class="report">\n{body}\n</div>\n</body>\n</html>\n'
+        f'<div class="report">\n{landmarks(body)}\n</div>\n</body>\n</html>\n'
     )
 
 
@@ -261,7 +275,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
 def text_summary(report: Mapping[str, Any]) -> str:
     meta = report["meta"]
     lines = [f'{meta["season"]} · {file_title(report).upper()}',
-             f'{meta.get("label") or "Your Team"} · {meta.get("scoring")}',
+             f'{meta.get("label") or "Your Team"} · {scoring_name(meta)}',
              "",
              (IN_SEASON_OPENER if meta.get("season_started") else OPENER),
              "", BYE_HEAD.upper()]
@@ -299,6 +313,9 @@ def text_summary(report: Mapping[str, Any]) -> str:
     if href:
         lines += ["", f"CANCEL: {label} — {href}"]
     lines += ["", f"{CANCEL_HEAD.upper()} {CANCEL_BODY}"]
+    # Who sent it (CAN-SPAM, CASL; launch audit L3, GATE-9).
+    if sender_line():
+        lines += ["", sender_line()]
     return "\n".join(lines) + "\n"
 
 
@@ -396,9 +413,14 @@ def email_html(report: Mapping[str, Any]) -> str:
     for row in report["roster"]:
         record = row.get("record")
         rank = rank_phrase(row)
-        last = ((f'<b style="color:{TURF};">{esc(rank)}</b> ' if rank else "")
-                + f'<span style="{SMALL}">{record["per_game"]} a game over '
-                f'{record["games"]}</span>'
+        # The rank over its rate, each unbroken but the cell free to wrap
+        # between them: as one nowrap line ("QB2 of 39 23.7 a game over 16")
+        # it pushed the email 9px past a 390px phone and squeezed every name
+        # onto three lines (Oct 2026, GATE-2).
+        last = ((f'<b style="color:{TURF};white-space:nowrap;">{esc(rank)}</b><br>'
+                 if rank else "")
+                + f'<span style="{SMALL}white-space:nowrap;">{record["per_game"]} '
+                f'a game over {record["games"]}</span>'
                 if record else
                 f'<span style="{SMALL}">'
                 f'{esc(row.get("no_record_reason") or NO_RECORD)}</span>')
@@ -408,14 +430,13 @@ def email_html(report: Mapping[str, Any]) -> str:
             f'<td style="{cell}"><b>{esc(row["name"])}</b><br>'
             f'<span style="{SMALL}">{esc(row.get("team") or "—")} · {esc(bye)}'
             f'</span></td>'
-            f'<td style="{cell}text-align:right;white-space:nowrap;">{last}</td>'
+            f'<td style="{cell}text-align:right;">{last}</td>'
             f'</tr>')
 
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
               if href else "")
-    scoring = {"ppr": "Full PPR", "half_ppr": "Half PPR",
-               "standard": "Standard"}.get(meta.get("scoring"), meta.get("scoring"))
+    scoring = scoring_name(meta)
     return (
         f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
@@ -445,7 +466,7 @@ def email_html(report: Mapping[str, Any]) -> str:
         + f'<tr><td style="background:{PAPER};padding:20px 26px 26px 26px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(WEEKLY_PROMISE)}<br>{esc(NO_BETTING_LINE)}<br>'
-        f'{esc(NFLVERSE_LINE)}<br>'
+        f'{esc(NFLVERSE_LINE)}<br>{sender_html()}'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )

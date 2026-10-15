@@ -217,13 +217,15 @@ THURSDAY = "2026-01-01T15:00:00+00:00"
 TUESDAY_1PM = "2026-01-06T13:00:00+00:00"
 
 
-def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=()):
+def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=(),
+           dry=False):
     """run.trials.main end to end on the fixture week, with a fake provider.
     `registry` is the file's text, or None for no file at all; `sent` is
     (key, sent_at) pairs already in the send log. -> (code, out, err, mailed)."""
     import run.delivery as delivery
     import run.intake as intake
     from test_solo_run import SEASON, WEEK, _cache
+    real_build_provider = delivery.build_provider
     monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     monkeypatch.setenv("EMAIL_PROVIDER", "resend")
     monkeypatch.setattr(intake, "fetch_seats", lambda *a, **k: list(rows))
@@ -241,6 +243,11 @@ def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=()):
             mailed.append(message)
             return "id"
     monkeypatch.setattr(delivery, "build_provider", lambda *a, **k: Fake())
+    if dry:
+        # No provider configured at all: the real factory, which falls back to
+        # writing drafts and mailing nobody.
+        monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+        monkeypatch.setattr(delivery, "build_provider", real_build_provider)
     monkeypatch.setattr("run.solo.current_season", lambda *a, **k: SEASON)
     monkeypatch.setattr("run.solo.current_week", lambda *a, **k: WEEK)
     monkeypatch.setattr("run.solo.season_over", lambda *a, **k: False)
@@ -365,3 +372,23 @@ def test_free_reports_stop_at_the_daily_allowance(tmp_path, monkeypatch, capsys)
     *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=THURSDAY,
                         sent=yesterday)
     assert len(mailed) == 3
+
+
+def test_requests_waiting_with_no_email_provider_turn_the_run_red(
+        tmp_path, monkeypatch, capsys) -> None:
+    """OPS-08, reproduced: with the free report switched on (TRIAL_OPEN) and
+    EMAIL_PROVIDER unset, a request built a report, printed "none were sent"
+    and exited 0 — so the hourly cron stayed green while the page told the
+    person it "usually lands within the hour", and every hour after. Requests
+    waiting for a REAL reason (the week underway, subscribers first, the day's
+    allowance) stay quiet; nothing configured to send them is not one."""
+    rows = [_row("fan@example.com", ref=_fixture_ref())]
+    code, out, err, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
+                                    now=THURSDAY, dry=True)
+    assert code == 1 and not mailed, (out, err)
+    assert "EMAIL_PROVIDER is not set" in err and "1 request(s) are waiting" in err
+    # Nothing pending is still a quiet hour with no provider.
+    code, out, _, _ = _drive(tmp_path, monkeypatch, capsys,
+                             rows=[{"kind": "waitlist", "email": "w@example.com"}],
+                             now=THURSDAY, dry=True)
+    assert code == 0 and "none pending" in out

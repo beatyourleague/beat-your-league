@@ -821,7 +821,7 @@ def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
     gate = re.search(r"github\.event\.schedule != '([^']+)'", text)
     assert gate and gate.group(1) in hourly, \
         "the once-a-day steps' schedule gate no longer names the hourly cron"
-    assert "0 14 * * *" in crons, "the daily run (renewals, reply kit) moved"
+    assert "17 14 * * *" in crons, "the daily run (renewals, reply kit) moved"
 
 
 # --------------------------------------------------------------------- #

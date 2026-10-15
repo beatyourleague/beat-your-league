@@ -447,13 +447,25 @@ def test_a_seated_starter_out_last_week_is_in_doubt_not_gone() -> None:
 # --------------------------------------------------------------------- #
 
 def test_usage_is_shortened_without_dropping_a_fact() -> None:
+    """Reproduction (panel review I11): the email row read "last 4: 2.5
+    tgt/g, 21.0 car/g" — our shorthand, not the reader's. Spelled out now,
+    and a clause under one every other game goes from the short line only
+    when another clause stays ("1 carry" over four games was "0.2 car/g" on a
+    receiver's row)."""
     from engine.usage import Usage, usage_line
     line = usage_line(Usage(weeks=4, targets=34, air_yards=None, rz_targets=None,
                             snaps=None, carries=21))
     assert line == "last 4 games: 34 targets (8.5 a game), 21 carries"
-    assert short_usage(line) == "last 4: 8.5 tgt/g, 5.2 car/g"
+    assert short_usage(line) == "last 4: 8.5 targets · 5.2 carries a game"
     one = usage_line(Usage(1, 1, None, None, None, 1))
-    assert short_usage(one) == "last 1: 1.0 tgt/g, 1.0 car/g"
+    assert short_usage(one) == "last 1: 1.0 targets · 1.0 carries a game"
+    receiver = usage_line(Usage(4, 34, None, None, None, 1))
+    assert short_usage(receiver) == "last 4: 8.5 targets a game"
+    # A line never empties: the larger of two tiny clauses stays.
+    trickle = usage_line(Usage(4, 1, None, None, None, 1))
+    assert short_usage(trickle).startswith("last 4: 0.2") and "a game" in short_usage(trickle)
+    for row in (line, one, receiver):
+        assert "tgt/g" not in short_usage(row) and "car/g" not in short_usage(row)
     # Anything it does not recognise passes through whole, never trimmed.
     assert short_usage("last 3 games: 4 inside the 20") == "last 3 games: 4 inside the 20"
     assert short_usage("last season: 14.5 a game over 17 games") == \

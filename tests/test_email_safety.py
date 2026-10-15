@@ -64,6 +64,16 @@ def _all_emails() -> dict[str, str]:
         out[f"welcome {plan}"] = welcome_message(
             "a@b.co", plan, "abc123", "2026",
             purchased_at="2026-09-29T12:00:00+00:00").html
+    # The renewal notice and the roster report are emails too, and were held
+    # to none of this: the notice was a bare <div> a phone laid out at 980px.
+    from datetime import date
+
+    from render.preseason import email_html
+    from render.renewal import Renewal, renewal_message
+    from test_preseason import _report as roster_report
+    out["renewal notice"] = renewal_message(
+        Renewal("a@b.co", "$39.00 USD", date(2027, 8, 1), "year", plan="season")).html
+    out["roster report"] = email_html(roster_report())
     return out
 
 
@@ -106,7 +116,8 @@ def test_every_email_declares_it_is_light_only_and_has_a_padded_preview(emails) 
         assert '<meta name="color-scheme" content="light only">' in html, name
         assert '<meta name="supported-color-schemes" content="light only">' in html, name
         assert "<title>" in html and 'lang="en"' in html, name
-    for name in ("report", "final check", "roster confirmation"):
+    for name in ("report", "final check", "roster confirmation", "welcome season",
+                 "welcome seat", "renewal notice"):
         assert "&#847;&zwnj;&nbsp;" in emails[name] and "mso-hide:all" in emails[name], name
 
 
@@ -132,3 +143,40 @@ def test_a_full_report_stays_far_under_gmails_clip() -> None:
     report["bench"] = [dict(template, name=f"Bench Player {i}") for i in range(22)]
     size = len(render_email(report).encode("utf-8"))
     assert size < GMAIL_CLIP * 0.6, f"{size / 1024:.0f} KB is too close to Gmail's clip"
+
+
+# Every email a subscriber or buyer receives (the roster confirmation is a
+# one-line transactional reply to their own request, with no ask in it).
+SENDER_BLOCK = [name for name in (
+    "report", "free report", "seat report", "final check", "renewal notice",
+    "roster report", "welcome season", "welcome monthly", "welcome league_pass",
+    "welcome seat")]
+
+
+def test_every_email_says_who_sent_it(emails) -> None:
+    """Reproduction (launch audit L3, GATE-9): rendered with
+    SENDER_POSTAL_ADDRESS set, the report and the waitlist carried the sender
+    block — and the Saturday final check, all four welcome emails, the renewal
+    notice and the roster report did not."""
+    for name in SENDER_BLOCK:
+        assert "Beat Your League · PO Box 123, Toronto ON M5V 1A1 · " \
+               "hello@beatyourleague.com" in emails[name], name
+
+
+def test_every_email_carries_a_way_out(emails) -> None:
+    """GATE-9's other half: each email names how to stop it — a cancel route
+    for a paid subscription, a stop route for a seat, and for the free report
+    the promise that nothing more comes."""
+    import html as _html
+    for name in SENDER_BLOCK:
+        text = _html.unescape(emails[name])
+        assert re.search(r"Cancel|Reply \"stop\"|only email we.ll send you", text), name
+
+
+def test_every_full_email_is_a_document_a_phone_lays_out(emails) -> None:
+    """The renewal notice was a bare <div>: no doctype, no viewport, so a
+    phone rendered it at a desktop's 980px and shrank the type to fit
+    (measured at 390px, Oct 2026)."""
+    for name, page in emails.items():
+        assert page.lstrip().lower().startswith("<!doctype html"), name
+        assert 'name="viewport"' in page, name

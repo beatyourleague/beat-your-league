@@ -18,8 +18,9 @@ Everything it needs is already stored:
   which channel a sign-up came from without any analytics on the site.
 - **Stripe**, when ``STRIPE_API_KEY`` is set in this shell: active
   subscriptions by plan (read off each subscription's own price), checkout
-  sessions of the last 7 days by outcome, refunds of the last 30. Read-only
-  GETs. Each part that cannot be read says so and the rest still prints.
+  sessions of the last 7 days by outcome, refunds of the last 30, and paid
+  signups ever by the channel tag their payment carried. Read-only GETs. Each
+  part that cannot be read says so and the rest still prints.
 
 Counts only. No address is ever printed — this is the kind of output that gets
 pasted into a chat or a note, and the send log keys carry digests for the same
@@ -199,6 +200,33 @@ def _refunds_line(refunds: list[dict]) -> str:
     return f"  Refunds, last 30 days: {len(given)}"
 
 
+def _paid_by_channel_line(sessions: list[dict]) -> str:
+    """Paid roster signups, ever, by the channel tag the purchase carried
+    (contract C5: the join page appends "_via-<tag>" to the payment's own
+    reference). Form rows only ever counted who ASKED; this is who PAID, the
+    number a partner or affiliate decision needs (G09). Only this product's
+    payments count — a Sleeper-era reference is not one — and the tag is
+    re-checked to its shape before it is printed."""
+    from run.checkout import is_paid
+    from run.intake import split_via
+    from run.refs import is_roster_ref
+    counts: Counter[str] = Counter()
+    for session in sessions:
+        ref = session.get("client_reference_id")
+        if (session.get("status") != "complete" or not is_paid(session)
+                or not isinstance(ref, str) or not is_roster_ref(ref)):
+            continue
+        _ref, via = split_via(ref)
+        counts[via if via and VIA_RE.fullmatch(via) else NO_VIA] += 1
+    if not counts:
+        return "  Paid signups by channel (ever): none yet"
+    ranked = sorted(((t, n) for t, n in counts.items() if t != NO_VIA),
+                    key=lambda item: (-item[1], item[0]))
+    ranked += [(NO_VIA, counts[NO_VIA])] if counts.get(NO_VIA) else []
+    return ("  Paid signups by channel (ever): "
+            + ", ".join(f"{tag} {n}" for tag, n in ranked))
+
+
 def stripe_summary(api_key: str, now: datetime) -> list[str]:
     """The payments half. Each read is independent — a key without Refunds
     access still shows subscriptions and checkouts — and a part that cannot
@@ -210,6 +238,8 @@ def stripe_summary(api_key: str, now: datetime) -> list[str]:
         ("checkout sessions", "checkout/sessions",
          [("created[gte]", str(week_ago))], _checkouts_line),
         ("refunds", "refunds", [("created[gte]", str(month_ago))], _refunds_line),
+        # Every session ever, not the week: a channel's worth is its total.
+        ("paid signups by channel", "checkout/sessions", [], _paid_by_channel_line),
     )
     lines: list[str] = []
     for what, path, params, summarise in parts:
@@ -316,7 +346,11 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
             lines.append(f"  (Week {last}'s send reached {sends['weekly'][last]} "
                          f"subscriber(s) — the closest count without it.)")
     else:
-        plans = Counter(s.plan for s in registry)
+        # By what each row is billed as (LP-D3): a League Pass buyer used to
+        # count as "season", which hid how many passes there are.
+        names = {"season": "season", "monthly": "monthly",
+                 "pass": "League Pass buyer", "league_pass": "League Pass seat"}
+        plans = Counter(names.get(s.report_plan, s.report_plan) for s in registry)
         setups = Counter(f"{s.scoring}/{s.league_size}" for s in registry)
         lines.append(f"  {len(registry)} on the registry: " + ", ".join(
             f"{n} {plan}" for plan, n in sorted(plans.items())))

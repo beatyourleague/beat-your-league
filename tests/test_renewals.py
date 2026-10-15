@@ -241,3 +241,45 @@ def test_a_new_season_does_not_re_welcome_everyone_who_ever_subscribed() -> None
     seat_a = welcome_message("a@example.com", "seat", "1111111111", "2026")
     seat_b = welcome_message("b@example.com", "seat", "2222222222", "2026")
     assert seat_a.key != seat_b.key
+
+
+# --------------------------------------------------------------------- #
+# panel review, Oct 2026: which product, and who sent it
+# --------------------------------------------------------------------- #
+
+def test_the_notice_names_what_is_renewing(monkeypatch) -> None:
+    """Reproduction (launch audit L5): Renewal carried no plan, so a $99
+    League Pass payer's notice read "Your Beat Your League subscription" with
+    nothing about the seats that ride on the charge — and nothing told them
+    seats are claimed again with the new season's roster (LP-D5)."""
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS", raising=False)
+    season = renewal_message(_renewal(plan="season"))
+    payer = renewal_message(_renewal(plan="pass", amount="$99.00 USD"))
+    for doc in (season.html, season.text):
+        assert "Beat Your League season pass renews on August 1, 2027" in doc
+        assert "every manager in your league" not in doc
+    assert "season pass" in season.subject
+    for doc in (payer.html, payer.text):
+        assert "Beat Your League League Pass renews on August 1, 2027" in doc
+        assert "$99.00 USD" in doc
+        assert re.search(r"each claims their\s+seat again with their new roster", doc)
+        assert re.search(r"every seat.{0,6}s\s+reports stop", doc)
+    assert "League Pass" in payer.subject
+    # The welcome's word for the payer reads the same.
+    assert renewal_message(_renewal(plan="league_pass", amount="$99.00 USD")).text \
+        == payer.text
+    # A sweep that cannot tell names neither, rather than guessing.
+    assert "subscription renews" in renewal_message(_renewal()).subject
+
+
+def test_the_notice_says_who_sent_it(monkeypatch) -> None:
+    """Reproduction (launch audit L3, GATE-9): rendered with
+    SENDER_POSTAL_ADDRESS set, the weekly report printed the sender block and
+    the renewal notice — the email about somebody's money — did not."""
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 123, Toronto ON M5V 1A1")
+    message = renewal_message(_renewal(plan="season"))
+    line = "Beat Your League · PO Box 123, Toronto ON M5V 1A1 · hello@beatyourleague.com"
+    assert line in message.text and line in message.html
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS")
+    bare = renewal_message(_renewal(plan="season"))
+    assert "PO Box" not in bare.text and "None" not in bare.text

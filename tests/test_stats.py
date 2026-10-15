@@ -203,11 +203,14 @@ def test_payments_are_counted_from_the_price_and_the_windows(monkeypatch) -> Non
         "monthly at $14.99 1 (1 set to end), yearly at $99.00 1",
         "  Checkouts, last 7 days: 4 created — 1 complete, 2 expired, 1 still open",
         "  Refunds, last 30 days: 1",
+        "  Paid signups by channel (ever): none yet",
     ]
-    windows = {urlsplit(u).path: parse_qs(urlsplit(u).query).get("created[gte]")
-               for u in fake.urls}
-    assert windows["/v1/checkout/sessions"] == [str(int(NOW.timestamp()) - 7 * 86400)]
-    assert windows["/v1/refunds"] == [str(int(NOW.timestamp()) - 30 * 86400)]
+    windows = [(urlsplit(u).path, parse_qs(urlsplit(u).query).get("created[gte]"))
+               for u in fake.urls]
+    assert ("/v1/checkout/sessions", [str(int(NOW.timestamp()) - 7 * 86400)]) in windows
+    assert ("/v1/refunds", [str(int(NOW.timestamp()) - 30 * 86400)]) in windows
+    # The channel count reads every session ever, not the week.
+    assert ("/v1/checkout/sessions", None) in windows
     assert "@" not in "\n".join(lines)
 
 
@@ -248,3 +251,34 @@ def test_without_a_key_the_payment_view_says_why(tmp_path, monkeypatch, capsys) 
     assert stats.main(["--registry", str(tmp_path / "none.json"),
                        "--now", NOW.isoformat()]) == 0
     assert "STRIPE_API_KEY is not set in this shell" in capsys.readouterr().out
+
+
+def test_paid_signups_are_counted_by_the_channel_their_payment_carried(
+        monkeypatch) -> None:
+    """G09 / contract C5, reproduced: `make stats` counted channels only on
+    free form rows (who ASKED), while the checkout URL carried no tag at all,
+    so the one number a partner deal needs — purchases by channel — could not
+    be had. The join page now appends "_via-<tag>" to the payment's own
+    reference; this counts PAID roster sessions by it, ever. An unpaid or
+    incomplete session, and a Sleeper-era reference, are not this product's
+    purchases."""
+    import run.subscriptions as subscriptions
+    from run.refs import encode_roster
+    from test_solo_run import SLOTS, _pid
+    ref = encode_roster("season", "ppr", list(SLOTS), [_pid(i) for i in range(1, 9)])
+
+    def session(i, ref, status="complete", paid="paid"):
+        return {"id": f"cs_{i}", "status": status, "payment_status": paid,
+                "client_reference_id": ref,
+                "customer_details": {"email": f"buyer{i}@example.com"}}
+    sessions = [session(1, ref + "_via-reddit"), session(2, ref + "_via-reddit"),
+                session(3, ref + "_via-x"), session(4, ref),
+                session(5, ref + "_via-reddit", status="expired"),
+                session(6, ref + "_via-x", paid="unpaid"),
+                session(7, "s-123456-789012-345678")]          # Sleeper era
+    fake = _FakeStripe(shapes={"checkout/sessions": {"data": sessions,
+                                                     "has_more": False}})
+    monkeypatch.setattr(subscriptions, "_stripe_get", fake)
+    lines = stats.stripe_summary("rk_test_x", NOW)
+    assert lines[-1] == "  Paid signups by channel (ever): reddit 2, x 1, (no tag) 1"
+    assert "@" not in "\n".join(lines)

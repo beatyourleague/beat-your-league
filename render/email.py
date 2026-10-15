@@ -52,6 +52,13 @@ from render.report import (
     SECTION_MARK,
     source_line,
     _forward_line,
+    _forward_text,
+    seats_line,
+    seats_text,
+    team_name,
+    range_text,
+    RANGE_DEFINITION,
+    RANGE_LABEL,
     SEEDED_SECTION_LINE,
     update_line,
     update_lines,
@@ -93,17 +100,66 @@ SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
 
 TRIAL_HEAD = "Your free report"
+TRIAL_INTRO = "This one's on us, built from the roster you sent."
+TRIAL_ONLY = ("This is the only email we'll send you unless you sign up. Didn't "
+              "ask for it? Ignore it — you won't hear from us again.")
+# The free report's one ask (panel review I2). It was an unlinked URL inside
+# the grey legal footer, after the data-source and no-betting lines, on the
+# email whose whole job is to convert. No price here: the join page states
+# the prices with their renewal terms beside them, which an email ask can't.
+TRIAL_ASK_HEAD = "Want this every Tuesday?"
+TRIAL_ASK = ("Your lineup decided like this one, every Tuesday, plus a final "
+             "check on Saturday when injury news changes it.")
+TRIAL_BUTTON = "Get next Tuesday's report"
+# The channel tag the join page reads (^[a-z0-9-]{1,24}$), so a signup that
+# came from a free report is counted as one (`make stats`).
+TRIAL_VIA = "trial"
 
 
-def _trial_line() -> str:
-    """run/trials.py: the one free report. Says what it is and how to get
-    one every week, and promises nothing further lands uninvited."""
+def trial_join_url() -> str | None:
+    """Where the free report's button goes, or None with no site to send
+    anyone to — a button with nowhere to go is worse than none."""
     site = os.environ.get("SITE_URL", "").rstrip("/")
-    get_one = ("Get one every Tuesday, plus a final check on Saturday when injury "
-               "news changes your lineup" + (f": {site}/join." if site else "."))
-    return ("This one's on us, built from the roster you sent. " + get_one +
-            " This is the only email we'll send you unless you sign up. Didn't "
-            "ask for it? Ignore it — you won't hear from us again.")
+    return f"{site}/join/?via={TRIAL_VIA}" if site.startswith("https://") else None
+
+
+def _trial_cta() -> str:
+    """The free report's call to action: one line and a bulletproof button
+    (a padded table cell, the one button every mail client draws, Outlook
+    included), with the only-email promise beneath it."""
+    url = trial_join_url()
+    button = ""
+    if url:
+        button = (
+            f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+            f'align="center" style="margin:14px auto 0 auto;"><tr>'
+            f'<td style="background:{FLAG};border-radius:3px;">'
+            f'<a href="{esc(url)}" style="display:inline-block;padding:13px 24px;'
+            f'font-family:{DISPLAY};font-size:16px;font-weight:bold;'
+            f'letter-spacing:1.5px;text-transform:uppercase;color:{NAVY};'
+            f'text-decoration:none;">{esc(TRIAL_BUTTON)}</a></td></tr></table>')
+    return (
+        f'<tr><td style="padding:26px 28px 0 28px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{NAVY};"><tr>'
+        f'<td style="padding:22px 20px 22px 20px;text-align:center;">'
+        f'<div style="font-family:{DISPLAY};font-size:20px;font-weight:bold;'
+        f'letter-spacing:1px;text-transform:uppercase;color:{CARD};">'
+        f'{esc(TRIAL_ASK_HEAD)}</div>'
+        f'<div style="font-family:{FONT};font-size:14px;line-height:1.5;'
+        f'color:#C9D4E2;padding-top:6px;">{esc(TRIAL_ASK)}</div>'
+        f'{button}'
+        f'<div style="font-family:{FONT};font-size:12px;line-height:1.5;'
+        f'color:#B9C2D0;padding-top:14px;">{esc(TRIAL_ONLY)}</div>'
+        f'</td></tr></table></td></tr>')
+
+
+def _trial_cta_lines() -> list[str]:
+    """The plain-text twin: the URL spelled out, since text has no button."""
+    url = trial_join_url()
+    return (["", TRIAL_ASK_HEAD.upper(), TRIAL_ASK]
+            + ([f"{TRIAL_BUTTON}: {url}"] if url else [])
+            + [TRIAL_ONLY])
 
 
 def tick_box() -> str:
@@ -173,10 +229,15 @@ def _note(inner_html: str) -> str:
 # sections
 # --------------------------------------------------------------------- #
 
-def _header(meta: Mapping[str, Any]) -> str:
+def _header(meta: Mapping[str, Any], team: str | None = None,
+            tagline: str = "Your lineup, decided.") -> str:
+    """The navy masthead. ``team`` names a subscriber's roster
+    (render.report.team_name) so two teams' emails can be told apart;
+    ``tagline`` is the subject's promise, said again under the week."""
     scoring = f' · {esc(meta["scoring"])}' if meta.get("scoring") else ""
     lines = [
-        f'<b>{esc(meta["league_name"])}</b> · {esc(meta["num_teams"])} teams{scoring}',
+        f'<b>{esc(team or meta["league_name"])}</b> · {esc(meta["num_teams"])} '
+        f'teams{scoring}',
     ]
     # A solo report has no opponent, so there is nothing to name here. The line
     # used to render "This week: None" — an absent value printed as a word.
@@ -194,7 +255,7 @@ def _header(meta: Mapping[str, Any]) -> str:
             f'<tr><td style="padding:0 28px;">'
             f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
             f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
-            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(_trial_line())}</div></td></tr>')
+            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(TRIAL_INTRO)}</div></td></tr>')
     season_end = season_end_lines(meta)
     if season_end:
         banner += (
@@ -223,7 +284,7 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'color:{CARD};padding:6px 0 2px 0;">Week {esc(meta["week"])} · '
         f'{"Your Report" if meta.get("solo") else "Rival Report"}</div>'
         + (f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
-           f'color:{FLAG};padding:0 0 10px 0;">Your lineup, decided.</div>'
+           f'color:{FLAG};padding:0 0 10px 0;">{esc(tagline)}</div>'
            if meta.get("solo") else '<div style="padding:0 0 8px 0;"></div>')
         + f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
         f'{" &nbsp;—&nbsp; ".join(lines)}</div></td></tr>{banner}'
@@ -496,18 +557,21 @@ def _regret(regret: Mapping[str, Any]) -> str:
     confidence = _pct(regret["confidence"])
     drivers = " · ".join(
         f'{esc(d["label"])} <b>{esc(d["value"])}</b>' for d in regret["drivers"])
-    # SS-D2: the card is the closest call WITH ODDS. Its header said "the
-    # week's closest call" under a section title saying the same, while a
-    # dead-even decision with no odds sat in the lineup above it.
-    label = esc(regret.get("label") or "Closest call with odds")
+    # No title bar inside the card: the section title right above it already
+    # says "The Week's Closest Call", and the email printed it twice, stacked
+    # (panel review D8). The browser report prints it once.
+    # SS-D2: what the card IS — the closest call WITH ODDS — rides as a small
+    # label inside it, because a dead-even decision with no odds can sit in
+    # the lineup above it; a narrower decision is named in ``closer``.
+    label = (f'<div style="{SMALL}font-weight:bold;letter-spacing:1px;'
+             f'text-transform:uppercase;color:{SLATE};margin:0 0 4px 0;">'
+             f'{esc(regret["label"])}</div>' if regret.get("label") else "")
     extra = "".join(f'<p style="{SMALL}margin:6px 0 0 0;">{esc(regret[key])}</p>'
                     for key in ("reason", "closer") if regret.get(key))
     body = (
-        f'<div style="background:{PAPER};border:1px solid {LINE};">'
-        f'<div style="background:{NAVY};color:{CARD};font-family:{DISPLAY};'
-        f'font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;'
-        f'padding:8px 16px;">{label}</div>'
-        f'<div style="padding:14px 16px;">'
+        f'<div style="background:{PAPER};border:1px solid {LINE};'
+        f'border-top:3px solid {NAVY};">'
+        f'<div style="padding:14px 16px;">{label}'
         f'<div style="font-family:{FONT};font-size:18px;font-weight:bold;'
         f'color:{NAVY};">Start {esc(regret["start_name"])} '
         f'<span style="color:{SLATE};font-weight:normal;">over</span> '
@@ -703,16 +767,23 @@ def _receipts(receipts: Mapping[str, Any]) -> str:
 # function of a report belongs with the renderers; run/week.py re-exports it so
 # its own callers are unchanged.
 
-def _forward_lines() -> list[str]:
+def _forward_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
     """The standing acquisition line for the plain-text email, above the
     cancellation block. A forwarded report reaches the eleven best prospects a
-    subscriber knows; gated on SITE_URL exactly like the HTML footer."""
-    site = os.environ.get("SITE_URL", "").rstrip("/")
-    if not site:
+    subscriber knows; gated on SITE_URL exactly like the HTML footer. Same
+    words as the HTML (render.report._forward_text), so a League Pass
+    league's copy points at the seat, not the checkout; a payer's seat count
+    carries the seat link instead (render.report.seats_text)."""
+    meta = meta or {}
+    seats = seats_text(meta)
+    if seats:
+        label, _, rest = seats.partition(": ")
+        return ["", f"{label.upper()}: {rest}"]
+    words = _forward_text(meta)
+    if not words:
         return []
-    return ["",
-            f"GOT THIS FROM A LEAGUEMATE? Every manager gets their own report, "
-            f"built from their own roster — {site}/join."]
+    lead = "Got this from a leaguemate?"
+    return ["", words.replace(lead, lead.upper(), 1)]
 
 
 @buyer_slots
@@ -727,11 +798,14 @@ def text_summary(report: Mapping[str, Any]) -> str:
     lines = [
         f"BEAT YOUR LEAGUE — {meta['league_name']} — "
         f"season {meta['season']} week {meta['week']}",
-        meta['my_label'] if solo else f"{meta['my_label']} vs {meta['rival_label']}",
+        # A subscriber's team by name (render.report.team_name), so two
+        # teams' plain-text halves differ from their first lines.
+        (team_name(report) or meta['my_label']) if solo
+        else f"{meta['my_label']} vs {meta['rival_label']}",
         "",
     ]
     if meta.get("trial"):
-        lines += [f"{TRIAL_HEAD.upper()}. {_trial_line()}", ""]
+        lines += [f"{TRIAL_HEAD.upper()}. {TRIAL_INTRO}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
@@ -745,8 +819,11 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines += ["", f"{head}: {matchup['range_gate']}"]
     elif solo:
         you = matchup["you"]
-        lines += ["", f"{head}: {you['projected_total']:.1f} projected "
-                      f"({you['floor']:.1f}–{you['ceiling']:.1f})"]
+        # The band is labelled and defined here too (principle 5): the
+        # plain-text half printed "(94.5–157.7)" with no name at all.
+        lines += ["", f"{head}: {you['projected_total']:.1f} projected · "
+                      f"{RANGE_LABEL} {range_text(you)}",
+                  f"  {RANGE_LABEL.capitalize()}: {RANGE_DEFINITION}"]
     else:
         lines += [
             "",
@@ -875,9 +952,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
         # ends on how to buy, so it carries who sent it like every other
         # commercial email (CAN-SPAM, CASL; launch audit C14). It returned
         # before the paid footer's sender line, so it never printed one.
-        lines += ["", "Projections are analysis, not guarantees — no betting "
+        # The ask comes BEFORE the fine print (panel review I2): it used to
+        # be the last line, after the data source and the no-betting line.
+        lines += [*_trial_cta_lines(),
+                  "", "Projections are analysis, not guarantees — no betting "
                       "picks, no staking advice. Your decisions are yours.",
-                  source_line(meta), "", _trial_line(),
+                  source_line(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
@@ -894,13 +974,49 @@ def text_summary(report: Mapping[str, Any]) -> str:
               source_line(meta),
               *read_lines(meta),
               *update_lines(meta),
-              *_forward_lines(),
+              *_forward_lines(meta),
               "",
               # A seat's way out is a stop request, a subscriber's is the
               # billing page (render/report.cancel_lines; launch audit C4).
               *cancel_lines(is_seat(meta)),
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
+
+def solo_promise(report: Mapping[str, Any]) -> str:
+    """What a solo report promises, in the subject and under the masthead.
+
+    Week 1 carries an ORDERING, not a decision (CLAUDE.md: placement by last
+    season's scoring, no projection, no confidence). "Decided" on that body
+    oversells it by the body's own words."""
+    if not any(s.get("projected") is not None for s in report.get("lineup", [])):
+        return "your opening lineup"
+    return "your lineup, decided"
+
+
+def preheader_for(report: Mapping[str, Any]) -> str:
+    """The inbox preview line, built from THIS report (panel review RQ-05).
+
+    It was one fixed sentence promising "the one call worth arguing about" —
+    above weeks 1-3 and every report whose closest-call section reads "No
+    coin-flip call published". It names the closest call when there is one,
+    and otherwise the game plan's first action; both are already in the body.
+    """
+    meta = report["meta"]
+    if not meta.get("solo"):
+        return (f'The file on {meta["rival_label"]}: your lineup, their fragile '
+                f'spots, and the one call that matters.')
+    regret = report.get("regret") or {}
+    if "gate" not in regret and regret.get("start_name") and \
+            regret.get("over_name") and regret.get("confidence") is not None:
+        return (f"Closest call: start {regret['start_name']} over "
+                f"{regret['over_name']}, {_pct(regret['confidence'])}%. "
+                f"Your whole lineup is inside.")
+    first = next((item.get("action") for item in report.get("checklist") or []
+                  if item.get("action")), None)
+    if first:
+        return f"{str(first).rstrip('.')}. Your whole lineup is inside."
+    return f"Week {meta['week']}: {solo_promise(report)}."
+
 
 @buyer_slots
 def subject_for(report: Mapping[str, Any]) -> str:
@@ -916,12 +1032,11 @@ def subject_for(report: Mapping[str, Any]) -> str:
     """
     meta = report["meta"]
     if meta.get("solo"):
-        # Week 1 carries an ORDERING, not a decision (CLAUDE.md: placement by
-        # last season's scoring, no projection, no confidence). "Decided" on
-        # that body oversells it by the body's own words.
-        if not any(s.get("projected") is not None for s in report.get("lineup", [])):
-            return f"Week {meta['week']}: your opening lineup"
-        return f"Week {meta['week']}: your lineup, decided"
+        # A subscriber's team by name (render.report.team_name): a manager
+        # with two teams got two identical subjects (panel review BE-I5).
+        team = team_name(report)
+        week = f"Week {meta['week']}" + (f" — {team}" if team else "")
+        return f"{week}: {solo_promise(report)}"
     if meta.get("rivalry_week"):
         return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
     return f"Week {meta['week']}: the file on {meta['rival_label']}"
@@ -936,17 +1051,21 @@ def _footer(meta: Mapping[str, Any]) -> str:
             f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;">'
             f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
             f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
-            f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}<br>'
-            f'{sender_html()}'
-            f'{esc(_trial_line())}</p></td></tr>')
+            f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}'
+            + (f'<br>{esc(sender_line())}' if sender_line() else "")
+            + '</p></td></tr>')
     return (
         f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;'
         f'margin-top:24px;">'
-        f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
+        # A seat link is one long unbroken string: it wraps rather than
+        # widening a phone's email.
+        f'<p style="{SMALL}margin:0;overflow-wrap:anywhere;word-break:break-word;">'
+        f'<b>Beat Your League</b> — '
         f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
         f'{read_line(meta)}'
         f'{update_line(meta)}'
-        f'{_forward_line()}'
+        f'{seats_line(meta)}'
+        f'{_forward_line(meta)}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
@@ -968,8 +1087,11 @@ def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
             f'<div style="font-family:{DISPLAY};font-size:34px;font-weight:bold;'
             f'color:{TURF};line-height:1.1;">{you["projected_total"]:.1f}'
             f'<span style="{SMALL}font-size:12px;color:{SLATE};"> PROJ</span></div>'
-            f'<div style="{SMALL}">{you["floor"]:.0f} – {you["ceiling"]:.0f} '
-            f'realistic range</div>')
+            f'<div style="{BASE}font-weight:bold;color:#33445C;">{range_text(you)} '
+            f'<span style="{SMALL}">{esc(RANGE_LABEL)}</span></div>'
+            f'<p style="{SMALL}color:#33445C;margin:8px 0 0 0;">'
+            f'<b style="color:{NAVY};">{esc(RANGE_LABEL.capitalize())}:</b> '
+            f'{esc(RANGE_DEFINITION)}</p>')
         if matchup.get("range_basis"):
             body += f'<div style="{SMALL}margin-top:6px;">{esc(matchup["range_basis"])}</div>'
     if no_opponent:
@@ -980,33 +1102,49 @@ def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
 _USAGE_LINE = re.compile(r"last (\d+) games?: (.+)")
 
 
-def short_usage(text: str | None) -> str | None:
-    """engine.usage.usage_line, said in a phone's width:
-    "last 4 games: 34 targets (8.5 a game), 21 carries" ->
-    "last 4: 8.5 tgt/g, 5.2 car/g".
+# A clause below this per-game rate is dropped from the SHORT line when
+# another clause remains: "1 carry" over four games printed "0.2 car/g" on a
+# receiver's row, clutter that reads as a role (panel review I11). The full
+# line, every clause, stays on the browser report.
+MIN_SHOWN_RATE = 0.5
 
-    The same counts over the same window, as per-game rates (launch audit F6).
-    A clause it does not recognise returns the whole line unchanged — a
-    shortened line must never drop a fact. Week 1's "last season: ..." basis
-    is not a usage line and passes through untouched."""
+
+def short_usage(text: str | None) -> str | None:
+    """engine.usage.usage_line, said in a phone's width and a buyer's words:
+    "last 4 games: 34 targets (8.5 a game), 21 carries" ->
+    "last 4: 8.5 targets · 5.2 carries a game".
+
+    The same counts over the same window, as per-game rates (launch audit F6),
+    spelled out: "tgt/g" and "car/g" were our shorthand, not the reader's
+    (panel review I11). A clause it does not recognise returns the whole line
+    unchanged. A clause under MIN_SHOWN_RATE goes only when another stays, so
+    a line never empties. Week 1's "last season: ..." basis is not a usage
+    line and passes through untouched."""
     match = _USAGE_LINE.fullmatch(text or "")
     if not match:
         return text
     games = int(match.group(1))
-    parts = []
+    parts: list[tuple[float, str]] = []
     for clause in match.group(2).split(", "):
         targets = re.fullmatch(r"\d+ targets? \(([\d.]+) a game\)", clause)
         attempts = re.fullmatch(r"\d+ pass attempts? \(([\d.]+) a game\)", clause)
         carries = re.fullmatch(r"(\d+) carr(?:y|ies)", clause)
         if targets:
-            parts.append(f"{targets.group(1)} tgt/g")
+            rate = float(targets.group(1))
+            parts.append((rate, f"{targets.group(1)} targets"))
         elif attempts:
-            parts.append(f"{attempts.group(1)} att/g")
+            # A quarterback's volume (RQ-07): his throws, not a trick-play target.
+            rate = float(attempts.group(1))
+            parts.append((rate, f"{attempts.group(1)} pass attempts"))
         elif carries and games:
-            parts.append(f"{int(carries.group(1)) / games:.1f} car/g")
+            rate = int(carries.group(1)) / games
+            parts.append((rate, f"{rate:.1f} carries"))
         else:
             return text
-    return f"last {games}: " + ", ".join(parts)
+    shown = [words for rate, words in parts if rate >= MIN_SHOWN_RATE]
+    if not shown:
+        shown = [max(parts)[1]]
+    return f"last {games}: " + " · ".join(shown) + " a game"
 
 
 # Fixed widths for the narrow columns, so the PLAYER column gets whatever is
@@ -1182,8 +1320,11 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
     """
     meta = report["meta"]
     if meta.get("solo"):
+        team = team_name(report)
+        promise = solo_promise(report)
         return [
-            _header(meta),
+            _header(meta, team, f"{team}: {promise}." if team
+                    else f"{promise[:1].upper()}{promise[1:]}."),
             _checklist(report["checklist"]),
             _your_week(report["matchup"], report.get("no_opponent")),
             _your_lineup(report),
@@ -1215,14 +1356,11 @@ def render_email(report: Mapping[str, Any]) -> str:
     # opened, so it is the most-read sentence the product ships. The solo
     # version used to read "The file on None: your lineup, their fragile
     # spots..." — an absent value printed as a word, promising two things this
-    # product does not do.
-    preheader = (
-        'Your lineup for the week, the one call worth arguing about, and who is '
-        'actually earning the ball.'
-        if meta.get("solo") else
-        f'The file on {meta["rival_label"]}: your lineup, their fragile spots, '
-        f'and the one call that matters.')
+    # product does not do. It is built from the report now (preheader_for).
+    preheader = preheader_for(report)
     sections = "".join(_compose(report) + [
+        # The free report's ask sits ABOVE the footer, never in it.
+        _trial_cta() if meta.get("trial") else "",
         # breathing room between the last section and the footer band
         '<tr><td style="padding:12px;"></td></tr>',
         _footer(meta),
