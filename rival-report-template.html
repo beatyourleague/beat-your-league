@@ -192,6 +192,10 @@
     font-size:13px;color:var(--slate);background:#F2F0E8;}
   .tname{display:block;font-weight:700;font-size:14px;line-height:1.2;}
   .tsub{display:block;margin-top:2px;font-size:10.5px;color:var(--slate);line-height:1.3;}
+  /* Opponent and kickoff, straight under the name: the first fact a manager
+     checks, and the one that says a starter plays Thursday night. */
+  .tgame{display:block;margin-top:2px;font-size:10.5px;font-weight:700;
+    color:var(--ink2);letter-spacing:.02em;line-height:1.3;white-space:nowrap;}
   /* Availability is the one thing on a row a reader must not skim past. */
   .tflag{display:block;margin-top:2px;font-size:10.5px;font-weight:700;
          color:var(--brick);line-height:1.3;letter-spacing:.2px;}
@@ -229,7 +233,7 @@
     /* A narrow screen needs the numbers to fit before it needs long names. */
     .tape col:nth-child(1),.tape col:nth-child(4){width:32%;}
     .tape col:nth-child(2),.tape col:nth-child(5){width:15%;}
-    .tsub,.tflag{font-size:9.5px;} .tape td{padding:7px 5px;}
+    .tsub,.tflag,.tgame{font-size:9.5px;} .tape td{padding:7px 5px;}
     .tname{font-size:13px;} .tpts{font-size:15px;}
   }
 
@@ -297,6 +301,16 @@
   .pivot .cond{font-weight:700;font-size:15px;margin-top:3px;}
   .pivot .then{margin-top:8px;font-size:14px;line-height:1.55;color:var(--ink2);}
   .pivot .then b{color:var(--turf);}
+
+  /* ================= rising roles ================= */
+  /* Its own list. It once borrowed ul.receipts, whose rules live inside the
+     navy ledger card, so on the page the bullets hung outside the section. */
+  .risingintro{margin-top:14px;font-size:14px;line-height:1.55;color:var(--ink2);}
+  .rising{list-style:none;margin-top:12px;display:grid;gap:8px;}
+  .rising li{background:var(--card);border:1px solid var(--line);
+    border-left:4px solid var(--turf);padding:10px 14px;font-size:14px;
+    line-height:1.5;color:var(--ink2);}
+  .rising li b{color:var(--navy);font-weight:700;}
 
   /* ================= receipts ================= */
   .ledger{margin-top:16px;background:var(--navy);color:#C9D4E2;padding:18px 20px;

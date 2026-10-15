@@ -366,6 +366,17 @@ class WeekData:
     # engine/rising.py: the week's risers league-wide, built once; each
     # subscriber's report filters them to players not on their roster.
     rising: list = field(default_factory=list)
+    # Facts a row prints beside a player, never model inputs (launch audit
+    # F7/F2/F5, Oct 2026): this week's games (team -> opponent, home or away,
+    # Eastern date and kickoff) and last week's injury report in its own words
+    # (gsis -> designation, injury). An outage leaves them empty and the rows
+    # simply say less.
+    games: dict = field(default_factory=dict)
+    listed: dict = field(default_factory=dict)
+    # True only for the week being played now. Today's player directory
+    # describes today, so its teams may stand in for a row's team in that week
+    # and never in a replayed one (principle 3).
+    is_live_week: bool = False
 
 
 def _statuses(directory: PlayerDirectory,
@@ -417,23 +428,104 @@ def _statuses(directory: PlayerDirectory,
     return out
 
 
-def _live_roster_out(cache_dir: Path, season: str, week: int, players_csv: Path,
-                     today: date | None = None, *,
-                     session: requests.Session | None = None) -> dict[str, str]:
+def _is_live_week(cache_dir: Path, season: str, week: int,
+                  today: date | None = None, *,
+                  session: requests.Session | None = None) -> bool:
+    """Is (season, week) the week being played now? Anything read from TODAY's
+    players release may describe that week and no other."""
+    try:
+        return (str(season) == current_season(cache_dir, today, session=session)
+                and int(week) == current_week(cache_dir, season, today,
+                                              session=session))
+    except (SoloError, OSError, ValueError):
+        return False
+
+
+def _live_roster_out(players_csv: Path, is_live_week: bool) -> dict[str, str]:
     """Injured reserve / PUP / suspended / released, from TODAY's players
     release — applied only when the week being built is the one being played
     now. The release holds current status only, so applying it to a replayed
     week (the pinned 2024 sample, the proving run, a backfill) would mark a
     2024 starter out for a 2026 injury: fabrication (principle 3)."""
     from engine.availability import roster_out
-    try:
-        if str(season) != current_season(cache_dir, today, session=session):
-            return {}
-        if int(week) != current_week(cache_dir, season, today, session=session):
-            return {}
-        return roster_out(players_csv)
-    except (SoloError, OSError, ValueError):
+    if not is_live_week:
         return {}
+    try:
+        return roster_out(players_csv)
+    except (OSError, ValueError):
+        return {}
+
+
+def _week_games(cache_dir: Path, season: str, week: int, *, live: bool = True,
+                session: requests.Session | None = None) -> dict[str, dict[str, Any]]:
+    """team -> this week's game: opponent, home or away, and the kickoff as the
+    schedule release states it (gameday plus gametime, which nflverse writes in
+    NFL time — Eastern). A team absent from the result is on bye.
+
+    Facts for the row, never inputs: the spread and total in the same file are
+    the market's and are not read here (principle 4)."""
+    try:
+        rows = _schedule(cache_dir, live=live, session=session)
+    except (NflverseError, OSError):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if str(row.get("season") or "") != str(season) or _int(row.get("week")) != int(week):
+            continue
+        home = (row.get("home_team") or "").strip()
+        away = (row.get("away_team") or "").strip()
+        day = (row.get("gameday") or "").strip()
+        clock = (row.get("gametime") or "").strip()
+        if not (home and away and day):
+            continue
+        out[home] = {"opponent": away, "home": True, "day": day, "time": clock}
+        out[away] = {"opponent": home, "home": False, "day": day, "time": clock}
+    return out
+
+
+def _injury_words(text: str | None) -> str:
+    """The report's injury, as a reader says it: "Hamstring" -> "hamstring",
+    "Not injury related - resting player" -> "resting" (the same reading the
+    Saturday check gives it)."""
+    injury = (text or "").strip().lower()
+    if injury.startswith("not injury related"):
+        injury = injury.split("-", 1)[-1].strip() if "-" in injury else "not injury related"
+        injury = {"resting player": "resting"}.get(injury, injury)
+    return injury
+
+
+def _listed_on_report(cache_dir: Path, season: str, week: int, *, live: bool = True,
+                      session: requests.Session | None = None
+                      ) -> dict[str, tuple[str, str]]:
+    """gsis -> (designation, injury) on week ``week``'s injury report, in the
+    report's own words. The gate reads the same report through
+    ``ingest.injuries``, which folds Doubtful into Out — right for the gate,
+    wrong for a sentence: a reader told "ruled out" about a doubtful player
+    has been told something the report never said."""
+    if week < 1:
+        return {}
+    try:
+        path = fetch("injuries", f"injuries_{season}.csv", cache_dir, live=live,
+                     session=session)
+    except NflverseError:
+        return {}
+    found: dict[str, tuple[str, str]] = {}
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                if str(row.get("season") or "") != str(season):
+                    continue
+                if (row.get("game_type") or "REG").upper() != "REG":
+                    continue
+                if _int(row.get("week")) != int(week):
+                    continue
+                status = (row.get("report_status") or "").strip().lower()
+                gsis = (row.get("gsis_id") or "").strip()
+                if gsis and status in {"out", "doubtful", "questionable"}:
+                    found[gsis] = (status, _injury_words(row.get("report_primary_injury")))
+    except OSError:
+        return {}
+    return found
 
 
 def _team_before(player_id: str, week: int,
@@ -609,6 +701,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
     # is in" means.
     assert_week_is_complete(cache_dir, season, week, weekly)
 
+    is_live_week = _is_live_week(cache_dir, season, week, today, session=session)
     return WeekData(
         season=season,
         week=week,
@@ -619,8 +712,12 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         availability=_availability(cache_dir, season, week, directory,
                                    live=live, session=session, weekly=weekly,
                                    roster_out=_live_roster_out(
-                                       cache_dir, season, week, players_csv,
-                                       today, session=session)),
+                                       players_csv, is_live_week)),
+        # The same report the gate reads (week W-1's), in its own words.
+        games=_week_games(cache_dir, season, week, live=live, session=session),
+        listed=_listed_on_report(cache_dir, season, week - 1, live=live,
+                                 session=session),
+        is_live_week=is_live_week,
         # Read off the rows already parsed above rather than re-reading the
         # whole season: the counted-usage columns are in SEASON_COLUMNS for
         # exactly this reason.
@@ -963,7 +1060,12 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                last_season_ranks=last_season_ranks,
                                calibrate=calibrator_for(data.week, seeded,
                                                         anchor, contextual),
-                               confirmed_fallback=fallback_for(data.week, seeded))
+                               confirmed_fallback=fallback_for(data.week, seeded),
+                               schedule=getattr(data, "games", None) or {},
+                               teams=_row_teams(spec, data),
+                               injury_report=({"week": data.week - 1,
+                                               "listed": getattr(data, "listed", {})}
+                                              if data.week > 1 else None))
     report["rising"] = rising_for(data.rising, spec.player_ids,
                                   last_season_ranks, data.players)
     if seeded:
@@ -973,6 +1075,32 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         report["meta"]["seeded"] = True
     report["meta"]["last_week"] = data.last_week
     return report
+
+
+def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
+    """player -> the team whose game his row shows.
+
+    The team the availability gate placed him on, so a row can never name one
+    game while its flag reads another team's bye. A defense's team is its id.
+    For the week being played now, today's directory fills the gap (week 1,
+    before anyone has a stat row); for a replayed week it never does — a 2024
+    sample row showing a 2026 team's opponent would be invented — so a replayed
+    week whose gate placed nobody shows no games at all rather than a lone
+    defense's."""
+    statuses = data.availability.statuses
+    live_now = bool(getattr(data, "is_live_week", False))
+    if statuses is None and not live_now:
+        return {}
+    today = {p.player_id: p.team for p in data.directory.players} if live_now else {}
+    out: dict[str, str] = {}
+    for pid in spec.player_ids:
+        team = ((statuses or {}).get(pid) or {}).get("team")
+        if not team and pid.startswith("DEF-"):
+            team = pid.split("-", 1)[1]
+        team = team or today.get(pid)
+        if team:
+            out[pid] = str(team)
+    return out
 
 
 def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],

@@ -336,7 +336,10 @@ def no_call_head(shown_any_marker: bool, mixed: bool) -> str:
 # strings are precise and stay precise (the ledger and tests read them); this is
 # only how a reader is told. Order matters: first match wins.
 _GATE_PHRASES = (
-    ("availability in doubt", "one of the two players is questionable"),
+    # Dated (launch audit F5): the designation is LAST week's report — the
+    # only one out on a Tuesday — and "is questionable" stated it as this
+    # week's news, including about players who had played through it.
+    ("availability in doubt", "one of the two players was questionable last week"),
     ("not a live head-to-head", "one of the two players is out"),
     ("nobody on your bench", "no bench player at that position"),
     ("not enough games", "not enough games played yet"),
@@ -848,6 +851,11 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
         if slot.get("usage"):
             bits.append(str(slot["usage"]))
         flags = [f["text"] for f in (slot.get("flags") or [])]
+        # Opponent and kickoff (launch audit F7), straight under the name: it
+        # is the fact a manager checks first, and the one that says a starter
+        # plays Thursday night.
+        game = (f'<span class="tgame">{esc(slot["game"])}</span>'
+                if slot.get("game") else "")
         confidence = slot.get("confidence")
         if confidence is not None:
             # The bar runs from 50% to 100%, not from zero: every number is a
@@ -867,7 +875,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
             call = ""
         rows.append(
             f'<tr class="trow"><td class="tslot">{esc(slot["slot"])}</td>'
-            f'<td class="tside you"><span class="tname">{esc(name)}</span>'
+            f'<td class="tside you"><span class="tname">{esc(name)}</span>{game}'
             + (f'<span class="tflag">{esc(" · ".join(flags))}</span>' if flags else "")
             + (f'<span class="tsub">{esc(" · ".join(bits))}</span>' if bits else "")
             + f'</td><td class="tpts you">{proj}</td>'
@@ -915,8 +923,8 @@ def _bench_table(report: Mapping[str, Any]) -> str:
             f'<tr class="trow bench"><td class="tslot">{esc(entry["position"])}</td>'
             f'<td class="tside you"><span class="tname">{esc(entry["name"])}</span>'
             f'{tag}'
-            + ("" if entry.get("out")
-               else f'<span class="tsub">{esc(bench_phrase(entry))}</span>')
+            + (f'<span class="tsub">{esc(bench_form(entry))}</span>'
+               if bench_shows_form(entry) else "")
             + '</td>'
             f'<td class="tpts you">{proj}</td><td class="tcall"></td></tr>')
     head = (f'<tr class="thead"><td></td><td>{esc(BENCH_HEAD)}</td>'
@@ -1039,7 +1047,24 @@ def section_regret(regret: Mapping[str, Any]) -> str:
     return _section("The Week's Closest Call", 6, body)
 
 
-def section_pivots(plans: list[Mapping[str, Any]]) -> str:
+# Said after a cleared-player plan, and only on a Sunday game (the engine sets
+# "saturday" on the plan): the Saturday check reads Friday's final report and
+# mails a swap when he is cleared, and stays quiet when he is not (RULE F3) —
+# hence "if he is", never "either way". Never on a free report: there is no
+# Saturday check behind one.
+SATURDAY_FOLLOWUP = "If he is, Saturday's final check will tell you."
+
+
+def pivot_action(plan: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> str:
+    """One plan's "then", as every surface states it."""
+    action = str(plan["action"])
+    if plan.get("saturday") and not (meta or {}).get("trial"):
+        action = f"{action}. {SATURDAY_FOLLOWUP}"
+    return action
+
+
+def section_pivots(plans: list[Mapping[str, Any]],
+                   meta: Mapping[str, Any] | None = None) -> str:
     if not plans:
         body = gate_note("no pivots this week — no starter we can check is "
                          "listed questionable")
@@ -1047,7 +1072,7 @@ def section_pivots(plans: list[Mapping[str, Any]]) -> str:
         rows = "".join(
             f'<div class="pivot"><div class="if">If</div>'
             f'<div class="cond">{esc(p["condition"])}</div>'
-            f'<div class="then">{esc(p["action"])}</div></div>'
+            f'<div class="then">{esc(pivot_action(p, meta))}</div></div>'
             for p in plans
         )
         body = f'<div class="pivots">{rows}</div>'
@@ -1059,14 +1084,31 @@ RISING_INTRO = ("Players getting more of the ball lately. Check whether any is "
                 "free in your league.")
 
 
+def rising_parts(row: Mapping[str, Any]) -> tuple[str, str]:
+    """(who, what) — "Braelon Allen (NYJ, RB)" and the counted-usage clause —
+    so both renderers can set the name apart. Split on the engine's own
+    "name (team, pos): ..." line; anything else is shown whole."""
+    line = str(row.get("line") or "")
+    who, sep, what = line.partition(": ")
+    return (who, what) if sep else ("", line)
+
+
 def section_rising(rows: Sequence[Mapping[str, Any]]) -> str:
     """Counted usage, reported (RULE U1). Empty means the section is absent —
-    an empty 'rising roles' block would advertise a feature that found nothing."""
+    an empty 'rising roles' block would advertise a feature that found nothing.
+
+    Its own classes (launch audit W7): it borrowed ``ul.receipts``, whose rules
+    are scoped to the navy ledger card, so on the published samples the
+    bullets hung outside the section and the intro rendered as bare text."""
     if not rows:
         return ""
-    items = "".join(f'<li>{esc(r["line"])}</li>' for r in rows)
-    return _section(RISING_HEAD, 8, f'<p>{esc(RISING_INTRO)}</p>'
-                                     f'<ul class="receipts">{items}</ul>')
+    items = []
+    for row in rows:
+        who, what = rising_parts(row)
+        items.append(f'<li><b>{esc(who)}</b> {esc(what)}</li>' if who
+                     else f'<li>{esc(what)}</li>')
+    return _section(RISING_HEAD, 8, f'<p class="risingintro">{esc(RISING_INTRO)}</p>'
+                                     f'<ul class="rising">{"".join(items)}</ul>')
 
 
 def section_hype(entries: list[Mapping[str, Any]],
@@ -1120,7 +1162,20 @@ def bench_phrase(entry: Mapping[str, Any]) -> str:
     up describing a player three different ways.
     """
     if entry.get("out"):
-        return "can't play this week"
+        # The engine's own words for WHY (engine.solo_report.absence): a bye, a
+        # reserve list, or last week's Out — which is not "can't play" (F2).
+        return entry.get("out_text") or "can't play this week"
+    return bench_form(entry)
+
+
+def bench_shows_form(entry: Mapping[str, Any]) -> bool:
+    """A player who certainly cannot play shows only why; one out on last
+    week's report may play, so his recent games stay beside his number."""
+    return not entry.get("out") or entry.get("out_kind") == "designation"
+
+
+def bench_form(entry: Mapping[str, Any]) -> str:
+    """The bench player's recent games (or, before any, last season's rate)."""
     games = entry.get("games") or []
     if not games:
         # Before a game is played, last season is the reason he sits — the same
@@ -1582,7 +1637,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
             section_your_week(report["matchup"], report.get("no_opponent")),
             section_your_lineup(report),
             section_regret(report["regret"]),
-            section_pivots(report["pivots"]),
+            section_pivots(report["pivots"], report["meta"]),
             section_rising(report.get("rising") or []),
             section_receipts(report["receipts"]),
             footer(meta),
@@ -1596,7 +1651,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
         section_tape(report),
         section_fragility(report["fragility"], meta["rival_label"]),
         section_regret(report["regret"]),
-        section_pivots(report["pivots"]),
+        section_pivots(report["pivots"], report["meta"]),
         section_hype(report["hype"], report.get("waiver_market")),
         section_receipts(report["receipts"]),
         footer(meta),

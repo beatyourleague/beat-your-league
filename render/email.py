@@ -23,6 +23,7 @@ from __future__ import annotations
 from render.report import buyer_slots
 
 import os
+import re
 from typing import Any, Mapping
 
 from render.sender import sender_line
@@ -35,7 +36,11 @@ from render.report import (
     AS_SET_BODY,
     AS_SET_HEAD,
     BENCH_HEAD,
+    bench_form,
     bench_phrase,
+    bench_shows_form,
+    pivot_action,
+    rising_parts,
     BRAND_LINE,
     CANCEL_BODY,
     cancel_destination,
@@ -507,7 +512,8 @@ def _regret(regret: Mapping[str, Any]) -> str:
     return _sec(6, "The Week's Closest Call", body)
 
 
-def _pivots(plans: list[Mapping[str, Any]]) -> str:
+def _pivots(plans: list[Mapping[str, Any]],
+            meta: Mapping[str, Any] | None = None) -> str:
     if not plans:
         body = _gate("no pivots this week — no starter we can check is "
                      "listed questionable")
@@ -516,7 +522,7 @@ def _pivots(plans: list[Mapping[str, Any]]) -> str:
             f'<tr><td style="{BASE}font-weight:bold;color:{SLATE};'
             f'padding:7px 10px 7px 0;vertical-align:top;">If</td>'
             f'<td style="{BASE}padding:7px 0;border-bottom:1px solid {LINE};">'
-            f'{esc(p["condition"])}<br><b>→ {esc(p["action"])}</b></td></tr>'
+            f'{esc(p["condition"])}<br><b>→ {esc(pivot_action(p, meta))}</b></td></tr>'
             for p in plans
         )
         body = (f'<table role="presentation" width="100%" cellpadding="0" '
@@ -618,14 +624,26 @@ def _waiver_market(market: Mapping[str, Any] | None) -> str:
 
 
 def _rising(rows) -> str:
+    """The template's ``.rising`` card, inline: one bordered row per player
+    with the name set apart (launch audit W7). A table, because a div's
+    border-left is one of the things Outlook's Word engine drops."""
     if not rows:
         return ""
     from render.report import RISING_HEAD, RISING_INTRO
-    items = "".join(f'<div style="{SMALL}color:{NAVY};padding:3px 0;">'
-                    f'<b>{esc(r["name"])}</b> — '
-                    f'{esc(r["line"].split(": ", 1)[1])}</div>' for r in rows)
+    items = []
+    for row in rows:
+        who, what = rising_parts(row)
+        items.append(
+            f'<tr><td style="{BASE}font-size:13px;background:{CARD};'
+            f'border:1px solid {LINE};border-left:4px solid {TURF};'
+            f'padding:8px 12px;">'
+            + (f'<b>{esc(who)}</b><br>' if who else "")
+            + f'{esc(what)}</td></tr>'
+            f'<tr><td style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>')
+    table = (f'<table role="presentation" width="100%" cellpadding="0" '
+             f'cellspacing="0" border="0">{"".join(items)}</table>')
     return _sec(8, RISING_HEAD,
-                f'<p style="{BASE}margin:0 0 6px 0;">{esc(RISING_INTRO)}</p>{items}')
+                f'<p style="{BASE}margin:0 0 10px 0;">{esc(RISING_INTRO)}</p>{table}')
 
 
 def _receipts(receipts: Mapping[str, Any]) -> str:
@@ -767,11 +785,15 @@ def text_summary(report: Mapping[str, Any]) -> str:
         # reader show — dropped the one field a wrong answer is unrecoverable
         # from. An HTML/text disagreement on availability is the drift the
         # shared-constant rule exists to prevent.
-        flags = " · ".join(f["text"] for f in (slot.get("flags") or []))
+        # The opponent and kickoff ride the same sub-line (launch audit F7):
+        # plain text is what a phone previews, and "@ DEN · Thu 8:15 PM ET" is
+        # the one fact there that changes WHEN the lineup has to be set.
+        under = " · ".join(([slot["game"]] if slot.get("game") else [])
+                           + [f["text"] for f in (slot.get("flags") or [])])
         lines.append(
             f"  {slot['slot']:<6} {name:<24} {projected:>6}  {confidence}".rstrip())
-        if flags:
-            lines.append(f"  {'':<6} {flags}")
+        if under:
+            lines.append(f"  {'':<6} {under}")
     # Plain text has no note under the table, so every reason a slot carries no
     # number has to arrive here — including the structural ones whose per-row
     # markers were dropped above. Printing them only in the all-gated case left
@@ -816,7 +838,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     if report.get("pivots"):
         lines += ["", "IF/THEN FOR GAMEDAY"]
         for plan in report["pivots"]:
-            lines.append(f"  If {plan['condition']}: {plan['action']}")
+            lines.append(f"  If {plan['condition']}: {pivot_action(plan, meta)}")
     if report.get("rising"):
         from render.report import RISING_HEAD, RISING_INTRO
         lines += ["", RISING_HEAD.upper(), f"  {RISING_INTRO}"]
@@ -939,9 +961,52 @@ def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
     return _sec(2, "Your Week", body)
 
 
+_USAGE_LINE = re.compile(r"last (\d+) games?: (.+)")
+
+
+def short_usage(text: str | None) -> str | None:
+    """engine.usage.usage_line, said in a phone's width:
+    "last 4 games: 34 targets (8.5 a game), 21 carries" ->
+    "last 4: 8.5 tgt/g, 5.2 car/g".
+
+    The same counts over the same window, as per-game rates (launch audit F6).
+    A clause it does not recognise returns the whole line unchanged — a
+    shortened line must never drop a fact. Week 1's "last season: ..." basis
+    is not a usage line and passes through untouched."""
+    match = _USAGE_LINE.fullmatch(text or "")
+    if not match:
+        return text
+    games = int(match.group(1))
+    parts = []
+    for clause in match.group(2).split(", "):
+        targets = re.fullmatch(r"\d+ targets? \(([\d.]+) a game\)", clause)
+        carries = re.fullmatch(r"(\d+) carr(?:y|ies)", clause)
+        if targets:
+            parts.append(f"{targets.group(1)} tgt/g")
+        elif carries and games:
+            parts.append(f"{int(carries.group(1)) / games:.1f} car/g")
+        else:
+            return text
+    return f"last {games}: " + ", ".join(parts)
+
+
+# Fixed widths for the narrow columns, so the PLAYER column gets whatever is
+# left. The call column used to be nowrap with "start · waiting on Rashid
+# Shaheed" in it, which pushed the table past a phone's width and squeezed
+# every name onto four to eight lines at 390px (launch audit F6).
+_SLOT_W, _PROJ_W, _CALL_W = 40, 44, 60
+
+
 def _your_lineup(report: Mapping[str, Any]) -> str:
     """The solo lineup: slot, player, projection, call. No tint, because a tint
-    is a comparison and there is no opponent to compare against."""
+    is a comparison and there is no opponent to compare against.
+
+    Built for a phone first (launch audit F6). The call column carries only a
+    percentage and its bar, never a sentence; the scan line is slot, name,
+    projection, odds; and everything else — opponent and kickoff, any
+    availability flag, why a row has no odds, the bench gap and usage — runs
+    in a sub-row beneath the name that spans the projection and call columns
+    too, instead of wrapping four to eight lines deep inside the player cell."""
     slots = report["lineup"]
     mixed = any(s.get("confidence") is not None for s in slots)
     shown_marker = False
@@ -949,38 +1014,59 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
     for slot in slots:
         name = slot.get("player_name") or "—"
         proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
-        bits = [b for b in (edge_phrase(slot), slot.get("usage")) if b]
+        bits = [str(b) for b in (edge_phrase(slot), short_usage(slot.get("usage")))
+                if b]
         flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
         confidence = slot.get("confidence")
+        label = ""
         if confidence is not None:
             # The number with the site's bar under it: 50% (a coin flip)
             # is the empty end, because every call is a head-to-head.
             call = (f'<b style="font-size:16px;color:{NAVY};">{_pct(confidence)}%</b>'
                     f'<div style="padding-top:4px;">'
-                    f'{_bar((_pct(confidence) - 50) * 2, "56px", align="right")}</div>')
-        elif (mixed and slot.get("player_name")
-                and not is_structural_gate(slot.get("confidence_gate"))):
-            shown_marker = True
-            call = f'<span style="{SMALL}">{esc(row_label(slot))}</span>'
+                    f'{_bar((_pct(confidence) - 50) * 2, f"{_CALL_W - 8}px", align="right")}'
+                    f'</div>')
         else:
             call = ""
-        cell = f'{BASE}padding:7px 8px;border-bottom:1px solid {LINE};'
+            if (mixed and slot.get("player_name")
+                    and not is_structural_gate(slot.get("confidence_gate"))):
+                shown_marker = True
+                label = row_label(slot)
+        # Everything but the name runs full width beneath it, one fact a line:
+        # kickoff, availability, why no odds, then the bench gap and usage.
+        details = [
+            (f'<span style="color:{NAVY};">{esc(slot["game"])}</span>'
+             if slot.get("game") else ""),
+            (f'<span style="color:{BRICK};font-weight:bold;">{" · ".join(flags)}</span>'
+             if flags else ""),
+            f'<b>{esc(label)}</b>' if label else "",
+            esc(" · ".join(bits)) if bits else "",
+        ]
+        details = [d for d in details if d]
+        # Lean inline styles on purpose: these rows repeat per player, and a
+        # 30-player roster has to stay far under Gmail's ~102 KB clip.
+        line = f'border-bottom:1px solid {LINE};'
+        pad = (f'padding:7px 8px {"1px" if details else "7px"} 8px;'
+               f'{"" if details else line}vertical-align:top;')
         rows.append(
-            f'<tr><td style="{cell}{SMALL}font-weight:bold;white-space:nowrap;">'
-            f'{esc(slot["slot"])}</td>'
-            f'<td style="{cell}"><b>{esc(name)}</b>'
-            + (f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
-               f'{" · ".join(flags)}</span>' if flags else "")
-            + (f'<br><span style="{SMALL}">{esc(" · ".join(str(b) for b in bits))}'
-               f'</span>' if bits else "")
-            + f'</td><td style="{cell}text-align:right;font-weight:bold;'
-            f'white-space:nowrap;">{proj}</td>'
-            f'<td style="{cell}text-align:right;white-space:nowrap;">{call}</td></tr>')
+            f'<tr><td width="{_SLOT_W}" style="{SMALL}{pad}font-weight:bold;'
+            f'white-space:nowrap;">{esc(slot["slot"])}</td>'
+            f'<td style="{BASE}{pad}"><b>{esc(name)}</b></td>'
+            f'<td width="{_PROJ_W}" style="{BASE}{pad}text-align:right;'
+            f'font-weight:bold;white-space:nowrap;">{proj}</td>'
+            f'<td width="{_CALL_W}" style="{BASE if call else ""}{pad}'
+            f'text-align:right;">{call}</td></tr>')
+        if details:
+            rows.append(
+                f'<tr><td style="{line}"></td>'
+                f'<td colspan="3" style="{SMALL}padding:0 8px 7px 8px;{line}">'
+                f'{"<br>".join(details)}</td></tr>')
     th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
           f'color:{NAVY};padding:0 8px 5px 8px;border-bottom:2px solid {NAVY};')
-    head = (f'<tr><td style="{th}"></td><td style="{th}">Your lineup</td>'
-            f'<td style="{th}text-align:right;">Proj</td>'
-            f'<td style="{th}text-align:right;">Call</td></tr>')
+    head = (f'<tr><td width="{_SLOT_W}" style="{th}"></td>'
+            f'<td style="{th}">Your lineup</td>'
+            f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
+            f'<td width="{_CALL_W}" style="{th}text-align:right;">Call</td></tr>')
     note = ""
     gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
     if gates:
@@ -1009,27 +1095,38 @@ def _bench(report: Mapping[str, Any]) -> str:
     for entry in bench:
         proj = (f'{entry["projected"]:.1f}' if entry.get("projected") is not None
                 else "—")
-        cell = f'{BASE}{SMALL}padding:6px 8px;border-bottom:1px solid {LINE};'
+        line = f'border-bottom:1px solid {LINE};'
         rank = entry.get("last_season_rank")
         tag = ""
         if entry.get("out"):
-            tag = (f'<br><span style="{SMALL}color:{BRICK};font-weight:bold;">'
+            tag = (f'<span style="color:{BRICK};font-weight:bold;">'
                    f'{esc(bench_phrase(entry))}</span>')
         elif entry.get("notable") and rank:
-            tag = (f'<br><span style="{SMALL}color:{NAVY};font-weight:bold;'
+            tag = (f'<span style="color:{NAVY};font-weight:bold;'
                    f'text-transform:uppercase;">{esc(rank)} last season</span>')
-        sub = ("" if entry.get("out") else
-               f'<br><span style="{SMALL}">{esc(bench_phrase(entry))}</span>')
+        sub = esc(bench_form(entry)) if bench_shows_form(entry) else ""
+        details = [d for d in (tag, sub) if d]
+        # Same shape as the lineup above (F6): the name on the scan line, the
+        # why underneath at full width rather than four lines deep in a cell.
+        pad = (f'padding:6px 8px {"1px" if details else "6px"} 8px;'
+               f'{"" if details else line}vertical-align:top;')
         rows.append(
-            f'<tr><td style="{cell}font-weight:bold;white-space:nowrap;color:{SLATE};">'
-            f'{esc(entry["position"])}</td>'
-            f'<td style="{cell}">{esc(entry["name"])}{tag}{sub}</td>'
-            f'<td style="{cell}text-align:right;white-space:nowrap;color:{SLATE};">'
-            f'{proj}</td><td style="{cell}"></td></tr>')
+            f'<tr><td width="{_SLOT_W}" style="{SMALL}{pad}font-weight:bold;'
+            f'white-space:nowrap;">{esc(entry["position"])}</td>'
+            f'<td style="{SMALL}{pad}">{esc(entry["name"])}</td>'
+            f'<td width="{_PROJ_W}" style="{SMALL}{pad}text-align:right;'
+            f'white-space:nowrap;">{proj}</td><td width="{_CALL_W}" style="{pad}"></td></tr>')
+        if details:
+            rows.append(
+                f'<tr><td style="{line}"></td>'
+                f'<td colspan="3" style="{SMALL}padding:0 8px 6px 8px;{line}">'
+                f'{"<br>".join(details)}</td></tr>')
     th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
           f'color:{SLATE};padding:14px 8px 5px 8px;border-bottom:1px solid {LINE};')
-    head = (f'<tr><td style="{th}"></td><td style="{th}">{esc(BENCH_HEAD)}</td>'
-            f'<td style="{th}text-align:right;">Proj</td><td style="{th}"></td></tr>')
+    head = (f'<tr><td width="{_SLOT_W}" style="{th}"></td>'
+            f'<td style="{th}">{esc(BENCH_HEAD)}</td>'
+            f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
+            f'<td width="{_CALL_W}" style="{th}"></td></tr>')
     return (f'<table role="presentation" width="100%" cellpadding="0" '
             f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
 
@@ -1051,7 +1148,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
             _your_week(report["matchup"], report.get("no_opponent")),
             _your_lineup(report),
             _regret(report["regret"]),
-            _pivots(report["pivots"]),
+            _pivots(report["pivots"], report["meta"]),
             _rising(report.get("rising") or []),
             "" if meta.get("trial") else _receipts(report["receipts"]),
         ]
@@ -1064,7 +1161,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
         _tape(report),
         _fragility(report["fragility"], meta["rival_label"]),
         _regret(report["regret"]),
-        _pivots(report["pivots"]),
+        _pivots(report["pivots"], report["meta"]),
         _hype(report["hype"], report.get("waiver_market")),
         _receipts(report["receipts"]),
     ]
