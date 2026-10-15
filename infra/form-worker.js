@@ -29,12 +29,14 @@
  * and the intake (which only READS) is unaffected.
  *
  * Contract (matches run/intake.py fetch_seats + run/updates.py):
- *   POST JSON  {kind:"seat",     email, covered_by, ref}
- *   POST JSON  {kind:"update",   email, ref, replaces, token}
+ *   POST JSON  {kind:"seat",     email, ref, pass_token | covered_by}
+ *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
+ *                                the operator's emailed change, run/updates.py)
  *   POST JSON  {kind:"update_request", email, ref}   (confirm-by-email, step 1)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code)
  *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
- *   POST JSON  {kind:"waitlist", email}
+ *   POST JSON  {kind:"waitlist", email, ref?}         (ref: the roster checked
+ *                                while checkout was closed, run/waitlist.py)
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
  * Every kind may also carry an optional `via` (^[a-z0-9-]{1,24}$, e.g. "x" or
  * "reply-kit"): where the visitor came from, read off the page's own URL, so
@@ -77,7 +79,8 @@
  *
  * Setup for the scheduler (after the steps above):
  *   Worker → Settings → Triggers → Cron Triggers → add ONE trigger:
- *     0,30 * * * *        (UTC — every half hour; the handler picks what is due)
+ *     17,47 * * * *       (UTC — every half hour, off the top of the hour; the
+ *                          handler picks what is due)
  *   Worker → Settings → Variables → add, marked SECRET:
  *     GH_DISPATCH_TOKEN = a fine-grained GitHub token: Resource owner
  *                         beatyourleague, Repository access "Only select
@@ -111,8 +114,13 @@ function sanitizeKind(body) {
   if (!EMAIL.test(email) || email.length > 254) return null;
   if (kind === "waitlist") {
     // The launch list holds the address (plus the optional via tag sanitize()
-    // adds to every kind).
-    return { kind, email };
+    // adds to every kind) and, when checkout was closed for the plan picked
+    // AFTER a roster was checked (contract C6), the ref that checkout would
+    // have used — so the one launch email can bring the roster back instead
+    // of asking for fifteen names again. A ref that is not that shape is
+    // dropped, never a refused row: a bad ref must not cost a sign-up.
+    const saved = String(body.ref || "").trim();
+    return REF.test(saved) ? { kind, email, ref: saved } : { kind, email };
   }
   const ref = String(body.ref || "").trim();
   if (!REF.test(ref)) return null;
@@ -126,14 +134,26 @@ function sanitizeKind(body) {
     return { kind, email, ref };
   }
   if (kind === "seat") {
+    // A seat names its pass one of two ways (contract C4): the per-pass seat
+    // link's `pass_token` — a digest the intake recomputes over the addresses
+    // that really bought a pass, so the buyer's address never has to be typed
+    // or shared — or, from the generic link, the buyer's address typed as
+    // `covered_by`. One of the two is required; both may ride along.
+    const passToken = String(body.pass_token || "").trim().toLowerCase();
     const payer = String(body.covered_by || "").trim().toLowerCase();
-    if (!EMAIL.test(payer) || payer.length > 254) return null;
-    return { kind, email, ref, covered_by: payer };
+    const named = {};
+    if (TOKEN.test(passToken)) named.pass_token = passToken;
+    if (EMAIL.test(payer) && payer.length <= 254) named.covered_by = payer;
+    if (!named.pass_token && !named.covered_by) return null;
+    return { kind, email, ref, ...named };
   }
+  // An update names the subscription it replaces — except the OPERATOR's
+  // (`make roster-update`, run/updates.py), sent for a subscriber who emailed
+  // a new roster: the token authenticates it, and the intake picks the team.
   const replaces = String(body.replaces || "").trim();
   const token = String(body.token || "").trim();
-  if (!SLUG.test(replaces) || !TOKEN.test(token)) return null;
-  return { kind, email, ref, replaces, token };
+  if (!TOKEN.test(token) || (replaces && !SLUG.test(replaces))) return null;
+  return replaces ? { kind, email, ref, replaces, token } : { kind, email, ref, token };
 }
 
 function sanitize(body) {
@@ -156,13 +176,20 @@ const BRANCH = "main";
 // billing at season's end, the missed-run watchdog) run on the 14:00 dispatch
 // and never on the hourly ones — a dispatch has no `github.event.schedule` to
 // tell them apart, so the input does.
+//
+// Every cron sits at minute :17 or :47, never :00 (OPS-01): the top of the
+// hour is when GitHub's scheduler is busiest and most often late, so the
+// backups land off-peak, and the Worker's one trigger (17,47 * * * *) fires
+// at the same minutes so both sides keep one time per job. The half hour
+// between :17 and :47 is what keeps the hourly intake from ever starting
+// beside the Tuesday or Saturday runs.
 const SCHEDULE = [
-  { cron: "0 12 * * 2", workflow: "weekly.yml" },     // Tuesday's reports
-  { cron: "0 16 * * 2", workflow: "weekly.yml" },     // ...the same-morning retry
-  { cron: "0 14 * * *", workflow: "daily.yml", inputs: { daily: "true" } },
-  { cron: "30 * * * *", workflow: "daily.yml", inputs: { daily: "false" } },
-  { cron: "0 16 * * 6", workflow: "saturday.yml" },   // the final check
-  { cron: "0 13 * * 1", workflow: "monday.yml" },     // grading
+  { cron: "17 12 * * 2", workflow: "weekly.yml" },     // Tuesday's reports
+  { cron: "17 16 * * 2", workflow: "weekly.yml" },     // ...the same-morning retry
+  { cron: "17 14 * * *", workflow: "daily.yml", inputs: { daily: "true" } },
+  { cron: "47 * * * *", workflow: "daily.yml", inputs: { daily: "false" } },
+  { cron: "17 16 * * 6", workflow: "saturday.yml" },   // the final check
+  { cron: "17 13 * * 1", workflow: "monday.yml" },     // grading
 ];
 
 // Plain numbers, comma lists and `*` — the only syntax the workflows use. A

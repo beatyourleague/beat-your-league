@@ -84,7 +84,8 @@ def _simulate_week(tmp_path: Path, env: str = '{ GH_DISPATCH_TOKEN: "tok" }',
                    status: int = 204):
     """Every half-hour tick of one UTC week through `scheduled()`, with fetch
     stubbed: tick ISO -> the dispatches it made."""
-    start = int(WEEK_START.timestamp() * 1000)
+    # The trigger fires at :17 and :47 (OPS-01), so the ticks do too.
+    start = int((WEEK_START + timedelta(minutes=17)).timestamp() * 1000)
     return _node(tmp_path, f"""
       const calls = [];
       globalThis.fetch = async (url, init) => {{
@@ -97,7 +98,7 @@ def _simulate_week(tmp_path: Path, env: str = '{ GH_DISPATCH_TOKEN: "tok" }',
       for (let t = {start}; t < {start} + 7 * 24 * 3600 * 1000; t += 30 * 60 * 1000) {{
         calls.length = 0;
         try {{
-          await worker.scheduled({{ scheduledTime: t, cron: "0,30 * * * *" }},
+          await worker.scheduled({{ scheduledTime: t, cron: "17,47 * * * *" }},
                                  {env}, {{ waitUntil() {{}} }});
         }} catch (e) {{ errors[new Date(t).toISOString()] = String(e); }}
         if (calls.length) out[new Date(t).toISOString()] = calls.slice();
@@ -111,12 +112,12 @@ def _simulate_week(tmp_path: Path, env: str = '{ GH_DISPATCH_TOKEN: "tok" }',
 # --------------------------------------------------------------------- #
 
 def test_every_workflow_cron_is_one_the_worker_can_fire() -> None:
-    """The Worker runs on ONE Cron Trigger, "0,30 * * * *", and matches only
+    """The Worker runs on ONE Cron Trigger, "17,47 * * * *", and matches only
     numbers, lists and `*`. A workflow cron at :15, or written with a step
     (`*/2`), would simply never be dispatched — no error anywhere — so the
     syntax the two sides share is pinned here, before any simulation."""
     header = WORKER.read_text(encoding="utf-8").split("*/", 1)[0]
-    assert "0,30 * * * *" in header, "the trigger to configure is not documented"
+    assert "17,47 * * * *" in header, "the trigger to configure is not documented"
     for name in SCHEDULED:
         crons = _crons(name)
         assert crons, f"{name} lost its own schedule — the GitHub backup is gone"
@@ -124,8 +125,26 @@ def test_every_workflow_cron_is_one_the_worker_can_fire() -> None:
             fields = cron.split()
             assert len(fields) == 5 and all(re.fullmatch(r"\*|\d+(,\d+)*", f)
                                             for f in fields), (name, cron)
-            assert fields[0] in ("0", "30"), \
+            assert fields[0] in ("17", "47"), \
                 f"{name} runs at minute {fields[0]}, which the Worker's trigger never reaches"
+
+
+def test_no_backup_cron_fires_at_the_top_of_the_hour_and_the_watchdog_agrees() -> None:
+    """OPS-01, reproduced from the launch audit: every GitHub backup cron sat
+    at minute :00 (weekly 0 12 / 0 16, daily 0 14, saturday 0 16, monday
+    0 13) — the minute GitHub's own documentation names as its busiest, when
+    scheduled runs start latest or are dropped. They now sit off-peak, and the
+    two places that encode WHEN the Tuesday run is due must say the same
+    minute as the cron: the watchdog's "owed" cutoff (a purchase before it was
+    owed that Tuesday's report) and the Worker's table (pinned below by
+    simulation)."""
+    for name in SCHEDULED:
+        for cron in _crons(name):
+            assert cron.split()[0] != "0", f"{name} still fires at :00: {cron}"
+    tuesday = _crons("weekly.yml")[0].split()
+    due = watchdog.tuesday_due_at(datetime(2026, 10, 13).date())
+    assert (due.hour, due.minute) == (int(tuesday[1]), int(tuesday[0])), \
+        f"the watchdog says the Tuesday run is due at {due:%H:%M}, the cron {tuesday}"
 
 
 @needs_node
@@ -140,7 +159,7 @@ def test_the_worker_dispatches_exactly_what_the_workflows_schedule(tmp_path) -> 
                        for c in calls)
            for iso, calls in sim["result"]["out"].items()}
     expected: dict[str, list[str]] = {}
-    at = WEEK_START
+    at = WEEK_START + timedelta(minutes=17)
     while at < WEEK_START + timedelta(days=7):
         fired = sorted(name for name in SCHEDULED
                        for cron in _crons(name) if _matches(cron, at))
@@ -149,10 +168,10 @@ def test_the_worker_dispatches_exactly_what_the_workflows_schedule(tmp_path) -> 
         at += timedelta(minutes=30)
     assert got == expected
     # Spot checks in plain words, so a failure reads as a schedule.
-    assert got["2026-10-13T12:00:00.000Z"] == ["weekly.yml"]     # Tuesday's reports
-    assert got["2026-10-13T16:00:00.000Z"] == ["weekly.yml"]     # ...and the retry
-    assert got["2026-10-17T16:00:00.000Z"] == ["saturday.yml"]
-    assert got["2026-10-12T13:00:00.000Z"] == ["monday.yml"]
+    assert got["2026-10-13T12:17:00.000Z"] == ["weekly.yml"]     # Tuesday's reports
+    assert got["2026-10-13T16:17:00.000Z"] == ["weekly.yml"]     # ...and the retry
+    assert got["2026-10-17T16:17:00.000Z"] == ["saturday.yml"]
+    assert got["2026-10-12T13:17:00.000Z"] == ["monday.yml"]
     assert sum(1 for names in got.values() if "daily.yml" in names) == 7 * 25
 
 
@@ -245,12 +264,12 @@ def test_the_once_a_day_steps_run_on_the_14_00_dispatch_and_never_hourly(tmp_pat
                 by_worker = _evaluate(step["if"], event="workflow_dispatch",
                                       daily=call["body"]["inputs"]["daily"])
                 assert by_worker == by_github, (iso, step.get("name"))
-            seen_daily += cron == "0 14 * * *"
-            seen_hourly += cron == "30 * * * *"
+            seen_daily += cron == "17 14 * * *"
+            seen_hourly += cron == "47 * * * *"
     assert seen_daily == 7 and seen_hourly == 7 * 24
     for step in _once_a_day_steps():
-        assert _evaluate(step["if"], event="schedule", schedule="0 14 * * *")
-        assert not _evaluate(step["if"], event="schedule", schedule="30 * * * *")
+        assert _evaluate(step["if"], event="schedule", schedule="17 14 * * *")
+        assert not _evaluate(step["if"], event="schedule", schedule="47 * * * *")
         assert not _evaluate(step["if"], event="workflow_dispatch", daily="false")
         assert _evaluate(step["if"], event="workflow_dispatch", daily="true")
     triggers = _yaml("daily.yml").get(True) or _yaml("daily.yml").get("on")
@@ -282,7 +301,7 @@ def test_the_once_a_day_steps_run_once_however_many_times_14_00_fires(
     for step in steps:
         if step.get("id") == "today":
             continue
-        for event, kw in (("schedule", {"schedule": "0 14 * * *"}),
+        for event, kw in (("schedule", {"schedule": "17 14 * * *"}),
                           ("workflow_dispatch", {"daily": "true"})):
             assert _evaluate(step["if"], event=event, due="true", **kw)
             assert not _evaluate(step["if"], event=event, due="false", **kw), \
@@ -403,6 +422,46 @@ def test_any_kind_may_say_where_it_came_from_and_a_bad_tag_costs_nothing(tmp_pat
     # Still refused for the reasons a row was refused before.
     refused = _post_all(tmp_path, [{"kind": "trial", "email": "nope", "via": "x"}])
     assert refused["statuses"] == [400] and not refused["puts"]
+
+
+@needs_node
+def test_the_worker_stores_the_new_shapes_and_nothing_looser(tmp_path) -> None:
+    """Three Worker-side halves of shared contracts, run under node:
+
+    - C4: a seat claim from the per-pass seat link carries `pass_token` (20
+      hex) and NO payer address; one of the two is required, and a token of
+      any other shape is dropped like a bad `via`, never stored.
+    - C6: a waitlist row may carry the `ref` checkout would have used; a ref
+      that is not Stripe-safe is dropped and the address still lands (a bad
+      ref must not cost a sign-up).
+    - G12: the operator's update (`make roster-update`) names no `replaces`;
+      a token is still required, and a `replaces` that is present must be a
+      slug."""
+    token = "0123456789abcdef0123"
+    rows = [
+        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc", "pass_token": token},
+        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc",
+         "pass_token": "ABC", "covered_by": "c@example.com"},
+        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc", "pass_token": "nope"},
+        {"kind": "waitlist", "email": "w@example.com", "ref": "s3-abc_via-x"},
+        {"kind": "waitlist", "email": "w@example.com", "ref": "<b>"},
+        {"kind": "update", "email": "u@example.com", "ref": "s3-abc", "token": token},
+        {"kind": "update", "email": "u@example.com", "ref": "s3-abc", "token": token,
+         "replaces": "not-a-slug"},
+        {"kind": "update", "email": "u@example.com", "ref": "s3-abc"},
+    ]
+    got = _post_all(tmp_path, rows)
+    assert got["statuses"] == [200, 200, 400, 200, 200, 200, 400, 400]
+    stored = [{k: v for k, v in p["opts"]["metadata"].items() if k != "received_at"}
+              for p in got["puts"]]
+    assert stored == [
+        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc", "pass_token": token},
+        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc",
+         "covered_by": "c@example.com"},
+        {"kind": "waitlist", "email": "w@example.com", "ref": "s3-abc_via-x"},
+        {"kind": "waitlist", "email": "w@example.com"},
+        {"kind": "update", "email": "u@example.com", "ref": "s3-abc", "token": token},
+    ]
 
 
 # --------------------------------------------------------------------- #

@@ -87,7 +87,7 @@ def test_a_trial_never_touches_the_ledger_or_the_registry(tmp_path,
                        "--week", str(WEEK), "--cache", str(cache)])
     assert code == 0
     assert len(sent) == 1
-    assert "Your free file" in sent[0].subject
+    assert "Your free report" in sent[0].subject
     assert not list(tmp_path.rglob("calls.jsonl")), "a trial reached the ledger"
     assert not (tmp_path / "processed").exists()
 
@@ -107,3 +107,39 @@ def test_too_few_players_asks_for_the_rest(tmp_path, capsys,
                        "--week", str(WEEK), "--cache", str(_cache(tmp_path))])
     assert code == 1
     assert "ask for the rest" in capsys.readouterr().err
+
+
+def test_the_operators_free_report_carries_no_subscriber_only_lines(
+        tmp_path, monkeypatch) -> None:
+    """RQ-02, reproduced: `printf roster | python -m run.trial --email
+    prospect@example.com --roster - --print` drafted "Subject: Your free file —
+    Week 6…" and a body telling a prospect who had paid nothing "DONE WITH
+    THIS? Cancel it yourself from your own billing page", "ROSTER CHANGED?
+    Reply to this email … your next report follows it" and "Your results start
+    here" — because run/trial.py never set meta["trial"], the flag every
+    renderer reads (run/trials.py, the hourly free report, always did). Its
+    --print text is pasted straight into the group chat it was asked in."""
+    from render.report import CANCEL_TEXT
+    monkeypatch.setenv("SITE_URL", "https://x.test")
+    roster = tmp_path / "roster.txt"
+    roster.write_text("Aaron Armstrong\nBell Cow\nCade Carter\nDre Wideout\n"
+                      "Eli Slotside\nFrank Tighten\nGabe Fielder\n", encoding="utf-8")
+    data = trial.load_week_data(_cache(tmp_path), SEASON, WEEK, session=OFFLINE)
+    ids = trial.resolve_roster(roster.read_text(), data.directory)
+    spec = trial.RosterSpec(player_ids=tuple(ids), slots=trial.TEMPLATES["nokd"],
+                            scoring="ppr", label="Your Team")
+    report = trial.report_for(spec, data, league_size=12, cache_dir=_cache(tmp_path))
+    report["meta"]["plan"] = "season"           # a stray plan must not survive
+    plain, message = trial.trial_message(report, "prospect@example.com", ids,
+                                         SEASON, WEEK)
+    assert message.subject.startswith("Your free report — ")
+    assert "file" not in message.subject.lower()
+    for text in (plain, message.html):
+        assert CANCEL_TEXT.split(" —")[0] not in text, "a prospect was told to cancel"
+        assert "roster changed?" not in text.lower(), \
+            "the subscriber's roster route leaked"
+        assert "Your results start here" not in text
+        assert "This one's on us" in text.replace("&#x27;", "'"), \
+            "the free report's own footer is missing"
+    assert "plan" not in report["meta"] and report["meta"]["trial"] is True
+    assert message.unsubscribe is None

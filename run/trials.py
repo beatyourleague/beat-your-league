@@ -56,7 +56,9 @@ Rules, each a way a free report could cost more than it earns:
   unknown, every subscriber would read as eligible for a "free" report.
 
 Every piece fails closed: no endpoint, no provider or no data means nothing is
-sent and the log says why.
+sent and the log says why. Requests waiting with NO email provider is the one
+quiet state that is a failure (OPS-08): the page promises "usually within the
+hour", nothing can ever keep it, so the run exits 1 and the cron files an issue.
 """
 
 from __future__ import annotations
@@ -77,7 +79,7 @@ TRIAL_DAILY_CAP = 40
 # kickoff to the next build, or behind a full daily allowance) with room left.
 TRIAL_MAX_AGE = timedelta(days=14)
 # On a Tuesday (UTC), free reports wait for the subscriber run's marker or
-# this hour, whichever comes first. The retry runs at 16:00 and is done well
+# this hour, whichever comes first. The retry runs at 16:17 and is done well
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
 # then the watchdog says so separately.
 TUESDAY_RELEASE_HOUR = 20
@@ -273,6 +275,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     limit = min(MAX_PER_RUN, room)
 
+    # Somebody asked, the page told them it "usually lands within the hour",
+    # and nothing can send it (OPS-08). Every earlier return above is a request
+    # waiting for a real reason — the week underway, subscribers first, the
+    # day's allowance spent — and stays quiet. This one is a misconfiguration
+    # that waits forever, so it goes red and the hourly cron files its issue.
+    # Decided before anything is built: a report nobody can send is wasted work.
+    provider = None
+    if not args.dry_run:
+        provider = build_provider(None)
+        if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
+            print(f"FREE REPORTS NOT SENT: {len(todo)} request(s) are waiting and "
+                  f"EMAIL_PROVIDER is not set, so none can be mailed. Set it (and "
+                  f"its key), or turn the free report off on the site "
+                  f"(TRIAL_OPEN).", file=sys.stderr)
+            return 1
+
     from render.email import render_email, text_summary
     from run.refs import decode_roster
     from run.solo import load_week_data, report_for, spec_from_ref
@@ -314,13 +332,8 @@ def main(argv: list[str] | None = None) -> int:
     if skipped:
         print(f"Free reports: {len(skipped)} request(s) skipped as unbuildable "
               f"({', '.join(skipped[:5])}).")
-    if args.dry_run:
+    if args.dry_run or provider is None:
         print(f"Free reports (dry run): {len(messages)} built.")
-        return 0
-    provider = build_provider(None)
-    if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
-        print(f"Free reports: {len(messages)} built — EMAIL_PROVIDER is not set, "
-              f"so none were sent or recorded.")
         return 0
     sends = send_all(messages, provider=provider)
     sent_now = sum(1 for s in sends if s.ok and not s.skipped)

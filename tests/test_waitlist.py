@@ -243,3 +243,84 @@ def test_the_url_defaults_from_site_url_so_the_runbook_command_works(
     finally:
         wl.send_all = original
     assert sent and all("https://example.com/join/" in m.text for m in sent)
+
+
+# --------------------------------------------------------------------- #
+# the roster a closed checkout saved (contract C6) and opening morning (OPS-13)
+# --------------------------------------------------------------------- #
+
+def _roster_ref() -> str:
+    from run.refs import encode_roster
+    from test_solo_run import SLOTS, _pid
+    return encode_roster("season", "ppr", list(SLOTS), [_pid(i) for i in range(1, 9)])
+
+
+def test_a_saved_roster_comes_back_in_that_persons_launch_email(monkeypatch,
+                                                                 capsys) -> None:
+    """Contract C6. A visitor who checked a roster while checkout was closed
+    left only an address on the list, so the one launch email sent them back
+    to an empty page and fifteen names to type again — the step most of them
+    will not repeat. The join page now saves the ref checkout would have used
+    on the waitlist row, and that person's email links SITE_URL/join/?ref=<ref>,
+    which the page decodes back into the roster and its settings. Everybody
+    else's email is unchanged, one link each, and a ref that does not decode
+    is never put in a link."""
+    import run.waitlist as wl
+    ref = _roster_ref()
+    rows = [
+        {"kind": "waitlist", "email": "saved@example.com", "ref": "s3-old"},
+        {"kind": "waitlist", "email": "saved@example.com", "ref": ref},
+        {"kind": "waitlist", "email": "plain@example.com"},
+        {"kind": "waitlist", "email": "junk@example.com", "ref": "s3-not-a-roster"},
+        {"kind": "trial", "email": "trial@example.com", "ref": ref},
+    ]
+    assert wl.saved_refs(rows) == {"saved@example.com": ref}
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setattr(wl, "fetch_seats", lambda *a, **k: rows)
+    sent: list = []
+    monkeypatch.setattr(wl, "send_all", lambda msgs, provider: sent.extend(msgs) or [])
+    assert main([]) == 0
+    by_to = {m.to: m for m in sent}
+    assert set(by_to) == {"saved@example.com", "plain@example.com", "junk@example.com"}
+    restore = f"https://example.com/join/?ref={ref}"
+    saved = by_to["saved@example.com"]
+    assert restore in saved.text and restore in saved.html
+    assert wl.SAVED_LINE in saved.text and saved.text.count("http") == 1
+    for other in ("plain@example.com", "junk@example.com"):
+        assert "?ref=" not in by_to[other].text and wl.SAVED_LINE not in by_to[other].text
+        assert "https://example.com/join/" in by_to[other].text
+    assert "with their roster: 1" in capsys.readouterr().out
+    # The query is joined, never doubled, when --url already carries one.
+    assert wl.restore_url("https://x/join/?via=x", ref) == f"https://x/join/?via=x&ref={ref}"
+
+
+def test_opening_morning_says_every_missing_setting_at_once(monkeypatch, capsys,
+                                                             export: Path) -> None:
+    """OPS-13, reproduced: nothing said which settings `run.waitlist --send`
+    needs, so they surfaced one refusal at a time — and EMAIL_FROM, which
+    run/delivery.py silently defaults to a placeholder at example.invalid,
+    surfaced as nothing at all. A provider named without its key raised a
+    traceback. Now a real send names everything missing before reading a
+    list, and `make waitlist-send` is the one command the runbook points at."""
+    import run.waitlist as wl
+    for name in ("EMAIL_PROVIDER", "EMAIL_FROM", "SENDER_POSTAL_ADDRESS",
+                 "RESEND_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    assert main(["--list", str(export), "--url", "https://x/join/", "--send"]) == 1
+    err = capsys.readouterr().err
+    assert "NOTHING WAS SENT" in err
+    for name in ("EMAIL_FROM", "SENDER_POSTAL_ADDRESS", "RESEND_API_KEY"):
+        assert name in err, f"{name} was not named"
+    monkeypatch.setenv("EMAIL_FROM", "Beat Your League <hi@example.com>")
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 1")
+    monkeypatch.setenv("RESEND_API_KEY", "re_x")
+    assert wl.send_env_missing() == []
+    makefile = (Path(__file__).resolve().parent.parent / "Makefile").read_text()
+    send = makefile.split("\nwaitlist-send:", 1)[1].split("\n\n", 1)[0]
+    assert "-m run.waitlist --send" in send
+    preview = makefile.split("\nwaitlist-preview:", 1)[1].split("\n\n", 1)[0]
+    assert "-m run.waitlist" in preview and "--send" not in preview
+    assert "sent.jsonl" in makefile.split("\nwaitlist-preview:", 1)[0].rsplit("\n\n", 1)[1], \
+        "the target's comment must say to commit the send log afterwards"
