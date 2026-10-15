@@ -1,0 +1,115 @@
+# Launch readiness
+
+Oct 15 2026, NFL Week 6. An audit before taking the first payment: four research briefs
+(who pays for fantasy tools, the 2026 competitors, conversion benchmarks, costs and
+compliance) and eight audits (the product built for six real rosters this week, two panels
+of four buyer personas walking the site on their own devices, the website, operations,
+economics, legal, go-to-market). An adversarial verifier re-checked every serious finding;
+93 were confirmed, 1 refuted. Estimates are labelled. Not legal or tax advice.
+
+**The repeatable version of this check is `make launch-check`.** It turns everything a machine
+can verify into PASS / FAIL / WARN / OWNER gates and says READY only when nothing is left.
+
+## Verdict
+
+**A viable product for a narrow, real buyer — not ready to take money until the owner steps
+below are done.** It leads the field on honesty and on the shape of the service: decided for
+you, in your inbox, any league app, no login, a Saturday check only when Friday's injury
+report changes something, and a refund that beats the category. It was behind the free app
+optimizers on what they already show (opponent, kickoff, current injury status); the report
+work below closes most of that from facts alone. The owner's own rules exclude the
+category's usual trust signals (named experts, accuracy awards, user counts), so the free
+report on the visitor's own roster is the strongest conversion lever left — switch it on
+with sending.
+
+Treat the rest of 2026 as a proof season. The profit case is August 2027.
+
+## Who to sell to first
+
+**The busy money-league regular**: about 28–49, a white-collar job, 1–3 leagues with at
+least one $50–$100 buy-in on ESPN, Yahoo or CBS (average entry fees: CBS $122, Yahoo $91,
+ESPN $70, Sleeper $45). Already in the top quarter of fantasy spenders, about 4.5 hours a
+week on it, and wants the decision made rather than another tool to run. **Sell him the $39
+season pass.**
+
+**Second: his league's commissioner**, buying the $99 League Pass out of dues (about $8.25 a
+manager in a 12-team league). Each sale puts the brand in front of 10–12 managers, and word
+of mouth is how players find tools — which matters most for an anonymous brand.
+
+Not yet: multi-league grinders (FantasyPros covers 50 leagues), Sleeper-native under-30s
+(lowest buy-ins, free AI, and a two-FLEX default lineup the product can't set up yet), free
+office leagues.
+
+**The persona panel.** Eight simulated buyers; none would buy with checkout closed, and every
+one scored trust lowest (3–6 of 10). The closest — the busy ESPN/Yahoo regular and the
+commissioners — flip on the same two things: a free report on their own roster, and a sample
+that shows a real close call.
+
+## Scorecard (as audited) and status now
+
+| Area | Audit | Status now |
+|---|---|---|
+| Product value | 6, at risk | Opponent and kickoff on each row, Thursday-night lock line, out-last-week if/then, dated injury wording and a phone layout fix are in progress (report work) |
+| Decision quality | 5, **no-go** | **Fixed:** injured reserve, PUP, suspended and released players are out in the weekly report (they were started with odds) |
+| Website appeal | 7, at risk | **Fixed:** apps named in the hero; FAQs for "more than one league" and "why not a chatbot"; honest scoring coverage; the false "nobody answers who do I start" line gone |
+| Conversion funnel | 3, **no-go** | Code side **fixed** (Sleeper kicker line, ranked search, problems first, the live sample shows odds again); checkout, waitlist and free report wait on owner steps |
+| Trust | 5, at risk | Live sample rebuilt on a rule-chosen 2026 roster; "file" wording fixed at the source |
+| Pricing & economics | 7, go | Fee figures corrected (about 7%, not 3.7%); League Pass's false "cheaper than one buy-in" replaced with the dues split |
+| Operations | 5, at risk | Worker-triggered crons, a dead-man's switch and quiet pre-launch alarms in progress (ops work); DMARC is an owner step |
+| Legal & compliance | 4, **no-go** | **Fixed:** Pay-button text matches the terms; required terms box names the renewal and 18+; consent recorded on the customer; privacy names every processor; renewal notice complete; launch email has a sender and opt-out. Owner: mailbox address |
+| Go-to-market | 3, at risk | Post drafts and a reply helper in progress; a League Pass group-chat line and a pass-buyer thank-you page **added** |
+| Brand | 7, go | — |
+
+## Must be true before the first payment (owner)
+
+All in `LAUNCH.md`, in this order:
+
+1. **Steps 1–3:** payment links checked, Stripe public details (business name, support email
+   hello@, no phone or address — receipts show them), the Pay-button script (it now also makes
+   the terms box required), Resend verified, **DMARC**, Gmail "Send mail as" hello@, all GitHub
+   secrets, and the **fork pull-request approval setting** (the public repo's cache holds the
+   subscriber list).
+2. **Step 5, the form Worker** — no longer a follow-up. Without it, roster changes have no
+   path (every report promises one), seats can't be claimed, and the waitlist is a mailto that
+   nothing collects.
+3. **A sender address:** a rented mailbox, never a home (about US$10/month), in
+   `SENDER_POSTAL_ADDRESS`. The launch announcement refuses to send without it.
+4. **Step 4:** one real purchase watched from payment to inbox, then open — ideally for the
+   Week 7 Tuesday (Oct 20). Each closed week costs about an eighth of what's left of 2026.
+5. **Then** Resend Pro and the free own-roster report (`TRIAL_OPEN`).
+
+## The money
+
+From `run/economics.py` (assumptions at its top) and the audit's model.
+
+| Number | Value |
+|---|---|
+| Stripe on a $39 pass (Canadian account, US card, CAD payout) | about 7.0% — $2.72, kept by Stripe on a refund |
+| With a USD payout account | about $1.94 |
+| Net per season pass after Stripe, 8% refunds, disputes | about $32.93 |
+| Net per League Pass | about $84, plus an expected renewal |
+| Break-even on this season's fixed costs | a handful of purchases (mailbox, domain) |
+| Base case for 2026, open Week 7 | about 30 purchases + 2 League Passes, about $880 pre-tax, about 75 owner hours |
+| 100 subscribers by Week 10 | would need 5,000–20,000 visitors in 2–3 weeks: not organic |
+| Paid ads | cost $50–$300 per buyer against about $42 of value: none this season |
+| Biggest lever | the refund rate: 15% costs about $128, 25% about $310 per 50 purchases |
+| Free email capacity | Resend's free tier lasts to about 85 recipients a send day |
+| GST/HST | not until C$30,000 of sales in four quarters |
+
+**Pricing:** keep $14.99 and $39, never prorate; the pass earns more than monthly in every
+join week. Don't advertise the pass's 12-month coverage until rosters roll to a new season
+(IDEAS.md), or 2027 reports would be built from 2026 rosters.
+
+## What was deliberately not done
+
+- No track-record or grade claims on selling pages, no testimonials, no customer counts — the
+  owner's rules; the free report is the trust lever instead.
+- The flagship sample (a 70% close call) was not re-pinned: that moves every pinned landing
+  figure and needs a rule chosen before looking at outcomes (IDEAS.md).
+- Two-FLEX lineups, a season roll, a multi-team price, registry encryption: logged in
+  IDEAS.md with their reasons.
+
+## Refuted
+
+- "Selling to your own leagues breaks anonymity" — the rule covers public surfaces; your own
+  leagues remain the best warm channel.

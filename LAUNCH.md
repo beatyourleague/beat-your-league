@@ -13,6 +13,17 @@ can buy.
 
 ## Where things stand
 
+**Launch readiness (Oct 15 2026):** a full audit — market research, eight buyer personas,
+product, site, operations, economics, legal — is in `reports/launch-readiness.md`. Its
+verdict: a viable product for the busy money-league manager, not ready to take money until
+the steps below are done. **Run `make launch-check`** at any point: every remaining item
+shows as OWNER (yours) or FAIL (code), and it says READY when nothing is left.
+
+**The order that matters:** steps 1, 2, 3 and 5 (the form Worker is now part of opening —
+without it roster changes, seats and the waitlist have nowhere to go), then step 4's real
+purchase, then open. Aim for the Week 7 Tuesday (Oct 20); each closed week costs about an
+eighth of what's left of 2026.
+
 Done:
 - `beatyourleague.com` on GitHub Pages; `hello@beatyourleague.com` forwards to your inbox.
 - Terms (Ontario law) and privacy pages. The refund window is counted from each buyer's own
@@ -51,14 +62,19 @@ the offer of a refund.
    | Include a free trial | Off | The refund window is the trial |
    | Limit the number of payments | Off | `run/billing.py` ends monthly billing at season's end from the real schedule |
    | Promotion codes | Off | The founding rate is the discount, and the terms promise it at every renewal |
-   | After payment | Redirect to `https://beatyourleague.com/thanks.html` | |
+   | After payment | Redirect to `https://beatyourleague.com/thanks.html` — and for the **League Pass link only**, `https://beatyourleague.com/thanks.html?plan=pass` | The pass buyer's thank-you page then shows the seat link and a line to paste in the league chat |
 
    If Managed Payments can't be switched off on an existing link, make a replacement link for
    that product with the settings above, **deactivate** the old one, and send me the new URL
    and its `plink_` id.
 3. **Settings → Business → Public details:** Terms of service URL
    `https://beatyourleague.com/terms.html`, Privacy policy URL
-   `https://beatyourleague.com/privacy.html`.
+   `https://beatyourleague.com/privacy.html`. Public business name **Beat Your League**,
+   support email **hello@beatyourleague.com**, and **no phone number or personal address** —
+   these show on receipts, so they decide whether you stay anonymous.
+
+   **Settings → Billing → Customer portal:** confirm **Cancel subscriptions** is allowed
+   (the terms promise self-serve cancelling).
 
    **Settings → Business → Branding** (the new logo, Sep 29 2026 — Stripe still shows the
    old one or none until you do this; it's on the checkout page, receipts and invoices):
@@ -82,7 +98,10 @@ the offer of a refund.
      and everything else None, and use that.
 
    The sentences come from `render/welcome.py`, which a test ties to the pricing page, so
-   Stripe's page can't disagree with ours.
+   Stripe's page can't disagree with ours. The script also makes the **terms box required**,
+   with a line naming the yearly renewal, its amount and 18+ (California's auto-renewal law
+   wants that consent, and a record of it: the intake stamps the time and terms version on
+   each customer). That's why step 3's Terms of service URL must be set first.
 5. **Delete the `setup-payment-link-text` key.** A key that can edit payment links can change
    what buyers pay, and nothing needs it again.
 
@@ -98,8 +117,22 @@ the offer of a refund.
    straight into the GitHub secret in step 3 — nowhere else.
 
 The free tier sends 3,000 a month but only **100 a day**, which the Tuesday run outgrows at
-about 100 subscribers. The $20/month plan goes into PLAN §2's budget table the week that
-happens.
+about 85 subscribers. The $20/month plan goes into PLAN §2's budget table the week that
+happens, and before the free-report button is switched on.
+
+4. **DMARC (5 min):** Cloudflare → your domain → **Email → DMARC Management** → enable, or
+   add a TXT record named `_dmarc` with `v=DMARC1; p=none; rua=mailto:hello@beatyourleague.com`.
+   Inboxes distrust a new sending domain without one. After a few clean weeks, change `p=none`
+   to `p=quarantine`.
+5. **Reply as hello@, not as you (15 min):** in Gmail → Settings → Accounts → **Send mail as**
+   → add `hello@beatyourleague.com`, SMTP server `smtp.resend.com`, port 465, username
+   `resend`, password = a second Resend key with Sending access. Refund and roster emails
+   then go out from hello@, so your personal address never reaches a customer.
+6. **A sender address (decision, ~US$10/month):** US and Canadian anti-spam law want a postal
+   address in marketing email. Rent a virtual mailbox or PO box — never your home — and put it
+   in the GitHub secret `SENDER_POSTAL_ADDRESS` (step 3). The launch announcement refuses to
+   send without it. One question to an Ontario lawyer about online-sale disclosures is worth
+   booking before scale (the audit flags it; not legal advice).
 
 ## 3. GitHub secrets (~10 min)
 
@@ -116,6 +149,12 @@ repository secret**, once per row. Names exactly as written.
 | `RESEND_API_KEY` | from step 2 |
 | `SITE_URL` | `https://beatyourleague.com` |
 | `BILLING_PORTAL_URL` | `https://billing.stripe.com/p/login/cNi4gB3Nx3zkcXt1IKaMU00` |
+| `SENDER_POSTAL_ADDRESS` | the rented mailbox address from step 2.6 (one line) |
+
+**Also on GitHub (1 min, important):** Settings → Actions → General → **Fork pull request
+workflows from outside collaborators** → **Require approval for all outside collaborators**.
+The repository is public, and without this anyone could open a pull request whose workflow
+reads the automation's cache — which holds subscribers' emails and rosters.
 
 `github-actions-crons` needs exactly three permissions: Checkout Sessions **Read**, Customers
 **Write**, Subscriptions **Write**; everything else None. If Stripe won't reveal it, recreate
@@ -155,7 +194,8 @@ green. Nobody else's money moves until you've watched your own go all the way th
 
 Then decide what happens to your subscription (section 9): keep it and it starts the public
 record, or cancel and refund it as section 7 describes. A refund doesn't return Stripe's fee
-(about $1.43).
+(about $2.72 on a $39 pass from a Canadian account, or about $1.94 with a USD payout account;
+`.venv/bin/python -m run.economics` shows the arithmetic).
 
 ## 5. The form Worker (~20 min) — the email list, League Pass and roster updates
 
@@ -213,9 +253,10 @@ The order is PLAN §5.1's — subscribers per hour of your time — with one cha
    Nothing is emailed from your Mac: it writes a draft and prints a text version to paste
    back into the chat. Add `--scoring half_ppr`, `--template sf` or `--size 10` to match their
    league. A name it can't place stops the run and names the line — ask them, don't guess.
-2. **Discords and league group chats.** Ask a mod before mentioning the product. The
-   comparison page (`beatyourleague.com/compare/`) is the thing to paste when someone asks
-   what to use.
+2. **Discords and league group chats.** Ask a mod before mentioning the product. When
+   someone asks what to use, paste the sample report (`beatyourleague.com/sample-report.html`)
+   or this week's (`/this-week.html`) with one line of answer — not the comparison page,
+   which leads with grading the selling pages leave out.
 3. **X replies, about 20 minutes a day.** A number and one line of reasoning in reply to
    start/sit questions. No links in replies — the product lives in your profile.
 4. **Reddit.** Read each subreddit's rules yourself and ask the mods first. Answers only, no

@@ -266,7 +266,26 @@ def check_selling_copy() -> list[Gate]:
     for page in pages():
         if re.search(PERSONAL_DOMAINS, page.read_text(encoding="utf-8"), re.I):
             hits_personal.append(rel(page))
+    retired = []
+    for name in SELLING:
+        path = SITE / name
+        if not path.exists():
+            continue
+        text = visible_text(path.read_text(encoding="utf-8"))
+        for phrase in RETIRED_CLAIMS:
+            if phrase.lower() in text.lower():
+                retired.append(f"{name}: '{phrase}'")
+    landing = (SITE / "index.html").read_text(encoding="utf-8")
+    hero = landing.split('<header class="hero">')[1].split("</header>")[0] \
+        if '<header class="hero">' in landing else ""
+    missing_apps = [a for a in ("ESPN", "Yahoo", "Sleeper", "CBS") if a not in hero]
     return [
+        _gate("Copy", "No claim the audit retired (false or unprovable lines)", not retired,
+              "; ".join(retired[:5])),
+        _gate("Copy", "The hero names the league apps it works with", not missing_apps,
+              f"missing: {', '.join(missing_apps)}", fail="WARN"),
+        _gate("Copy", "The FAQ says the same thing to people and to search engines",
+              _faq_twin_ok(landing), "the JSON-LD FAQ answers differ from the visible ones"),
         _gate("Copy", "No banned claim words on selling pages (calibrated, tested, proven, accurate)",
               not hits_banned, "; ".join(hits_banned[:5])),
         _gate("Copy", "No betting language on selling pages", not hits_bet, "; ".join(hits_bet[:5])),
@@ -275,6 +294,29 @@ def check_selling_copy() -> list[Gate]:
         _gate("Copy", "No personal email address on any page", not hits_personal,
               ", ".join(hits_personal)),
     ]
+
+
+# Lines the launch audit found false, unprovable or contradicted by the code.
+RETIRED_CLAIMS = ("cheaper than one buy-in", "Nobody answers", "From Sunday afternoon to Monday",
+                  "sign-in code", "fifteen seconds", "in one click, any time",
+                  "Cancel any time yourself, in one click", "renews automatically each season")
+
+
+def _faq_twin_ok(landing: str) -> bool:
+    block = re.search(r'<script type="application/ld\+json">(.*?)</script>', landing, re.S)
+    if not block:
+        return False
+    try:
+        graph = json.loads(block.group(1))["@graph"]
+        faq = next(n for n in graph if n["@type"] == "FAQPage")
+    except (ValueError, StopIteration, KeyError):
+        return False
+    visible = {}
+    for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>", landing, re.S):
+        a = re.sub(r"\s*\(<a href=\"sample-first-week.html\">.*?</a>\)", "", a, flags=re.S)
+        visible[html.unescape(q)] = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", a))).strip()
+    return len(visible) == len(faq["mainEntity"]) and all(
+        visible.get(i["name"]) == i["acceptedAnswer"]["text"] for i in faq["mainEntity"])
 
 
 def check_prices() -> list[Gate]:
@@ -349,6 +391,26 @@ def check_funnel_config() -> list[Gate]:
     else:
         gates.append(Gate("Funnel", "League Pass seats, roster updates and free reports can be received",
                           "PASS", form))
+    confirm = js_constants((SITE / "join/confirm.html").read_text(encoding="utf-8"))
+    endpoints = {k: v for k, v in (("index WAITLIST_ENDPOINT", landing.get("WAITLIST_ENDPOINT", "")),
+                                   ("join FORM_ENDPOINT", form),
+                                   ("join NOTIFY_LIST_ENDPOINT", join.get("NOTIFY_LIST_ENDPOINT", "")),
+                                   ("confirm FORM_ENDPOINT", confirm.get("FORM_ENDPOINT", ""))) if v}
+    gates.append(_gate("Funnel", "Every page posts to the same form Worker",
+                       len(set(endpoints.values())) <= 1,
+                       "; ".join(f"{k}={v}" for k, v in endpoints.items()),
+                       next(iter(endpoints.values()), "none set yet")))
+    gates.append(_gate("Funnel", "The form Worker sits on our own domain",
+                       not any("workers.dev" in v for v in endpoints.values()),
+                       "a *.workers.dev address is easily blocked and looks unofficial — "
+                       f"use forms.{DOMAIN}", fail="WARN"))
+    seats_open = lp.get("SEATS_OPEN") == "true"
+    gates.append(_gate("Funnel", "The League Pass is never sold before seats can be claimed",
+                       # The page builds its Buy button only when CHECKOUT_OPEN and
+                       # SEATS_OPEN are both true, so SEATS_OPEN is the one to guard.
+                       not (seats_open and not form),
+                       "league-pass.html has SEATS_OPEN on while FORM_ENDPOINT is empty "
+                       "(seats would refuse)"))
     contact = landing.get("CONTACT_EMAIL", "")
     gates.append(_gate("Funnel", "A project inbox (not a personal one) is the contact route",
                        contact.endswith("@" + DOMAIN), f"CONTACT_EMAIL={contact or 'empty'}",
@@ -426,6 +488,74 @@ def check_product() -> list[Gate]:
     gates.append(_gate("Product", "The subject line names the week",
                        f"Week {report['meta']['week']}" in subject_for(report), subject_for(report)))
     return gates
+
+
+BATTERY = (("ppr", 12, "std"), ("half_ppr", 10, "std"), ("standard", 14, "std"),
+           ("ppr", 12, "sf"), ("half_ppr", 12, "nokd"))
+TEMPLATE_SLOTS = {
+    "std": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"),
+    "sf": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF"),
+    "nokd": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX"),
+}
+
+
+def check_product_battery() -> list[Gate]:
+    """The sample roster under five setups, joined to TODAY's roster status and
+    the schedule's byes OUTSIDE the report's own availability data — the first
+    version of this check trusted that data and passed a report that started an
+    injured-reserve receiver (launch audit)."""
+    import csv
+    from engine.availability import ROSTER_OUT
+    from engine.subscriber import RosterSpec
+    from render.email import render_email
+    from render.live_sample import LIVE_ROSTER
+    from run.solo import CACHE_DIR, SeasonOver, load_week_data, report_for
+    try:
+        data = load_week_data(CACHE_DIR)
+    except SeasonOver as exc:
+        return [Gate("Product", "Five league setups build sound reports", "SKIP", str(exc))]
+    status: dict[str, str] = {}
+    with (CACHE_DIR / "players.csv").open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            if (row.get("status") or "").upper() in ROSTER_OUT:
+                status[row["gsis_id"]] = ROSTER_OUT[row["status"].upper()]
+    byes = data.availability.bye_teams or set()
+    known = {p.player_id for p in data.directory.players}
+    roster = tuple(p for p in LIVE_ROSTER if p in known)
+    silent, bad_alt, absurd, defense, wide = [], [], [], [], []
+    for scoring, size, template in BATTERY:
+        label = f"{scoring}/{size}/{template}"
+        report = report_for(RosterSpec(player_ids=roster, slots=TEMPLATE_SLOTS[template],
+                                       scoring=scoring, label="Sample roster"),
+                            data, league_size=size)
+        told = " ".join(c["action"] for c in report["checklist"])
+        for slot in report["lineup"]:
+            pid = slot.get("player_id") or ""
+            team = (data.availability.statuses or {}).get(pid, {}).get("team")
+            cannot = pid in status or (team in byes and not pid.startswith("DEF-")) \
+                or (pid.startswith("DEF-") and pid.split("-", 1)[1] in byes)
+            flagged = any(f.get("kind") == "out" for f in slot.get("flags") or [])
+            if cannot and not (flagged and slot["player_name"].split()[-1] in told):
+                silent.append(f"{label}: {slot['player_name']}")
+            if slot.get("confidence") is not None:
+                if not 0.5 <= slot["confidence"] <= 0.99:
+                    absurd.append(f"{label}: {slot['player_name']}")
+                if slot.get("position") == "DEF":
+                    defense.append(label)
+                if slot.get("alternative_id") in status:
+                    bad_alt.append(f"{label}: {slot.get('alternative_name')}")
+        if len(render_email(report).encode("utf-8")) >= 100_000:
+            wide.append(label)
+    n = len(BATTERY)
+    return [
+        _gate("Product", "No player who can't play is started without a flag and a checklist line",
+              not silent, "; ".join(silent[:4]), f"{n} setups, this week"),
+        _gate("Product", "No call is made against a player on injured reserve or suspended",
+              not bad_alt, "; ".join(bad_alt[:4])),
+        _gate("Product", "Every % in every setup is between 50 and 99, none on a defense",
+              not absurd and not defense, "; ".join((absurd + defense)[:4])),
+        _gate("Product", "Every setup's email stays under Gmail's clip", not wide, ", ".join(wide)),
+    ]
 
 
 def check_proving() -> list[Gate]:
@@ -599,17 +729,40 @@ def check_compliance() -> list[Gate]:
     gates.append(_gate("Compliance", "The welcome email states renewal, amount and how to cancel",
                        "renews once a year" in body and "$39" in body and "Cancel" in body,
                        "the acknowledgment email lost a disclosure"))
-    address = os.environ.get("SENDER_POSTAL_ADDRESS", "").strip()
-    try:
-        from render.report import SENDER_POSTAL_ADDRESS as configured
-        address = address or configured
-    except ImportError:
-        pass
+    from render.sender import postal_address
+    address = postal_address()
     gates.append(Gate("Compliance", "Commercial email carries a postal address (CAN-SPAM, CASL)",
                       "PASS" if address else "OWNER",
-                      address or "no sender postal address configured — the launch "
-                                 "announcement and any marketing email need one (a virtual "
-                                 "mailbox keeps the owner anonymous)"))
+                      address or "SENDER_POSTAL_ADDRESS is not set here — the launch "
+                                 "announcement refuses to send without it. Rent a mailbox "
+                                 "(never a home address) and set it as a GitHub secret and "
+                                 "in your shell"))
+    import sys as _sys
+    _sys.path.insert(0, str(REPO))
+    from infra.stripe_paylink_text import MESSAGES, TOS_MESSAGES
+    from render.welcome import TERMS_VERSION
+    from datetime import date
+    stamp = date.fromisoformat(TERMS_VERSION)
+    terms = (SITE / "terms.html").read_text(encoding="utf-8")
+    gates.append(_gate("Compliance", "Stripe's Pay-button text matches the terms (once a year)",
+                       not any("each season" in m for m in MESSAGES.values())
+                       and all("once a year" in MESSAGES[p] for p in ("season", "league_pass")),
+                       "infra/stripe_paylink_text.py says something the terms don't"))
+    gates.append(_gate("Compliance", "The checkout's terms box names the renewal, its amount and 18+",
+                       all("18 or older" in t and "[Terms](" in t for t in TOS_MESSAGES.values()),
+                       "a TOS_MESSAGES entry lost a required element"))
+    gates.append(_gate("Compliance", "The terms carry the version consent is recorded against",
+                       f"Last updated {stamp.day} {stamp:%B %Y}" in terms,
+                       f"terms.html's Last updated date ≠ TERMS_VERSION {TERMS_VERSION}"))
+    privacy = visible_text((SITE / "privacy.html").read_text(encoding="utf-8"))
+    missing = [p for p in ("Stripe", "Resend", "Cloudflare", "GitHub", "United States")
+               if p not in privacy]
+    gates.append(_gate("Compliance", "The privacy policy names every processor and where data lives",
+                       not missing, f"missing: {', '.join(missing)}"))
+    worker = (REPO / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    gates.append(_gate("Compliance", "Form rows expire as the privacy policy says",
+                       "expirationTtl" in worker,
+                       "infra/form-worker.js stores rows forever; privacy.html promises ~13 months"))
     return gates
 
 
@@ -642,6 +795,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("scripts", check_scripts), ("selling copy", check_selling_copy),
         ("prices", check_prices), ("funnel configuration", check_funnel_config),
         ("season clock", check_week_json), ("this week's report", check_product),
+        ("five league setups", check_product_battery),
         ("compliance text", check_compliance), ("owner secrets", check_secrets),
         ("economics", check_economics),
     ]

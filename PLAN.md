@@ -222,7 +222,7 @@ show anyway.
 | Claude Pro (Aug + Sep) | $40 | powers Claude Code build + language layer |
 | GitHub, GitHub Actions, GH Pages, Cloudflare (DNS, email forwarding, the form Worker) | $0 | free tiers. Sleeper is no longer used (§0) |
 | Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
-| Stripe | 2.9% + 30¢ per charge | no fixed cost |
+| Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94 | no fixed cost |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
 | Resend Pro | $20/mo | **trigger: when subscribers + trials exceed 90.** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000 |
 | Capafy listing (optional side bet) | $0.99 | closed-source skill version |
@@ -465,7 +465,7 @@ tested; both are config, not code, so switching either is a secret change.
 
 | Piece | Choice | Cost at 100 subscribers | Why |
 |---|---|---|---|
-| Billing | Stripe Checkout/Payment Links | 2.9% + 30¢ | vs Substack's 10%, saves ~$3.60 per $39 pass |
+| Billing | Stripe Checkout/Payment Links | about 7% (see §2; was listed as 2.9% + 30¢) | vs Substack's 10%, still saves ~$1.20 per $39 pass |
 | Entitlement | Stripe Subscriptions API | $0 | answers "is this person paid up right now" natively |
 | Sending | Resend | $0 (3,000 emails/mo free) | ~1,700 sends/season for 100 subs fits the free tier |
 | Sending at scale | Amazon SES | ~$0.17/season | if the list outgrows the free tier |

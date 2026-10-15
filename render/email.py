@@ -25,8 +25,10 @@ from render.report import buyer_slots
 import os
 from typing import Any, Mapping
 
+from render.sender import sender_line
 from render.report import (
     EMAIL_META,
+    sender_html,
     SEASON_END_HEAD,
     season_end_lines,
     preheader_html,
@@ -841,11 +843,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
               *_forward_lines(),
               "",
               *_cancel_lines(),
-              "DONE WITH THIS? Cancel it yourself from your own billing page — about "
-              "fifteen seconds, and the billing stops immediately. Note that "
-              "unsubscribing from emails alone does NOT stop a subscription; cancel "
-              "there if you want the charges to end. The reports stop on their own "
-              "once you do."]
+              "DONE WITH THIS? Cancel it yourself from your own billing page — enter "
+              "your email, open the link Stripe sends, press Cancel. About a minute, "
+              "and no further charges. Note that unsubscribing from emails alone does "
+              "NOT stop a subscription; cancel there if you want the charges to end. "
+              "The reports stop on their own once you do.",
+              *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
 @buyer_slots
@@ -893,6 +896,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
+        f'{sender_html()}'
         f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
         + (f' <a href="{esc(_cancel_href)}" style="color:{NAVY};">'
            f'{esc(_cancel_label)}</a>.' if _cancel_href else "")

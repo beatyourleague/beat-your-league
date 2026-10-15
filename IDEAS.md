@@ -143,3 +143,36 @@ So the reachable shape is ~7 months of product, not 12. Sequence: build the
 season review, then the draft-prep file as its own artifact, and only then
 price a twelve-month tier. Selling the months before they contain something is
 the one move that cannot be undone cheaply — it is the review that follows you.
+
+
+## From the launch-readiness audit (Oct 15 2026)
+
+Confirmed findings that are bigger than a launch fix or belong to the off-season.
+The report is `reports/launch-readiness.md`; `make launch-check` holds the rest true.
+
+- **Lineup controls (flex count 1–2, superflex, K yes/no, DEF yes/no) in a v4 ref.**
+  Two-FLEX lineups (common on Sleeper) can't be set up today; the FAQ says so. Intake +
+  ref + roster.js work, with a cross-language test. Highest-value product gap for Sleeper users.
+- **Season roll before Aug 2027.** A pass bought in Oct 2026 runs to Oct 2027, and the
+  Tuesday run would build Sep 2027 reports from a 2026 roster. Hold reports for a
+  prior-season roster until a post-draft roster is confirmed; one pre-season "paste your new
+  roster" email. Only then state the pass's 12-month coverage on the pricing card.
+- **A multi-team price.** 23% of players run 3+ leagues; today each team is its own
+  subscription (the FAQ says so).
+- **Free post-draft roster check (Aug 2027 lead magnet).** The facts-only roster report
+  through the trial pipeline (`join/?check=1`, one per address), upselling the pass.
+- **"Tell me next August", with consent**, on the season's last report and at cancel —
+  the cheapest 2027 revenue there is, held to the waitlist's one-email rule.
+- **January stub charges.** About 23% of monthly buyers pay a small January charge after
+  their last report. Decide: stop on Jan 10 after the last Saturday check, or disclose it.
+- **A weekly share card for this-week.html** (closest call + rising roles as a PNG og:image),
+  and a dated archive of past live-sample weeks a skeptic can check against box scores.
+- **Retention clean-out.** The privacy policy promises deletion within 12 months after a
+  subscription ends; a small `run/prune` over the signup log (Stripe-checked) would make that
+  automatic rather than a yearly owner task.
+- **Re-pin the published sample to a genuinely close call (52–62%)**, chosen by a stated rule
+  before outcomes are looked at — the current flagship close call (70%) reads as "start your
+  studs" to a savvy buyer. Moves every pinned landing figure, so it's a deliberate decision.
+- **Encrypt the registry and plans before caching** (defence in depth behind the fork-PR
+  approval setting in LAUNCH step 3), plus a nightly encrypted backup — the registry exists in
+  one Actions cache entry today.

@@ -232,11 +232,22 @@ def source_line(meta: Mapping[str, Any]) -> str:
     """
     return NFLVERSE_LINE if meta.get("solo") else SLEEPER_LINE
 CANCEL_HEAD = "Done with this?"
-CANCEL_BODY = ("Cancel it yourself from your own billing page — it takes about "
-               "fifteen seconds and stops the billing immediately; the exact "
-               "steps are on our terms page. "
+# The real flow (launch audit L4): Stripe's billing page emails a sign-in LINK,
+# and the whole thing takes about a minute — "fifteen seconds" and "a sign-in
+# code" were misstatements of how the reader gets out.
+CANCEL_BODY = ("Cancel it yourself from your own billing page — enter your email, "
+               "open the link Stripe sends, press Cancel. About a minute, and no "
+               "further charges; the exact steps are on our terms page. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end.")
+def sender_html() -> str:
+    """Who sent this, with a postal address once one is configured (CASL and
+    CAN-SPAM identification; render/sender.py). Empty until then."""
+    from render.sender import sender_line
+    line = sender_line()
+    return f"{esc(line)}<br>" if line else ""
+
+
 def cancel_destination() -> tuple[str, str]:
     """(href, label) for the self-serve cancel route — one route, every surface.
 
@@ -1451,6 +1462,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         f'{_forward_line()}'
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
+        f'{sender_html()}'
         # Every commercial email needs a working way out. It points at the
         # self-serve cancel because that costs the reader ~15 seconds and the
         # operator nothing — no inbox to watch. The unsubscribe-vs-cancel
