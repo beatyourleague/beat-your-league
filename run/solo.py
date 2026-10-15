@@ -371,7 +371,9 @@ class WeekData:
 def _statuses(directory: PlayerDirectory,
               injury: injuries_feed.InjuryWeek | None,
               weekly: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
-              week: int | None = None) -> dict[str, dict[str, Any]] | None:
+              week: int | None = None,
+              roster_out: Mapping[str, str] | None = None
+              ) -> dict[str, dict[str, Any]] | None:
     """One record per player whose team is known, or None for no report.
 
     None is the whole point. The archive holds rows only for players who were
@@ -401,13 +403,37 @@ def _statuses(directory: PlayerDirectory,
             team = injury.teams.get(player.player_id) or player.team
         if not team:
             continue                      # -> UNKNOWN -> gated
+        reason = (roster_out or {}).get(player.player_id)
         out[player.player_id] = {
             "team": team,
             "position": player.position,
-            "active": True,
+            # Injured reserve, PUP, suspended, released: OUT whatever the
+            # injury report says (he stops appearing on it). Fail-closed: it
+            # only ever removes seats and calls (method §15 C4).
+            "active": reason is None,
+            "out_reason": reason,
             "injury_status": injury.by_gsis.get(player.player_id),
         }
     return out
+
+
+def _live_roster_out(cache_dir: Path, season: str, week: int, players_csv: Path,
+                     today: date | None = None, *,
+                     session: requests.Session | None = None) -> dict[str, str]:
+    """Injured reserve / PUP / suspended / released, from TODAY's players
+    release — applied only when the week being built is the one being played
+    now. The release holds current status only, so applying it to a replayed
+    week (the pinned 2024 sample, the proving run, a backfill) would mark a
+    2024 starter out for a 2026 injury: fabrication (principle 3)."""
+    from engine.availability import roster_out
+    try:
+        if str(season) != current_season(cache_dir, today, session=session):
+            return {}
+        if int(week) != current_week(cache_dir, season, today, session=session):
+            return {}
+        return roster_out(players_csv)
+    except (SoloError, OSError, ValueError):
+        return {}
 
 
 def _team_before(player_id: str, week: int,
@@ -591,7 +617,10 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         weekly=weekly,
         prior=prior,
         availability=_availability(cache_dir, season, week, directory,
-                                   live=live, session=session, weekly=weekly),
+                                   live=live, session=session, weekly=weekly,
+                                   roster_out=_live_roster_out(
+                                       cache_dir, season, week, players_csv,
+                                       today, session=session)),
         # Read off the rows already parsed above rather than re-reading the
         # whole season: the counted-usage columns are in SEASON_COLUMNS for
         # exactly this reason.
@@ -663,6 +692,7 @@ def _availability(cache_dir: Path, season: str, week: int,
                   directory: PlayerDirectory, *, live: bool = True,
                   session: requests.Session | None = None,
                   weekly: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
+                  roster_out: Mapping[str, str] | None = None,
                   ) -> WeekAvailability:
     """The injury report and byes, in the shape the gate reads — on the
     information set that exists when the report goes out.
@@ -701,9 +731,9 @@ def _availability(cache_dir: Path, season: str, week: int,
     except (NflverseError, OSError):
         pass
 
-    statuses = _statuses(directory, injury, weekly, week)
+    statuses = _statuses(directory, injury, weekly, week, roster_out)
     basis = (f"the week {week - 1} injury report, the last complete one before "
-             f"this file goes out") if statuses else None
+             f"this report goes out") if statuses else None
     return WeekAvailability(season=season, week=week, snapshot_as_of=basis,
                             statuses=statuses, bye_teams=byes)
 

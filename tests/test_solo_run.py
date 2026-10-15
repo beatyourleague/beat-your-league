@@ -932,3 +932,42 @@ def test_a_mid_season_stats_outage_refuses_instead_of_claiming_week_one(
     # Week 10: refuse, loudly, rather than publish "the season hasn't started".
     with pytest.raises(solo.SoloError, match="week 10"):
         solo.load_week_data(solo.CACHE_DIR, "2024", 10, live=False)
+
+
+def test_injured_reserve_and_suspended_players_are_out_in_the_live_week(tmp_path) -> None:
+    """Launch audit, Oct 2026: the Tuesday report treated players on injured
+    reserve, PUP, suspension or release as ACTIVE — they stop appearing on the
+    injury report, so a gate reading designations alone called them healthy —
+    and the live sample started an injured-reserve receiver at FLEX with
+    published odds. players.csv status now makes them OUT, but ONLY for the week
+    being played now: the release is today's status, and applying it to a
+    replayed week would mark a past starter out for a present injury."""
+    import csv as _csv
+    from datetime import date
+
+    import run.solo as solo
+    from engine.availability import Status
+
+    cache = _cache(tmp_path)
+    path = cache / "players.csv"
+    rows = list(_csv.DictReader(path.open(encoding="utf-8")))
+    target = rows[0]["gsis_id"]
+    for row in rows:
+        row["status"] = "RES" if row["gsis_id"] == target else "ACT"
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        writer = _csv.DictWriter(fh, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+
+    # The live week (the fixture's week 6 is played on 2024-09-12).
+    live = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE,
+                               today=date(2024, 9, 12))
+    status = live.availability.classify(target)
+    assert status.status == Status.OUT, status
+    assert "injured reserve" in status.reason
+
+    # A replay of that week months later: today's status must not reach it.
+    replay = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE,
+                                 today=date(2025, 3, 1))
+    assert replay.availability.classify(target).status != Status.OUT or \
+        "injured reserve" not in replay.availability.classify(target).reason

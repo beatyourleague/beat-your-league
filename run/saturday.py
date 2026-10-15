@@ -55,12 +55,7 @@ PLANS_DIR = REPO_ROOT / "data" / "plans"
 # players.csv roster statuses that mean he cannot play this week, whatever the
 # injury report says: a player moved to injured reserve on Thursday simply
 # stops appearing on it.
-ROSTER_OUT = {
-    "RES": "on injured reserve", "RSR": "on injured reserve",
-    "PUP": "on the PUP list", "RSN": "on the non-football injury list",
-    "SUS": "suspended", "EXE": "on the exempt list",
-    "CUT": "released", "RLS": "released",
-}
+from engine.availability import ROSTER_OUT  # noqa: E402 — one definition, shared
 # Below this share of still-to-play teams with ANY row in the week's report,
 # the report is not in yet. Measured on 2024: every team that played filed
 # every week but one (week 1, 31 of 32), so a real report clears this easily.

@@ -471,3 +471,19 @@ Grade D — 667 calls, 52.9% landed, resolution −1.6 points — so
 `TEAM_DEFENSE_CONFIDENCE_CALIBRATED` stays False, now as a measured result
 rather than an untested one (C1 above recorded why they had been excluded).
 
+
+### C7 — the live gate reads roster status too (2026-10-15)
+
+The launch-readiness audit found the Tuesday report treating players on
+injured reserve, PUP, the non-football-injury list, the exempt list,
+suspension or release as active: such a player stops appearing on the injury
+report, so a gate reading designations alone (§6) called him healthy. The
+live sample started an injured-reserve receiver at FLEX with no flag.
+The live gate now also reads `players.csv` status and classifies those
+players OUT with the plain reason, exactly as the Saturday check already did
+(`engine.availability.ROSTER_OUT`, one shared definition). It applies ONLY to
+the week being played now: the release holds today's status, so applying it to
+a replayed week would mark a past starter out for a present injury. This is
+the fail-closed direction — it can only remove seats and calls, never add a
+number — and it does not touch this harness, which has no historical roster
+status and is unchanged. No new arm is needed for a rule that withholds.

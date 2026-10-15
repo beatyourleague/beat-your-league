@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og brand billing billing-preview
 
 week:
@@ -83,6 +83,15 @@ proving:
 # registry if a copy is here). Counts only, never an address. Read-only.
 stats:
 	$(PY) -m run.stats
+
+# Launch readiness: the site, the funnel, this week's product, compliance text,
+# email DNS, owner setup and the economics, as PASS/FAIL/WARN/OWNER gates.
+# Read-only. `make launch-check-fast` skips the browser, proving run and tests.
+launch-check:
+	$(PY) -m run.launch_check
+
+launch-check-fast:
+	$(PY) -m run.launch_check --fast
 
 # This week's public posts, drafted from the live sample report (content/this-week.md).
 drops:

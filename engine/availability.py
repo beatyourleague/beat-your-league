@@ -86,7 +86,8 @@ class WeekAvailability:
         # OUT/QUESTIONABLE are decidable without the schedule — decide them first.
         if position != "DEF" and (not record.get("active") or not team):
             return PlayerStatus(
-                Status.OUT, "not on an NFL roster", self.snapshot_as_of
+                Status.OUT, record.get("out_reason") or "not on an NFL roster",
+                self.snapshot_as_of
             )
         designation = record.get("injury_status")
         if designation in OUT_DESIGNATIONS:
@@ -118,6 +119,33 @@ class WeekAvailability:
         if position == "DEF":
             return PlayerStatus(Status.ACTIVE, "team defense", self.snapshot_as_of)
         return PlayerStatus(Status.ACTIVE, "no injury designation", self.snapshot_as_of)
+
+
+# players.csv roster statuses that mean he cannot play this week, whatever the
+# injury report says: a player moved to injured reserve stops appearing on the
+# injury report, so a gate reading designations alone calls him healthy. One
+# definition for the Saturday check and the Tuesday report (Oct 2026: the
+# Tuesday report started an injured-reserve player at FLEX with published odds).
+ROSTER_OUT = {
+    "RES": "on injured reserve", "RSR": "on injured reserve",
+    "PUP": "on the PUP list", "RSN": "on the non-football injury list",
+    "SUS": "suspended", "EXE": "on the exempt list",
+    "CUT": "released", "RLS": "released",
+}
+
+
+def roster_out(players_csv) -> dict[str, str]:
+    """gsis -> why he can't play, from the daily players release. TODAY's
+    status: never apply it to a past week (principle 3)."""
+    import csv
+    out: dict[str, str] = {}
+    with open(players_csv, encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            gsis = (row.get("gsis_id") or "").strip()
+            status = (row.get("status") or "").strip().upper()
+            if gsis and status in ROSTER_OUT:
+                out[gsis] = ROSTER_OUT[status]
+    return out
 
 
 def may_publish_confidence(a: PlayerStatus, b: PlayerStatus) -> tuple[bool, str | None]:

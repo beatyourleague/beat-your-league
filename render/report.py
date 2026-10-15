@@ -406,7 +406,7 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
     """The data-age sentence (principle 3), shared by both renderers.
 
     The engine names the information set itself ("the week 9 injury report,
-    the last complete one before this file goes out"), which is true of a
+    the last complete one before this report goes out"), which is true of a
     live Tuesday file and of a replayed sample alike. A bare timestamp is
     humanised if one ever arrives: a raw ISO stamp on a buyer surface — a 2026
     download time on a 2024 report — made a cold reader doubt what year they
