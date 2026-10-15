@@ -453,6 +453,10 @@
     transform:translateY(110%);transition:transform .3s ease;}
   .stickybar .btn{display:block;text-align:center;clip-path:none;}
   .stickybar.show{transform:none;}
+  /* Off screen means out of the tab order too, and a focused field is never
+     hidden behind the bar (launch audit W6). */
+  .stickybar:not(.show){visibility:hidden;transition:transform .3s ease,visibility 0s .3s;}
+  @media (max-width:880px){html{scroll-padding-bottom:84px;}}
 
   /* Sections rise into place once, as they arrive. Only below-the-fold
      content is ever held back, and only when the script is running. */
