@@ -283,3 +283,29 @@ def test_the_notice_says_who_sent_it(monkeypatch) -> None:
     monkeypatch.delenv("SENDER_POSTAL_ADDRESS")
     bare = renewal_message(_renewal(plan="season"))
     assert "PO Box" not in bare.text and "None" not in bare.text
+
+
+def test_the_sweep_names_the_plan_from_the_link_that_took_the_money(stripe) -> None:
+    """The notice says "League Pass" or "season pass" only when the plan the
+    intake stamped on the Customer (from the payment link, never a ref) says
+    so (launch audit L5). Before, the sweep never passed a plan, so every
+    notice said "your subscription" — including a $99 pass whose notice has
+    to explain what happens to the league's seats. An unknown or missing
+    stamp names neither, rather than guess."""
+    stripe["subs"] = [
+        _subscription(id="sub_pass", customer={
+            "id": "cus_p", "email": "commish@example.com",
+            "metadata": {"byl_plan": "league_pass"}}),
+        _subscription(id="sub_season", customer={
+            "id": "cus_s", "email": "fan@example.com",
+            "metadata": {"byl_plan": "season"}}),
+        _subscription(id="sub_odd", customer={
+            "id": "cus_o", "email": "odd@example.com",
+            "metadata": {"byl_plan": "monthly"}}),
+        _subscription(id="sub_none", customer={
+            "id": "cus_n", "email": "none@example.com"}),
+    ]
+    found, _ = renewals.upcoming("sk_test", TODAY)
+    plans = {r.email: r.plan for r in found}
+    assert plans == {"commish@example.com": "pass", "fan@example.com": "season",
+                     "odd@example.com": None, "none@example.com": None}

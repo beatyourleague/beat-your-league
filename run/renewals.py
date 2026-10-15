@@ -106,10 +106,12 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                 customer = subscription.get("customer")
                 email = ""
                 customer_id = None
+                plan = None
                 if isinstance(customer, dict) and not customer.get("deleted"):
                     email = (customer.get("email") or "").strip().lower()
                     cid = customer.get("id")
                     customer_id = cid if isinstance(cid, str) else None
+                    plan = renewing_plan(customer.get("metadata"))
                 amount = _money((price or {}).get("unit_amount"),
                                 (price or {}).get("currency"))
                 if not email or not amount:
@@ -120,7 +122,7 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                     continue
                 renewal = Renewal(email=email, amount=amount,
                                   renews_on=renews_on, interval=interval,
-                                  customer_id=customer_id)
+                                  customer_id=customer_id, plan=plan)
                 if due(renewal, today):
                     renewals.append(renewal)
             last = data[-1].get("id") if data and isinstance(data[-1], dict) else None
@@ -130,6 +132,17 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                    f"&starting_after={urllib.parse.quote(str(last))}")
     renewals.sort(key=lambda r: (r.renews_on, r.slug))
     return renewals, problems
+
+
+def renewing_plan(metadata) -> str | None:
+    """What the notice names: "pass" (the League Pass payer) or "season" (the
+    $39 pass), from the plan the intake stamped on the Customer from the
+    payment link that took the money (run/intake._promote) — never from a ref.
+    Anything else names neither, and the notice says "your subscription"
+    rather than guess (render/renewal.Renewal.plan, launch audit L5)."""
+    from run.refs import LEAGUE_PASS, SEASON
+    value = (metadata or {}).get("byl_plan") if isinstance(metadata, dict) else None
+    return {LEAGUE_PASS: "pass", SEASON: "season"}.get(value)
 
 
 def _first_item(subscription: dict) -> dict | None:
