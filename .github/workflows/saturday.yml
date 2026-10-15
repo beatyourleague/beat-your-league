@@ -12,21 +12,21 @@ name: saturday-final-check
 
 on:
   schedule:
-    # Saturdays 16:00 UTC — noon ET on daylight time, 11:00 ET from Nov 1.
+    # Saturdays 16:17 UTC — just after noon ET on daylight time, 11:17 ET from Nov 1.
     # Teams playing Sunday file their final injury report on Friday
     # afternoon; nflverse rebuilds its injury release daily around 14:00 UTC
-    # (observed on the release's own asset timestamps), so 16:00 reads a file
+    # (observed on the release's own asset timestamps), so 16:17 reads a file
     # that has Friday in it, with a day left to act on it. run.saturday
     # refuses outright if the week's report is not in yet, rather than
     # reading a missing report as a healthy league.
-    - cron: "0 16 * * 6"
-  # The form Worker (infra/form-worker.js) also dispatches this at 16:00 UTC
+    - cron: "17 16 * * 6"
+  # The form Worker (infra/form-worker.js) also dispatches this at 16:17 UTC
   # on Saturdays, because GitHub's scheduler runs late or not at all; the
   # cron above is the backup. A double trigger is safe: see the checkout.
   workflow_dispatch: {}
 
 # One run at a time: two runs reading the same committed send log can mail the
-# same message twice (the 14:00 UTC daily run fires from BOTH its crons at
+# same message twice (the 14:17 UTC daily run fires from BOTH its crons at
 # once; found by review, Sep 29 2026).
 concurrency:
   group: saturday-final-check

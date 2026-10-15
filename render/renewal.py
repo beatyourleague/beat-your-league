@@ -36,8 +36,9 @@ import os
 from dataclasses import dataclass
 from datetime import date
 
-from render.report import CANCEL_HEAD, esc
-from render.welcome import UNSUB_LINE, _cancel_destination
+from render.report import CANCEL_HEAD, EMAIL_META, esc, preheader_html
+from render.sender import CONTACT, sender_line
+from render.welcome import PAYER_PLANS, UNSUB_LINE, _cancel_destination
 from run.delivery import Message
 
 _BODY = ("font-family:Arial,Helvetica,sans-serif;font-size:15px;"
@@ -61,6 +62,21 @@ class Renewal:
     renews_on: date
     interval: str                # "year" — monthly never reaches here
     customer_id: str | None = None
+    # What is renewing, when the sweep can tell: "season" (the $39 pass) or
+    # "pass" (the League Pass payer). None names neither — "your
+    # subscription" — rather than guess, the same rule as the amount.
+    plan: str | None = None
+
+    @property
+    def product(self) -> str:
+        """The plan by name (launch audit L5: the notice never said which
+        product was renewing, and a League Pass payer renews a different
+        thing — their whole league's seats ride on it)."""
+        if self.plan in PAYER_PLANS:
+            return "League Pass"
+        if self.plan == "season":
+            return "season pass"
+        return "subscription"
 
     @property
     def slug(self) -> str:
@@ -100,24 +116,44 @@ def renewal_message(renewal: Renewal) -> Message:
     # The product, how often it renews and a contact: what Cal. B&P §17602
     # names besides the date and amount, and what the first version left out
     # (launch audit L5). The amount is still Stripe's, never our constant.
-    lede = (f"Your Beat Your League subscription renews on {when}, and the card "
-            f"on file will be charged {renewal.amount} — it renews once a year "
-            f"until you cancel. Nothing is due before then, and this is the only "
-            f"notice we send about it.")
+    lede = (f"Your Beat Your League {renewal.product} renews on {when}, and "
+            f"the card on file will be charged {renewal.amount} — it renews once "
+            f"a year until you cancel. Nothing is due before then, and this is "
+            f"the only notice we send about it.")
     what = ("Renewing keeps the Tuesday report coming for the season ahead — "
             "the lineup we'd set for your roster under your scoring, with "
             "the odds on the close calls.")
-    contact = "Questions? Write to hello@beatyourleague.com."
+    if renewal.plan in PAYER_PLANS:
+        # The seats ride on this charge, and each is claimed again with the
+        # new season's roster rather than carried over (panel review LP-D5).
+        what = ("Renewing keeps the Tuesday report coming for the season ahead, "
+                "for you and every manager in your league: each claims their "
+                "seat again with their new roster. Cancel, and every seat's "
+                "reports stop with yours.")
+    contact = f"Questions? Write to {CONTACT}."
+    # Who sent it (CAN-SPAM, CASL; launch audit L3, GATE-9): the notice about
+    # somebody's money carried no sender block, while the weekly report did.
+    sender = sender_line()
 
+    # A whole document, like every other email here: it was a bare <div>, so
+    # a phone laid it out at a desktop's 980px and shrank the type to fit
+    # (measured at 390px, Oct 2026), and it declared no colour scheme.
     html = (
-        f'<div style="{_BODY}max-width:560px;margin:0 auto;padding:8px 4px;">'
+        f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        f'{EMAIL_META}<title>Your Beat Your League renewal</title>\n</head>\n'
+        f'<body style="margin:0;padding:0;">\n'
+        f'{preheader_html(f"Your {renewal.product} renews {when}, at {renewal.amount}. How to cancel, if you want to, is inside.")}'
+        f'<div style="{_BODY}max-width:560px;margin:0 auto;padding:16px 12px;">'
         f'<p style="{_HEAD}margin-top:0;">Your renewal is coming up</p>'
         f'<p style="{_BODY}margin:0 0 10px;">{esc(lede)}</p>'
         f'<p style="{_BODY}margin:0 0 10px;">{esc(what)}</p>'
         f'<p style="{_HEAD}">{esc(CANCEL_HEAD)}</p>'
         f'<p style="{_BODY}margin:0 0 8px;">{cancel_line} {esc(UNSUB_LINE)}</p>'
         f'<p style="{_BODY}margin:0 0 8px;">{esc(contact)}</p>'
-        f'</div>'
+        + (f'<p style="{_BODY}margin:14px 0 0;color:#5A6B80;font-size:12px;">'
+           f'{esc(sender)}</p>' if sender else "")
+        + '</div>\n</body>\n</html>\n'
     )
     text = "\n".join([
         "YOUR RENEWAL IS COMING UP",
@@ -129,8 +165,9 @@ def renewal_message(renewal: Renewal) -> Message:
         f"{cancel_text} {UNSUB_LINE}",
         "",
         contact,
+        *([sender] if sender else []),
     ]) + "\n"
 
     return Message(to=renewal.email,
-                   subject=f"Beat Your League: your subscription renews {when}",
+                   subject=f"Beat Your League: your {renewal.product} renews {when}",
                    html=html, text=text, key=renewal.key)

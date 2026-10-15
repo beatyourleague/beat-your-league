@@ -23,12 +23,12 @@ name: monday-receipts
 
 on:
   schedule:
-    # Mondays 13:00 UTC — 09:00 ET on daylight time, 08:00 ET from Nov 1 2026.
+    # Mondays 13:17 UTC — 09:17 ET on daylight time, 08:00 ET from Nov 1 2026.
     # Deliberately BEFORE Monday Night Football: the Sunday slate settles now
     # and the MNF calls settle next week, because RULE L1 refuses to grade a
     # call whose game is not final rather than guessing at it.
-    - cron: "0 13 * * 1"
-  # The form Worker (infra/form-worker.js) also dispatches this at 13:00 UTC
+    - cron: "17 13 * * 1"
+  # The form Worker (infra/form-worker.js) also dispatches this at 13:17 UTC
   # on Mondays, because GitHub's scheduler runs late or not at all; the cron
   # above is the backup.
   workflow_dispatch: {}

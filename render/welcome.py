@@ -12,6 +12,12 @@ ends, a $99 League Pass renews yearly and covers seats, and a SEAT bills nobody
 at all. Sending a seat holder renewal terms for money they never spent would be
 its own small dishonesty.
 
+It is also the first thing a buyer reads after paying, when they are most
+anxious about it, and it used to be Arial paragraphs with no masthead, no
+preview line and nothing that looked like the product they bought (panel
+review I6). It wears the weekly email's navy masthead now, names the plan and
+the purchase date, and links the terms they agreed to (launch audit L5).
+
 Prices are constants here and a test ties them to the live pages, because two
 surfaces stating two prices is the drift this repo keeps finding.
 """
@@ -19,9 +25,13 @@ surfaces stating two prices is the drift this repo keeps finding.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 
+from render.email import (BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE, NAVY,
+                          PAPER, SLATE, SMALL)
 from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, SEAT_STOP_BODY,
-                           cancel_destination, esc, seat_stop_href)
+                           cancel_destination, esc, preheader_html, seat_stop_href)
+from render.sender import CONTACT, sender_line
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
@@ -32,11 +42,6 @@ PASS_PRICE = "$99"
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
 TERMS_VERSION = "2026-10-15"
-
-_FONT = "font-family:Arial,Helvetica,sans-serif;"
-_BODY = f"{_FONT}font-size:15px;line-height:1.6;color:#33445C;"
-_HEAD = (f"{_FONT}font-weight:bold;font-size:17px;color:#16314A;"
-         "margin:18px 0 4px;")
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "
@@ -58,6 +63,24 @@ REFUND_TERMS = ("Refunds are no-questions until your second weekly report's "
 REFUND_TERMS_LEAGUE = ("Refunds are no-questions until your second weekly "
                        "report's week kicks off — one per league.")
 
+# The plan words this module takes. The welcome has its own vocabulary, older
+# than the registry's: "league_pass" here is the PAYER (on a registry row it
+# is a seat — render/report.SEAT_PLAN), and "pass" is accepted as the same
+# payer, the registry's word for it since Oct 2026.
+PAYER_PLANS = ("league_pass", "pass")
+
+# What a League Pass payer sends their league. Paste-ready, because the
+# commissioner's one job after paying is getting eleven people to claim a seat
+# (panel review LP-I6): it used to be the third paragraph of the terms, as
+# untappable text. {link} is the league's own seat link (run/intake signs it,
+# C4) — with it nobody types anybody's address.
+SHARE_MESSAGE = ("I got us the League Pass from Beat Your League: everyone gets "
+                 "their own lineup report every Tuesday, built from their own "
+                 "roster. Nothing to pay. Claim your seat here: {link}")
+# Seats ride the pass: what the payer ends, every seat loses (LP-I6).
+SEATS_END = ("Your league's seats last as long as your pass does: if you cancel "
+             "it or take a refund, every seat's reports stop too.")
+
 
 def _plan_terms(plan: str) -> tuple[str, list[str]]:
     """(what you bought, the disclosures that purchase legally requires)."""
@@ -69,22 +92,7 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
              "through the offseason, because we aren't sending you anything.",
              REFUND_TERMS],
         )
-    if plan == "league_pass":
-        # The seat link ships HERE because the page cannot deliver it: the
-        # browser renders it in the instant before navigating to Stripe, and
-        # rendering it any earlier would leave a shareable claim link before any
-        # payment exists. The welcome only sends after the payment, so this is
-        # the first moment the link is safe to hand over.
-        site = os.environ.get("SITE_URL", "").rstrip("/")
-        seat_line = (
-            f"Every manager who claims a seat gets their own report at no "
-            f"charge to them. Send them this link — each enters their own "
-            f"roster: {site}/join/?pass=1 — and tell them the email you paid "
-            f"with, which is how their seat is matched to your pass."
-            if site else
-            "Every manager who claims a seat gets their own report at no "
-            "charge to them; share your league's signup link whenever you're "
-            "ready.")
+    if plan in PAYER_PLANS:
         return (
             f"the League Pass — {PASS_PRICE} USD for your whole league's season",
             # terms.html §3: the renewal falls on the purchase anniversary. This
@@ -94,12 +102,14 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
              "the anniversary of the day you bought it. We email you before it "
              "bills.",
              REFUND_TERMS_LEAGUE,
-             seat_line],
+             SEATS_END],
         )
     if plan == "seat":
         return (
             "a seat on your league's League Pass",
-            ["Nothing bills you for this seat, ever — your commissioner's pass "
+            # "Your league's pass", never "your commissioner's": any manager
+            # may buy the pass (panel review LP-D7).
+            ["Nothing bills you for this seat, ever — your league's pass "
              "covers it. If the pass lapses, your reports stop; they never "
              "quietly convert into a charge."],
         )
@@ -107,14 +117,124 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
         f"the season pass — {SEASON_PRICE} USD for the season",
         [f"It renews once a year at {SEASON_PRICE} USD unless you cancel, on "
          "the anniversary of the day you bought it. We email you before it "
-             "bills.",
+         "bills.",
          REFUND_TERMS],
     )
 
 
+def _site() -> str:
+    return os.environ.get("SITE_URL", "").rstrip("/")
+
+
+def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
+    """(the lead-in, the link, the message to paste) a League Pass payer sends
+    their league; None for anybody else.
+
+    With the league's own seat link (C4) the message is complete. Without it,
+    the generic seat page matches a seat by the payer's address, so the
+    payer is told to give it out; with no site at all there is no link to
+    give, and the email says something true instead of a dead href."""
+    if plan not in PAYER_PLANS:
+        return None
+    if seat_link and seat_link.startswith("https://"):
+        return ("Every manager in your league gets their own report at no charge "
+                "to them. This link is your league's own, so they need only "
+                "their roster:", seat_link, SHARE_MESSAGE.format(link=seat_link))
+    site = _site()
+    if site:
+        link = f"{site}/join/?pass=1"
+        return ("Every manager who claims a seat gets their own report at no "
+                "charge to them. Send them this link — each enters their own "
+                "roster — and tell them the email you paid with (this one), "
+                "which is how their seat is matched to your pass:", link,
+                SHARE_MESSAGE.format(link=link)
+                + " — when it asks for my email, it's the one I paid with.")
+    return ("Every manager who claims a seat gets their own report at no "
+            "charge to them; share your league's signup link whenever you're "
+            "ready.", "", "")
+
+
+def _purchase_date(purchased_at: str) -> str | None:
+    """'October 15, 2026' from Stripe's `created` (epoch seconds, as the
+    intake passes it) or an ISO stamp; None when there is no readable clock.
+    On the buyer's clock, the one the site's times are printed in."""
+    raw = str(purchased_at or "").strip()
+    if not raw:
+        return None
+    try:
+        stamp = (datetime.fromtimestamp(int(raw), timezone.utc) if raw.isdigit()
+                 else datetime.fromisoformat(raw))
+    except (ValueError, OverflowError, OSError):
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    from zoneinfo import ZoneInfo
+    local = stamp.astimezone(ZoneInfo("America/New_York"))
+    return f"{local:%B} {local.day}, {local.year}"
+
+
+def _terms_date() -> str:
+    day = datetime.fromisoformat(TERMS_VERSION)
+    return f"{day:%B} {day.day}, {day.year}"
+
+
+# What happens next, row by row — the thanks page's three rows (site/
+# thanks.html), so the page and the email describe one sequence. A seat's
+# first report is the next Tuesday run (run/tuesday.py), so it has no "today".
+NEXT_TODAY = ("Your first report. This week's lineup if the week's games "
+              "haven't started, otherwise your roster report: the byes that "
+              "leave you short and last season under your scoring.")
+# "The odds on the close calls", never "every": a slot gets odds only when both
+# players are confirmed to play, and a bye-heavy week can have few (PE-11).
+NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
+                "your scoring, with the odds on the close calls. About ninety "
+                "seconds to read.")
+NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
+                 "changes your lineup. No news, no email.")
+
+
+def _next_rows(seat: bool) -> list[tuple[str, str]]:
+    rows = [] if seat else [("Today", NEXT_TODAY)]
+    return rows + [("Every Tuesday", NEXT_TUESDAY),
+                   ("Saturday, if needed", NEXT_SATURDAY)]
+
+
+# A seat link is one long unbroken string; unwrapped, it pushed the email
+# 17px past a 390px phone (Oct 2026).
+_WRAP = "overflow-wrap:anywhere;word-break:break-word;"
+
+
+def _masthead(subhead: str) -> str:
+    """The weekly email's navy band (render/email._header), so the first email
+    after paying looks like the product it bought."""
+    return (
+        f'<tr><td style="background:{NAVY};padding:24px 26px;'
+        f'border-left:4px solid {FLAG};">'
+        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
+        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
+        f'Beat Your League</div>'
+        f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
+        f'letter-spacing:1px;text-transform:uppercase;color:{CARD};'
+        f'padding:6px 0 2px 0;">You&#x27;re in.</div>'
+        f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
+        f'color:{FLAG};padding:2px 0 0 0;">{esc(subhead)}</div></td></tr>')
+
+
+def _block(title: str, inner: str) -> str:
+    """One titled block, in the weekly email's section style."""
+    return (
+        f'<tr><td style="padding:22px 26px 0 26px;">'
+        f'<div style="font-family:{DISPLAY};font-size:14px;font-weight:bold;'
+        f'letter-spacing:2.5px;text-transform:uppercase;color:{NAVY};'
+        f'border-bottom:2px solid {NAVY};padding-bottom:6px;">{esc(title)}</div>'
+        f'<div style="padding-top:10px;">{inner}</div></td></tr>')
+
+
 def welcome_message(email: str, plan: str, slug: str, season: str,
-                    purchased_at: str = "") -> Message:
-    """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat."""
+                    purchased_at: str = "", seat_link: str | None = None) -> Message:
+    """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
+    (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
+    league seat link (C4), or None to fall back to the generic seat page."""
     bought, terms = _plan_terms(plan)
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
@@ -138,57 +258,115 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         stop_html = f"{cancel_line} {esc(UNSUB_LINE)} {esc(CANCEL_PERIOD)}"
         stop_text = f"{cancel_text} {UNSUB_LINE} {CANCEL_PERIOD}"
 
-    what_next = ("Every Tuesday morning, one email: the lineup we'd set for "
-                 "your roster under your scoring, the odds on every call worth "
-                 "making, and last week's calls graded against the real box "
-                 "score. Reading it takes about ninety seconds. And if Friday's "
-                 "injury report changes your lineup, a short final check lands "
-                 "Saturday with the swap — only when something changes.")
+    when = None if seat else _purchase_date(purchased_at)
+    opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
     roster_line = ("Trades and pickups happen — reply to any report with your "
                    "updated roster and your report follows it from the next "
                    "Tuesday.")
+    share = _share(plan, seat_link)
+    site = _site()
+    terms_url = f"{site}/terms.html" if site.startswith("https://") else ""
+    # A seat ticked no box at checkout — it never saw one.
+    terms_ref = (f"Our terms (last updated {_terms_date()})" if seat else
+                 f"The terms you agreed to (last updated {_terms_date()})")
+    sender = sender_line()
+    # The preview line an inbox shows before the mail is opened: the plan,
+    # and that the terms are inside — never the filler-less run into the body.
+    preheader = (f"You {verb} {bought.split(' — ')[0]}. What happens next, and "
+                 + ("how to stop it." if seat else "your terms in writing."))
 
+    # ---------------------------------------------------------------- html
+    para = f'<p style="{BASE}font-size:15px;margin:0 0 10px 0;">'
+    rows_html = "".join(
+        f'<tr><td style="{SMALL}color:{NAVY};font-weight:bold;'
+        f'text-transform:uppercase;letter-spacing:1px;padding:9px 12px 9px 0;'
+        f'vertical-align:top;width:30%;border-top:1px solid {LINE};">'
+        f'{esc(when_)}</td><td style="{BASE}padding:9px 0;'
+        f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
+        for when_, what in _next_rows(seat))
+    blocks = []
+    if share:
+        lead, link, paste = share
+        inner = para + esc(lead) + "</p>"
+        if link and not link.startswith("https://"):
+            # Every href in an email is https (tests/test_email_safety.py);
+            # a link that is not one is still given, as text.
+            inner += (f'<p style="{BASE}font-size:15px;margin:0 0 10px 0;{_WRAP}">'
+                      f'{esc(link)}</p>')
+        elif link:
+            inner += (
+                f'<table role="presentation" cellpadding="0" cellspacing="0" '
+                f'border="0" style="margin:4px 0 12px 0;"><tr>'
+                f'<td style="background:{FLAG};border-radius:3px;">'
+                f'<a href="{esc(link)}" style="display:inline-block;padding:12px 20px;'
+                f'font-family:{DISPLAY};font-size:15px;font-weight:bold;'
+                f'letter-spacing:1.5px;text-transform:uppercase;color:{NAVY};'
+                f'text-decoration:none;">Your league&#x27;s seat link</a></td></tr>'
+                f'</table>'
+                f'<p style="{SMALL}margin:0 0 6px 0;">Or paste this into your '
+                f'league chat:</p>'
+                f'<div style="{BASE}background:{FLAG_TINT};border-left:3px solid '
+                f'{FLAG};padding:10px 12px;{_WRAP}">{esc(paste)}</div>')
+        blocks.append(_block("Send your league this", inner))
+    blocks.append(_block(
+        "What happens next",
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0">{rows_html}</table>'))
+    terms_html = "".join(f'{para}{esc(term)}</p>' for term in terms)
+    terms_html += (f'<p style="{SMALL}margin:4px 0 0 0;">{esc(terms_ref)}: '
+                   + (f'<a href="{esc(terms_url)}" style="color:{NAVY};">'
+                      f'{esc(terms_url)}</a>.' if terms_url else
+                      "on our site's terms page.")
+                   + '</p>')
+    blocks.append(_block("The terms, in writing", terms_html))
+    blocks.append(_block(CANCEL_HEAD, f'{para}{stop_html}</p>'))
+    footer = (
+        f'<tr><td style="padding:18px 26px 0 26px;"><p style="{BASE}font-size:13px;'
+        f'color:{SLATE};margin:0;">{esc(roster_line)}</p></td></tr>'
+        f'<tr><td style="padding:12px;"></td></tr>'
+        f'<tr><td style="background:{PAPER};padding:18px 26px 24px 26px;">'
+        f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — questions? '
+        f'Write to {esc(CONTACT)}.'
+        + (f'<br>{esc(sender)}' if sender else "")
+        + '</p></td></tr>')
     html = (
-        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
-        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>Welcome to Beat Your League</title></head>'
-        f'<body style="margin:0;padding:0;"><table role="presentation" width="100%" '
-        f'cellpadding="0" cellspacing="0" border="0"><tr><td align="center" '
-        f'style="padding:8px 8px;"><table role="presentation" width="560" '
-        f'cellpadding="0" cellspacing="0" border="0" style="max-width:560px;'
-        f'width:100%;"><tr><td style="{_BODY}text-align:left;">'
-        f'<p style="{_HEAD}margin-top:0;">You&#x27;re in.</p>'
-        f'<p style="{_BODY}margin:0 0 10px;">You {verb} {esc(bought)}. '
-        f'{esc(what_next)}</p>'
-        f'<p style="{_HEAD}">The terms, in writing</p>'
-        + "".join(f'<p style="{_BODY}margin:0 0 8px;">{esc(term)}</p>'
-                  for term in terms)
-        + f'<p style="{_HEAD}">{esc(CANCEL_HEAD)}</p>'
-        f'<p style="{_BODY}margin:0 0 8px;">{stop_html}</p>'
-        f'<p style="{_BODY}margin:14px 0 0;color:#5A6B80;font-size:13px;">'
-        f'{esc(roster_line)}</p>'
-        f'</td></tr></table></td></tr></table></body></html>\n'
+        f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        f'{EMAIL_META}<title>Welcome to Beat Your League</title>\n</head>\n'
+        f'<body style="margin:0;padding:0;background:{PAPER};">\n'
+        f'{preheader_html(preheader)}'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{PAPER};"><tr><td align="center" '
+        f'style="padding:18px 8px;">'
+        f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
+        f'border="0" style="max-width:600px;width:100%;background:{CARD};">'
+        f'{_masthead(opener)}'
+        + "".join(blocks) + footer
+        + '</table></td></tr></table>\n</body>\n</html>\n'
     )
-    text = "\n".join([
-        "YOU'RE IN.",
-        "",
-        f"You {verb} {bought}.",
-        what_next,
-        "",
-        "THE TERMS, IN WRITING",
-        *terms,
-        "",
-        CANCEL_HEAD.upper(),
-        stop_text,
-        "",
-        roster_line,
-    ]) + "\n"
+
+    # ---------------------------------------------------------------- text
+    text_lines = ["BEAT YOUR LEAGUE", "YOU'RE IN.", "", opener]
+    if share:
+        lead, link, paste = share
+        text_lines += ["", "SEND YOUR LEAGUE THIS", lead]
+        if link:
+            text_lines += [link, "", "Or paste this into your league chat:", paste]
+    text_lines += ["", "WHAT HAPPENS NEXT",
+                   *[f"{when_}: {what}" for when_, what in _next_rows(seat)],
+                   "", "THE TERMS, IN WRITING", *terms,
+                   f"{terms_ref}: " + (terms_url or "on our site's terms page."),
+                   "", CANCEL_HEAD.upper(), stop_text,
+                   "", roster_line,
+                   "", f"Beat Your League — questions? Write to {CONTACT}.",
+                   *([sender] if sender else [])]
+    text = "\n".join(text_lines) + "\n"
 
     # A buyer's first report goes out the day they pay (run/intake.py), so
     # their subject says it is on its way; a seat's first one is the next
     # Tuesday run.
     subject = ("Your seat is in — first report lands Tuesday morning"
-               if plan == "seat" else
+               if seat else
                "You're in — your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,
     # so the key moved with it and `servable` — the projection of an

@@ -45,6 +45,17 @@ _CUSTOMER_RE = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
 
 PLANS = (SEASON, MONTHLY, LEAGUE_PASS)
 
+# What a PAID row is billed as, kept apart from `plan` (LP-D3, Oct 15 2026).
+# `plan` already carries a meaning other code reads — LEAGUE_PASS on a row is a
+# SEAT — so a League Pass PAYER was written as an ordinary "season" row, and a
+# monthly buyer was too. Every report a payer or a monthly buyer received then
+# said "Your season pass renews once a year" at the season's end: false for a
+# monthly plan that stops itself, and the wrong product for a $99 pass. A seat
+# pays nothing and carries no billing at all.
+PASS_BILLING = "pass"
+BILLINGS = (SEASON, MONTHLY, PASS_BILLING)
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
 # A league smaller than four cannot fill a bench and one larger than 32 cannot
 # be filled by the NFL. Both ends only ever act as a denominator in buyer-facing
 # counts ("8 of the other 11 teams can cover that"), so a wrong one is a visible
@@ -78,10 +89,30 @@ class RosterSubscriber:
     # slug — send-log keys, report filenames, the update link itself — must
     # not move when the roster does, or a changed roster is a second send.
     origin: str | None = None
+    # season | monthly | pass on a paid row; None on a seat. Rows written
+    # before the field existed read as their plan (season or monthly).
+    billing: str | None = None
+    # The day the roster in use was set — the purchase, the seat claim or the
+    # last confirmed update — as YYYY-MM-DD. A report says it beside the
+    # roster-change route, so a subscriber can see which roster it read.
+    roster_as_of: str | None = None
 
     @property
     def is_league_seat(self) -> bool:
         return self.plan == LEAGUE_PASS
+
+    @property
+    def is_pass_payer(self) -> bool:
+        return self.billing == PASS_BILLING
+
+    @property
+    def report_plan(self) -> str:
+        """What a report's meta["plan"] says (one vocabulary for every
+        renderer): season | monthly | pass (the League Pass PAYER) |
+        league_pass (a SEAT, render.report.SEAT_PLAN)."""
+        if self.is_league_seat:
+            return LEAGUE_PASS
+        return self.billing or self.plan
 
     @property
     def slug(self) -> str:
@@ -175,10 +206,17 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
     origin = str(origin_raw).strip() if origin_raw else None
     if origin is not None and not re.fullmatch(r"[0-9a-f]{10}", origin):
         raise RosterRegistryError(f"{where}: origin must be a 10-hex slug, got {origin_raw!r}")
+    billing = _billing(raw.get("billing"), plan, where)
+    as_of_raw = raw.get("roster_as_of")
+    roster_as_of = str(as_of_raw).strip() if as_of_raw else None
+    if roster_as_of is not None and not _DATE_RE.match(roster_as_of):
+        raise RosterRegistryError(
+            f"{where}: roster_as_of must be YYYY-MM-DD, got {as_of_raw!r}")
     subscriber = RosterSubscriber(
         email=email, ref=ref, player_ids=players, slots=slots, scoring=scoring,
         league_size=size, label=label, plan=plan, covered_by=covered_by,
-        stripe_customer_id=stripe_customer_id, origin=origin)
+        stripe_customer_id=stripe_customer_id, origin=origin, billing=billing,
+        roster_as_of=roster_as_of)
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that
@@ -187,6 +225,29 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
     except SubscriberError as exc:
         raise RosterRegistryError(f"{where}: {exc}") from exc
     return subscriber
+
+
+def _billing(raw: object, plan: str, where: str) -> str | None:
+    """A paid row's billing, defaulting to its plan; a seat's is None.
+
+    The two fields must agree where they overlap: a monthly plan is billed
+    monthly and nothing else is, and a seat bills nobody. A disagreement is a
+    hand edit or a bug in what wrote the row, and either way the season-end
+    sentence would describe somebody else's money."""
+    value = str(raw).strip() if raw else None
+    if plan == LEAGUE_PASS:
+        if value:
+            raise RosterRegistryError(
+                f"{where}: a {LEAGUE_PASS} seat bills nobody, got billing {value!r}")
+        return None
+    value = value or plan
+    if value not in BILLINGS:
+        raise RosterRegistryError(
+            f"{where}: billing must be one of {BILLINGS}, got {value!r}")
+    if (value == MONTHLY) != (plan == MONTHLY):
+        raise RosterRegistryError(
+            f"{where}: billing {value!r} disagrees with plan {plan!r}")
+    return value
 
 
 def load_rosters(path: Path | None = None) -> list[RosterSubscriber]:
@@ -225,6 +286,9 @@ def to_json(subscribers: list[RosterSubscriber]) -> list[dict]:
             row["covered_by"] = sub.covered_by
         if sub.stripe_customer_id:
             row["stripe_customer_id"] = sub.stripe_customer_id
+        for name in ("origin", "billing", "roster_as_of"):
+            if getattr(sub, name):
+                row[name] = getattr(sub, name)
         rows.append(row)
     return rows
 

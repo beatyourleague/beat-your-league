@@ -123,7 +123,9 @@ def test_a_seat_holder_claimed_a_seat_and_has_a_real_way_out(monkeypatch) -> Non
         assert re.search(r"reply .{0,6}stop", doc, re.I)
         assert re.search(r"mail app.{0,6}s unsubscribe", doc, re.I)
         assert re.search(r"within 10 business days", doc)
-        assert re.search(r"commissioner.{0,6}s pass isn.{0,6}t affected", doc, re.I)
+        # "Your league's pass": any manager may buy it (panel review LP-D7).
+        assert re.search(r"league.{0,6}s pass isn.{0,6}t affected", doc, re.I)
+        assert "commissioner" not in doc.lower()
     assert msg.unsubscribe == "mailto:hello@beatyourleague.com?subject=stop", \
         "the mail app's unsubscribe must reach the inbox that honours a stop"
     # A buyer's welcome is unchanged: bought, billing page, no stop header.
@@ -212,3 +214,118 @@ def test_no_developer_vocabulary_reaches_the_welcome() -> None:
             for pattern in _DEV_SPEAK:
                 assert not re.search(pattern, doc, re.I), \
                     f"developer vocabulary {pattern!r} in the {plan} welcome"
+
+
+# --------------------------------------------------------------------- #
+# panel review, Oct 2026: what the first email after paying looks like
+# --------------------------------------------------------------------- #
+
+SEAT_LINK = ("https://example.com/join/?pass=0123456789abcdef0123"
+             "&s=ppr&n=12&t=T1")
+
+
+def test_the_welcome_wears_the_weekly_emails_masthead_and_a_preview_line() -> None:
+    """Reproduction (panel review I6): welcome_message(..., 'season', ...) at
+    600px was plain "You're in." Arial paragraphs — no navy masthead, no mark,
+    no preview line, nothing that looked like the report just bought. The
+    weekly email's masthead (the gold BEAT YOUR LEAGUE over a navy band) and a
+    padded preheader now open every plan's welcome."""
+    from render.email import NAVY
+    for plan in ("season", "monthly", "league_pass", "seat"):
+        html = _msg(plan).html
+        assert f"background:{NAVY};" in html.split("You&#x27;re in.")[0], plan
+        assert "letter-spacing:4px;text-transform:uppercase" in html, plan
+        assert "&#847;&zwnj;&nbsp;" in html and "mso-hide:all" in html, plan
+        # What happens next, row by row, as the thanks page lists it.
+        assert "Every Tuesday" in html and "Saturday, if needed" in html, plan
+    # A seat's first report is next Tuesday's run: there is no "today".
+    assert ">Today<" in _msg("season").html and ">Today<" not in _msg("seat").html
+
+
+def test_the_welcome_names_the_plan_the_purchase_date_and_the_terms(monkeypatch) -> None:
+    """Reproduction (launch audit L5): the welcome named no purchase date —
+    `purchased_at` fed only the send key — and linked no terms page, though
+    the buyer had just ticked a box agreeing to them."""
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    # Stripe's `created`, as run/intake passes it: 2026-10-15 16:00 UTC.
+    msg = welcome_message("fan@example.com", "season", "abc123def0", "2026",
+                          purchased_at="1792080000")
+    for doc in (msg.html, msg.text):
+        assert "the season pass" in doc
+        assert "Purchased October 15, 2026." in doc
+        assert "https://example.com/terms.html" in doc
+        assert re.search(r"terms you agreed to \(last updated October 15, 2026\)", doc)
+    monthly = _msg("monthly")
+    assert "the monthly plan" in monthly.text
+    pass_ = _msg("league_pass")
+    assert "the League Pass" in pass_.text
+    # No clock, no invented date.
+    assert "Purchased" not in _msg("season").text
+    # A seat ticked no box at checkout, and bought nothing on a date.
+    seat = welcome_message("m@example.com", "seat", "abc123def0", "2026",
+                           purchased_at="1792080000")
+    assert "Purchased" not in seat.text and "agreed to" not in seat.text
+
+
+def test_every_welcome_says_who_sent_it(monkeypatch) -> None:
+    """Reproduction (launch audit L3, GATE-9): with SENDER_POSTAL_ADDRESS set,
+    the weekly report carried the sender block and every welcome — the
+    acknowledgment the law owes the buyer — carried none, on either half."""
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 123, Toronto ON M5V 1A1")
+    line = "Beat Your League · PO Box 123, Toronto ON M5V 1A1 · hello@beatyourleague.com"
+    for plan in ("season", "monthly", "league_pass", "seat"):
+        msg = _msg(plan)
+        assert line in msg.text, plan
+        assert line in msg.html, plan
+    monkeypatch.delenv("SENDER_POSTAL_ADDRESS")
+    bare = _msg("season")
+    assert "None" not in bare.text and " ·  · " not in bare.text
+    assert "hello@beatyourleague.com" in bare.text, "a contact route stays"
+
+
+def test_a_pass_payer_is_handed_the_leagues_own_seat_link_first() -> None:
+    """Reproduction (panel review LP-I6, contract C4): the commissioner's one
+    job after paying — sharing with the league — was the third paragraph under
+    "The terms, in writing", untappable, and told them to give out "the email
+    you paid with" in an email sent to that very address. With the league's
+    own seat link it is the first block: a tappable button and a message to
+    paste, naming nobody's address."""
+    msg = welcome_message("commish@example.com", "league_pass", "abc123def0",
+                          "2026", seat_link=SEAT_LINK)
+    html_seat = SEAT_LINK.replace("&", "&amp;")
+    assert f'href="{html_seat}"' in msg.html, "the seat link is not tappable"
+    order = [msg.html.index(f">{title}</div>") for title in
+             ("Send your league this", "What happens next", "The terms, in writing")]
+    assert order == sorted(order), "the share block is not first"
+    for doc in (msg.text, msg.html.replace("&amp;", "&")):
+        assert SEAT_LINK in doc
+        assert "Nothing to pay. Claim your seat here: " + SEAT_LINK in doc
+        assert "email you paid with" not in doc, "the signed link needs no address"
+        assert "commish@example.com" not in doc, "an address rode in the share text"
+    # "pass" — the registry's word for the payer — reads the same.
+    assert welcome_message("c@example.com", "pass", "abc123def0", "2026",
+                           seat_link=SEAT_LINK).text == msg.text.replace(
+        "commish@example.com", "c@example.com")
+
+
+def test_a_pass_payer_is_told_seats_end_with_the_pass(monkeypatch) -> None:
+    """LP-I6: cancelling or refunding the pass ends every seat's reports, and
+    the 'Done with this?' block mentioned only the payer's own."""
+    for seat_link in (None, SEAT_LINK):
+        msg = welcome_message("c@example.com", "league_pass", "abc123def0",
+                              "2026", seat_link=seat_link)
+        for doc in (msg.html, msg.text):
+            assert re.search(r"seats last as long as your pass does", doc), doc
+            assert re.search(r"every seat.{0,6}s reports stop too", doc)
+    for plan in ("season", "monthly", "seat"):
+        assert "every seat" not in _msg(plan).text, plan
+
+
+def test_a_seat_link_that_is_not_https_is_never_an_href(monkeypatch) -> None:
+    """Every href in an email is https (tests/test_email_safety.py); a seat link
+    that is not one is still given, as text, never as a link."""
+    monkeypatch.setenv("SITE_URL", "http://localhost:8000")
+    msg = _msg("league_pass")
+    assert "http://localhost:8000/join/?pass=1" in msg.text
+    assert "http://localhost:8000/join/?pass=1" in msg.html
+    assert 'href="http://localhost:8000/join' not in msg.html

@@ -22,10 +22,12 @@ name: weekly-report
 
 on:
   schedule:
-    # Tuesdays 12:00 UTC — 08:00 ET on daylight time, 07:00 ET from Nov 1
+    # Tuesdays 12:17 UTC — 08:17 ET on daylight time, 07:17 ET from Nov 1
     # 2026. Cron has no timezone, so the hour drifts by one across the season;
-    # 12:00 was chosen over 11:00 so BOTH halves land at a civilised morning
-    # hour instead of 06:00 ET in November.
+    # The 12 UTC hour was chosen over 11 so BOTH halves land at a civilised morning
+    # hour instead of 06:00 ET in November. Minute :17, never :00 (OPS-01,
+    # Oct 2026): the top of the hour is when GitHub's scheduler is busiest and
+    # starts runs latest, and the Worker fires at the same minute.
     #
     # The floor is not taste, it is nflverse: Monday night's box scores have to
     # be published before a week-W report can project from a complete week W-1.
@@ -35,14 +37,14 @@ on:
     # processing. run/solo.py's assert_week_is_complete now refuses outright if
     # the week really is short, so a late publish is a loud failure and a
     # retry, never a quietly worse report.
-    - cron: "0 12 * * 2"
+    - cron: "17 12 * * 2"
     # THE SAME JOB AGAIN, four hours later. Not a second workflow: one
     # definition means the retry cannot drift from the thing it is retrying.
     #
-    # If the 11:00 run worked, this costs nothing — every message carries an
+    # If the 12:17 run worked, this costs nothing — every message carries an
     # idempotency key of (season, week, subscriber) checked against
     # data/processed/sent.jsonl, so it finds everyone already sent, reports
-    # them as skipped, and exits clean. If the 11:00 run FAILED, subscribers
+    # them as skipped, and exits clean. If the 12:17 run FAILED, subscribers
     # get their file the same morning instead of whenever the failure is
     # noticed, which for a solo operator could be Thursday.
     #
@@ -51,15 +53,15 @@ on:
     # cannot cover is a run that sent successfully and then failed to commit
     # sent.jsonl — the send log is uploaded as an artifact for exactly that
     # case, and recovering from it is deliberately manual.
-    - cron: "0 16 * * 2"
-  # The form Worker (infra/form-worker.js) also dispatches this at 12:00 and
-  # 16:00 UTC on Tuesdays: GitHub's scheduler started these runs 5-7 hours
+    - cron: "17 16 * * 2"
+  # The form Worker (infra/form-worker.js) also dispatches this at 12:17 and
+  # 16:17 UTC on Tuesdays: GitHub's scheduler started these runs 5-7 hours
   # late on Oct 6 and Oct 13 2026. The crons above stay as the backup, and a
   # double trigger is safe — see the checkout step below.
   workflow_dispatch: {}
 
 # One run at a time: two runs reading the same committed send log can mail the
-# same message twice (the 14:00 UTC daily run fires from BOTH its crons at
+# same message twice (the 14:17 UTC daily run fires from BOTH its crons at
 # once; found by review, Sep 29 2026).
 concurrency:
   group: weekly-report
@@ -115,8 +117,8 @@ jobs:
       # (run/saturday.py). Their OWN key, never inside data/registry: the
       # hourly intake cron saves that cache constantly, and a save racing this
       # run's would drop the week's plans. Restored before the send so the
-      # 16:00 retry — which writes no new plans when everything was already
-      # sent — saves the 12:00 run's plans forward instead of an empty folder.
+      # 16:17 retry — which writes no new plans when everything was already
+      # sent — saves the 12:17 run's plans forward instead of an empty folder.
       - name: Restore sent lineups
         uses: actions/cache/restore@v4
         with:
@@ -213,8 +215,11 @@ jobs:
         run: .venv/bin/python -m run.tuesday
       # The live sample (render/live_sample.py): this week's report for the
       # published sample roster, so the site shows the product running now,
-      # not a 2024 replay. Records nothing, and keeps the last page on any
-      # failure rather than failing the run.
+      # not a 2024 replay. Built before the week's first kickoff, it RECORDS
+      # the odds it prints on the public ledger (principle 2: a % in public is
+      # a published call), committed below with the rest of the ledger; after
+      # kickoff it changes nothing. A data outage keeps the last page; a ledger
+      # it cannot write fails the run rather than publishing odds off the record.
       - name: Publish this week's sample report
         if: always()
         run: .venv/bin/python -m render.live_sample

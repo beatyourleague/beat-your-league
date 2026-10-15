@@ -5,7 +5,7 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
-        og brand billing billing-preview
+        og brand billing billing-preview roster-update waitlist-preview waitlist-send live-sample
 
 week:
 	$(PY) -m run.week
@@ -83,6 +83,38 @@ proving:
 # registry if a copy is here). Counts only, never an address. Read-only.
 stats:
 	$(PY) -m run.stats
+
+# A roster change a subscriber sent by email ("reply with your new roster"),
+# applied through the same validated path as a confirmed self-serve update: it
+# posts an authenticated update row to the form Worker and the next hourly
+# intake checks it and keeps their scoring and lineup. ROSTER is a file of the
+# names they sent, or - for stdin. Needs UPDATE_SECRET and FORM_ENDPOINT (the
+# GitHub secrets' values) in this shell. Prints no address. ARGS=--dry-run
+# resolves the names and posts nothing.
+#   make roster-update EMAIL=fan@example.com ROSTER=names.txt
+roster-update:
+	$(PY) -m run.updates --email "$(EMAIL)" --roster "$(ROSTER)" $(ARGS)
+
+# The launch announcement, the one email the waitlist was promised. Preview
+# first. The send needs EMAIL_PROVIDER + its key (RESEND_API_KEY or
+# POSTMARK_TOKEN), EMAIL_FROM, SITE_URL, SENDER_POSTAL_ADDRESS, and FORM_ENDPOINT
+# + FORM_API_KEY for the Worker's list — or LIST=file.csv (an `email` column)
+# for the sign-ups that arrived by email before the Worker existed; run it once
+# per list, the send log keeps anyone on both to one message. Afterwards commit
+# and push data/processed/sent.jsonl: the crons read the committed copy, and it
+# is what stops a second send.
+waitlist-preview:
+	$(PY) -m run.waitlist $(if $(LIST),--list "$(LIST)")
+
+waitlist-send:
+	$(PY) -m run.waitlist --send $(if $(LIST),--list "$(LIST)")
+
+# This week's live sample (site/this-week.html + site/week.json). Built before
+# the week's first kickoff it RECORDS its odds on the public ledger, like a
+# subscriber's report; after kickoff it refuses unless ARGS=--force, which
+# rebuilds and records nothing. ARGS=--no-record previews without recording.
+live-sample:
+	$(PY) -m render.live_sample $(ARGS)
 
 # The product's own answer to "A or B this week?", for replying in public:
 # facts for both, and the report's % only with ARGS=--publish, which records

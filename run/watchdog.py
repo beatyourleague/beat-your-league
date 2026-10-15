@@ -11,7 +11,7 @@ when a subscriber wrote in to ask where their report was. The Saturday final
 check is quieter still: it mails only when a lineup has to change, so a check
 that never ran looks exactly like a week with no news.
 
-So the once-a-day run (daily.yml, 14:00 UTC) asks two questions about the
+So the once-a-day run (daily.yml, 14:17 UTC) asks two questions about the
 current week and goes red when either answer is no:
 
 - **Tuesday**, from the Wednesday after the week's send Tuesday: did a Tuesday
@@ -27,7 +27,7 @@ purchase on a Wednesday covered a Tuesday GitHub had dropped for everybody
 else, and the watchdog said all clear.
 
 **Only somebody who was owed the run can make it missing.** A Tuesday is owed
-to subscribers whose purchase predates its send (12:00 UTC on the send
+to subscribers whose purchase predates its send (12:17 UTC on the send
 Tuesday); a Saturday check to subscribers who bought before the week's first
 kickoff (they were sent that week's lineup, by Tuesday or at purchase). In
 launch week the secrets can go in AFTER a Tuesday that ran unconfigured and
@@ -63,9 +63,14 @@ from typing import Iterable, NamedTuple
 TUESDAY = "tuesday"
 SATURDAY = "saturday"
 MARKER_PROVIDER = "marker"
-# The hour (UTC) the Tuesday run is due on its send Tuesday. A purchase after
-# it was never owed that Tuesday's report.
+# The time (UTC) the Tuesday run is due on its send Tuesday — weekly.yml's
+# first cron, to the minute (tests/test_scheduling.py reads the two from one
+# another). A purchase after it was never owed that Tuesday's report. The
+# minute is :17, not :00 (OPS-01): the top of the hour is when GitHub's
+# scheduler is most loaded and most often late, and the Worker that starts the
+# runs on time fires at the same minute.
 TUESDAY_SEND_HOUR = 12
+TUESDAY_SEND_MINUTE = 17
 
 
 class WatchdogError(RuntimeError):
@@ -143,7 +148,7 @@ def claim_day(day: date, sent_log: Path | None = None) -> bool:
     watchdog). True when they are due — nothing claimed the day yet, and now
     this run has — False when an earlier run already did.
 
-    daily.yml fires the 14:00 run twice by design (the Worker's dispatch and
+    daily.yml fires the 14:17 run twice by design (the Worker's dispatch and
     GitHub's own cron, which can arrive hours apart), and both used to pass
     the once-a-day gate: two "a scheduled run did not happen" comments a day
     and two walks of every Stripe subscription (launch review OPS-7). The two
@@ -190,7 +195,8 @@ def week_calendar(cache_dir: Path, season: str, week: int) -> WeekCalendar:
 def tuesday_due_at(tuesday: date) -> datetime:
     """When the send Tuesday's run is due: a purchase after this was never
     owed that week's Tuesday report (it gets the first email intake sends)."""
-    return datetime.combine(tuesday, time(TUESDAY_SEND_HOUR), tzinfo=timezone.utc)
+    return datetime.combine(tuesday, time(TUESDAY_SEND_HOUR, TUESDAY_SEND_MINUTE),
+                            tzinfo=timezone.utc)
 
 
 def owed(purchases: Iterable[datetime | None], cutoff: datetime) -> bool:
@@ -233,7 +239,7 @@ def missing_runs(keys: set[str], season: str, week: int, today: date,
     """Which of this week's runs are due, were owed to somebody, and left no
     marker. Pure.
 
-    "Due" is the day AFTER: the Tuesday run has a same-day retry at 16:00 UTC,
+    "Due" is the day AFTER: the Tuesday run has a same-day retry at 16:17 UTC,
     and the Saturday check may legitimately run into the afternoon, so the
     question is only asked once the whole day is over.
 
