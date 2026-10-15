@@ -117,7 +117,8 @@ def _final_teams_for_week(cache_dir: Path, season: str, week: int) -> set[str]:
 
 
 def week_has_kicked_off(cache_dir: Path, season: str, week: int,
-                        today: "date | None" = None) -> bool:
+                        today: "date | None" = None, *,
+                        now: "datetime | None" = None) -> bool:
     """Has week ``week`` started playing yet?
 
     Load-bearing for honesty, not convenience. A report's confidences are
@@ -129,13 +130,23 @@ def week_has_kicked_off(cache_dir: Path, season: str, week: int,
     So a purchase made mid-week does NOT get that week's calls. It gets the
     roster file instead, and its first weekly file on the next Tuesday.
 
-    Read off the schedule's earliest gameday for the week. Unknown reads as
-    STARTED: if we cannot tell, we must not publish a prediction.
+    Read off the schedule's earliest KICKOFF for the week (gameday + gametime,
+    NFL time). It used to compare the gameday's DATE with today's UTC date, so
+    from about 8 PM ET on Wednesday to Thursday night's kickoff a buyer was
+    sent the roster report instead of the week's report they paid for (review,
+    Oct 2026). Passing ``today`` (a date) keeps the date comparison, for
+    callers that only know the day. Unknown reads as STARTED: if we cannot
+    tell, we must not publish a prediction.
     """
     import csv as _csv
     from datetime import date as _date, datetime as _dt
+    from zoneinfo import ZoneInfo
 
-    today = today or _dt.now(timezone.utc).date()
+    precise = today is None
+    now = now or _dt.now(timezone.utc)
+    today = today or now.date()
+    eastern = ZoneInfo("America/New_York")
+    first_kick: "_dt | None" = None
     try:
         path = fetch("schedules", "games.csv", cache_dir, live=True)
     except NflverseError:
@@ -155,8 +166,21 @@ def week_has_kicked_off(cache_dir: Path, season: str, week: int,
                 continue
             if first is None or day < first:
                 first = day
+            try:
+                clock = (row.get("gametime") or "").strip()
+                kick = _dt.strptime(f"{day.isoformat()} {clock}", "%Y-%m-%d %H:%M")
+                kick = kick.replace(tzinfo=eastern).astimezone(timezone.utc)
+            except ValueError:
+                kick = None               # no time: the date rule decides below
+            if kick is not None and (first_kick is None or kick < first_kick):
+                first_kick = kick
     if first is None:
         return True                       # week not in the schedule -> unknown
+    # The precise rule applies only when the earliest-dated game carries a
+    # time; otherwise a later game's time could make an untimed opener look
+    # unplayed.
+    if precise and first_kick is not None and first_kick.astimezone(eastern).date() == first:
+        return now >= first_kick
     return today >= first
 
 

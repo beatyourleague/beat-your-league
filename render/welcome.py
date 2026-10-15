@@ -82,9 +82,12 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
             "ready.")
         return (
             f"the League Pass — {PASS_PRICE} USD for your whole league's season",
-            [f"It renews once a year at {PASS_PRICE} USD unless you cancel — "
-             "charged before the season it covers, never during the offseason. "
-             "We email you before it bills.",
+            # terms.html §3: the renewal falls on the purchase anniversary. This
+            # used to say "before the season it covers", which nothing in Stripe
+            # enforces — a wrong date in the acknowledgment the law requires.
+            [f"It renews once a year at {PASS_PRICE} USD unless you cancel, on "
+             "the anniversary of the day you bought it. We email you before it "
+             "bills.",
              REFUND_TERMS_LEAGUE,
              seat_line],
         )
@@ -97,9 +100,9 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
         )
     return (
         f"the season pass — {SEASON_PRICE} USD for the season",
-        [f"It renews once a year at {SEASON_PRICE} USD unless you cancel — "
-         "charged next August, before the season it covers, never during the "
-         "offseason. We email you before it bills.",
+        [f"It renews once a year at {SEASON_PRICE} USD unless you cancel, on "
+         "the anniversary of the day you bought it. We email you before it "
+             "bills.",
          REFUND_TERMS],
     )
 

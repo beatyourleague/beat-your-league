@@ -568,3 +568,115 @@ def test_the_receipts_grade_only_the_calls_in_this_subscribers_reports() -> None
     assert lost["ask"] is None and "0 of 2" in lost["note"]
     assert "missed" in call_line(lost["last_week_calls"][0])
     assert own_record([], weekly, rule, 7) == {"record": None, "note": EMPTY_NOTE}
+
+
+def test_a_weeks_report_mailed_at_purchase_gets_its_own_plan(tmp_path, monkeypatch) -> None:
+    """Review, Oct 9 2026: a buyer who pays between Tuesday's send and that
+    week's kickoff is mailed THE WEEK'S REPORT by run/intake.py, and no plan
+    was ever stored for it — so no Saturday final check that week, no receipts
+    in the next report, and the Saturday run raised a false "plans cache is
+    missing" alarm. The plan now lands beside the registry (never in the
+    Tuesday plans cache, whose save an hourly job would race), only for a send
+    that really happened, and both readers find it. A dry or unconfigured run
+    builds the report but records nothing in the public ledger."""
+    import run.delivery as delivery
+    import run.intake as intake
+    import run.saturday as saturday
+    from run.intake import RosterSignup
+    from test_solo_run import OFFLINE, SEASON, WEEK, _cache
+    from test_tuesday import REF
+
+    data = intake.load_week_data(_cache(tmp_path), SEASON, WEEK, session=OFFLINE)
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    monkeypatch.setattr(intake, "CACHE_DIR", _cache(tmp_path))
+    monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    signup = RosterSignup(email="fan@example.com", ref=REF, plan="season",
+                          seen_at="2026-10-07T15:00:00+00:00")
+    first = tmp_path / "registry" / saturday.FIRST_PLANS_NAME
+    processed = tmp_path / "processed"
+
+    # Dry: built, nothing sent, nothing stored, nothing in the ledger.
+    monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+    intake._send_first_files([signup], data, SEASON, processed_dir=processed,
+                             first_plans=first, out_dir=tmp_path / "out")
+    assert not first.exists()
+    assert not any(processed.rglob("*.jsonl")) if processed.exists() else True
+
+    # Real: sent, and the plan both readers look for is there.
+    sent = []
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            sent.append(message)
+            return "id"
+    monkeypatch.setattr(intake, "build_provider", lambda *a, **k: Fake())
+    intake._send_first_files([signup], data, SEASON, processed_dir=processed,
+                             first_plans=first, out_dir=tmp_path / "out")
+    assert [m.key for m in sent] == [f"{SEASON}-w{WEEK:02d}-{signup.slug}"]
+    plan = saturday.load_plan(first, SEASON, WEEK, signup.slug)
+    assert plan is not None and plan["slug"] == signup.slug
+    assert saturday.first_plans_dir(tmp_path / "registry" / "rosters.json") == first
+    assert [p["week"] for p in saturday.load_plans(tmp_path / "plans", SEASON,
+                                                     signup.slug, also=first)] == [WEEK]
+
+
+def test_the_hourly_intake_never_mails_an_existing_subscriber_their_week(tmp_path, monkeypatch) -> None:
+    """Review, Oct 9 2026 — the worst latent defect found that day, live since
+    Aug 27 and hidden only because nothing has ever been sent. `servable` is
+    EVERY signup in the purchase log, and the week's-report key is per WEEK, so
+    from Monday night's final whistle to the next kickoff each hourly intake
+    run mailed every subscriber that week's report: built from the roster they
+    bought with (ignoring updates), with no paid check (cancelled and refunded
+    subscribers included), every plan called "season", no receipts — and then
+    the Tuesday run skipped them all as already sent, so no Saturday plan was
+    stored for anybody. A first email belongs to a PURCHASE: once anything has
+    been sent to that subscription since it was bought, intake sends nothing."""
+    import json as _json
+    import run.delivery as delivery
+    import run.intake as intake
+    import run.saturday as saturday
+    from run.intake import RosterSignup
+    from test_solo_run import OFFLINE, SEASON, WEEK, _cache
+    from test_tuesday import REF
+
+    data = intake.load_week_data(_cache(tmp_path), SEASON, WEEK, session=OFFLINE)
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    monkeypatch.setattr(intake, "CACHE_DIR", _cache(tmp_path))
+    log = tmp_path / "sent.jsonl"
+    monkeypatch.setattr(delivery, "SENT_LOG", log)
+    sent = []
+
+    class Fake:
+        name = "fake"
+
+        def send(self, message, sender, reply_to):
+            sent.append(message)
+            return "id"
+    monkeypatch.setattr(intake, "build_provider", lambda *a, **k: Fake())
+
+    # Bought in August; last week's report went out after that.
+    old = RosterSignup(email="fan@example.com", ref=REF, plan="season",
+                       seen_at="1786000000")              # 2026-08-06
+    log.write_text(_json.dumps({
+        "key": f"{SEASON}-w{WEEK - 1:02d}-{old.slug}", "provider": "fake",
+        "message_id": "x", "sent_at": "2026-10-06T12:04:00+00:00"}) + "\n")
+    intake._send_first_files([old], data, SEASON, processed_dir=tmp_path / "p",
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert sent == [], "an existing subscriber was mailed this week's report by intake"
+
+    # A new purchase still gets its first email the day it pays, and only once.
+    from run.refs import encode_roster
+    from test_tuesday import ROSTER_IDS, SLOTS
+    new = RosterSignup(email="new@example.com",
+                       ref=encode_roster("monthly", "ppr", list(SLOTS), ROSTER_IDS),
+                       plan="monthly", seen_at="1791500000")    # 2026-10-08
+    assert new.slug != old.slug
+    intake._send_first_files([new], data, SEASON, processed_dir=tmp_path / "p",
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert len(sent) == 1 and sent[0].to == "new@example.com"
+    intake._send_first_files([new], data, SEASON, processed_dir=tmp_path / "p",
+                             first_plans=tmp_path / "first", out_dir=tmp_path / "out")
+    assert len(sent) == 1, "the first email went out twice"
+    assert saturday.load_plan(tmp_path / "first", SEASON, WEEK, new.slug) is not None

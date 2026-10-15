@@ -552,7 +552,59 @@ def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
               file=sys.stderr)
 
 
-def _first_file(signup, data, season: str, processed_dir):
+def _served_since_purchase(signup, entries: list[dict]) -> bool:
+    """Has this subscription been sent a report since it was bought?
+
+    The purchase log is EVERY signup ever, and the week's-report key is per
+    week, so without this each hourly run from Monday night to kickoff mailed
+    every subscriber that week's report ahead of the Tuesday run (review, Oct 9
+    2026). A first email belongs to a PURCHASE: a weekly report, a final check
+    or a roster report sent at or after the purchase means it was served. The
+    welcome does not count (it goes out in the same run, just before). A
+    re-purchase of the same roster is a new purchase: older sends predate it.
+    """
+    import re as _re
+    slug = signup.slug
+    shapes = (_re.compile(rf"^\d{{4}}-w\d\d-{slug}$"),
+              _re.compile(rf"^\d{{4}}-w\d\d-final-{slug}$"),
+              _re.compile(rf"^preseason-.*-{slug}$"))
+    bought = (datetime.fromtimestamp(int(signup.seen_at), tz=timezone.utc)
+              if str(signup.seen_at).isdigit() else None)
+    for entry in entries:
+        key = str(entry.get("key") or "")
+        if not any(shape.match(key) for shape in shapes):
+            continue
+        if bought is None:
+            return True                # no purchase time: any send counts
+        try:
+            at = datetime.fromisoformat(str(entry.get("sent_at") or ""))
+        except ValueError:
+            return True                # unreadable: err toward not re-sending
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if at >= bought:
+            return True
+    return False
+
+
+def _sent_entries() -> list[dict]:
+    import run.delivery as delivery
+    path = Path(delivery.SENT_LOG)
+    if not path.is_file():
+        return []
+    out = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict):
+            out.append(entry)
+    return out
+
+
+def _first_file(signup, data, season: str, processed_dir, record: bool = True,
+                out_dir: Path | None = None):
     """The file a purchase earns, chosen by WHEN the purchase happened.
 
     Pre-season, or mid-week: the roster file — byes, thin spots and last
@@ -579,19 +631,28 @@ def _first_file(signup, data, season: str, processed_dir):
             email=signup.email, ref=signup.ref,
             player_ids=tuple(roster.player_ids), slots=tuple(roster.slots),
             scoring=roster.scoring, league_size=roster.league_size,
-            plan="season", origin=signup.slug)
+            # The registry flattens a League Pass payer to a season row; a
+            # monthly buyer is monthly (the season-end note reads it).
+            plan="monthly" if signup.plan == "monthly" else "season",
+            origin=signup.slug)
         template = (REPO_ROOT / "rival-report-template.html").read_text(
             encoding="utf-8")
+        # record: a call is PUBLISHED when it reaches someone; building a report
+        # that a dry or unconfigured run will never send must not write
+        # permanent ledger rows (the rule run/tuesday.py follows).
+        from run.tuesday import SUBSCRIBER_REPORTS
         result = run_subscriber(subscriber, data, template,
-                                processed_dir=processed_dir)
+                                out_dir=out_dir or SUBSCRIBER_REPORTS,
+                                processed_dir=processed_dir, record=record)
         if result.ok and result.message is not None:
-            return result.message
+            return result.message, result.plan
         # Fall through to the roster file rather than sending nothing.
     return None
 
 
 def _send_first_files(servable: list[RosterSignup], data, season: str,
-                      processed_dir=None) -> None:
+                      processed_dir=None, first_plans: Path | None = None,
+                      out_dir: Path | None = None) -> None:
     """The file they get for paying, on the day they pay.
 
     The weekly product cannot say anything until box scores exist, so a buyer
@@ -607,6 +668,10 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     from run.tuesday import PROCESSED_DIR
 
     processed_dir = processed_dir or PROCESSED_DIR
+    # Only purchases that have not been served yet. Everyone else is the
+    # Tuesday run's, which checks entitlement and reads the current roster.
+    entries = _sent_entries()
+    servable = [s for s in servable if not _served_since_purchase(s, entries)]
     if not servable:
         return
     if data is None:
@@ -627,12 +692,20 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
               f"({exc})", file=sys.stderr)
         return
 
-    messages = []
+    # Decided BEFORE anything is built, because it decides whether a week's
+    # report built here enters the public record.
+    provider = build_provider(None)
+    sending = not (provider.name == DRY_PROVIDER)
+    messages, plans = [], {}
     for signup in servable:
         try:
-            weekly = _first_file(signup, data, season, processed_dir)
+            weekly = _first_file(signup, data, season, processed_dir, record=sending,
+                                 out_dir=out_dir)
             if weekly is not None:
-                messages.append(weekly)
+                message, plan = weekly
+                messages.append(message)
+                if plan is not None:
+                    plans[message.key] = plan
                 continue
             roster = signup.roster()
             spec = spec_from_ref(roster)
@@ -648,7 +721,6 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     if not messages:
         return
 
-    provider = build_provider(None)
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
         print(f"First files: {len(messages)} pending — EMAIL_PROVIDER is not "
               f"set, so none were sent and none were recorded.")
@@ -659,6 +731,20 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     print(f"First files via {provider.name}: {len(delivered)} sent, "
           f"{len(sends) - len(delivered) - len(failures)} already sent, "
           f"{len(failures)} failed")
+    # A week's report mailed today is what Saturday's final check and next
+    # week's receipts must read, exactly as sent — so its plan is stored only
+    # for a send that really happened, the same rule run/tuesday.py follows.
+    if sending and first_plans is not None:
+        from run.saturday import write_plan
+        for result in delivered:
+            plan = plans.get(result.message.key)
+            if plan is None:
+                continue
+            try:
+                write_plan(first_plans, plan)
+            except OSError as exc:
+                print(f"    plan not saved for {result.message.key}: {exc}",
+                      file=sys.stderr)
     for result in failures:
         print(f"    FIRST FILE SEND FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
@@ -892,7 +978,9 @@ def main(argv: list[str] | None = None) -> int:
     # contract; the weekly and daily crons set EMAIL_PROVIDER.
     _send_welcomes(servable, seat_rows, known_season)
     _send_confirmations(awaiting, data)
-    _send_first_files(servable, data, known_season)
+    from run.saturday import FIRST_PLANS_NAME
+    _send_first_files(servable, data, known_season,
+                      first_plans=registry_dir / FIRST_PLANS_NAME)
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered

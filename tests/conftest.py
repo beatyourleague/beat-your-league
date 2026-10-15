@@ -31,7 +31,10 @@ REGISTRY_DIR = REPO_ROOT / "data" / "registry"
 def _snapshot() -> dict[str, float]:
     if not REGISTRY_DIR.is_dir():
         return {}
-    return {p.name: p.stat().st_mtime_ns for p in REGISTRY_DIR.iterdir() if p.is_file()}
+    # Recursive: data/registry/first-plans/<season>/ (Oct 2026) is a write
+    # path too, and a top-level-only snapshot could not see it.
+    return {str(p.relative_to(REGISTRY_DIR)): p.stat().st_mtime_ns
+            for p in REGISTRY_DIR.rglob("*") if p.is_file()}
 
 
 @pytest.fixture(autouse=True)

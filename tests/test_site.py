@@ -796,7 +796,7 @@ def test_the_post_purchase_page_sets_an_honest_delivery_expectation() -> None:
     visible = html.unescape(prose(text[text.find("<body>"):]))
 
     workflow = (SITE.parent / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    assert 'cron: "0 * * * *"' in workflow, (
+    assert re.search(r'cron: "\d{1,2} \* \* \* \*"', workflow), (
         "the intake no longer runs hourly, so \"up to an hour\" on the "
         "post-purchase page may now be a promise we cannot keep")
     assert re.search(r"up to an hour", visible, re.I), \
@@ -1386,7 +1386,7 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
     A question we ask and discard is worse than one we never ask: it tells the
     buyer their answer matters, and it is checkable in one click."""
     groups = set(re.findall(r'<input type="radio" name="(\w+)"', JOIN))
-    assert groups == {"scoring", "size", "template"}, \
+    assert groups == {"scoring", "size", "template", "plan"}, \
         f"the picker's question set changed: {groups}"
     call = re.search(r"R\.encodeRoster\((.*?)\);", JOIN, re.S)
     assert call, "the picker no longer builds a ref"
@@ -1397,6 +1397,10 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
         assert reader in args, (
             f"the {group} answer is collected but never reaches the ref — "
             f"the page says it matters, so it has to")
+    # The plan switch (Oct 9 2026) reaches the ref through monthlyChosen,
+    # which the switch's change listener sets from radio("plan").
+    assert "monthlyChosen" in args
+    assert re.search(r'monthlyChosen = radio\("plan"\) === "monthly"', JOIN)
     assert re.search(r'function leagueSize\(\)[^}]*radio\("size"\)', JOIN), \
         "leagueSize() stopped reading the size radio"
 
@@ -1684,7 +1688,8 @@ def test_selling_surfaces_carry_no_grade_c_banned_words() -> None:
                                        (PROJECTIONS, "projections"),
                                        (NO_CALL, "no-call"), (CONFIDENCE, "confidence"),
                                        (FIRST_WEEK_SAMPLE, "first-week sample"),
-                                       (HOW, "how it works")])
+                                       (HOW, "how it works"),
+                                       (LEAGUE_PASS, "league pass")])
 def test_no_betting_language(page: str, name: str) -> None:
     banned = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager)\b"
     assert not re.search(banned, page, re.I), f"betting language crept into {name}"
@@ -2236,6 +2241,11 @@ def test_the_league_pass_arithmetic_matches_the_actual_season_price() -> None:
     assert int(match.group(1)) == 12 * int(SEASON_PRICE), (
         f"the page compares against ${match.group(1)} but twelve season passes "
         f"at ${SEASON_PRICE} is ${12 * int(SEASON_PRICE)}")
+    # The ten-team figure (Oct 9 2026: most leagues are not twelve) carries
+    # the same obligation.
+    ten = re.search(r"ten would cost \$(\d+)", LEAGUE_PASS)
+    assert ten and int(ten.group(1)) == 10 * int(SEASON_PRICE), \
+        "the ten-team comparison is missing or no longer matches the season price"
 
 
 def test_the_league_pass_is_not_commissioner_only() -> None:
@@ -2558,9 +2568,34 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
     assert "header-pitch" in pass_branch and "$99" in pass_branch
     assert "header-chips" in pass_branch
+    # Monthly is a function since Oct 9 2026, because the buyer can now switch
+    # to it on the page as well as arrive with ?plan=monthly.
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
                          .split("else if (WANTS_PASS)")[0]
-    assert "header-pitch" in monthly_branch and "14.99" in monthly_branch
+    assert "monthlyPlan()" in monthly_branch
+    monthly = JOIN.split("function monthlyPlan()")[1].split("\nfunction ")[0]
+    assert "header-pitch" in monthly and "14.99" in monthly
+    assert '$("terms-line").textContent = monthlyTerms' in monthly
+    season = JOIN.split("function seasonPlan()")[1].split("\n}")[0]
+    assert "SEASON_STATE" in season and "SEASON_SUBMIT" in season, \
+        "switching back to the season pass must restore its own terms and price"
+
+
+def test_the_buyer_can_switch_plans_without_losing_their_roster() -> None:
+    """Personas, Oct 9 2026: a mid-season buyer from the hero CTA saw only the
+    $39 season pass, and would buy monthly or not at all. The switch rewrites
+    the page in place (a reload would drop the pasted roster), is never shown
+    to a seat holder, an update, a free report or a League Pass buyer, and the
+    submit handler charges the plan on screen, never the one in the URL."""
+    switch = JOIN.split("// Season ⇄ monthly, on the page.")[1].split("</script>")[0]
+    assert "!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS" in switch
+    assert "location" not in switch, "switching plans must not reload the page"
+    handler = JOIN.split('$("form-email").addEventListener')[1].split("\n});")[0]
+    assert "monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON" in handler
+    assert "WANTS_MONTHLY" not in handler, "the handler reads the URL, not the choice"
+    # Both prices on the switch are the prices the plans charge.
+    assert f"Season pass · ${SEASON_PRICE}" in JOIN
+    assert f"Monthly · ${MONTHLY_PRICE}" in JOIN
 
 
 def test_seat_mode_carries_no_billing_promises_and_warns_up_front() -> None:
@@ -2966,3 +3001,80 @@ def test_the_how_it_works_page_answers_who_what_and_how_to_check() -> None:
     assert LANDING.count('href="how-it-works.html"') >= 2, "nav and footer both link it"
     for claim in (r"\bwin \d", r"more (?:often|games) than", r"beat(s)? (?:the )?(?:market|vegas|experts)"):
         assert not re.search(claim, page, re.I), f"how-it-works makes a results claim: {claim}"
+
+
+def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) -> None:
+    """The hero's "Week N's report lands Tuesday" line (Oct 9 2026) is honest
+    urgency only while it is true. It is read from site/week.json, which the
+    Tuesday build writes beside this-week.html from the report it just built
+    and the NFL schedule (never typed), the weekly cron commits it, and the
+    page shows it only in the eight days before the next report actually
+    lands. The verification pass found the first version (a 9-day file-age
+    check) claimed "Week 2's report lands Tuesday" from May to September once
+    the cron built a preseason Week 1, and ran two days past a missed build."""
+    import json as _json
+    from render.live_sample import next_report_day, write_week_json
+    from run.solo import CACHE_DIR
+    out = tmp_path / "week.json"
+    write_week_json({"meta": {"season": "2026", "week": 6, "last_week": 18,
+                              "generated_at": "2026-10-13T12:05:00+00:00"}}, out,
+                    "2026-10-20")
+    assert _json.loads(out.read_text()) == {
+        "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-20",
+        "built_at": "2026-10-13T12:05:00+00:00"}
+    try:
+        day = next_report_day(CACHE_DIR, "2026", 5)
+    except Exception:                                   # pragma: no cover
+        day = None
+    if day is not None:
+        # Week 5 of 2026 ends with Monday night (Oct 12): Week 6 lands Tue Oct 13.
+        assert day == "2026-10-13"
+    workflow = (SITE.parent / ".github" / "workflows" / "weekly.yml").read_text()
+    assert "site/week.json" in workflow, "the cron builds the clock but never commits it"
+    assert (SITE / "week.json").is_file(), \
+        "week.json must be committed: the persist step's git add names it explicitly"
+    script = LANDING.split("// The season clock.")[1].split("})();")[0]
+    assert 'fetch("week.json"' in script
+    assert "8 * 864e5" in script and "lands_on" in script, \
+        "the line must be tied to the day the report lands"
+    assert "if (left < 1" in script
+    assert "AbortSignal.timeout ?" in script or "AbortSignal && AbortSignal.timeout" in script, \
+        "an unguarded AbortSignal.timeout throws on iOS 15 and kills the rest of the script"
+    assert "try {" in script
+    assert "textContent" in script and "innerHTML" not in script
+    # The static sentence is what shows when the file can't be used, and the
+    # open state keeps a target for the clock.
+    assert 'id="season-clock">A new report every Tuesday of the season.' in LANDING
+    assert 'lead.id = "season-clock"' in LANDING
+
+
+def test_no_page_calls_abort_signal_timeout_unguarded() -> None:
+    """AbortSignal.timeout arrived in Safari 16. Called bare where it is
+    missing (iOS 15 iPhones) it throws a TypeError, and at page load that
+    aborts the rest of the inline script: the join page's player-list load did
+    exactly that before any roster could be checked, and the landing's season
+    clock would have taken the phone sticky bar down with it (verification
+    pass, Oct 9 2026). Every call is feature-detected."""
+    for path in SITE.rglob("*.html"):
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"AbortSignal\.timeout\(", text):
+            before = text[max(0, match.start() - 60):match.start()]
+            assert "AbortSignal.timeout ?" in before, (
+                f"{path.relative_to(SITE)} calls AbortSignal.timeout without "
+                f"checking it exists: {text[match.start() - 60:match.end() + 10]!r}")
+
+
+def test_the_plan_on_screen_is_the_plan_charged_after_back() -> None:
+    """Verification pass, Oct 9 2026 (reproduced with bfcache off): a browser
+    restoring form state on Back re-checked Monthly AFTER the script drew the
+    season price, so a Monthly pill sat beside a $39 button and tapping it
+    changed nothing. The radios opt out of restoration and the page re-draws
+    from whatever is checked on every pageshow; a stale "isn't open" error is
+    cleared on every switch."""
+    plan_inputs = re.findall(r'<input type="radio" name="plan"[^>]*>', JOIN)
+    assert len(plan_inputs) == 2
+    assert all('autocomplete="off"' in tag for tag in plan_inputs)
+    switch = JOIN.split("// Season ⇄ monthly, on the page.")[1].split("</script>")[0]
+    assert 'window.addEventListener("pageshow", applyPlan)' in switch
+    assert 'monthlyChosen = radio("plan") === "monthly"' in switch
+    assert 'showError("err-email", "")' in switch

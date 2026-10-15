@@ -33,7 +33,12 @@ on:
     # This is the interim. Once the form Worker is deployed, a Stripe webhook
     # can trigger this workflow directly and the wait drops from an hour to a
     # minute — same pipeline, better trigger.
-    - cron: "0 * * * *"
+    #
+    # On the HALF hour (Oct 9 2026): on the hour it fired together with the
+    # Tuesday runs (12:00, 16:00) and the Saturday check (16:00), each in its
+    # own concurrency group and each reading the send log from its own
+    # checkout, so a purchase in that window could be welcomed or mailed twice.
+    - cron: "30 * * * *"
   workflow_dispatch: {}
 
 # One run at a time: two runs reading the same committed send log can mail the
@@ -144,11 +149,11 @@ jobs:
       # promise made above Stripe's own Pay button.
       #
       # ONCE A DAY, not hourly. This job carries two crons ("0 14 * * *" and
-      # "0 * * * *") and no step is schedule-gated, so an ungated step here
+      # "30 * * * *") and no step is schedule-gated, so an ungated step here
       # would walk every subscription on the account 24 times a day to write
       # nothing. The stop dates do not move between hours.
       - name: Stop monthly billing at the end of the season
-        if: always() && github.event.schedule != '0 * * * *'
+        if: always() && github.event.schedule != '30 * * * *'
         id: billing
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}

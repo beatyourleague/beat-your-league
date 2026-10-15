@@ -76,6 +76,21 @@ class SaturdayError(RuntimeError):
 # the plan — written Tuesday, read Saturday
 # --------------------------------------------------------------------- #
 
+# Plans for a week's report mailed AT PURCHASE (run/intake.py, a buyer who pays
+# between Tuesday's send and that week's kickoff). They live beside the
+# registry because the hourly intake saves that cache itself; writing them into
+# the Tuesday plans cache from an hourly job would race the Tuesday run's save
+# and could drop the whole week's plans (weekly.yml says why plans have their
+# own key). Found by review, Oct 9 2026: those buyers got no Saturday check,
+# no receipts the next week, and the Saturday run raised a false alarm.
+FIRST_PLANS_NAME = "first-plans"
+
+
+def first_plans_dir(registry_path: Path | None) -> Path:
+    from run.rosters import DEFAULT_ROSTERS
+    return Path(registry_path or DEFAULT_ROSTERS).parent / FIRST_PLANS_NAME
+
+
 def plan_path(plans_dir: Path, season: str, week: int, slug: str) -> Path:
     return Path(plans_dir) / str(season) / f"w{int(week):02d}-{slug}.json"
 
@@ -133,18 +148,23 @@ def write_plan(plans_dir: Path, plan: Mapping[str, Any]) -> Path:
     return path
 
 
-def load_plans(plans_dir: Path, season: str, slug: str) -> list[dict[str, Any]]:
-    """Every stored plan for one subscription this season."""
-    folder = Path(plans_dir) / str(season)
-    if not folder.is_dir():
-        return []
-    out = []
-    for path in sorted(folder.glob(f"w*-{slug}.json")):
-        try:
-            out.append(json.loads(path.read_text(encoding="utf-8")))
-        except (OSError, json.JSONDecodeError):
-            continue                   # one damaged week never hides the rest
-    return out
+def load_plans(plans_dir: Path, season: str, slug: str,
+               also: Path | None = None) -> list[dict[str, Any]]:
+    """Every stored plan for one subscription this season — from the Tuesday
+    plans and, when ``also`` is given, the purchase-day plans (one per week;
+    Tuesday's wins if both exist)."""
+    by_week: dict[int, dict[str, Any]] = {}
+    for folder_root in ([also] if also is not None else []) + [plans_dir]:
+        folder = Path(folder_root) / str(season)
+        if not folder.is_dir():
+            continue
+        for path in sorted(folder.glob(f"w*-{slug}.json")):
+            try:
+                plan = json.loads(path.read_text(encoding="utf-8"))
+                by_week[int(plan["week"])] = plan
+            except (OSError, ValueError, KeyError, TypeError):
+                continue               # one damaged week never hides the rest
+    return [by_week[w] for w in sorted(by_week)]
 
 
 def load_plan(plans_dir: Path, season: str, week: int,
@@ -346,7 +366,8 @@ def check_report_is_in(starts: Mapping[str, datetime], filed: set[str],
 def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster,
                data_for_changes):
     """One subscriber -> ("missing"|"unreadable"|"quiet"|"send", payload)."""
-    plan = load_plan(args.plans_dir, season, week, subscriber.slug)
+    plan = (load_plan(args.plans_dir, season, week, subscriber.slug)
+            or load_plan(first_plans_dir(args.registry), season, week, subscriber.slug))
     if plan is None:
         return "missing", None
     if set(subscriber.player_ids) != set(plan["players"]):

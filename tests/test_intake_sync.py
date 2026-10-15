@@ -734,6 +734,22 @@ def test_a_purchase_before_kickoff_gets_the_week_it_paid_for() -> None:
     # A week the schedule does not cover reads as STARTED, never as "safe".
     assert week_has_kicked_off(CACHE_DIR, "2026", 99, date(2026, 9, 1)) is True
     assert week_has_kicked_off(CACHE_DIR, "1999", 1, date(2026, 9, 1)) is True
+    # To the minute (Oct 2026): it compared the game's DATE with today's UTC
+    # date, so from ~8 PM ET Wednesday until Thursday night's kickoff a buyer
+    # got the roster report instead of the week's report.
+    from datetime import datetime as _dt, timezone as _tz
+    from run.saturday import kickoffs
+    try:
+        first = min(kickoffs(CACHE_DIR, "2026", 6).values())
+    except Exception:                                   # pragma: no cover
+        first = None
+    if first is not None:
+        before = first.replace(minute=0) if first.minute else first.replace(hour=first.hour - 1)
+        assert week_has_kicked_off(CACHE_DIR, "2026", 6, now=before) is False
+        assert week_has_kicked_off(CACHE_DIR, "2026", 6, now=first) is True
+        # The evening before, already a new UTC day: not started.
+        eve = first.replace(hour=1, minute=0) if first.hour > 1 else first
+        assert week_has_kicked_off(CACHE_DIR, "2026", 6, now=eve) is (eve >= first)
 
 
 def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
@@ -751,7 +767,17 @@ def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
     text = (Path(__file__).resolve().parent.parent / ".github" / "workflows"
             / "daily.yml").read_text(encoding="utf-8")
     crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
-    assert "0 * * * *" in crons, f"the hourly intake sweep is gone: {crons}"
+    hourly = [c for c in crons if re.fullmatch(r"\d{1,2} \* \* \* \*", c)]
+    assert hourly, f"the hourly intake sweep is gone: {crons}"
+    # Not on the hour (Oct 9 2026): the Tuesday runs (12:00, 16:00) and the
+    # Saturday check (16:00) fire on the hour in their own concurrency groups,
+    # each reading the send log from its own checkout — the same purchase could
+    # be welcomed or mailed twice.
+    assert all(c.split()[0] != "0" for c in hourly), \
+        f"the hourly intake fires on the hour, alongside the Tuesday runs: {hourly}"
+    gate = re.search(r"github\.event\.schedule != '([^']+)'", text)
+    assert gate and gate.group(1) in hourly, \
+        "the once-a-day steps' schedule gate no longer names the hourly cron"
     assert "0 14 * * *" in crons, "the daily run (renewals, reply kit) moved"
 
 

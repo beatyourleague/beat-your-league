@@ -45,7 +45,7 @@ from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
 from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
                        load_week_data, report_for)
-from run.saturday import PLANS_DIR, build_plan, write_plan
+from run.saturday import PLANS_DIR, build_plan, first_plans_dir, write_plan
 from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 
@@ -86,7 +86,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    template_html: str, out_dir: Path = SUBSCRIBER_REPORTS,
                    processed_dir: Path = PROCESSED_DIR,
                    record: bool = True,
-                   plans_dir: Path | None = None) -> RunResult:
+                   plans_dir: Path | None = None,
+                   first_plans: Path | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
     ``record`` is False when nothing is being mailed. A call is PUBLISHED when
@@ -118,7 +119,7 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         from engine.own_record import own_record
         from run.saturday import load_plans
         report["receipts"] = own_record(
-            load_plans(plans_dir, data.season, subscriber.slug)
+            load_plans(plans_dir, data.season, subscriber.slug, also=first_plans)
             if plans_dir is not None else [],
             data.weekly, subscriber.spec().rule, data.week)
     except SoloError as exc:
@@ -321,7 +322,8 @@ def main(argv: list[str] | None = None) -> int:
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
                               processed_dir=args.processed_dir, record=sending,
-                              plans_dir=args.plans_dir or PLANS_DIR)
+                              plans_dir=args.plans_dir or PLANS_DIR,
+                              first_plans=first_plans_dir(args.registry))
                for s in subscribers]
 
     line = "=" * 62

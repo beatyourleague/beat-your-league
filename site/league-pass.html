@@ -24,9 +24,10 @@
 <style>
   :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--turf-glow:#2EA968;
     --flag:#F2C230;--flag-deep:#D9A81B;--brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;
-    --line:#D8D3C6;--abyss:#05090F;--pitch:#0A1420;--dusk2:#BCC9DB;--gold-edge:rgba(242,194,48,.20);}
+    --line:#D8D3C6;--abyss:#05090F;--pitch:#0A1420;--dusk2:#BCC9DB;--gold-edge:rgba(242,194,48,.20);
+    --flag-tint:#FBF3D9;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  html{overflow-x:hidden;}
+  html{overflow-x:hidden;overflow-x:clip;background:var(--abyss);}
   body{background:radial-gradient(900px 600px at 85% -5%,rgba(30,122,70,.22),transparent 60%),
       linear-gradient(180deg,#0C1930 0%,var(--pitch) 40%,var(--abyss) 100%);
     background-color:var(--abyss);font-family:'Barlow',sans-serif;color:var(--paper);
@@ -45,14 +46,14 @@
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
   h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(40px,8vw,76px);line-height:.92;text-transform:uppercase;margin-top:16px;
-    text-shadow:0 3px 0 rgba(0,0,0,.55),0 6px 0 rgba(0,0,0,.22),0 22px 50px rgba(0,0,0,.6);}
+    text-shadow:0 22px 50px rgba(0,0,0,.45);text-wrap:balance;}
   h1 em{font-style:italic;color:var(--navy);background:linear-gradient(180deg,#FFD75E,var(--flag) 60%,var(--flag-deep));
-    padding:0 14px 4px;display:inline-block;transform:skewX(-6deg);}
-  h1 em span{display:inline-block;transform:skewX(6deg);}
+    padding:0 14px 4px;display:inline-block;transform:rotate(-1.5deg);
+    box-shadow:0 12px 30px -14px rgba(242,194,48,.6);}
+  h1 em span{display:inline-block;}
   .lede{margin-top:20px;font-size:18px;line-height:1.65;color:var(--dusk2);max-width:640px;}
-  h2{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:30px;
-    text-transform:uppercase;margin:38px 0 10px;
-    text-shadow:0 3px 0 rgba(0,0,0,.5),0 6px 0 rgba(0,0,0,.2);}
+  h2{font-family:'Barlow Condensed';font-weight:800;font-size:30px;
+    text-transform:uppercase;margin:38px 0 10px;text-wrap:balance;}
   p{font-size:15.5px;line-height:1.7;color:var(--dusk2);margin:10px 0;}
   b{color:var(--paper);}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;}
@@ -63,7 +64,7 @@
     padding:26px;margin-top:26px;box-shadow:0 26px 60px -22px rgba(0,0,0,.85);}
   .price .tag{font-size:11.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--turf);}
   .price .amt{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:64px;
-    line-height:1;margin-top:6px;text-shadow:0 3px 0 rgba(16,30,51,.13);}
+    line-height:1;margin-top:6px;}
   /* The 3px letterpress shadow is sized for the 64px price; inherited onto 15px
      text it lands almost a full x-height away and reads as a smudge. */
   .price .amt small{font-family:'Barlow';font-size:15px;font-weight:700;color:var(--slate);
@@ -72,13 +73,17 @@
   .btn{display:inline-block;margin-top:18px;font-family:'Barlow Condensed';font-weight:800;
     font-size:18px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
     padding:15px 28px;background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
-    color:var(--navy);clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);
-    transition:transform .16s ease;}
-  .btn:hover{transform:translateY(-2px);}
-  .soon{margin-top:18px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
-    letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);
-    background:var(--flag-tint);border:none;border-left:4px solid var(--flag-deep);
-    padding:13px 16px;text-align:left;}
+    color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
+    transition:transform .16s ease,box-shadow .16s ease;box-shadow:0 10px 24px -14px rgba(0,0,0,.9);}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
+  .steps{margin-top:22px;background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 20px;}
+  .steps h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;letter-spacing:.04em;}
+  .steps ol{margin:10px 0 0 20px;font-size:15px;line-height:1.7;color:var(--dusk2);}
+  .steps li b{color:var(--paper);}
+  /* The closed state sits where the button will: the landing's switched-off shape. */
+  .soon{margin-top:18px;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
+    background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 16px;}
   .fine{margin-top:14px;font-size:13px;color:var(--slate);line-height:1.6;}
   footer{margin-top:40px;padding-top:18px;border-top:1px solid rgba(246,244,238,.14);
     font-size:12.5px;color:#7C8DA5;line-height:1.7;}
@@ -97,7 +102,7 @@
   </header>
   <main id="main">
 
-  <h2>Why someone buys this for the league</h2>
+  <h2>Why one manager buys it for twelve</h2>
   <div class="grid">
     <div class="box"><h3>It levels the field</h3>
       <p>One manager buying an edge is an arms race. Everyone having the same tool is just a
@@ -105,20 +110,20 @@
       before anyone makes it.</p></div>
     <div class="box"><h3>It feeds the group chat</h3>
       <p>Twelve managers making calls from their own reports on Tuesday, and a group chat
-      finding out on Sunday whose held up. Screenshots, arguments, rematches — the
-      season gets louder.</p></div>
+      finding out on Sunday who's held up. The screenshots, the arguments and the rematches
+      all get louder.</p></div>
     <div class="box"><h3>Nobody's team gets shared</h3>
       <p>Each report goes only to the manager it's about. We never share one manager's
       report with another, and we never publish your league's names anywhere.</p></div>
     <div class="box"><h3>It's cheaper than one buy-in</h3>
-      <p>Twelve individual passes would cost $468. This is $99 for every manager in your
-      league who signs up — often less than one team's entry fee.</p></div>
+      <p>Twelve individual passes would cost $468, and ten would cost $390. This is $99 for
+      every manager in your league who signs up, often less than one team's entry fee.</p></div>
   </div>
 
   <div class="price">
     <div class="tag">League Pass · one season</div>
     <div class="amt">$99 <small>for the whole league</small></div>
-    <p style="font-size:13px;opacity:.75;margin:6px 0 0;">All prices in US dollars.</p>
+    <p style="font-size:13px;color:var(--slate);margin:6px 0 0;">All prices in US dollars.</p>
     <ul>
       <li>A separate weekly report for every manager who claims their seat</li>
       <li>Each seat is its own report: own roster, own scoring, own calls</li>
@@ -129,21 +134,32 @@
       cancel yourself any time.</li>
     </ul>
     <div class="soon" id="league-cta">Checkout opens soon</div>
-    <p class="fine">How it works: any manager in the league can buy it — you don't have to be
-    the commissioner. You pay once, then share your league's signup link.
-    Each manager takes ninety seconds to paste their roster, and their own report starts the
-    next Tuesday. Managers who never sign up simply don't get a report; there's no charge
-    either way.</p>
+    <p class="fine">Any manager in the league can buy it; you don't have to be the commissioner.
+    Managers who never sign up simply don't get a report, and there's no charge either way.
+    Leagues of 8, 10, 12 or 14 teams are all covered.</p>
+  </div>
+
+  <div class="steps">
+    <h3>What you do after paying</h3>
+    <ol>
+      <li><b>Pay once, on Stripe.</b> Your own roster goes in at the same time, so your report
+      is the first one.</li>
+      <li><b>Text the league the link.</b> Your welcome email carries your league's signup link.
+      Send it to the group chat with the email you paid with, which is how each seat is matched
+      to your pass.</li>
+      <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their own
+      report lands the next Tuesday.</li>
+    </ol>
   </div>
 
   <h2>Fair play</h2>
-  <p>Everyone gets the same quality of report, built for their own roster — so the league
-  gets sharper, not lopsided. It's analysis, not a guarantee: a league full of good
-  information still crowns exactly one champion. That part's still up to you.</p>
+  <p>Everyone gets the same report, built for their own roster, so the league gets sharper,
+  not lopsided. A league full of good information still crowns exactly one champion; that
+  part is up to you.</p>
   </main>
   <footer>
-    <b>Beat Your League</b> — analysis, not picks. No betting content, no staking advice.
-    Must be 18+ to purchase. Not affiliated with the NFL.<br>
+    <b>Beat Your League</b> — analysis, not picks, and not a guarantee. Must be 18+ to
+    purchase. Not affiliated with the NFL.<br>
     <a href="terms.html">Terms &amp; refunds</a> &middot;
     <a href="privacy.html">Privacy</a> ·
     <a href="index.html">Back to the main page</a>

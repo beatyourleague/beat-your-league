@@ -133,7 +133,7 @@ go.addEventListener("click", () => {
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind: "confirm", code: CODE }),
-    signal: AbortSignal.timeout(15000),
+    signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     say("Confirmed. It's applied within the hour, and your next report — and " +

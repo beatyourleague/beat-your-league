@@ -33,14 +33,14 @@
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   [hidden]{display:none!important;}
-  html{scroll-behavior:smooth;overflow-x:hidden;}
+  html{scroll-behavior:smooth;overflow-x:hidden;overflow-x:clip;background:var(--abyss);}
   body{background:
       radial-gradient(1100px 700px at 78% -10%, rgba(242,194,48,.07), transparent 55%),
       radial-gradient(900px 640px at 12% 8%, rgba(30,122,70,.14), transparent 60%),
       linear-gradient(180deg,#0C1930 0%, var(--pitch) 44%, var(--abyss) 100%);
     background-color:var(--abyss);
     font-family:'Barlow',-apple-system,sans-serif;color:var(--paper);
-    -webkit-font-smoothing:antialiased;overflow-x:hidden;}
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip;}
   .wrap{max-width:1060px;margin:0 auto;padding:0 22px;}
   a{color:inherit;}
   a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
@@ -60,10 +60,11 @@
   /* 24px minimum target: the text links were 17px tall. */
   .navlinks a:not(.btn){padding:7px 4px;}
   .navlinks a:hover{color:var(--paper);}
+  .btn.primary,.btn.gold{box-shadow:0 10px 24px -14px rgba(0,0,0,.9);}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
   .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
     padding:12px 22px;border:none;transition:transform .15s ease;}
-  .btn:hover{transform:translateY(-2px);}
   .btn.gold{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
   .btn.ghost{border:2px solid rgba(246,244,238,.4);color:var(--paper);padding:10px 20px;}
@@ -76,26 +77,31 @@
     letter-spacing:.3em;text-transform:uppercase;color:var(--flag);}
   h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
     font-size:clamp(52px,7.4vw,92px);line-height:.92;text-transform:uppercase;
-    margin:14px 0 16px;text-shadow:0 3px 0 rgba(0,0,0,.5),0 20px 46px rgba(0,0,0,.55);}
+    margin:14px 0 16px;text-shadow:0 20px 46px rgba(0,0,0,.45);text-wrap:balance;}
   h1 em{font-style:italic;color:var(--navy);
     background:linear-gradient(180deg,#FFD75E,var(--flag) 60%,var(--flag-deep));
-    padding:0 14px 4px;display:inline-block;transform:skewX(-6deg);}
-  h1 em span{display:inline-block;transform:skewX(6deg);}
-  .sub{font-size:18.5px;line-height:1.6;color:var(--dusk2);max-width:46ch;}
+    padding:0 14px 4px;display:inline-block;transform:rotate(-1.5deg);
+    box-shadow:0 12px 30px -14px rgba(242,194,48,.6);}
+  h1 em span{display:inline-block;}
+  .sub{font-size:18.5px;line-height:1.6;color:var(--dusk2);max-width:48ch;}
   .watchform{display:flex;gap:10px;margin-top:26px;max-width:460px;}
   .watchform input{flex:1;min-width:0;padding:13px 14px;font:inherit;font-size:15.5px;
     background:rgba(255,255,255,.06);border:1px solid rgba(246,244,238,.28);
     color:var(--paper);border-radius:2px;}
   .watchform input::placeholder{color:var(--dusk);}
-  .watchnote{margin-top:10px;font-size:13px;color:var(--dusk);line-height:1.55;max-width:46ch;}
+  .watchnote{margin-top:10px;font-size:13.5px;color:var(--dusk);line-height:1.55;max-width:46ch;}
   .creds{list-style:none;display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:18px;
     font-size:13.5px;font-weight:600;color:var(--dusk2);}
   .creds li{display:flex;align-items:center;gap:7px;}
   .creds li::before{content:"";width:14px;height:14px;flex:none;border-radius:50%;
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   .creds b{color:var(--flag);font-weight:800;}
-  .heroline{margin-top:14px;font-size:13.5px;color:var(--dusk);max-width:52ch;}
+  .heroline{margin-top:14px;font-size:14px;color:var(--dusk);max-width:52ch;line-height:1.55;
+    text-wrap:pretty;}
   .heroline b{color:var(--dusk2);}
+  /* The season clock, written by the Tuesday build beside this-week.html:
+     true urgency, derived, never typed. Static text stays if it can't load. */
+  .heroline .clock{color:var(--flag);font-weight:800;}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
 
   /* the Tuesday email, as it arrives: a phone, an inbox row, the report */
@@ -103,7 +109,7 @@
   /* A stadium light behind the phone: dark frame on a dark page otherwise
      dissolves into it. Painted behind, never over, the screen. */
   .phonewrap::before{content:"";position:absolute;z-index:0;left:50%;top:44%;
-    width:680px;max-width:180vw;aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none;
+    width:min(680px,100vw);aspect-ratio:1;transform:translate(-50%,-50%);pointer-events:none;
     background:radial-gradient(closest-side,rgba(242,194,48,.34),rgba(242,194,48,.14) 42%,
       rgba(46,169,104,.10) 66%,transparent);}
   .phonewrap > *{position:relative;z-index:1;}
@@ -130,8 +136,15 @@
   .statusbar svg{height:11px;width:auto;display:block;}
   .statusbar .icons{display:flex;gap:5px;align-items:center;}
   .inbox{padding:6px 16px 8px;font-size:27px;font-weight:800;letter-spacing:-.01em;
-    color:#000;}
-  .mailrow{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;
+    color:#000;max-height:50px;overflow:hidden;
+    transition:opacity .25s ease,max-height .45s cubic-bezier(.2,.8,.2,1),padding .45s ease;}
+  /* After the tap the row is the opened email: the "Inbox" title folds away
+     and the row becomes the message header, as a mail client does, rather
+     than an inbox and an open report on screen at once. It is the resting
+     state too, so a visitor who never sees the motion sees the same screen. */
+  .screen.opened .inbox{opacity:0;max-height:0;padding-top:0;padding-bottom:0;}
+  .screen.opened .mailrow{background:transparent;box-shadow:none;margin-top:4px;}
+  .mailrow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;
     background:var(--card);margin:0 8px;padding:10px 11px;border-radius:14px;
     box-shadow:0 1px 0 rgba(16,30,51,.06);}
   .mailrow .av{width:34px;height:34px;border-radius:50%;background:var(--navy);
@@ -155,6 +168,10 @@
   .peek p{padding:10px 12px 4px;font-size:13px;font-weight:700;color:var(--navy);}
   .peek .flipbar{margin:8px 12px 12px;height:10px;}
   .peek .filehead + .pivot{padding:10px 12px;}
+  .peek .pivot p.then{padding:0;margin-top:4px;font-size:12.5px;font-weight:600;color:var(--ink2);}
+  /* Before the tap the screen is an inbox: the report it opens is not there yet. */
+  .screen #hero-card,.screen .peek{transition:opacity .35s ease;}
+  .js .screen:not(.opened) #hero-card,.js .screen:not(.opened) .peek{opacity:0;}
   .screen::after{content:"";position:absolute;left:0;right:0;bottom:0;height:20%;
     background:linear-gradient(180deg,rgba(242,240,234,0),#F2F0EA 80%);pointer-events:none;}
   .homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:36%;
@@ -179,7 +196,7 @@
   .js .hero .mailrow.wait{opacity:0;transform:translateY(-8px);}
   .hero .mailrow{transition:opacity .35s ease,transform .35s ease,background .25s ease;}
   .hero .mailrow.tap{background:#E4E1D8;}
-  .realtag{font-size:12.5px;color:var(--dusk);letter-spacing:.02em;}
+  .realtag{font-size:13.5px;color:var(--dusk);letter-spacing:.02em;}
   .realtag b{color:var(--flag);font-weight:700;}
 
   /* the product's own paper */
@@ -195,18 +212,18 @@
   .fslot{font-family:'Barlow Condensed';font-weight:800;font-size:13px;color:var(--slate);
     letter-spacing:.06em;}
   .fname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .fname small{display:block;font-weight:500;font-size:11.5px;color:var(--slate);}
+  .fname small{display:block;font-weight:500;font-size:12px;color:var(--slate);}
   /* Bars run from 50% (a coin flip) to 100%: every number is a head-to-head
      against the best bench option, so zero is not the floor — 50 is. */
   .fbar{height:8px;background:#E6E2D6;border-radius:99px;overflow:hidden;}
   .fbar i{display:block;height:100%;border-radius:99px;
     background:linear-gradient(90deg,var(--flag-deep),var(--flag));
-    transition:width .9s cubic-bezier(.2,.8,.2,1);}
+    transition:width .9s cubic-bezier(.34,1.3,.64,1);}
   .fpct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:19px;
     text-align:right;font-variant-numeric:tabular-nums;}
-  .fnc{grid-column:3 / 5;font-size:11px;font-weight:800;letter-spacing:.06em;
+  .fnc{grid-column:3 / 5;font-size:11.5px;font-weight:800;letter-spacing:.06em;
     text-transform:uppercase;color:var(--slate);text-align:right;}
-  .fcap{padding:9px 14px 12px;border-top:2px solid var(--navy);font-size:12px;
+  .fcap{padding:9px 14px 12px;border-top:2px solid var(--navy);font-size:13px;
     color:var(--slate);line-height:1.5;}
   .js .anim .frow{opacity:0;transform:translateX(-6px);transition:opacity .4s ease,transform .4s ease;}
   .js .anim.in .frow{opacity:1;transform:none;}
@@ -215,9 +232,11 @@
   :root{--gap-section:96px;}
   section{padding:var(--gap-section) 0 0;}
   h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(30px,4.2vw,44px);
-    text-transform:uppercase;line-height:.98;letter-spacing:.005em;margin:0 0 12px;}
-  h2.slant{font-weight:900;font-style:italic;text-shadow:0 3px 0 rgba(0,0,0,.5);}
-  .lede{font-size:17px;line-height:1.6;color:var(--dusk2);max-width:58ch;margin-bottom:30px;}
+    text-transform:uppercase;line-height:.98;letter-spacing:.005em;margin:0 0 12px;
+    text-wrap:balance;}
+  h2.slant{font-weight:900;font-style:italic;}
+  .lede{font-size:17px;line-height:1.6;color:var(--dusk2);max-width:58ch;margin-bottom:30px;
+    text-wrap:pretty;}
 
   /* proof line */
   .proof{padding:40px 0 0;}
@@ -259,7 +278,7 @@
   .note b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;
     text-transform:uppercase;letter-spacing:.02em;color:var(--paper);margin-bottom:6px;}
   .note p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:40ch;}
-  .realfoot{font-size:12.5px;color:var(--dusk);margin-top:14px;}
+  .realfoot{font-size:13.5px;color:var(--dusk);margin-top:14px;}
   .realfoot b{color:var(--flag);font-weight:700;}
 
   /* the flip widget */
@@ -286,7 +305,7 @@
      defaults to min-width:auto, so `white-space:nowrap` on .ucount forced its
      120px column out to the ~230px the text needs — pushing the row past the
      viewport and scrolling the whole PAGE sideways on a phone. */
-  .urow{display:grid;grid-template-columns:1fr 130px minmax(0,200px);gap:12px;align-items:center;
+  .urow{display:grid;grid-template-columns:1fr 120px minmax(0,230px);gap:12px;align-items:center;
     padding:8px 0;border-bottom:1px solid #E6E2D6;font-size:14.5px;}
   .urow:last-child{border-bottom:0;}
   .urow b{font-weight:700;}
@@ -294,7 +313,7 @@
   .ubar i{display:block;height:100%;background:linear-gradient(90deg,#1E7A46,#2EA968);
     border-radius:99px;transition:width .9s cubic-bezier(.2,.8,.2,1);}
   .urow > *{min-width:0;}
-  .ucount{font-size:12.5px;color:var(--slate);text-align:right;}
+  .ucount{font-size:13px;color:var(--slate);text-align:right;}
 
   /* pivot widget */
   .pivot{padding:14px 16px 16px;}
@@ -309,13 +328,18 @@
     background:linear-gradient(90deg,var(--flag),rgba(242,194,48,.25));}
   .timeline li{position:relative;padding:34px 26px 0 0;}
   .timeline li::before{content:"";position:absolute;left:0;top:2px;width:16px;height:16px;
-    border-radius:50%;background:var(--pitch);border:3px solid var(--flag);}
+    border-radius:50%;background:var(--flag);border:3px solid var(--flag);
+    transition:background .4s ease;}
+  .js .timeline.reveal:not(.shown) li::before{background:var(--pitch);}
+  .timeline.shown li:nth-child(2)::before{transition-delay:.25s;}
+  .timeline.shown li:nth-child(3)::before{transition-delay:.5s;}
+  .timeline.shown li:nth-child(4)::before{transition-delay:.75s;}
   .timeline b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:20px;
     text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
   .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:34ch;}
 
   /* rankings vs. your report */
-  .versus{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:900px;}
+  .versus{display:grid;grid-template-columns:1fr 1.1fr;gap:22px;max-width:960px;}
   .vcol{border:1px solid rgba(246,244,238,.14);padding:22px 24px;}
   .vcol.ours{background:var(--paper);color:var(--navy);border:2px solid var(--flag);
     box-shadow:0 0 48px -10px rgba(242,194,48,.35);}
@@ -332,45 +356,74 @@
   /* ------------------------------------------------ pricing */
   .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px;}
   .plan{background:var(--card);color:var(--navy);border:1px solid var(--line);
-    padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;height:100%;}
-  .plans{align-items:center;}
+    padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;
+    display:flex;flex-direction:column;}
+  .plans{align-items:stretch;isolation:isolate;}
+  .plan:not(.founder){z-index:1;}
   .plan.founder{border:2px solid var(--flag);padding:30px 26px;
     box-shadow:0 30px 70px -24px rgba(0,0,0,.85),0 0 48px -8px rgba(242,194,48,.45);}
   .plan.founder .price{font-size:60px;}
   /* The season pass is the one to land on: a touch larger and lifted, on
      screens wide enough to sit the two cards side by side. */
-  @media (min-width:761px){.plan.founder{transform:scale(1.035);transform-origin:center;}}
-  .stamp50{position:absolute;top:-14px;right:16px;color:var(--navy);
+  @media (min-width:881px){.plan.founder{transform:translateY(-10px);}}
+  .plan .head{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;
+    flex-wrap:wrap;}
+  .plan .head .tag{white-space:nowrap;}
+  .stamp50{color:var(--navy);
     background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
-    box-shadow:0 6px 16px -6px rgba(0,0,0,.6);
     font-family:'Barlow Condensed';font-weight:800;font-size:12.5px;letter-spacing:.12em;
-    text-transform:uppercase;padding:4px 10px;}
+    text-transform:uppercase;padding:4px 10px;white-space:nowrap;}
   .plan .tag{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
     color:var(--turf);}
   .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:52px;
     line-height:1;margin-top:8px;}
   .price small{font-family:'Barlow';font-size:14px;font-weight:700;color:var(--slate);
     font-style:normal;}
-  .plan ul{margin:14px 0 0 18px;font-size:14.5px;line-height:1.7;color:var(--ink2);}
+  .plan ul{margin:14px 0 18px 18px;font-size:14.5px;line-height:1.7;color:var(--ink2);}
   .plan ul a{color:var(--turf);}
-  .plan .soon{margin-top:16px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
-    letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);
-    background:#F4EED9;border-left:4px solid var(--flag-deep);padding:12px 14px;}
-  .finance{margin-top:16px;font-size:13px;color:var(--dusk);line-height:1.65;max-width:70ch;}
+  /* The closed state sits where the button will: the same shape, switched off. */
+  .plan .soon{margin-top:auto;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
+    background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 14px;}
+  .plan .soon small{display:block;font-family:'Barlow';font-weight:600;font-size:12.5px;
+    letter-spacing:0;text-transform:none;color:var(--slate);margin-top:2px;}
+  .plan .btn{display:block;text-align:center;clip-path:none;margin-top:auto;}
+  .finance{margin-top:18px;font-size:13.5px;color:var(--dusk);line-height:1.65;max-width:70ch;}
   .finance a{color:var(--flag);}
 
   /* why this exists */
   .leaguepass{padding-top:var(--gap-section);}
   .lpcard{border:1px solid rgba(246,244,238,.22);border-left:3px solid var(--flag);
-    padding:26px 28px;max-width:760px;background:rgba(246,244,238,.04);}
+    padding:26px 28px;background:rgba(246,244,238,.04);
+    display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr);gap:28px;align-items:center;}
   .lpcard h2{margin:6px 0 10px;}
   .lpcard p{font-size:15.5px;line-height:1.65;color:var(--dusk2);max-width:60ch;margin-bottom:14px;}
+  /* Twelve seats, one payment: every manager's own report. */
+  .seats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+  .seats span{aspect-ratio:1.35;border-radius:4px;background:var(--paper);
+    border-top:4px solid var(--flag);display:grid;align-content:space-between;padding:6px 8px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:13px;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--navy);
+    transition:opacity .4s ease,transform .4s ease;transition-delay:calc(var(--i,0) * 60ms);}
+  .seats span:nth-child(odd){border-top-color:var(--turf);}
+  /* Visible by default; only a section the script is about to reveal holds
+     its seats back, so no-script, reduced motion and an already-visible
+     section all show the whole grid. */
+  .js .leaguepass.reveal:not(.shown) .seats span{opacity:0;transform:translateY(8px);}
+  .seats small{font-family:'Barlow';font-weight:600;font-size:11.5px;letter-spacing:0;
+    text-transform:none;color:var(--slate);}
+  @media (max-width:880px){.lpcard{grid-template-columns:1fr;}.seats{display:none;}}
+  /* A paper band: the product's own colour, marking a change of chapter. */
   .why{padding-top:var(--gap-section);}
-  .whycard{border-left:3px solid var(--flag);padding:6px 0 6px 28px;max-width:760px;}
+  .whycard{border-left:3px solid var(--flag);padding:6px 0 6px 28px;
+    display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:8px 40px;align-items:start;}
+  .whycard .kicker{grid-column:1 / -1;}
+  .whycard .whybody{margin-top:14px;}
+  @media (max-width:880px){.whycard{grid-template-columns:1fr;}.whycard .whybody{margin-top:0;}}
   .whyquote{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(26px,3.4vw,36px);
     line-height:1.15;margin:12px 0 14px;text-wrap:balance;}
   .whyquote em{font-style:italic;color:var(--flag);}
-  .whybody{font-size:16.5px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
+  .whybody{font-size:16.5px;line-height:1.65;color:var(--dusk2);max-width:70ch;}
   .whybody a{color:var(--flag);}
 
   /* ------------------------------------------------ faq */
@@ -383,8 +436,8 @@
     display:flex;justify-content:space-between;align-items:center;gap:12px;}
   .faq summary::-webkit-details-marker{display:none;}
   .faq summary::after{content:"+";font-family:'Barlow Condensed';font-weight:800;
-    font-size:22px;color:var(--flag);}
-  .faq details[open] summary::after{content:"–";}
+    font-size:22px;color:var(--flag);transition:transform .25s ease;flex:none;}
+  .faq details[open] summary::after{transform:rotate(45deg);}
   .faq .a{padding:0 0 16px;font-size:15px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
   .faq .a a{color:var(--flag);}
 
@@ -410,13 +463,12 @@
     background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);
     animation:shine 1s ease-out forwards;pointer-events:none;}
   @keyframes shine{to{left:130%;}}
-  .hero .phonewrap{will-change:transform;}
 
   /* ------------------------------------------------ closer + footer */
   .closer{text-align:center;padding:var(--gap-section) 0 20px;}
   .closer p{color:var(--dusk2);margin:8px auto 20px;max-width:46ch;}
   footer{margin-top:56px;border-top:1px solid rgba(246,244,238,.14);
-    padding:22px 0 44px;font-size:12.5px;color:#7C8DA5;line-height:1.8;}
+    padding:22px 0 44px;font-size:13px;color:#8C9CB3;line-height:1.8;}
   footer a{color:var(--flag);text-decoration:none;}
   footer a:hover{text-decoration:underline;}
 
@@ -430,6 +482,7 @@
     .btn.gold.shine::after{display:none;}
     .js .hero .mailrow.wait{opacity:1;transform:none;}
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
+    .faq summary::after,.timeline li::before,.seats span,.inbox{transition:none!important;}
   }
 
   /* A note beside its card needs about 330px or it wraps taller than the card
@@ -446,15 +499,22 @@
     .note p{max-width:60ch;}
   }
   @media (max-width:880px){
-    /* Phones see the product in the first screen: headline, then the phone,
-       then the form. The nav's own button keeps the action on screen. */
+    /* Phones: headline, the form and the line that explains it, then the phone
+       showing what arrives. With checkout open the hero's own button takes the
+       form's place. */
     .hero{grid-template-columns:1fr;padding:26px 0 20px;gap:0;}
     .hero > div:first-child{display:contents;}
     .hero .kicker{order:1;} .hero h1{order:2;} .hero .sub{order:3;}
-    .hero .phonewrap{order:4;margin:26px 0 8px;}
+    .hero .watchform{order:4;margin-top:18px;} .hero .watchnote{order:5;}
+    .hero .heroline{order:6;}
+    .hero.can-buy .cta-row{order:4;}
+    .hero .phonewrap{order:7;margin:26px 0 8px;}
     .hero .phone{max-width:286px;}
-    .hero .watchform{order:5;} .hero .watchnote{order:6;} .hero .creds{order:7;}
-    .hero .heroline{order:8;} .hero .cta-row{order:9;margin-top:14px;}
+    .hero .creds{order:8;}
+    .hero .cta-row{order:9;margin-top:14px;}
+    /* The form is the action on a phone; a second gold button in the nav
+       above it competes with it. The sticky bar takes over once it scrolls. */
+    nav .btn{display:none;}
     .proofline{grid-template-columns:1fr;gap:6px;}
     .timeline{grid-template-columns:1fr;gap:22px;}
     .timeline::before{left:7px;right:auto;top:0;bottom:0;width:2px;height:auto;
@@ -510,9 +570,9 @@
   <div>
     <div class="kicker">Fantasy football · start/sit</div>
     <h1>Know who <em><span>to start.</span></em></h1>
-    <p class="sub">Your roster. Your scoring. Every close call decided, with the odds.
-    In your inbox every Tuesday — and again Saturday if injury news changes your
-    lineup.</p>
+    <p class="sub">Built from your roster and scored your league's way: every close
+    call decided, with the odds. In your inbox every Tuesday, and a Saturday check
+    when injury news changes your lineup.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -523,20 +583,20 @@
     <p class="watchnote" id="watch-note" role="status"></p>
     <ul class="creds" aria-label="What you get">
       <li>Built for your exact roster and scoring</li>
-      <li>Every close call decided</li>
+      <li>Decided calls, with odds and the reason</li>
       <li>Set your lineup in 90 seconds</li>
     </ul>
-    <p class="heroline"><b>A new report every Tuesday of the season.</b> One email when signups
+    <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b> One email when signups
     open — nothing else, no card, unsubscribe in one click.</p>
     <div class="cta-row">
       <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
       <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
-      <a class="btn ghost" href="sample-report.html">See a real report</a>
+      <a class="btn ghost" id="hero-sample" href="sample-report.html">See a real report</a>
     </div>
   </div>
   <div class="phonewrap">
     <div class="phone">
-      <div class="screen">
+      <div class="screen opened">
         <div class="island" aria-hidden="true"></div>
         <div class="statusbar" aria-hidden="true"><span>8:04</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div>
         <div class="notif" id="notif" aria-hidden="true">
@@ -570,7 +630,8 @@
           <p>Start Bijan Robinson over Chase Brown</p>
           <div class="flipbar"><span class="a" style="width:70%"></span></div>
           <div class="filehead">If/then for gameday</div>
-          <div class="pivot"><div class="if">If Tony Pollard (FLEX) is ruled out</div></div></div>
+          <div class="pivot"><div class="if">If Tony Pollard (FLEX) is ruled out</div>
+          <p class="then">Move Chase Brown into FLEX (projects 10.3).</p></div></div>
         <div class="homebar" aria-hidden="true"></div>
       </div>
     </div>
@@ -584,8 +645,8 @@
     <div class="big">12:55<small>Sunday</small></div>
     <p><b>He was on your bench. He went for 30. You lost by four.</b> Every manager has
     that week — lost on one close call, made in a hurry five minutes before kickoff. The
-    report makes that call on Tuesday, for your roster, with the odds. Sunday, you just
-    watch.</p>
+    report makes that call on Tuesday, for your roster, with the odds. Sunday, you
+    watch football.</p>
   </div>
 </section>
 
@@ -611,7 +672,7 @@
         </div>
       </div><!--/card-->
     </div>
-    <div class="note"><b>No coin flips left to you</b><p>Every week has a call you'd go
+    <div class="note"><b>The close one, called</b><p>Every week has a call you'd go
       back and forth on. We pick a side and tell you how sure to be: Start Bijan Robinson
       over Chase Brown — 70%, proj 15.1 vs 10.3.</p></div>
     <div class="leaf">
@@ -639,8 +700,8 @@
         </div>
       </div><!--/card-->
     </div>
-    <div class="note"><b>Late news, handled early</b><p>Got a questionable starter? The
-      report already names who goes in if he sits — and Saturday's final check tells
+    <div class="note"><b>Late news, planned for</b><p>Got a questionable starter? The
+      report already names who goes in if he sits, and Saturday's final check tells
       you if he does.</p></div>
   </div>
   <p class="realfoot"><b>Real report</b> · every figure above comes from the published
@@ -684,8 +745,9 @@
       check tells you the swap. No news, no email.</p></li>
     <li><b>Sunday</b><p>Your lineup's already set. If news breaks late, the report told
       you the if/then in advance.</p></li>
-    <li><b>Monday</b><p>You made the right calls, and you have the report to show the group
-      chat you made them before kickoff.</p></li>
+    <li><b>Monday</b><p>Win or lose, you have the receipt: the call, the odds and the
+      reason, dated Tuesday. Your next report lists last week's calls and how each one
+      finished.</p></li>
   </ol>
 </section>
 
@@ -695,7 +757,7 @@
   new one every Tuesday.</p>
   <div class="plans">
     <div class="plan">
-      <div class="tag">Monthly</div>
+      <div class="head"><div class="tag">Monthly</div></div>
       <div class="price">$14.99 <small>/ month</small></div>
       <ul>
         <li>Your first report the day you sign up, then every Tuesday</li>
@@ -707,11 +769,10 @@
         <li>Billing stops when the season does — we don't charge through
         the offseason</li>
       </ul>
-      <div class="soon" id="monthly-cta">Checkout opens soon</div>
+      <div class="soon" id="monthly-cta">Checkout opens soon<small>Leave your email above for the one message when it does</small></div>
     </div>
     <div class="plan founder">
-      <span class="stamp50" aria-hidden="true">Founding rate</span>
-      <div class="tag">Season pass · 2026</div>
+      <div class="head"><div class="tag">Season pass · 2026</div><span class="stamp50">Founding rate</span></div>
       <div class="price">$39 <small>/ season</small></div>
       <ul>
         <li>Your first report the day you sign up, then every Tuesday through your
@@ -721,11 +782,11 @@
         report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
         <li>Cancel any time yourself, in one click</li>
-        <li>Renews once a year at $39 unless you cancel — we email you first,
-        and cancelling is one click
+        <li>Founding rate locked in: renews once a year at $39 unless you cancel,
+        never more. We email you first, and cancelling is one click
         (<a href="terms.html#cancel">how</a>)</li>
       </ul>
-      <div class="soon" id="season-cta" style="margin-top:16px">Checkout opens soon</div>
+      <div class="soon" id="season-cta">Checkout opens soon<small>Leave your email above for the one message when it does</small></div>
     </div>
   </div>
   <p class="finance" id="currency-note">All prices in US dollars.</p>
@@ -737,12 +798,20 @@
 
 <section class="leaguepass">
   <div class="lpcard">
+    <div>
     <div class="kicker">Run the league?</div>
     <h2>One payment covers every manager.</h2>
-    <p>Everyone gets their own report, built from their own roster, and nobody's team is
-    shared. It levels the field, it feeds the group chat, and it's often less than one team's
-    entry fee. Any manager can buy it; you don't have to be the commissioner.</p>
+    <p>Every manager gets their own report, built from their own roster, and nobody's
+    team is shared. Twelve managers set their lineups on Tuesday, and the group chat
+    finds out Sunday who was right. Any manager can buy it; you don't have to be the
+    commissioner.</p>
     <p><a class="btn ghost" href="league-pass.html">See the League Pass</a></p>
+    </div>
+    <div class="seats" aria-hidden="true">
+      <span style="--i:0">Team 1<small>own report</small></span><span style="--i:1">Team 2<small>own report</small></span><span style="--i:2">Team 3<small>own report</small></span><span style="--i:3">Team 4<small>own report</small></span>
+      <span style="--i:4">Team 5<small>own report</small></span><span style="--i:5">Team 6<small>own report</small></span><span style="--i:6">Team 7<small>own report</small></span><span style="--i:7">Team 8<small>own report</small></span>
+      <span style="--i:8">Team 9<small>own report</small></span><span style="--i:9">Team 10<small>own report</small></span><span style="--i:10">Team 11<small>own report</small></span><span style="--i:11">Team 12<small>own report</small></span>
+    </div>
   </div>
 </section>
 
@@ -755,9 +824,7 @@
     <p class="whybody">So we built the report we wanted: every close call on your roster
     decided on Tuesday, the odds on each one, and the plan for late news. One email, a
     few minutes of your week, and Sunday back to being fun. We're independent and small,
-    paid only by subscribers: no ads and no selling your data.
-    Questions? Write to
-    <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
+    paid only by subscribers: no ads and no selling your data.</p>
   </div>
 </section>
 
@@ -814,10 +881,13 @@
       </details>
       <details>
         <summary>When do the numbers start?</summary>
-        <div class="a">Right away. From Week 4 on, every report carries odds from the first
-        one you get. (Early in a season the report leans on last season until there's
-        enough this year — <a href="sample-first-week.html">here's what a Week 1 report
-        looks like</a>.)</div>
+        <div class="a">Join in Week 4 or later and your first weekly report carries the
+        odds. (Join after that week's first game and you get your roster report the same
+        day, then the week's report on Tuesday.) Early in a season they start sooner or
+        later depending on your setup: Week 1 sets your lineup in last season's order with
+        no odds, full-PPR 12-team standard lineups get them from Week 2, and every other
+        setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report
+        looks like</a>).</div>
       </details>
     </div>
   </div>
@@ -825,7 +895,7 @@
 
 <section class="closer">
   <h2 class="slant" id="closer-head">Your lineup, decided every Tuesday.</h2>
-  <p id="closer-note">Leave your email and you'll get one message the morning signups open.</p>
+  <p id="closer-note">Leave your email. The morning checkout opens, you get one message and the founding rate.</p>
   <div class="cta-row" style="justify-content:center">
     <a class="btn gold" id="closer-cta" href="#watch-form">Tell me when it opens</a>
     <a class="btn ghost" href="sample-report.html">See a real report</a>
@@ -896,7 +966,7 @@
         {"@type": "Question", "name": "What if my roster changes mid-season?",
          "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
         {"@type": "Question", "name": "When do the numbers start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Right away. From Week 4 on, every report carries odds from the first one you get. Early in a season the report leans on last season until there's enough this year."}}
+         "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4."}}
       ]
     }
   ]
@@ -928,6 +998,10 @@ const TRIAL_OPEN = false;
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");
   if (tryCta) tryCta.hidden = false;
+  // Three buttons in one row wrap unevenly and dilute the two that matter; the
+  // real report is a click away in the nav, under the phone and in the FAQ.
+  const sample = document.getElementById("hero-sample");
+  if (sample) sample.hidden = true;
 }
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
@@ -940,7 +1014,7 @@ const WAITLIST_ENDPOINT = "";
 // never the paid checkout URL, or the page would promise "free" and hand over a
 // $39 subscribe form. Empty means fall through to the mailto capture below.
 const LEDGER_FREE_URL = "";
-// Empty on purpose — no personal address on a public page. Set before launch.
+// The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 
 const watchForm = document.getElementById("watch-form");
@@ -958,7 +1032,7 @@ if (watchForm) {
         const res = await fetch(WAITLIST_ENDPOINT, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ kind: "waitlist", email: email }),
-          signal: AbortSignal.timeout(15000),
+          signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
         });
         if (!res.ok) throw new Error(String(res.status));
         note.textContent = "You're on the list. One email when signups open, nothing else.";
@@ -1062,6 +1136,8 @@ if (CHECKOUT_OPEN) {
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     }
+    const hero = document.querySelector(".hero");
+    if (hero) hero.classList.add("can-buy");
     const heroline = document.querySelector(".heroline");
     if (heroline) {
       heroline.replaceChildren();
@@ -1070,8 +1146,14 @@ if (CHECKOUT_OPEN) {
       // week's report to anyone who buys before that week's kickoff, the roster
       // report otherwise — so the old sentence told a buyer to wait for something
       // they already have, on the one screen where impatience loses the sale.
-      heroline.textContent = "Checkout is open — set up your team and your " +
-        "first report lands today.";
+      // The season clock writes into #season-clock, so the open state keeps
+      // one: the clock is honest urgency exactly when a visitor can act on it.
+      const lead = document.createElement("b");
+      lead.id = "season-clock";
+      lead.textContent = "Checkout is open.";
+      heroline.appendChild(lead);
+      heroline.appendChild(document.createTextNode(
+        " Set up your team and your first report lands today."));
     }
     // Same sentence, same reason, at the bottom of the page. The heading also
     // carries a hardcoded date that is simply false from Sep 9 onward.
@@ -1110,18 +1192,11 @@ function play(card) {
   card.querySelectorAll("[data-w]").forEach((bar, i) => {
     setTimeout(() => { bar.style.width = bar.dataset.w + "%"; }, 120 + i * 160);
   });
+  // The numeral arrives WITH its bar, as the figure the report printed. It
+  // used to count up from 50%, printing 51…79% on the way — figures the
+  // product never published, on a card that says "real".
   card.querySelectorAll("[data-n]").forEach((el, i) => {
-    const end = Number(el.dataset.n);
-    const start = performance.now() + 120 + i * 160;
-    const tick = (now) => {
-      const t = Math.min(1, Math.max(0, (now - start) / 900));
-      el.textContent = Math.round(50 + (end - 50) * (1 - Math.pow(1 - t, 3))) + "%";
-      if (t < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-    // A background tab never runs animation frames, and a number frozen at
-    // "50%" would misquote the report. The final figure lands regardless.
-    setTimeout(() => { el.textContent = end + "%"; }, 1400 + i * 160);
+    setTimeout(() => { el.style.opacity = "1"; }, 260 + i * 160);
   });
 }
 // The hero's own card waits for its email to arrive: the notification drops in,
@@ -1129,20 +1204,35 @@ function play(card) {
 const heroCard = document.getElementById("hero-card");
 const notif = document.getElementById("notif");
 const mailrow = document.getElementById("mailrow");
+let arrived = false;
 function arrive() {
-  if (!notif || !mailrow || !heroCard) return;
+  if (arrived || !notif || !mailrow || !heroCard || heroCard.classList.contains("in")) return;
+  arrived = true;
+  // The resting state (no script, reduced motion) is the opened email; the
+  // sequence starts one step earlier, from the inbox, and ends there.
+  const screen = heroCard.closest(".screen");
+  if (screen) screen.classList.remove("opened");
   mailrow.classList.add("wait");
   notif.classList.add("go");
   setTimeout(() => { mailrow.classList.remove("wait"); }, 1350);
   setTimeout(() => { mailrow.classList.add("tap"); }, 1750);
-  setTimeout(() => { mailrow.classList.remove("tap"); play(heroCard); }, 2050);
+  setTimeout(() => {
+    mailrow.classList.remove("tap");
+    // The tap OPENS the email: the inbox title goes, the row becomes the
+    // message header, and the report below is what it contains.
+    const screen = heroCard.closest(".screen");
+    if (screen) screen.classList.add("opened");
+    play(heroCard);
+  }, 2050);
 }
 if (!reduced && "IntersectionObserver" in window) {
   cards.forEach((card) => {
     card.querySelectorAll("[data-w]").forEach((bar) => {
       bar.style.width = bar.closest(".flipbar") ? "50%" : "0%";
     });
-    card.querySelectorAll("[data-n]").forEach((el) => { el.textContent = "50%"; });
+    card.querySelectorAll("[data-n]").forEach((el) => {
+      el.style.opacity = "0"; el.style.transition = "opacity .45s ease";
+    });
   });
   const io = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -1150,10 +1240,27 @@ if (!reduced && "IntersectionObserver" in window) {
     }
   }, { threshold: 0.35 });
   cards.forEach((card) => { if (card !== heroCard) io.observe(card); });
-  arrive();
+  // The phone sits below the form on a phone, so the email arrives when the
+  // phone is actually on screen, not off it while the visitor reads the form.
+  const phoneEl = heroCard.closest(".phone");
+  if (phoneEl) {
+    const seen = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { seen.disconnect(); arrive(); }
+    }, { threshold: 0.4 });
+    seen.observe(phoneEl);
+  } else {
+    arrive();
+  }
   // Failsafe: a card must never STAY undecided. If the observer misfires,
   // everything plays out on its own.
-  setTimeout(() => cards.forEach((card) => { if (!card.classList.contains("in")) play(card); }), 4000);
+  setTimeout(() => cards.forEach((card) => {
+    if (card.classList.contains("in")) return;
+    // The hero card belongs to its sequence once that has started; before it
+    // starts (phone never scrolled to), the opened resting screen gets its
+    // final values like every other card.
+    if (card === heroCard && arrived) return;
+    play(card);
+  }), 4000);
 } else {
   cards.forEach((card) => card.classList.add("in"));
 }
@@ -1163,7 +1270,7 @@ if (!reduced && "IntersectionObserver" in window) {
 if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
-    ".timeline, .versus, .whycard, .plans, .finance, .faqgrid, .closer > *");
+    ".timeline, .versus, .whycard, .plans, .finance, .faqgrid, .leaguepass, .closer > *");
   const rise = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -1185,23 +1292,49 @@ if (!reduced) {
   if (main) setTimeout(() => main.classList.add("shine"), 2600);
 }
 
-// On wide screens the phone drifts a touch slower than the page: depth,
-// without anything to learn.
-if (!reduced && window.matchMedia("(min-width: 881px)").matches) {
-  const phone = document.querySelector(".hero .phonewrap");
-  let queued = false;
-  window.addEventListener("scroll", () => {
-    if (queued || !phone) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      // Phone and its caption move as one, and never more than 25px: the
-      // drift must not carry either onto the section below.
-      const y = Math.min(window.scrollY, 500);
-      phone.style.transform = "translateY(" + (y * 0.05).toFixed(1) + "px)";
-    });
-  }, { passive: true });
-}
+// The season clock. week.json is written by the same Tuesday build as
+// this-week.html: the week its report covers, the season's last week, and
+// lands_on, the Tuesday the NEXT report goes out (from the NFL schedule, never
+// typed). The line shows only in the eight days before that Tuesday, so a
+// missed build goes quiet the day after, and a preseason file built for Week 1
+// in May never claims a report "lands Tuesday" months early. Anything wrong
+// with the file leaves the static sentence alone; nothing here can throw past
+// the try, so it can never take the rest of this script down with it.
+(function () {
+  try {
+    const clock = document.getElementById("season-clock");
+    if (!clock || !window.fetch) return;
+    fetch("week.json", { cache: "no-cache",
+      signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return;
+        const left = w.last_week - w.week;
+        if (left < 1 || !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) return;
+        const lands = new Date(w.lands_on + "T23:59:59");     // the visitor's own day
+        const now = new Date();
+        const ahead = lands - now;
+        if (!(ahead >= 0 && ahead <= 8 * 864e5)) return;
+        const today = lands.toDateString() === now.toDateString();
+        // On a Tuesday after that day's report went out, the next one is a
+        // week away: "lands Tuesday" would read as today.
+        const when = today ? "today." : now.getDay() === 2 ? "next Tuesday." : "Tuesday.";
+        const target = document.getElementById("season-clock");
+        if (!target) return;
+        target.replaceChildren();
+        const strong = document.createElement("span");
+        strong.className = "clock";
+        strong.textContent = "Week " + (w.week + 1) + "'s report lands " + when;
+        target.appendChild(strong);
+        // A calendar fact, not a count of anybody's reports: plenty of leagues
+        // finish in Week 17, so "N reports left" would overstate it for them.
+        target.appendChild(document.createTextNode(
+          " " + left + (left === 1 ? " regular-season week" : " regular-season weeks") +
+          " to go."));
+      })
+      .catch(() => {});
+  } catch (e) { /* the static sentence stays */ }
+})();
 
 // The phone-width bar: shown only while neither the hero nor the closer (each
 // with its own button) is on screen.

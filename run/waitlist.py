@@ -52,17 +52,17 @@ CAMPAIGN = "launch-2026"
 # Same standard run/registry.py applies, so a bad row cannot reach a provider.
 EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[a-zA-Z]{2,}$")
 
-SUBJECT = "Signups are open — first report lands Tuesday"
+SUBJECT = "Signups are open — your first report lands the day you join"
 
 BODY = """\
 You asked to hear when this opened. It's open.
 
 {brand}
 
-You type your roster once. Every Tuesday morning you get one file: the lineup
-we would set and what each call is worth, the one decision worth arguing about,
-and who is actually earning the ball — real target and carry counts, not
-adjectives.
+You type your roster once and your first report lands the day you join. Then
+every Tuesday morning: the lineup we would set with the odds on the close calls,
+the one decision worth arguing about, and who is actually earning the ball —
+real target and carry counts, not adjectives.
 
   {url}
 

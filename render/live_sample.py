@@ -46,6 +46,36 @@ def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
     return report
 
 
+def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
+    """The Tuesday the NEXT weekly report goes out: the first Tuesday after the
+    last game of ``week`` (the week this build's report covers), as an ISO
+    date. None when the schedule cannot say."""
+    from datetime import date, timedelta
+    from run.solo import _schedule, _weeks
+    days = (_weeks(_schedule(cache_dir), season).get(int(week)) or [])
+    if not days:
+        return None
+    last = date.fromisoformat(max(days))
+    ahead = (1 - last.weekday()) % 7 or 7            # Tuesday is weekday 1
+    return (last + timedelta(days=ahead)).isoformat()
+
+
+def write_week_json(report: dict, path: Path, lands_on: str | None = None) -> None:
+    """The season clock the landing page reads (site/week.json): the week this
+    report covers, the season's last week, and the day the next report lands,
+    so the hero can say "Week 7's report lands Tuesday" from the schedule
+    rather than from a sentence somebody typed in September. Written beside
+    the live page by the same build, committed by the same persist step. The
+    page shows the line only in the days just before ``lands_on``."""
+    import json
+    meta = report["meta"]
+    path.write_text(json.dumps({
+        "season": meta["season"], "week": meta["week"],
+        "last_week": meta.get("last_week"), "lands_on": lands_on,
+        "built_at": meta.get("generated_at"),
+    }, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=LIVE_OUT)
@@ -60,6 +90,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args.out.write_text(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")),
                         encoding="utf-8")
+    try:
+        lands_on = next_report_day(CACHE_DIR, report["meta"]["season"],
+                                   report["meta"]["week"])
+    except Exception:  # noqa: BLE001 — no date means the page says nothing new
+        lands_on = None
+    write_week_json(report, args.out.with_name("week.json"), lands_on)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

@@ -24,7 +24,7 @@
 <style>
   :root{
     --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
-    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --brick:#B3402F;
+    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
     --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
@@ -138,6 +138,11 @@
   .row .fix button{font-size:12px;padding:5px 9px;background:#fff;
     border:1px solid var(--line);color:var(--ink);font-weight:700;cursor:pointer;}
   .row .fix button:hover{border-color:var(--navy);}
+  /* A row offering a choice lists it under the name: in a side column the
+     buttons took their full width and squeezed the name to a word per line. */
+  .row{grid-template-columns:minmax(0,1fr) auto;}
+  .row.choose{grid-template-columns:1fr;}
+  .row.choose .fix{justify-content:flex-start;}
   .row .drop{color:var(--slate);border-style:dashed;}
   .twin{font-size:12px;color:#8A6A10;font-weight:600;}
   .tally{margin-top:10px;font-size:13px;color:var(--slate);font-weight:600;}
@@ -181,8 +186,22 @@
   #player-search{border-radius:3px;}
   textarea{border-radius:3px;}
   #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:3px;}
-  #submit{background:linear-gradient(180deg,#24924F,var(--turf));
-    box-shadow:0 10px 22px -12px rgba(30,122,70,.8);}
+  /* Green moves you forward through the steps; gold is the one button that
+     leaves for checkout — the same gold as every primary button on the site. */
+  #submit{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
+    color:var(--navy);box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
+  .optlabel{margin:16px 0 0;font-size:12px;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink2);}
+  .optlabel + .opts{margin-top:6px;}
+  #opt-plan{margin-bottom:6px;}
+  #lbl-plan{margin-top:0;}
+  /* The closed state of the checkout button: the landing's switched-off shape,
+     still pressable so it can say what to do instead. */
+  #submit.is-closed{background:#EEEBE2;color:var(--slate);border:1.5px dashed #C9C3B4;
+    box-shadow:none;}
+  #submit.is-closed:hover{transform:none;}
+  .retry{margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
+    font-size:14px;padding:9px 14px;}
   .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
     font-size:12.5px;color:var(--slate);font-weight:600;}
   .secure svg{width:12px;height:14px;flex:none;}
@@ -204,7 +223,10 @@
     color:var(--flag);line-height:1;margin-bottom:4px;}
   .side a{color:var(--flag);}
   .side .trust{margin-top:16px;padding-top:14px;border-top:1px solid rgba(246,244,238,.14);
-    display:grid;gap:6px;font-size:12.5px;color:#C9D4E2;}
+    display:grid;gap:6px;font-size:13px;color:#C9D4E2;}
+  .side .trust span{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:start;}
+  .side .trust span::before{content:"";width:12px;height:12px;margin-top:3px;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4 6 10.2l5-6' fill='none' stroke='%23F2C230' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;}
   header .note{color:#F6F4EE;background:rgba(242,194,48,.1);border-left:3px solid var(--flag);
     padding:10px 12px;font-size:13px;}
   header .note a{color:var(--flag);}
@@ -244,22 +266,27 @@
     <div class="eyebrow">1 · Your league's settings</div>
     <div class="note">Scoring and league size decide how every player in your
     report is scored, so every number matches your league.</div>
-    <div class="opts" id="opt-scoring">
+    <div class="optlabel" id="lbl-scoring">Scoring</div>
+    <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
       <label><input type="radio" name="scoring" value="half_ppr">Half PPR</label>
       <label><input type="radio" name="scoring" value="standard">Standard</label>
     </div>
-    <div class="opts" id="opt-size">
+    <div class="optlabel" id="lbl-size">League size</div>
+    <div class="opts" id="opt-size" role="radiogroup" aria-labelledby="lbl-size">
       <label><input type="radio" name="size" value="8">8 teams</label>
       <label><input type="radio" name="size" value="10">10 teams</label>
       <label><input type="radio" name="size" value="12" checked>12 teams</label>
       <label><input type="radio" name="size" value="14">14 teams</label>
     </div>
-    <div class="opts" id="opt-template">
+    <div class="optlabel" id="lbl-template">Starting lineup</div>
+    <div class="opts" id="opt-template" role="radiogroup" aria-labelledby="lbl-template">
       <label><input type="radio" name="template" value="std" checked>Standard lineup</label>
       <label><input type="radio" name="template" value="sf">Superflex</label>
       <label><input type="radio" name="template" value="nokd">No K or DEF</label>
     </div>
+    <div class="note">Standard is QB, 2 RB, 2 WR, TE, FLEX, K and DEF. Superflex adds a
+    second flex that can take a quarterback.</div>
   </section>
 
   <section id="step-roster">
@@ -281,14 +308,23 @@ Baltimore Ravens
     <button id="resolve" type="submit">Check my roster</button>
     </form>
     <div class="err" id="err-roster"></div>
+    <button type="button" id="retry-dir" class="retry" style="display:none">Try loading the player list again</button>
     <div id="rows"></div>
     <div class="tally" id="tally"></div>
   </section>
 
   <section id="step-email" class="hidden">
-    <div class="eyebrow">3 · Where do reports go?</div>
+    <div class="eyebrow" id="step3-head">3 · Where do reports go?</div>
     <div class="note" id="seat-share" style="display:none"></div>
     <form id="form-email" novalidate>
+      <div class="optlabel" id="lbl-plan" style="display:none">Your plan</div>
+      <!-- autocomplete=off: a browser restoring form state on Back would
+           re-check Monthly after the script had drawn the season price. -->
+      <div class="opts" id="opt-plan" role="radiogroup" aria-labelledby="lbl-plan" style="display:none">
+        <label><input type="radio" name="plan" value="season" autocomplete="off" checked>Season pass · $39</label>
+        <label><input type="radio" name="plan" value="monthly" autocomplete="off">Monthly · $14.99</label>
+      </div>
+      <div class="optlabel" id="lbl-email" style="display:none">Where reports go</div>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
       <div id="pass-field" style="display:none">
         <input type="email" id="pass-email" autocomplete="off"
@@ -349,7 +385,7 @@ Baltimore Ravens
   <ul>
     <li><span><b>Your first report today</b>, then a new one every Tuesday morning</span></li>
     <li><span>Every slot decided for <b>your roster, your scoring</b></span></li>
-    <li><span><b>The odds on every close call</b>, so you know how sure to be</span></li>
+    <li><span><b>The odds on the close calls</b>, so you know how sure to be</span></li>
     <li><span>An <b>if/then plan</b> for late injury news, and a <b>Saturday final
       check</b> when it changes your lineup</span></li>
     <li><span>Your lineup set in <b>about ninety seconds</b></span></li>
@@ -358,9 +394,9 @@ Baltimore Ravens
   your roster and your league's scoring.
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
-    <span>✓ Risk-free: full refund, no questions, until your second report's week kicks off</span>
-    <span>✓ Cancel yourself in one click, any time</span>
-    <span>✓ No league login, no password — just your roster</span>
+    <span>Risk-free: full refund, no questions, until your second report's week kicks off</span>
+    <span>Cancel yourself in one click, any time</span>
+    <span>No league login, no password — just your roster</span>
   </div>
 </aside>
 </div>
@@ -399,7 +435,7 @@ const FORM_ENDPOINT = "";
 // above); set both to the same URL. Separate constants on purpose: the seat
 // path must keep working even if the owner ever splits the backends.
 const NOTIFY_LIST_ENDPOINT = "";
-// Deliberately EMPTY: no personal address ships on a public page.
+// The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 // Stripe accepts up to 200 chars of [A-Za-z0-9_-] and SILENTLY DROPS anything
 // else while still showing a working payment page. The browser is the only
@@ -416,6 +452,11 @@ const QUERY = new URLSearchParams(location.search);
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
 const WANTS_PASS = QUERY.get("plan") === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
+// The plan being bought RIGHT NOW. It starts from the card they clicked and
+// can be switched on the page (Oct 9 2026): a mid-season buyer arriving from
+// the hero used to see only the $39 season pass, with monthly reachable only
+// from the landing's other card. The submit handler reads this, never the URL.
+let monthlyChosen = WANTS_MONTHLY;
 
 // Say checkout is closed BEFORE someone pastes fifteen names, not after. The
 // end-of-flow message stays (nothing is saved and the page must say so), but
@@ -474,7 +515,8 @@ const TEMPLATES = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { directory: null, matches: [], ready: false };
+const state = { directory: null, matches: [], ready: false, dirFailed: false,
+                dirLoading: false };
 
 function radio(name) {
   const picked = document.querySelector(`input[name="${name}"]:checked`);
@@ -496,11 +538,34 @@ function textCell(className, text) {
   return node;
 }
 
-fetch("players.json", { signal: AbortSignal.timeout(15000) })
-  .then((r) => r.json())
-  .then((payload) => { state.directory = R.buildDirectory(payload); })
-  .catch(() => showError("err-roster",
-    "We couldn't load the player list just now — reload and try again."));
+// One failed download used to leave the page permanently unable to check a
+// roster, with "reload" as the only way out — and a reload loses the paste.
+function directoryFailedMessage() {
+  return "We couldn't load the player list just now." +
+    ($("roster-text").value.trim() ? " Your roster is still here." : "");
+}
+function loadDirectory() {
+  if (state.dirLoading || state.directory) return;
+  state.dirLoading = true;
+  state.dirFailed = false;
+  $("retry-dir").style.display = "none";
+  if ($("err-roster").textContent) showError("err-roster", "Loading the player list…");
+  return fetch("players.json", { signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined) })
+    .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then((payload) => {
+      state.directory = R.buildDirectory(payload);
+      showError("err-roster", "");
+    })
+    .catch(() => {
+      if (state.directory) return;          // an earlier attempt already won
+      state.dirFailed = true;
+      showError("err-roster", directoryFailedMessage());
+      $("retry-dir").style.display = "block";
+    })
+    .finally(() => { state.dirLoading = false; });
+}
+$("retry-dir").addEventListener("click", loadDirectory);
+loadDirectory();
 
 // Type-to-add: most people fix a roster one player at a time, and a typeahead
 // beats retyping into a paste box. Suggestions come from the same published
@@ -558,7 +623,12 @@ if (searchBox) {
 $("resolve").addEventListener("click", () => {
   showError("err-roster", "");
   if (!state.directory) {
-    showError("err-roster", "Still loading the player list — one moment.");
+    // "Still loading" is only true while the download is in flight; after a
+    // failure it was a promise nothing would keep (QA, Oct 9 2026).
+    showError("err-roster", state.dirFailed
+      ? directoryFailedMessage()
+      : "Still loading the player list — one moment.");
+    if (state.dirFailed) $("retry-dir").style.display = "block";
     return;
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
@@ -621,6 +691,7 @@ function draw() {
     const fix = document.createElement("div");
     fix.className = "fix";
     const options = match.player ? (match.twins || []) : match.candidates;
+    if (options.length) row.classList.add("choose");
     options.forEach((option) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -700,7 +771,7 @@ $("form-email").addEventListener("submit", (event) => {
   let ref;
   try {
     ref = R.encodeRoster(
-      WANTS_PASS ? "league_pass" : (WANTS_MONTHLY ? "monthly" : "season"),
+      WANTS_PASS ? "league_pass" : (monthlyChosen ? "monthly" : "season"),
       radio("scoring"), template(), ids, leagueSize());
   } catch (err) {
     showError("err-email", "Something went wrong reading your roster — reload " +
@@ -732,7 +803,15 @@ $("form-email").addEventListener("submit", (event) => {
   }
 
   const link = WANTS_PASS ? STRIPE_LINK_PASS
-             : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+             : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+  const otherLink = WANTS_PASS ? ""
+             : monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY;
+  if (!link && otherLink) {
+    showError("err-email", (monthlyChosen ? "Monthly" : "The season pass") +
+      " isn't open yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
+      " is. Switch to it above and you can buy today.");
+    return;
+  }
   if (!link) {
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
@@ -741,7 +820,7 @@ $("form-email").addEventListener("submit", (event) => {
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: "waitlist", email: email }),
-        signal: AbortSignal.timeout(15000),
+        signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
       // fetch resolves on a 400 too — "we kept your email" after the backend
       // rejected the row would be this page claiming a save that didn't happen.
       }).then((response) => {
@@ -750,13 +829,15 @@ $("form-email").addEventListener("submit", (event) => {
           "setup. Your roster isn't saved (redoing it takes a minute), but we " +
           "kept your email: you'll get the link the morning checkout opens.");
       }).catch(() => {
-        showError("err-email", "Checkout isn't open just yet — we're finishing " +
-          "setup. Your roster isn't saved, so please come back in a day or two.");
+        showError("err-email", "Checkout isn't open just yet. Your roster isn't saved, but " +
+          "leave your email on the front page and you'll get one message the " +
+          "morning it opens.");
       });
       return;
     }
-    showError("err-email", "Checkout isn't open just yet — we're finishing " +
-      "setup. Your roster isn't saved, so please come back in a day or two.");
+    showError("err-email", "Checkout isn't open just yet. Your roster isn't saved, but " +
+      "leave your email on the front page and you'll get one message the " +
+      "morning it opens.");
     return;
   }
   if (WANTS_PASS) showSeatLink();
@@ -782,13 +863,13 @@ function submitSeat(email, ref) {
   }
   if (!FORM_ENDPOINT) {
     showError("err-email", "Seats aren't open just yet — we're finishing setup. " +
-      "Your roster isn't saved, so please come back in a day or two.");
+      "Nothing was sent or saved.");
     return;
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: email, covered_by: payer, ref: ref }),
-    signal: AbortSignal.timeout(15000),
+    signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     // Claimed, not granted: the seat is honoured only if a pass really covers
@@ -815,7 +896,7 @@ function submitUpdate(email, ref) {
       ? { kind: "update", email: email, ref: ref,
           replaces: UPDATE_SLUG, token: UPDATE_TOKEN }
       : { kind: "update_request", email: email, ref: ref }),
-    signal: AbortSignal.timeout(15000),
+    signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     // Received, not yet applied: the intake checks the token against the
@@ -833,13 +914,13 @@ function submitUpdate(email, ref) {
 function submitTrial(email, ref) {
   if (!FORM_ENDPOINT) {
     showError("err-email", "Free reports aren't open just yet — we're finishing " +
-      "setup. Your roster isn't saved, so please come back in a day or two.");
+      "setup. Nothing was sent or saved.");
     return;
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind: "trial", email: email, ref: ref }),
-    signal: AbortSignal.timeout(15000),
+    signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     $("form-email").style.display = "none";
@@ -869,74 +950,58 @@ function showSeatLink() {
   share.style.display = "block";
 }
 
-if (TRY_MODE) {
-  $("header-pitch").textContent =
-    "Try it free. Enter your league's settings and your roster, and we'll email " +
-    "you this week's report for your team — every close call decided, with the " +
-    "odds. One per person, no card.";
-  $("header-chips").replaceChildren();
-  ["Free — no card", "This week's report", "One per person"].forEach((text) => {
-    const chip = document.createElement("span");
-    chip.textContent = text;
-    $("header-chips").appendChild(chip);
-  });
-  $("submit").textContent = "Email me my free report";
-  $("pay-note").style.display = "none";
-  $("renew-note").style.display = "none";
-  $("terms-line").style.display = "none";
-  $("closed-note").style.display = "none";
-  $("first-note").style.display = "none";
-  $("trial-note").style.display = "list-item";
+// The static markup IS the season pass: its pitch, chips, terms and button.
+// Kept as node copies (never markup strings) so switching back restores it
+// exactly, including the bold price in the pitch.
+const SEASON_STATE = {};
+["header-pitch", "header-chips", "terms-line", "renew-note"].forEach((id) => {
+  SEASON_STATE[id] = [...$(id).childNodes].map((n) => n.cloneNode(true));
+});
+const SEASON_SUBMIT = $("submit").textContent;
+
+// A mode that charges nothing shows no checkout step and no currency line.
+function nothingToPay(stepLabel) {
+  document.querySelector(".progress .s3").textContent = stepLabel;
+  $("currency-note").style.display = "none";
   document.querySelector(".secure").style.display = "none";
-} else if (UPDATE_MODE) {
-  $("header-pitch").textContent =
-    "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
-    "and your next report is built from it. Nothing to pay. Enter the address " +
-    "your reports go to and we'll email you a button to confirm it.";
-  $("header-chips").replaceChildren();
-  ["Roster update", "Nothing to pay", "Confirmed by email"]
-    .forEach((text) => {
-      const chip = document.createElement("span");
-      chip.textContent = text;
-      $("header-chips").appendChild(chip);
-    });
-  $("submit").textContent = "Update my roster";
-  $("pay-note").style.display = "none";
-  $("renew-note").style.display = "none";
-  $("terms-line").style.display = "none";
-  $("closed-note").style.display = "none";
-  $("first-note").style.display = "none";
-  $("update-note").style.display = "list-item";
-} else if (SEAT_MODE) {
-  $("header-pitch").textContent =
-    "Seat already paid by your commissioner. Enter your own roster and you get " +
-    "your own report — not a copy of theirs. Nothing to pay.";
-  $("header-chips").replaceChildren();
-  ["Seat already paid by your commissioner", "Your own report",
-   "First report the day you join"].forEach((text) => {
-    const chip = document.createElement("span");
-    chip.textContent = text;
-    $("header-chips").appendChild(chip);
-  });
-  $("submit").textContent = "Claim my seat — already paid";
-  $("pass-field").style.display = "block";
-  $("seat-note").style.display = "list-item";
-  $("pay-note").style.display = "none";
-  $("renew-note").style.display = "none";
-  // A seat holder pays nothing, so billing terms would read as a charge
-  // waiting to happen — and the refund/cancel-from-your-account sentence is
-  // about money they never spent and an account they don't have.
-  $("terms-line").style.display = "none";
-  $("first-note").style.display = "none";
-  // Say seats aren't open BEFORE they paste fifteen names, same as checkout.
-  if (!FORM_ENDPOINT) {
-    const note = $("closed-note");
-    note.textContent = "Seats aren't open just yet — we're finishing setup. " +
-      "You're welcome to set up now to see how it works, but nothing is saved " +
-      "until they open.";
-    note.style.display = "block";
+}
+// Say it is not open BEFORE they paste fifteen names (the free report and the
+// roster update used to say so only at submit — the late disappointment the
+// checkout note exists to prevent). The submit handlers still refuse too.
+function closedUpFront(what) {
+  const note = $("closed-note");
+  note.textContent = what + " aren't open just yet — we're finishing setup. You're " +
+    "welcome to try the page, but nothing is sent or saved until they open.";
+  note.style.display = "block";
+}
+
+// Checkout closed is decided per plan (links arrive one at a time), and now
+// per CHOICE: switching to a plan whose link is still empty must say so
+// before anyone types an email, not after.
+const CLOSED_NOTE = [...$("closed-note").childNodes].map((n) => n.cloneNode(true));
+// ``other`` is the link of the plan NOT chosen, when there is a choice: links
+// arrive one at a time, so "checkout isn't open" while the other plan can be
+// bought this minute would turn away a sale the page could make.
+function noteClosedFor(link, other) {
+  const note = $("closed-note");
+  if (!link && other) {
+    note.textContent = (monthlyChosen ? "Monthly" : "The season pass") + " isn't " +
+      "open just yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
+      " is: pick it in step 3 to buy today.";
+  } else if (!link) {
+    note.replaceChildren(...CLOSED_NOTE.map((n) => n.cloneNode(true)));
   }
-} else if (WANTS_MONTHLY) {
+  note.style.display = link ? "none" : "block";
+  // A closed tier's button says so on the button: on a phone the header note
+  // is several screens above it, and "Continue to checkout — $39" over a
+  // checkout that cannot open read as bait (QA, Oct 9 2026).
+  if (!link) $("submit").textContent = "Checkout opens soon";
+  $("submit").classList.toggle("is-closed", !link);
+  $("submit").setAttribute("aria-disabled", link ? "false" : "true");
+  document.querySelector(".secure").style.display = link ? "" : "none";
+}
+
+function monthlyPlan() {
   $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
     "team's report: the lineup we'd set, with the odds on every close call. " +
@@ -955,6 +1020,91 @@ if (TRY_MODE) {
     "one per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
+  noteClosedFor(STRIPE_LINK_MONTHLY, STRIPE_LINK_SEASON);
+}
+
+function seasonPlan() {
+  Object.entries(SEASON_STATE).forEach(([id, nodes]) => {
+    $(id).replaceChildren(...nodes.map((n) => n.cloneNode(true)));
+  });
+  $("submit").textContent = SEASON_SUBMIT;
+  noteClosedFor(STRIPE_LINK_SEASON, STRIPE_LINK_MONTHLY);
+}
+
+if (TRY_MODE) {
+  $("header-pitch").textContent =
+    "Try it free. Enter your league's settings and your roster, and we'll email " +
+    "you this week's report for your team — every close call decided, with the " +
+    "odds. One per person, no card.";
+  $("header-chips").replaceChildren();
+  ["Free — no card", "This week's report", "One per person"].forEach((text) => {
+    const chip = document.createElement("span");
+    chip.textContent = text;
+    $("header-chips").appendChild(chip);
+  });
+  $("submit").textContent = "Email me my free report";
+  nothingToPay("3 · Send");
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+  $("terms-line").style.display = "none";
+  if (FORM_ENDPOINT) { $("closed-note").style.display = "none"; }
+  else { closedUpFront("Free reports"); }
+  $("first-note").style.display = "none";
+  $("trial-note").style.display = "list-item";
+  document.querySelector(".secure").style.display = "none";
+} else if (UPDATE_MODE) {
+  $("header-pitch").textContent =
+    "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
+    "and your next report is built from it. Nothing to pay. Enter the address " +
+    "your reports go to and we'll email you a button to confirm it.";
+  $("header-chips").replaceChildren();
+  ["Roster update", "Nothing to pay", "Confirmed by email"]
+    .forEach((text) => {
+      const chip = document.createElement("span");
+      chip.textContent = text;
+      $("header-chips").appendChild(chip);
+    });
+  $("submit").textContent = "Update my roster";
+  nothingToPay("3 · Confirm");
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+  $("terms-line").style.display = "none";
+  if (FORM_ENDPOINT) { $("closed-note").style.display = "none"; }
+  else { closedUpFront("Roster updates"); }
+  $("first-note").style.display = "none";
+  $("update-note").style.display = "list-item";
+} else if (SEAT_MODE) {
+  $("header-pitch").textContent =
+    "Seat already paid by your commissioner. Enter your own roster and you get " +
+    "your own report — not a copy of theirs. Nothing to pay.";
+  $("header-chips").replaceChildren();
+  ["Seat already paid by your commissioner", "Your own report",
+   "First report next Tuesday"].forEach((text) => {
+    const chip = document.createElement("span");
+    chip.textContent = text;
+    $("header-chips").appendChild(chip);
+  });
+  $("submit").textContent = "Claim my seat — already paid";
+  nothingToPay("3 · Claim");
+  $("pass-field").style.display = "block";
+  $("seat-note").style.display = "list-item";
+  $("pay-note").style.display = "none";
+  $("renew-note").style.display = "none";
+  // A seat holder pays nothing, so billing terms would read as a charge
+  // waiting to happen — and the refund/cancel-from-your-account sentence is
+  // about money they never spent and an account they don't have.
+  $("terms-line").style.display = "none";
+  $("first-note").style.display = "none";
+  // Say seats aren't open BEFORE they paste fifteen names, same as checkout.
+  if (!FORM_ENDPOINT) {
+    const note = $("closed-note");
+    note.textContent = "Seats aren't open just yet — we're finishing setup. " +
+      "You're welcome to set up now to see how it works, but nothing is saved " +
+      "until they open.";
+    note.style.display = "block";
+  }
+} else if (WANTS_MONTHLY) {
+  monthlyPlan();
 } else if (WANTS_PASS) {
   $("submit").textContent = "Buy the League Pass — $99";
   // The pass buyer must never read a $39 pitch above a $99 button — every
@@ -978,6 +1128,34 @@ if (TRY_MODE) {
     "weekly report's week kicks off — one per league.";
   $("renew-note").textContent = passTerms;
   $("terms-line").textContent = passTerms;
+}
+
+// Every paying mode, from the first paint: the button and the secure line say
+// whether THIS plan can take money yet.
+if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
+  noteClosedFor(WANTS_PASS ? STRIPE_LINK_PASS
+                : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON);
+}
+
+// Season ⇄ monthly, on the page. Never offered to a seat holder, an update,
+// a free report or a League Pass buyer: each of those is buying something
+// else (or nothing), and their own branch above set the page for it.
+if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
+  $("lbl-plan").style.display = "block";
+  $("lbl-email").style.display = "block";
+  $("opt-plan").style.display = "flex";
+  $("step3-head").textContent = "3 · Your plan and email";
+  document.querySelector(
+    'input[name="plan"][value="' + (monthlyChosen ? "monthly" : "season") + '"]').checked = true;
+  const applyPlan = () => {
+    monthlyChosen = radio("plan") === "monthly";
+    showError("err-email", "");
+    if (monthlyChosen) { monthlyPlan(); } else { seasonPlan(); }
+  };
+  $("opt-plan").addEventListener("change", applyPlan);
+  // A page brought back from the browser's history can have its radios
+  // restored AFTER this script ran: draw whatever is actually checked.
+  window.addEventListener("pageshow", applyPlan);
 }
 </script>
 </body>
