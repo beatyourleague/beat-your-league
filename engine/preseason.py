@@ -1,4 +1,4 @@
-"""The pre-season file — what we can tell a subscriber before any game exists.
+"""The pre-season report — what we can tell a subscriber before any game exists.
 
 Sold and delivered the moment somebody pays, which is the whole point. The
 weekly product cannot say anything until box scores exist, so a buyer who paid
@@ -14,7 +14,7 @@ limitation.** Two sources, both already cached:
 
 So nothing here is a projection, a probability or a ranking of what WILL happen.
 That means it carries no calibration burden at all: the frozen method's Grade C
-governs published *predictions*, and this file makes none. It states what
+governs published *predictions*, and this report makes none. It states what
 happened and what the schedule already says. Read the register that follows out
 of that: "Kittle scored 12.4 a game last season" is a record; "Kittle will score
 12.4" would be a claim we have not earned and do not make.
@@ -27,7 +27,7 @@ renders as no record. A zero would read as "he was terrible" when the truth is
 RULE P2 — a bye collision is only claimed where the roster genuinely cannot fill
 a slot. The check places the players who ARE available into the starting
 template; a week is only flagged when a slot is left empty. Saying "your RBs are
-on bye" when a third RB covers it would be a false alarm, and a file that cries
+on bye" when a third RB covers it would be a false alarm, and a report that cries
 wolf in August is not read in October.
 """
 
@@ -45,7 +45,7 @@ from ingest.nflverse import bye_teams
 # are the ones a manager can still plan around.
 SEASON_WEEKS = range(1, 19)
 
-# What the file says when it has nothing on somebody. Buyer vocabulary: this is
+# What the report says when it has nothing on somebody. Buyer vocabulary: this is
 # an absence of evidence, said plainly, never a zero.
 NO_RECORD = "no record last season"
 
@@ -97,6 +97,18 @@ def unfillable_slots(slots: Sequence[str],
     return empty
 
 
+def _current_week(cache_dir: Path, season: str) -> int | None:
+    """The week being played now, from the schedule release — run.solo's own
+    calendar, so the roster report and the weekly report cannot disagree about
+    which weeks are behind us. None when the schedule cannot say, and then no
+    week is dropped: a bye listed late is better than a real one hidden."""
+    try:
+        from run.solo import current_week
+        return int(current_week(Path(cache_dir), str(season)))
+    except Exception:  # noqa: BLE001 — an unreadable schedule drops nothing
+        return None
+
+
 def bye_by_team(cache_dir: Path, season: str) -> dict[str, int]:
     """team -> the week it is idle. Straight off the published schedule.
 
@@ -136,7 +148,7 @@ def prior_season_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
 
 
 # Half a season. A rank built on three good games would be a small-sample
-# artefact dressed as a fact, and this file's whole claim is that everything in
+# artefact dressed as a fact, and this report's whole claim is that everything in
 # it is a fact. Below the bar a player simply has no rank, stated as such.
 RANK_MIN_GAMES = 8
 
@@ -151,7 +163,7 @@ def positional_ranks(form: Mapping[str, Mapping[str, float]],
                      ) -> dict[str, tuple[str, int, int]]:
     """player -> (position, rank, pool size) by last season's points per game.
 
-    The number the file already prints — "18.7 a game" — does not tell a
+    The number the report already prints — "18.7 a game" — does not tell a
     reader whether that is good. "WR3 of 159" does, instantly, in the
     vocabulary they already think in. And because it is scored under THIS
     subscriber's rules, the rank is theirs rather than a generic one: a
@@ -186,16 +198,27 @@ def build_preseason_report(
     prior_season: str | None = None,
     season_started: bool = False,
     byes: Mapping[str, int] | None = None,
+    from_week: int | None = None,
 ) -> dict[str, Any]:
-    """One subscriber's pre-season file: byes, thin spots and last year's record.
+    """One subscriber's pre-season report: byes, thin spots and last year's
+    record.
 
-    ``byes`` is passed in when a batch builds several files: the schedule is
+    ``byes`` is passed in when a batch builds several reports: the schedule is
     the same for everybody, and reading it per subscriber would make a hundred
     subscribers cost a hundred times what one does — the opposite of the shared
     per-week load run/solo.py exists to provide.
+
+    ``from_week`` is the first week still worth planning around. Once the
+    season has started it defaults to the current week, read off the same
+    schedule: a Week-6 buyer was told "Week 5: no one to start at DEF" under
+    an opener promising "the weeks ahead", and the subject line counted it
+    (launch audit C7, Oct 2026). A week already played is not a problem to
+    plan around; it is a week somebody lost.
     """
     by_id = {p.player_id: p for p in directory.players}
     byes = dict(byes) if byes is not None else bye_by_team(cache_dir, season)
+    if from_week is None and season_started:
+        from_week = _current_week(cache_dir, season)
     form = prior_season_form(prior, spec.rule)
     ranks = positional_ranks(form, directory)
     slots = list(spec.slots)
@@ -206,7 +229,7 @@ def build_preseason_report(
         if player is None:
             # A roster is validated at intake, so this is defence in depth: a
             # player the directory lost between then and now is named as
-            # unknown rather than silently dropped from his own owner's file.
+            # unknown rather than silently dropped from his own owner's report.
             roster.append({"player_id": player_id, "name": player_id,
                            "position": "UNK", "team": None, "bye": None,
                            "record": None, "no_record_reason": NO_RECORD})
@@ -232,7 +255,9 @@ def build_preseason_report(
     # Bye collisions, week by week. Only weeks where a slot is genuinely left
     # empty (RULE P2), and each one names the slots so it is actionable.
     collisions: list[dict[str, Any]] = []
-    for week in SEASON_WEEKS:
+    weeks_ahead = [week for week in SEASON_WEEKS
+                   if from_week is None or week >= from_week]
+    for week in weeks_ahead:
         out_this_week = {r["player_id"] for r in roster if r["bye"] == week}
         if not out_this_week:
             continue
@@ -276,9 +301,16 @@ def build_preseason_report(
             "slots": slots,
             "solo": True,
             "preseason": True,
-            # The same content serves a mid-season buyer, but the file must not
-            # call itself pre-season in October.
+            # The same content serves a mid-season buyer, but the report must
+            # not call itself pre-season in October.
             "season_started": bool(season_started),
+            # The first week the bye check covers, and whether any bye on
+            # the roster is still ahead of it — so a report sent after the
+            # last bye says that, rather than "every bye is covered".
+            "from_week": from_week,
+            "byes_ahead": any(r["bye"] is not None
+                              and (from_week is None or r["bye"] >= from_week)
+                              for r in roster),
         },
         "roster": roster,
         "collisions": collisions,

@@ -23,7 +23,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Collection, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from engine.availability import (
     PlayerStatus, Status, WeekAvailability, load_week_availability,
@@ -526,6 +526,18 @@ TEAM_RANGE_DOUBTFUL_STARTER = (
     "lineup below flags who.")
 
 
+# The same withheld total when somebody on the bench COULD replace an absent
+# starter but was himself out on last week's report (launch audit R4). "Your
+# roster had nobody eligible to replace him" was false — Breece Hall sat on the
+# bench at 9.6 under a seated bye-week starter — and the reader who believed it
+# went looking for a waiver pickup they may not need. What is true is that
+# nobody on the bench is cleared yet.
+TEAM_RANGE_STANDIN_STARTER = (
+    "no projected total — your {slots} {verb} this week, and nobody on your "
+    "bench is cleared to replace {them} yet. Any total we showed would count "
+    "points that may not happen. The lineup below flags who.")
+
+
 def _absent_starters(picks: list[SlotPick]) -> list[SlotPick]:
     """Seated starters who are not expected to play (bye, reserve list, or
     out on the injury report the gate reads)."""
@@ -542,20 +554,29 @@ def _ruled_out_last_week(pick: SlotPick) -> bool:
                 and pick.status.reason.startswith("designated "))
 
 
-def team_range_gate(picks: list[SlotPick]) -> str:
+def team_range_gate(picks: list[SlotPick],
+                    standins: Mapping[str, Sequence[str]] | None = None) -> str:
     """Which reason applies. Unfillable slots first: it is the more specific
     fact and the only one the subscriber can act on. An absent starter comes
-    next, for the same reason — it names players and a slot to go fix."""
+    next, for the same reason — it names players and a slot to go fix.
+
+    ``standins`` (absent starter -> bench players out only on last week's
+    report who could start there) chooses the wording that does not claim the
+    roster had nobody (launch audit R4)."""
     if any(p.player_id is None for p in picks):
         return TEAM_RANGE_INCOMPLETE
     absent = _absent_starters(picks)
     if absent:
         slots = _join_words(sorted({p.slot for p in absent}))
-        wording = (TEAM_RANGE_DOUBTFUL_STARTER
-                   if any(_ruled_out_last_week(p) for p in absent)
+        doubtful = any(_ruled_out_last_week(p) for p in absent)
+        them = "them" if len(absent) > 1 else "him"
+        if any((standins or {}).get(p.player_id or "") for p in absent):
+            return TEAM_RANGE_STANDIN_STARTER.format(
+                slots=slots, them=them,
+                verb="may not play" if doubtful else "can't play")
+        wording = (TEAM_RANGE_DOUBTFUL_STARTER if doubtful
                    else TEAM_RANGE_ABSENT_STARTER)
-        return wording.format(slots=slots,
-                              them="them" if len(absent) > 1 else "him")
+        return wording.format(slots=slots, them=them)
     return TEAM_RANGE_GATE
 
 
@@ -956,6 +977,7 @@ def _clearance_moves_a_seat(pick: SlotPick) -> bool:
 
 def late_news(my_picks: list[SlotPick], players: PlayerIndex,
               availability: WeekAvailability | None = None,
+              seat_ok: Callable[[str, SlotPick], bool] | None = None,
               ) -> list[tuple[str, SlotPick, bool, str]]:
     """The players whose Sunday news decides a slot:
     (name, pick, is_starter, player_id).
@@ -976,6 +998,12 @@ def late_news(my_picks: list[SlotPick], players: PlayerIndex,
     status on Sunday morning while its own if/then said "Keep X … if he's out,
     nothing changes": a chore whose answer was the same either way, and a
     thirty-second plan that cries wolf is one that stops being read.
+
+    ``seat_ok(bench_id, pick)``, when given, says whether that pick's starter
+    can still be benched once the bench player's news is in. A starter whose
+    game kicks off first cannot (launch audit R2/C1, Oct 2026: "start him over
+    RJ Harvey" about a Thursday-night back, on news that lands Friday), so
+    that seat is not one his news can move.
     """
     out: list[tuple[str, SlotPick, bool, str]] = []
     for pick in my_picks:
@@ -989,6 +1017,8 @@ def late_news(my_picks: list[SlotPick], players: PlayerIndex,
         if not alt or pick.projection is None:
             continue
         if availability.classify(alt).status is not Status.QUESTIONABLE:
+            continue
+        if seat_ok is not None and not seat_ok(alt, pick):
             continue
         if any(name == players.name(alt) for name, _, _, _ in out):
             continue
@@ -1010,16 +1040,40 @@ def late_news(my_picks: list[SlotPick], players: PlayerIndex,
 def pivots(
     my_picks: list[SlotPick], rival_picks: list[SlotPick], players: PlayerIndex,
     availability: WeekAvailability | None = None,
+    *,
+    news: list[tuple[str, SlotPick, bool, str]] | None = None,
+    stand_in: Callable[[SlotPick], tuple[str, float | None] | None] | None = None,
+    limit: int | None = 3,
 ) -> list[dict[str, str]]:
-    """If/then plan for late news, from questionable statuses + alternatives."""
+    """If/then plan for late news, from questionable statuses + alternatives.
+
+    ``news`` is late_news already worked out (so every surface names the same
+    players); ``stand_in(pick)`` picks who a questionable starter's plan moves
+    in — (id, projection) or None for nobody who can — when the caller knows
+    more than the slot's own alternative does (when each game kicks off);
+    ``limit`` None prints every plan, because a game-plan line that promises
+    "your if/then has the answer" must find one (launch audit R7)."""
     plans: list[dict[str, str]] = []
-    for name, pick, is_starter, _pid in late_news(my_picks, players, availability):
-        if is_starter and pick.alternative_id:
+    if news is None:
+        news = late_news(my_picks, players, availability)
+    for name, pick, is_starter, pid in news:
+        if is_starter:
+            if stand_in is not None:
+                found = stand_in(pick)
+            elif pick.alternative_id:
+                found = (pick.alternative_id,
+                         pick.alternative_projection.mean
+                         if pick.alternative_projection else None)
+            else:
+                found = None
+            if found is None:
+                continue
+            alt_id, alt_mean = found
             plans.append({
                 "condition": f"{name} ({pick.slot}) is ruled out",
-                "action": f"Move {players.name(pick.alternative_id)} into {pick.slot}"
-                          + (f" (projects {pick.alternative_projection.mean:.1f})"
-                             if pick.alternative_projection else ""),
+                "action": f"Move {players.name(alt_id)} into {pick.slot}"
+                          + (f" (projects {alt_mean:.1f})" if alt_mean is not None else ""),
+                "about": pid,
             })
         elif not is_starter and pick.player_id and pick.projection:
             # DECIDE (owner review, Sep 29 2026): state what the projections
@@ -1034,6 +1088,7 @@ def pivots(
                 "condition": f"{name} (bench) is cleared to play",
                 "action": (f"Start {name} at {pick.slot} — he projects {theirs:.1f} "
                            f"to {starter}'s {mine:.1f}. If he's out, nothing changes."),
+                "about": pid,
             })
     for pick in rival_picks:
         if pick.status and pick.status.status is Status.QUESTIONABLE:
@@ -1043,7 +1098,7 @@ def pivots(
                 "action": "Their projected total drops — say nothing in the group "
                           "chat until their lineup locks.",
             })
-    return plans[:3]
+    return plans if limit is None else plans[:limit]
 
 
 def _season_record(season: Season, roster_id: int, before_week: int) -> tuple[int, int, int]:
@@ -1205,11 +1260,22 @@ def checklist(
     early_calls: bool = False,
     extra: Sequence[Mapping[str, str]] = (),
     late_news_skip: Collection[str] = (),
+    *,
+    news: list[tuple[str, SlotPick, bool, str]] | None = None,
+    planned: Collection[str] | None = None,
+    unplanned: Mapping[str, str] | None = None,
+    standins: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, str]]:
     """The game plan. ``extra`` items (the solo report's kickoff and
     cleared-player lines) go immediately before the late-news line, which
     stays last because it is the one item that waits for gameday;
-    ``late_news_skip`` names players one of those items already times."""
+    ``late_news_skip`` names players one of those items already times.
+
+    The solo report also passes what it worked out once for every surface:
+    ``news`` (late_news, timed), ``planned`` (players an if/then is printed
+    for) with ``unplanned`` (player -> the sentence for one who has none), and
+    ``standins`` (absent starter -> bench players out only on last week's
+    report who could start there)."""
     seated = [p for p in my_picks if p.player_id is not None]
     items: list[dict[str, str]] = []
     if current_starters is None:
@@ -1283,10 +1349,17 @@ def checklist(
         # week" said of him was a confident claim about a report not yet out.
         certain = [p for p in absent if not _ruled_out_last_week(p)]
         doubtful = [p for p in absent if _ruled_out_last_week(p)]
-        if certain:
+        # A bench player who was out only on LAST week's report may well play
+        # (launch audit F2), so "nobody eligible" / "nobody else can start
+        # there" was false whenever one sat there (R4: Breece Hall at 9.6
+        # under a bye-week Jahmyr Gibbs). Those starters get their own line
+        # naming him; the rest keep the sentence that is true of them.
+        cover = standins or {}
+        alone = [p for p in certain if not cover.get(p.player_id or "")]
+        if alone:
             named = ", ".join(
-                f"{players.name(p.player_id or '')} ({p.slot})" for p in certain)
-            verb = "isn't" if len(certain) == 1 else "aren't"
+                f"{players.name(p.player_id or '')} ({p.slot})" for p in alone)
+            verb = "isn't" if len(alone) == 1 else "aren't"
             items.append({
                 "action": f"{named} {verb} playing this week — we had nobody "
                           f"eligible to put in, so that's a zero unless you add "
@@ -1294,10 +1367,28 @@ def checklist(
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })
-        if doubtful:
+        for names, group in _by_standins(certain, cover):
+            one = len(names) == 1
+            zero = "that's a zero" if len(group) == 1 else "those are zeros"
+            items.append({
+                "action": f"{_named_slots(group, players)} "
+                          f"{'isn' if len(group) == 1 else 'aren'}'t playing this "
+                          f"week, and "
+                          + (f"the only bench player who could start there, "
+                             f"{names[0]}, was" if one else
+                             f"every bench player who could start there "
+                             f"({_join_words(list(names))}) was")
+                          + " out on last week's injury report. If "
+                          + ("he isn't" if one else "none is")
+                          + f" cleared, {zero} unless you add someone off waivers.",
+                "deadline": "before this week's first kickoff",
+                "urgency": "now",
+            })
+        alone = [p for p in doubtful if not cover.get(p.player_id or "")]
+        if alone:
             named = ", ".join(
-                f"{players.name(p.player_id or '')} ({p.slot})" for p in doubtful)
-            one = len(doubtful) == 1
+                f"{players.name(p.player_id or '')} ({p.slot})" for p in alone)
+            one = len(alone) == 1
             items.append({
                 "action": f"{named} {'was' if one else 'were'} out on last week's "
                           f"injury report and nobody else on your roster can "
@@ -1306,12 +1397,31 @@ def checklist(
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
             })
+        for names, group in _by_standins(doubtful, cover):
+            one = len(names) == 1
+            alone_pair = one and len(group) == 1
+            zero = "that's a zero" if len(group) == 1 else "those are zeros"
+            items.append({
+                "action": f"{_named_slots(group, players)} "
+                          f"{'was' if len(group) == 1 else 'were'} out on last "
+                          f"week's injury report, and so was "
+                          + (f"the only bench player who could start there, "
+                             f"{names[0]}" if one else
+                             f"every bench player who could start there "
+                             f"({_join_words(list(names))})")
+                          + ". Start whoever is cleared; if "
+                          + ("neither" if alone_pair else "nobody")
+                          + f" is, {zero} unless you add someone off waivers.",
+                "deadline": "before this week's first kickoff",
+                "urgency": "now",
+            })
         # The late-news item used to live only below this return, so the solo
         # product — the one that ships — never printed it, while the landing
         # page promised "the one player whose news you need to check".
         items.extend(extra)
         items.extend(_late_news_item(my_picks, players, availability,
-                                     skip=late_news_skip))
+                                     skip=late_news_skip, news=news,
+                                     planned=planned, unplanned=unplanned))
         return items
 
     changes = [
@@ -1381,22 +1491,64 @@ def checklist(
     return items
 
 
+def _by_standins(picks: list[SlotPick], cover: Mapping[str, Sequence[str]]
+                 ) -> list[tuple[tuple[str, ...], list[SlotPick]]]:
+    """Absent starters who have stand-ins, grouped by WHO the stand-ins are,
+    in lineup order — two starters covered by the same two bench players are
+    one sentence, not two that read the same."""
+    groups: dict[tuple[str, ...], list[SlotPick]] = {}
+    for pick in picks:
+        names = tuple(cover.get(pick.player_id or "") or ())
+        if names:
+            groups.setdefault(names, []).append(pick)
+    return list(groups.items())
+
+
+def _named_slots(picks: list[SlotPick], players: PlayerIndex) -> str:
+    """"Kyle Monangai (RB), Stefon Diggs (FLEX)" — the checklist's own form."""
+    return ", ".join(f"{players.name(p.player_id or '')} ({p.slot})" for p in picks)
+
+
+ANSWER_EITHER_WAY = "Your if/then below already has the answer either way."
+
+
 def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
                     availability: WeekAvailability | None,
-                    skip: Collection[str] = ()) -> list[dict[str, str]]:
+                    skip: Collection[str] = (),
+                    news: list[tuple[str, SlotPick, bool, str]] | None = None,
+                    planned: Collection[str] | None = None,
+                    unplanned: Mapping[str, str] | None = None,
+                    ) -> list[dict[str, str]]:
     """``skip``: players another item already times — a Thursday-night player
     told to check his status on Sunday morning is told it three days after his
-    game locked (launch audit F7)."""
-    watch = [entry for entry in late_news(my_picks, players, availability)
-             if entry[3] not in skip]
+    game locked (launch audit F7).
+
+    With ``planned`` given, "your if/then already has the answer" is said only
+    of players an if/then is printed for (launch audit R7: it was said of a
+    lone quarterback with nobody behind him, and of three players whose plans
+    the cap had dropped); anyone else gets ``unplanned``'s plain sentence."""
+    if news is None:
+        news = late_news(my_picks, players, availability)
+    watch = [entry for entry in news if entry[3] not in skip]
     if not watch:
         return []
     names = [name for name, _, _, _ in watch]
     who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    if planned is None:
+        detail = ANSWER_EITHER_WAY
+    else:
+        answered = [name for name, _, _, pid in watch if pid in planned]
+        missing = [(unplanned or {}).get(pid) for _, _, _, pid in watch
+                   if pid not in planned]
+        parts = ([ANSWER_EITHER_WAY] if answered and not missing else
+                 [f"Your if/then below has the answer for {_join_words(answered)}."]
+                 if answered else [])
+        parts += [line for line in missing if line]
+        detail = " ".join(parts)
     return [{
         "action": f"Sunday morning: check {who}'s status" if len(names) == 1
                   else f"Sunday morning: check on {who}",
-        "detail": "Your if/then below already has the answer either way.",
+        **({"detail": detail} if detail else {}),
         "deadline": "gameday morning",
         "urgency": "deadline",
     }]
@@ -1427,7 +1579,26 @@ def _slot_json(pick: SlotPick, players: PlayerIndex) -> dict[str, Any]:
         "status": pick.status.status.value if pick.status else None,
         "status_reason": pick.status.reason if pick.status else None,
         "flags": pick.flags,
+        "short_games": _short_of_games(pick, players),
     }
+
+
+def _short_of_games(pick: SlotPick, players: PlayerIndex) -> list[str]:
+    """Who, of the two players in a slot's head-to-head, is the one short of
+    games — when that is why the slot carries no odds.
+
+    The row used to read "odds after 3 games" beside a starter with five games
+    on record and a usage line counting four of them (launch audit F11, the
+    live sample's running backs): the short record was his bench alternative's,
+    and the row blamed the man it sat beside. Measured on ``evidence``, the
+    same quantity the gate measured, so the name is the reason itself."""
+    if not (pick.confidence_gate or "").startswith("not enough games"):
+        return []
+    return [players.name(pid)
+            for pid, projection in ((pick.player_id, pick.projection),
+                                    (pick.alternative_id, pick.alternative_projection))
+            if pid and projection is not None
+            and projection.evidence < MIN_GAMES_FOR_CALL]
 
 
 def current_nfl_season(raw_dir: Path) -> str | None:

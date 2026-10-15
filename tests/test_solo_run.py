@@ -971,3 +971,84 @@ def test_injured_reserve_and_suspended_players_are_out_in_the_live_week(tmp_path
                                  today=date(2025, 3, 1))
     assert replay.availability.classify(target).status != Status.OUT or \
         "injured reserve" not in replay.availability.classify(target).reason
+
+
+def test_a_released_player_with_no_stat_row_is_out_not_unknown(tmp_path) -> None:
+    """Launch audit R1 (Oct 2026): the reserve-list rule never reached a player
+    with no stat row this season — the gate skipped him before it read his
+    players.csv status, so he stayed UNKNOWN, was seated unflagged and counted
+    in the total. Jake Moody (released) started at K with his old team's game
+    on his row. He is out of the REPORT now, with the plain reason and no game.
+
+    Not at the gate: the gate's call state stays exactly as it was (he is still
+    unplaced there), because giving him a record changes which bench player a
+    slot is measured against and published new percentages (see
+    tests/test_report_timing.py). A teamless player who is NOT on a reserve
+    list stays UNKNOWN everywhere (fail closed, unchanged)."""
+    cache = _cache(tmp_path)
+    path = cache / "players.csv"
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    columns = list(rows[0]) + ["status"]
+    for row in rows:
+        row["status"] = "ACT"
+    released, unplaced = "00-0099998", "00-0099997"
+    rows.append(dict(rows[0], gsis_id=released, display_name="Moe Released",
+                     position="K", status="CUT"))
+    rows.append(dict(rows[0], gsis_id=unplaced, display_name="Nate Newcomer",
+                     position="WR", status="ACT"))
+    _write(path, rows, columns)
+
+    live = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE,
+                               today=date(2024, 9, 12))
+    assert live.availability.classify(released).status is Status.UNKNOWN, \
+        "the gate's call state changed"
+    assert live.roster_out[released] == "released"
+    assert live.availability.classify(unplaced).status is Status.UNKNOWN
+
+    spec = RosterSpec(player_ids=tuple(_pid(i) for i in range(1, 9))
+                      + (released, unplaced), slots=SLOTS, scoring="ppr")
+    assert released not in solo._row_teams(spec, live), \
+        "a released player's row named a game"
+    report = solo.report_for(spec, live)
+    rows = [s for s in report["lineup"] if s["player_id"] == released] + \
+        [b for b in report["bench"] if b["player_id"] == released]
+    assert rows and "game" not in rows[0]
+    row = rows[0]
+    if "out_text" in row:
+        assert row["out_text"] == "released" and row["projected"] is None
+    else:
+        assert [f["text"] for f in row["flags"]] == ["OUT — released"]
+    # Replayed, today's release never reaches the week (principle 3).
+    replay = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE,
+                                 today=date(2025, 3, 1))
+    assert replay.roster_out == {}
+    assert replay.availability.classify(released).status is Status.UNKNOWN
+
+
+def test_the_live_weeks_row_shows_todays_team() -> None:
+    """Launch audit R5: a row's game came from the team on the player's LAST
+    STAT ROW — Marvin Harrison Jr. printed Arizona's game a week after he
+    became a Texan. In the week being played now, today's directory decides;
+    a replayed week still reads only the gate's team. A player on a reserve
+    list shows no game at all."""
+    from engine.availability import WeekAvailability as WA
+
+    mover = _pid(1)
+    directory = PlayerDirectory([Player(mover, "Aaron Armstrong", "QB", "HOU"),
+                                 Player(_pid(2), "Bell Cow", "RB", "SF")])
+    spec = RosterSpec(player_ids=(mover, _pid(2)), slots=("QB", "RB"), scoring="ppr")
+
+    class Data:
+        availability = WA("2026", 6, "w5",
+                          {mover: {"team": "ARI", "position": "QB", "active": True},
+                           _pid(2): {"team": "SF", "position": "RB", "active": False,
+                                     "out_reason": "on injured reserve"}},
+                          frozenset({"MIA"}))
+        is_live_week = True
+
+    Data.directory = directory
+    assert solo._row_teams(spec, Data) == {mover: "HOU"}
+    assert solo._live_teams(spec, Data) == {mover: "HOU"}
+    Data.is_live_week = False
+    assert solo._row_teams(spec, Data) == {mover: "ARI"}
+    assert solo._live_teams(spec, Data) == {}

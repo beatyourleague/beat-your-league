@@ -377,6 +377,11 @@ class WeekData:
     # describes today, so its teams may stand in for a row's team in that week
     # and never in a replayed one (principle 3).
     is_live_week: bool = False
+    # gsis -> why he can't play (injured reserve, PUP, released...), from
+    # TODAY's players release; empty unless this is the live week. The gate
+    # already reads it for every player it can place on a team; the report
+    # reads it for the rest (launch audit R1).
+    roster_out: dict = field(default_factory=dict)
 
 
 def _statuses(directory: PlayerDirectory,
@@ -401,6 +406,13 @@ def _statuses(directory: PlayerDirectory,
     because three prior appearances are required for a call and an appearance
     is a row with a team. When no season rows are supplied at all (a unit test
     of the report alone), the report's own team column stands in.
+
+    A teamless player on a reserve list or released (``roster_out``) is left
+    out HERE too, deliberately: this is the gate's call state, and giving him
+    a record changes which bench player a slot's odds are measured against —
+    measured on 240 live rosters, that published nine new percentages (launch
+    audit R1). He is out of the REPORT instead, through ``WeekData.roster_out``
+    and engine.solo_report.live_availability, which may only remove odds.
     """
     if injury is None or not injury.teams:
         return None
@@ -702,6 +714,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
     assert_week_is_complete(cache_dir, season, week, weekly)
 
     is_live_week = _is_live_week(cache_dir, season, week, today, session=session)
+    roster_out = _live_roster_out(players_csv, is_live_week)
     return WeekData(
         season=season,
         week=week,
@@ -711,8 +724,8 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         prior=prior,
         availability=_availability(cache_dir, season, week, directory,
                                    live=live, session=session, weekly=weekly,
-                                   roster_out=_live_roster_out(
-                                       players_csv, is_live_week)),
+                                   roster_out=roster_out),
+        roster_out=roster_out,
         # The same report the gate reads (week W-1's), in its own words.
         games=_week_games(cache_dir, season, week, live=live, session=session),
         listed=_listed_on_report(cache_dir, season, week - 1, live=live,
@@ -1063,6 +1076,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                confirmed_fallback=fallback_for(data.week, seeded),
                                schedule=getattr(data, "games", None) or {},
                                teams=_row_teams(spec, data),
+                               live_teams=_live_teams(spec, data),
+                               live_out=_live_out(spec, data),
                                injury_report=({"week": data.week - 1,
                                                "listed": getattr(data, "listed", {})}
                                               if data.week > 1 else None))
@@ -1080,27 +1095,60 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
 def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
     """player -> the team whose game his row shows.
 
-    The team the availability gate placed him on, so a row can never name one
-    game while its flag reads another team's bye. A defense's team is its id.
-    For the week being played now, today's directory fills the gap (week 1,
-    before anyone has a stat row); for a replayed week it never does — a 2024
-    sample row showing a 2026 team's opponent would be invented — so a replayed
-    week whose gate placed nobody shows no games at all rather than a lone
-    defense's."""
+    For a replayed week, the team the availability gate placed him on (his
+    last stat row's), and nothing else — a 2024 sample row showing a 2026
+    team's opponent would be invented — so a replayed week whose gate placed
+    nobody shows no games at all rather than a lone defense's.
+
+    For the week being played now, TODAY's directory team wins (launch audit
+    R5, Oct 2026). The gate's team is the one on his last stat row, which for a
+    player traded or signed since then is a team he no longer plays for: Marvin
+    Harrison Jr.'s row printed Arizona's game a week after he became a Texan.
+    The report reads the same directory, so when that team is on bye the row's
+    flag says so (engine.solo_report.live_availability) and the two cannot
+    disagree. A defense's team is its id.
+
+    A player on a reserve list or released shows NO game at all (R1): "@ CLE ·
+    Sun 1:00 PM ET" beside a released kicker named a game he is not in."""
     statuses = data.availability.statuses
     live_now = bool(getattr(data, "is_live_week", False))
     if statuses is None and not live_now:
         return {}
     today = {p.player_id: p.team for p in data.directory.players} if live_now else {}
+    gone = getattr(data, "roster_out", None) or {}
     out: dict[str, str] = {}
     for pid in spec.player_ids:
-        team = ((statuses or {}).get(pid) or {}).get("team")
-        if not team and pid.startswith("DEF-"):
-            team = pid.split("-", 1)[1]
-        team = team or today.get(pid)
+        record = (statuses or {}).get(pid) or {}
+        if pid.startswith("DEF-"):
+            team = record.get("team") or pid.split("-", 1)[1]
+        elif record.get("active") is False or pid in gone:
+            continue
+        else:
+            team = today.get(pid) or record.get("team")
         if team:
             out[pid] = str(team)
     return out
+
+
+def _live_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
+    """player -> TODAY's team, for the week being played now and no other
+    (principle 3: today's directory describes today). Defenses and players on
+    a reserve list are left out — neither has a team question to answer."""
+    if not getattr(data, "is_live_week", False):
+        return {}
+    gone = getattr(data, "roster_out", None) or {}
+    statuses = data.availability.statuses or {}
+    wanted = set(spec.player_ids)
+    return {p.player_id: str(p.team) for p in data.directory.players
+            if p.player_id in wanted and p.team and not p.player_id.startswith("DEF-")
+            and p.player_id not in gone
+            and (statuses.get(p.player_id) or {}).get("active") is not False}
+
+
+def _live_out(spec: RosterSpec, data: WeekData) -> dict[str, str]:
+    """player -> why he can't play, for this roster, the live week only."""
+    gone = getattr(data, "roster_out", None) or {}
+    return {pid: gone[pid] for pid in spec.player_ids if pid in gone}
 
 
 def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],

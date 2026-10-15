@@ -341,6 +341,10 @@ _GATE_PHRASES = (
     # week's news, including about players who had played through it.
     ("availability in doubt", "one of the two players was questionable last week"),
     ("not a live head-to-head", "one of the two players is out"),
+    # Launch audit F11: the bench HAS a player there, out or not yet cleared;
+    # "no bench player at that position" sat beside his bench row.
+    ("bench option not cleared", "your bench player at that position isn't cleared to play"),
+    ("held: the lineup changed", "the lineup changed around a player who can't play this week"),
     ("nobody on your bench", "no bench player at that position"),
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
@@ -376,10 +380,29 @@ def row_label(slot: Mapping[str, Any]) -> str:
     gate = slot.get("confidence_gate") or ""
     alt = slot.get("alternative_name")
     starter_ok = slot.get("status") == "active"
+    # Only a row whose player the if/then actually names may send the reader
+    # there (launch audit R7). Reports built before the field existed, and the
+    # league product, keep the old wording.
+    see = " · see if/then" if slot.get("if_then", True) else ""
     if gate.startswith("we don't put odds on defenses"):
         return "projection only"
     if gate.startswith("not enough games"):
+        # Name who is short (launch audit F11): "odds after 3 games" sat beside
+        # a starter with five games and a usage line counting four of them —
+        # the short record was his bench alternative's.
+        short = list(slot.get("short_games") or [])
+        if len(short) == 1:
+            return f"odds once {short[0]} has 3 games"
+        if len(short) == 2:
+            return "odds once both have 3 games"
         return "odds after 3 games"
+    if gate.startswith("bench option not cleared"):
+        held = slot.get("bench_held") or {}
+        name = held.get("name") or "your bench player"
+        return {"bye": f"{name} on bye", "roster": f"{name} can't play"}.get(
+            held.get("kind"), f"{name} not cleared yet")
+    if gate.startswith("held: the lineup changed"):
+        return "held this week"
     if gate.startswith("nobody on your bench"):
         return f"no bench {slot.get('slot', '')}".strip()
     if gate.startswith("no eligible player") or not gate:
@@ -389,8 +412,8 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # and the plain fact is that his odds wait on the bench player's news.
         return f"start · waiting on {alt}"
     if gate.startswith("availability in doubt"):
-        return "questionable · see if/then"
-    return "status open · see if/then"
+        return f"questionable{see}"
+    return f"status open{see}"
 
 
 def short_gate(gate: str | None, slot: str) -> str:
