@@ -596,7 +596,7 @@
       <li>Set your lineup in 90 seconds</li>
     </ul>
     <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b> One email when signups
-    open — nothing else, no card, unsubscribe in one click.</p>
+    open — nothing else, no card, unsubscribe any time.</p>
     <div class="cta-row">
       <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
       <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
@@ -860,7 +860,7 @@
       </details>
       <details>
         <summary>I'm in more than one league. What do I need?</summary>
-        <div class="a">Each team gets its own report and its own subscription, so most managers start with the league that has the most riding on it and add another the same way. One email address can hold several. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager with one payment.</div>
+        <div class="a">Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager with one payment.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
@@ -958,7 +958,7 @@
       "mainEntity": [
         {"@type": "Question", "name": "Does it work with my league app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — ESPN, Yahoo, Sleeper, CBS or any other. Paste your roster once (or pick names from a list) and we take it from there. No league login, no password."}},
         {"@type": "Question", "name": "Does it match my league's scoring?", "acceptedAnswer": {"@type": "Answer", "text": "For the settings most leagues use, yes: full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet."}},
-        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription, so most managers start with the league that has the most riding on it and add another the same way. One email address can hold several. Running a whole league? The League Pass covers every manager with one payment."}},
+        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several. Running a whole league? The League Pass covers every manager with one payment."}},
         {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
         {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
         {"@type": "Question", "name": "My league app already has an “optimize lineup” button. Why this?", "acceptedAnswer": {"@type": "Answer", "text": "That button fills your lineup from the app's projections when you open the app and press it. Your report comes to you on Tuesday with every close call decided and the reason in a line, an if/then for late news, and a check of Friday's injury report on Saturday — so you don't have to remember to look."}},
@@ -982,6 +982,20 @@ document.documentElement.classList.add("js");
 // ^[a-z0-9-]{1,24}$ and drops anything else without refusing the row.
 const VIA = (new URLSearchParams(location.search).get("via") || "")
   .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
 
 // Flip to true the day the Stripe Payment Links are pasted into site/join/.
 // It turns the pricing cards into live CTAs — both of which point at join/,
@@ -1188,6 +1202,15 @@ if (CHECKOUT_OPEN) {
       }
     }
   }
+}
+
+// AFTER every href this script writes: the open state's CTAs are rewritten or
+// built above, and a tag that skipped them dropped exactly the visitors who
+// were about to sign up.
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+  });
 }
 
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

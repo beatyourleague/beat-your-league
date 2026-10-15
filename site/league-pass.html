@@ -93,6 +93,15 @@
   .chatline button{flex:none;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
     letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
     border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
+  .chatline .blank{color:var(--flag);font-weight:700;white-space:nowrap;}
+  .chatline b{overflow-wrap:anywhere;}
+  .chatline-label{display:block;margin-top:10px;padding:3px 0;font-size:13.5px;line-height:1.5;
+    color:var(--dusk2);}
+  #chat-email{display:block;width:100%;margin-top:6px;padding:10px 12px;font:inherit;font-size:16px;
+    color:var(--paper);background:rgba(255,255,255,.06);border:1.5px solid var(--gold-edge);}
+  #chat-email:focus-visible{outline:2px solid var(--flag);outline-offset:1px;}
+  .chatline-msg{margin:6px 0 0;font-size:13.5px;color:var(--flag);}
+  .chatline-msg:empty{display:none;}
   .soon{margin-top:18px;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
     background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 16px;}
@@ -166,13 +175,34 @@
       <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their own
       report lands the next Tuesday.</li>
     </ol>
-    <p class="chatline-head">Something to paste in the group chat:</p>
-    <div class="chatline">
-      <p id="chat-text">I got us the League Pass from Beat Your League: everyone gets their own
-      lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours up
-      here: https://beatyourleague.com/join/?pass=1 and enter the email I paid with when it
-      asks.</p>
-      <button type="button" id="chat-copy">Copy</button>
+    <!-- The group-chat line (launch audit F4). Until the pass can be bought it
+         is an EXAMPLE with blanks: no live link and nothing to copy, because
+         "I got us the League Pass" is false before anybody has paid and the
+         seat link goes out only once a pass can be bought. The copyable
+         version carries the payer's email, because the seat form refuses a
+         claim without it. -->
+    <div id="chat-example">
+      <p class="chatline-head">What you'll send the group chat once you've paid:</p>
+      <div class="chatline">
+        <p>I got us the League Pass from Beat Your League: everyone gets their own lineup
+        report every Tuesday, built from their own roster. Nothing to pay. Set yours up here:
+        <span class="blank">[the link in your welcome email]</span> — and when it asks for my
+        email, enter <span class="blank">[the email you paid with]</span>.</p>
+      </div>
+    </div>
+    <div id="chat-live" hidden>
+      <p class="chatline-head">Once you've paid, paste this in the group chat:</p>
+      <label class="chatline-label" for="chat-email">The email you pay with — each manager
+      enters it to claim their seat. It stays on this page.</label>
+      <input type="email" id="chat-email" autocomplete="email" placeholder="you@example.com">
+      <div class="chatline">
+        <p id="chat-text">I got us the League Pass from Beat Your League: everyone gets their own
+        lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours up
+        here: https://beatyourleague.com/join/?pass=1 — and when it asks for my email, enter
+        <b id="chat-email-echo">[the email I paid with]</b>.</p>
+        <button type="button" id="chat-copy">Copy</button>
+      </div>
+      <p class="chatline-msg" id="chat-msg" role="status"></p>
     </div>
   </div>
 
@@ -202,6 +232,23 @@ const CHECKOUT_OPEN = false;
 // cannot keep: seats arrive through the form Worker. Flip this the day
 // FORM_ENDPOINT is set on the join page (launch audit, Oct 2026).
 const SEATS_OPEN = false;
+// A cookie-free source tag (?via=<channel>), carried onto the links below.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
 if (CHECKOUT_OPEN && SEATS_OPEN) {
   const slot = document.getElementById("league-cta");
   const link = document.createElement("a");
@@ -209,21 +256,62 @@ if (CHECKOUT_OPEN && SEATS_OPEN) {
   link.href = "join/index.html?plan=pass";
   link.textContent = "Buy the League Pass — $99";
   slot.replaceWith(link);
+  // Only now is the line true to send, so only now can it be copied.
+  document.getElementById("chat-example").hidden = true;
+  document.getElementById("chat-live").hidden = false;
+} else if (CHECKOUT_OPEN) {
+  // Checkout is open for one team while seats wait on the form Worker. The
+  // static "Leave your email" points at the landing's capture, which the
+  // landing hides once a purchase can complete — so in exactly this state a
+  // commissioner could neither buy nor leave an address (launch audit F3).
+  // CHECKOUT_OPEN agrees with the landing's (tests/test_site.py), and while it
+  // is false the landing's capture is always on the page.
+  const slot = document.getElementById("league-cta");
+  slot.replaceChildren(document.createTextNode("League Pass opens soon"));
+  const small = document.createElement("small");
+  const own = document.createElement("a");
+  own.href = "join/index.html";
+  own.textContent = "set up your own team";
+  small.append("It opens the day your league can claim its seats. Meanwhile, ", own, ".");
+  slot.appendChild(small);
 }
-// The group-chat line: one tap, then paste. Clipboard writes can be refused
-// (older browsers, in-app views); the text is selectable either way.
+// The group-chat line: one tap, then paste. It needs the payer's email in it
+// — the seat form refuses a claim without one — so Copy waits for it. The
+// email is written into the line as text and goes nowhere else. Clipboard
+// writes can be refused (older browsers, in-app views); the text is
+// selectable either way.
 const copy = document.getElementById("chat-copy");
 if (copy) {
+  const input = document.getElementById("chat-email");
+  const echo = document.getElementById("chat-email-echo");
+  const line = document.getElementById("chat-text");
+  const msg = document.getElementById("chat-msg");
+  const blank = echo.textContent;
+  const valid = () => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.value.trim());
+  input.addEventListener("input", () => {
+    echo.textContent = valid() ? input.value.trim() : blank;
+    msg.textContent = "";
+  });
   copy.addEventListener("click", () => {
-    const text = document.getElementById("chat-text").textContent.replace(/\s+/g, " ").trim();
-    const done = () => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 2000); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, () => {
-        window.getSelection().selectAllChildren(document.getElementById("chat-text"));
-      });
-    } else {
-      window.getSelection().selectAllChildren(document.getElementById("chat-text"));
+    if (!valid()) {
+      msg.textContent = "Add the email you pay with first — each manager needs it to claim a seat.";
+      input.focus();
+      return;
     }
+    const text = line.textContent.replace(/\s+/g, " ").trim();
+    const done = () => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 2000); };
+    const selectIt = () => window.getSelection().selectAllChildren(line);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, selectIt);
+    } else {
+      selectIt();
+    }
+  });
+}
+// AFTER every href this script writes (the Buy button, the own-team link).
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
   });
 }
 </script>

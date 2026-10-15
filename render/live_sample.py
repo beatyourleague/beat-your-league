@@ -64,6 +64,47 @@ LIVE_ROSTER = (
 SHOWCASE_MIN_ODDS = 3
 LIVE_OUT = REPO_ROOT / "site" / "this-week.html"
 
+# The ?via= channel tag, carried onto this page's links into the funnel. The
+# Tuesday posts link THIS page, and its "set it up" link dropped the tag, so a
+# signup from a tagged post was counted nowhere (launch audit F2). carryVia is
+# the funnel pages' own function, character for character (tests/test_site.py
+# compares every copy and runs it under node). URL only — nothing is stored.
+VIA_SCRIPT = r"""<script>
+"use strict";
+// A cookie-free source tag (?via=<channel>), carried onto the links below.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+  });
+}
+</script>
+"""
+
+
+def with_via_carry(page: str) -> str:
+    """The rendered page with VIA_SCRIPT just before its closing body tag (at
+    the end, so every link it decorates already exists)."""
+    head, tag, tail = page.rpartition("</body>")
+    if not tag:
+        return page + VIA_SCRIPT
+    return head + VIA_SCRIPT + tag + tail
+
 
 def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
           week: int | None = None) -> dict:
@@ -128,8 +169,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"this week's sample was not rebuilt ({exc}); the previous page "
               f"stays up.")
         return 0
-    args.out.write_text(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")),
-                        encoding="utf-8")
+    args.out.write_text(
+        with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))),
+        encoding="utf-8")
     try:
         lands_on = next_report_day(CACHE_DIR, report["meta"]["season"],
                                    report["meta"]["week"])

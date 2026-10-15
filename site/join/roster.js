@@ -217,6 +217,15 @@ function resolveLine(directory, typed) {
   return first;
 }
 
+// Not an error — a nudge shown inline. Bijan Robinson and Brian Robinson are
+// the same position on the same team, which is the one pair a confirm row
+// cannot separate on sight.
+function twinsOf(directory, player) {
+  return (directory.confusable.get(player.id) || [])
+    .map((id) => directory.byId.get(id))
+    .filter(Boolean);
+}
+
 function resolvePlain(directory, typed, keepLead) {
   const cleaned = stripDecoration(typed, directory.teams, keepLead);
   // Blank means no LETTER survives; letters of any script are reported back.
@@ -228,17 +237,7 @@ function resolvePlain(directory, typed, keepLead) {
   const found = [...new Map((directory.byName.get(key) || []).map((p) => [p.id, p])).values()];
   if (found.length === 1) {
     const player = found[0];
-    return {
-      typed,
-      player,
-      candidates: [],
-      // Not an error — a nudge shown inline. Bijan Robinson and Brian Robinson
-      // are the same position on the same team, which is the one pair a confirm
-      // row cannot separate on sight.
-      twins: (directory.confusable.get(player.id) || [])
-        .map((id) => directory.byId.get(id))
-        .filter(Boolean),
-    };
+    return { typed, player, candidates: [], twins: twinsOf(directory, player) };
   }
   if (found.length > 1) {
     return { typed, player: null, candidates: found, reason: "ambiguous" };
@@ -334,6 +333,18 @@ function enterPick(suggested, query) {
   return suggested.length === 1 ? suggested[0] : null;
 }
 
+// A player tapped in the typeahead joins the list ALREADY ON SCREEN as one more
+// row. The list carries decisions the paste box does not ("pick one" and
+// "remove" change the list, never the text), so re-reading the box on every
+// add silently undid them and blocked checkout again (launch audit F7). The
+// tapped player IS the answer — no lookup by name, which could come back
+// ambiguous for a name two players share. A new array: the old one is not
+// touched. Browser-only (Python never sees an unencoded list).
+function addPick(directory, matches, player) {
+  return matches.concat([{ typed: player.name, player, candidates: [],
+                           twins: twinsOf(directory, player) }]);
+}
+
 // ---------------------------------------------------------------- //
 // the signup reference — mirrors run/refs.py encode_roster
 // ---------------------------------------------------------------- //
@@ -414,8 +425,8 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
 // the global scope and a second `const REF_RE` is a SyntaxError that kills the
 // whole file silently from the page's point of view.
 const R = { normalize, stripDecoration, buildDirectory, resolveLine, resolveAll,
-            suggestPlayers, enterPick, encodeRoster, packOne, REF_RE, MAX_ROSTER,
-            SIZE_CODE };
+            suggestPlayers, enterPick, addPick, encodeRoster, packOne, REF_RE,
+            MAX_ROSTER, SIZE_CODE };
 if (typeof module !== "undefined" && module.exports) {
   module.exports = R;
 } else {
