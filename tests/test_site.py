@@ -890,6 +890,109 @@ def test_the_privacy_policy_does_not_claim_more_privacy_than_we_deliver() -> Non
                 f"runs no analytics")
 
 
+def _privacy_body() -> str:
+    page = (SITE / "privacy.html").read_text(encoding="utf-8")
+    return html.unescape(prose(re.sub(r"<[^>]+>", " ", page[page.find("<body>"):])))
+
+
+def _terms_body() -> str:
+    page = (SITE / "terms.html").read_text(encoding="utf-8")
+    return html.unescape(prose(re.sub(r"<[^>]+>", " ", page[page.find("<body>"):])))
+
+
+def test_the_privacy_policy_states_only_retention_something_performs() -> None:
+    """Reproduction (launch audit C3, Oct 15 2026): §4 said Cloudflare keeps
+    form rows "until we read it" — rows are never deleted on read and live
+    400 days; §7 said "the waitlist is cleared after the one message it was
+    for" — run/waitlist.py sends and returns, nothing clears anything; and it
+    said email, roster and settings are deleted "12 months afterwards" — no
+    code anywhere prunes the registry, the signup log or Stripe metadata. A
+    deletion promise nothing performs is a false statement about people's
+    data. What IS performed: the Worker's TTL."""
+    privacy = _privacy_body()
+    for retired in (r"until we read it", r"cleared after the one message",
+                    r"12 months after", r"up to 12 months"):
+        assert not re.search(retired, privacy, re.I), \
+            f"privacy promises a deletion nothing performs: {retired!r}"
+    worker = (SITE.parent / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    ttl = re.search(r"ROW_TTL_SECONDS\s*=\s*(\d+)\s*\*\s*24\s*\*\s*60\s*\*\s*60", worker)
+    assert ttl and "expirationTtl: ROW_TTL_SECONDS" in worker
+    days = int(ttl.group(1))
+    assert re.search(r"within about 13 months", privacy), \
+        "the one retention the code performs must be stated"
+    assert 365 < days <= 13 * 31, \
+        f"the Worker keeps rows {days} days; privacy says about 13 months"
+    assert re.search(r"no fixed date", privacy, re.I), \
+        "say plainly that nothing deletes the rest on a timer"
+    assert re.search(r"within 30 days", privacy), "a deletion request needs a response time"
+
+
+def test_the_privacy_policy_names_every_place_our_data_actually_goes() -> None:
+    """Reproduction (launch audit C5): mail to hello@ is forwarded to a Gmail
+    inbox (LAUNCH.md) — so Google holds every refund, deletion and roster
+    reply — and Google was not named; and Stripe was said to hold only the
+    payment and subscription while run/intake.py writes the encoded roster
+    (byl_roster_ref), the plan and the terms-acceptance record onto the
+    Customer, and the ref rides client_reference_id."""
+    privacy = _privacy_body()
+    assert re.search(r"Google \(Gmail\)", privacy), "the inbox hello@ forwards to"
+    assert re.search(r"Five service providers", privacy)
+    stripe = privacy[privacy.find("Stripe handles payment"):][:500]
+    for held in (r"roster", r"settings", r"accepting these terms"):
+        assert re.search(held, stripe), f"Stripe's record also holds {held!r}"
+    assert not re.search(r"we hold only a reference to it", privacy)
+
+
+def test_the_privacy_policy_names_the_channel_tag_and_the_stop_list() -> None:
+    """Reproduction (launch audit C8): the landing and join pages post `via`
+    with every form row and the Worker stores it beside the email, while the
+    policy said "That is everything we hold about you" without it. Same for
+    the stop list's digest (run/suppress.py), which the C4 fix added."""
+    worker = (SITE.parent / "infra" / "form-worker.js").read_text(encoding="utf-8")
+    privacy = _privacy_body()
+    # Section 1 is the itemised list; the summary box above it is not enough.
+    section1 = privacy[privacy.find("1. What we collect"):privacy.find("2. What we never")]
+    if re.search(r"\bvia\b", worker):
+        assert re.search(r"name of (that|the) channel", section1), \
+            "the Worker stores a channel tag the policy does not itemise"
+    if (SITE.parent / "run" / "suppress.py").exists():
+        assert re.search(r"stop emailing you", section1) and \
+            re.search(r"one-way digest", section1), "the stop list is held data"
+
+
+def test_the_terms_describe_one_cancel_flow() -> None:
+    """Reproduction (launch audit C2): §3 said "cancelling takes one click from
+    your billing page" while §4 — and every other surface — said enter your
+    email, open the link Stripe sends, press Cancel, about a minute. Two
+    descriptions of leaving in the document that wins every disagreement."""
+    terms = _terms_body()
+    assert not re.search(r"cancel\w*[^.;:]{0,60}\bone[\s-]+click|"
+                         r"\bone[\s-]+click[^.;:]{0,60}cancel", terms, re.I)
+    section3 = terms[terms.find("3. Price"):terms.find("4. How to cancel")]
+    assert re.search(r"in about a minute", section3)
+
+
+def test_the_terms_keep_reports_to_the_end_of_the_paid_period() -> None:
+    """Reproduction (launch audit C13): §4 said the reports "stop on their own
+    after that" (after cancelling) and, two sentences on, "you keep access for
+    the rest of the period you've already paid for" — and every report's
+    text half said "The reports stop on their own once you do"."""
+    terms = _terms_body()
+    assert re.search(r"continue to the end of the period you've already paid "
+                     r"for, then stop", terms)
+    assert not re.search(r"stop on their own after that", terms)
+
+
+def test_the_terms_give_a_seat_its_way_out() -> None:
+    """A League Pass seat has no billing, so §4's billing page is no route for
+    it (launch audit C4). The operative contract says what its emails say."""
+    from render.report import SEAT_STOP_BODY
+    terms = _terms_body()
+    assert re.search(r"A League Pass seat has no billing of its own", terms)
+    assert re.search(r'reply "stop"', terms) and "10 business days" in terms
+    assert "10 business days" in SEAT_STOP_BODY, "terms and emails must agree"
+
+
 def test_both_documents_are_reachable_and_the_old_url_still_resolves() -> None:
     """legal.html was live before the split. Nothing external points at it that
     we know of, but a 404 on a terms link is the worst possible broken link on

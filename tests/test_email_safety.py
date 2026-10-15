@@ -28,7 +28,7 @@ FORBIDDEN = [r"<style", r"@media", r"display\s*:\s*(flex|grid)", r"var\(--",
 GMAIL_CLIP = 102 * 1024
 
 
-def _report_email() -> str:
+def _report() -> dict:
     import render.sample as sample
     try:
         report = sample.build(10)
@@ -36,11 +36,24 @@ def _report_email() -> str:
         pytest.skip(f"sample data not cached: {exc}")
     report["meta"].pop("historical_demo", None)
     report["meta"].pop("anonymized_demo", None)
-    return render_email(report)
+    return report
+
+
+def _variant(report: dict, **meta) -> str:
+    import copy
+    out = copy.deepcopy(report)
+    out["meta"].update(meta)
+    return render_email(out)
 
 
 def _all_emails() -> dict[str, str]:
-    out = {"report": _report_email(),
+    report = _report()
+    # The free report and a League Pass seat's report have footers of their
+    # own (a sender line on the free one, a stop route on the seat's — launch
+    # audit C14, C4), so each is held to the same client rules as the paid one.
+    out = {"report": render_email(report),
+           "free report": _variant(report, trial=True),
+           "seat report": _variant(report, plan="league_pass"),
            "final check": render_final_check(
                {"week": 10, "players": {}},
                [Change("swap", "Start X at RB", "Y is out.")],
@@ -56,7 +69,20 @@ def _all_emails() -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def emails() -> dict[str, str]:
-    return _all_emails()
+    # Rendered as they ship once configured: with a postal address and a
+    # billing page, so the sender block and the cancel link are under test too.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("SENDER_POSTAL_ADDRESS", "PO Box 123, Toronto ON M5V 1A1")
+        mp.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/x")
+        return _all_emails()
+
+
+def test_the_free_report_carries_the_sender_block_like_the_paid_one(emails) -> None:
+    """Reproduction (launch audit C14, OPS-4): with SENDER_POSTAL_ADDRESS set,
+    the paid report's footer printed the mailbox address and the free report's
+    — the one email to a non-customer, ending on how to buy — did not."""
+    for name in ("report", "free report", "seat report"):
+        assert "PO Box 123, Toronto ON M5V 1A1" in emails[name], name
 
 
 def test_no_email_uses_what_email_clients_cannot_render(emails) -> None:

@@ -63,17 +63,20 @@
     <div class="topbar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html">← Home</a></div>
     <h1>Privacy Policy</h1>
     <p>Last updated 15 October 2026. The short version: we collect your email, your roster,
-    your league's scoring settings and your billing address, and nothing else. No cookies,
-    no analytics, no trackers, no advertising. This policy is part of our
-    <a href="terms.html">Terms of Service</a>.</p>
+    your league's scoring settings and your billing address, plus the few small records
+    listed below, and nothing else. No cookies, no analytics, no trackers, no
+    advertising. This policy is part of our <a href="terms.html">Terms of Service</a>.</p>
   </header>
   <main>
 
     <div class="note"><b>The whole list.</b> Your email address, the roster you entered,
     your league's scoring settings — scoring type, league size and lineup shape — and the
-    billing address you give Stripe at checkout. That is everything we hold about you. We
-    never see your card, you never create a password with us, and we never connect to your
-    league account.</div>
+    billing address you give Stripe at checkout. Beside those, a few small records: when
+    you accepted our terms, anything you email us, the name of the channel if you came
+    from a link we posted, and — only if you ask us to stop emailing you — a one-way
+    digest of your address. That is everything we hold about you. We never see your
+    card, you never create a password with us, and we never connect to your league
+    account.</div>
 
     <h2>1. What we collect, and why</h2>
     <ul>
@@ -101,6 +104,16 @@
       commissioner paid with, which is how your seat is matched to their pass.</li>
       <li><b>If you change your roster through our form</b>: the new roster and your email,
       so we can email you a button to confirm the change.</li>
+      <li><b>When you accepted these terms</b> — the date and which version, recorded at
+      checkout — so a renewal can always be tied to the words you agreed to.</li>
+      <li><b>Anything you email us</b> at hello@ — an updated roster, a refund or deletion
+      request, a question — so we can answer it.</li>
+      <li><b>Where you came from, if it was a link we posted</b>: the name of that channel
+      (for example "x" or "reddit"), read off the link itself and stored with your form
+      entry, so we can count which posts bring people. No cookie is involved, and it says
+      nothing about anywhere else you go.</li>
+      <li><b>If you ask us to stop emailing you</b>: a one-way digest of your address on our
+      stop list — never the address itself — so nothing is sent to it again.</li>
     </ul>
     <p>We do not build a profile of you, and we do not use your data to train anything.</p>
 
@@ -124,18 +137,26 @@
     host serves the pages, which involves the ordinary server logs any web host keeps.</p>
 
     <h2>4. Who else sees your data</h2>
-    <p>Four service providers, each doing one job, and none gets anything beyond it. Each
-    stores data in the United States, so your information is processed there.</p>
+    <p>Five service providers, each doing one job, and none gets anything beyond it. Each
+    processes data in the United States, so your information is handled there.</p>
     <ul>
       <li><b>Stripe</b> handles payment and billing. They hold your payment details and your
-      subscription; we hold only a reference to it.</li>
+      subscription. Your checkout and your customer record there also carry the roster and
+      settings you entered (as a short code), the plan you chose, and the record of your
+      accepting these terms — that is how a payment becomes your report. We hold a
+      reference to that record.</li>
       <li><b>Resend</b> delivers our emails. They handle your address and the message.</li>
       <li><b>Cloudflare</b> runs our domain, routes mail sent to hello@, and stores what
       you send through our forms (waitlist, free-report requests, seat claims, roster
-      changes) until we read it.</li>
+      changes). Each of those entries deletes itself within about 13 months of
+      arriving.</li>
+      <li><b>Google (Gmail)</b> is the inbox that mail to hello@ is forwarded to, and where
+      we read and answer it. It holds what you email us and our replies.</li>
       <li><b>GitHub</b> hosts this site and runs the automation that builds and sends the
       reports. Your email, roster and settings are kept in that automation's private
-      storage, never in the public site or its code.</li>
+      storage, never in the public site or its code. The two records it keeps beside the
+      code — what has been sent, and the stop list — carry one-way digests, never an
+      address.</li>
     </ul>
     <p>Each has its own privacy policy. <b>We do not sell your data, rent it, or hand it to
     advertisers or data brokers</b> — not now and not later. If that ever changed we would
@@ -159,21 +180,21 @@
     is in it, and nothing about you is ever sent to it.</p>
 
     <h2>7. How long we keep it</h2>
-    <p>Form submissions (waitlist, free-report requests, seat claims, roster changes) expire
-    on their own after about 13 months, and the waitlist is cleared after the one message it
-    was for. Your email, roster and settings are kept while you are subscribed and for up to
-    12 months afterwards, so a returning subscriber's setup still works and a refund or
-    billing question can be answered; then we delete them. Ask and we will delete them
-    sooner. Your billing address is the one item we
-    cannot always delete on request: it forms part of a payment record, and tax law requires
-    those to be kept for a set number of years. We will delete everything else and tell you
+    <p>Form submissions (waitlist, free-report requests, seat claims, roster changes)
+    delete themselves within about 13 months of arriving. Everything else — your email,
+    roster and settings, and the mail you send us — we keep while it is needed: while you
+    are subscribed, and afterwards so a returning subscriber's setup still works and a
+    refund or billing question can be answered. There is no fixed date for those: ask,
+    and we delete them and confirm it within 30 days. Your billing address is the one
+    item we cannot always delete on request: it forms part of a payment record, and tax
+    law requires those to be kept for a set number of years. We will delete everything else and tell you
     plainly what the payment record still holds.</p>
 
     <h2>8. Seeing or deleting what we hold</h2>
     <p>Email <b>hello@beatyourleague.com</b> and we will tell you exactly what we have, or
-    delete it — whichever you ask for. You do not need an account or a form, and we will not
-    ask you why. Cancelling stops the billing; asking us removes the data. If you are covered
-    by the GDPR, the UK GDPR, Canadian privacy law, or a US state privacy law, these are the
+    delete it — whichever you ask for — within 30 days. You do not need an account or a
+    form, and we will not ask you why. Cancelling stops the billing; asking us removes the
+    data. If you are covered by the GDPR, the UK GDPR, Canadian privacy law, or a US state privacy law, these are the
     access, correction, deletion and portability rights those laws give you, and we honour
     them for everyone regardless of where you live.</p>
 

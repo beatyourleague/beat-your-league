@@ -104,6 +104,45 @@ def test_a_seat_holder_is_never_shown_billing_terms() -> None:
     assert "seat" in msg.subject.lower()
 
 
+def test_a_seat_holder_claimed_a_seat_and_has_a_real_way_out(monkeypatch) -> None:
+    """Reproduction (launch audit C4, Oct 15 2026): welcome_message(email,
+    'seat', ...) said "You bought a seat on your league's League Pass." and,
+    under DONE WITH THIS?, sent the seat to "your billing page" to cancel
+    "if you want the charges to end" — in the same email as "Nothing bills you
+    for this seat, ever". A seat has no Stripe subscription, so the portal
+    finds no customer at its address: the email gave it no working way out at
+    all. A seat CLAIMED its place, and stops by asking (run/suppress.py)."""
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/x1")
+    msg = _msg("seat")
+    for doc in (msg.html, msg.text):
+        assert re.search(r"You claimed a seat", doc), doc
+        assert not re.search(r"\bbought\b", doc, re.I), "a seat bought nothing"
+        assert "billing.stripe.com" not in doc
+        assert not re.search(r"billing page|charges to end|cancel", doc, re.I), \
+            "a seat has nothing to cancel and no charges to end"
+        assert re.search(r"reply .{0,6}stop", doc, re.I)
+        assert re.search(r"mail app.{0,6}s unsubscribe", doc, re.I)
+        assert re.search(r"within 10 business days", doc)
+        assert re.search(r"commissioner.{0,6}s pass isn.{0,6}t affected", doc, re.I)
+    assert msg.unsubscribe == "mailto:hello@beatyourleague.com?subject=stop", \
+        "the mail app's unsubscribe must reach the inbox that honours a stop"
+    # A buyer's welcome is unchanged: bought, billing page, no stop header.
+    paid = _msg("season")
+    assert "You bought" in paid.text and "billing.stripe.com" in paid.text
+    assert paid.unsubscribe is None
+
+
+def test_a_buyer_is_told_reports_run_to_the_end_of_what_they_paid_for() -> None:
+    """Terms §4 keeps access to the end of the period already paid for, and
+    run/subscriptions.py keeps a cancel_at_period_end subscription entitled
+    until then — the acknowledgment states the same fact (launch audit C13)."""
+    for plan in ("season", "monthly", "league_pass"):
+        msg = _msg(plan)
+        for doc in (msg.html, msg.text):
+            assert re.search(r"continue to the end of the period you.{0,6}ve "
+                             r"already paid for, then stop", doc), plan
+
+
 def test_welcome_prices_match_the_pages_that_sold_them() -> None:
     """Two surfaces stating two prices is the drift this repo keeps finding.
     The email's constants must equal the landing page's own numbers and the

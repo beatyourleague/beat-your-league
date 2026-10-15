@@ -57,6 +57,36 @@ def test_a_banned_word_or_betting_word_on_a_selling_page_fails(site) -> None:
     assert _status(gates, "betting language") == "FAIL"
 
 
+def test_a_one_click_cancel_claim_in_the_terms_fails(site) -> None:
+    """Reproduction (launch audit C2, Oct 15 2026): terms §3 still said
+    "cancelling takes one / click from your billing page" — hand-wrapped
+    across two lines — after §4 and every other surface had moved to the real
+    flow (an emailed link, about a minute). The gate read only the selling
+    pages, so the retired claim survived in the operative contract."""
+    page = site / "terms.html"
+    text = page.read_text(encoding="utf-8")
+    fixed = "you can cancel\n      yourself from your billing page in about a minute (section 4)."
+    assert fixed in text
+    page.write_text(text.replace(
+        fixed, "cancelling takes one\n      click from your billing page."))
+    assert _status(lc.check_selling_copy(), "audit retired") == "FAIL"
+    # Either order, any phrasing in between, and on the privacy page too.
+    page.write_text(text)
+    privacy = site / "privacy.html"
+    privacy.write_text(privacy.read_text(encoding="utf-8").replace(
+        "</main>", "<p>One-click   cancelling, whenever you like.</p></main>"))
+    assert _status(lc.check_selling_copy(), "audit retired") == "FAIL"
+
+
+def test_one_click_that_is_not_about_cancelling_is_not_a_retired_claim(site) -> None:
+    """"Our terms are always one click away" is true and says nothing about
+    leaving; the gate is about the cancel flow, not the phrase."""
+    page = site / "terms.html"
+    page.write_text(page.read_text(encoding="utf-8").replace(
+        "</main>", "<p>This page is always one click away.</p></main>"))
+    assert _status(lc.check_selling_copy(), "audit retired") == "PASS"
+
+
 def test_a_broken_link_and_a_bad_anchor_fail(site) -> None:
     page = site / "how-it-works.html"
     page.write_text(page.read_text().replace(

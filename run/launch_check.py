@@ -272,14 +272,20 @@ def check_selling_copy() -> list[Gate]:
         if re.search(PERSONAL_DOMAINS, page.read_text(encoding="utf-8"), re.I):
             hits_personal.append(rel(page))
     retired = []
-    for name in SELLING:
+    for name in SELLING + LEGAL:
         path = SITE / name
         if not path.exists():
             continue
+        # visible_text collapses every run of whitespace to one space, so a
+        # claim hand-wrapped across two lines of HTML ("takes one\n click")
+        # is still one phrase here.
         text = visible_text(path.read_text(encoding="utf-8"))
         for phrase in RETIRED_CLAIMS:
             if phrase.lower() in text.lower():
                 retired.append(f"{name}: '{phrase}'")
+        for pattern in RETIRED_PATTERNS:
+            for m in re.finditer(pattern, text, re.I):
+                retired.append(f"{name}: '{m.group(0)}'")
     landing = (SITE / "index.html").read_text(encoding="utf-8")
     hero = landing.split('<header class="hero">')[1].split("</header>")[0] \
         if '<header class="hero">' in landing else ""
@@ -305,6 +311,19 @@ def check_selling_copy() -> list[Gate]:
 RETIRED_CLAIMS = ("cheaper than one buy-in", "Nobody answers", "From Sunday afternoon to Monday",
                   "sign-in code", "fifteen seconds", "in one click, any time",
                   "Cancel any time yourself, in one click", "renews automatically each season")
+# The operative contract and the privacy policy are scanned too. The terms
+# kept "cancelling takes one click from your billing page" in §3 after §4 and
+# every other surface had moved to the real flow (an emailed link, about a
+# minute) — the retired claim survived in the one document that wins every
+# disagreement, because the gate only read the selling pages (launch audit
+# C2, Oct 15 2026).
+LEGAL = ("terms.html", "privacy.html")
+# Retired claims with more than one wording. Cancelling through Stripe's
+# billing page is never one click — enter an email, open the link it sends,
+# press Cancel — so ANY "one click" said of cancelling is the retired claim,
+# in either order and however it is phrased between.
+RETIRED_PATTERNS = (r"\bcancel\w*\b[^.;:]{0,60}\bone[\s-]+click\b",
+                    r"\bone[\s-]+click\b[^.;:]{0,60}\bcancel\w*\b")
 
 
 def _faq_twin_ok(landing: str) -> bool:

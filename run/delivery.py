@@ -23,6 +23,8 @@ Design rules, each learned from a way this goes wrong:
 - **No secrets in logs.** Only provider names and message ids are printed.
 - **Nothing is sent to someone who isn't paying.** That check lives in
   ``run.batch``; delivery just refuses to guess by requiring an explicit list.
+- **Nothing is sent to someone who asked us to stop.** That check lives HERE
+  (``run.suppress``), because it binds every sender at once.
 """
 
 from __future__ import annotations
@@ -68,6 +70,9 @@ class Message:
     # delivered draft's headers). No List-Unsubscribe-Post: one-click POST
     # (RFC 8058) promises an endpoint that consumes the request, and a Stripe
     # portal link is not one. Claiming it would be worse than omitting it.
+    # A League Pass SEAT has no subscription to cancel, so its target is a
+    # mailto stop request instead (render/report.unsubscribe_target), which
+    # the stop list then honours (run/suppress.py).
     unsubscribe: str | None = None
 
 
@@ -77,6 +82,13 @@ class SendResult:
     ok: bool
     detail: str
     skipped: bool = False
+    # Skipped because the address asked us to stop (run/suppress.py). Always
+    # also ``skipped``, so every existing count treats it as not-a-failure;
+    # this flag lets a runner say so separately.
+    suppressed: bool = False
+
+
+SUPPRESSED = "suppressed — this address asked us to stop"
 
 
 # --------------------------------------------------------------------- #
@@ -334,13 +346,32 @@ DRY_PROVIDER = "dry"
 def send_all(messages: list[Message], provider: Provider | None = None,
              sender: str = DEFAULT_FROM, reply_to: str | None = DEFAULT_REPLY_TO,
              sent_log: Path | None = None,
-             resend_anyway: bool = False) -> list[SendResult]:
-    """Send each message once. Never raises: failures come back as results."""
+             resend_anyway: bool = False,
+             suppress_file: Path | None = None) -> list[SendResult]:
+    """Send each message once, and never to an address that asked us to stop.
+    Never raises: failures come back as results."""
+    from run.suppress import (SuppressionError, is_suppressed, load_suppressed,
+                              owed_anyway)
     provider = provider or build_provider()
     sent_log = sent_log or SENT_LOG
+    # The stop list (run/suppress.py) is checked HERE, once, for every runner:
+    # "you're off within 10 business days" is promised to League Pass seats
+    # and the waitlist, and a check living in each runner is one runner short
+    # the first time somebody adds a sender. Unreadable fails CLOSED — a late
+    # Tuesday is recoverable; mailing somebody who asked us to stop is not.
+    try:
+        stopped = load_suppressed(suppress_file)
+    except SuppressionError as exc:
+        return [SendResult(m, ok=False, detail=f"not sent: {exc}") for m in messages]
     already = set() if resend_anyway else load_sent(sent_log)
     results: list[SendResult] = []
     for message in messages:
+        # Before the resend override and the send log: --resend re-mails a
+        # week, it never re-mails somebody who said stop.
+        if is_suppressed(message.to, stopped) and not owed_anyway(message.key):
+            results.append(SendResult(message, ok=True, detail=SUPPRESSED,
+                                      skipped=True, suppressed=True))
+            continue
         if message.key in already:
             results.append(SendResult(message, ok=True, detail="already sent", skipped=True))
             continue

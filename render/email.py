@@ -27,6 +27,7 @@ import re
 from typing import Any, Mapping
 
 from render.sender import sender_line
+from render.report import cancel_html, cancel_lines, is_seat
 from render.report import (
     EMAIL_META,
     sender_html,
@@ -844,9 +845,14 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines += ["", RISING_HEAD.upper(), f"  {RISING_INTRO}"]
         lines += [f"  - {r['line']}" for r in report["rising"]]
     if meta.get("trial"):
+        # The free report is the one email that reaches a non-customer and it
+        # ends on how to buy, so it carries who sent it like every other
+        # commercial email (CAN-SPAM, CASL; launch audit C14). It returned
+        # before the paid footer's sender line, so it never printed one.
         lines += ["", "Projections are analysis, not guarantees — no betting "
                       "picks, no staking advice. Your decisions are yours.",
-                  source_line(meta), "", _trial_line()]
+                  source_line(meta), "", _trial_line(),
+                  *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
     if report["receipts"].get("last_week_calls"):
@@ -864,12 +870,9 @@ def text_summary(report: Mapping[str, Any]) -> str:
               *update_lines(meta),
               *_forward_lines(),
               "",
-              *_cancel_lines(),
-              "DONE WITH THIS? Cancel it yourself from your own billing page — enter "
-              "your email, open the link Stripe sends, press Cancel. About a minute, "
-              "and no further charges. Note that unsubscribing from emails alone does "
-              "NOT stop a subscription; cancel there if you want the charges to end. "
-              "The reports stop on their own once you do.",
+              # A seat's way out is a stop request, a subscriber's is the
+              # billing page (render/report.cancel_lines; launch audit C4).
+              *cancel_lines(is_seat(meta)),
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
@@ -900,13 +903,15 @@ def subject_for(report: Mapping[str, Any]) -> str:
 
 def _footer(meta: Mapping[str, Any]) -> str:
     basis = availability_basis(meta)
-    _cancel_href, _cancel_label = cancel_destination()
     if meta.get("trial"):
+        # Sender identity on the free report too (launch audit C14): it is
+        # the one email to a non-customer, and it ends on how to buy.
         return (
             f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;">'
             f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
             f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
             f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}<br>'
+            f'{sender_html()}'
             f'{esc(_trial_line())}</p></td></tr>')
     return (
         f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;'
@@ -919,24 +924,9 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
-        + (f' <a href="{esc(_cancel_href)}" style="color:{NAVY};">'
-           f'{esc(_cancel_label)}</a>.' if _cancel_href else "")
-        + '</p></td></tr>'
+        f'{cancel_html(is_seat(meta), f"color:{NAVY};")}'
+        '</p></td></tr>'
     )
-
-
-def _cancel_lines() -> list[str]:
-    """The cancel route as a URL, for the half that cannot carry an anchor.
-
-    The footer told every subscriber the steps were "on our legal page" and
-    linked nothing, on either half — ~18 emails a season, each promising a
-    fifteen-second cancel with no way to reach it (found Aug 24 2026 by
-    reading a delivered draft: the HTML carried exactly one href, the roster
-    update link).
-    """
-    href, label = cancel_destination()
-    return [f"CANCEL: {label} — {href}", ""] if href else []
 
 
 def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
