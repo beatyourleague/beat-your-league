@@ -98,7 +98,10 @@ def test_the_page_builds_its_ref_through_the_tested_twin() -> None:
     join = (Path(__file__).resolve().parent.parent / "site" / "join" /
             "index.html").read_text(encoding="utf-8")
     assert "R.encodeRoster(" in join, "the page no longer uses the tested encoder"
-    assert 'client_reference_id=" + encodeURIComponent(ref)' in join
+    # The channel tag (contract C5) is appended by the tested twin too — never
+    # by string concatenation on the page.
+    assert "const tagged = R.withVia(ref, SOURCE);" in join
+    assert 'client_reference_id=" + encodeURIComponent(tagged)' in join
     # No second, hand-rolled reference anywhere on the page.
     assert "REF_PREFIX + " not in join, "the page assembles a ref by hand"
 

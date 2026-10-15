@@ -1498,7 +1498,7 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
     A question we ask and discard is worse than one we never ask: it tells the
     buyer their answer matters, and it is checkable in one click."""
     groups = set(re.findall(r'<input type="radio" name="(\w+)"', JOIN))
-    assert groups == {"scoring", "size", "template", "plan"}, \
+    assert groups == {"scoring", "size", "template", "kicker", "defense", "plan"}, \
         f"the picker's question set changed: {groups}"
     call = re.search(r"R\.encodeRoster\((.*?)\);", JOIN, re.S)
     assert call, "the picker no longer builds a ref"
@@ -1509,6 +1509,12 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
         assert reader in args, (
             f"the {group} answer is collected but never reaches the ref — "
             f"the page says it matters, so it has to")
+    # The lineup is the base plus the kicker and defense answers (contract
+    # C8): template() reaches all three through shapeChoice().
+    choice = _js_function(JOIN, "shapeChoice")
+    for group in ("template", "kicker", "defense"):
+        assert f'radio("{group}")' in choice, f"the {group} answer never reaches the ref"
+    assert "R.shapeSlots(s.base, s.kicker, s.defense)" in _js_function(JOIN, "template")
     # The plan switch (Oct 9 2026) reaches the ref through monthlyChosen,
     # which the switch's change listener sets from radio("plan").
     assert "monthlyChosen" in args
@@ -1882,22 +1888,33 @@ def test_forward_line_is_gated_on_a_real_destination(monkeypatch) -> None:
 
 
 def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
-    """The closed-checkout capture keeps the email ONLY, on the ledger-list
+    """The closed-checkout capture keeps the email and the checked roster's ref
+    (contract C6, I1 — the launch email links back to it), on the list
     backend. The seat form endpoint must stay reserved for League Pass seats —
     an individual signup posted there would bypass the payment architecture."""
     handler = JOIN.split('$("form-email").addEventListener')[1]
     closed = handler.split("if (!link) {")[1].split("if (WANTS_PASS) showSeatLink")[0]
     assert "NOTIFY_LIST_ENDPOINT" in closed
     assert "FORM_ENDPOINT" not in closed
-    assert "league_id" not in closed, "launch-notify must carry the email only"
+    assert "league_id" not in closed, "launch-notify carries an email and a roster ref only"
+    # C6: the row carries the ref checkout WOULD have used — the tagged one.
+    assert 'kind: "waitlist", email: email, ref: tagged' in closed
     # Every not-open outcome — kept, failed, or nothing to keep it with — says
-    # checkout is not open and that the roster was not saved. Read per
-    # message, so a new outcome cannot slip in without both.
+    # checkout is not open, and says exactly what was kept: the roster WITH
+    # the email when the row went in, and otherwise that it isn't saved with
+    # us (it stays in the page's own address). Read per message, so a new
+    # outcome cannot slip in without both.
     messages = re.findall(r'show(?:Error\("err-email", |Ok\()(.*?)\);', prose(closed), re.S)
     assert len(messages) >= 3, messages
+    kept = [m for m in messages if "we kept" in m]
+    assert len(kept) == 1 and "we kept your email and this roster" in kept[0], messages
     for message in messages:
         assert "isn't open just yet" in message, f"a not-open outcome hides it: {message}"
-        assert "isn't saved" in message, f"a not-open outcome implies a save: {message}"
+        if message not in kept:
+            assert "isn't saved" in message, f"a not-open outcome implies a save: {message}"
+    # The kept one is a done message, said only after the backend accepted it.
+    ok_block = closed.split('closedAction(otherLink) === "list"')[1].split(".catch(")[0]
+    assert "if (!response.ok) throw" in ok_block.split("showOk(")[0]
 
 
 def test_backtest_page_carries_no_internal_register() -> None:
@@ -1962,13 +1979,16 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     The static header stays the season default — the rewrites are JS, so we
     pin their presence and their key phrases."""
     assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
-    assert "Seat already paid by your commissioner" in JOIN
+    assert "Seat already paid — League Pass" in JOIN
     assert "covers " in JOIN and "every manager in your league" in prose(JOIN)
     assert f"${MONTHLY_PRICE} / month" in JOIN
-    # The commissioner's shareable seat link exists only pre-checkout (Stripe
-    # confirmation messages are static per link and cannot carry a league id).
-    assert 'id="seat-share"' in JOIN
-    assert '"?pass=1"' in JOIN
+    # The pass buyer is told, on the way to Stripe, where the seat link will
+    # come from: the welcome email, which carries a link naming THIS pass
+    # (contract C4). The page itself no longer hands out the generic ?pass=1
+    # link, whose typed buyer's address is how a seat claim got lost (LP-D1).
+    share = _js_function(JOIN, "showSeatLink")
+    assert 'id="seat-share"' in JOIN and "welcome email has the link" in share
+    assert '"?pass=1"' not in share
 
 
 def test_the_logo_mark_is_one_shape_on_every_surface() -> None:
@@ -2683,7 +2703,10 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     charges."""
     pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
     assert "header-pitch" in pass_branch and "$99" in pass_branch
-    assert "header-chips" in pass_branch
+    # The chips are drawn by setChips (one builder for every mode, so the
+    # first-report chip follows the season clock — PC-02).
+    assert 'setChips(["$99 / league / season"' in pass_branch
+    assert '$("header-chips")' in _js_function(JOIN, "setChips")
     # Monthly is a function since Oct 9 2026, because the buyer can now switch
     # to it on the page as well as arrive with ?plan=monthly.
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
@@ -3575,3 +3598,162 @@ def test_the_pass_buyers_thank_you_states_the_pass_refund_limit() -> None:
     assert '<span id="refund-limit">one per person</span>' in THANKS
     branch = _js_code(THANKS).split('get("plan") === "pass") {')[1]
     assert 'getElementById("refund-limit").textContent = "one per league"' in branch
+
+
+# --------------------------------------------------------------------- #
+# the join page, Oct 15 2026 (world-class pass): shapes, seats, keeping the work
+# --------------------------------------------------------------------- #
+
+CONFIRM = (SITE / "join" / "confirm.html").read_text(encoding="utf-8")
+
+
+def test_the_lineup_choices_name_the_platform_defaults_and_say_what_an_ungraded_one_gets() -> None:
+    """RQ-10 / SS-I3 / PE-2: Sleeper's default (two FLEX) and Yahoo's (three
+    WR) could not be set up, and a K-less league that keeps its DEF had no
+    fitting option. The choices are a base named by the app whose default it
+    is, plus a kicker and a defense answer — and a shape no arm has graded says,
+    before anyone pays, that its report carries everything but the odds."""
+    step = JOIN.split('<section id="step-league">')[1].split("</section>")[0]
+    for value, words in (("std", "ESPN's default"), ("flex2", "Sleeper's default"),
+                         ("wr3", "Yahoo's default"), ("sf", "Superflex")):
+        assert re.search(rf'value="{value}"[^<]*>[^<]*(?:<span[^>]*>[^<]*)?{re.escape(words)}',
+                         step), value
+    assert 'name="kicker" value="no"' in step and 'name="defense" value="no"' in step
+    note = _js_function(JOIN, "drawShapeNote")
+    assert "R.GRADED_SHAPES.includes(code)" in note
+    assert "everything except the odds" in prose(note)
+
+
+def test_the_scoring_note_names_what_is_scored_and_what_is_not() -> None:
+    """PC-10: "so every number matches your league" overclaimed — six-point
+    passing touchdowns and TE premium are not scored. The note names the
+    scoring that is, and says plainly that those two are not."""
+    step = prose(JOIN.split('<section id="step-league">')[1].split("</section>")[0])
+    assert "4-point passing touchdowns" in step
+    assert "Six-point passing touchdowns and TE premium aren't scored yet" in step
+    assert "every number matches your league" not in JOIN_PROSE
+
+
+def test_no_join_copy_promises_odds_on_every_close_call() -> None:
+    """PE-11: bye-heavy weeks, gated players and ungraded lineups carry none,
+    so the promise is the true one — odds wherever both players are confirmed."""
+    assert not re.search(r"odds on (?:every|each) close call", JOIN_PROSE, re.I)
+    assert JOIN_PROSE.count("wherever both players are confirmed to play") >= 4
+
+
+def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
+    """BE-D1, the page's half: more than two defenses on a checked list is a
+    question, not "Looks right" — with a one-tap way to say they really are
+    all yours. Run in the browser by the verification flow; pinned here."""
+    draw = _js_function(JOIN, "draw")
+    guard = draw.split("defenses > 2")[1].split("} else if")[0]
+    assert "state.defensesOk !== defenses" in draw
+    assert "did some come from a" in prose(guard) and 'confirm.style.display = "block"' in guard
+    assert draw.index("defenses > 2") < draw.index("Looks right")
+
+
+def test_seat_links_name_their_pass_and_bring_their_settings() -> None:
+    """Contract C4 / LP-I1 / LP-I3. A 20-hex pass code in the seat link names
+    the pass, so the page asks for NO buyer's address and posts the code; the
+    link's s/n/t prefill the league's settings, said out loud and editable.
+    ?pass=1 keeps the typed-address path."""
+    code = _js_code(JOIN)
+    assert "/^[0-9a-f]{20}$/.test(QUERY.get(\"pass\") || \"\")" in code
+    seat = _js_function(JOIN, "submitSeat")
+    assert 'kind: "seat", email: email, ref: ref, via: SOURCE, pass_token: PASS_TOKEN' in seat
+    token_row = seat.split("? {")[1].split("}")[0]
+    assert "covered_by" not in token_row, "a coded seat link must not post a typed payer"
+    assert '$("pass-field").style.display = PASS_TOKEN ? "none" : "block"' in code
+    prefill = code.split("} else if (SEAT_MODE) {\n  const told")[1].split("\n}\n")[0]
+    for param in ('QUERY.get("s")', 'QUERY.get("n")', 'QUERY.get("t")'):
+        assert param in prefill
+    assert "Not right? Change them below." in prose(prefill)
+
+
+def test_the_seat_page_asks_for_whoever_bought_the_pass_with_visible_labels() -> None:
+    """LP-D6 / LP-D7. Both addresses on the seat form carry a <label> that
+    stays on screen once typed in (the placeholders vanished, inviting the swap
+    LP-D1 then dropped), and the copy names whoever bought the pass — any
+    manager can — never "your commissioner's email"."""
+    assert '<label class="optlabel" id="lbl-email" for="email">' in JOIN
+    assert '<label class="optlabel" id="lbl-pass-email" for="pass-email">' in JOIN
+    assert "The email the League Pass was bought with" in prose(JOIN)
+    assert "commissioner's email" not in JOIN_PROSE
+    assert "paid by your commissioner" not in JOIN_PROSE
+    assert '$("footer-checkout").style.display = "none"' in _js_function(JOIN, "nothingToPay")
+
+
+def test_the_renewal_date_is_stated_and_computed_from_today() -> None:
+    """LP-I11: the terms line names the date the pass renews — the
+    anniversary, or the month's last day when there is none — so a buyer can
+    budget it. Run under node."""
+    got = _node(_js_function(JOIN, "renewsOn") +
+                "\nconsole.log(JSON.stringify([new Date(2026, 9, 15), new Date(2028, 1, 29),"
+                " new Date(2026, 11, 31)].map(renewsOn)));")
+    assert got == ["Oct 15, 2027", "Feb 28, 2029", "Dec 31, 2027"]
+    assert 'unless you cancel — bought today, on " + renewsOn(new Date())' in prose(JOIN)
+    assert JOIN.count('<span class="renews-on"></span>') == 2
+
+
+def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
+    """PC-02: the chips and sidebar promised "your first report today" to a
+    buyer after kickoff, who gets the roster report today and the weekly report
+    on Tuesday (run/intake.py _first_file; week 1 always starts with the roster
+    report). Decided from site/week.json's first_kickoff; anything it cannot
+    tell gives the sentence that is true either way."""
+    fn = _js_function(JOIN, "firstReportTiming")
+    week = {"week": 6, "last_week": 18, "lands_on": "2026-10-20",
+            "first_kickoff": "2026-10-16T00:15:00Z"}
+    import json as _json
+    cases = [
+        (week, "2026-10-15T12:00:00Z"),              # before Thursday night
+        (week, "2026-10-16T01:00:00Z"),              # after it
+        ({**week, "week": 1}, "2026-09-08T12:00:00Z"),
+        ({k: v for k, v in week.items() if k != "first_kickoff"}, "2026-10-15T12:00:00Z"),
+        (week, "2026-10-21T12:00:00Z"),              # the clock ran out
+        ({**week, "week": 18}, "2026-10-16T01:00:00Z"),
+    ]
+    got = _node(fn + "\nconsole.log(JSON.stringify(" + _json.dumps(cases) +
+                ".map(([w, now]) => { const r = firstReportTiming(w, new Date(now));"
+                " return r ? r.when : null; })));")
+    assert got == ["before", "after", "after", None, None, None]
+    assert 'fetch("../week.json"' in _js_code(JOIN)
+    static = markup_only(JOIN)
+    assert "Your first report today" not in static and "First report the day you join" not in static
+    assert "A report the day you join" in static
+
+
+def test_a_closed_checkout_keeps_the_roster() -> None:
+    """BE-I3 / I1 / contract C6. A checked roster is kept in the page's own
+    address (?ref=), the waitlist row carries it, and ?ref= brings it back —
+    decoded by roster.js, by id, never re-read from names."""
+    keep = _js_function(JOIN, "keepInAddress")
+    assert "R.withVia(checkoutRef(), SOURCE)" in keep and 'params.set("ref", ref)' in keep
+    assert "history.replaceState" in keep and "email" not in keep.split("{", 1)[1]
+    assert "keepInAddress();" in _js_function(JOIN, "draw")
+    restore = _js_function(JOIN, "restoreRoster")
+    assert "state.directory.byId.get(id)" in restore and "resolveAll" not in restore
+    assert 'R.decodeRoster(QUERY.get("ref"))' in _js_code(JOIN)
+    assert "SOURCE = VIA || (RESTORED && RESTORED.via)" in _js_code(JOIN)
+
+
+def test_the_chips_are_a_thumb_tall_on_touch() -> None:
+    """I10: the first controls in the funnel measured 35px on touch."""
+    assert "@media (pointer:coarse){.opts label{min-height:44px;" in JOIN
+
+
+@pytest.mark.parametrize("page,name", [(JOIN, "join"), (CONFIRM, "confirm")])
+def test_join_pages_load_no_third_party_fonts_and_declare_their_colours(page, name) -> None:
+    """Contract C7 and I12: fonts are self-hosted (no request to a font
+    service — privacy.html can say so — and metric fallbacks stop the swap
+    moving the page), the two above-the-fold faces are preloaded, and the paper
+    page says it is light, with a navy browser bar."""
+    assert "fonts.googleapis.com" not in page and "fonts.gstatic.com" not in page, name
+    assert '<link rel="stylesheet" href="../fonts/fonts.css">' in page, name
+    preloads = re.findall(r'<link rel="preload" href="\.\./fonts/[\w-]+\.woff2" as="font"'
+                          r' type="font/woff2" crossorigin>', page)
+    assert 1 <= len(preloads) <= 2, name
+    assert '<meta name="theme-color" content="#101E33">' in page, name
+    assert '<meta name="color-scheme" content="light">' in page, name
+    assert not re.search(r"font-family:'Barlow(?: Condensed)?';", page), \
+        f"{name}: a face with no fallback stack renders in Times until the font lands"

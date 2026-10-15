@@ -46,8 +46,11 @@ const TEAM_ALIASES = {LAR: "LA", WSH: "WAS", JAC: "JAX", LVR: "LV", ARZ: "ARI",
 // Also stripped (a battery of Yahoo / CBS / NFL.com / Sleeper / ESPN pastes):
 // multi-position slot labels, injury and status tags, matchup and kickoff
 // text. Mirrors engine/roster.py _DECORATION exactly.
+// ESPN's table headings and totals row ("SLOT", "OPRK", "%ROST", "TOTALS",
+// "7th") ride along with a copied roster (BE-D1); a bare ST is the St. of
+// Amon-Ra St. Brown, so "%ST" goes only with its percent sign.
 const DECORATION =
-  /\b(?:W\/R\/T|R\/W\/T|W\/R|W\/T|OP)\b|\b(?:QB|RB|WR|TE|FB|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b|\bVS\.?(?=\s|$)|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?/gi;
+  /\b(?:W\/R\/T|R\/W\/T|W\/R|W\/T|OP)\b|\b(?:QB|RB|WR|TE|FB|DEF|DST|D\/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b|\b(?:SLOT|PLAYERS?|OPP|STATUS|PROJ|SCORE|OPRK|PRK|FPTS|AVG|LAST|TOTALS?|NFL|WEEK|SEASON)\b|%\s*(?:ST|ROST)\b|\b\d+(?:ST|ND|RD|TH)\b|\bVS\.?(?=\s|$)|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+%]+|\d+(?:\.\d+)?/gi;
 const POSITION_TAG = /\b(?:QB|RB|WR|TE|FB|K)\b/i;
 const DEFENSE_TAG = /\b(?:DEF|DST|D\/ST)\b/i;
 // A lone team code beside any of these is an OPPONENT or a note, never a
@@ -66,8 +69,73 @@ function isBlank(cleaned) {
   return !/\p{L}/u.test(cleaned || "");
 }
 
+// Tags a table copy glues onto the cell before them (BE-D1, a real ESPN
+// copy): "PhiQB", "Jalen HurtsQ", "Eagles D/STD/ST". Narrow on purpose so no
+// real name splits: a tag run after a LOWERCASE letter, a tag run after a real
+// team code, or a doubled defense tag. Mirrors engine/roster.py _unglue.
+const GLUE_TAG = "(?:D/ST|DST|DEF|SSPD|SUSP|DTD|OUT|PUP|NFI|IR|QB|RB|WR|TE|FB|K|Q|O|D|P)";
+const GLUED_TO_NAME = new RegExp("^([A-Za-z.'-]*[a-z.'])((?:" + GLUE_TAG + ")+)$");
+const GLUED_CODE = new RegExp("^([A-Z]{2,3})((?:" + GLUE_TAG + ")+)$");
+const DOUBLED_DEFENSE = /^(?:D\/ST|DST|DEF){2,}$/;
+const ONE_TAG = new RegExp(GLUE_TAG, "g");
+
+function unglue(raw, teams) {
+  const words = [];
+  for (const word of raw.split(" ")) {
+    const glued = GLUED_TO_NAME.exec(word);
+    // A token that IS a team code is never split: "SFO" is San Francisco, not
+    // SF plus an "O" (out) tag.
+    const isCode = Boolean(teams) && (teams.has(word.toUpperCase()) || word.toUpperCase() in TEAM_ALIASES);
+    const coded = isCode ? null : GLUED_CODE.exec(word);
+    if (DOUBLED_DEFENSE.test(word)) {
+      words.push(...word.match(ONE_TAG));
+    } else if (glued) {
+      words.push(glued[1], ...glued[2].match(ONE_TAG));
+    } else if (coded && teams && (teams.has(coded[1]) || coded[1] in TEAM_ALIASES)) {
+      words.push(coded[1], ...coded[2].match(ONE_TAG));
+    } else {
+      words.push(word);
+    }
+  }
+  return words.join(" ");
+}
+
+const POSITION_WORDS = new Set(["QB", "RB", "WR", "TE", "K", "FB", "DEF", "DST"]);
+const PLAYER_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "FB"]);
+
+// The position tags a line holds when it holds NOTHING else ("QB", "D/ST") —
+// the third cell of a table copy's player block. Mirrors _position_line.
+function positionLine(line, teams) {
+  const raw = unglue(tidy(line || ""), teams).toUpperCase().replace(/D\/ST/g, "DST");
+  const words = raw.split(/[\s/,]+/).filter(Boolean);
+  return words.length && words.every((w) => POSITION_WORDS.has(w)) ? new Set(words) : new Set();
+}
+
+// Is this position line the entry's OWN position? Mirrors _plays.
+function plays(player, tags) {
+  if (!player) return [...tags].some((t) => PLAYER_POSITIONS.has(t));
+  if (player.position === "DEF") return tags.has("DEF") || tags.has("DST");
+  return tags.has(player.position) || (player.position === "FB" && tags.has("RB"));
+}
+
+function canonical(team) {
+  const t = (team || "").toUpperCase();
+  return TEAM_ALIASES[t] || t || null;
+}
+
+// Is what was typed this player's FULL name, letter for letter (case and
+// spacing aside)? I15: an exact "Bijan Robinson" no longer offers "not Brian
+// Robinson? tap to swap". Mirrors engine/roster.py exact_name.
+function exactName(typed, name, teams) {
+  return sameName(stripDecoration(typed, teams), name);
+}
+function sameName(cleaned, name) {
+  const fold = (text) => (text || "").toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+  return fold(cleaned) === fold(name);
+}
+
 function stripDecoration(line, teams, keepLead) {
-  const raw = tidy(line);
+  const raw = unglue(tidy(line), teams);
   let text = raw.replace(DECORATION, " ").replace(/\s+/g, " ").trim();
   // A NON-LEADING bare K is the kicker position tag ("Jake Bates K DET");
   // a leading K is an initial ("K. Walker", "K Walker") and stays.
@@ -84,7 +152,9 @@ function stripDecoration(line, teams, keepLead) {
     // A team code beside a position tag, or beside matchup / bye / status /
     // projection text, is a PLAYER's line or a note, not a defense; a defense
     // carries DEF/DST/D/ST or stands alone.
-    if (tokens.length === 1 && isTeam(tokens[0]) && !DEFENSE_TAG.test(raw) &&
+    // Every word a team code counts the same way: "PhiQB CAR Sun 1:00 PM" is a
+    // player's team and his opponent (BE-D1), not two defenses.
+    if (tokens.length && tokens.every(isTeam) && !DEFENSE_TAG.test(raw) &&
         (POSITION_TAG.test(raw) || NOISE.test(raw) || removedTag)) {
       return "";
     }
@@ -237,7 +307,11 @@ function resolvePlain(directory, typed, keepLead) {
   const found = [...new Map((directory.byName.get(key) || []).map((p) => [p.id, p])).values()];
   if (found.length === 1) {
     const player = found[0];
-    return { typed, player, candidates: [], twins: twinsOf(directory, player) };
+    // A near-name alternate only when the name was NOT typed out in full: an
+    // exact "Bijan Robinson" offering "not Brian Robinson?" read as doubt
+    // about a household name (I15).
+    return { typed, player, candidates: [],
+             twins: sameName(cleaned, player.name) ? [] : twinsOf(directory, player) };
   }
   if (found.length > 1) {
     return { typed, player: null, candidates: found, reason: "ambiguous" };
@@ -260,24 +334,74 @@ function resolveRow(directory, line) {
   if (!results.length) return { typed: line, player: null, candidates: [], reason: "blank" };
   const resolved = results.filter(([, m]) => m.player);
   const players = resolved.filter(([, m]) => m.player.position !== "DEF");
+  // BE-D1: "PhiQB<tab>CAR<tab>Sun 1:00 PM" — a player's team-and-position
+  // cell, his opponent's code, his kickoff — read as the Panthers defense.
+  // When nothing but bare codes resolved, the row is judged whole, the way a
+  // one-line row is. Mirrors PlayerDirectory._resolve_row.
+  if (!players.length && resolved.length &&
+      resolved.every(([cell]) => codeOnly(directory, cell)) &&
+      isBlank(stripDecoration(cells.join(" "), directory.teams))) {
+    return { typed: line, player: null, candidates: [], reason: "blank" };
+  }
   const pool = players.length ? players : resolved.length ? resolved : results;
   return pool.reduce((best, cur) => (cur[0].length > best[0].length ? cur : best))[1];
 }
 
+// The team (nflverse code) when a row reads as a defense ONLY because it is a
+// bare team code with no DEF tag anywhere on it; otherwise null. Those are the
+// rows a table copy makes out of a player's team or opponent column, so they
+// are the only ones read in context. Mirrors PlayerDirectory._code_only.
+function codeOnly(directory, line) {
+  const cells = line.split("\t").map((c) => c.trim()).filter(Boolean);
+  const raw = unglue(tidy(cells.join(" ")), directory.teams);
+  if (DEFENSE_TAG.test(raw)) return null;
+  const tokens = stripDecoration(cells.join(" "), directory.teams).split(" ").filter(Boolean);
+  if (tokens.length !== 1) return null;
+  const word = tokens[0].toUpperCase();
+  if (!directory.teams.has(word) && !(word in TEAM_ALIASES)) return null;
+  return TEAM_ALIASES[word] || word;
+}
+
+// Every non-blank line, in order — mirrors PlayerDirectory.resolve_all,
+// including how a bare team code is read IN CONTEXT (BE-D1): ESPN's table
+// copies "Jalen Hurts / Phi / QB / CAR" one cell per line, and every code line
+// became a defense — eleven for a roster that owned one, under "Looks right".
+// After an entry, a bare code is his TEAM line (his team, or the next line is
+// a position tag) and, once his own position line is read, his OPPONENT.
 function resolveAll(directory, text) {
-  return (text || "")
-    .split(/[\r\n]+/)
-    .map((line) => line.trim())
+  const lines = (text || "").split(/[\r\n]+/).map((line) => line.trim())
     // Blank lines are dropped; anything with LETTERS is REPORTED BACK, even if
     // unreadable. Pasting fifteen and silently getting thirteen is the same
     // failure as guessing, wearing a different hat.
-    .filter((line) => line.length > 0)
-    .map((line) => resolveRow(directory, line))
-    .filter((match) => match.reason !== "blank")
+    .filter((line) => line.length > 0);
+  const out = [];
+  let block = null;           // what has been read since the last entry
+  lines.forEach((line, index) => {
+    const match = resolveRow(directory, line);
+    if (match.reason === "blank") {
+      const tags = positionLine(line, directory.teams);
+      if (block && tags.size && plays(out[out.length - 1].player, tags)) block.position = true;
+      return;
+    }
+    const code = codeOnly(directory, line);
+    if (code && block) {
+      const last = out[out.length - 1].player;
+      if (!block.team && !block.position &&
+          ((last && canonical(last.team) === code) ||
+           (index + 1 < lines.length && positionLine(lines[index + 1], directory.teams).size))) {
+        block.team = true;
+        return;
+      }
+      if (block.position) return;
+    }
     // The same player on consecutive lines is one entry: Yahoo prints a
     // defense's name and then its "Den - DEF" row.
-    .filter((match, i, all) => !(match.player && i > 0 && all[i - 1].player &&
-                                 all[i - 1].player.id === match.player.id));
+    const prev = out[out.length - 1];
+    if (match.player && prev && prev.player && prev.player.id === match.player.id) return;
+    out.push(match);
+    block = { team: false, position: false };
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------- //
@@ -339,10 +463,11 @@ function enterPick(suggested, query) {
 // add silently undid them and blocked checkout again (launch audit F7). The
 // tapped player IS the answer — no lookup by name, which could come back
 // ambiguous for a name two players share. A new array: the old one is not
-// touched. Browser-only (Python never sees an unencoded list).
+// touched. Browser-only (Python never sees an unencoded list). No near-name
+// swap: the tapped row showed the full name, which is the exact-name case
+// (I15) — the person read it and chose it.
 function addPick(directory, matches, player) {
-  return matches.concat([{ typed: player.name, player, candidates: [],
-                           twins: twinsOf(directory, player) }]);
+  return matches.concat([{ typed: player.name, player, candidates: [], twins: [] }]);
 }
 
 // ---------------------------------------------------------------- //
@@ -381,6 +506,13 @@ function base64url(bytes) {
 // exactly — the two are a contract with nothing type-checking across it, and
 // test_the_browser_and_python_agree_on_the_format pins this literal source.
 const SIZE_CODE = { 8: "a", 10: "b", 12: "c", 14: "d" };
+// v4 adds the ROSTER COUNT after the slots (two digits), so the end of the
+// packed roster is known exactly and a trailing "_via-<tag>" can never be read
+// off a payload that merely ends in those characters (base64url uses both "_"
+// and "-"). Mirrors run/refs.py ROSTER_MARKER_V4 / split_via.
+const VIA_SEPARATOR = "_via-";
+const VIA_RE = /^[a-z0-9-]{1,24}$/;
+const V4_SETTINGS = /^([a-z])([a-z])([A-Z]+)(\d{2})$/;
 
 function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
   const prefix = { season: "s", monthly: "m", league_pass: "p" }[plan];
@@ -410,13 +542,172 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
     const value = packOne(id);
     bytes.push((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
   }
-  const ref = prefix + "3-" + scoringCode + sizeCode + slotCodes + "-" +
+  const count = String(playerIds.length).padStart(2, "0");
+  const ref = prefix + "4-" + scoringCode + sizeCode + slotCodes + count + "-" +
               base64url(bytes);
   // Stripe SILENTLY drops an invalid client_reference_id while still showing a
   // working payment page, so this is the only place the failure can be made
   // loud. Asserted before anything navigates.
   if (!REF_RE.test(ref)) throw new Error("encoded ref is not Stripe-safe");
   return ref;
+}
+
+// (the ref without its source tag, the tag or null) — contract C5. The tag
+// starts after exactly 4 characters a player, as the v4 count says; a v2/v3
+// ref never carried one and comes back whole. Mirrors run/refs.py split_via.
+function splitVia(ref) {
+  if (typeof ref !== "string") return [ref, null];
+  const parts = splitRef(ref);
+  if (!parts || parts[0].length !== 2 || parts[0][1] !== "4") return [ref, null];
+  const m = V4_SETTINGS.exec(parts[1]);
+  if (!m) return [ref, null];
+  const tail = parts[2].slice(4 * Number(m[4]));
+  if (tail.startsWith(VIA_SEPARATOR) && VIA_RE.test(tail.slice(VIA_SEPARATOR.length))) {
+    return [ref.slice(0, ref.length - tail.length), tail.slice(VIA_SEPARATOR.length)];
+  }
+  return [ref, null];
+}
+
+// ``ref`` with "_via-<tag>" appended, or unchanged: an unusable tag is
+// DROPPED, never refused (a purchase must never fail over attribution), and
+// only a v4 ref knows where its payload ends. Mirrors run/refs.py with_via.
+function withVia(ref, via) {
+  if (!via || !VIA_RE.test(via) || typeof ref !== "string") return ref;
+  if (!/^[smp]4-/.test(ref) || splitVia(ref)[1] !== null) return ref;
+  const tagged = ref + VIA_SEPARATOR + via;
+  return REF_RE.test(tagged) ? tagged : ref;
+}
+
+// split("-", 2) as Python means it: the payload is base64url and may hold "-".
+function splitRef(ref) {
+  const a = ref.indexOf("-");
+  if (a < 0) return null;
+  const b = ref.indexOf("-", a + 1);
+  if (b < 0) return null;
+  return [ref.slice(0, a), ref.slice(a + 1, b), ref.slice(b + 1)];
+}
+
+function unbase64url(text) {
+  if (!/^[A-Za-z0-9_-]*$/.test(text)) throw new Error("unreadable roster");
+  const padded = text.replace(/-/g, "+").replace(/_/g, "/") +
+                 "=".repeat((4 - (text.length % 4)) % 4);
+  const binary = atob(padded);
+  return Array.from(binary, (c) => c.charCodeAt(0));
+}
+
+function unpackOne(value) {
+  if ((value & DEFENSE_FLAG) === DEFENSE_FLAG) {
+    let letters = "";
+    for (const shift of [10, 5, 0]) {
+      const code = (value >> shift) & 0x1f;
+      if (code) letters += String.fromCharCode(code + 64);
+    }
+    if (!letters) throw new Error("defense entry carries no team");
+    return "DEF-" + letters;
+  }
+  return "00-" + String(value).padStart(7, "0");
+}
+
+// The browser's reading of a ref — a waitlist launch email links back here
+// with ?ref= (contract C6), and the page restores the roster and settings
+// from it for checking. Every failure THROWS, like run/refs.py decode_roster:
+// a partly-read roster restored as if whole is a roster the subscriber did
+// not enter.
+function decodeRoster(ref) {
+  if (typeof ref !== "string" || !REF_RE.test(ref)) throw new Error("not a Stripe-safe reference");
+  const [core, via] = splitVia(ref);
+  const parts = splitRef(core);
+  if (!parts) throw new Error("expected 3 fields");
+  const [head, settings, packed] = parts;
+  const plan = { s: "season", m: "monthly", p: "league_pass" }[head[0]];
+  if (head.length !== 2 || !"234".includes(head[1]) || !plan) throw new Error("not a roster reference");
+  const scoring = { p: "ppr", h: "half_ppr", s: "standard" }[settings[0]];
+  if (!scoring) throw new Error("unknown scoring code");
+  const sizes = { a: 8, b: 10, c: 12, d: 14 };
+  let leagueSize = 12, slotCodes, count = null;
+  if (head[1] === "4") {
+    const m = V4_SETTINGS.exec(settings);
+    if (!m || !(m[2] in sizes)) throw new Error("unreadable v4 settings");
+    leagueSize = sizes[m[2]]; slotCodes = m[3]; count = Number(m[4]);
+    if (packed.length !== 4 * count) throw new Error("the roster is not the players its count says");
+  } else if (head[1] === "3") {
+    if (!(settings[1] in sizes)) throw new Error("unknown league-size code");
+    leagueSize = sizes[settings[1]]; slotCodes = settings.slice(2);
+  } else {
+    slotCodes = settings.slice(1);
+  }
+  const slotNames = {};
+  Object.keys(SLOT_CODE).forEach((name) => { slotNames[SLOT_CODE[name]] = name; });
+  if (!slotCodes || [...slotCodes].some((c) => !(c in slotNames))) throw new Error("bad slot template");
+  const bytes = unbase64url(packed);
+  if (!bytes.length || bytes.length % 3) throw new Error("roster is not a whole number of players");
+  const n = bytes.length / 3;
+  if (n > MAX_ROSTER) throw new Error("roster too long");
+  const playerIds = [];
+  for (let i = 0; i < n; i++) {
+    playerIds.push(unpackOne((bytes[3 * i] << 16) | (bytes[3 * i + 1] << 8) | bytes[3 * i + 2]));
+  }
+  if (new Set(playerIds).size !== playerIds.length) throw new Error("the same player appears twice");
+  if (n < slotCodes.length) throw new Error("more starting slots than players");
+  return { plan, scoring, slots: [...slotCodes].map((c) => slotNames[c]), playerIds,
+           leagueSize, via };
+}
+
+// ---------------------------------------------------------------- //
+// lineup shapes — mirrors engine/subscriber.py LINEUP_SHAPES (contract C8)
+// ---------------------------------------------------------------- //
+
+// A shape is a BASE plus whether the league starts a kicker and a team
+// defense, always in this order: base slots, then K, then DEF. Only the three
+// graded shapes print odds; every other shape gets the lineup, projections
+// and plans with the odds withheld until its own preregistered arm grades it.
+const SHAPE_BASES = {
+  std:   ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX"],
+  flex2: ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "FLEX"],
+  wr3:   ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX"],
+  sf:    ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX"],
+};
+const GRADED_SHAPES = ["std", "sf", "nokd"];
+
+function shapeCode(base, kicker, defense) {
+  if (!(base in SHAPE_BASES)) throw new Error("unknown lineup base " + base);
+  const suffix = kicker && defense ? "" : kicker ? "-nod" : defense ? "-nok" : "-nokd";
+  return base === "std" && suffix === "-nokd" ? "nokd" : base + suffix;
+}
+
+function shapeSlots(base, kicker, defense) {
+  if (!(base in SHAPE_BASES)) throw new Error("unknown lineup base " + base);
+  return SHAPE_BASES[base].concat(kicker ? ["K"] : [], defense ? ["DEF"] : []);
+}
+
+// The shape a code names (a seat link's t=, an old radio value), or null.
+function shapeFromCode(code) {
+  code = code === "std-nokd" ? "nokd" : code;
+  for (const base of Object.keys(SHAPE_BASES)) {
+    for (const kicker of [true, false]) {
+      for (const defense of [true, false]) {
+        if (shapeCode(base, kicker, defense) === code) {
+          return { base, kicker, defense, code, graded: GRADED_SHAPES.includes(code) };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// The shape these exact slots are, or null.
+function shapeOfSlots(slots) {
+  const want = (slots || []).join(",");
+  for (const base of Object.keys(SHAPE_BASES)) {
+    for (const kicker of [true, false]) {
+      for (const defense of [true, false]) {
+        if (shapeSlots(base, kicker, defense).join(",") === want) {
+          return shapeFromCode(shapeCode(base, kicker, defense));
+        }
+      }
+    }
+  }
+  return null;
 }
 
 // Exposed under ONE name in both worlds. In node the tests require() it; in a
@@ -426,7 +717,9 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
 // whole file silently from the page's point of view.
 const R = { normalize, stripDecoration, buildDirectory, resolveLine, resolveAll,
             suggestPlayers, enterPick, addPick, encodeRoster, packOne, REF_RE,
-            MAX_ROSTER, SIZE_CODE };
+            MAX_ROSTER, SIZE_CODE, withVia, splitVia, decodeRoster, shapeCode,
+            shapeSlots, shapeFromCode, shapeOfSlots, SHAPE_BASES, GRADED_SHAPES,
+            exactName, unglue };
 if (typeof module !== "undefined" && module.exports) {
   module.exports = R;
 } else {

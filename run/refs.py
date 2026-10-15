@@ -169,6 +169,27 @@ ROSTER_MARKER = "2"
 # ever been issued to anybody. v2 still decodes, as 12, so nothing that exists
 # breaks.
 ROSTER_MARKER_V3 = "3"
+# v4 adds the ROSTER COUNT (two digits after the slots) and, with it, an
+# optional trailing source tag:
+#
+#     s4-pcQRRWWTFKD15-<60 packed chars>[_via-reddit]
+#
+# Why the count. The tag rides on Stripe's client_reference_id, so a sale can
+# be counted by the channel that brought it (contract C5) — and the packed
+# roster is base64url, whose alphabet INCLUDES "_" and "-". A trailing
+# "_via-..." could therefore be read off the end of a payload that merely
+# happens to end in those characters, dropping the subscriber's last players
+# without an error. With the count the payload's length is known exactly
+# (4 characters a player), so whatever follows it is the tag or nothing, and a
+# truncated ref fails loudly instead of decoding as a shorter roster.
+# The lineup shapes added with v4 (engine.subscriber.LINEUP_SHAPES) need no new
+# field: the slots have always been carried one letter each. v2 and v3 still
+# decode exactly as before, and never carry a tag — the page that issued them
+# never appended one, so nothing is ever stripped from them.
+ROSTER_MARKER_V4 = "4"
+VIA_SEPARATOR = "_via-"
+VIA_RE = re.compile(r"^[a-z0-9-]{1,24}$")
+_V4_SETTINGS_RE = re.compile(r"^([a-z])([a-z])([A-Z]+)(\d{2})$")
 
 # One char, at a FIXED position (settings[1]), so slots stay unambiguous:
 # scoring codes are lowercase, slot codes uppercase, size codes lowercase.
@@ -210,6 +231,9 @@ class RosterRef:
     slots: tuple[str, ...]       # starting slots, in lineup order
     player_ids: tuple[str, ...]  # GSIS ids and DEF-<abbr>, roster order
     league_size: int = DEFAULT_LEAGUE_SIZE
+    # The channel tag a v4 ref carried (contract C5), or None. Attribution
+    # only: nothing about the roster, the plan or the report depends on it.
+    via: str | None = None
 
     @property
     def is_league_pass(self) -> bool:
@@ -253,8 +277,10 @@ def _unpack_one(value: int) -> str:
 
 def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
                   player_ids: list[str] | tuple[str, ...],
-                  league_size: int = DEFAULT_LEAGUE_SIZE) -> str:
-    """Build the v3 ref the intake page puts on the checkout URL."""
+                  league_size: int = DEFAULT_LEAGUE_SIZE,
+                  via: str | None = None) -> str:
+    """Build the v4 ref the intake page puts on the checkout URL, with the
+    source tag appended when one is usable (``with_via``)."""
     if plan not in _PLAN_TO_PREFIX:
         raise RefError(f"unknown plan {plan!r}")
     if scoring not in _SCORING_TO_CODE:
@@ -282,17 +308,59 @@ def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
                        f"{len(player_ids)} players")
     blob = b"".join(_pack_one(pid).to_bytes(3, "big") for pid in player_ids)
     packed = base64.urlsafe_b64encode(blob).decode("ascii").rstrip("=")
-    ref = (f"{_PLAN_TO_PREFIX[plan]}{ROSTER_MARKER_V3}-"
+    ref = (f"{_PLAN_TO_PREFIX[plan]}{ROSTER_MARKER_V4}-"
            f"{_SCORING_TO_CODE[scoring]}{_SIZE_TO_CODE[league_size]}{slot_codes}"
-           f"-{packed}")
+           f"{len(player_ids):02d}-{packed}")
     if not STRIPE_REF_RE.match(ref):
         raise RefError(f"encoded ref is not Stripe-safe: {ref!r}")
-    return ref
+    return with_via(ref, via)
+
+
+def with_via(ref: str, via: str | None) -> str:
+    """``ref`` with ``_via-<tag>`` appended, or unchanged.
+
+    An unusable tag is DROPPED, never refused — the same rule the form Worker
+    applies to the ``via`` field — because a channel tag is attribution, and a
+    purchase must never fail over attribution. Unchanged when: there is no
+    tag, it is not ``^[a-z0-9-]{1,24}$``, the ref is not v4 (only v4 knows
+    where its payload ends), it already carries one, or the result would pass
+    Stripe's 200 characters."""
+    if not via or not VIA_RE.match(via) or not isinstance(ref, str):
+        return ref
+    if not ref.startswith(tuple(f"{p}{ROSTER_MARKER_V4}-" for p in _PREFIX_TO_PLAN)):
+        return ref
+    if split_via(ref)[1] is not None:
+        return ref
+    tagged = f"{ref}{VIA_SEPARATOR}{via}"
+    return tagged if STRIPE_REF_RE.match(tagged) else ref
+
+
+def split_via(ref: str) -> tuple[str, str | None]:
+    """(the ref without its source tag, the tag or None). Contract C5: every
+    decoder strips the tag before decoding, and this is the one place that
+    knows where it starts — after exactly 4 characters a player, as the v4
+    count says, never wherever "_via-" happens to occur. A v2/v3 ref, or
+    anything this cannot read, comes back whole with None; decode_roster is
+    where an unreadable ref is refused."""
+    if not isinstance(ref, str):
+        return ref, None
+    parts = ref.split("-", 2)
+    if (len(parts) != 3 or len(parts[0]) != 2
+            or parts[0][1] != ROSTER_MARKER_V4):
+        return ref, None
+    match = _V4_SETTINGS_RE.match(parts[1])
+    if not match:
+        return ref, None
+    size = 4 * int(match.group(4))
+    tail = parts[2][size:]
+    if tail.startswith(VIA_SEPARATOR) and VIA_RE.match(tail[len(VIA_SEPARATOR):]):
+        return ref[:len(ref) - len(tail)], tail[len(VIA_SEPARATOR):]
+    return ref, None
 
 
 def is_roster_ref(ref: str) -> bool:
     """v1 and the roster refs are told apart on the marker, never on shape."""
-    return bool(isinstance(ref, str) and re.match(r"^[a-z][23]-", ref))
+    return bool(isinstance(ref, str) and re.match(r"^[a-z][234]-", ref))
 
 
 def decode_roster(ref: str) -> RosterRef:
@@ -305,12 +373,15 @@ def decode_roster(ref: str) -> RosterRef:
     """
     if not isinstance(ref, str) or not STRIPE_REF_RE.match(ref):
         raise RefError(f"not a Stripe-safe reference: {ref!r}")
+    whole = ref
+    ref, via = split_via(ref)
     # maxsplit: the payload is base64url and legitimately contains "-".
     parts = ref.split("-", 2)
     if len(parts) != 3:
         raise RefError(f"expected 3 fields, got {len(parts)}: {ref!r}")
     head, settings, packed = parts
-    if len(head) != 2 or head[1] not in (ROSTER_MARKER, ROSTER_MARKER_V3):
+    if len(head) != 2 or head[1] not in (ROSTER_MARKER, ROSTER_MARKER_V3,
+                                         ROSTER_MARKER_V4):
         raise RefError(f"not a roster reference: {ref!r}")
     version = head[1]
     if head[0] not in _PREFIX_TO_PLAN:
@@ -320,7 +391,20 @@ def decode_roster(ref: str) -> RosterRef:
     scoring_code = settings[0]
     if scoring_code not in SCORING:
         raise RefError(f"unknown scoring code {scoring_code!r} in {ref!r}")
-    if version == ROSTER_MARKER_V3:
+    count: int | None = None
+    if version == ROSTER_MARKER_V4:
+        match = _V4_SETTINGS_RE.match(settings)
+        if not match or match.group(2) not in SIZES:
+            raise RefError(f"unreadable v4 settings in {ref!r}")
+        league_size, slot_codes = SIZES[match.group(2)], match.group(3)
+        count = int(match.group(4))
+        if len(packed) != 4 * count:
+            # Anything after the counted payload that is not a well-formed tag
+            # (split_via took that off already) — or a payload cut short — is
+            # a ref we cannot read with certainty. Never a shorter roster.
+            raise RefError(f"the roster in {whole!r} is not the {count} "
+                           f"players its count says")
+    elif version == ROSTER_MARKER_V3:
         if len(settings) < 2 or settings[1] not in SIZES:
             raise RefError(f"unknown league-size code in {ref!r}")
         league_size, slot_codes = SIZES[settings[1]], settings[2:]
@@ -352,4 +436,5 @@ def decode_roster(ref: str) -> RosterRef:
         slots=tuple(SLOTS[c] for c in slot_codes),
         player_ids=ids,
         league_size=league_size,
+        via=via,
     )
