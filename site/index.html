@@ -102,7 +102,9 @@
   /* The season clock, written by the Tuesday build beside this-week.html:
      true urgency, derived, never typed. Static text stays if it can't load. */
   .heroline .clock{color:var(--flag);font-weight:800;}
-  .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;}
+  .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;align-items:center;}
+  .cta-row .textlink{color:var(--dusk2);font-size:15px;padding:10px 2px;}
+  .cta-row .textlink:hover{color:var(--paper);}
 
   /* the Tuesday email, as it arrives: a phone, an inbox row, the report */
   .phonewrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;}
@@ -582,7 +584,7 @@
     </form>
     <p class="watchnote" id="watch-note" role="status"></p>
     <ul class="creds" aria-label="What you get">
-      <li>Built for your exact roster and scoring</li>
+      <li>ESPN, Yahoo, Sleeper, CBS — paste your roster, no login</li>
       <li>Decided calls, with odds and the reason</li>
       <li>Set your lineup in 90 seconds</li>
     </ul>
@@ -635,8 +637,13 @@
         <div class="homebar" aria-hidden="true"></div>
       </div>
     </div>
+    <!-- The full pinned sample is always one tap away; "this week's" appears
+         only when the Tuesday build says this week's live page shows at least
+         three odds (a heavy bye week once left it with nothing to show). -->
     <p class="realtag"><b>Real report</b> · built from the 2024 season, Week 10 ·
-    <a href="this-week.html" style="color:var(--flag)">see this week's</a></p>
+    <a href="sample-report.html" style="color:var(--flag)">read it all</a><span
+    id="this-week-link" hidden> · <a href="this-week.html"
+    style="color:var(--flag)">see this week's</a></span></p>
   </div>
 </header>
 
@@ -706,7 +713,7 @@
   </div>
   <p class="realfoot"><b>Real report</b> · every figure above comes from the published
   <a href="sample-report.html" style="color:var(--flag)">2024 Week 10 sample</a>. The
-  same roster's report for this week, rebuilt every Tuesday, is
+  sample roster's report for this week, rebuilt every Tuesday, is
   <a href="this-week.html" style="color:var(--flag)">here</a>.</p>
 </section>
 
@@ -765,7 +772,7 @@
         <li>Try it risk-free. Full refund, no questions, until your second
         report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, in one click</li>
+        <li>Cancel any time yourself, online — no one to ask</li>
         <li>Billing stops when the season does — we don't charge through
         the offseason</li>
       </ul>
@@ -781,9 +788,9 @@
         <li>Try it risk-free. Full refund, no questions, until your second
         report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, in one click</li>
+        <li>Cancel any time yourself, online — no one to ask</li>
         <li>Founding rate locked in: renews once a year at $39 unless you cancel,
-        never more. We email you first, and cancelling is one click
+        never more. We email you first, and you cancel online yourself
         (<a href="terms.html#cancel">how</a>)</li>
       </ul>
       <div class="soon" id="season-cta">Checkout opens soon<small>Leave your email above for the one message when it does</small></div>
@@ -818,11 +825,11 @@
 <section class="why">
   <div class="whycard">
     <div class="kicker">Why this exists</div>
-    <p class="whyquote">Rankings answer <em>who's good this week.</em> Nobody answers
-    <em>who do I start</em> — for your team, under your scoring, before you're staring at
-    it at 12:55 on Sunday.</p>
+    <p class="whyquote">Rankings tell you <em>who's good this week.</em> Your report tells
+    you <em>who to start</em> — for your team, under your scoring, decided on Tuesday
+    instead of at 12:55 on Sunday.</p>
     <p class="whybody">So we built the report we wanted: every close call on your roster
-    decided on Tuesday, the odds on each one, and the plan for late news. One email, a
+    decided on Tuesday, with the odds and the reason, and the plan for late news. One email, a
     few minutes of your week, and Sunday back to being fun. We're independent and small,
     paid only by subscribers: no ads and no selling your data.</p>
   </div>
@@ -838,21 +845,19 @@
     <div class="faq">
       <details>
         <summary>Does it work with my league app?</summary>
-        <div class="a">Any of them — Sleeper, ESPN, Yahoo, anything. You paste your
-        roster once (or pick names from a list) and we take it from there. No league
-        connection needed.</div>
+        <div class="a">Yes — ESPN, Yahoo, Sleeper, CBS or any other. Paste your roster once (or pick names from a list) and we take it from there. No league login, no password.</div>
       </details>
       <details>
         <summary>Does it match my league's scoring?</summary>
-        <div class="a">Yes. PPR, half-PPR or standard, your league size, and your lineup
-        (superflex too). Every number in your report is worked out your league's way.</div>
+        <div class="a">For the settings most leagues use, yes: full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet.</div>
+      </details>
+      <details>
+        <summary>I'm in more than one league. What do I need?</summary>
+        <div class="a">Each team gets its own report and its own subscription, so most managers start with the league that has the most riding on it and add another the same way. One email address can hold several. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager with one payment.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
-        <div class="a">Tuesday morning, every week of the season, after Monday night's
-        game and days before your lineup locks. Your first one comes the day you sign
-        up. And if Friday's injury report changes your lineup, a short final check
-        lands Saturday with the swap.</div>
+        <div class="a">Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap.</div>
       </details>
       <details>
         <summary>How is this different from free rankings?</summary>
@@ -860,7 +865,11 @@
       </details>
       <details>
         <summary>My league app already has an “optimize lineup” button. Why this?</summary>
-        <div class="a">That button fills your lineup from the app's projections and stops there. It won't tell you how close a call was, why, or what to do if a questionable player sits. Your report decides every close call with the odds on it, gives the reason in a line, sets the if/then for late news, and checks Friday's injury report for you on Saturday.</div>
+        <div class="a">That button fills your lineup from the app's projections when you open the app and press it. Your report comes to you on Tuesday with every close call decided and the reason in a line, an if/then for late news, and a check of Friday's injury report on Saturday — so you don't have to remember to look.</div>
+      </details>
+      <details>
+        <summary>Can't I just ask a chatbot or Google?</summary>
+        <div class="a">You can, every week, if you paste in your roster, your scoring and the latest injury news yourself and remember to ask before Sunday. Your report starts from your roster and your league's scoring, works from the real box scores and injury reports, arrives on Tuesday without you asking, and checks Friday's injury report for you on Saturday.</div>
       </details>
       <details>
         <summary>Who's behind this?</summary>
@@ -876,18 +885,11 @@
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Trades and pickups happen — reply to any report with your updated
-        roster and it follows from the next Tuesday.</div>
+        <div class="a">Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday.</div>
       </details>
       <details>
         <summary>When do the numbers start?</summary>
-        <div class="a">Join in Week 4 or later and your first weekly report carries the
-        odds. (Join after that week's first game and you get your roster report the same
-        day, then the week's report on Tuesday.) Early in a season they start sooner or
-        later depending on your setup: Week 1 sets your lineup in last season's order with
-        no odds, full-PPR 12-team standard lineups get them from Week 2, and every other
-        setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report
-        looks like</a>).</div>
+        <div class="a">Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report looks like</a>).</div>
       </details>
     </div>
   </div>
@@ -947,26 +949,18 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Does it work with my league app?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Any of them — Sleeper, ESPN, Yahoo, anything. You paste your roster once (or pick names from a list) and we take it from there. No league connection needed."}},
-        {"@type": "Question", "name": "Does it match my league's scoring?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Yes. PPR, half-PPR or standard, your league size, and your lineup (superflex too). Every number in your report is worked out your league's way."}},
-        {"@type": "Question", "name": "When does it arrive?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
-        {"@type": "Question", "name": "How is this different from free rankings?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
-        {"@type": "Question", "name": "My league app already has an “optimize lineup” button. Why this?",
-         "acceptedAnswer": {"@type": "Answer", "text": "That button fills your lineup from the app's projections and stops there. It won't tell you how close a call was, why, or what to do if a questionable player sits. Your report decides every close call with the odds on it, gives the reason in a line, sets the if/then for late news, and checks Friday's injury report for you on Saturday."}},
-        {"@type": "Question", "name": "Who's behind this?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to hello@beatyourleague.com."}},
-        {"@type": "Question", "name": "Can I check how it decides?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
-        {"@type": "Question", "name": "How long does it take each week?",
-         "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
-        {"@type": "Question", "name": "What if my roster changes mid-season?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
-        {"@type": "Question", "name": "When do the numbers start?",
-         "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4."}}
+        {"@type": "Question", "name": "Does it work with my league app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — ESPN, Yahoo, Sleeper, CBS or any other. Paste your roster once (or pick names from a list) and we take it from there. No league login, no password."}},
+        {"@type": "Question", "name": "Does it match my league's scoring?", "acceptedAnswer": {"@type": "Answer", "text": "For the settings most leagues use, yes: full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet."}},
+        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription, so most managers start with the league that has the most riding on it and add another the same way. One email address can hold several. Running a whole league? The League Pass covers every manager with one payment."}},
+        {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
+        {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
+        {"@type": "Question", "name": "My league app already has an “optimize lineup” button. Why this?", "acceptedAnswer": {"@type": "Answer", "text": "That button fills your lineup from the app's projections when you open the app and press it. Your report comes to you on Tuesday with every close call decided and the reason in a line, an if/then for late news, and a check of Friday's injury report on Saturday — so you don't have to remember to look."}},
+        {"@type": "Question", "name": "Can't I just ask a chatbot or Google?", "acceptedAnswer": {"@type": "Answer", "text": "You can, every week, if you paste in your roster, your scoring and the latest injury news yourself and remember to ask before Sunday. Your report starts from your roster and your league's scoring, works from the real box scores and injury reports, arrives on Tuesday without you asking, and checks Friday's injury report for you on Saturday."}},
+        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to hello@beatyourleague.com."}},
+        {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
+        {"@type": "Question", "name": "How long does it take each week?", "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
+        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
+        {"@type": "Question", "name": "When do the numbers start?", "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4."}}
       ]
     }
   ]
@@ -998,10 +992,14 @@ const TRIAL_OPEN = false;
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");
   if (tryCta) tryCta.hidden = false;
-  // Three buttons in one row wrap unevenly and dilute the two that matter; the
-  // real report is a click away in the nav, under the phone and in the FAQ.
+  // Three buttons in one row wrap unevenly and dilute the two that matter, but
+  // the full report must stay one tap away from the hero: on a phone the next
+  // link to it is three screens down (launch audit). It becomes a text link.
   const sample = document.getElementById("hero-sample");
-  if (sample) sample.hidden = true;
+  if (sample) {
+    sample.className = "textlink";
+    sample.textContent = "or read a real report first";
+  }
 }
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
@@ -1308,6 +1306,10 @@ if (!reduced) {
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
+        if (w && Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call) {
+          const link = document.getElementById("this-week-link");
+          if (link) link.hidden = false;
+        }
         if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return;
         const left = w.last_week - w.week;
         if (left < 1 || !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) return;

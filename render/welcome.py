@@ -27,6 +27,10 @@ from run.delivery import Message
 SEASON_PRICE = "$39"
 MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$99"
+# The terms a buyer ticks at checkout. Equal to the "Last updated" date on
+# site/terms.html (tested), and stamped on every Customer with their consent
+# (run/intake._consent) so a renewal can always be tied to the words agreed to.
+TERMS_VERSION = "2026-10-15"
 
 _FONT = "font-family:Arial,Helvetica,sans-serif;"
 _BODY = f"{_FONT}font-size:15px;line-height:1.6;color:#33445C;"
@@ -113,11 +117,11 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     bought, terms = _plan_terms(plan)
     href, label = _cancel_destination()
     cancel_line = (
-        "Cancel any time, yourself, in about fifteen seconds — "
+        "Cancel any time, yourself, in about a minute — "
         + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>.'
            if href else "the steps are on our site's terms page.")
     )
-    cancel_text = ("Cancel any time, yourself, in about fifteen seconds — "
+    cancel_text = ("Cancel any time, yourself, in about a minute — "
                    + (f"{label}: {href}" if href else
                       "the steps are on our site's terms page."))
 

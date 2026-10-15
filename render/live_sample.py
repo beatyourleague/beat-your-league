@@ -1,11 +1,12 @@
-"""This week's report, for the published sample roster — site/this-week.html.
+"""This week's report, for a 2026 sample roster — site/this-week.html.
 
 Usage:
     python -m render.live_sample [--out PATH]
 
 The published sample (render/sample.py) is a 2024 week: reproducible and
 pinned, and silently saying "this product isn't running yet" to anyone who
-notices the year. This page is its live twin: the same roster, rebuilt every
+notices the year. This page is its live twin: a 2026 sample roster
+(LIVE_ROSTER, chosen by a stated pre-season rule), rebuilt every
 Tuesday by the weekly cron for the week being played, through the same
 pipeline a subscriber's report goes through. Nothing is recorded — it is not
 a subscriber, so none of its calls enter the public ledger — and the page says
@@ -24,10 +25,43 @@ from pathlib import Path
 
 from engine.subscriber import RosterSpec
 from render.report import TEMPLATE_PATH, render
-from render.sample import SAMPLE_ROSTER, SLOTS
+from render.sample import SLOTS
 from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# The live sample's own roster (Oct 2026). It used to be the pinned 2024
+# sample's roster, which had three Lions and two Bengals: in their shared bye
+# week the bench emptied and the page the landing links as proof printed no
+# odds, no closest call and no if/then (launch audit). Chosen ONCE by a stated
+# pre-season rule and never by this season's results, so it cannot flatter:
+# a mid-round 12-team PPR team — for each target rank, the player at that
+# 2025 PPR points-per-game rank (8+ games) who has a 2026 team, moving down a
+# rank while the roster already holds that position's bye week or two players
+# on it; one defense, the 5th-best by 2025 points allowed per game, by the same
+# bye rule. Targets: QB 6, 16 · RB 5, 14, 26, 38, 50 · WR 4, 13, 25, 37, 49 ·
+# TE 7, 19 · K 8 · DEF 5. Pinned, because a trade would otherwise reshuffle it.
+LIVE_ROSTER = (
+    "00-0037834",  # Brock Purdy         QB  SF  (QB6)
+    "00-0034796",  # Lamar Jackson       QB  BAL (QB16)
+    "00-0039040",  # De'Von Achane       RB  MIA (RB5)
+    "00-0036973",  # Travis Etienne      RB  NO  (RB14)
+    "00-0040784",  # Quinshon Judkins    RB  CLE (RB26)
+    "00-0039032",  # Tyjae Spears        RB  TEN (RB38)
+    "00-0040202",  # Devin Neal          RB  WAS (RB50)
+    "00-0036963",  # Amon-Ra St. Brown   WR  DET (WR4)
+    "00-0039064",  # Zay Flowers         WR  BAL (WR13)
+    "00-0039919",  # Rome Odunze         WR  CHI (WR25)
+    "00-0037261",  # Khalil Shakir       WR  BUF (WR40)
+    "00-0037545",  # Rashid Shaheed      WR  SEA (WR50)
+    "00-0030506",  # Travis Kelce        TE  KC  (TE9)
+    "00-0030061",  # Zach Ertz           TE  PHI (TE19)
+    "00-0031136",  # Chris Boswell       K   PIT (K12)
+    "DEF-KC",      # Chiefs              DEF (6th by points allowed)
+)
+# Below this many printed odds the page doesn't show what the landing sells,
+# and the landing's hero stops linking it that week (week.json "odds").
+SHOWCASE_MIN_ODDS = 3
 LIVE_OUT = REPO_ROOT / "site" / "this-week.html"
 
 
@@ -37,7 +71,7 @@ def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
     known = {p.player_id for p in data.directory.players}
     # A sample player who has left the league since 2024 is dropped rather
     # than failing the page; the roster stays well past a full lineup.
-    roster = tuple(pid for pid in SAMPLE_ROSTER if pid in known)
+    roster = tuple(pid for pid in LIVE_ROSTER if pid in known)
     spec = RosterSpec(player_ids=roster, slots=SLOTS, scoring="ppr",
                       label="Sample roster")
     report = report_for(spec, data, league_size=12)
@@ -69,10 +103,16 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None) -> No
     page shows the line only in the days just before ``lands_on``."""
     import json
     meta = report["meta"]
+    odds = sum(1 for slot in report.get("lineup") or []
+               if slot.get("confidence") is not None)
     path.write_text(json.dumps({
         "season": meta["season"], "week": meta["week"],
         "last_week": meta.get("last_week"), "lands_on": lands_on,
         "built_at": meta.get("generated_at"),
+        # What the live page shows this week, so the landing links it only
+        # when it actually shows the product (launch audit: a bye week once
+        # left it with nothing).
+        "odds": odds, "closest_call": "gate" not in (report.get("regret") or {"gate": 1}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 

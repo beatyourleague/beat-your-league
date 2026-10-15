@@ -268,7 +268,8 @@ def sweep(api_key: str, since: int | None = None,
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
-                _promote(api_key, customer, ref, plan or "season")
+                _promote(api_key, customer, ref, plan or "season",
+                         consent=_consent(session))
             except SubscriptionError as exc:
                 # Promotion is a durability optimisation, not the signup — the
                 # signup is already in hand.
@@ -276,15 +277,37 @@ def sweep(api_key: str, since: int | None = None,
     return signups, newest, problems
 
 
-def _promote(api_key: str, customer: str, ref: str, plan: str) -> None:
+def _consent(session: dict) -> dict[str, str]:
+    """The renewal-consent record for one purchase (California's auto-renewal
+    law asks for affirmative consent and proof of it, kept three years).
+
+    The payment links require the terms box (infra/stripe_paylink_text.py,
+    whose checkbox text names the yearly renewal and its amount); Stripe marks
+    the session consent.terms_of_service = "accepted". Copied onto the
+    Customer with the time and the terms version, because a Checkout Session
+    has no documented retention and a Customer lives as long as they do."""
+    from render.welcome import TERMS_VERSION
+    accepted = ((session.get("consent") or {}).get("terms_of_service") == "accepted")
+    created = session.get("created")
+    if not accepted:
+        return {}
+    return {"byl_terms_accepted": "yes",
+            "byl_terms_version": TERMS_VERSION,
+            "byl_terms_accepted_at": str(created) if isinstance(created, int) else ""}
+
+
+def _promote(api_key: str, customer: str, ref: str, plan: str,
+             consent: dict[str, str] | None = None) -> None:
     """Copy the roster onto the Customer, where it lives as long as they do.
 
     Stripe documents no retention guarantee for old Checkout Sessions, so this
     caps our dependence on session listability at one week instead of a season.
-    Metadata writes MERGE, so this is additive and idempotent.
+    Metadata writes MERGE, so this is additive and idempotent. The consent
+    record rides along (``_consent``).
     """
-    _stripe_post(f"{CUSTOMERS_API}/{urllib.parse.quote(customer)}", api_key,
-                 {f"metadata[{META_REF}]": ref, f"metadata[{META_PLAN}]": plan})
+    form = {f"metadata[{META_REF}]": ref, f"metadata[{META_PLAN}]": plan}
+    form.update({f"metadata[{k}]": v for k, v in (consent or {}).items()})
+    _stripe_post(f"{CUSTOMERS_API}/{urllib.parse.quote(customer)}", api_key, form)
 
 
 # --------------------------------------------------------------------- #

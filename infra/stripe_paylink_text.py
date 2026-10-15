@@ -35,7 +35,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from render.welcome import MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE  # noqa: E402
+from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE,  # noqa: E402
+                            TERMS_VERSION)
 from run.checkout import parse_link_plans  # noqa: E402
 
 API = "https://api.stripe.com/v1/payment_links"
@@ -46,19 +47,47 @@ KEY_SHAPE = re.compile(r"^[rs]k_(live|test)_[A-Za-z0-9]{20,}$")
 
 CANCEL = ("you can cancel any time from your billing page")
 
+# The renewal sentence must say what terms.html §3 says: once a year, on the
+# anniversary of the purchase. It said "each season", which no code enforces
+# and the terms contradict (launch audit, Oct 2026).
 MESSAGES = {
     "season": (
-        f"Renews automatically each season at {SEASON_PRICE} USD unless you "
-        f"cancel. We email you before any renewal, and {CANCEL} — the link is "
-        f"in every report we send."),
+        f"Renews automatically once a year, on the date you buy, at "
+        f"{SEASON_PRICE} USD until you cancel. We email you before any renewal, "
+        f"and {CANCEL} — the link is in every report we send."),
     "monthly": (
         f"Bills {MONTHLY_PRICE} USD monthly until you cancel. Billing stops "
         f"automatically when the season ends — we never charge through the "
-        f"offseason."),
+        f"offseason. {CANCEL[0].upper()}{CANCEL[1:]}."),
     "league_pass": (
-        f"Renews automatically each season at {PASS_PRICE} USD unless you "
-        f"cancel. We email you before any renewal, and {CANCEL}."),
+        f"Renews automatically once a year, on the date you buy, at {PASS_PRICE} "
+        f"USD until you cancel. We email you before any renewal, and {CANCEL}."),
 }
+
+# The box the buyer ticks. California's auto-renewal law wants affirmative
+# consent to the renewal terms and a record of it; Stripe records the tick on
+# the Checkout Session (consent.terms_of_service = "accepted"), and the intake
+# copies it onto the Customer with the terms version (run/intake.py). Needs the
+# Terms of service URL set in Stripe -> Settings -> Business -> Public details.
+TERMS_URL = "https://beatyourleague.com/terms.html"
+TOS_MESSAGES = {
+    "season": (f"I agree to the [Terms]({TERMS_URL}), including that this pass "
+               f"renews automatically once a year at {SEASON_PRICE} USD until I "
+               f"cancel, and I am 18 or older."),
+    "monthly": (f"I agree to the [Terms]({TERMS_URL}), including that this plan "
+                f"bills {MONTHLY_PRICE} USD every month until I cancel or the "
+                f"season ends, and I am 18 or older."),
+    "league_pass": (f"I agree to the [Terms]({TERMS_URL}), including that this "
+                    f"League Pass renews automatically once a year at "
+                    f"{PASS_PRICE} USD until I cancel, and I am 18 or older."),
+}
+
+
+def fields(plan: str) -> dict[str, str]:
+    """Everything this script writes onto one payment link."""
+    return {"custom_text[submit][message]": MESSAGES[plan],
+            "consent_collection[terms_of_service]": "required",
+            "custom_text[terms_of_service_acceptance][message]": TOS_MESSAGES[plan]}
 
 
 def _call(url: str, key: str, form: dict | None = None) -> dict:
@@ -122,13 +151,15 @@ def main() -> int:
     print()
     for plan in ("season", "monthly", "league_pass"):
         link = by_plan[plan]
-        _call(f"{API}/{urllib.parse.quote(link)}", key,
-              {"custom_text[submit][message]": MESSAGES[plan]})
+        _call(f"{API}/{urllib.parse.quote(link)}", key, fields(plan))
         # Read it back rather than trusting the write: a 200 says Stripe
         # accepted the request, not that the field says what we meant.
         back = _call(f"{API}/{urllib.parse.quote(link)}", key)
-        got = ((back.get("custom_text") or {}).get("submit") or {}).get("message")
-        ok = got == MESSAGES[plan]
+        custom = back.get("custom_text") or {}
+        got = (custom.get("submit") or {}).get("message")
+        tos = (custom.get("terms_of_service_acceptance") or {}).get("message")
+        consent = (back.get("consent_collection") or {}).get("terms_of_service")
+        ok = got == MESSAGES[plan] and tos == TOS_MESSAGES[plan] and consent == "required"
         print(f"  [{'ok ' if ok else 'FAIL'}] {plan:12} {link}")
         print(f"         {(got or 'MISSING')[:96]}")
         if not ok:

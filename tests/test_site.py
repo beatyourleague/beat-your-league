@@ -905,7 +905,7 @@ def test_cancelling_has_concrete_steps_not_just_a_promise() -> None:
     # is a platform decision; that it names ONE is not negotiable.
     assert re.search(r"(substack|stripe|billing)\S*\.com\S*/\S+", legal, re.I), \
         "the self-serve cancel path must name a concrete place to go"
-    assert re.search(r"billing stops immediately", legal, re.I)
+    assert re.search(r"no further charges", legal, re.I)
     # Self-serve must be the advertised route: any promise that WE cancel on
     # request creates an inbox someone has to watch every day of the season.
     assert not re.search(r"reply to (any report|this email) with the word", legal, re.I), \
@@ -2834,7 +2834,23 @@ def test_the_pay_button_disclosure_quotes_the_price_the_page_charges() -> None:
     assert MONTHLY_PRICE in MESSAGES["monthly"]
     assert PASS_PRICE in MESSAGES["league_pass"]
     # Each tier's disclosure must state ITS renewal shape, not another's.
-    assert "each season" in MESSAGES["season"] and "monthly" not in MESSAGES["season"]
+    # Once a year, on the purchase date — what terms.html §3 says. "Each
+    # season" contradicted the terms (launch audit, Oct 2026).
+    assert "once a year" in MESSAGES["season"] and "monthly" not in MESSAGES["season"]
+    assert "once a year" in MESSAGES["league_pass"]
+    assert not any("each season" in m for m in MESSAGES.values())
+    from infra.stripe_paylink_text import TOS_MESSAGES, fields
+    for plan in MESSAGES:
+        assert "18 or older" in TOS_MESSAGES[plan] and "[Terms](" in TOS_MESSAGES[plan]
+        assert fields(plan)["consent_collection[terms_of_service]"] == "required"
+    assert SEASON_PRICE in TOS_MESSAGES["season"] and "once a year" in TOS_MESSAGES["season"]
+    assert PASS_PRICE in TOS_MESSAGES["league_pass"]
+    from render.welcome import TERMS_VERSION
+    import datetime as _dt
+    terms = (SITE / "terms.html").read_text(encoding="utf-8")
+    stamp = _dt.date.fromisoformat(TERMS_VERSION)
+    assert f"Last updated {stamp.day} {stamp:%B %Y}" in terms, \
+        "terms.html's Last updated date must equal TERMS_VERSION, the version consent is recorded against"
     assert "offseason" in MESSAGES["monthly"], (
         "the monthly disclosure omits the season-end stop, which is the one "
         "promise a monthly buyer most needs at the moment of paying")
@@ -3021,7 +3037,7 @@ def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) ->
                     "2026-10-20")
     assert _json.loads(out.read_text()) == {
         "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-20",
-        "built_at": "2026-10-13T12:05:00+00:00"}
+        "built_at": "2026-10-13T12:05:00+00:00", "odds": 0, "closest_call": False}
     try:
         day = next_report_day(CACHE_DIR, "2026", 5)
     except Exception:                                   # pragma: no cover
@@ -3078,3 +3094,33 @@ def test_the_plan_on_screen_is_the_plan_charged_after_back() -> None:
     assert 'window.addEventListener("pageshow", applyPlan)' in switch
     assert 'monthlyChosen = radio("plan") === "monthly"' in switch
     assert 'showError("err-email", "")' in switch
+
+
+
+def test_the_faq_says_the_same_thing_to_people_and_to_search_engines() -> None:
+    """The FAQ is answered twice: in the page and in its JSON-LD. Only the
+    questions were checked, so an answer could be fixed on the page and stay
+    false in the markup crawlers quote (launch audit, Oct 2026). Every answer
+    in the markup must be the page's answer, word for word (links dropped)."""
+    import html as _html
+    import json as _json
+    block = re.search(r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S)
+    faq = next(n for n in _json.loads(block.group(1))["@graph"] if n["@type"] == "FAQPage")
+    visible = {}
+    for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>",
+                           LANDING, re.S):
+        a = re.sub(r"\s*\(<a href=\"sample-first-week.html\">.*?</a>\)", "", a, flags=re.S)
+        visible[_html.unescape(q)] = re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", "", a))).strip()
+    assert len(faq["mainEntity"]) == len(visible)
+    for item in faq["mainEntity"]:
+        assert visible.get(item["name"]) == item["acceptedAnswer"]["text"], item["name"]
+
+
+def test_the_landing_names_the_league_apps_in_the_hero() -> None:
+    """Launch audit: "does it work with my app?" is a target buyer's first
+    question, and the platforms were named only in a collapsed FAQ, eight phone
+    screens down. They are in the hero's first line of credentials now."""
+    hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
+    creds = re.search(r'<ul class="creds".*?</ul>', hero, re.S).group(0)
+    for app in ("ESPN", "Yahoo", "Sleeper", "CBS"):
+        assert app in creds, f"the hero no longer names {app}"

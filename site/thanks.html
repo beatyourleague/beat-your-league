@@ -68,6 +68,11 @@
   b{color:var(--navy);}
   .note{background:var(--card);border-left:5px solid var(--flag);padding:12px 14px;margin:14px 0;
     font-size:14px;line-height:1.6;}
+  .passnote p{margin:8px 0;font-size:14.5px;line-height:1.55;}
+  .passnote p.small{font-size:13px;color:var(--slate);}
+  .passnote button{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.08em;
+    text-transform:uppercase;background:var(--flag);color:var(--navy);border:0;padding:10px 14px;
+    cursor:pointer;min-height:40px;}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
 </style>
@@ -88,6 +93,21 @@
     from the roster you just entered, so it is not a template we had sitting around. If it
     has not arrived after that, check your spam folder; marking it &quot;not spam&quot; once
     keeps every future report in your inbox.</div>
+
+    <!-- A League Pass buyer lands here with ?plan=pass (the pass payment link's
+         success URL). The seat link used to flash for an instant before the
+         redirect to Stripe and then never be shown again (launch audit). -->
+    <div class="note passnote" id="pass-note" hidden><b>Your League Pass is live. Send your
+    league this:</b>
+      <p id="pass-chat">I got us the League Pass from Beat Your League: everyone gets their
+      own lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours
+      up here: https://beatyourleague.com/join/?pass=1 and enter the email I paid with when
+      it asks.</p>
+      <button type="button" id="pass-copy">Copy for the group chat</button>
+      <p class="small">Each manager pastes their own roster and enters the email you paid
+      with; that's how their seat is matched to your pass. Their first report lands the next
+      Tuesday. The same link is in your welcome email.</p>
+    </div>
 
     <ol class="steps">
       <li><b>Today</b>Your first report, built from the roster you just entered.</li>
@@ -119,7 +139,7 @@
     <h2>3. Changed your mind</h2>
     <p>Full refund, no questions, any time until your second weekly report's week kicks off —
     one per person (<a href="terms.html#refunds">the exact terms</a>). And you can
-    cancel yourself in about fifteen seconds from your billing page, whose link is at the
+    cancel yourself in about a minute from your billing page, whose link is at the
     bottom of every report we send; <a href="terms.html#cancel">the steps are here</a>. We do
     not ask why, and there is no retention call.</p>
 
@@ -131,6 +151,23 @@
     <p style="margin-top:22px"><a href="index.html">← Back to the site</a> &middot;
     <a href="sample-report.html">See a sample report</a></p>
 </main>
+<script>
+"use strict";
+if (new URLSearchParams(location.search).get("plan") === "pass") {
+  const note = document.getElementById("pass-note");
+  note.hidden = false;
+  const copy = document.getElementById("pass-copy");
+  copy.addEventListener("click", () => {
+    const text = document.getElementById("pass-chat").textContent.replace(/\s+/g, " ").trim();
+    const selectIt = () => window.getSelection().selectAllChildren(document.getElementById("pass-chat"));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; }, selectIt);
+    } else {
+      selectIt();
+    }
+  });
+}
+</script>
   <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under
   consumer law where you live.</footer>

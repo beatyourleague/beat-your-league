@@ -81,6 +81,18 @@
   .steps ol{margin:10px 0 0 20px;font-size:15px;line-height:1.7;color:var(--dusk2);}
   .steps li b{color:var(--paper);}
   /* The closed state sits where the button will: the landing's switched-off shape. */
+  .soon small{display:block;font-family:'Barlow';font-weight:600;font-size:13px;
+    letter-spacing:0;text-transform:none;margin-top:3px;}
+  .soon small a{color:var(--navy);}
+  .see{margin-top:14px;font-size:14px;}
+  .see a{color:var(--turf);font-weight:700;}
+  .chatline-head{margin-top:14px;font-size:14px;font-weight:700;color:var(--paper);}
+  .chatline{display:flex;gap:10px;align-items:flex-start;margin-top:6px;
+    background:rgba(255,255,255,.05);border:1px dashed var(--gold-edge);padding:10px 12px;}
+  .chatline p{margin:0;font-size:14px;line-height:1.55;flex:1;min-width:0;}
+  .chatline button{flex:none;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
+    border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
   .soon{margin-top:18px;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
     background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 16px;}
@@ -115,9 +127,10 @@
     <div class="box"><h3>Nobody's team gets shared</h3>
       <p>Each report goes only to the manager it's about. We never share one manager's
       report with another, and we never publish your league's names anywhere.</p></div>
-    <div class="box"><h3>It's cheaper than one buy-in</h3>
-      <p>Twelve individual passes would cost $468, and ten would cost $390. This is $99 for
-      every manager in your league who signs up, often less than one team's entry fee.</p></div>
+    <div class="box"><h3>About $8 a manager, out of dues</h3>
+      <p>Twelve individual passes would cost $468, and ten would cost $390. The League Pass
+      is $99 for every manager who signs up — about $8.25 each in a 12-team league ($9.90 in
+      a 10-team one), easy to take from this year's pot.</p></div>
   </div>
 
   <div class="price">
@@ -133,7 +146,10 @@
       <li>Renews once a year at $99 unless you cancel. We email you first, and you can
       cancel yourself any time.</li>
     </ul>
-    <div class="soon" id="league-cta">Checkout opens soon</div>
+    <div class="soon" id="league-cta">Checkout opens soon<small><a href="index.html#watch-form">Leave
+      your email</a> for the one message when it does</small></div>
+    <p class="see"><a href="sample-report.html">See the report each manager gets</a> ·
+    <a href="how-it-works.html">How it works</a></p>
     <p class="fine">Any manager in the league can buy it; you don't have to be the commissioner.
     Managers who never sign up simply don't get a report, and there's no charge either way.
     Leagues of 8, 10, 12 or 14 teams are all covered.</p>
@@ -150,6 +166,14 @@
       <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their own
       report lands the next Tuesday.</li>
     </ol>
+    <p class="chatline-head">Something to paste in the group chat:</p>
+    <div class="chatline">
+      <p id="chat-text">I got us the League Pass from Beat Your League: everyone gets their own
+      lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours up
+      here: https://beatyourleague.com/join/?pass=1 and enter the email I paid with when it
+      asks.</p>
+      <button type="button" id="chat-copy">Copy</button>
+    </div>
   </div>
 
   <h2>Fair play</h2>
@@ -174,13 +198,33 @@
 // payment carries the league it covers — that is what tells us whose seats to
 // honour. They paste a roster too: the pass buys them their own report as well.
 const CHECKOUT_OPEN = false;
-if (CHECKOUT_OPEN) {
+// A pass sold before seats can be claimed is a $99 promise to eleven people we
+// cannot keep: seats arrive through the form Worker. Flip this the day
+// FORM_ENDPOINT is set on the join page (launch audit, Oct 2026).
+const SEATS_OPEN = false;
+if (CHECKOUT_OPEN && SEATS_OPEN) {
   const slot = document.getElementById("league-cta");
   const link = document.createElement("a");
   link.className = "btn";
   link.href = "join/index.html?plan=pass";
   link.textContent = "Buy the League Pass — $99";
   slot.replaceWith(link);
+}
+// The group-chat line: one tap, then paste. Clipboard writes can be refused
+// (older browsers, in-app views); the text is selectable either way.
+const copy = document.getElementById("chat-copy");
+if (copy) {
+  copy.addEventListener("click", () => {
+    const text = document.getElementById("chat-text").textContent.replace(/\s+/g, " ").trim();
+    const done = () => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 2000); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, () => {
+        window.getSelection().selectAllChildren(document.getElementById("chat-text"));
+      });
+    } else {
+      window.getSelection().selectAllChildren(document.getElementById("chat-text"));
+    }
+  });
 }
 </script>
 </body>
