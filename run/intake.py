@@ -745,7 +745,10 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
             spec = spec_from_ref(roster)
             report = build_preseason_report(
                 spec, data.directory, data.prior, season, CACHE_DIR,
-                season_started=getattr(data, "week", 1) > 1, byes=byes)
+                season_started=getattr(data, "week", 1) > 1, byes=byes,
+                # The week this run already derived, so the roster report's
+                # "weeks ahead" and this run agree on what "now" is.
+                from_week=getattr(data, "week", None))
             messages.append(preseason_message(
                 signup.email, signup.slug, report,
                 purchased_at=str(signup.seen_at or "")))

@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Iterable
 
 import render.report as render_report
-from render.report import cancel_destination
+from render.report import unsubscribe_target
 from render.email import render_email, subject_for, text_summary
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
@@ -197,7 +197,9 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # For a PAID subscription there is no free list to leave — unsubscribing
         # and cancelling are the same act — so it points at where the money
         # actually stops.
-        unsubscribe=cancel_destination()[0] or None,
+        # A League Pass seat has no money to stop, so its way out is a stop
+        # request (render.report.unsubscribe_target).
+        unsubscribe=unsubscribe_target(subscriber.is_league_seat),
     )
 
     # Every published probability lands on the ledger (principle 2) at the
@@ -504,12 +506,18 @@ def main(argv: list[str] | None = None) -> int:
                          resend_anyway=args.resend)
         delivered = [s for s in sends if s.ok and not s.skipped]
         skipped = [s for s in sends if s.skipped]
+        # A stopped address is skipped too, and counted apart: folded into
+        # "already sent" it would hide a subscriber who asked us to stop and
+        # later paid again (run/suppress.py --remove undoes it).
+        stopped = [s for s in sends if getattr(s, "suppressed", False)]
         # Deliberately NOT named `failed`: that name holds the subscribers whose
         # report could not be BUILT, and rebinding it made a run where somebody's
         # report failed but every send succeeded exit 0.
         send_failures = [s for s in sends if not s.ok]
         print(f"Delivery via {provider.name}: {len(delivered)} sent, "
-              f"{len(skipped)} already sent, {len(send_failures)} failed")
+              f"{len(skipped) - len(stopped)} already sent, "
+              + (f"{len(stopped)} on the stop list, " if stopped else "")
+              + f"{len(send_failures)} failed")
         for send in send_failures:
             # The idempotency key carries the ref digest, never an address.
             print(f"    FAILED {send.message.key}: {send.detail}", file=sys.stderr)

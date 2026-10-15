@@ -203,6 +203,43 @@ def test_the_email_states_no_probability() -> None:
     assert "Sat Nov 9, 11:00 AM ET" in html
 
 
+def test_a_seat_holders_final_check_gives_a_stop_route_not_a_billing_page(
+        monkeypatch) -> None:
+    """A League Pass seat holder pays nothing and has no Stripe subscription,
+    so "cancel from your billing page" on their Saturday check pointed at a
+    page where their address finds no customer — no way out at all (final
+    review C4, Oct 15 2026). A seat's footer carries the stop route on both
+    halves; a paying subscriber's still carries the billing page."""
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/test")
+    plan = _roster()
+    changes = final_check(plan, _now(plan, te=OUT))
+    at = datetime(2024, 11, 9, 16, tzinfo=timezone.utc)
+    for seat_body in (render_final_check(plan, changes, at, seat=True),
+                      text_for_check(plan, changes, at, seat=True)):
+        assert "within 10 business days" in seat_body
+        assert "billing" not in seat_body.lower()
+        assert "billing.stripe.com" not in seat_body
+    for paid_body in (render_final_check(plan, changes, at),
+                      text_for_check(plan, changes, at)):
+        assert "billing.stripe.com/p/test" in paid_body
+
+
+def test_both_senders_point_a_seats_unsubscribe_header_at_a_stop_request() -> None:
+    """The List-Unsubscribe header is the mail app's own button; for a seat it
+    must reach the stop route, not a billing page (C4). Pinned at the source of
+    both senders, since the header is built where the Message is."""
+    import inspect
+    import run.saturday as saturday
+    import run.tuesday as tuesday
+    for module in (tuesday, saturday):
+        source = inspect.getsource(module)
+        assert "unsubscribe=unsubscribe_target(subscriber.is_league_seat)" in source
+        assert "cancel_destination()[0]" not in source
+    from render.report import unsubscribe_target
+    assert unsubscribe_target(True).startswith("mailto:") and \
+        unsubscribe_target(True).endswith("?subject=stop")
+
+
 def test_subject_lines_say_what_to_do() -> None:
     plan = _roster()
     one = final_check(plan, _now(plan, te=OUT))

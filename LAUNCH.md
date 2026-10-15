@@ -74,7 +74,9 @@ the offer of a refund.
    these show on receipts, so they decide whether you stay anonymous.
 
    **Settings → Billing → Customer portal:** confirm **Cancel subscriptions** is allowed
-   (the terms promise self-serve cancelling).
+   (the terms promise self-serve cancelling), and set **Cancellation mode** to **At end of
+   billing period** — the terms and every report say reports continue to the end of the
+   period already paid for, then stop.
 
    **Settings → Business → Branding** (the new logo, Sep 29 2026 — Stripe still shows the
    old one or none until you do this; it's on the checkout page, receipts and invoices):
@@ -127,7 +129,9 @@ happens, and before the free-report button is switched on.
 5. **Reply as hello@, not as you (15 min):** in Gmail → Settings → Accounts → **Send mail as**
    → add `hello@beatyourleague.com`, SMTP server `smtp.resend.com`, port 465, username
    `resend`, password = a second Resend key with Sending access. Refund and roster emails
-   then go out from hello@, so your personal address never reaches a customer.
+   then go out from hello@, so your personal address never reaches a customer. The privacy
+   policy names Google (Gmail) as the mailbox hello@ forwards to; if that ever changes, the
+   policy changes with it.
 6. **A sender address (decision, ~US$10/month):** US and Canadian anti-spam law want a postal
    address in marketing email. Rent a virtual mailbox or PO box — never your home — and put it
    in the GitHub secret `SENDER_POSTAL_ADDRESS` (step 3). The launch announcement refuses to
@@ -166,7 +170,7 @@ Keys go only into these boxes — never into chat, a note or a file. The three r
 secrets (`FORM_ENDPOINT`, `FORM_API_KEY`, `UPDATE_SECRET`) come in step 5; until then the
 features that need them stay off rather than half-working.
 
-**Tell me when all eight are in.** I put the three payment links back on the join page and
+**Tell me when all nine are in.** I put the three payment links back on the join page and
 switch the pricing buttons on; it's live on the next push, and step 4 needs it.
 
 ## 4. The proving run (~1 hour)
@@ -179,8 +183,8 @@ green. Nobody else's money moves until you've watched your own go all the way th
    with your own email and a real card. Enter your real roster.
 2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should finish green.
 3. **Check your inbox for two emails:**
-   - **The welcome:** $39, renews yearly at $39, refunds "until your second weekly file's
-     week kicks off", and the cancel link opens your Stripe billing page.
+   - **The welcome:** $39, renews yearly at $39, refunds until your second weekly report's
+     week kicks off, and the cancel link opens your Stripe billing page.
    - **Your first file:** this week's report, because you bought before kickoff. Open it on
      your phone and on a computer.
    - **Open it in the clients we can't test from here:** Gmail (phone and web, with your
@@ -232,9 +236,12 @@ and decides nothing: every row is checked before it reaches the subscriber list.
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
    `UPDATE_SECRET` = step 4's value.
 6. **Tell me the Worker URL** (it isn't a secret). I wire it into the homepage's email form
-   and the join, confirm and League Pass pages, switch the League Pass button on, change
-   the FAQ's roster answer to the link, and — once email sending (step 2) works too — turn on
-   the homepage's "Try it free on your roster" button (`TRIAL_OPEN`). Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
+   and the join, confirm and League Pass pages, switch the League Pass button on (the join
+   page's own League Pass checkout opens by itself once the Worker URL is in — it is never
+   sold before seats can be claimed), change the FAQ's roster answer to the link, and — once
+   email sending (step 2) works too — turn on the homepage's "Try it free on your roster"
+   button (`TRIAL_OPEN`). Keep that button on only while the season is running: a free-report
+   request made before the season's first game, or more than 14 days old, is never mailed. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
    email list on today.
 
 7. **Put it on your own domain (5 min):** Worker → **Settings → Domains & Routes → Add →
@@ -303,6 +310,17 @@ week (the daily watchdog checks that each Tuesday's reports and each Saturday's 
 ran). Before that week's first kickoff, run that workflow by hand from the Actions tab —
 nobody is mailed twice. After kickoff, don't: the Tuesday run now refuses to build a report
 about games already underway, and that week is lost.
+
+**When someone asks to stop.** Mail to hello@ that says stop or unsubscribe (a League Pass
+seat's mail-app unsubscribe button arrives with the subject "stop"):
+- If they **pay**, reply with the billing-page link instead — stopping a payer's emails while
+  billing continues is the one wrong answer.
+- Otherwise run this, then commit and push within 10 business days (the crons read the
+  committed list, which holds a digest, never the address):
+  ```bash
+  .venv/bin/python -m run.suppress their@example.com
+  ```
+- If someone on the list signs up again, `.venv/bin/python -m run.suppress --remove their@example.com`.
 
 **How's demand?** Pull, then run:
 ```bash

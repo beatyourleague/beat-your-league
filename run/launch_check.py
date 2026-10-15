@@ -779,7 +779,7 @@ def check_compliance() -> list[Gate]:
                        f"Last updated {stamp.day} {stamp:%B %Y}" in terms,
                        f"terms.html's Last updated date ≠ TERMS_VERSION {TERMS_VERSION}"))
     privacy = visible_text((SITE / "privacy.html").read_text(encoding="utf-8"))
-    missing = [p for p in ("Stripe", "Resend", "Cloudflare", "GitHub", "United States")
+    missing = [p for p in ("Stripe", "Resend", "Cloudflare", "GitHub", "Google", "United States")
                if p not in privacy]
     gates.append(_gate("Compliance", "The privacy policy names every processor and where data lives",
                        not missing, f"missing: {', '.join(missing)}"))

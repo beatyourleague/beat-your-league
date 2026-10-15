@@ -487,3 +487,25 @@ a replayed week would mark a past starter out for a present injury. This is
 the fail-closed direction — it can only remove seats and calls, never add a
 number — and it does not touch this harness, which has no historical roster
 status and is unchanged. No new arm is needed for a rule that withholds.
+
+
+### C8 — correction to C7: a withholding rule at the gate can add a number (2026-10-15)
+
+C7's last sentence was wrong. Excluding a player at the gate does not only
+remove seats and calls: when the excluded player was a slot's best bench
+option, the next bench player becomes the comparison, and a call that had been
+withheld can appear, or a published one can move. The final adversarial review
+measured it: moving the roster-status rule (and the bye of a player's current
+team) into the gate published 9 percentages across 240 live rosters that the
+frozen gate had not.
+
+So the live-week rules now live in the REPORT layer, not the gate:
+`engine.solo_report.live_availability` marks a reserve-list or released player
+OUT even when he has no stat row this season (he was UNKNOWN at the gate, seated
+and counted), and marks a player OUT when his CURRENT team is on bye. The lineup
+is rebuilt on those facts, and `keep_frozen_odds` keeps only odds the frozen gate
+already published for the same pair at the same slot; every other row is held.
+Measured on the same 240 rosters: the published odds are a strict subset of the
+gate's (0 added, 9 removed), and the 2025 proving weeks 4–5 record the identical
+111 calls. This harness is untouched, and the rule still needs no arm, because
+it now really can only withhold.

@@ -60,12 +60,40 @@ that shows a real close call.
 | Go-to-market | 3, at risk | **Added:** posts that lead with the manager's question and one fact; `make ask` for the product's own answer to "A or B?" (the % only when it's recorded publicly); `?via=` channel tags counted by `make stats`; a League Pass group-chat line and a pass-buyer thank-you page. Owner: one pseudonymous handle, Reddit answers only |
 | Brand | 7, go | — |
 
+## The final review (after the fixes)
+
+A second adversarial pass over the fixed product: four reviewers (the report on 240+ real
+rosters this week, operations, the site in a browser with checkout switched on, every page
+and email for wording and law), each finding re-attacked by a second agent before it counted.
+**37 confirmed, 7 refuted, all 37 fixed**, each pinned by a test. The ones that mattered:
+
+- **Players who can't play were still started** when they had no stats yet this season
+  (released kickers, injured-reserve tight ends, a backup whose team was on bye) — 29 of 240
+  random rosters. They're now benched or flagged, and no new odds appear because of it.
+- **Plans that couldn't be followed:** an if/then that moved in a Thursday-night player to
+  cover a Sunday starter's Friday news (the flagship sample had one). Every plan now uses a
+  player who is still unlocked, or says plainly that nobody can step in.
+- **The public record could hold a pick nobody received** after a Tuesday retry. Calls are
+  now recorded only when their email is delivered.
+- **The missed-run alarm could stay quiet** when one person bought that week, and false-alarm
+  in launch week; **old free-report requests could be re-mailed** the next season;
+  **a new buyer could be welcomed twice**. All fixed.
+- **The League Pass could be bought before seats could be claimed**, and **seat holders had
+  no way to stop their emails**. The pass now waits for its seats, and seats get a stop route
+  backed by a stop list.
+- **The terms and privacy policy promised things nothing does** (one-click cancelling,
+  automatic deletions). They now say only what happens.
+
+`make launch-check` after the fixes: **57 pass · 0 fail · 1 warn (unpushed commits) ·
+6 owner.** Full suite: 1,359 passing.
+
 ## Must be true before the first payment (owner)
 
 All in `LAUNCH.md`, in this order:
 
 1. **Steps 1–3:** payment links checked, Stripe public details (business name, support email
-   hello@, no phone or address — receipts show them), the Pay-button script (it now also makes
+   hello@, no phone or address — receipts show them), the customer portal set to cancel at
+   the end of the paid period, the Pay-button script (it now also makes
    the terms box required), Resend verified, **DMARC**, Gmail "Send mail as" hello@, all GitHub
    secrets, and the **fork pull-request approval setting** (the public repo's cache holds the
    subscriber list).

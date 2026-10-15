@@ -167,9 +167,15 @@ The report is `reports/launch-readiness.md`; `make launch-check` holds the rest 
   their last report. Decide: stop on Jan 10 after the last Saturday check, or disclose it.
 - **A weekly share card for this-week.html** (closest call + rising roles as a PNG og:image),
   and a dated archive of past live-sample weeks a skeptic can check against box scores.
-- **Retention clean-out.** The privacy policy promises deletion within 12 months after a
-  subscription ends; a small `run/prune` over the signup log (Stripe-checked) would make that
-  automatic rather than a yearly owner task.
+- **Retention clean-out.** The privacy policy now promises only what happens (form rows
+  expire after ~13 months; the rest is deleted on request). A small `run/prune` over the
+  signup log and registry (Stripe-checked) would let it promise deletion a set time after a
+  subscription ends, which is the better policy.
+- **Drop GitHub's backup schedule for the weekly run** once the Worker dispatch has a few
+  weeks of on-time starts. It is the last path to a duplicate first email: a failed on-time
+  Tuesday run whose 5–7 h late backup overlaps an hourly intake (CLAUDE.md, final review).
+- **A self-serve stop for League Pass seats** (a `kind:"stop"` row confirmed by email, like
+  roster updates), replacing the reply-and-`run.suppress` routine once seats exist in number.
 - **Re-pin the published sample to a genuinely close call (52–62%)**, chosen by a stated rule
   before outcomes are looked at — the current flagship close call (70%) reads as "start your
   studs" to a savvy buyer. Moves every pinned landing figure, so it's a deliberate decision.

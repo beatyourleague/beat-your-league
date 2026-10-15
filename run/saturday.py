@@ -50,7 +50,7 @@ from typing import Any, Mapping, Sequence
 
 from engine.final_check import Now, final_check, worth_sending
 from render.final_check import render_final_check, subject_for_check, text_for_check
-from render.report import cancel_destination
+from render.report import unsubscribe_target
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import RosterRegistryError, load_rosters
@@ -399,11 +399,11 @@ def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster
     return "send", Message(
         to=subscriber.email,
         subject=subject_for_check(week, changes),
-        html=render_final_check(plan, changes, at),
-        text=text_for_check(plan, changes, at),
+        html=render_final_check(plan, changes, at, seat=subscriber.is_league_seat),
+        text=text_for_check(plan, changes, at, seat=subscriber.is_league_seat),
         # Its own key, distinct from Tuesday's, and once per week.
         key=f"{season}-w{week:02d}-final-{subscriber.slug}",
-        unsubscribe=cancel_destination()[0] or None)
+        unsubscribe=unsubscribe_target(subscriber.is_league_seat))
 
 
 def _could_mail(args) -> bool:
@@ -565,9 +565,15 @@ def main(argv: list[str] | None = None) -> int:
         sends = send_all(messages, provider=provider, resend_anyway=args.resend)
         delivered = [s for s in sends if s.ok and not s.skipped]
         skipped = [s for s in sends if s.skipped]
+        # A stopped address is skipped too, and counted apart: folded into
+        # "already sent" it would hide a subscriber who asked us to stop and
+        # later paid again (run/suppress.py --remove undoes it).
+        stopped = [s for s in sends if getattr(s, "suppressed", False)]
         failures = [s for s in sends if not s.ok]
         print(f"Delivery via {provider.name}: {len(delivered)} sent, "
-              f"{len(skipped)} already sent, {len(failures)} failed")
+              f"{len(skipped) - len(stopped)} already sent, "
+              + (f"{len(stopped)} on the stop list, " if stopped else "")
+              + f"{len(failures)} failed")
         for send in failures:
             print(f"    FAILED {send.message.key}: {send.detail}", file=sys.stderr)
         if provider.name == DRY_PROVIDER:

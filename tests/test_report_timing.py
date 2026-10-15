@@ -182,7 +182,7 @@ def test_a_thursday_alternative_is_never_the_plan_for_a_sunday_starter() -> None
     assert ANSWER_EITHER_WAY not in sunday["detail"]
     assert sunday["detail"] == ("If Wade Wideout is out, nobody on your bench can "
                                 "step in at WR in time — Will Deepman plays "
-                                "before his news is in.")
+                                "before Wade Wideout's status is known.")
     row = _row(report, "Wade Wideout")
     assert row["if_then"] is False and row_label(row) == "questionable"
     for name, page in _surfaces(report).items():

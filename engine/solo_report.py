@@ -560,7 +560,7 @@ def no_stand_in_line(name: str, slot: str, early: Sequence[str]) -> str:
     if early:
         return (f"If {name} is out, nobody on your bench can step in at {slot} "
                 f"in time — {_join_words(list(early))} "
-                f"{'plays' if len(early) == 1 else 'play'} before his news is in.")
+                f"{'plays' if len(early) == 1 else 'play'} before {name}'s status is known.")
     return f"If {name} is out, nobody on your bench can play {slot}."
 
 

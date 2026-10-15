@@ -43,8 +43,9 @@
  * a bad attribution tag must not cost a signup.
  *
  * Rows EXPIRE about 400 days after they arrive (ROW_TTL_SECONDS). The privacy
- * page says we keep what we hold while it is in use and for a short period
- * after, then delete it — and nothing here ever deleted anything; every row
+ * page says form entries delete themselves within about 13 months of
+ * arriving, and this TTL is the only thing that makes that true — before it,
+ * nothing here ever deleted anything; every row
  * lived in KV forever. 400 days is the longest any row is needed: a
  * seat claim is re-read every week of the season it was made for (the roster
  * it names is that season's), a waitlist address waits at most one offseason
@@ -109,7 +110,8 @@ function sanitizeKind(body) {
   const email = String(body.email || "").trim().toLowerCase();
   if (!EMAIL.test(email) || email.length > 254) return null;
   if (kind === "waitlist") {
-    // The launch list holds the address and nothing else.
+    // The launch list holds the address (plus the optional via tag sanitize()
+    // adds to every kind).
     return { kind, email };
   }
   const ref = String(body.ref || "").trim();

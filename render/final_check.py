@@ -18,8 +18,8 @@ from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP, WATCH,
                                 Change)
 from render.email import (tick_box, BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
                           NAVY, PAPER, SLATE, SMALL, TURF, TURF_TINT, _sec)
-from render.report import (EMAIL_META, preheader_html, CANCEL_BODY, CANCEL_HEAD, NFLVERSE_LINE,
-                           NO_BETTING_LINE, cancel_destination, esc)
+from render.report import (EMAIL_META, preheader_html, NFLVERSE_LINE,
+                           NO_BETTING_LINE, cancel_html, cancel_lines, esc)
 
 ACT = (SWAP, NO_FILL, BACK)
 KEEP_AN_EYE = (WATCH, REMINDER)
@@ -89,7 +89,9 @@ def _items(items: list[Change], tint: str, rule_colour: str, box: bool) -> str:
 
 @buyer_slots
 def render_final_check(plan: Mapping[str, Any], changes: list[Change],
-                       at: datetime) -> str:
+                       at: datetime, seat: bool = False) -> str:
+    """``seat``: a League Pass seat holder, who has no billing to cancel, so
+    the footer gives a stop route instead (render.report.cancel_html)."""
     week = esc(plan["week"])
     header = (
         f'<tr><td style="background:{NAVY};padding:24px 28px;'
@@ -113,7 +115,6 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         else:
             body = _items(items, TURF_TINT, TURF, box=False)
         sections.append(_sec(0, HEADS[key], body))
-    href, label = cancel_destination()
     footer = (
         f'<tr><td style="padding:18px 28px 0 28px;"><p style="{BASE}margin:0;">'
         f'{esc(STANDS)}</p></td></tr>'
@@ -122,10 +123,8 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — injury '
         f'designations from each team\'s official report, as published.<br>'
         f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
-        + (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
-           if href else "")
-        + '</p></td></tr>')
+        f'{cancel_html(seat, f"color:{NAVY};")}'
+        '</p></td></tr>')
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
@@ -143,7 +142,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
 
 @buyer_slots
 def text_for_check(plan: Mapping[str, Any], changes: list[Change],
-                   at: datetime) -> str:
+                   at: datetime, seat: bool = False) -> str:
     lines = [f"BEAT YOUR LEAGUE — WEEK {plan['week']} FINAL CHECK",
              PREHEADER, f"Injury news as of {_eastern(at)}", ""]
     for key, items in _groups(changes):
@@ -152,9 +151,6 @@ def text_for_check(plan: Mapping[str, Any], changes: list[Change],
             lines.append(f"{'[ ] ' if key == 'act' else '- '}{item.action}")
             lines.append(f"    {item.detail}")
         lines.append("")
-    lines += [STANDS, "", NO_BETTING_LINE, NFLVERSE_LINE,
-              f"{CANCEL_HEAD} {CANCEL_BODY}"]
-    href, label = cancel_destination()
-    if href:
-        lines.append(f"CANCEL: {label} — {href}")
+    lines += [STANDS, "", NO_BETTING_LINE, NFLVERSE_LINE, "",
+              *cancel_lines(seat)]
     return "\n".join(lines) + "\n"

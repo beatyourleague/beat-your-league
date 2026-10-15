@@ -1101,7 +1101,12 @@ take money until LAUNCH.md's owner steps are done; treat 2026 as a proof season.
   — a rented mailbox, never a home); the launch announcement refuses to send without one.
 - **Crons start from the form Worker** (scheduled(), `0,30 * * * *`, secret GH_DISPATCH_TOKEN),
   GitHub's schedules as backup; `run/watchdog.py` goes red when a Tuesday send or Saturday check
-  never happened; pre-launch (no registry, no Stripe key) Tuesday/Saturday exit 0 "not set up
+  never happened — its only evidence is the run's own marker (`run-tuesday-<season>-wNN` /
+  `run-saturday-…`, written at the end of every run that got as far as sending, failures
+  included; never a report key, which a new buyer's first email shares), and it alarms only
+  when some subscriber bought before the run was due (unknown purchase times count as owed);
+  the 14:00 once-a-day steps claim the UTC day (`run-daily-<date>`), so the Worker dispatch
+  plus GitHub's cron run them once; pre-launch (no registry, no Stripe key) Tuesday/Saturday exit 0 "not set up
   yet". The hourly intake runs at :30, never alongside Tuesday/Saturday.
 - **The Tuesday run refuses a derived week that has kicked off** (a late backup run or a hand
   re-run would publish calls about games underway); "week underway" is the first kickoff to the
@@ -1116,6 +1121,59 @@ take money until LAUNCH.md's owner steps are done; treat 2026 as a proof season.
   line, then the %. `?via=` tags ride form rows (cookie-free) and `make stats` counts them.
 - **Money:** Stripe costs about 7% of a $39 pass on this account ($2.72, kept on a refund) —
   `run/economics.py`; PLAN §2 corrected.
+
+**The final adversarial review (Oct 15 2026) — 37 confirmed, 7 refuted, all fixed.** Four lenses
+(the report on real rosters, operations, the funnel in a browser, copy and compliance), each
+finding reproduced and then re-attacked by a second agent before it counted. Rules it left:
+- **Live-week availability is fixed in the REPORT layer, never the gate.** A teamless
+  reserve-list or released player (no 2026 stat row, so the gate never placed him) and a player
+  whose CURRENT directory team is on bye are OUT through `engine.solo_report.live_availability`;
+  the lineup is rebuilt on today's facts and `keep_frozen_odds` keeps only odds the frozen gate
+  already published (anything else is held). Doing it at the gate published 9 new percentages
+  across 240 live rosters, because a released player had been the bench option blocking a
+  call. Measured: the 240-roster battery publishes a strict subset of the old odds (0 added,
+  9 removed). A row's game comes from today's team, never a carried-forward one. Method §15 C8.
+- **No plan names a player whose game kicks off before the news it waits for.** The if/then
+  for a questionable starter, the "if he's cleared" swap and its Saturday promise all skip
+  candidates who play earlier (a Thursday bench player cannot cover a Sunday starter's Friday
+  news); the next eligible one in time is used, or the report says plainly that nobody can.
+  The pinned sample's if/then moved from Chase Brown (Thursday) to Sam LaPorta. Every player
+  the game plan names has a printed if/then — the cap is gone.
+- **A call is recorded when its email is DELIVERED** (`run.tuesday.record_delivered`, shared
+  with the intake's first email), never at build time, and a subscriber whose week is already
+  in the send log is not rebuilt unless `--resend`. A retry after a Tuesday line move once
+  recorded "Prescott over Maye" beside the mailed "Maye over Prescott".
+- **Only daily.yml's intake mails.** Tuesday's intake runs `run.intake --no-mail`: two intakes
+  in different concurrency groups, each reading its own checkout of sent.jsonl, welcomed one
+  buyer twice. Residual, accepted: a failed on-time Tuesday run whose late GitHub backup
+  overlaps an hourly :30 run can still mail a brand-new buyer that week's report twice (a
+  duplicate, never a wrong one); dropping the GitHub backup once the Worker has a track record
+  closes it (IDEAS.md).
+- **Free-report requests expire** — 14 days (`TRIAL_MAX_AGE`), and never from before the
+  current season's first game: the Worker keeps rows ~400 days and the key is per season, so
+  last October's served request was mailed again the next June.
+- **Every reader has a way out that works.** A League Pass SEAT has no subscription, so its
+  welcome says it CLAIMED a seat, and its footers (`render.report.cancel_html`/`cancel_lines`)
+  and List-Unsubscribe (`unsubscribe_target` → `mailto:hello@…?subject=stop`) give a stop
+  route, off within 10 business days, backed by the stop list `run/suppress.py` →
+  `data/processed/suppressed.txt` (committed, digests only, the trial-key canonicalisation).
+  `run/delivery.send_all` checks it before every send: suppressed = skipped and counted apart,
+  unreadable = fail closed, the pre-renewal notice the one exception. Paid footers say reports
+  continue to the end of the period paid for, then stop (portal: cancel at period end). The
+  free report carries the sender line; every mailing workflow step maps
+  `SENDER_POSTAL_ADDRESS`.
+- **Privacy states only what something performs:** form rows expire after about 13 months
+  (the Worker TTL); everything else is deleted on request. It names Google (Gmail, the hello@
+  inbox), says Stripe's customer record holds the roster reference and the consent record, and
+  mentions the optional channel tag. Terms §3 no longer says cancelling is "one click"; the
+  retired-claims gate now reads terms and privacy, whitespace-normalised.
+- **The League Pass is gated on its seats on the join page too** (`PASS_LINK = FORM_ENDPOINT ?
+  STRIPE_LINK_PASS : ""`); a closed plan's button says what pressing it does; `?via=` rides
+  every link into the funnel (one `carryVia`, identical on every page, URL only); the
+  group-chat line is copyable only when it is true and makes the commissioner add the email
+  they paid with; type-to-add appends one row so earlier choices survive.
+- **The roster report sent after kickoff lists only the weeks still ahead** (`from_week`),
+  subject included, and says "weekly report".
 
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
@@ -1462,7 +1520,9 @@ delivery layer as reports (`welcome-{season}-{slug}`, no address in the key — 
 committed); a failed send retries next run because only successes are logged; unconfigured email
 reports "N pending" without failing, since the registry is intake's contract. `daily.yml` sweeps
 every day at 14:00 UTC so the acknowledgment and the BLOCKED-signup alarm arrive within a day, not
-six; Tuesday's intake step carries the same env as belt over braces. Prices are constants tied to
+six; Tuesday's intake step runs `run.intake --no-mail` and holds no email secret — only
+daily.yml's intake mails (Oct 15 2026: two intakes in different concurrency groups welcomed one
+buyer twice). Prices are constants tied to
 the live pages by test. NOTE the cancel destination is env-driven: `BILLING_PORTAL_URL` (Stripe
 customer portal — owner enables in Dashboard → Settings → Billing) with `SITE_URL/legal.html#cancel`
 as the fallback; with neither set the email still names the legal page in prose, never a dead link.
