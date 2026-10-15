@@ -175,5 +175,30 @@
   guarantees, and this page is not legal advice. NFL data: nflverse (nflverse-data), CC-BY-4.0.
   Not affiliated with the NFL.</footer>
 </div>
+<script>
+"use strict";
+// A cookie-free source tag (?via=<channel>), carried onto the links below.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+  });
+}
+</script>
 </body>
 </html>

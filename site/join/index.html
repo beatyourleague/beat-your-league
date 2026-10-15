@@ -75,6 +75,11 @@
   .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
     font-size:13.5px;color:#7A2C1F;}
   .err:empty{display:none;}
+  /* A done message is not an alert. "We kept your email" in the red box read
+     as a failure (launch audit F6); it gets the green the done block uses. */
+  .ok{margin-top:10px;padding:10px 12px;background:var(--turf-tint);border-left:4px solid var(--turf);
+    font-size:13.5px;line-height:1.5;color:#14502E;}
+  .ok:empty{display:none;}
   .scout{background:var(--card);border:2px solid var(--navy);padding:16px 18px;margin-top:6px;}
   .scout .lead{font-family:'Barlow Condensed';font-weight:800;font-size:21px;
     text-transform:uppercase;line-height:1.12;}
@@ -200,6 +205,9 @@
   #submit.is-closed{background:#EEEBE2;color:var(--slate);border:1.5px dashed #C9C3B4;
     box-shadow:none;}
   #submit.is-closed:hover{transform:none;}
+  /* Pressed and done (the launch list kept the email): it stops posting rows. */
+  #submit:disabled{background:var(--turf-tint);color:var(--turf);border:1.5px solid var(--turf);
+    box-shadow:none;transform:none;}
   .retry{margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
     font-size:14px;padding:9px 14px;}
   .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
@@ -343,6 +351,7 @@ Baltimore Ravens
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
     </form>
     <div class="err" id="err-email" role="alert" tabindex="-1"></div>
+    <div class="ok" id="ok-email" role="status"></div>
     <div class="done" id="done">
       <b id="done-head">You're all set.</b>
       <ol>
@@ -355,7 +364,7 @@ Baltimore Ravens
         this roster. It only goes to the address your reports go to, and nothing
         changes until it's pressed.</li>
         <li id="trial-note" style="display:none">It's built from the roster you just
-        entered and usually lands within the hour. From Thursday night's first kickoff
+        entered and usually lands within the hour. From the week's first kickoff
         until Tuesday it waits for the next week's report, so it's never about games
         already underway. One free report per person — nothing to pay, no card.</li>
         <li id="pay-note">Card details never touch our systems — Stripe handles the
@@ -402,7 +411,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=93f71adc76"></script>
+<script src="roster.js?v=450f52df98"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -439,6 +448,19 @@ const FORM_ENDPOINT = "";
 const NOTIFY_LIST_ENDPOINT = "";
 // The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
+// The League Pass is for sale only while its seats can be claimed. Seats
+// arrive through FORM_ENDPOINT, so a pass sold before it exists is a $99
+// promise to eleven people we cannot keep — and the payment links come back
+// (LAUNCH.md step 3) before the Worker does (step 5). league-pass.html gates
+// its button on SEATS_OPEN; this page sold the pass to anyone holding the
+// ?plan=pass link regardless (launch audit F1). Every use of the pass link
+// goes through this one constant.
+const PASS_LINK = FORM_ENDPOINT ? STRIPE_LINK_PASS : "";
+// A plan for the buyer's OWN team that can take money right now, for a pass
+// buyer who arrives while the pass waits on seats: somewhere to go that
+// exists, rather than a front-page form the landing hides once checkout works.
+const OWN_PLAN_HREF = STRIPE_LINK_SEASON ? "index.html"
+                    : STRIPE_LINK_MONTHLY ? "index.html?plan=monthly" : "";
 // Stripe accepts up to 200 chars of [A-Za-z0-9_-] and SILENTLY DROPS anything
 // else while still showing a working payment page. The browser is the only
 // place that failure can be made loud, so it is checked before we navigate.
@@ -455,6 +477,25 @@ const QUERY = new URLSearchParams(location.search);
 // ^[a-z0-9-]{1,24}$ and drops anything else without refusing the row.
 const VIA = (new URLSearchParams(location.search).get("via") || "")
   .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+  });
+}
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
 // season pass, so a mangled link can never silently downgrade the sale.
 const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
@@ -478,7 +519,7 @@ let monthlyChosen = WANTS_MONTHLY;
 // "Continue to checkout — $39", entered fifteen names, and learned at submit
 // that nothing had been saved. Exactly the disappointment this note exists to
 // move earlier.
-const PLAN_LINK = WANTS_PASS ? STRIPE_LINK_PASS
+const PLAN_LINK = WANTS_PASS ? PASS_LINK
                 : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
 if (!PLAN_LINK) {
   const note = document.getElementById("closed-note");
@@ -523,8 +564,10 @@ const TEMPLATES = {
 };
 
 const $ = (id) => document.getElementById(id);
+// ``stale``: the box was typed in since the list on screen was read from it.
+// ``listed``: the launch list already has this visitor's email (one row a visit).
 const state = { directory: null, matches: [], ready: false, dirFailed: false,
-                dirLoading: false };
+                dirLoading: false, stale: false, listed: false };
 
 function radio(name) {
   const picked = document.querySelector(`input[name="${name}"]:checked`);
@@ -540,6 +583,10 @@ function showError(id, message) {
   // A refusal at submit is announced (role=alert) and focused, so neither a
   // screen reader nor a phone user is left on a button that did nothing.
   if (message && id === "err-email") $(id).focus({ preventScroll: false });
+}
+// Something that WORKED, in the done style (role=status, not alert).
+function showOk(message) {
+  $("ok-email").textContent = message;
 }
 
 // Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
@@ -595,11 +642,20 @@ function suggestions(query) {
 
 function addPlayer(player) {
   const box = $("roster-text");
+  // The list on screen carries decisions the box does not: "pick one" and
+  // "remove" change the list, never the text. Re-reading the whole box on an
+  // add silently undid every one of them and blocked checkout again (launch
+  // audit F7). So a checked, unedited list gains ONE row — the player tapped,
+  // which is the answer, not a name to look up — and only a list that was
+  // never checked, or was typed over since, is read from the box afresh.
+  const keep = state.matches.length > 0 && !state.stale;
   box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + player.name + "\n";
   searchBox.value = "";
   suggestBox.replaceChildren();
   // Re-check immediately so the tally follows every add without extra taps.
-  state.matches = R.resolveAll(state.directory, box.value);
+  state.matches = keep ? R.addPick(state.directory, state.matches, player)
+                       : R.resolveAll(state.directory, box.value);
+  state.stale = false;
   draw();
 }
 
@@ -642,6 +698,7 @@ $("resolve").addEventListener("click", () => {
     return;
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
+  state.stale = false;
   draw();
 });
 
@@ -652,6 +709,7 @@ $("resolve").addEventListener("click", () => {
 // input event — it re-checks itself on the next line.)
 $("roster-text").addEventListener("input", () => {
   if (!state.matches.length) return;
+  state.stale = true;
   state.ready = false;
   $("step-email").classList.add("hidden");
   const tally = $("tally");
@@ -697,11 +755,14 @@ function draw(focusAt) {
       (match.twins || []).forEach((twin) => {
         left.appendChild(textCell("twin", "not " + twin.name + "? tap to swap"));
       });
-      const duplicate = dupOf[index];
-      if (duplicate !== undefined) {
+      // Named, never numbered: "line 1" counted players, not lines of the
+      // box (a Sleeper paste puts a "QB" header above Josh Allen), and rows
+      // that need work are drawn FIRST, so the row it pointed at sat below
+      // it (launch audit F9).
+      if (dupOf[index] !== undefined) {
         row.className = "row bad";
         left.appendChild(textCell("why",
-          "you already listed this player on line " + (duplicate + 1)));
+          match.player.name + " is already on your roster — remove one"));
       }
     } else {
       // Shown back verbatim — never dropped.
@@ -791,6 +852,15 @@ wireEnter("form-roster", "resolve");
 $("form-email").addEventListener("submit", (event) => {
   event.preventDefault();
   showError("err-email", "");
+  showOk("");
+  // A closed plan's button reads "Switch to …" when the other plan can take
+  // money this minute, and pressing it does exactly that — before any email
+  // is asked for. It used to read "Email me when checkout opens" there and
+  // then record nothing (launch audit F5).
+  if (switchesPlan()) {
+    switchPlan();
+    return;
+  }
   const email = $("email").value.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     showError("err-email", "That email doesn't look right.");
@@ -835,21 +905,17 @@ $("form-email").addEventListener("submit", (event) => {
     return;
   }
 
-  const link = WANTS_PASS ? STRIPE_LINK_PASS
+  const link = WANTS_PASS ? PASS_LINK
              : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
   const otherLink = WANTS_PASS ? ""
              : monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY;
-  if (!link && otherLink) {
-    showError("err-email", (monthlyChosen ? "Monthly" : "The season pass") +
-      " isn't open yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
-      " is. Switch to it above and you can buy today.");
-    return;
-  }
   if (!link) {
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
     // is kept — EMAIL ONLY, and they are told exactly that.
-    if (NOTIFY_LIST_ENDPOINT) {
+    if (closedAction(otherLink) === "list") {
+      if (state.listed) return;            // one row a visit; the button is off
+      $("submit").disabled = true;          // a second press mid-flight is a second row
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kind: "waitlist", email: email, via: VIA }),
@@ -858,19 +924,29 @@ $("form-email").addEventListener("submit", (event) => {
       // rejected the row would be this page claiming a save that didn't happen.
       }).then((response) => {
         if (!response.ok) throw new Error("rejected");
-        showError("err-email", "Checkout isn't open just yet — we're finishing " +
-          "setup. Your roster isn't saved (redoing it takes a minute), but we " +
-          "kept your email: you'll get the link the morning checkout opens.");
+        // A done message, and the button stops: it used to show in the red
+        // alert box and post another row on every press (launch audit F6).
+        state.listed = true;
+        showOk("Checkout isn't open just yet — we're finishing setup. Your roster " +
+          "isn't saved (redoing it takes a minute), but we kept your email: " +
+          "you'll get the link the morning checkout opens.");
+        noteClosedFor(link, otherLink);
       }).catch(() => {
-        showError("err-email", "Checkout isn't open just yet. Your roster isn't saved, but " +
-          "leave your email on the front page and you'll get one message the " +
-          "morning it opens.");
+        $("submit").disabled = false;
+        showError("err-email", "Checkout isn't open just yet, and that didn't send — " +
+          "check your connection and try again. Your roster isn't saved.");
       });
       return;
     }
-    showError("err-email", "Checkout isn't open just yet. Your roster isn't saved, but " +
-      "leave your email on the front page and you'll get one message the " +
-      "morning it opens.");
+    if (WANTS_PASS && OWN_PLAN_HREF) {
+      showError("err-email", "The League Pass isn't open just yet — nothing was " +
+        "charged, and your roster isn't saved. A plan for your own team is open " +
+        "now: the link is at the top of this page.");
+      return;
+    }
+    showError("err-email", (WANTS_PASS ? "The League Pass" : "Checkout") +
+      " isn't open just yet. Your roster isn't saved, but leave your email on " +
+      "the front page and you'll get one message the morning checkout opens.");
     return;
   }
   if (WANTS_PASS) showSeatLink();
@@ -1011,32 +1087,74 @@ function closedUpFront(what) {
 // Checkout closed is decided per plan (links arrive one at a time), and now
 // per CHOICE: switching to a plan whose link is still empty must say so
 // before anyone types an email, not after.
-const CLOSED_NOTE = [...$("closed-note").childNodes].map((n) => n.cloneNode(true));
-// ``other`` is the link of the plan NOT chosen, when there is a choice: links
-// arrive one at a time, so "checkout isn't open" while the other plan can be
-// bought this minute would turn away a sale the page could make.
+//
+// What the button DOES while this plan cannot take money, and so what it says
+// (launch audit F5/F6 — a label promising a capture that never happened):
+//   "switch" — the other plan can be bought this minute: pressing switches.
+//   "list"   — the email list is connected: pressing keeps the email, once.
+//   "none"   — nothing to do here: the switched-off look.
+// ``other`` is the link of the plan NOT chosen, when there is a choice.
+function closedAction(other) {
+  if (other) return "switch";
+  // The launch list is one message "when checkout opens". A pass buyer whose
+  // own team's plan is already open has had that moment; listing them would
+  // send a launch email about a checkout that already works.
+  if (NOTIFY_LIST_ENDPOINT && !(WANTS_PASS && OWN_PLAN_HREF)) return "list";
+  return "none";
+}
+function closedLabel(action) {
+  if (action === "switch") {
+    return "Switch to " + (monthlyChosen ? "the season pass" : "monthly") + " — open now";
+  }
+  if (action === "list") return "Email me when checkout opens";
+  return WANTS_PASS ? "League Pass opens soon" : "Checkout opens soon";
+}
+// The note at the top, pointing only at something that exists: the form below
+// when it is connected, the plan that is open, or the front page's capture
+// (which the landing shows for as long as no plan can be bought).
+function closedNoteNodes(action) {
+  const text = (words) => document.createTextNode(words);
+  const link = (href, words) => {
+    const a = document.createElement("a");
+    a.href = carryVia(href, VIA);
+    a.textContent = words;
+    return a;
+  };
+  const lead = WANTS_PASS ? "The League Pass isn't open just yet" : "Checkout isn't open just yet";
+  if (WANTS_PASS && OWN_PLAN_HREF) {
+    return [text(lead + " — it opens the day your league can claim its seats, so " +
+                 "nobody pays for a seat that can't be used. A plan for your own team " +
+                 "is open now: "), link(OWN_PLAN_HREF, "set that up instead"), text(".")];
+  }
+  const head = text(lead + ". You're welcome to set up now to see how it works, but " +
+                    "nothing is saved until it does; ");
+  if (action === "list") {
+    return [head, text("leave your email below, at step 3, and we'll send exactly one " +
+                       "message when it opens.")];
+  }
+  return [head, text("leave your email on the "), link("../index.html", "front page"),
+          text(" and we'll send exactly one message when it opens.")];
+}
 function noteClosedFor(link, other) {
   const note = $("closed-note");
-  if (!link && other) {
+  const action = link ? "open" : closedAction(other);
+  if (action === "switch") {
     note.textContent = (monthlyChosen ? "Monthly" : "The season pass") + " isn't " +
       "open just yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
-      " is: pick it in step 3 to buy today.";
+      " is: switch to it in step 3 to buy today.";
   } else if (!link) {
-    note.replaceChildren(...CLOSED_NOTE.map((n) => n.cloneNode(true)));
+    note.replaceChildren(...closedNoteNodes(action));
   }
   note.style.display = link ? "none" : "block";
   // A closed tier's button says so on the button: on a phone the header note
   // is several screens above it, and "Continue to checkout — $39" over a
-  // checkout that cannot open read as bait (QA, Oct 9 2026).
-  // With the email list connected, the closed button does something useful —
-  // the handler already posts kind:"waitlist" — so it says so and looks live
-  // (launch audit PC-13). Without it, it looks switched off, as before.
-  const listening = !link && Boolean(NOTIFY_LIST_ENDPOINT);
-  if (!link) {
-    $("submit").textContent = listening ? "Email me when checkout opens" : "Checkout opens soon";
-  }
-  $("submit").classList.toggle("is-closed", !link && !listening);
-  $("submit").setAttribute("aria-disabled", link || listening ? "false" : "true");
+  // checkout that cannot open read as bait (QA, Oct 9 2026). A button that
+  // does something says what; one that doesn't looks switched off.
+  const listed = action === "list" && state.listed;
+  if (!link) $("submit").textContent = listed ? "You're on the list" : closedLabel(action);
+  $("submit").disabled = listed;
+  $("submit").classList.toggle("is-closed", action === "none");
+  $("submit").setAttribute("aria-disabled", action === "none" || listed ? "true" : "false");
   document.querySelector(".secure").style.display = link ? "" : "none";
 }
 
@@ -1170,15 +1288,47 @@ if (TRY_MODE) {
 }
 
 // Every paying mode, from the first paint: the button and the secure line say
-// whether THIS plan can take money yet.
+// whether THIS plan can take money yet — and, with the other plan's link, what
+// pressing it does instead (the first paint used to pass no ``other``, so a
+// closed season pass read "Email me when checkout opens" beside an open
+// monthly).
 if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
-  noteClosedFor(WANTS_PASS ? STRIPE_LINK_PASS
-                : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON);
+  noteClosedFor(WANTS_PASS ? PASS_LINK
+                : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON,
+                WANTS_PASS ? ""
+                : monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY);
 }
 
 // Season ⇄ monthly, on the page. Never offered to a seat holder, an update,
 // a free report or a League Pass buyer: each of those is buying something
 // else (or nothing), and their own branch above set the page for it.
+// A declaration, so the submit handler's "Switch to …" button can call it.
+function applyPlan() {
+  monthlyChosen = radio("plan") === "monthly";
+  showError("err-email", "");
+  showOk("");
+  if (monthlyChosen) { monthlyPlan(); } else { seasonPlan(); }
+}
+// Whether the button on screen is the closed plan's "Switch to …": a buyer
+// choosing between season and monthly, whose choice cannot take money while
+// the other plan can. The same test noteClosedFor labels it by.
+function switchesPlan() {
+  if (SEAT_MODE || UPDATE_MODE || TRY_MODE || WANTS_PASS) return false;
+  const link = monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+  const other = monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY;
+  return !link && closedAction(other) === "switch";
+}
+// The closed plan's "Switch to …" button, pressed: the plan on screen becomes
+// the one that can take money, its own price and terms redrawn above the
+// button. Nothing is charged until that button is pressed again.
+function switchPlan() {
+  const to = monthlyChosen ? "season" : "monthly";
+  document.querySelector('input[name="plan"][value="' + to + '"]').checked = true;
+  applyPlan();
+  showOk((to === "monthly" ? "Switched to monthly" : "Switched to the season pass") +
+    " — its price and terms are just above the button.");
+  $("submit").focus();
+}
 if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   $("lbl-plan").style.display = "block";
   $("lbl-email").style.display = "block";
@@ -1186,11 +1336,6 @@ if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   $("step3-head").textContent = "3 · Your plan and email";
   document.querySelector(
     'input[name="plan"][value="' + (monthlyChosen ? "monthly" : "season") + '"]').checked = true;
-  const applyPlan = () => {
-    monthlyChosen = radio("plan") === "monthly";
-    showError("err-email", "");
-    if (monthlyChosen) { monthlyPlan(); } else { seasonPlan(); }
-  };
   $("opt-plan").addEventListener("change", applyPlan);
   // A page brought back from the browser's history can have its radios
   // restored AFTER this script ran: draw whatever is actually checked.

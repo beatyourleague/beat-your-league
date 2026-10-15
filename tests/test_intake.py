@@ -563,3 +563,36 @@ def test_the_typeahead_ranks_by_who_people_mean_and_enter_never_guesses() -> Non
     assert got["enterMany"] is None
     assert got["enterOne"] == "Keenan Allen"
     assert got["enterExact"] == "Josh Allen"
+
+
+def test_a_typeahead_add_keeps_every_choice_already_made_on_the_list() -> None:
+    """Launch audit F7, in the browser's own code. A pasted "J. Smith" is a
+    choice and a junk line is removable; the person picks Jane and removes the
+    junk — on the LIST, which the paste box never learns. Adding a player used
+    to re-read the box and bring both problems back, blocking checkout.
+    R.addPick appends the tapped player (twins included, as resolution gives
+    them) and leaves every earlier row exactly as decided, without touching
+    the array it was given."""
+    got = run_js(
+        "const d = R.buildDirectory({players: ["
+        "['John Smith','00-0000001','WR','MIN'],['Jane Smith','00-0000002','WR','CHI'],"
+        "['Bijan Robinson','00-0000003','RB','ATL'],['Brian Robinson','00-0000004','RB','ATL'],"
+        "['Josh Allen','00-0000005','QB','BUF']],"
+        " confusable: [['00-0000003','00-0000004']]});\n"
+        "const matches = R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nBench total 98.2');\n"
+        "const before = matches.map(m => m.player ? m.player.name : 'OPEN ' + m.reason);\n"
+        "matches[1] = {typed: 'J. Smith', player: d.byId.get('00-0000002'), candidates: [], twins: []};\n"
+        "matches.splice(2, 1);\n"
+        "const kept = matches.slice();\n"
+        "const after = R.addPick(d, matches, d.byId.get('00-0000003'));\n"
+        "console.log(JSON.stringify({before, untouched: matches.length === kept.length,"
+        " after: after.map(m => m.player ? m.player.name : 'OPEN ' + m.reason),"
+        " twins: after[after.length - 1].twins.map(t => t.name),"
+        " reread: R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nBench total 98.2\\nBijan Robinson')"
+        ".map(m => m.player ? m.player.name : 'OPEN ' + m.reason)}))")
+    assert got["before"] == ["Josh Allen", "OPEN ambiguous", "OPEN unknown"]
+    assert got["after"] == ["Josh Allen", "Jane Smith", "Bijan Robinson"]
+    assert got["untouched"] is True
+    assert got["twins"] == ["Brian Robinson"]
+    # The trap it replaces: re-reading the box undoes both decisions.
+    assert got["reread"] == ["Josh Allen", "OPEN ambiguous", "OPEN unknown", "Bijan Robinson"]

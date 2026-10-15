@@ -248,9 +248,18 @@ def test_the_launch_waitlist_states_exactly_what_it_will_send() -> None:
     """Checkout is closed and the product is being rebuilt, so the only honest
     ask on this page is a waitlist. It must say what arrives, how often, and how
     to leave — a list that promises "updates" and then mails weekly is how a
-    launch burns the audience it spent three weeks collecting."""
+    launch burns the audience it spent three weeks collecting.
+
+    How to leave must be a route that exists. The hero promised "unsubscribe
+    in one click", while the launch email (run/waitlist.py) offers a reply or
+    the mail app's button, actioned within 10 business days, and delivery
+    deliberately sends no List-Unsubscribe-Post — there is no one-click route
+    (launch audit C11)."""
     assert 'id="watch-form"' in LANDING
-    assert re.search(r"unsubscribe in one click", LANDING, re.I)
+    assert re.search(r"unsubscribe any time", LANDING, re.I)
+    assert not re.search(r"unsubscribe in one click|one-click unsubscribe",
+                         prose(LANDING), re.I), \
+        "the waitlist promises a one-click unsubscribe nothing provides"
     assert re.search(r"no card", LANDING, re.I)
     # The volume promise is the part that must not go missing.
     assert re.search(r"exactly one message|one email when signups open",
@@ -1774,14 +1783,18 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     backend. The seat form endpoint must stay reserved for League Pass seats —
     an individual signup posted there would bypass the payment architecture."""
     handler = JOIN.split('$("form-email").addEventListener')[1]
-    closed = handler.split("if (!link) {")[1].split("if (WANTS_PASS)")[0]
+    closed = handler.split("if (!link) {")[1].split("if (WANTS_PASS) showSeatLink")[0]
     assert "NOTIFY_LIST_ENDPOINT" in closed
     assert "FORM_ENDPOINT" not in closed
     assert "league_id" not in closed, "launch-notify must carry the email only"
-    # The honest-refusal phrases survive in both outcomes.
-    assert closed.count("isn't open just yet") == 3, \
-        "every not-open outcome must say so"
-    assert closed.count("isn't saved") == 3
+    # Every not-open outcome — kept, failed, or nothing to keep it with — says
+    # checkout is not open and that the roster was not saved. Read per
+    # message, so a new outcome cannot slip in without both.
+    messages = re.findall(r'show(?:Error\("err-email", |Ok\()(.*?)\);', prose(closed), re.S)
+    assert len(messages) >= 3, messages
+    for message in messages:
+        assert "isn't open just yet" in message, f"a not-open outcome hides it: {message}"
+        assert "isn't saved" in message, f"a not-open outcome implies a save: {message}"
 
 
 def test_backtest_page_carries_no_internal_register() -> None:
@@ -2769,7 +2782,9 @@ def test_the_closed_note_is_decided_per_plan_not_all_or_nothing() -> None:
     learning at submit that nothing was saved — precisely the disappointment
     this note exists to move earlier.
     """
-    assert "const PLAN_LINK = WANTS_PASS ? STRIPE_LINK_PASS" in JOIN, (
+    # The pass resolves through PASS_LINK, which is empty until seats can be
+    # claimed (test_the_league_pass_is_never_sold_before_its_seats_can_be_claimed).
+    assert "const PLAN_LINK = WANTS_PASS ? PASS_LINK" in JOIN, (
         "the closed note no longer resolves the link for the visitor's own plan")
     assert "if (!PLAN_LINK) {" in JOIN
     assert not re.search(r"!STRIPE_LINK_SEASON\s*&&\s*!STRIPE_LINK_MONTHLY", JOIN), (
@@ -3124,3 +3139,336 @@ def test_the_landing_names_the_league_apps_in_the_hero() -> None:
     creds = re.search(r'<ul class="creds".*?</ul>', hero, re.S).group(0)
     for app in ("ESPN", "Yahoo", "Sleeper", "CBS"):
         assert app in creds, f"the hero no longer names {app}"
+
+
+# --------------------------------------------------------------------- #
+# launch audit, Oct 15 2026 — the funnel's own findings (F1–F9, C6, C10–C12)
+# --------------------------------------------------------------------- #
+
+THANKS = (SITE / "thanks.html").read_text(encoding="utf-8")
+
+
+def _node(script: str) -> object:
+    """Run a snippet under node and return the JSON it prints. Skipped without
+    node, like tests/test_intake.py; CI has it."""
+    import json as _json
+    import shutil
+    import subprocess
+    if shutil.which("node") is None:
+        pytest.skip("node not available")
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, f"node failed:\n{done.stderr}"
+    return _json.loads(done.stdout)
+
+
+def _js_function(page: str, name: str) -> str:
+    """One top-level function's source, declaration to closing brace."""
+    start = page.index(f"function {name}(")
+    return page[start:page.index("\n}\n", start) + 2]
+
+
+def _js_code(page: str) -> str:
+    """Inline script code with whole-line comments removed — a comment that
+    names the trap it explains must not pass for the code that avoids it."""
+    scripts = re.findall(r"<script>(.*?)</script>", page, re.S)
+    return "\n".join(line for line in "\n".join(scripts).splitlines()
+                     if not line.lstrip().startswith("//"))
+
+
+def test_the_league_pass_is_never_sold_before_its_seats_can_be_claimed() -> None:
+    """Launch audit F1, reproduced in headless Chrome at 390px: with all three
+    payment links set and FORM_ENDPOINT empty — LAUNCH.md restores the links in
+    step 3 and the seat Worker in step 5 — league-pass.html showed "Checkout
+    opens soon", but join/index.html?plan=pass showed no closed note and a live
+    "Buy the League Pass — $99" button, and submitting navigated to
+    buy.stripe.com with a p3- ref. Every manager the commissioner then sent to
+    join/?pass=1 read "Seats aren't open just yet". The pass is gated on the
+    endpoint its seats need, on the join page too, through ONE constant."""
+    code = _js_code(JOIN)
+    uses = [line.strip() for line in code.splitlines() if "STRIPE_LINK_PASS" in line]
+    assert len(uses) == 2 and uses[0].startswith("const STRIPE_LINK_PASS = ") and \
+        uses[1] == 'const PASS_LINK = FORM_ENDPOINT ? STRIPE_LINK_PASS : "";', (
+            "the pass link is read somewhere other than PASS_LINK, the only place "
+            f"the seat gate lives: {uses}")
+    # Every place a plan's link is resolved — the up-front note, the submit,
+    # the first paint — resolves the pass through the gate.
+    assert code.count("WANTS_PASS ? PASS_LINK") == 3
+    # The gate itself, run: an empty endpoint sells no pass, whatever the link.
+    line = re.search(r"const PASS_LINK = [^;]*;", JOIN).group(0)
+    got = _node(
+        "const out = [];\n"
+        "for (const [FORM_ENDPOINT, STRIPE_LINK_PASS] of [['', 'https://buy.stripe.com/x'],"
+        " ['https://forms.example', 'https://buy.stripe.com/x'],"
+        " ['https://forms.example', '']]) {\n"
+        f"  {line}\n  out.push(PASS_LINK);\n}}\nconsole.log(JSON.stringify(out));")
+    assert got == ["", "https://buy.stripe.com/x", ""]
+    # A closed pass says so up front and in its own name, never as a $99 button.
+    assert "League Pass opens soon" in JOIN
+    assert "The League Pass isn't open just yet" in JOIN
+
+
+def _funnel_pages() -> dict[str, str]:
+    from render.live_sample import VIA_SCRIPT
+    return {"landing": LANDING, "join": JOIN, "how-it-works": HOW,
+            "league-pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
+            "this-week (live sample)": VIA_SCRIPT}
+
+
+def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
+    """Launch audit F2, reproduced: LAUNCH.md tells the owner to post
+    beatyourleague.com/?via=reddit, the landing read the tag only for its own
+    waitlist POST, and every link to join/ dropped it — "Try it free" opened
+    join/index.html?try=1 and the trial row posted with no via, so once the
+    landing's capture retires `make stats` could count no channel at all.
+    this-week.html, the page the Tuesday posts link, did the same. Each page
+    now carries the sanitised tag onto its links into the funnel — URL only,
+    nothing stored — with ONE function, identical on every page."""
+    import inspect
+    import json as _json
+    from render import live_sample
+    pages = _funnel_pages()
+    sources = {name: _js_function(page, "carryVia") for name, page in pages.items()}
+    assert len(set(sources.values())) == 1, \
+        "carryVia drifted between pages: " + ", ".join(sources)
+    via = {name: re.search(r"const VIA = .*?\|\| undefined;", page, re.S).group(0)
+           for name, page in pages.items()}
+    assert len(set(via.values())) == 1, "the VIA sanitiser drifted between pages"
+    for name, page in pages.items():
+        assert 'a.setAttribute("href", carryVia(a.getAttribute("href"), VIA))' in page, \
+            f"{name} defines carryVia but never applies it"
+        assert not re.search(r"localStorage|sessionStorage|document\.cookie", page), \
+            f"{name} stores something in the browser"
+    # The landing and league-pass write hrefs in script (the open state's
+    # CTAs, the Buy button): the tag is applied AFTER the last of them.
+    for name in ("landing", "league-pass"):
+        code = pages[name]
+        apply_at = code.rindex('a.setAttribute("href", carryVia(')
+        writes = [m.start() for m in re.finditer(r"\.href = ", code)]
+        assert writes and max(writes) < apply_at, \
+            f"{name} writes an href after the tag was carried, so that link drops it"
+    # The live sample's page carries it, before the closing body tag.
+    page = live_sample.with_via_carry('<html><body><a href="join/index.html">x</a></body></html>')
+    assert page.index("function carryVia(") < page.index("</body>")
+    assert "with_via_carry(" in inspect.getsource(live_sample.main), \
+        "this-week.html is written without the tag carry"
+    # The function itself, run.
+    cases = [
+        ("join/index.html", "reddit", "join/index.html?via=reddit"),
+        ("join/index.html?try=1", "reddit", "join/index.html?try=1&via=reddit"),
+        ("join/index.html?plan=monthly", "x-post", "join/index.html?plan=monthly&via=x-post"),
+        ("join/", "x", "join/?via=x"),
+        ("index.html#pricing", "x", "index.html?via=x#pricing"),
+        ("../index.html", "x", "../index.html?via=x"),
+        ("../how-it-works.html", "x", "../how-it-works.html?via=x"),
+        ("this-week.html", "x", "this-week.html?via=x"),
+        ("league-pass.html", "x", "league-pass.html?via=x"),
+        # Not a page that reads it, not ours, or already tagged: untouched.
+        ("sample-report.html", "x", "sample-report.html"),
+        ("terms.html#cancel", "x", "terms.html#cancel"),
+        ("compare/index.html", "x", "compare/index.html"),
+        ("#watch-form", "x", "#watch-form"),
+        ("mailto:hello@beatyourleague.com", "x", "mailto:hello@beatyourleague.com"),
+        ("https://elsewhere.example/join/index.html", "x",
+         "https://elsewhere.example/join/index.html"),
+        ("join/index.html?via=first", "second", "join/index.html?via=first"),
+        # Only a sanitised tag is ever written into a URL.
+        ("join/index.html", "Reddit", "join/index.html"),
+        ("join/index.html", "a b", "join/index.html"),
+        ("join/index.html", "x" * 25, "join/index.html"),
+        ("join/index.html", "", "join/index.html"),
+    ]
+    got = _node(sources["landing"] + "\nconsole.log(JSON.stringify("
+                + _json.dumps([[h, v] for h, v, _ in cases])
+                + ".map(([h, v]) => carryVia(h, v))));")
+    assert got == [want for _, _, want in cases]
+    # And what reaches it is the page's own sanitiser output.
+    sanitise = via["landing"].replace("const VIA = ", "const f = (search) => ") \
+                             .replace("location.search", "search")
+    got = _node(sanitise + "\nconsole.log(JSON.stringify(['?via=Reddit!', '?via=a%20b', "
+                "'?x=1', '?via=' + 'y'.repeat(30)].map((q) => f(q) || null)));")
+    assert got == ["reddit", "ab", None, "y" * 24]
+
+
+def test_the_league_pass_capture_never_points_at_a_hidden_form() -> None:
+    """Launch audit F3, reproduced at 390 and 1280: with the landing able to
+    complete checkout (its capture hidden) and seats still closed, League
+    Pass's "Leave your email" loaded index.html#watch-form onto a form that was
+    hidden=true — the visitor landed at the top of the page and could neither
+    buy nor leave an address. The static link is right only while the landing
+    shows its capture, which is exactly while CHECKOUT_OPEN is false (the
+    landing hides it only inside `if (CHECKOUT_OPEN)`), and the two pages'
+    CHECKOUT_OPEN must agree; once it is true, the closed pass points at the
+    own-team checkout, which then exists."""
+    lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
+    flag = r"const CHECKOUT_OPEN = (true|false);"
+    assert re.search(flag, LANDING).group(1) == re.search(flag, lp).group(1), \
+        "the landing and League Pass disagree on whether checkout is open"
+    hide = LANDING.index('for (const id of ["watch-form", "watch-note"])')
+    assert LANDING.rindex("if (CHECKOUT_OPEN) {", 0, hide) > LANDING.index("const CHECKOUT_OPEN"), \
+        "the landing hides its capture outside the CHECKOUT_OPEN block"
+    code = _js_code(lp)
+    branch = code.split("} else if (CHECKOUT_OPEN) {")[1].split("\n}\n")[0]
+    assert "league-cta" in branch and "join/index.html" in branch
+    assert "watch-form" not in branch, "the open-checkout state still links the hidden capture"
+    # The static closed state is the only place the landing's capture is linked.
+    assert lp.count("index.html#watch-form") == 1
+
+
+def test_the_group_chat_line_is_copyable_only_when_true_and_names_the_payer() -> None:
+    """Launch audit F4, reproduced at 390: the pre-purchase League Pass page
+    offered a live Copy of "I got us the League Pass … join/?pass=1" with
+    checkout and seats both closed — a purchase claim false when pasted, and
+    the seat link out before any payment. And the copied text, there and on
+    thanks.html?plan=pass, never carried the payer's email: a manager who used
+    it verbatim was stopped at "We need your commissioner's email". Now the
+    pre-purchase page shows an example with blanks (no link, no Copy) unless
+    CHECKOUT_OPEN && SEATS_OPEN, and on both pages Copy refuses until the
+    payer's email is in the line."""
+    lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
+    example = re.search(r'<div id="chat-example">(.*?)\n    </div>', lp, re.S).group(1)
+    assert "<button" not in example and "join/" not in example, \
+        "the example can be copied, or hands out the seat link before payment"
+    live = re.search(r'<div id="chat-live" hidden>(.*?)\n    </div>', lp, re.S)
+    assert live and 'id="chat-copy"' in live.group(1), \
+        "the copyable line must be hidden in the static (closed) page"
+    code = _js_code(lp)
+    opened = code.split("if (CHECKOUT_OPEN && SEATS_OPEN) {")[1].split("} else if")[0]
+    assert 'getElementById("chat-live").hidden = false' in opened
+    assert code.count('getElementById("chat-live").hidden = false') == 1
+    for page, copy_id, line_id, echo_id in (
+            (lp, "chat-copy", "chat-text", "chat-email-echo"),
+            (THANKS, "pass-copy", "pass-chat", "pass-chat-email")):
+        line = re.search(rf'<p id="{line_id}">(.*?)</p>', page, re.S).group(1)
+        assert f'id="{echo_id}"' in line, "the copied line has no place for the payer's email"
+        assert "join/?pass=1" in line
+        assert f'id="{copy_id}"' in page
+        handler = _js_code(page).split('copy.addEventListener("click"')[1]
+        assert handler.index("if (!valid())") < handler.index("writeText"), \
+            "Copy hands over a line with no payer email in it"
+        assert ".innerHTML" not in _js_code(page)
+
+
+def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
+    """Launch audit F5 and F6, both reproduced. F5: only the monthly link set,
+    list connected, season chosen — the button read "Email me when checkout
+    opens", and pressing it posted nothing and said "switch to monthly". F6:
+    no links, list connected — the note said "leave your email on the front
+    page" while the page's own button captured it, the confirmation rendered
+    in the red alert box, and each further press posted another row (two
+    recorded). Now the label and the action come from one decision
+    (closedAction): "switch" switches, "list" keeps the email once and then
+    stops, "none" looks switched off."""
+    fns = _js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
+    states = [  # notify, pass, own plan open, monthly chosen, other plan's link
+        ("https://f", False, "", False, "https://buy.stripe.com/m"),
+        ("", False, "", True, "https://buy.stripe.com/s"),
+        ("https://f", False, "", False, ""),
+        ("", False, "", False, ""),
+        ("https://f", True, "index.html", False, ""),
+        ("https://f", True, "", False, ""),
+        ("", True, "", False, ""),
+    ]
+    import json as _json
+    got = _node(
+        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n" + fns +
+        "\nconsole.log(JSON.stringify(" + _json.dumps(states) + ".map(([n, p, o, m, other]) => {"
+        " NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o; monthlyChosen = m;"
+        " const a = closedAction(other); return [a, closedLabel(a)]; })));")
+    assert got == [
+        ["switch", "Switch to monthly — open now"],
+        ["switch", "Switch to the season pass — open now"],
+        ["list", "Email me when checkout opens"],
+        ["none", "Checkout opens soon"],
+        ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
+        ["list", "Email me when checkout opens"],
+        ["none", "League Pass opens soon"],
+    ]
+    code = _js_code(JOIN)
+    handler = code.split('$("form-email").addEventListener')[1].split("\n});")[0]
+    # The press does what the label says: the same decision drives both.
+    assert "if (switchesPlan()) {\n    switchPlan();" in handler
+    assert 'closedAction(other) === "switch"' in _js_function(JOIN, "switchesPlan")
+    assert 'closedAction(otherLink) === "list"' in handler
+    assert "closedLabel(action)" in _js_function(JOIN, "noteClosedFor")
+    # The first paint knows the other plan too (it used to pass none).
+    first = code.split("if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {\n  noteClosedFor(")[1] \
+                .split(");")[0]
+    assert "STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY" in first
+    # F6: a kept email is a done message, once, and the note says "below".
+    listed = handler.split('closedAction(otherLink) === "list"')[1].split(".catch(")[0]
+    assert "if (state.listed) return;" in listed
+    assert "state.listed = true" in listed and "showOk(" in listed
+    assert 'showError("err-email"' not in listed, "a kept email is shown as an error"
+    assert "$(\"submit\").disabled = listed" in _js_function(JOIN, "noteClosedFor")
+    ok_rule = JOIN.split(".ok{")[1].split("}")[0]
+    assert "brick" not in ok_rule and "turf" in ok_rule
+    notes = _js_function(JOIN, "closedNoteNodes")
+    below = notes.split('if (action === "list") {')[1].split("}")[0]
+    assert "leave your email below" in below and "front page" not in below
+
+
+def test_adding_a_player_keeps_every_choice_already_made() -> None:
+    """Launch audit F7, reproduced at 390: paste a roster with "J. Taylor" and
+    a junk line, tap "Jonathan Taylor" and "remove" ("…Looks right", step 3
+    shown), then add Tyler Warren from the typeahead — the tally went back to
+    "2 lines we couldn't read" and step 3 vanished, because adding re-read the
+    whole paste box and neither choice ever edits it. A checked, unedited list
+    now gains one row (R.addPick, run under node in tests/test_intake.py); only
+    an unchecked or typed-over list is read from the box afresh."""
+    add = _js_function(JOIN, "addPlayer")
+    assert "R.addPick(state.directory, state.matches, player)" in add
+    assert "state.matches.length > 0 && !state.stale" in add
+    code = _js_code(JOIN)
+    typed = code.split('$("roster-text").addEventListener("input"')[1].split("});")[0]
+    assert "state.stale = true" in typed, "typing in the box must make the list stale"
+    check = code.split('$("resolve").addEventListener("click"')[1].split("\n});")[0]
+    assert "state.stale = false" in check
+
+
+def test_a_duplicate_row_names_the_player_not_a_line_number() -> None:
+    """Launch audit F9, reproduced: a Sleeper paste plus "Josh Allen" again
+    from the search box showed "you already listed this player on line 1" on
+    the FIRST row drawn — the number counted players, not lines of the box
+    (Josh Allen sat on line 2 under a "QB" header), and problem rows are drawn
+    first, so the row it pointed at was below it."""
+    draw = _js_function(JOIN, "draw")
+    assert 'match.player.name + " is already on your roster — remove one"' in draw
+    assert not re.search(r"on line \"|line \" \+", draw), "a duplicate still points at a line number"
+
+
+def test_the_landing_invents_no_behaviour_of_people_it_has_never_observed() -> None:
+    """Launch audit C6: the multi-league FAQ answer said "most managers start
+    with the league that has the most riding on it" — on the page and in the
+    JSON-LD — about customers that do not exist yet (no invented behaviour
+    claims). Both copies are checked: the FAQ equality test keeps them equal."""
+    import json as _json
+    block = re.search(r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S)
+    texts = {"landing": prose(markup_only(LANDING)),
+             "landing JSON-LD": _json.dumps(_json.loads(block.group(1)))}
+    for page in ("join/index.html", "league-pass.html", "how-it-works.html", "thanks.html"):
+        texts[page] = prose(markup_only((SITE / page).read_text(encoding="utf-8")))
+    claim = re.compile(r"\bmost (?:managers|people|players|subscribers|buyers|commissioners|"
+                       r"fantasy players|of (?:you|our))\b|\b(?:managers|people|subscribers) "
+                       r"(?:usually|typically|tend to)\b", re.I)
+    for name, text in texts.items():
+        assert not claim.search(text), f"{name} claims a behaviour nobody observed"
+
+
+def test_the_free_report_waits_from_the_weeks_first_kickoff_whatever_day() -> None:
+    """Launch audit C10: the note said "From Thursday night's first kickoff",
+    but run/trials.py holds from the week's actual first kickoff — Week 1 and
+    Week 12 of 2026 start on a Wednesday, Week 18 on a Sunday."""
+    note = prose(re.search(r'<li id="trial-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
+    assert "From the week's first kickoff until Tuesday" in note
+    assert "Thursday" not in note
+
+
+def test_the_pass_buyers_thank_you_states_the_pass_refund_limit() -> None:
+    """Launch audit C12, reproduced in headless Chrome: thanks.html?plan=pass
+    showed the pass note and then "Full refund … — one per person", while the
+    pass's own terms (terms §5, the welcome email, the join page's pass mode)
+    say one per LEAGUE."""
+    assert '<span id="refund-limit">one per person</span>' in THANKS
+    branch = _js_code(THANKS).split('get("plan") === "pass") {')[1]
+    assert 'getElementById("refund-limit").textContent = "one per league"' in branch

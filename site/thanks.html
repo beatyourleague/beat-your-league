@@ -73,6 +73,13 @@
   .passnote button{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.08em;
     text-transform:uppercase;background:var(--flag);color:var(--navy);border:0;padding:10px 14px;
     cursor:pointer;min-height:40px;}
+  .passnote label{display:block;margin-top:8px;padding:3px 0;font-size:13.5px;line-height:1.5;
+    color:var(--slate);}
+  .passnote input{display:block;width:100%;max-width:420px;margin-top:4px;padding:10px 12px;
+    font:inherit;font-size:16px;border:1.5px solid var(--navy);background:var(--card);}
+  .passnote #pass-chat b{overflow-wrap:anywhere;}
+  .passnote p.msg{color:var(--brick);font-weight:700;}
+  .passnote p.msg:empty{display:none;}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
 </style>
@@ -97,13 +104,21 @@
     <!-- A League Pass buyer lands here with ?plan=pass (the pass payment link's
          success URL). The seat link used to flash for an instant before the
          redirect to Stripe and then never be shown again (launch audit). -->
+    <!-- The line carries the payer's email, because the seat form refuses a
+         claim without it: a line pasted as it was left every manager at "We
+         need your commissioner's email" (launch audit F4). This page cannot
+         know the address, so Copy waits until it is typed in. -->
     <div class="note passnote" id="pass-note" hidden><b>Your League Pass is live. Send your
     league this:</b>
+      <label class="small" for="pass-email">The email you paid with — each manager enters it
+      to claim their seat. It stays on this page.</label>
+      <input type="email" id="pass-email" autocomplete="email" placeholder="you@example.com">
       <p id="pass-chat">I got us the League Pass from Beat Your League: everyone gets their
       own lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours
-      up here: https://beatyourleague.com/join/?pass=1 and enter the email I paid with when
-      it asks.</p>
+      up here: https://beatyourleague.com/join/?pass=1 — and when it asks for my email, enter
+      <b id="pass-chat-email">[the email I paid with]</b>.</p>
       <button type="button" id="pass-copy">Copy for the group chat</button>
+      <p class="small msg" id="pass-msg" role="status"></p>
       <p class="small">Each manager pastes their own roster and enters the email you paid
       with; that's how their seat is matched to your pass. Their first report lands the next
       Tuesday. The same link is in your welcome email.</p>
@@ -138,7 +153,7 @@
 
     <h2>3. Changed your mind</h2>
     <p>Full refund, no questions, any time until your second weekly report's week kicks off —
-    one per person (<a href="terms.html#refunds">the exact terms</a>). And you can
+    <span id="refund-limit">one per person</span> (<a href="terms.html#refunds">the exact terms</a>). And you can
     cancel yourself in about a minute from your billing page, whose link is at the
     bottom of every report we send; <a href="terms.html#cancel">the steps are here</a>. We do
     not ask why, and there is no retention call.</p>
@@ -156,10 +171,30 @@
 if (new URLSearchParams(location.search).get("plan") === "pass") {
   const note = document.getElementById("pass-note");
   note.hidden = false;
+  // The pass's own refund terms are one per LEAGUE (terms §5, the welcome, the
+  // join page's pass mode); the season pass's "one per person" was left
+  // standing on this branch (launch audit C12).
+  document.getElementById("refund-limit").textContent = "one per league";
   const copy = document.getElementById("pass-copy");
+  const input = document.getElementById("pass-email");
+  const echo = document.getElementById("pass-chat-email");
+  const line = document.getElementById("pass-chat");
+  const msg = document.getElementById("pass-msg");
+  const blank = echo.textContent;
+  const valid = () => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.value.trim());
+  // Written into the line as text, and nowhere else.
+  input.addEventListener("input", () => {
+    echo.textContent = valid() ? input.value.trim() : blank;
+    msg.textContent = "";
+  });
   copy.addEventListener("click", () => {
-    const text = document.getElementById("pass-chat").textContent.replace(/\s+/g, " ").trim();
-    const selectIt = () => window.getSelection().selectAllChildren(document.getElementById("pass-chat"));
+    if (!valid()) {
+      msg.textContent = "Add the email you paid with first — each manager needs it to claim a seat.";
+      input.focus();
+      return;
+    }
+    const text = line.textContent.replace(/\s+/g, " ").trim();
+    const selectIt = () => window.getSelection().selectAllChildren(line);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(() => { copy.textContent = "Copied"; }, selectIt);
     } else {
