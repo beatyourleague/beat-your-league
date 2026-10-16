@@ -11,6 +11,7 @@ public record starts answering the same question two ways.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -118,21 +119,44 @@ def test_a_pending_call_is_never_quoted(tmp_path) -> None:
 # what each draft says
 # --------------------------------------------------------------------- #
 
-def test_receipts_monday_publishes_the_misses_it_would_rather_not(ledger) -> None:
-    """Principle 2: wins AND misses. A Receipts post that quietly reported
-    only the hits would be the exact thing the ledger was built to make
-    impossible."""
+def test_receipts_monday_drafts_every_call_one_at_a_time(ledger) -> None:
+    """Principle 2 is kept by the record, and the owner's notes list every
+    settled call — the miss included, beside the hits — so nothing is chosen
+    blind. Each draft quotes ONE call, at the number it was published at,
+    with the box score that settled it."""
     path, verdict = posts.receipts_monday(ledger, ledger / "out")
     text = path.read_text(encoding="utf-8")
-    assert verdict == "2-1 week 10"
-    assert "2 hit, 1 miss" in text
-    assert "MISS** · Tony Pollard over Chase Brown" in text
-    assert "The one that hurt" in text, "the draft buried its own miss"
-    # Every call carries the number it was published at and what it scored.
+    assert verdict == "3 call(s) week 10"
+    assert "MISS** · Tony Pollard over Chase Brown" in text, "the notes buried a miss"
     assert "at 61%" in text and "22.4 to 9.1" in text
+    drafts = [line for line in text.splitlines() if line.startswith("> Week 10, recorded")]
+    assert len(drafts) == 3, drafts
+    assert ("> Week 10, recorded before kickoff: Tony Pollard over Chase Brown, 50%. "
+            "Tony Pollard 4.2, Chase Brown 18.7.") in drafts
     # Cards are rendered for the week, the miss included.
     assert (ledger / "out" / "cards").is_dir()
     assert len(list((ledger / "out" / "cards").glob("*.svg"))) == 3
+
+
+TALLY = re.compile(r"(?<![\d-])\d{1,3}-\d{1,3}(?![\d-])|hit rate|season to date|we went|"
+                   r"graded calls|public record:|\bhit, \d+ miss", re.I)
+
+
+def test_no_draft_carries_a_win_loss_total_or_a_hit_rate(ledger) -> None:
+    """Reproduction (GTM-4 / AFTER-6, Oct 2026): Receipts Monday drafted
+    "Season to date: 2-1 on 3 graded call(s), 67%" and "we went 2-1", and the
+    reply kit "Our public record: 2-1 on 3 graded calls, 67%" — the record on
+    the pitch, against the sell-the-win rule. A recorded call may be quoted
+    one at a time; no draft may sum them, and the only % in any draft is a
+    call's own published number."""
+    out = ledger / "out"
+    texts = [posts.receipts_monday(ledger, out)[0].read_text(encoding="utf-8"),
+             posts.coinflip_friday(ledger, out)[0].read_text(encoding="utf-8"),
+             posts.reply_kit(ledger, out, "2026-09-20")[0].read_text(encoding="utf-8")]
+    published = {"61%", "65%", "50%"}
+    for text in texts:
+        assert not TALLY.search(text), TALLY.search(text).group(0)
+        assert set(re.findall(r"\d+%", text)) <= published, re.findall(r"\d+%", text)
 
 
 def test_coinflip_friday_quotes_the_closest_recorded_call(ledger) -> None:
@@ -164,8 +188,9 @@ def test_every_draft_has_an_honest_empty_state(tmp_path) -> None:
 def test_the_reply_kit_quotes_only_graded_public_calls(ledger) -> None:
     path, verdict = posts.reply_kit(ledger, ledger / "out", "2026-09-20")
     text = path.read_text(encoding="utf-8")
-    assert "2-1 on 3 graded calls" in text
-    assert "no subscriber's file" in text
+    assert verdict == "3 number(s)"
+    assert "Saquon Barkley over Tony Pollard at 61% — hit (22.4 to 9.1)" in text
+    assert "no subscriber's report" in text
     assert "do not pad this list" in text, \
         "a thin day must say it is thin rather than filling out"
 

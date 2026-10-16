@@ -174,11 +174,54 @@ The report is `reports/launch-readiness.md`; `make launch-check` holds the rest 
 - **Drop GitHub's backup schedule for the weekly run** once the Worker dispatch has a few
   weeks of on-time starts. It is the last path to a duplicate first email: a failed on-time
   Tuesday run whose 5–7 h late backup overlaps an hourly intake (CLAUDE.md, final review).
-- **A self-serve stop for League Pass seats** (a `kind:"stop"` row confirmed by email, like
-  roster updates), replacing the reply-and-`run.suppress` routine once seats exist in number.
+- **A one-click stop for League Pass seats** (LP-I12). Today a leaguemate replies "stop", the
+  owner runs `run.suppress`, and up to two more Tuesday reports can arrive within the 10
+  business days. Instead: a `kind:"stop"` row on the form Worker carrying a per-seat code
+  signed with `UPDATE_SECRET` (the seat token's key), printed in each seat's footer, applied
+  by the next hourly intake. No owner in the loop, which is the "cancelling costs the
+  operator nothing" rule applied to seats.
 - **Re-pin the published sample to a genuinely close call (52–62%)**, chosen by a stated rule
   before outcomes are looked at — the current flagship close call (70%) reads as "start your
   studs" to a savvy buyer. Moves every pinned landing figure, so it's a deliberate decision.
 - **Encrypt the registry and plans before caching** (defence in depth behind the fork-PR
   approval setting in LAUNCH step 3), plus a nightly encrypted backup — the registry exists in
   one Actions cache entry today.
+- **Move the site to Cloudflare Pages and the repo to private** (AFTER-10, G08). GitHub's
+  Pages terms don't fit a site that sells a subscription, and the public repo shows internal
+  strategy. The decision and the steps are in LAUNCH §10; fonts are being self-hosted.
+
+
+## Model ideas that need a preregistered arm first
+
+Each would move a published probability or the projection behind it, so each needs its own
+frozen method, run once, before any of it ships (CLAUDE.md, principle 1). None is in a sprint.
+
+- **Lighter or role-aware shrinkage, and an "if he plays" figure** (RQ-11). K=4 shrinkage
+  toward the field plus a ~0.9 appearance prior drags hot starters below what platforms
+  project: Derrick Henry at 22.4 PPR a game projected 15.2; Nico Collins benched for Javonte
+  Williams in a half-PPR superflex report. Arm: shrinkage strength (and a role term) chosen on
+  2014–2019, confirmed on 2020–2024; separately, print an "if he plays" figure beside the
+  expected value, which is display, not a new probability.
+- **Suspension returns and zero-game veterans** (RQ-12). Suspension and not-on-a-team weeks
+  count as missed games, so Jordan Addison read "no games this season yet" in his first
+  eligible week (WR24 the year before; scored 15.4), then projected 6.9. Arm: excuse those
+  weeks in the availability prior, and seed a zero-game veteran from his prior season at the
+  anchor's weight.
+- **Role changes the report already sees** (RQ-17). Braelon Allen projected 6.3 half-PPR
+  while Rising Roles listed him at 22.0 touches a game with Breece Hall out. Arm: recent
+  usage share and teammate absences as projection inputs.
+- **Evidence against the free projections every buyer already has** (G07). The published
+  evaluation leads with Sleeper's free feed beating the old model (68.8% vs 64.4% on 368
+  head-to-heads, p = 0.089), and the model has changed since (anchor, context). Arm: the
+  shipped model against a free consensus source available for commercial reference, on the
+  same 2020–2025 slot decisions. If it loses, preregister a licensed blend. Until then the
+  value claim rests on format — the report arriving, decided — not on beating free numbers.
+
+
+## What managers said
+
+Answers from the five-manager conversations (LAUNCH 7.2), in their words, no names. Three
+questions each: would you have set your lineup differently, what would make you pay, how many
+teams do you run.
+
+- *(none yet)*
