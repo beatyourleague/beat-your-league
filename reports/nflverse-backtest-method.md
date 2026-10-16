@@ -545,8 +545,13 @@ the setups method later graded two more (superflex, no K or DEF), and those are
 the only shapes with a grade. The ref carries any slot list, and the picker may
 offer more shapes (launch review contract C8), so a three-receiver lineup would
 have printed odds that no arm had checked. In the report layer, a lineup whose
-slots (as a multiset) are not one of the three graded shapes keeps every seat
-and projection and prints no odds, with the reason "odds once this lineup shape
-is graded" (`run.solo.shape_graded`, `engine.solo_report.hold_ungraded_shape`).
-It can only withhold, so it needs no arm; a shape gets odds when its own
+offensive slots (QB/RB/WR/TE/FLEX/SUPER_FLEX, as a multiset) are not those of a
+graded shape, or that has more than one kicker or defense slot, keeps every
+seat and projection and prints no odds, with the reason "odds once this lineup
+shape is graded" (`run.solo.shape_graded`,
+`engine.solo_report.hold_ungraded_shape`). One kicker or one defense slot, or
+neither, does not change the judgement: nobody else can play those slots and
+they can play nowhere else, so they move no other slot's call; the kicker's
+calls were graded in the standard shape and a defense never carries odds. It
+can only withhold, so it needs no arm; a shape gets odds when its own
 preregistered arm grades it.

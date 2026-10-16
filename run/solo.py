@@ -992,14 +992,23 @@ SUPERFLEX_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX",
 # the ref carries any slot list, so the shape is read off the slots themselves.
 # Any other shape prints projections and no odds until an arm grades it
 # (engine.solo_report.hold_ungraded_shape) — the number is one nothing checked.
-# Compared as a multiset: the order slots are listed in decides no call.
-GRADED_SHAPES = frozenset(tuple(sorted(t)) for t in (
-    MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
+#
+# Judged on the OFFENSE (QB/RB/WR/TE/FLEX/SUPER_FLEX), as a multiset — the order
+# slots are listed in decides no call. A kicker and a defense slot stand alone:
+# nobody else can play there and they can play nowhere else, so having one, or
+# not, changes no other slot's call. The kicker's calls were graded in the
+# standard shape, and a defense never carries odds. At most one of each.
+_STANDALONE = ("K", "DEF")
+GRADED_SHAPES = frozenset(
+    tuple(sorted(s for s in t if s not in _STANDALONE))
+    for t in (MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
 
 
 def shape_graded(slots: Sequence[str]) -> bool:
     """Has a preregistered arm graded this lineup shape?"""
-    return tuple(sorted(slots)) in GRADED_SHAPES
+    offense = tuple(sorted(s for s in slots if s not in _STANDALONE))
+    return (offense in GRADED_SHAPES
+            and all(list(slots).count(s) <= 1 for s in _STANDALONE))
 
 
 def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:

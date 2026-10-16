@@ -69,7 +69,6 @@ from render.report import (
     availability_basis,
     edge_phrase,
     esc,
-    is_structural_gate,
     no_call_explainer,
     no_call_head,
     number_sections,

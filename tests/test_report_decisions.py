@@ -438,9 +438,15 @@ def test_an_ungraded_lineup_shape_prints_projections_and_no_odds() -> None:
     # The graded shapes are the arms' own templates, whatever order a ref lists.
     assert (MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE) == (
         TEMPLATE_T1, TEMPLATE_SF, TEMPLATE_NKD)
-    assert len(GRADED_SHAPES) == 3
+    assert len(GRADED_SHAPES) == 2, "standard and no K or DEF share an offense"
+    assert all(shape_graded(t) for t in (TEMPLATE_T1, TEMPLATE_SF, TEMPLATE_NKD))
     assert shape_graded(tuple(reversed(TEMPLATE_SF)))
+    # A kicker or a defense slot stands alone, so one without the other
+    # changes no other slot's call; a second of either is a different shape.
+    assert shape_graded(TEMPLATE_NKD + ("DEF",)) and shape_graded(TEMPLATE_NKD + ("K",))
+    assert not shape_graded(TEMPLATE_T1 + ("K",))
     assert not shape_graded(TEMPLATE_T1 + ("WR",))
+    assert not shape_graded(("QB", "RB", "WR", "WR", "WR", "TE", "FLEX", "K", "DEF"))
     roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
               WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
               WR2: ("Wes Slotman", "WR", "KC"), WR3: ("Will Deepman", "WR", "KC")}
