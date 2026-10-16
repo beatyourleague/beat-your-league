@@ -276,6 +276,16 @@ def test_a_sunday_night_game_is_final_on_saturday_in_nfl_time() -> None:
     assert not _state(kickoff=MON_NIGHT).final
 
 
+def test_every_state_carries_its_kickoff_for_the_inactives_rule() -> None:
+    """Panel review RQ-01, Saturday half: engine.final_check refuses a cover
+    who plays before a still-questionable starter's inactives (90 minutes
+    before HIS kickoff) only when each Now knows its game's time. state_for
+    built every Now without it, so the rule never fired on a real Saturday."""
+    assert _state(kickoff=SUN_NIGHT).kickoff == SUN_NIGHT
+    assert _state(kickoff=SUN_1PM, listed={"p1": ("Questionable", "knee")}).kickoff == SUN_1PM
+    assert _state(kickoff=SUN_1PM, status="RES").kickoff == SUN_1PM
+
+
 def test_a_team_that_filed_nothing_is_not_final() -> None:
     assert not _state(filed=set()).final
 

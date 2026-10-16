@@ -484,7 +484,10 @@ def to_html(markdown: str) -> str:
                 head, *body = rows
                 # Phones: a wide table scrolls inside its own container —
                 # never the page body sideways.
-                out.append('<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">')
+                # A scrollable region must be reachable by keyboard (axe
+                # scrollable-region-focusable, serious; panel review GATE-19).
+                out.append('<div style="overflow-x:auto;-webkit-overflow-scrolling:touch" '
+                           'tabindex="0" role="region" aria-label="Table, scrolls sideways">')
                 out.append("<table>")
                 def _style(idx: int) -> str:
                     align = aligns[idx] if idx < len(aligns) else "left"

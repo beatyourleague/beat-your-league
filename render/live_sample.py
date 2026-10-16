@@ -306,13 +306,19 @@ def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
     return (last + timedelta(days=ahead)).isoformat()
 
 
-def write_week_json(report: dict, path: Path, lands_on: str | None = None) -> None:
+def write_week_json(report: dict, path: Path, lands_on: str | None = None,
+                    first_kickoff: str | None = None) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
     rather than from a sentence somebody typed in September. Written beside
     the live page by the same build, committed by the same persist step. The
-    page shows the line only in the days just before ``lands_on``."""
+    page shows the line only in the days just before ``lands_on``.
+
+    ``first_kickoff`` (ISO-8601 UTC) is the instant this week starts: the join
+    page says a buyer's first weekly report comes "today" only before it, and
+    "your roster report today, your first weekly report next Tuesday" after
+    (panel review PC-02). Absent, the page keeps the sentence true either way."""
     import json
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
@@ -325,6 +331,7 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None) -> No
         # when it actually shows the product (launch audit: a bye week once
         # left it with nothing).
         "odds": odds, "closest_call": "gate" not in (report.get("regret") or {"gate": 1}),
+        "first_kickoff": first_kickoff,
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
@@ -382,7 +389,14 @@ def main(argv: list[str] | None = None) -> int:
                                    report["meta"]["week"])
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
-    write_week_json(report, args.out.with_name("week.json"), lands_on)
+    try:
+        from run.saturday import kickoffs
+        starts = kickoffs(CACHE_DIR, report["meta"]["season"], report["meta"]["week"])
+        first = min(starts.values()).astimezone(timezone.utc) if starts else None
+        first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
+    except Exception:  # noqa: BLE001 — no instant means the either-way sentence
+        first_kickoff = None
+    write_week_json(report, args.out.with_name("week.json"), lands_on, first_kickoff)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

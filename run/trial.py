@@ -98,7 +98,7 @@ def trial_message(report: dict, email: str, ids: list[str], season: str,
     only a subscriber's report may carry — cancel your billing, change your
     roster for "your next report", your results start here — and to add the
     free report's own footer. run/trials.py (the hourly free report) always
-    set it; this operator copy never did, so the paste-ready text LAUNCH §6
+    set it; this operator copy never did, so the paste-ready text LAUNCH §7
     sends straight into a group chat told a prospect who had paid nothing to
     cancel their billing (RQ-02). And no plan: a trial has none, and the
     season-end note reads one.

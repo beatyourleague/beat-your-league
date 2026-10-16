@@ -278,7 +278,7 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's report: the
-    lineup we'd set, with the odds wherever both players are confirmed to play.
+    lineup we'd set, with the odds wherever both players are healthy and playing.
     <b>$39 for the season</b>, at a founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now: once you check your roster it stays in this
@@ -440,7 +440,7 @@ Baltimore Ravens
   <ul>
     <li><span id="side-first"><b>A report the day you join</b>, then a new one every Tuesday morning</span></li>
     <li><span>Every slot decided for <b>your roster, your scoring</b></span></li>
-    <li><span><b>The odds</b> wherever both players are confirmed to play, so you know how sure to be</span></li>
+    <li><span><b>The odds</b> wherever both players are healthy and playing, so you know how sure to be</span></li>
     <li><span>An <b>if/then plan</b> for late injury news, and a <b>Saturday final
       check</b> when it changes your lineup</span></li>
     <li><span>Your lineup set in <b>about ninety seconds</b></span></li>
@@ -455,7 +455,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=e2a9d110b7"></script>
+<script src="roster.js?v=652b5d6132"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -474,7 +474,7 @@ Baltimore Ravens
 // EMPTIED Sep 29 2026 (owner decision) until the GitHub secrets are set: with
 // the links live and no Stripe key in the crons, a buyer paid and received
 // nothing — no welcome, no report — until somebody set the key. The URLs are in
-// git history; LAUNCH.md step 3 is where they come back.
+// git history; they come back after LAUNCH.md steps 1–3 and 5 (the Worker first).
 const STRIPE_LINK_SEASON = "";  // $39/season, auto-renewing annual
 const STRIPE_LINK_MONTHLY = "";  // $14.99/month
 const STRIPE_LINK_PASS = "";  // $99/season, whole league
@@ -495,7 +495,7 @@ const CONTACT_EMAIL = "hello@beatyourleague.com";
 // The League Pass is for sale only while its seats can be claimed. Seats
 // arrive through FORM_ENDPOINT, so a pass sold before it exists is a $99
 // promise to eleven people we cannot keep — and the payment links come back
-// (LAUNCH.md step 3) before the Worker does (step 5). league-pass.html gates
+// (LAUNCH.md steps 1–3) before the Worker does (step 5). league-pass.html gates
 // its button on SEATS_OPEN; this page sold the pass to anyone holding the
 // ?plan=pass link regardless (launch audit F1). Every use of the pass link
 // goes through this one constant.
@@ -1142,7 +1142,13 @@ $("form-email").addEventListener("submit", (event) => {
       "the front page for one message the morning checkout opens.");
     return;
   }
-  if (WANTS_PASS) showSeatLink();
+  if (WANTS_PASS) {
+    showSeatLink();
+    // The pass thank-you page prefills its share line with the address that
+    // paid (thanks.html PAID_EMAIL_KEY, panel review LP-I9): this tab only,
+    // read once and deleted there, never a cookie and never sent anywhere.
+    try { sessionStorage.setItem("byl_paid_email", email); } catch (e) { /* private mode */ }
+  }
   window.location.assign(
     link + (link.indexOf("?") === -1 ? "?" : "&") +
     "client_reference_id=" + encodeURIComponent(tagged) +
@@ -1437,7 +1443,7 @@ function monthlyPlan() {
   $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
     "team's report: the lineup we'd set, with the odds wherever both players are " +
-    "confirmed to play. $14.99 a month, and billing stops on its own when the " +
+    "healthy and playing. $14.99 a month, and billing stops on its own when the " +
     "season ends.";
   setChips(["$14.99 / month", "Cancel any time", FIRST_CHIP]);
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
@@ -1464,7 +1470,7 @@ if (TRY_MODE) {
   $("header-pitch").textContent =
     "Try it free. Enter your league's settings and your roster, and we'll email " +
     "you this week's report for your team — your lineup decided, with the odds " +
-    "wherever both players are confirmed to play. One per person, no card.";
+    "wherever both players are healthy and playing. One per person, no card.";
   setChips(["Free — no card", "This week's report", "One per person"]);
   $("lbl-email").textContent = "Where to send your free report";
   $("submit").textContent = "Email me my free report";
@@ -1534,7 +1540,7 @@ if (TRY_MODE) {
   // price on the page has to be the one this purchase actually costs.
   $("header-pitch").textContent = "Set up once, and every Tuesday every manager " +
     "in your league gets their own report: the lineup we'd set, with the odds " +
-    "wherever both players are confirmed to play. One League Pass covers all of " +
+    "wherever both players are healthy and playing. One League Pass covers all of " +
     "it — $99 for the whole league's season.";
   setChips(["$99 / league / season", "Covers every manager", FIRST_CHIP]);
   $("lbl-email").textContent = "Your email — your own report and the receipt go here";

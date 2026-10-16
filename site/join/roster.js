@@ -675,12 +675,22 @@ const SHAPE_BASES = {
   wr3:   ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX"],
   sf:    ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX"],
 };
-const GRADED_SHAPES = ["std", "sf", "nokd"];
+// Graded by OFFENSE, the twin of engine.subscriber.graded_slots: a kicker or
+// defense slot changes no other slot's call, so every K/DEF variant of a
+// graded offense (standard, superflex) is graded too.
+const GRADED_BASES = ["std", "sf"];
 
 function shapeCode(base, kicker, defense) {
   if (!(base in SHAPE_BASES)) throw new Error("unknown lineup base " + base);
   const suffix = kicker && defense ? "" : kicker ? "-nod" : defense ? "-nok" : "-nokd";
   return base === "std" && suffix === "-nokd" ? "nokd" : base + suffix;
+}
+
+const GRADED_SHAPES = [];
+for (const base of GRADED_BASES) {
+  for (const kicker of [true, false]) {
+    for (const defense of [true, false]) GRADED_SHAPES.push(shapeCode(base, kicker, defense));
+  }
 }
 
 function shapeSlots(base, kicker, defense) {

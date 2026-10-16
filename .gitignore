@@ -52,3 +52,6 @@ __pycache__/
 
 # nflverse CSVs are large and re-fetchable; cached like the rest of data/raw/.
 data/raw/nflverse/
+
+# The launch check's accessibility gate installs axe-core locally (LAUNCH.md).
+node_modules/

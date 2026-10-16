@@ -3195,7 +3195,13 @@ def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) ->
                     "2026-10-20")
     assert _json.loads(out.read_text()) == {
         "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-20",
-        "built_at": "2026-10-13T12:05:00+00:00", "odds": 0, "closest_call": False}
+        "built_at": "2026-10-13T12:05:00+00:00", "odds": 0, "closest_call": False,
+        "first_kickoff": None}
+    # The join page's "today" needs the week's first kickoff (panel review
+    # PC-02): the build writes it when the schedule has it.
+    write_week_json({"meta": {"season": "2026", "week": 6, "last_week": 18}}, out,
+                    "2026-10-20", "2026-10-16T00:15:00Z")
+    assert _json.loads(out.read_text())["first_kickoff"] == "2026-10-16T00:15:00Z"
     try:
         day = next_report_day(CACHE_DIR, "2026", 5)
     except Exception:                                   # pragma: no cover
@@ -3662,7 +3668,7 @@ def test_no_join_copy_promises_odds_on_every_close_call() -> None:
     """PE-11: bye-heavy weeks, gated players and ungraded lineups carry none,
     so the promise is the true one — odds wherever both players are confirmed."""
     assert not re.search(r"odds on (?:every|each) close call", JOIN_PROSE, re.I)
-    assert JOIN_PROSE.count("wherever both players are confirmed to play") >= 4
+    assert JOIN_PROSE.count("wherever both players are healthy and playing") >= 4
 
 
 def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
@@ -4008,7 +4014,7 @@ def test_the_comparison_is_the_tools_a_manager_already_has() -> None:
     for column in section.split('<div class="cmpcol')[1:]:
         assert re.findall(r"<dt>([^<]+)</dt>", column) == ["When", "Close calls", "Late news"]
     text = prose(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", section, flags=re.S)))
-    assert "wherever both players are confirmed to play" in text
+    assert "wherever both players are healthy and playing" in text
     for claim in (r"\bbetter\b", r"\bmore (?:often|wins|accurate)\b", r"\bwin(?:s|ning)?\b",
                   r"\bwrong\b", r"\bbad\b", r"\bworse\b"):
         assert not re.search(claim, text, re.I), f"the comparison makes a results claim: {claim}"
@@ -4087,7 +4093,7 @@ def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() ->
         for overclaim in (r"your league's way", r"odds on (?:each one|every close call)",
                           r"every close call decided and the odds"):
             assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
-        assert "wherever both players are confirmed to play" in text, name
+        assert "wherever both players are healthy and playing" in text, name
     for name in ("meta", "og", "JSON-LD"):
         assert "half-PPR or standard" in surfaces[name]
 

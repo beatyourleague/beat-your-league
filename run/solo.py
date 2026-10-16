@@ -947,11 +947,19 @@ NO_K_OR_DEF_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")
 
 def anchored(spec: "RosterSpec", league_size: int, week: int, seeded: bool) -> bool:
     """Does this report count last season in weeks 4-16? Every setting in the
-    setup must be one whose arm shipped (anchor method §8, note 1)."""
+    setup must be one whose arm shipped (anchor method §8, note 1).
+
+    The lineup clause is the standard OFFENSE (engine.subscriber.lineup_class),
+    with or without a kicker or defense — the arm shipped in the standard and
+    no-K/DEF shapes, and a K or DEF slot changes no other slot's call. Read as
+    an exact template it gave "standard, no kicker" (a shape the picker now
+    offers) the unanchored model, so the same pair published two numbers into
+    one ledger store (Oct 16 2026)."""
+    from engine.subscriber import graded_slots, lineup_class
     return (ANCHOR_WEIGHT is not None and not seeded and week in ANCHOR_WEEKS
             and spec.scoring in ANCHOR_SCORING
             and int(league_size) in ANCHOR_SIZES
-            and tuple(spec.slots) in (MEASURED_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
+            and lineup_class(spec.slots) == "std" and graded_slots(spec.slots))
 
 
 # reports/fallback-method.md §3, decided by its one run (Sep 29 2026,
@@ -1005,10 +1013,11 @@ GRADED_SHAPES = frozenset(
 
 
 def shape_graded(slots: Sequence[str]) -> bool:
-    """Has a preregistered arm graded this lineup shape?"""
-    offense = tuple(sorted(s for s in slots if s not in _STANDALONE))
-    return (offense in GRADED_SHAPES
-            and all(list(slots).count(s) <= 1 for s in _STANDALONE))
+    """Has a preregistered arm graded this lineup shape? One rule, held in
+    engine.subscriber.graded_slots, which the signup side and the report-level
+    withholding ask too (two copies disagreed about "standard, no kicker")."""
+    from engine.subscriber import graded_slots
+    return graded_slots(slots)
 
 
 def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:

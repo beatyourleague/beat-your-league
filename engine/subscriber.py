@@ -112,7 +112,7 @@ class LineupShape:
 
     @property
     def graded(self) -> bool:
-        return self.code in GRADED_SHAPES
+        return graded_slots(self.slots)
 
 
 # The bases, in the order the page offers them. "Standard" is ESPN's default
@@ -124,10 +124,20 @@ SHAPE_BASES: dict[str, tuple[tuple[str, ...], str]] = {
     "sf": (("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX"), "Superflex"),
 }
 
-# The graded three, by the codes the signup page has always used for them
-# ("nokd" predates this table and stays its name: run/trial.py and the
-# launch check spell it that way).
-GRADED_SHAPES = frozenset({"std", "sf", "nokd"})
+# ONE RULE FOR "GRADED" (merged Oct 16 2026: the report engine and the signup
+# side had each grown its own list, and two lists disagreed about "standard,
+# no kicker"). A shape is judged on its OFFENSE — the slots other than K and
+# DEF, as a multiset, so the order they are listed in decides nothing. A
+# kicker or a defense slot stands alone: nobody else can play there and they
+# play nowhere else, so having one or not changes no other slot's candidates
+# and therefore no other slot's call — those rows are the very numbers the
+# graded arm measured. reports/setups-method.md graded the standard offense
+# (with K and DEF, and with neither) and superflex; the bases below whose
+# offense matches one of those are graded, every other one waits for
+# reports/lineup-shapes-method.md. At most one K and one DEF: a second kicker
+# is a slot nothing measured.
+_STANDALONE = ("K", "DEF")
+GRADED_BASES = frozenset({"std", "sf"})
 
 # The reason a row carries no odds in an ungraded shape, in the buyer's words.
 UNGRADED_SHAPE_GATE = "odds once this lineup shape is graded"
@@ -179,10 +189,39 @@ def shape_for_slots(slots: Iterable[str]) -> LineupShape | None:
     return next((s for s in LINEUP_SHAPES.values() if s.slots == wanted), None)
 
 
+def lineup_class(slots: Iterable[str]) -> str:
+    """The offense a lineup plays, named by the base it matches ("std", "sf",
+    "flex2", "wr3"), whatever its K/DEF and whatever its order. It is also part
+    of a ledger call's identity (``build_season``): the offense moves the
+    published probability through the positional prior, and two shapes that
+    publish different numbers for one pair must not share a call id. An
+    offense matching no base gets a stable digest name, never a guess."""
+    import hashlib
+    offense = tuple(sorted(s for s in slots if s not in _STANDALONE))
+    for base, (base_slots, _name) in SHAPE_BASES.items():
+        if tuple(sorted(base_slots)) == offense:
+            return base
+    return "x" + hashlib.sha1(",".join(offense).encode()).hexdigest()[:6]
+
+
+def graded_slots(slots: Iterable[str]) -> bool:
+    """Has a preregistered arm graded this lineup? The one rule every surface
+    asks — the report engine (run.solo.shape_graded), the shapes table, the
+    report-level withholding below and the shapes backtest."""
+    slots = list(slots)
+    return (lineup_class(slots) in GRADED_BASES
+            and all(slots.count(s) <= 1 for s in _STANDALONE))
+
+
+# The graded shapes by code, derived from the one rule above (never a second
+# list to keep in step with it).
+GRADED_SHAPES = frozenset(code for code, shape in LINEUP_SHAPES.items()
+                          if shape.graded)
+
+
 def graded_shape(slots: Iterable[str]) -> bool:
     """May a report for this lineup print odds? Only a graded shape's may."""
-    shape = shape_for_slots(slots)
-    return shape is not None and shape.graded
+    return graded_slots(slots)
 
 
 def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict[str, Any]:
@@ -201,9 +240,10 @@ def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict
     "Start X over Y at WR · 64%" (engine/solo_report.py). That line becomes
     the plain one the same builder writes when no call is paired — "Bench Y
     — X starts at WR" — so the decision stays and only the number goes."""
-    shape = shape_for_slots(slots)
-    if shape is not None and shape.graded:
+    slots = list(slots)
+    if graded_slots(slots):
         return report
+    shape = shape_for_slots(slots)
     for row in report.get("lineup") or []:
         if row.get("confidence") is None:
             continue
@@ -292,6 +332,23 @@ def _fantasy_positions(position: str) -> list[str]:
     return [position]
 
 
+def ledger_store_id(scoring: str, league_size: int, slots: Iterable[str],
+                    season) -> str:
+    """The ledger store a subscriber's published calls are recorded in, named
+    for everything that moves the published probability (CLAUDE.md, "Ledger
+    identity"): the scoring preset, the league size and — found Oct 16 2026 —
+    the lineup's offense. Measured on the live sample roster, Week 6 2026, PPR
+    12: standard and superflex published 0.788 and 0.772 for the same pair
+    under ONE call id, and record_calls kept whichever ran first. The standard
+    offense keeps the name it has always had (typed-ppr-12-2026), so nothing
+    already recorded moves; every other offense carries its class
+    (typed-ppr-12-sf-2026). K and DEF are not in it: they change no other
+    slot's number, and their own rows are identical across shapes."""
+    lineup = lineup_class(slots)
+    middle = "" if lineup == "std" else f"-{lineup}"
+    return f"typed-{scoring}-{league_size}{middle}-{season}"
+
+
 def build_season(
     spec: RosterSpec,
     weekly: Mapping[int, Mapping[str, Mapping[str, object]]],
@@ -361,7 +418,7 @@ def build_season(
         # either way, so this is not a wrong ANSWER like the scoring collision
         # was — it is a probability recorded in the wrong bucket, which distorts
         # the exact table the ledger exists to produce.
-        league_id=f"typed-{spec.scoring}-{league_size}-{season}",
+        league_id=ledger_store_id(spec.scoring, league_size, spec.slots, season),
         season=str(season),
         name="Your league",
         status="in_season",

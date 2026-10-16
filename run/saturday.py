@@ -338,13 +338,17 @@ def state_for(player_id: str, *, starts: Mapping[str, datetime],
     eastern = ZoneInfo(NFL_TIME)
     days = (kickoff.astimezone(eastern).date() - at.astimezone(eastern).date()).days
     final = team in filed and days <= 1
+    # The kickoff rides on every state: engine.final_check refuses a cover who
+    # plays before a still-questionable starter's inactives only when it knows
+    # both games' times (panel review RQ-01, one clock for Tuesday and Saturday).
     if status in ROSTER_OUT:
-        return Now("out", ROSTER_OUT[status], locked=locked, final=True)
+        return Now("out", ROSTER_OUT[status], locked=locked, final=True,
+                   kickoff=kickoff)
     if player_id in listed:
         designation, injury = listed[player_id]
         return Now(designation, _reason(designation, injury),
-                   locked=locked, final=final)
-    return Now(locked=locked, final=final)
+                   locked=locked, final=final, kickoff=kickoff)
+    return Now(locked=locked, final=final, kickoff=kickoff)
 
 
 def check_report_is_in(starts: Mapping[str, datetime], filed: set[str],

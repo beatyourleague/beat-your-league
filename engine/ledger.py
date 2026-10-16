@@ -293,14 +293,26 @@ def _call_is_final(call: LedgerCall, raw_dir: Path,
 # graded correctly for either. Measured on real 2024 week-10 data before the id
 # carried the preset: 5 of 6 calls collided across presets while publishing
 # different probabilities.
+# ...and the lineup's offense when it is not the standard one
+# (engine.subscriber.ledger_store_id): `typed-ppr-12-sf-2026`.
 TYPED_LEDGER_RE = re.compile(
-    r"^typed-(?P<scoring>[a-z_]+)-(?P<size>\d+)-(?P<season>\d{4})$")
+    r"^typed-(?P<scoring>[a-z_]+)-(?P<size>\d+)(?:-(?P<lineup>[a-z][a-z0-9]*))?"
+    r"-(?P<season>\d{4})$")
 
 
 def scoring_of(league_id: str) -> str | None:
     """The scoring preset a `typed-*` ledger's calls were made under."""
     match = TYPED_LEDGER_RE.match(league_id or "")
     return match.group("scoring") if match else None
+
+
+def lineup_of(league_id: str) -> str | None:
+    """The lineup offense those calls were made in: "std" for the standard
+    store name, the class otherwise (engine.subscriber.lineup_class)."""
+    match = TYPED_LEDGER_RE.match(league_id or "")
+    if not match:
+        return None
+    return match.group("lineup") or "std"
 
 
 def league_size_of(league_id: str) -> int | None:

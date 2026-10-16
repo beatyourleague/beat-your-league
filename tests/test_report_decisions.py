@@ -464,7 +464,7 @@ def test_an_ungraded_lineup_shape_prints_projections_and_no_odds() -> None:
         "because odds start once this lineup shape is graded.")
     for name, page in _surfaces(report).items():
         assert "projection only" in page, name
-        assert "your lineup shape gets projections only until it's graded" in page, name
+        assert "your lineup shape hasn't been graded yet, so it carries no odds" in page, name
         assert not re.search(r"\b\d{2}% vs\b", page), name
 
 
