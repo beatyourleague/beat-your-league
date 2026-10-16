@@ -31,18 +31,29 @@ T1 = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
 # the table
 # --------------------------------------------------------------------- #
 
-def test_the_three_graded_shapes_are_the_ones_the_setups_run_measured() -> None:
-    """Only shapes an arm graded may print odds. The three are the templates
-    reports/setups-method.md graded, letter for letter — the slot ORDER too,
-    because the same slots in another order would read as a different shape."""
+def test_the_graded_shapes_are_the_offenses_the_setups_run_measured() -> None:
+    """Only shapes an arm graded may print odds. Graded is judged on the
+    OFFENSE (engine.subscriber.graded_slots): reports/setups-method.md graded
+    the standard offense (with K and DEF, and with neither) and superflex, and
+    a kicker or defense slot changes no other slot's call — so every K/DEF
+    variant of those two offenses is graded and nothing else is. Merged Oct 16
+    2026: the report engine and the signup side had each grown a list, and
+    the two disagreed about "standard, no kicker"."""
     import engine.setups_backtest as setups
     from engine.nflverse_backtest import TEMPLATE_T1
-    graded = {code: LINEUP_SHAPES[code].slots for code in GRADED_SHAPES}
-    assert graded == {"std": tuple(TEMPLATE_T1), "sf": setups.TEMPLATE_SF,
-                      "nokd": setups.TEMPLATE_NKD}
+    assert GRADED_SHAPES == {code for code, shape in LINEUP_SHAPES.items()
+                             if shape.base in ("std", "sf")}
+    # The three measured templates, letter for letter, are among them.
+    measured = {"std": tuple(TEMPLATE_T1), "sf": setups.TEMPLATE_SF,
+                "nokd": setups.TEMPLATE_NKD}
+    for code, slots in measured.items():
+        assert LINEUP_SHAPES[code].slots == slots and code in GRADED_SHAPES, code
     from run.trial import TEMPLATES
-    for code in GRADED_SHAPES:
+    for code in measured:
         assert LINEUP_SHAPES[code].slots == TEMPLATES[code], code
+    from run.solo import shape_graded
+    for code, shape in LINEUP_SHAPES.items():
+        assert shape_graded(shape.slots) is shape.graded, code
 
 
 def test_every_base_with_and_without_k_and_def_is_one_shape() -> None:
@@ -201,11 +212,23 @@ def test_report_for_withholds_every_number_in_an_ungraded_shape(week6) -> None:
     std, _ = _build(week6, "std")
     assert any(row["confidence"] is not None for row in std["lineup"]), \
         "the control lost its odds: this test no longer proves anything"
-    for code in ("flex2", "wr3", "sf-nok", "flex2-nokd"):
+    import engine.subscriber as subscriber
+    for code in ("flex2", "wr3", "wr3-nod", "flex2-nokd"):
+        # The rows this shape WOULD publish if it were graded: those, and only
+        # those, must carry the shape as their reason. (Which rows those are
+        # moves with the week's injury news; the rule doesn't.)
+        real = subscriber.graded_slots
+        subscriber.graded_slots = lambda slots: True
+        try:
+            would, _ = _build(week6, code)
+        finally:
+            subscriber.graded_slots = real
         report, projections = _build(week6, code)
         assert len(report["lineup"]) == len(LINEUP_SHAPES[code].slots), code
         assert all(row["confidence"] is None for row in report["lineup"]), code
-        assert UNGRADED_SHAPE_GATE in {row["confidence_gate"] for row in report["lineup"]}, code
+        for was, now in zip(would["lineup"], report["lineup"]):
+            if was["confidence"] is not None:
+                assert now["confidence_gate"] == UNGRADED_SHAPE_GATE, code
         assert "confidence" not in report["regret"], code
         assert extract_published_calls(report) == [], code
         assert any(row["projected"] is not None for row in report["lineup"]), code
@@ -233,18 +256,32 @@ def test_the_saturday_check_works_on_an_ungraded_shape(week6) -> None:
 
 
 # --------------------------------------------------------------------- #
-# the preregistered harness (draft): arms derived, published runs untouched
+# the preregistered harness: arms derived, published runs untouched
 # --------------------------------------------------------------------- #
 
-def test_the_shape_arms_are_exactly_the_ungraded_shapes() -> None:
+def test_the_shape_arms_are_two_per_ungraded_offense() -> None:
+    """Method §1: for every base whose offense no arm has graded, the shape
+    with a K and a DEF and the shape with neither — and nothing else, so the
+    graded standard and superflex offenses are never re-run under a new name."""
     import engine.shapes_backtest as shapes
-    assert {arm.key for arm in shapes.SHAPE_ARMS} == \
-        {code for code, shape in LINEUP_SHAPES.items() if not shape.graded}
+    from engine.subscriber import graded_slots
+    assert [arm.key for arm in shapes.SHAPE_ARMS] == ["flex2", "flex2-nokd",
+                                                      "wr3", "wr3-nokd"]
     for arm in shapes.SHAPE_ARMS:
-        assert arm.template == LINEUP_SHAPES[arm.key].slots
-        if arm.same_calls_as:
-            twin = LINEUP_SHAPES[arm.same_calls_as]
-            assert twin.slots == arm.template + ("DEF",)
+        shape = LINEUP_SHAPES[arm.key]
+        assert arm.template == shape.slots and arm.base == shape.base
+        assert not graded_slots(arm.template)
+        assert shape.kicker == shape.defense
+
+
+def test_an_offense_prints_only_when_both_its_arms_beat_d() -> None:
+    """Method §3, frozen before the run: either arm at D keeps the offense
+    ungraded in every K/DEF variant."""
+    from engine.shapes_backtest import offense_decision
+    assert offense_decision(["C", "B"]).startswith("prints")
+    assert offense_decision(["B", "B"]).startswith("prints")
+    assert offense_decision(["C", "D"]).startswith("stays ungraded")
+    assert offense_decision(["D", "B"]).startswith("stays ungraded")
 
 
 def test_the_shape_harness_grades_with_the_parents_code_as_shipped() -> None:
@@ -301,3 +338,40 @@ def test_the_shape_runner_refuses_a_partial_window_and_writes_one_report(tmp_pat
     assert [arm.key for arm, _, _ in results] == [a.key for a in arms]
     text = shapes.report(results, 1.2064)
     assert "b = 1.2064" in text and all(f"### {a.key}" in text for a in arms)
+    assert "Two FLEX" in text.split("## Decisions")[1].split("## Summary")[0]
+
+
+def test_the_lineup_offense_is_part_of_a_calls_identity() -> None:
+    """Reproduction (found merging the shapes work, Oct 16 2026): the ledger
+    store was typed-{scoring}-{size}-{season}, but the lineup's offense moves
+    the published probability through the positional prior. On the live
+    sample roster, Week 6 2026, PPR 12, standard and superflex published
+    0.788 and 0.772 for Kelce over Ertz under ONE call id, and record_calls
+    kept whichever ran first. Every offense now has its own store; the
+    standard one keeps the name it always had, and K/DEF — which move no other
+    slot's number — never split a store."""
+    from engine.ledger import TYPED_LEDGER_RE, league_size_of, lineup_of, scoring_of
+    from engine.subscriber import ledger_store_id
+    ids = {code: ledger_store_id("ppr", 12, shape.slots, 2026)
+           for code, shape in LINEUP_SHAPES.items()}
+    assert ids["std"] == ids["nokd"] == ids["std-nok"] == "typed-ppr-12-2026"
+    assert ids["sf"] == ids["sf-nokd"] == "typed-ppr-12-sf-2026"
+    assert len({ids["std"], ids["sf"], ids["flex2"], ids["wr3"]}) == 4
+    for store in set(ids.values()):
+        assert TYPED_LEDGER_RE.match(store), store
+        assert scoring_of(store) == "ppr" and league_size_of(store) == 12
+    assert lineup_of(ids["std"]) == "std" and lineup_of(ids["sf"]) == "sf"
+    assert lineup_of(ids["flex2"]) == "flex2"
+
+
+def test_a_built_season_records_into_its_offenses_store(week6) -> None:
+    """End to end: the season a report is built on carries the store id, so
+    the calls recorded on delivery land there."""
+    from engine.subscriber import build_season
+    seasons = {}
+    for code in ("std", "sf", "std-nok"):
+        spec = RosterSpec(_roster(week6), LINEUP_SHAPES[code].slots, "ppr")
+        seasons[code] = build_season(spec, week6.weekly, week6.directory,
+                                     week6.season, week6.week, league_size=12)
+    assert seasons["std"].league_id == seasons["std-nok"].league_id
+    assert seasons["std"].league_id != seasons["sf"].league_id
