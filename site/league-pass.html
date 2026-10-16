@@ -19,10 +19,15 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,800;0,900;1,800;1,900&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- A dark page, said so: native controls draw dark and a phone's browser
+     bar takes the page's colour (launch review I12). -->
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05090F">
+<link rel="preload" href="fonts/barlow-condensed-900i.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--turf-glow:#2EA968;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--turf-glow:#2EA968;
     --flag:#F2C230;--flag-deep:#D9A81B;--brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;
     --line:#D8D3C6;--abyss:#05090F;--pitch:#0A1420;--dusk2:#BCC9DB;--gold-edge:rgba(242,194,48,.20);
     --flag-tint:#FBF3D9;}
@@ -30,21 +35,29 @@
   html{overflow-x:hidden;overflow-x:clip;background:var(--abyss);}
   body{background:radial-gradient(900px 600px at 85% -5%,rgba(30,122,70,.22),transparent 60%),
       linear-gradient(180deg,#0C1930 0%,var(--pitch) 40%,var(--abyss) 100%);
-    background-color:var(--abyss);font-family:'Barlow',sans-serif;color:var(--paper);
+    background-color:var(--abyss);font-family:var(--sans);color:var(--paper);
     -webkit-font-smoothing:antialiased;padding-bottom:40px;}
   .wrap{max-width:820px;margin:0 auto;padding:0 20px;}
   a{color:inherit;}
   header{padding:34px 0 8px;}
-  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;letter-spacing:.28em;
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:.28em;
     text-transform:uppercase;color:var(--flag);text-decoration:none;}
   .brand svg.mark{width:22px;height:22px;flex:none;}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  /* The site's routes, as on every page (launch review I5). */
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;}
+  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:var(--dusk2);text-decoration:none;padding:6px 2px;}
+  .sitenav a:hover{color:var(--paper);}
+  .sitenav a.home{color:var(--paper);padding:8px 15px;}
+  .sitebar a:focus-visible,main a:focus-visible,button:focus-visible,summary:focus-visible{
+    outline:3px solid var(--flag);outline-offset:2px;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
-  h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+  h1{font-family:var(--display);font-weight:900;font-style:italic;
     font-size:clamp(40px,8vw,76px);line-height:.92;text-transform:uppercase;margin-top:16px;
     text-shadow:0 22px 50px rgba(0,0,0,.45);text-wrap:balance;}
   h1 em{font-style:italic;color:var(--navy);background:linear-gradient(180deg,#FFD75E,var(--flag) 60%,var(--flag-deep));
@@ -52,36 +65,36 @@
     box-shadow:0 12px 30px -14px rgba(242,194,48,.6);}
   h1 em span{display:inline-block;}
   .lede{margin-top:20px;font-size:18px;line-height:1.65;color:var(--dusk2);max-width:640px;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:30px;
+  h2{font-family:var(--display);font-weight:800;font-size:30px;
     text-transform:uppercase;margin:38px 0 10px;text-wrap:balance;}
   p{font-size:15.5px;line-height:1.7;color:var(--dusk2);margin:10px 0;}
   b{color:var(--paper);}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px;}
   .box{background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 20px;}
-  .box h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;}
+  .box h3{font-family:var(--display);font-weight:800;font-size:19px;text-transform:uppercase;}
   .box p{font-size:14.5px;margin-top:7px;}
   .price{background:var(--card);color:var(--navy);border:2px solid var(--flag);
     padding:26px;margin-top:26px;box-shadow:0 26px 60px -22px rgba(0,0,0,.85);}
   .price .tag{font-size:11.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--turf);}
-  .price .amt{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:64px;
+  .price .amt{font-family:var(--display);font-weight:900;font-style:italic;font-size:64px;
     line-height:1;margin-top:6px;}
   /* The 3px letterpress shadow is sized for the 64px price; inherited onto 15px
      text it lands almost a full x-height away and reads as a smudge. */
-  .price .amt small{font-family:'Barlow';font-size:15px;font-weight:700;color:var(--slate);
+  .price .amt small{font-family:var(--sans);font-size:15px;font-weight:700;color:var(--slate);
     font-style:normal;text-shadow:none;}
   .price ul{margin:14px 0 0 18px;font-size:14.5px;line-height:1.75;color:var(--ink2);}
-  .btn{display:inline-block;margin-top:18px;font-family:'Barlow Condensed';font-weight:800;
+  .btn{display:inline-block;margin-top:18px;font-family:var(--display);font-weight:800;
     font-size:18px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
     padding:15px 28px;background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
     transition:transform .16s ease,box-shadow .16s ease;box-shadow:0 10px 24px -14px rgba(0,0,0,.9);}
   .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
   .steps{margin-top:22px;background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 20px;}
-  .steps h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;letter-spacing:.04em;}
+  .steps h3{font-family:var(--display);font-weight:800;font-size:19px;text-transform:uppercase;letter-spacing:.04em;}
   .steps ol{margin:10px 0 0 20px;font-size:15px;line-height:1.7;color:var(--dusk2);}
   .steps li b{color:var(--paper);}
   /* The closed state sits where the button will: the landing's switched-off shape. */
-  .soon small{display:block;font-family:'Barlow';font-weight:600;font-size:13px;
+  .soon small{display:block;font-family:var(--sans);font-weight:600;font-size:13px;
     letter-spacing:0;text-transform:none;margin-top:3px;}
   .soon small a{color:var(--navy);}
   .see{margin-top:14px;font-size:14px;}
@@ -90,7 +103,7 @@
   .chatline{display:flex;gap:10px;align-items:flex-start;margin-top:6px;
     background:rgba(255,255,255,.05);border:1px dashed var(--gold-edge);padding:10px 12px;}
   .chatline p{margin:0;font-size:14px;line-height:1.55;flex:1;min-width:0;}
-  .chatline button{flex:none;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+  .chatline button{flex:none;font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
     border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
   .chatline .blank{color:var(--flag);font-weight:700;white-space:nowrap;}
@@ -102,7 +115,24 @@
   #chat-email:focus-visible{outline:2px solid var(--flag);outline-offset:1px;}
   .chatline-msg{margin:6px 0 0;font-size:13.5px;color:var(--flag);}
   .chatline-msg:empty{display:none;}
-  .soon{margin-top:18px;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+  /* One big tap: the phone's own share sheet where there is one (the group
+     chat is an app on that phone), a copy everywhere else (LP-I5, LP-I9). */
+  .sharebtn{display:block;width:100%;max-width:420px;margin-top:10px;min-height:48px;
+    font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--navy);border:0;cursor:pointer;padding:12px 18px;
+    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));}
+  .ask .chatline{margin-top:10px;}
+  /* The commissioner's questions, the landing's FAQ style on this page. */
+  .faq details{border-bottom:1px solid rgba(246,244,238,.12);}
+  .faq details:first-child{border-top:1px solid rgba(246,244,238,.12);}
+  .faq summary{cursor:pointer;padding:15px 0;font-weight:700;font-size:16px;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .faq summary::-webkit-details-marker{display:none;}
+  .faq summary::after{content:"+";font-family:var(--display);font-weight:800;font-size:22px;
+    color:var(--flag);flex:none;}
+  .faq details[open] summary::after{content:"–";}
+  .faq .a{padding:0 0 15px;font-size:15px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
+  .soon{margin-top:18px;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
     background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 16px;}
   .fine{margin-top:14px;font-size:13px;color:var(--slate);line-height:1.6;}
@@ -111,11 +141,67 @@
   footer a{color:var(--flag);}
   @media (max-width:640px){.grid{grid-template-columns:1fr;}}
 </style>
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "FAQPage",
+ "mainEntity": [
+  {
+   "@type": "Question",
+   "name": "Can a manager join late?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if the week's games haven't started, otherwise their roster report — then every Tuesday."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What if a manager leaves or is replaced?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "The new manager claims a seat with your league's link. The one who left can stop their reports by replying \"stop\" to any of them, and they're off within 10 business days. Your pass isn't affected."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "We co-manage a team. Do we both get it?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Yes. Each co-manager claims a seat with their own email and the same roster, and each gets the report."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "I'm in two leagues that both have a pass. What do I do?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Claim a seat in each, with each league's own link. Each seat is its own report, built from that league's roster and settings."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What are my leaguemates' emails used for?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Only to send each manager their own report, the email confirming their seat, and — if they ask — the confirmation of a roster change. Nobody sees another manager's report or address: your own report shows how many seats are claimed, as a count, never who."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "What happens to the seats if I cancel or take a refund?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Your league's seats last as long as your pass does: if you cancel it or take a refund, every seat's reports stop too."
+   }
+  }
+ ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="topbar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylpClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylpClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html">← Home</a></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylpClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylpClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
     <h1>One payment.<br><em><span>The whole league.</span></em></h1>
     <p class="lede">Every manager gets their own weekly report, built from their own
     roster, every Tuesday. Twelve rosters means twelve
@@ -164,16 +250,36 @@
     Leagues of 8, 10, 12 or 14 teams are all covered.</p>
   </div>
 
+  <!-- The ask BEFORE the purchase (panel review LP-I5): a commissioner
+       spending shared dues usually checks with the league first, and the only
+       line this page offered was "I got us the League Pass", false until paid.
+       This one is a question, true at any time, and carries no seat link. -->
+  <div class="steps ask">
+    <h3>Ask the league first</h3>
+    <div class="chatline">
+      <p id="ask-text">Should we put the League Pass from Beat Your League on this year's
+      dues? $99 covers the whole league, and everyone gets their own lineup report every
+      Tuesday, built from their own roster: https://beatyourleague.com/league-pass.html</p>
+    </div>
+    <button type="button" class="sharebtn" id="ask-share">Send this to the group chat</button>
+    <p class="chatline-msg" id="ask-msg" role="status"></p>
+  </div>
+
   <div class="steps">
     <h3>What you do after paying</h3>
     <ol>
       <li><b>Pay once, on Stripe.</b> Your own roster goes in at the same time, so your report
       is the first one.</li>
-      <li><b>Text the league the link.</b> Your welcome email carries your league's signup link.
-      Send it to the group chat with the email you paid with, which is how each seat is matched
-      to your pass.</li>
-      <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their own
-      report lands the next Tuesday.</li>
+      <!-- One phrase for the address everywhere a seat meets it — this page,
+           the seat page and the emails: "the email the pass was bought with",
+           because any manager may buy it (panel review LP-D7). -->
+      <li><b>Send the league your link.</b> Your welcome email carries your league's seat link.
+      Where it's your league's own link, a manager who opens it needs only their roster;
+      the general seat page asks each manager for the email the pass was bought with, which
+      is how a seat is matched to your pass.</li>
+      <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their
+      first report lands the day they claim their seat — that week's lineup if the week's
+      games haven't started, otherwise their roster report — then every Tuesday.</li>
     </ol>
     <!-- The group-chat line (launch audit F4). Until the pass can be bought it
          is an EXAMPLE with blanks: no live link and nothing to copy, because
@@ -185,25 +291,57 @@
       <p class="chatline-head">What you'll send the group chat once you've paid:</p>
       <div class="chatline">
         <p>I got us the League Pass from Beat Your League: everyone gets their own lineup
-        report every Tuesday, built from their own roster. Nothing to pay. Set yours up here:
-        <span class="blank">[the link in your welcome email]</span> — and when it asks for my
-        email, enter <span class="blank">[the email you paid with]</span>.</p>
+        report every Tuesday, built from their own roster. Nothing to pay. Claim your seat
+        here: <span class="blank">[your league's link, from your welcome email]</span></p>
       </div>
     </div>
     <div id="chat-live" hidden>
-      <p class="chatline-head">Once you've paid, paste this in the group chat:</p>
-      <label class="chatline-label" for="chat-email">The email you pay with — each manager
-      enters it to claim their seat. It stays on this page.</label>
+      <p class="chatline-head">Once you've paid, use the link in your welcome email — or
+      paste this in the group chat:</p>
+      <label class="chatline-label" for="chat-email">The email you pay with — on this general
+      seat page, each manager enters it as the email the pass was bought with. It stays on
+      this page.</label>
       <input type="email" id="chat-email" autocomplete="email" placeholder="you@example.com">
       <div class="chatline">
         <p id="chat-text">I got us the League Pass from Beat Your League: everyone gets their own
         lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours up
-        here: https://beatyourleague.com/join/?pass=1 — and when it asks for my email, enter
-        <b id="chat-email-echo">[the email I paid with]</b>.</p>
+        here: https://beatyourleague.com/join/?pass=1 — where it asks for the email the pass
+        was bought with, enter <b id="chat-email-echo">[the email I paid with]</b>.</p>
         <button type="button" id="chat-copy">Copy</button>
       </div>
       <p class="chatline-msg" id="chat-msg" role="status"></p>
     </div>
+  </div>
+
+  <!-- What a commissioner asks before spending the league's money, answered
+       with what the code already does (panel review LP-I8). The JSON-LD below
+       repeats it word for word (tests/test_site.py). -->
+  <h2 id="lp-faq">Before you ask</h2>
+  <div class="faq">
+    <details>
+      <summary>Can a manager join late?</summary>
+      <div class="a">Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if the week's games haven't started, otherwise their roster report — then every Tuesday.</div>
+    </details>
+    <details>
+      <summary>What if a manager leaves or is replaced?</summary>
+      <div class="a">The new manager claims a seat with your league's link. The one who left can stop their reports by replying "stop" to any of them, and they're off within 10 business days. Your pass isn't affected.</div>
+    </details>
+    <details>
+      <summary>We co-manage a team. Do we both get it?</summary>
+      <div class="a">Yes. Each co-manager claims a seat with their own email and the same roster, and each gets the report.</div>
+    </details>
+    <details>
+      <summary>I'm in two leagues that both have a pass. What do I do?</summary>
+      <div class="a">Claim a seat in each, with each league's own link. Each seat is its own report, built from that league's roster and settings.</div>
+    </details>
+    <details>
+      <summary>What are my leaguemates' emails used for?</summary>
+      <div class="a">Only to send each manager their own report, the email confirming their seat, and — if they ask — the confirmation of a roster change. Nobody sees another manager's report or address: your own report shows how many seats are claimed, as a count, never who.</div>
+    </details>
+    <details>
+      <summary>What happens to the seats if I cancel or take a refund?</summary>
+      <div class="a">Your league's seats last as long as your pass does: if you cancel it or take a refund, every seat's reports stop too.</div>
+    </details>
   </div>
 
   <h2>Fair play</h2>
@@ -307,6 +445,35 @@ if (copy) {
       selectIt();
     }
   });
+}
+// The ask before buying (LP-I5): true at any time, so it is always shareable.
+const ask = document.getElementById("ask-share");
+if (ask) {
+  ask.addEventListener("click", () => {
+    const line = document.getElementById("ask-text");
+    shareLine(line.textContent.replace(/\s+/g, " ").trim(), line,
+              document.getElementById("ask-msg"));
+  });
+}
+// One tap to the group chat: the phone's own share sheet where the browser
+// has one (the chat is an app on that phone), a clipboard copy otherwise, and
+// failing both the line is selected for a copy by hand. A cancelled share
+// sheet is the visitor changing their mind, not an error. The same function,
+// character for character, is on thanks.html (tests/test_site.py).
+function shareLine(text, line, status) {
+  const byHand = () => {
+    window.getSelection().selectAllChildren(line);
+    status.textContent = "The message is selected — copy it and paste it in the group chat.";
+  };
+  const copyIt = () => {
+    if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
+    navigator.clipboard.writeText(text).then(
+      () => { status.textContent = "Copied — paste it in the group chat."; }, byHand);
+  };
+  if (!navigator.share) return copyIt();
+  navigator.share({ text: text }).then(
+    () => { status.textContent = ""; },
+    (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
 // AFTER every href this script writes (the Buy button, the own-team link).
 if (VIA) {

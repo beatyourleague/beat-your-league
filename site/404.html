@@ -18,22 +18,36 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- A paper page, said so: light native controls, and a phone's browser
+     bar in the masthead's navy (launch review I12). -->
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#101E33">
+<link rel="preload" href="/fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:22px;flex:none;}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  /* The site's routes on every page, the samples' masthead row (launch
+     review I5): a visitor arriving from a shared link had only a Home pill. */
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
+    flex-wrap:wrap;}
+  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
+  .sitenav a.home{color:var(--paper);padding:8px 15px;}
+  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
@@ -42,7 +56,7 @@
   main a,p a,li a{color:var(--brick);text-decoration:underline;
     text-underline-offset:2px;text-decoration-thickness:1px;}
   main a:hover,p a:hover,li a:hover{color:var(--navy);}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:10px 28px 34px;}
   .done{display:flex;align-items:center;gap:16px;margin-top:18px;}
@@ -58,10 +72,10 @@
   .steps{list-style:none;margin:18px 0 6px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .steps li{margin:0;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--flag);
     padding:12px 14px;font-size:13.5px;line-height:1.5;}
-  .steps li b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+  .steps li b{display:block;font-family:var(--display);font-weight:800;font-size:15px;
     letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;}
   @media (max-width:600px){.steps{grid-template-columns:1fr;}}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
   p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
   ul{margin-left:20px;}
@@ -71,18 +85,19 @@
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
   .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
-  .cta a{display:inline-block;font-family:'Barlow Condensed';font-weight:800;letter-spacing:.1em;
+  .cta a{display:inline-block;font-family:var(--display);font-weight:800;letter-spacing:.1em;
     text-transform:uppercase;font-size:15px;padding:11px 20px;text-decoration:none;
     background:var(--flag);color:var(--navy);border:2px solid var(--flag);}
   .cta a.ghost{background:transparent;color:var(--navy);border-color:var(--navy);}
   main .cta a:hover{color:var(--navy);}
+  [hidden]{display:none!important;}
 </style>
 <meta name="robots" content="noindex">
 </head>
 <body>
 <div class="sheet">
   <header>
-    <div class="topbar"><a class="brand" href="/"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="/">← Home</a></div>
+    <div class="sitebar"><a class="brand" href="/"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="/how-it-works.html">How it works</a><a href="/sample-report.html">Real report</a><a href="/index.html#pricing">Pricing</a><a class="home" href="/">← Home</a></nav></div>
     <h1>That page isn't here.</h1>
     <p>The link may be old or mistyped. Here's where most people meant to go.</p>
   </header>
@@ -90,11 +105,34 @@
     <div class="cta">
       <a href="/">Back to the front page</a>
       <a class="ghost" href="/how-it-works.html">How it works</a>
-      <a class="ghost" href="/this-week.html">This week's report</a>
+      <!-- This week's live report only in a week it shows at least three odds
+           and a closest call, the landing hero's rule; otherwise the pinned
+           sample (launch review PC-01). Root-absolute: this page is served
+           for a mistyped URL at any depth. -->
+      <a class="ghost" href="/sample-report.html" data-pinned-week>See a real report</a>
+      <a class="ghost" href="/this-week.html" data-live-week hidden>This week's report</a>
     </div>
     <p style="margin-top:22px">Something that should be here? Write to <b>hello@beatyourleague.com</b>.</p>
   </main>
   <footer><b>Beat Your League</b> — analysis, not picks. Not affiliated with the NFL.</footer>
 </div>
+<script>
+"use strict";
+// The landing hero's rule for linking this week's live report (PC-01).
+(function () {
+  try {
+    if (!window.fetch) return;
+    fetch("/week.json", { cache: "no-cache",
+      signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!(w && Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call)) return;
+        document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
+        document.querySelectorAll("[data-pinned-week]").forEach((el) => { el.hidden = true; });
+      })
+      .catch(() => {});
+  } catch (e) { /* the pinned sample stays */ }
+})();
+</script>
 </body>
 </html>

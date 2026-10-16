@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — your lineup, decided every Tuesday</title>
 <link rel="canonical" href="https://beatyourleague.com/">
-<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
+<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are confirmed to play, and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
-<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.">
+<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are confirmed to play, and an if/then plan for late news.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -19,11 +19,15 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,800;0,900;1,800;1,900&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- A dark page, said so: native controls and scrollbars draw dark, and a
+     phone's browser bar takes the page's own colour (launch review I12). -->
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05090F">
+<link rel="preload" href="fonts/barlow-condensed-900i.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
     --navy:#101E33; --paper:#F6F4EE; --card:#FFFFFF;
     --turf:#1E7A46; --turf-glow:#2EA968; --turf-tint:#DFF0E4;
     --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
@@ -39,7 +43,7 @@
       radial-gradient(900px 640px at 12% 8%, rgba(30,122,70,.14), transparent 60%),
       linear-gradient(180deg,#0C1930 0%, var(--pitch) 44%, var(--abyss) 100%);
     background-color:var(--abyss);
-    font-family:'Barlow',-apple-system,sans-serif;color:var(--paper);
+    font-family:var(--sans);color:var(--paper);
     -webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-x:clip;}
   .wrap{max-width:1060px;margin:0 auto;padding:0 22px;}
   a{color:inherit;}
@@ -51,7 +55,7 @@
 
   /* ------------------------------------------------ nav */
   nav{display:flex;align-items:center;justify-content:space-between;padding:22px 0 0;}
-  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);
     font-weight:800;font-size:15px;letter-spacing:.24em;text-transform:uppercase;
     color:var(--flag);text-decoration:none;}
   .brand svg.mark{width:24px;height:24px;flex:none;}
@@ -60,9 +64,13 @@
   /* 24px minimum target: the text links were 17px tall. */
   .navlinks a:not(.btn){padding:7px 4px;}
   .navlinks a:hover{color:var(--paper);}
+  /* The nav CTA's two labels; the short one takes over below 880px. Declared
+     here, BEFORE the media queries, or this base rule would win the cascade
+     and leave a tablet's button empty. */
+  nav .btn .short{display:none;}
   .btn.primary,.btn.gold{box-shadow:0 10px 24px -14px rgba(0,0,0,.9);}
   .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
-  .btn{display:inline-block;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+  .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
     padding:12px 22px;border:none;transition:transform .15s ease;}
   .btn.gold{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
@@ -73,9 +81,9 @@
   /* ------------------------------------------------ hero */
   .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;
     padding:58px 0 30px;}
-  .kicker{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+  .kicker{font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.3em;text-transform:uppercase;color:var(--flag);}
-  h1{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+  h1{font-family:var(--display);font-weight:900;font-style:italic;
     font-size:clamp(52px,7.4vw,92px);line-height:.92;text-transform:uppercase;
     margin:14px 0 16px;text-shadow:0 20px 46px rgba(0,0,0,.45);text-wrap:balance;}
   h1 em{font-style:italic;color:var(--navy);
@@ -102,6 +110,14 @@
   /* The season clock, written by the Tuesday build beside this-week.html:
      true urgency, derived, never typed. Static text stays if it can't load. */
   .heroline .clock{color:var(--flag);font-weight:800;}
+  /* The season clock and this week's link both arrive with the Tuesday
+     build's week file, a beat after first paint on a slow phone. Their room is
+     reserved — three lines for the clock's sentence, the link's own place on
+     the realtag line — so their arrival moves nothing (measured in Chrome on
+     Slow 4G at 1280px: CLS 0.10, the button row and the whole page below the
+     hero pushed down by one line each). */
+  .heroline{min-height:calc(3 * 1.55em);}
+  .realtag span[data-live-week][hidden]{display:inline!important;visibility:hidden;}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;align-items:center;}
   .cta-row .textlink{color:var(--dusk2);font-size:15px;padding:10px 2px;}
   .cta-row .textlink:hover{color:var(--paper);}
@@ -129,26 +145,26 @@
   .screen{position:relative;height:100%;background:#F2F0EA;border-radius:42px;
     overflow:hidden;display:flex;flex-direction:column;}
   /* The island is hardware, not screen: it sits above every screen layer, so
-     the notification slides out from UNDER it rather than across it. */
-  .island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:92px;
-    height:27px;border-radius:20px;background:#000;z-index:10;}
-  .statusbar{display:flex;justify-content:space-between;align-items:center;
-    padding:15px 26px 0 30px;height:48px;font-size:14px;font-weight:700;color:#000;
+     the notification slides out from UNDER it rather than across it. Sized in
+     proportion to the screen, as on the real phone: a fixed 92px island on the
+     286px phone below 880px swallowed the signal bars (launch review D4). */
+  .island{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:31%;
+    aspect-ratio:92 / 27;border-radius:20px;background:#000;z-index:10;}
+  /* The status bar is three columns, the middle one the island's own width:
+     the time sits centred in the left "ear" and the icons in the right one,
+     so nothing can slide under the island at any phone size. */
+  .statusbar{display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;
+    padding:15px 4px 0;height:48px;font-size:14px;font-weight:700;color:#000;
     letter-spacing:-.01em;}
+  .statusbar > span:first-child{justify-self:center;}
   .statusbar svg{height:11px;width:auto;display:block;}
-  .statusbar .icons{display:flex;gap:5px;align-items:center;}
-  .inbox{padding:6px 16px 8px;font-size:27px;font-weight:800;letter-spacing:-.01em;
-    color:#000;max-height:50px;overflow:hidden;
-    transition:opacity .25s ease,max-height .45s cubic-bezier(.2,.8,.2,1),padding .45s ease;}
-  /* After the tap the row is the opened email: the "Inbox" title folds away
-     and the row becomes the message header, as a mail client does, rather
-     than an inbox and an open report on screen at once. It is the resting
-     state too, so a visitor who never sees the motion sees the same screen. */
-  .screen.opened .inbox{opacity:0;max-height:0;padding-top:0;padding-bottom:0;}
-  .screen.opened .mailrow{background:transparent;box-shadow:none;margin-top:4px;}
+  .statusbar .icons{grid-column:3;justify-self:center;display:flex;gap:5px;align-items:center;}
+  /* The opened email, from the first frame: the row is the message header and
+     the report is what it contains. The hero's proof used to arrive LAST — an
+     empty card at first paint, then two seconds of inbox before any row
+     (launch review D3). The notification still drops in over it, once. */
   .mailrow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;
-    background:var(--card);margin:0 8px;padding:10px 11px;border-radius:14px;
-    box-shadow:0 1px 0 rgba(16,30,51,.06);}
+    margin:4px 8px 0;padding:10px 11px;border-radius:14px;}
   .mailrow .av{width:34px;height:34px;border-radius:50%;background:var(--navy);
     display:grid;place-items:center;}
   .mailrow .av svg{width:22px;height:22px;}
@@ -160,6 +176,11 @@
   .screen .filehead{padding:9px 12px;font-size:12.5px;}
   .screen .fbody{padding:2px 12px 6px;}
   .screen .frow{grid-template-columns:24px 1fr 44px 36px;gap:8px;padding:8px 0;font-size:13.5px;}
+  /* The phone is at most 320px at EVERY viewport, so its name column is narrow
+     at every viewport: a name wraps to two lines rather than "Amon-Ra St. …".
+     Scoped to phones only, it truncated from 431px to 880px, where the phone
+     is 286px (launch review D5). Truncation hides which player it is. */
+  .screen .fname{white-space:normal;overflow:visible;text-overflow:clip;}
   .screen .fslot{font-size:12px;}
   .screen .fpct{font-size:17px;}
   .screen .fnc{grid-column:2 / 5;text-align:left;font-size:10px;margin-top:-6px;}
@@ -171,16 +192,13 @@
   .peek .flipbar{margin:8px 12px 12px;height:10px;}
   .peek .filehead + .pivot{padding:10px 12px;}
   .peek .pivot p.then{padding:0;margin-top:4px;font-size:12.5px;font-weight:600;color:var(--ink2);}
-  /* Before the tap the screen is an inbox: the report it opens is not there yet. */
-  .screen #hero-card,.screen .peek{transition:opacity .35s ease;}
-  .js .screen:not(.opened) #hero-card,.js .screen:not(.opened) .peek{opacity:0;}
   .screen::after{content:"";position:absolute;left:0;right:0;bottom:0;height:20%;
     background:linear-gradient(180deg,rgba(242,240,234,0),#F2F0EA 80%);pointer-events:none;}
   .homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:36%;
     height:5px;border-radius:3px;background:#111;z-index:10;}
-  /* The Tuesday notification: drops from the island, gets tapped, becomes the
-     inbox row and the report below it. Played once, on load; at rest it is gone
-     and the phone shows the inbox, so a page whose script never runs is whole. */
+  /* The Tuesday notification: drops from the island over the open report,
+     holds, and goes. Played once, when the phone is on screen; at rest it is
+     gone, so a page whose script never runs shows the same report. */
   .notif{position:absolute;top:46px;left:8px;right:8px;z-index:3;display:grid;
     grid-template-columns:30px 1fr auto;gap:9px;align-items:start;padding:9px 11px;
     background:rgba(252,251,248,.96);border-radius:16px;color:#000;
@@ -195,9 +213,6 @@
   .js .notif.go{animation:notif 1.9s cubic-bezier(.2,.8,.2,1) forwards;}
   @keyframes notif{0%{opacity:0;transform:translateY(-140%)}
     18%,72%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-40%) scale(.96)}}
-  .js .hero .mailrow.wait{opacity:0;transform:translateY(-8px);}
-  .hero .mailrow{transition:opacity .35s ease,transform .35s ease,background .25s ease;}
-  .hero .mailrow.tap{background:#E4E1D8;}
   .realtag{font-size:13.5px;color:var(--dusk);letter-spacing:.02em;}
   .realtag b{color:var(--flag);font-weight:700;}
   /* Its two links are the hero's route to a full report on a phone: real
@@ -208,13 +223,13 @@
   .filecard{background:var(--paper);color:var(--navy);border:1px solid var(--line);}
   .filehead{display:flex;justify-content:space-between;align-items:center;gap:10px;
     background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);
-    padding:11px 14px;font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+    padding:11px 14px;font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.14em;text-transform:uppercase;}
   .fbody{padding:4px 14px 8px;}
   .frow{display:grid;grid-template-columns:30px 1fr 70px 40px;gap:10px;
     align-items:center;padding:9px 0;border-bottom:1px solid #E6E2D6;font-size:14.5px;}
   .frow:last-child{border-bottom:0;}
-  .fslot{font-family:'Barlow Condensed';font-weight:800;font-size:13px;color:var(--slate);
+  .fslot{font-family:var(--display);font-weight:800;font-size:13px;color:var(--slate);
     letter-spacing:.06em;}
   .fname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .fname small{display:block;font-weight:500;font-size:12px;color:var(--slate);}
@@ -224,7 +239,7 @@
   .fbar i{display:block;height:100%;border-radius:99px;
     background:linear-gradient(90deg,var(--flag-deep),var(--flag));
     transition:width .9s cubic-bezier(.34,1.3,.64,1);}
-  .fpct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:19px;
+  .fpct{font-family:var(--display);font-weight:900;font-style:italic;font-size:19px;
     text-align:right;font-variant-numeric:tabular-nums;}
   .fnc{grid-column:3 / 5;font-size:11.5px;font-weight:800;letter-spacing:.06em;
     text-transform:uppercase;color:var(--slate);text-align:right;}
@@ -236,7 +251,7 @@
   /* ------------------------------------------------ sections */
   :root{--gap-section:96px;}
   section{padding:var(--gap-section) 0 0;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(30px,4.2vw,44px);
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(30px,4.2vw,44px);
     text-transform:uppercase;line-height:.98;letter-spacing:.005em;margin:0 0 12px;
     text-wrap:balance;}
   h2.slant{font-weight:900;font-style:italic;}
@@ -254,7 +269,7 @@
     background:repeating-linear-gradient(90deg,rgba(242,194,48,.35) 0 1px,transparent 1px 28px);
     -webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);
     mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
-  .proofline .big{font-family:'Barlow Condensed';font-weight:900;font-size:clamp(54px,7vw,76px);
+  .proofline .big{font-family:var(--display);font-weight:900;font-size:clamp(54px,7vw,76px);
     line-height:.9;color:var(--flag);font-variant-numeric:tabular-nums;}
   .proofline .big small{display:block;font-size:.3em;letter-spacing:.3em;
     text-transform:uppercase;color:var(--dusk2);margin-top:8px;}
@@ -280,7 +295,7 @@
   .note{position:relative;padding:12px 0 14px 26px;border-left:2px solid var(--flag);}
   .note::before{content:"";position:absolute;left:-46px;top:27px;width:44px;height:1px;
     background:var(--flag);}
-  .note b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:22px;
+  .note b{display:block;font-family:var(--display);font-weight:800;font-size:22px;
     text-transform:uppercase;letter-spacing:.02em;color:var(--paper);margin-bottom:6px;}
   .note p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:40ch;}
   .realfoot{font-size:13.5px;color:var(--dusk);margin-top:14px;}
@@ -296,13 +311,10 @@
     transition:width 1.1s cubic-bezier(.2,.8,.2,1);}
   .flipbar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;
     background:var(--navy);opacity:.35;}
-  .flippct{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:22px;
+  .flippct{font-family:var(--display);font-weight:900;font-style:italic;font-size:22px;
     position:relative;height:28px;}
   .flippct span{position:absolute;top:0;transform:translateX(-100%);white-space:nowrap;}
-  .fliptoss{position:relative;height:14px;margin-top:10px;font-size:10.5px;font-weight:700;
-    letter-spacing:.08em;text-transform:uppercase;color:var(--slate);}
-  .fliptoss span{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;}
-  .fliptoss + .flipbar{margin-top:4px;}
+  .fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}
 
   /* usage widget */
   .usage{padding:12px 16px 8px;}
@@ -326,37 +338,50 @@
     color:var(--brick);}
   .pivot p{font-size:15px;line-height:1.55;margin-top:6px;}
 
-  /* the week, as one line through it */
-  .timeline{list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:0;
-    margin-top:30px;position:relative;}
-  .timeline::before{content:"";position:absolute;left:0;right:0;top:9px;height:2px;
-    background:linear-gradient(90deg,var(--flag),rgba(242,194,48,.25));}
-  .timeline li{position:relative;padding:34px 26px 0 0;}
-  .timeline li::before{content:"";position:absolute;left:0;top:2px;width:16px;height:16px;
-    border-radius:50%;background:var(--flag);border:3px solid var(--flag);
-    transition:background .4s ease;}
-  .js .timeline.reveal:not(.shown) li::before{background:var(--pitch);}
-  .timeline.shown li:nth-child(2)::before{transition-delay:.25s;}
-  .timeline.shown li:nth-child(3)::before{transition-delay:.5s;}
-  .timeline.shown li:nth-child(4)::before{transition-delay:.75s;}
-  .timeline b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:20px;
-    text-transform:uppercase;letter-spacing:.06em;color:var(--flag);margin-bottom:6px;}
-  .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);max-width:34ch;}
+  /* The week as one strip of four day panels, like a calendar's week view:
+     the day in the headline's italic, what arrives under it, then what you
+     do. It replaced a four-dot timeline that read as a stock section
+     (launch review I8). */
+  .timeline{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:3px;margin-top:30px;}
+  .timeline li{background:rgba(246,244,238,.045);border-top:3px solid rgba(242,194,48,.4);
+    padding:0 22px 24px;}
+  .timeline li:first-child{border-top-color:var(--flag);}
+  .timeline b{display:block;font-family:var(--display);font-weight:900;font-style:italic;
+    font-size:32px;line-height:1;text-transform:uppercase;color:var(--flag);
+    padding:18px 0 12px;margin-bottom:12px;border-bottom:1px dashed rgba(246,244,238,.18);}
+  .timeline b small{display:block;margin-top:8px;font-family:var(--sans);font-style:normal;
+    font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--dusk);}
+  .timeline p{font-size:15px;line-height:1.6;color:var(--dusk2);}
 
-  /* rankings vs. your report */
-  .versus{display:grid;grid-template-columns:1fr 1.1fr;gap:22px;max-width:960px;}
-  .vcol{border:1px solid rgba(246,244,238,.14);padding:22px 24px;}
-  .vcol.ours{background:var(--paper);color:var(--navy);border:2px solid var(--flag);
+  /* The three tools, side by side. One row per question, and the rows line up
+     across the columns (subgrid), so a visitor reads across "When" in all
+     three at once; the report's column is the product's own paper. */
+  .cmp{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 16px;max-width:1000px;
+    align-items:stretch;}
+  .cmpcol{display:grid;grid-row:span 7;grid-template-rows:subgrid;row-gap:0;
+    border:1px solid rgba(246,244,238,.16);background:rgba(246,244,238,.03);padding:20px 22px 22px;}
+  .cmpcol dl{display:grid;grid-row:span 6;grid-template-rows:subgrid;row-gap:0;}
+  .cmphead{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--dusk2);margin-bottom:4px;}
+  .cmpcol dt{font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--dusk);margin-top:14px;padding-top:12px;border-top:1px solid rgba(246,244,238,.12);}
+  .cmpcol dd{font-size:15.5px;line-height:1.5;color:var(--dusk2);margin-top:4px;}
+  .cmpcol.ours{background:var(--paper);color:var(--navy);border:2px solid var(--flag);
     box-shadow:0 0 48px -10px rgba(242,194,48,.35);}
-  .vhead{font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.2em;
-    text-transform:uppercase;color:var(--dusk);margin-bottom:12px;}
-  .vcol.ours .vhead{color:var(--turf);}
-  .vcol ul{list-style:none;display:grid;gap:12px;}
-  .vcol li{display:flex;gap:10px;font-size:15.5px;line-height:1.45;color:var(--dusk);}
-  .vcol li::before{content:"–";flex:none;width:14px;color:var(--dusk);}
-  .vcol.ours li{color:var(--navy);font-weight:600;}
-  .vcol.ours li::before{content:"✓";color:var(--turf);font-weight:800;}
-  @media (max-width:640px){.versus{grid-template-columns:1fr;}}
+  /* The report's name sits on the hero's tilted gold slab: same mark, same voice. */
+  .cmpcol.ours .cmphead span{display:inline-block;color:var(--navy);padding:1px 10px 2px;
+    background:linear-gradient(180deg,#FFD75E,var(--flag) 60%,var(--flag-deep));
+    transform:rotate(-1.5deg);}
+  .cmpcol.ours dt{color:var(--turf);border-top-color:#E6E2D6;}
+  .cmpcol.ours dd{color:var(--navy);font-weight:600;}
+  .cmpnote{margin-top:22px;max-width:70ch;padding-left:16px;border-left:3px solid var(--flag);
+    font-size:15.5px;line-height:1.6;color:var(--dusk2);}
+  .cmpnote b{color:var(--paper);}
+  @media (max-width:760px){
+    .cmp{grid-template-columns:1fr;gap:14px;}
+    .cmpcol,.cmpcol dl{display:block;grid-row:auto;}
+  }
 
   /* ------------------------------------------------ pricing */
   .plans{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:6px;}
@@ -376,22 +401,27 @@
   .plan .head .tag{white-space:nowrap;}
   .stamp50{color:var(--navy);
     background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
-    font-family:'Barlow Condensed';font-weight:800;font-size:12.5px;letter-spacing:.12em;
+    font-family:var(--display);font-weight:800;font-size:12.5px;letter-spacing:.12em;
     text-transform:uppercase;padding:4px 10px;white-space:nowrap;}
   .plan .tag{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
     color:var(--turf);}
-  .price{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:52px;
+  .price{font-family:var(--display);font-weight:900;font-style:italic;font-size:52px;
     line-height:1;margin-top:8px;}
-  .price small{font-family:'Barlow';font-size:14px;font-weight:700;color:var(--slate);
+  .price small{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--slate);
     font-style:normal;}
   .plan ul{margin:14px 0 18px 18px;font-size:14.5px;line-height:1.7;color:var(--ink2);}
   .plan ul a{color:var(--turf);}
   /* The closed state sits where the button will: the same shape, switched off. */
-  .plan .soon{margin-top:auto;font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+  .plan .soon{margin-top:auto;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;color:var(--slate);text-align:center;
     background:#EEEBE2;border:1.5px dashed #C9C3B4;padding:12px 14px;}
-  .plan .soon small{display:block;font-family:'Barlow';font-weight:600;font-size:12.5px;
+  .plan .soon small{display:block;font-family:var(--sans);font-weight:600;font-size:12.5px;
     letter-spacing:0;text-transform:none;color:var(--slate);margin-top:2px;}
+  /* "Leave your email" is a link that takes you TO the form and puts the
+     cursor in it: on a phone the form is ~3,000px above these cards, and the
+     words alone sent nobody anywhere (launch review I4). */
+  .plan .soon small a{display:inline-block;padding:5px 0;color:var(--navy);
+    text-decoration:underline;text-underline-offset:2px;}
   .plan .btn{display:block;text-align:center;clip-path:none;margin-top:auto;}
   .finance{margin-top:18px;font-size:13.5px;color:var(--dusk);line-height:1.65;max-width:70ch;}
   .finance a{color:var(--flag);}
@@ -403,21 +433,17 @@
     display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,.9fr);gap:28px;align-items:center;}
   .lpcard h2{margin:6px 0 10px;}
   .lpcard p{font-size:15.5px;line-height:1.65;color:var(--dusk2);max-width:60ch;margin-bottom:14px;}
-  /* Twelve seats, one payment: every manager's own report. */
-  .seats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-  .seats span{aspect-ratio:1.35;border-radius:4px;background:var(--paper);
-    border-top:4px solid var(--flag);display:grid;align-content:space-between;padding:6px 8px;
-    font-family:'Barlow Condensed';font-weight:800;font-size:13px;letter-spacing:.06em;
-    text-transform:uppercase;color:var(--navy);
-    transition:opacity .4s ease,transform .4s ease;transition-delay:calc(var(--i,0) * 60ms);}
-  .seats span:nth-child(odd){border-top-color:var(--turf);}
-  /* Visible by default; only a section the script is about to reveal holds
-     its seats back, so no-script, reduced motion and an already-visible
-     section all show the whole grid. */
-  .js .leaguepass.reveal:not(.shown) .seats span{opacity:0;transform:translateY(8px);}
-  .seats small{font-family:'Barlow';font-weight:600;font-size:11.5px;letter-spacing:0;
-    text-transform:none;color:var(--slate);}
-  @media (max-width:880px){.lpcard{grid-template-columns:1fr;}.seats{display:none;}}
+  /* The ask before the purchase, as it looks in the group chat: one outgoing
+     message, true before anybody has paid. It replaced twelve "Team 1 … Team
+     12" placeholder tiles that read as a stock section (launch review I8,
+     LP-I5). */
+  .chatmock{margin:0;}
+  .chatmock figcaption{font-size:13px;font-weight:600;color:var(--dusk);margin-bottom:10px;}
+  .lpcard .bubble{position:relative;max-width:380px;margin:0 0 0 auto;padding:13px 16px;
+    border-radius:20px 20px 6px 20px;font-size:15.5px;line-height:1.5;font-weight:500;
+    color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag));
+    box-shadow:0 18px 40px -22px rgba(0,0,0,.9);}
+  @media (max-width:880px){.lpcard{grid-template-columns:1fr;}.lpcard .bubble{margin-left:0;}}
   /* A paper band: the product's own colour, marking a change of chapter. */
   .why{padding-top:var(--gap-section);}
   .whycard{border-left:3px solid var(--flag);padding:6px 0 6px 28px;
@@ -425,7 +451,7 @@
   .whycard .kicker{grid-column:1 / -1;}
   .whycard .whybody{margin-top:14px;}
   @media (max-width:880px){.whycard{grid-template-columns:1fr;}.whycard .whybody{margin-top:0;}}
-  .whyquote{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(26px,3.4vw,36px);
+  .whyquote{font-family:var(--display);font-weight:800;font-size:clamp(26px,3.4vw,36px);
     line-height:1.15;margin:12px 0 14px;text-wrap:balance;}
   .whyquote em{font-style:italic;color:var(--flag);}
   .whybody{font-size:16.5px;line-height:1.65;color:var(--dusk2);max-width:70ch;}
@@ -435,12 +461,15 @@
   .faqgrid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;
     align-items:start;}
   .faqgrid .lede{margin-bottom:0;}
+  /* On a wide screen the heading and its button stay in view while the
+     answers open beside them. */
+  @media (min-width:881px){.faqgrid > div:first-child{position:sticky;top:28px;}}
   .faq details{border-bottom:1px solid rgba(246,244,238,.12);}
   .faq details:first-child{border-top:1px solid rgba(246,244,238,.12);}
   .faq summary{cursor:pointer;padding:16px 0;font-weight:700;font-size:16.5px;list-style:none;
     display:flex;justify-content:space-between;align-items:center;gap:12px;}
   .faq summary::-webkit-details-marker{display:none;}
-  .faq summary::after{content:"+";font-family:'Barlow Condensed';font-weight:800;
+  .faq summary::after{content:"+";font-family:var(--display);font-weight:800;
     font-size:22px;color:var(--flag);transition:transform .25s ease;flex:none;}
   .faq details[open] summary::after{transform:rotate(45deg);}
   .faq .a{padding:0 0 16px;font-size:15px;line-height:1.65;color:var(--dusk2);max-width:62ch;}
@@ -485,13 +514,16 @@
      tips, the targets fill. Nothing else moves. The static HTML already holds
      every final value, so a page whose script never runs is complete. */
   @media (prefers-reduced-motion: reduce){
-    .fbar i,.ubar i,.flipbar .a,.stickybar,.hero .mailrow{transition:none!important;}
+    /* An in-page link jumps rather than gliding several thousand pixels: the
+       sticky bar's "#watch-form" scrolled ~4,500px over most of a second for
+       a visitor who asked for no motion (launch review D6). */
+    html{scroll-behavior:auto;}
+    .fbar i,.ubar i,.flipbar .a,.stickybar{transition:none!important;}
     .notif{display:none!important;}
     .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
     .btn.gold.shine::after{display:none;}
-    .js .hero .mailrow.wait{opacity:1;transform:none;}
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
-    .faq summary::after,.timeline li::before,.seats span,.inbox{transition:none!important;}
+    .faq summary::after{transition:none!important;}
   }
 
   /* A note beside its card needs about 330px or it wraps taller than the card
@@ -521,40 +553,40 @@
     .hero .phone{max-width:286px;}
     .hero .creds{order:8;}
     .hero .cta-row{order:9;margin-top:14px;}
+    /* A tablet keeps its nav and the CTA, in the short label: at 768px the
+       nav used to show the logo alone (launch review I14). */
+    nav .btn .long{display:none;}
+    nav .btn .short{display:inline;}
+    .proofline{grid-template-columns:1fr;gap:6px;}
+    .timeline{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .faqgrid{grid-template-columns:1fr;gap:18px;}
+    .stickybar{display:block;}
+    footer{padding-bottom:96px;}
+  }
+  @media (max-width:720px){.navlinks .hidemd{display:none;}}
+  /* Two pricing cards side by side down to 641px: one column from 881px down
+     stretched each card to 724px of mostly empty line at 768 (I14). */
+  @media (max-width:640px){.plans{grid-template-columns:1fr;}}
+  @media (max-width:599px){
     /* The form is the action on a phone; a second gold button in the nav
        above it competes with it. The sticky bar takes over once it scrolls. */
     nav .btn{display:none;}
-    .proofline{grid-template-columns:1fr;gap:6px;}
-    .timeline{grid-template-columns:1fr;gap:22px;}
-    .timeline::before{left:7px;right:auto;top:0;bottom:0;width:2px;height:auto;
-      background:linear-gradient(180deg,var(--flag),rgba(242,194,48,.25));}
-    .timeline li{padding:0 0 0 34px;}
-    .plans{grid-template-columns:1fr;}
-    .faqgrid{grid-template-columns:1fr;gap:18px;}
     .navlinks .hidesm{display:none;}
-    .stickybar{display:block;}
-    footer{padding-bottom:96px;}
   }
   @media (max-width:560px){
     .urow{grid-template-columns:1fr auto;gap:6px 10px;}
     .ubar{grid-column:1 / -1;order:3;}
     .ucount{grid-column:1 / -1;order:2;text-align:left;}
   }
-  /* The hero card lives in a phone that shrinks with the screen, so at phone
-     widths the name column is what gets squeezed. A wrapped name over two
-     lines beats "Amon-Ra St. B…": truncation hides which player it is. */
-  nav .btn .short{display:none;}
   @media (max-width:480px){
+    .timeline{grid-template-columns:1fr;}
     .watchform{flex-direction:column;}
     .watchform .btn{clip-path:none;}
   }
   @media (max-width:430px){
-    nav .btn .long{display:none;}
-    nav .btn .short{display:inline;}
-    nav .btn{font-size:14px;padding:10px 14px;white-space:nowrap;}
     .brand{font-size:13px;letter-spacing:.18em;}
+    /* The phone shrinks with the screen, so its columns tighten too. */
     .frow{grid-template-columns:26px 1fr 44px 38px;gap:8px;}
-    .fname{white-space:normal;overflow:visible;}
   }
 </style>
 </head>
@@ -566,7 +598,7 @@
   <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg>Beat Your League</a>
   <div class="navlinks">
     <a class="hidesm" href="how-it-works.html">How it works</a>
-    <a class="hidesm" href="sample-report.html">See a real report</a>
+    <a class="hidesm hidemd" href="sample-report.html">See a real report</a>
     <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
          a closed checkout reads as bait. JS rewrites it the day checkout opens;
          if JS never runs, the honest state is what shows. -->
@@ -579,9 +611,12 @@
   <div>
     <div class="kicker">Fantasy football · start/sit</div>
     <h1>Know who <em><span>to start.</span></em></h1>
-    <p class="sub">Built from your roster and scored your league's way: every close
-    call decided, with the odds. In your inbox every Tuesday, and a Saturday check
-    when injury news changes your lineup.</p>
+    <!-- Says the scoring it supports and where odds print, rather than "your
+         league's way" and odds on every call (launch review PC-10, PE-11). -->
+    <p class="sub">Built from your roster, scored for PPR, half-PPR or standard: every
+    close call decided, with the odds wherever both players are confirmed to play. In
+    your inbox every Tuesday, plus a Saturday check when injury news changes your
+    lineup.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -605,7 +640,7 @@
   </div>
   <div class="phonewrap">
     <div class="phone">
-      <div class="screen opened">
+      <div class="screen">
         <div class="island" aria-hidden="true"></div>
         <div class="statusbar" aria-hidden="true"><span>8:04</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div>
         <div class="notif" id="notif" aria-hidden="true">
@@ -614,21 +649,20 @@
           Robinson over Chase Brown, 70%.</span></span>
           <time>now</time>
         </div>
-        <div class="inbox" aria-hidden="true">Inbox</div>
         <div class="mailrow" id="mailrow">
           <span class="av"><svg class="avmark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="byliClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#byliClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg></span>
           <span><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span>
           <time>now</time>
         </div>
-        <div class="filecard anim" id="hero-card" data-real="2024-w10">
+        <div class="filecard" id="hero-card" data-real="2024-w10">
           <div class="filehead">Your lineup · decided</div>
           <div class="fbody">
             <div class="frow"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span>
-              <span class="fbar"><i data-w="60" style="width:60%"></i></span><span class="fpct" data-n="80">80%</span></div>
+              <span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div>
             <div class="frow"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span>
-              <span class="fbar"><i data-w="48" style="width:48%"></i></span><span class="fpct" data-n="74">74%</span></div>
+              <span class="fbar"><i style="width:48%"></i></span><span class="fpct">74%</span></div>
             <div class="frow"><span class="fslot">WR</span><span class="fname">Ja'Marr Chase</span>
-              <span class="fbar"><i data-w="46" style="width:46%"></i></span><span class="fpct" data-n="73">73%</span></div>
+              <span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div>
             <div class="frow"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span>
               <span class="fnc">questionable · see if/then</span></div>
           </div>
@@ -649,7 +683,7 @@
          three odds (a heavy bye week once left it with nothing to show). -->
     <p class="realtag"><b>Real report</b> · built from the 2024 season, Week 10 ·
     <a href="sample-report.html" style="color:var(--flag)">read it all</a><span
-    id="this-week-link" hidden> · <a href="this-week.html"
+    id="this-week-link" data-live-week hidden> · <a href="this-week.html"
     style="color:var(--flag)">see this week's</a></span></p>
   </div>
 </header>
@@ -666,7 +700,7 @@
 
 <section>
   <h2>What lands in your inbox</h2>
-  <p class="lede">Every slot decided, for your roster and your league's scoring. Here's the
+  <p class="lede">Every slot decided, for your roster under your scoring. Here's the
   rest of that same real report.</p>
   <div class="rows">
     <div class="leaf first">
@@ -677,18 +711,23 @@
             <span>Bijan Robinson<small>start · proj 15.1</small></span>
             <span style="text-align:right">Chase Brown<small>sit · proj 10.3</small></span>
           </div>
-          <div class="fliptoss" aria-hidden="true"><span>toss-up</span></div>
           <div class="flipbar"><span class="a" data-w="70" style="width:70%"></span></div>
           <!-- One numeral only: the sample publishes the 70% side and nothing
                else, and a real-output card may not print a figure the product
                never printed — even an arithmetic complement. -->
           <div class="flippct"><span style="left:70%">70%</span></div>
+          <!-- The 50% tick is explained in a legend line, not labelled on the
+               bar: on a phone "TOSS-UP" sat right above "70%" and read as one
+               phrase (launch review BE-I11). -->
+          <div class="fliplegend">The bar starts at 50%, a toss-up.</div>
         </div>
       </div><!--/card-->
     </div>
-    <div class="note"><b>The close one, called</b><p>Every week has a call you'd go
-      back and forth on. We pick a side and tell you how sure to be: Start Bijan Robinson
-      over Chase Brown — 70%, proj 15.1 vs 10.3.</p></div>
+    <!-- Framed as what it is: the closest call that CARRIES ODDS on this
+         roster that week, not a coin flip (launch review PC-03). -->
+    <div class="note"><b>The close one, called</b><p>The week's closest call on this
+      roster, decided: Start Bijan Robinson over Chase Brown — 70%, proj 15.1 vs 10.3.
+      A side picked, and how sure to be.</p></div>
     <div class="leaf">
       <div class="filecard anim" data-real="2024-w10">
         <div class="filehead">Who's getting the ball</div>
@@ -718,48 +757,69 @@
       report already names who goes in if he sits, and Saturday's final check tells
       you if he does.</p></div>
   </div>
+  <!-- This week's live report is linked only in a week it shows at least three
+       odds and a closest call — the hero's own rule, read from the file the
+       Tuesday build writes (launch review PC-01). Otherwise the pinned sample
+       above is the link. -->
   <p class="realfoot"><b>Real report</b> · every figure above comes from the published
-  <a href="sample-report.html" style="color:var(--flag)">2024 Week 10 sample</a>. The
-  sample roster's report for this week, rebuilt every Tuesday, is
-  <a href="this-week.html" style="color:var(--flag)">here</a>.</p>
+  <a href="sample-report.html" style="color:var(--flag)">2024 Week 10 sample</a>.<span
+  data-live-week hidden> The sample roster's report for this week, rebuilt every Tuesday,
+  is <a href="this-week.html" style="color:var(--flag)">here</a>.</span></p>
 </section>
 
-<section>
-  <h2>Why not just use rankings?</h2>
-  <p class="lede">Rankings are written for everybody. Your report is written for your team.</p>
-  <div class="versus">
-    <div class="vcol">
-      <div class="vhead">Rankings</div>
-      <ul>
-        <li>One list for millions of rosters</li>
-        <li>Standard scoring, unless you go looking</li>
-        <li>WR14 or WR19 — you still have to decide</li>
-        <li>Late news? Hope you're watching</li>
-      </ul>
+<!-- The buyer's real alternatives are the tools already on their phone, not
+     a rankings page (launch review GTM-5, SS-I6, I8). Each column says what
+     the tool does and what it asks of you — facts about how each one works,
+     never a claim about anyone's results. -->
+<section class="cmpsec">
+  <h2>Why not an optimizer, or a chatbot?</h2>
+  <p class="lede">Rankings are one list for everybody. Here's what the tools already on
+  your phone do, beside your report, for a manager with no time on Sunday.</p>
+  <div class="cmp">
+    <div class="cmpcol">
+      <h3 class="cmphead"><span>A lineup optimizer</span></h3>
+      <dl>
+        <dt>When</dt><dd>When you open it and run it, before kickoff, every week.</dd>
+        <dt>Close calls</dt><dd>Sets your lineup from projections.</dd>
+        <dt>Late news</dt><dd>Whatever is known when you run it.</dd>
+      </dl>
     </div>
-    <div class="vcol ours">
-      <div class="vhead">Your report</div>
-      <ul>
-        <li>Built on your roster, player by player</li>
-        <li>Scored your league's way, every number</li>
-        <li>Every close call decided, with the odds</li>
-        <li>The if/then on Tuesday, a final check on Saturday</li>
-      </ul>
+    <div class="cmpcol">
+      <h3 class="cmphead"><span>A chatbot</span></h3>
+      <dl>
+        <dt>When</dt><dd>When you ask, with your roster, your scoring and the latest news
+        pasted in.</dd>
+        <dt>Close calls</dt><dd>An answer to whatever you ask it.</dd>
+        <dt>Late news</dt><dd>What you paste in, or what it can find.</dd>
+      </dl>
+    </div>
+    <div class="cmpcol ours">
+      <h3 class="cmphead"><span>Your report</span></h3>
+      <dl>
+        <dt>When</dt><dd>Every Tuesday, in your inbox. Nothing to remember.</dd>
+        <dt>Close calls</dt><dd>Every one decided, with the odds wherever both players are
+        confirmed to play.</dd>
+        <dt>Late news</dt><dd>An if/then on Tuesday, then a Saturday check of Friday's injury
+        report.</dd>
+      </dl>
     </div>
   </div>
+  <p class="cmpnote"><b>Already pay for a fantasy site?</b> Keep it if you like it. This is
+  narrower: one report for your roster, decided and in your inbox on Tuesday — with a full
+  refund until your second report's week kicks off if it isn't for you.</p>
 </section>
 
 <section>
   <h2>Your week, handled</h2>
   <ol class="timeline">
-    <li><b>Tuesday</b><p>Your report lands. A short checklist up top — the calls worth
+    <li><b>Tuesday<small>Your report</small></b><p>Your report lands. A short checklist up top — the calls worth
       making, and the one player whose news to watch. Tick the boxes, done in ninety
       seconds.</p></li>
-    <li><b>Saturday</b><p>Friday's injury report changed your lineup? A short final
+    <li><b>Saturday<small>Only if news</small></b><p>Friday's injury report changed your lineup? A short final
       check tells you the swap. No news, no email.</p></li>
-    <li><b>Sunday</b><p>Your lineup's already set. If news breaks late, the report told
+    <li><b>Sunday<small>Kickoff</small></b><p>Your lineup's already set. If news breaks late, the report told
       you the if/then in advance.</p></li>
-    <li><b>Monday</b><p>Win or lose, you have the receipt: the call, the odds and the
+    <li><b>Monday<small>The receipt</small></b><p>Win or lose, you have the receipt: the call, the odds and the
       reason, dated Tuesday. Your next report lists last week's calls and how each one
       finished.</p></li>
   </ol>
@@ -783,7 +843,7 @@
         <li>Billing stops when the season does — we don't charge through
         the offseason</li>
       </ul>
-      <div class="soon" id="monthly-cta">Checkout opens soon<small>Leave your email above for the one message when it does</small></div>
+      <div class="soon" id="monthly-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
     </div>
     <div class="plan founder">
       <div class="head"><div class="tag">Season pass · 2026</div><span class="stamp50">Founding rate</span></div>
@@ -800,13 +860,13 @@
         never more. We email you first, and you cancel online yourself
         (<a href="terms.html#cancel">how</a>)</li>
       </ul>
-      <div class="soon" id="season-cta">Checkout opens soon<small>Leave your email above for the one message when it does</small></div>
+      <div class="soon" id="season-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
     </div>
   </div>
   <p class="finance" id="currency-note">All prices in US dollars.</p>
   <p class="finance" id="finance-note">Payment runs on Stripe's own page. Checkout opens
-  soon — leave your email above and you'll get one message the morning it does, at the
-  founding rate. Running the league?
+  soon — <a href="#watch-form" data-to-capture>leave your email</a> and you'll get one
+  message the morning it does, at the founding rate. Running the league?
   <a href="league-pass.html">One payment can cover every team</a>.</p>
 </section>
 
@@ -821,20 +881,20 @@
     commissioner.</p>
     <p><a class="btn ghost" href="league-pass.html">See the League Pass</a></p>
     </div>
-    <div class="seats" aria-hidden="true">
-      <span style="--i:0">Team 1<small>own report</small></span><span style="--i:1">Team 2<small>own report</small></span><span style="--i:2">Team 3<small>own report</small></span><span style="--i:3">Team 4<small>own report</small></span>
-      <span style="--i:4">Team 5<small>own report</small></span><span style="--i:5">Team 6<small>own report</small></span><span style="--i:6">Team 7<small>own report</small></span><span style="--i:7">Team 8<small>own report</small></span>
-      <span style="--i:8">Team 9<small>own report</small></span><span style="--i:9">Team 10<small>own report</small></span><span style="--i:10">Team 11<small>own report</small></span><span style="--i:11">Team 12<small>own report</small></span>
-    </div>
+    <figure class="chatmock">
+      <figcaption>Ask the league first, something like:</figcaption>
+      <p class="bubble">Should we put the League Pass on this year's dues? One payment covers
+      the league, and everybody gets their own lineup report every Tuesday, built from their
+      own roster.</p>
+    </figure>
   </div>
 </section>
 
 <section class="why">
   <div class="whycard">
     <div class="kicker">Why this exists</div>
-    <p class="whyquote">Rankings tell you <em>who's good this week.</em> Your report tells
-    you <em>who to start</em> — for your team, under your scoring, decided on Tuesday
-    instead of at 12:55 on Sunday.</p>
+    <p class="whyquote">Nobody should set a lineup at <em>12:55 on Sunday.</em> Yours gets
+    decided on <em>Tuesday</em> — for your team, under your scoring.</p>
     <p class="whybody">So we built the report we wanted: every close call on your roster
     decided on Tuesday, with the odds and the reason, and the plan for late news. One email, a
     few minutes of your week, and Sunday back to being fun. We're independent and small,
@@ -851,12 +911,8 @@
     </div>
     <div class="faq">
       <details>
-        <summary>Does it work with my league app?</summary>
-        <div class="a">Yes — ESPN, Yahoo, Sleeper, CBS or any other. Paste your roster once (or pick names from a list) and we take it from there. No league login, no password.</div>
-      </details>
-      <details>
-        <summary>Does it match my league's scoring?</summary>
-        <div class="a">For the settings most leagues use, yes: full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet.</div>
+        <summary>Does it work with my league?</summary>
+        <div class="a">Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet.</div>
       </details>
       <details>
         <summary>I'm in more than one league. What do I need?</summary>
@@ -867,36 +923,20 @@
         <div class="a">Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap.</div>
       </details>
       <details>
-        <summary>How is this different from free rankings?</summary>
-        <div class="a">Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble.</div>
-      </details>
-      <details>
-        <summary>My league app already has an “optimize lineup” button. Why this?</summary>
-        <div class="a">That button fills your lineup from the app's projections when you open the app and press it. Your report comes to you on Tuesday with every close call decided and the reason in a line, an if/then for late news, and a check of Friday's injury report on Saturday — so you don't have to remember to look.</div>
-      </details>
-      <details>
-        <summary>Can't I just ask a chatbot or Google?</summary>
-        <div class="a">You can, every week, if you paste in your roster, your scoring and the latest injury news yourself and remember to ask before Sunday. Your report starts from your roster and your league's scoring, works from the real box scores and injury reports, arrives on Tuesday without you asking, and checks Friday's injury report for you on Saturday.</div>
-      </details>
-      <details>
-        <summary>Who's behind this?</summary>
-        <div class="a">Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
-      </details>
-      <details>
-        <summary>Can I check how it decides?</summary>
-        <div class="a">Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the <a href="how-it-works.html">How it works</a> page.</div>
-      </details>
-      <details>
-        <summary>How long does it take each week?</summary>
-        <div class="a">About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it.</div>
+        <summary>When do the numbers start?</summary>
+        <div class="a">Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report looks like</a>).</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
         <div class="a">Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday.</div>
       </details>
       <details>
-        <summary>When do the numbers start?</summary>
-        <div class="a">Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report looks like</a>).</div>
+        <summary>Can I check how it decides?</summary>
+        <div class="a">Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the <a href="how-it-works.html">How it works</a> page.</div>
+      </details>
+      <details>
+        <summary>Who's behind this?</summary>
+        <div class="a">Beat Your League is independent and small: one fantasy player built it, after too many lineups set at 12:55 on Sunday. It's paid for only by subscribers — no ads, and your data is never sold. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
       </details>
     </div>
   </div>
@@ -945,7 +985,7 @@
     {
       "@type": "Product",
       "name": "Beat Your League",
-      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under your league's scoring, with every close call decided and the odds on each one, and an if/then plan for late news.",
+      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are confirmed to play, and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "39", "priceCurrency": "USD",
          "description": "Season pass — every weekly report through your title game, the first on the day you join. No-questions refund until your second weekly report's week kicks off."},
@@ -956,18 +996,13 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Does it work with my league app?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — ESPN, Yahoo, Sleeper, CBS or any other. Paste your roster once (or pick names from a list) and we take it from there. No league login, no password."}},
-        {"@type": "Question", "name": "Does it match my league's scoring?", "acceptedAnswer": {"@type": "Answer", "text": "For the settings most leagues use, yes: full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet."}},
+        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams, and a standard, superflex or no-kicker-no-defense lineup. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version, and lineups with two FLEX spots aren't supported yet."}},
         {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several. Running a whole league? The League Pass covers every manager with one payment."}},
         {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
-        {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings give everyone the same list and leave the decision to you. Your report starts from your roster and your league's scoring, decides every close call, and puts the odds on it — plus an if/then for late news, so Sunday morning isn't a scramble."}},
-        {"@type": "Question", "name": "My league app already has an “optimize lineup” button. Why this?", "acceptedAnswer": {"@type": "Answer", "text": "That button fills your lineup from the app's projections when you open the app and press it. Your report comes to you on Tuesday with every close call decided and the reason in a line, an if/then for late news, and a check of Friday's injury report on Saturday — so you don't have to remember to look."}},
-        {"@type": "Question", "name": "Can't I just ask a chatbot or Google?", "acceptedAnswer": {"@type": "Answer", "text": "You can, every week, if you paste in your roster, your scoring and the latest injury news yourself and remember to ask before Sunday. Your report starts from your roster and your league's scoring, works from the real box scores and injury reports, arrives on Tuesday without you asking, and checks Friday's injury report for you on Saturday."}},
-        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small, built by fantasy players who were tired of setting lineups at 12:55 on Sunday. We're paid only by subscribers: no ads, and we never sell your data. Questions go to hello@beatyourleague.com."}},
-        {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
-        {"@type": "Question", "name": "How long does it take each week?", "acceptedAnswer": {"@type": "Answer", "text": "About ninety seconds. The top of the report is a short checklist: the lineup to set and the one player whose news to watch. Tick the boxes and you're done — the detail is there if you want it."}},
+        {"@type": "Question", "name": "When do the numbers start?", "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
-        {"@type": "Question", "name": "When do the numbers start?", "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR 12-team standard lineups get them from Week 2, and every other setup from Week 4."}}
+        {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
+        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small: one fantasy player built it, after too many lineups set at 12:55 on Sunday. It's paid for only by subscribers — no ads, and your data is never sold. Questions go to hello@beatyourleague.com."}}
       ]
     }
   ]
@@ -1191,7 +1226,9 @@ if (CHECKOUT_OPEN) {
     }
     const finance = document.getElementById("finance-note");
     if (finance) {
-      const passLink = finance.querySelector("a");
+      // By its href: the line's FIRST link is the closed state's "leave your
+      // email", which this rewrite retires.
+      const passLink = finance.querySelector('a[href="league-pass.html"]');
       finance.textContent = "Payment runs on Stripe's own page — your roster " +
         "and scoring ride into checkout with you, and the founding rate is " +
         "locked in for every renewal. Running the league? ";
@@ -1233,31 +1270,17 @@ function play(card) {
     setTimeout(() => { el.style.opacity = "1"; }, 260 + i * 160);
   });
 }
-// The hero's own card waits for its email to arrive: the notification drops in,
-// the row appears under it and is tapped, and then the report gets decided.
-const heroCard = document.getElementById("hero-card");
+// The hero's report is open and decided from the first frame — it is the
+// page's proof, and it used to arrive last: the sequence emptied the card at
+// first paint and showed an inbox for two seconds before any row (launch
+// review D3). The motion is additive now: the Tuesday notification drops in
+// over the open report, once, when the phone is actually on screen.
 const notif = document.getElementById("notif");
-const mailrow = document.getElementById("mailrow");
 let arrived = false;
 function arrive() {
-  if (arrived || !notif || !mailrow || !heroCard || heroCard.classList.contains("in")) return;
+  if (arrived || !notif) return;
   arrived = true;
-  // The resting state (no script, reduced motion) is the opened email; the
-  // sequence starts one step earlier, from the inbox, and ends there.
-  const screen = heroCard.closest(".screen");
-  if (screen) screen.classList.remove("opened");
-  mailrow.classList.add("wait");
   notif.classList.add("go");
-  setTimeout(() => { mailrow.classList.remove("wait"); }, 1350);
-  setTimeout(() => { mailrow.classList.add("tap"); }, 1750);
-  setTimeout(() => {
-    mailrow.classList.remove("tap");
-    // The tap OPENS the email: the inbox title goes, the row becomes the
-    // message header, and the report below is what it contains.
-    const screen = heroCard.closest(".screen");
-    if (screen) screen.classList.add("opened");
-    play(heroCard);
-  }, 2050);
 }
 if (!reduced && "IntersectionObserver" in window) {
   cards.forEach((card) => {
@@ -1273,10 +1296,10 @@ if (!reduced && "IntersectionObserver" in window) {
       if (entry.isIntersecting) { play(entry.target); io.unobserve(entry.target); }
     }
   }, { threshold: 0.35 });
-  cards.forEach((card) => { if (card !== heroCard) io.observe(card); });
+  cards.forEach((card) => io.observe(card));
   // The phone sits below the form on a phone, so the email arrives when the
   // phone is actually on screen, not off it while the visitor reads the form.
-  const phoneEl = heroCard.closest(".phone");
+  const phoneEl = document.querySelector(".hero .phone");
   if (phoneEl) {
     const seen = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) { seen.disconnect(); arrive(); }
@@ -1288,12 +1311,7 @@ if (!reduced && "IntersectionObserver" in window) {
   // Failsafe: a card must never STAY undecided. If the observer misfires,
   // everything plays out on its own.
   setTimeout(() => cards.forEach((card) => {
-    if (card.classList.contains("in")) return;
-    // The hero card belongs to its sequence once that has started; before it
-    // starts (phone never scrolled to), the opened resting screen gets its
-    // final values like every other card.
-    if (card === heroCard && arrived) return;
-    play(card);
+    if (!card.classList.contains("in")) play(card);
   }), 4000);
 } else {
   cards.forEach((card) => card.classList.add("in"));
@@ -1304,7 +1322,7 @@ if (!reduced && "IntersectionObserver" in window) {
 if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
-    ".timeline, .versus, .whycard, .plans, .finance, .faqgrid, .leaguepass, .closer > *");
+    ".timeline, .cmp, .cmpnote, .whycard, .plans, .finance, .faqgrid, .leaguepass, .closer > *");
   const rise = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -1342,9 +1360,12 @@ if (!reduced) {
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
+        // EVERY link to this week's live report waits for the same rule — at
+        // least three odds and a closest call — or it stays on the pinned
+        // sample. The hero obeyed it while the proof cards' footer linked the
+        // page whatever week it was (launch review PC-01).
         if (w && Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call) {
-          const link = document.getElementById("this-week-link");
-          if (link) link.hidden = false;
+          document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
         }
         if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return;
         const left = w.last_week - w.week;
@@ -1387,12 +1408,20 @@ if (stickybar && "IntersectionObserver" in window) {
   });
   watched.forEach((el) => obs.observe(el));
 }
-const stickyCta = document.getElementById("sticky-cta");
-if (stickyCta && stickyCta.getAttribute("href") === "#watch-form") {
-  stickyCta.addEventListener("click", () => {
-    setTimeout(() => { const f = document.getElementById("watch-email"); if (f) f.focus({ preventScroll: true }); }, 450);
-  });
-}
+// Every "#watch-form" link — the nav, the sticky bar, the closer, the pricing
+// cards — lands IN the form, not merely near it: the field takes the cursor
+// (on a phone, the keyboard opens) and the form scrolls to mid-screen, at once
+// for a visitor who asked for reduced motion (launch review I4, D6). In the
+// open state these links point at join/ and none of this applies.
+document.addEventListener("click", (event) => {
+  const link = event.target.closest ? event.target.closest('a[href="#watch-form"]') : null;
+  const form = document.getElementById("watch-form");
+  const field = document.getElementById("watch-email");
+  if (!link || !form || !field || form.hidden) return;
+  event.preventDefault();
+  field.focus({ preventScroll: true });
+  form.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+});
 </script>
 </body>
 </html>

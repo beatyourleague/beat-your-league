@@ -19,42 +19,43 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
     --paper:#F9F6EE; --card:#FFFFFF; --navy:#16314A; --ink:#33445C;
     --slate:#5A6B80; --gold:#C9922A; --gold-bright:#F2C230;
     --turf:#1E7A46; --brick:#B3402F; --line:#DDD6C6;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--paper);color:var(--navy);
-    font-family:'Barlow',-apple-system,sans-serif;font-size:16px;line-height:1.6;
+    font-family:var(--sans);font-size:16px;line-height:1.6;
     -webkit-font-smoothing:antialiased;}
   .wrap{max-width:780px;margin:0 auto;padding:38px 20px 80px;}
   a{color:var(--brick);}
   a:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
-  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);
     font-weight:800;font-size:14px;letter-spacing:.26em;text-transform:uppercase;
     color:var(--gold);text-decoration:none;}
   .brand svg{width:24px;height:24px;flex:none;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;white-space:nowrap;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;white-space:nowrap;
     text-decoration:none;color:var(--navy);background:var(--card);padding:8px 15px;
     border:1.5px solid rgba(22,49,74,.35);border-radius:999px;}
   .home:hover,.home:focus-visible{border-color:var(--navy);}
-  h1{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(32px,6vw,48px);
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(32px,6vw,48px);
     line-height:1;text-transform:uppercase;margin-top:18px;max-width:18ch;}
   .standfirst{margin-top:14px;font-size:17px;color:var(--ink);max-width:64ch;}
   .standfirst b{color:var(--navy);}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(22px,3.6vw,30px);
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(22px,3.6vw,30px);
     text-transform:uppercase;line-height:1.04;margin:40px 0 8px;}
   p{max-width:66ch;color:var(--ink);}
   p + p{margin-top:10px;}
   .tablewrap{overflow-x:auto;margin-top:14px;border:2px solid var(--navy);background:var(--card);}
   table{width:100%;min-width:560px;border-collapse:collapse;font-size:14.5px;
     font-variant-numeric:tabular-nums;}
-  th{background:var(--navy);color:#DCE4EE;font-family:'Barlow Condensed';font-weight:700;
+  th{background:var(--navy);color:#DCE4EE;font-family:var(--display);font-weight:700;
     font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;text-align:right;
     padding:10px 12px;}
   th:first-child{text-align:left;}
@@ -68,7 +69,7 @@
     font-size:15px;color:var(--ink);max-width:66ch;}
   .verdict b{color:var(--navy);}
   .cta{margin-top:44px;padding:20px 22px;background:var(--card);border:2px solid var(--navy);}
-  .cta .btn{display:inline-block;margin-top:12px;font-family:'Barlow Condensed';
+  .cta .btn{display:inline-block;margin-top:12px;font-family:var(--display);
     font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;
     text-decoration:none;color:var(--navy);padding:12px 24px;
     background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);

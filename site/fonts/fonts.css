@@ -1,0 +1,130 @@
+/* Barlow and Barlow Condensed, self-hosted (SIL Open Font License 1.1 — see
+   OFL.txt beside this file). Google Fonts' own latin subsets, one file per
+   face the site actually sets (measured page by page in Chrome), so no page
+   asks a third party for anything and a visitor's IP goes nowhere but our host.
+
+   font-display:swap shows text at once in the fallback and swaps when the
+   face lands. On a slow phone that swap used to move the page by a quarter of
+   a screen (CLS 0.23-0.54 on the paper pages, launch review D2): the stacks
+   fell back to Arial, or for Barlow Condensed to Times, at different widths.
+   So every stack names a FALLBACK FACE below before any system font. */
+
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;
+  src:url(barlow-400.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;
+  src:url(barlow-500.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;
+  src:url(barlow-600.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;
+  src:url(barlow-700.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:800;font-display:swap;
+  src:url(barlow-800.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:600;font-display:swap;
+  src:url(barlow-condensed-600.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:700;font-display:swap;
+  src:url(barlow-condensed-700.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:800;font-display:swap;
+  src:url(barlow-condensed-800.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:normal;font-weight:900;font-display:swap;
+  src:url(barlow-condensed-900.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:italic;font-weight:800;font-display:swap;
+  src:url(barlow-condensed-800i.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Barlow Condensed';font-style:italic;font-weight:900;font-display:swap;
+  src:url(barlow-condensed-900i.woff2) format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+
+/* The metric-matched fallbacks. Arial (or Arimo / Liberation Sans, which
+   share its metrics) scaled so a line of OUR text takes the same width it
+   will in Barlow, with Barlow's own ascent and descent (1.0 / 0.2 em, no line
+   gap), so nothing re-wraps or changes height when the real face arrives.
+
+   Each size-adjust is a measurement, not a guess: Chrome's width of the
+   site's own copy (the landing, How it works, the terms and privacy pages,
+   League Pass, the thank-you page, the sample and the join page — about
+   20,000 characters) in each Barlow face, divided by the same characters in
+   Arial at the weight the browser would pick — fitted so the copy matches
+   as written AND uppercased, to within 0.02%. Two faces per weight, because
+   Barlow's capitals are narrower against Arial's than its lower case is
+   (0.86 against 0.96 at 400): one face for everything, then one for A-Z
+   alone (unicode-range; the later rule wins for its range), so a line in
+   capitals — a chip, a label, a text-transform:uppercase headline — matches
+   as well as a sentence does. One weight's width tuned to sentences left a
+   sample's masthead chips wrapping in the fallback and unwrapping on swap
+   (CLS 0.20 at 768px on Slow 4G). An override is a share of the
+   size-adjusted em, hence 100% / size-adjust. */
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:400;
+  src:local('Arial'),local('ArialMT'),local('Arimo'),local('Liberation Sans');
+  size-adjust:95.70%;ascent-override:104.49%;descent-override:20.90%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:400;
+  src:local('Arial'),local('ArialMT'),local('Arimo'),local('Liberation Sans');unicode-range:U+0041-005A;
+  size-adjust:86.18%;ascent-override:116.04%;descent-override:23.21%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:500;
+  src:local('Arial'),local('ArialMT'),local('Arimo'),local('Liberation Sans');
+  size-adjust:96.74%;ascent-override:103.37%;descent-override:20.67%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:500;
+  src:local('Arial'),local('ArialMT'),local('Arimo'),local('Liberation Sans');unicode-range:U+0041-005A;
+  size-adjust:86.28%;ascent-override:115.90%;descent-override:23.18%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:600;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:90.57%;ascent-override:110.41%;descent-override:22.08%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:600;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:86.15%;ascent-override:116.08%;descent-override:23.22%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:700;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:91.52%;ascent-override:109.27%;descent-override:21.85%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:700;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:86.24%;ascent-override:115.96%;descent-override:23.19%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:800 900;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:92.50%;ascent-override:108.11%;descent-override:21.62%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Fallback';font-style:normal;font-weight:800 900;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:86.44%;ascent-override:115.69%;descent-override:23.14%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:100 600;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:74.23%;ascent-override:134.72%;descent-override:26.94%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:100 600;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:65.74%;ascent-override:152.11%;descent-override:30.42%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:700;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:76.04%;ascent-override:131.51%;descent-override:26.30%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:700;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:67.01%;ascent-override:149.23%;descent-override:29.85%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:800;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:77.83%;ascent-override:128.49%;descent-override:25.70%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:800;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:68.30%;ascent-override:146.41%;descent-override:29.28%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:900;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');
+  size-adjust:79.40%;ascent-override:125.94%;descent-override:25.19%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:normal;font-weight:900;
+  src:local('Arial Bold'),local('Arial-BoldMT'),local('Arimo Bold'),local('Liberation Sans Bold');unicode-range:U+0041-005A;
+  size-adjust:69.39%;ascent-override:144.11%;descent-override:28.82%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:italic;font-weight:100 800;
+  src:local('Arial Bold Italic'),local('Arial-BoldItalicMT'),local('Arimo Bold Italic'),local('Liberation Sans Bold Italic');
+  size-adjust:75.45%;ascent-override:132.54%;descent-override:26.51%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:italic;font-weight:100 800;
+  src:local('Arial Bold Italic'),local('Arial-BoldItalicMT'),local('Arimo Bold Italic'),local('Liberation Sans Bold Italic');unicode-range:U+0041-005A;
+  size-adjust:66.22%;ascent-override:151.01%;descent-override:30.20%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:italic;font-weight:900;
+  src:local('Arial Bold Italic'),local('Arial-BoldItalicMT'),local('Arimo Bold Italic'),local('Liberation Sans Bold Italic');
+  size-adjust:76.93%;ascent-override:129.99%;descent-override:26.00%;line-gap-override:0%;}
+@font-face{font-family:'Barlow Condensed Fallback';font-style:italic;font-weight:900;
+  src:local('Arial Bold Italic'),local('Arial-BoldItalicMT'),local('Arimo Bold Italic'),local('Liberation Sans Bold Italic');unicode-range:U+0041-005A;
+  size-adjust:67.30%;ascent-override:148.59%;descent-override:29.72%;line-gap-override:0%;}

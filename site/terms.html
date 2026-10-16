@@ -19,22 +19,36 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- A paper page, said so: light native controls, and a phone's browser
+     bar in the masthead's navy (launch review I12). -->
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#101E33">
+<link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:22px;flex:none;}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  /* The site's routes on every page, the samples' masthead row (launch
+     review I5): a visitor arriving from a shared link had only a Home pill. */
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
+    flex-wrap:wrap;}
+  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
+  .sitenav a.home{color:var(--paper);padding:8px 15px;}
+  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
@@ -43,10 +57,10 @@
   main a,p a,li a{color:var(--brick);text-decoration:underline;
     text-underline-offset:2px;text-decoration-thickness:1px;}
   main a:hover,p a:hover,li a:hover{color:var(--navy);}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:10px 28px 34px;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
   p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
   ul{margin-left:20px;}
@@ -60,7 +74,7 @@
 <body>
 <div class="sheet">
   <header>
-    <div class="topbar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html">← Home</a></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
     <h1>Terms of Service</h1>
     <p>Last updated 15 October 2026. Short, in plain words, and written to be kept. If
     anything here conflicts with what a sales page says, this page wins. Your data is covered separately, in the
@@ -134,18 +148,25 @@
     charges, and nobody has to approve it. Your reports continue to the end of the
     period you've already paid for, then stop on their own — we check who is still
     subscribed before every send.</p>
-    <div class="note"><b>One thing worth knowing:</b> clicking "unsubscribe" at the bottom of
-    an email stops the <i>emails</i>, but on its own it does not always stop a
-    <i>subscription</i> — that is true of most paid newsletters, not just ours. If you want
-    the charges to stop, cancel from your billing page. If you ever find you were charged
-    after intending to cancel, email us and we'll refund it.</div>
+    <div class="note"><b>Unsubscribing, on a paid report, is cancelling.</b> The link at the
+    bottom of every report and your mail app's own unsubscribe button both take you to your billing
+    page, because for a subscription you pay for, stopping the emails and stopping the
+    charges are one step: cancel there, and your reports continue to the end of the period
+    you've already paid for, then stop. Blocking our address or filtering our emails stops
+    the <i>emails</i> but does not always stop a <i>subscription</i> — so if you want the
+    charges to end, cancel from your billing page. If you ever find you were charged after
+    intending to cancel, email us and we'll refund it.</div>
     <p>Cancelling stops future charges. You keep access for the rest of the period you've
     already paid for, and you keep every report we already sent. If anything about
     cancelling doesn't work, email us (section 15) and we'll sort it out.</p>
     <p><b>A League Pass seat</b> has no billing of its own, so there is nothing to cancel.
     To stop a seat's emails, reply "stop" to any of them or use your mail app's
-    unsubscribe, and you're off within 10 business days. Your commissioner's pass isn't
+    unsubscribe, and you're off within 10 business days. Your league's pass isn't
     affected.</p>
+    <p><b>Emails nobody pays for</b> — the one free report and the one launch email from
+    our waiting list — are single messages; nothing follows them unless you sign up. To
+    be left off anyway, reply "stop" or "unsubscribe" (or use your mail app's unsubscribe
+    where it offers one) and you're off within 10 business days.</p>
 
     <h2 id="refunds">5. Refunds</h2>
     <p>Full refund, no questions asked, any time until <b>your second weekly report's week

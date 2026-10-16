@@ -25,6 +25,7 @@ a browser — regeneration is a local, deliberate act, like `make sample`.
 from __future__ import annotations
 
 import argparse
+import base64
 import html
 import re
 import hashlib
@@ -60,6 +61,47 @@ CHROME_CANDIDATES = (
 
 class OgError(RuntimeError):
     pass
+
+
+# --------------------------------------------------------------------- #
+# the type: the site's own self-hosted faces, embedded
+# --------------------------------------------------------------------- #
+
+FONT_DIR = SITE / "fonts"
+# The faces the card sets, as (family, weight, style, file stem in FONT_DIR).
+CARD_FACES = (
+    ("Barlow", "500", "normal", "barlow-500"),
+    ("Barlow", "700", "normal", "barlow-700"),
+    ("Barlow Condensed", "800", "normal", "barlow-condensed-800"),
+    ("Barlow Condensed", "900", "normal", "barlow-condensed-900"),
+    ("Barlow Condensed", "900", "italic", "barlow-condensed-900i"),
+)
+
+
+def embedded_fonts(faces=CARD_FACES, font_dir: Path | None = None) -> str:
+    """@font-face rules carrying the site's own woff2 files as data: URIs.
+
+    The card renders from a file in a temp directory, and Chrome refuses a
+    font loaded from file:// into a file:// page (an opaque origin, so the
+    CORS check fails). Embedding is what lets the card use exactly the type
+    every page serves — it used to fetch Google Fonts mid-render, a third-
+    party request and a network race on every build. Fails closed: a card set
+    in Arial stops looking like the product, so a missing face refuses.
+    """
+    folder = font_dir or FONT_DIR
+    rules = []
+    for family, weight, style, stem in faces:
+        path = folder / f"{stem}.woff2"
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            raise OgError(f"font file {path.name} is missing — the card would "
+                          f"render in a fallback face") from exc
+        rules.append(
+            f"@font-face{{font-family:'{family}';font-style:{style};"
+            f"font-weight:{weight};font-display:block;src:url(data:font/woff2;"
+            f"base64,{base64.b64encode(data).decode('ascii')}) format('woff2');}}")
+    return "\n".join(rules)
 
 
 # --------------------------------------------------------------------- #
@@ -115,12 +157,37 @@ def hero_rows(page: str) -> list[dict[str, str]]:
     return rows
 
 
-def headline(page: str) -> str:
+def _h1(page: str) -> str:
     match = re.search(r"<h1[^>]*>(.*?)</h1>", page, re.S)
     if not match:
         raise OgError("no <h1> on the landing page")
-    text = re.sub(r"<[^>]+>", " ", match.group(1))
-    return html.unescape(" ".join(text.split()))
+    return match.group(1)
+
+
+def _text(fragment: str) -> str:
+    return html.unescape(" ".join(re.sub(r"<[^>]+>", " ", fragment).split()))
+
+
+def headline(page: str) -> str:
+    return _text(_h1(page))
+
+
+def headline_html(page: str) -> str:
+    """The landing's headline in the landing's own treatment: the words, and
+    the one phrase it sets on the gold slab (its <em>). Rebuilt from TEXT, so
+    nothing but the two words and an <em> of ours reaches the card's markup
+    (launch review I13: the card set "Know who to start." in sentence case,
+    unlike the page it advertises, which weakened recall between X and the
+    landing)."""
+    inner = _h1(page)
+    match = re.search(r"<em\b[^>]*>(.*?)</em>", inner, re.S)
+    if not match:
+        return html.escape(headline(page))
+    before, slab = _text(inner[:match.start()]), _text(match.group(1))
+    after = _text(inner[match.end():])
+    return " ".join(part for part in (
+        html.escape(before), f"<em><span>{html.escape(slab)}</span></em>",
+        html.escape(after)) if part)
 
 
 # --------------------------------------------------------------------- #
@@ -143,16 +210,14 @@ def _row_html(row: dict[str, str]) -> str:
 def build_html(page: str) -> str:
     """The card, in the site's own palette and type."""
     rows = "\n        ".join(_row_html(row) for row in hero_rows(page))
-    head = html.escape(headline(page))
+    head = headline_html(page)
     # The logo, from the one drawing every page uses (imported here, not at the
     # top, so render.og stays importable on its own).
     from render.report import mark_svg
     mark = mark_svg("og", "ogmark")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,800;0,900;1,900&family=Barlow:wght@400;500;700;800&display=swap">
+<style>{embedded_fonts()}</style>
 <style>
   *{{margin:0;padding:0;box-sizing:border-box;}}
   html,body{{width:{WIDTH}px;height:{HEIGHT}px;overflow:hidden;}}
@@ -168,8 +233,15 @@ def build_html(page: str) -> str:
   .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
   .mark span{{font-family:'Barlow Condensed';font-weight:900;font-size:23px;
     letter-spacing:.2em;text-transform:uppercase;color:#F2C230;}}
-  h1{{font-family:'Barlow Condensed';font-weight:900;font-size:92px;line-height:.93;
-    letter-spacing:-.005em;text-wrap:balance;}}
+  /* The landing hero's own treatment (launch review I13): heavy italic
+     capitals, the payoff phrase on the tilted gold slab. */
+  h1{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:96px;
+    line-height:.92;text-transform:uppercase;text-shadow:0 20px 46px rgba(0,0,0,.45);}}
+  h1 em{{font-style:italic;color:#101E33;display:inline-block;margin-top:10px;
+    background:linear-gradient(180deg,#FFD75E,#F2C230 60%,#D9A81B);padding:0 16px 5px;
+    transform:rotate(-1.5deg);box-shadow:0 12px 30px -14px rgba(242,194,48,.6);
+    text-shadow:none;}}
+  h1 em span{{display:inline-block;}}
   .sub{{margin-top:24px;font-size:26px;line-height:1.42;color:#BCC9DB;font-weight:500;
     max-width:520px;}}
   .sub b{{color:#F6F4EE;font-weight:700;}}
@@ -201,8 +273,8 @@ def build_html(page: str) -> str:
   <div class="left">
     <div class="mark">{mark}<span>Beat Your League</span></div>
     <h1>{head}</h1>
-    <div class="sub">Your lineup, decided every Tuesday — computed from
-      <b>your exact roster</b> and your league's scoring.</div>
+    <div class="sub">Your lineup, decided every Tuesday — from <b>your exact
+      roster</b>, scored PPR, half-PPR or standard.</div>
   </div>
   <div class="right">
     <div class="filecard">
@@ -340,8 +412,9 @@ def render_png(html: str, out: Path, width: int, height: int,
              "--no-first-run", "--no-default-browser-check",
              "--disable-extensions", "--disable-crash-reporter",
              f"--screenshot={shot}", f"--window-size={width},{height}",
-             # Google Fonts has to arrive before the shutter, or the image
-             # ships in Helvetica and stops looking like the product.
+             # Every face is embedded, but decoding still has to finish
+             # before the shutter, or the image ships in a fallback face and
+             # stops looking like the product.
              "--virtual-time-budget=8000",
              "--force-device-scale-factor=1",
              f"--user-data-dir={Path(work) / 'profile'}",
@@ -378,6 +451,16 @@ def render(page: str, out: Path, chrome: str | None = None) -> Path:
     return written
 
 
+def _shown(path: Path) -> str:
+    """A path for the log: repo-relative when it is in the repo. --out may
+    point anywhere (a scratch render to look at), and printing it must not
+    raise after the card has already been written."""
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(OUT))
@@ -395,14 +478,14 @@ def main(argv: list[str] | None = None) -> int:
         data = out.read_bytes()
         width, height = png_size(data)
         stale = source_digest(data) != page_digest(page)
-        print(f"{out.relative_to(REPO_ROOT)}: {width}x{height}, "
+        print(f"{_shown(out)}: {width}x{height}, "
               f"{out.stat().st_size:,} bytes, "
               f"{'STALE — run `make og`' if stale else 'current'}")
         return 0 if ((width, height) == (WIDTH, HEIGHT) and not stale) else 1
 
     rows = hero_rows(page)
     render(page, out)
-    print(f"wrote {out.relative_to(REPO_ROOT)} "
+    print(f"wrote {_shown(out)} "
           f"({out.stat().st_size:,} bytes, {WIDTH}x{HEIGHT})")
     print(f"  headline: {headline(page)}")
     for row in rows:

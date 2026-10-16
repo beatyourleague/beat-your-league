@@ -19,22 +19,36 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- A paper page, said so: light native controls, and a phone's browser
+     bar in the masthead's navy (launch review I12). -->
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#101E33">
+<link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:22px;flex:none;}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  /* The site's routes on every page, the samples' masthead row (launch
+     review I5): a visitor arriving from a shared link had only a Home pill. */
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
+    flex-wrap:wrap;}
+  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
+  .sitenav a.home{color:var(--paper);padding:8px 15px;}
+  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
@@ -43,10 +57,10 @@
   main a,p a,li a{color:var(--brick);text-decoration:underline;
     text-underline-offset:2px;text-decoration-thickness:1px;}
   main a:hover,p a:hover,li a:hover{color:var(--navy);}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:10px 28px 34px;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
   p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
   ul{margin-left:20px;}
@@ -60,7 +74,7 @@
 <body>
 <div class="sheet">
   <header>
-    <div class="topbar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="index.html">← Home</a></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
     <h1>Privacy Policy</h1>
     <p>Last updated 15 October 2026. The short version: we collect your email, your roster,
     your league's scoring settings and your billing address, plus the few small records
@@ -99,9 +113,13 @@
       build and send that one report — and a one-way digest of your address, so each
       person gets one per season. We send nothing else unless you sign up.</li>
       <li><b>If you join the waitlist</b>: your email, to send the one message we promised
-      when signups open. Nothing else is sent to it.</li>
-      <li><b>If you claim a League Pass seat</b>: your email, your roster, and the email your
-      commissioner paid with, which is how your seat is matched to their pass.</li>
+      when signups open — and, if you checked a roster on the signup page while checkout was
+      closed, a short code standing for that roster and your league settings, so that
+      message can bring your setup back. Nothing else is sent to it.</li>
+      <li><b>If you claim a League Pass seat</b>: your email, your roster, and what matches
+      your seat to your league's pass — either the pass code in your league's own link (a
+      one-way digest of the buyer's address, which cannot be turned back into it) or the
+      email the pass was bought with.</li>
       <li><b>If you change your roster through our form</b>: the new roster and your email,
       so we can email you a button to confirm the change.</li>
       <li><b>When you accepted these terms</b> — the date and which version, recorded at
@@ -110,8 +128,9 @@
       request, a question — so we can answer it.</li>
       <li><b>Where you came from, if it was a link we posted</b>: the name of that channel
       (for example "x" or "reddit"), read off the link itself and stored with your form
-      entry, so we can count which posts bring people. No cookie is involved, and it says
-      nothing about anywhere else you go.</li>
+      entry — or, if you buy, on your Stripe customer record — so we can count which posts
+      bring people. No cookie is involved, and it says nothing about anywhere else you
+      go.</li>
       <li><b>If you ask us to stop emailing you</b>: a one-way digest of your address on our
       stop list — never the address itself — so nothing is sent to it again.</li>
     </ul>
@@ -132,9 +151,13 @@
     <p><b>This site sets no cookies, runs no analytics, and carries no advertising or
     tracking scripts.</b> There is no consent banner because there is nothing to consent to,
     and because we don't track you, a browser's Do Not Track signal changes nothing.
-    Two honest details: our pages load type from Google Fonts, so your browser contacts
-    Google and Google can see your IP address as it would for any site using them; and our
-    host serves the pages, which involves the ordinary server logs any web host keeps.</p>
+    <b>Loading our pages makes no request to any third party</b>: even the type is served
+    from this site, so the only party that sees a visit is our host, with the ordinary
+    server logs any web host keeps. One convenience stays inside your own browser: when you
+    buy a League Pass, the thank-you page fills in your group-chat message with the email
+    you just typed, if the signup page kept it in that browser tab's session storage. It
+    is never sent anywhere from there, and the thank-you page deletes it as soon as it has
+    read it.</p>
 
     <h2>4. Who else sees your data</h2>
     <p>Five service providers, each doing one job, and none gets anything beyond it. Each
@@ -142,9 +165,9 @@
     <ul>
       <li><b>Stripe</b> handles payment and billing. They hold your payment details and your
       subscription. Your checkout and your customer record there also carry the roster and
-      settings you entered (as a short code), the plan you chose, and the record of your
-      accepting these terms — that is how a payment becomes your report. We hold a
-      reference to that record.</li>
+      settings you entered (as a short code), the plan you chose, the channel tag if you
+      came from a link we posted, and the record of your accepting these terms — that is
+      how a payment becomes your report. We hold a reference to that record.</li>
       <li><b>Resend</b> delivers our emails. They handle your address and the message.</li>
       <li><b>Cloudflare</b> runs our domain, routes mail sent to hello@, and stores what
       you send through our forms (waitlist, free-report requests, seat claims, roster
@@ -153,10 +176,10 @@
       <li><b>Google (Gmail)</b> is the inbox that mail to hello@ is forwarded to, and where
       we read and answer it. It holds what you email us and our replies.</li>
       <li><b>GitHub</b> hosts this site and runs the automation that builds and sends the
-      reports. Your email, roster and settings are kept in that automation's private
-      storage, never in the public site or its code. The two records it keeps beside the
-      code — what has been sent, and the stop list — carry one-way digests, never an
-      address.</li>
+      reports. Your email, roster and settings are kept in the storage that automation
+      carries between runs (its cache) — never in the public site, its code or its run
+      logs. The two records it keeps beside the code — what has been sent, and the stop
+      list — carry one-way digests, never an address.</li>
     </ul>
     <p>Each has its own privacy policy. <b>We do not sell your data, rent it, or hand it to
     advertisers or data brokers</b> — not now and not later. If that ever changed we would
@@ -173,7 +196,8 @@
     <p>It is built from the roster you gave us and public NFL data, and it goes only to you.
     We never publish your name, your email or your roster anywhere. Our public record of
     graded calls names NFL players and never subscribers, and carries nothing that could
-    identify you or your league.</p>
+    identify you or your league. It also records the odds printed each week on our own
+    sample roster's report, which holds nothing of yours.</p>
 
     <h2>6. Where the football data comes from</h2>
     <p>Openly licensed public NFL data. Nothing about you, your league or your leaguemates
@@ -208,10 +232,13 @@
     subscribers before it takes effect, and the date at the top of this page will change.</p>
 
     <h2>11. Who to contact</h2>
-    <p>Beat Your League is an independent solo project. Contact
-    <b>hello@beatyourleague.com</b> for anything on this page — access, deletion, or a
-    question about how something works. Billing questions are covered in the
-    <a href="terms.html">Terms of Service</a>.</p>
+    <!-- An accountable role, named without naming a person (launch review L7):
+         the site is anonymous by the owner's rule, and the role is real — one
+         person answers it. -->
+    <p>Beat Your League is an independent solo project, and its one person answers this
+    page. <b>Privacy contact, Beat Your League:</b> <b>hello@beatyourleague.com</b> — for
+    anything on this page: access, deletion, or a question about how something works.
+    Billing questions are covered in the <a href="terms.html">Terms of Service</a>.</p>
 </main>
   <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under

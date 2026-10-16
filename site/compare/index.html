@@ -19,56 +19,59 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../fonts/fonts.css">
 <style>
-  :root{
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
     --paper:#F9F6EE; --card:#FFFFFF; --navy:#16314A; --ink:#33445C;
     --slate:#5A6B80; --gold:#C9922A; --gold-bright:#F2C230;
     --turf:#1E7A46; --turf-tint:#E8F2EA; --brick:#B3402F; --line:#DDD6C6;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--paper);color:var(--navy);
-    font-family:'Barlow',-apple-system,sans-serif;font-size:16px;line-height:1.6;
+    font-family:var(--sans);font-size:16px;line-height:1.6;
     -webkit-font-smoothing:antialiased;}
   .wrap{max-width:920px;margin:0 auto;padding:38px 20px 80px;}
   a{color:var(--brick);}
   a:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
-  .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';
+  /* Navy, not gold: gold text on this cream measured 2.54:1 (axe, Oct 2026). */
+  .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);
     font-weight:800;font-size:14px;letter-spacing:.26em;text-transform:uppercase;
-    color:var(--gold);text-decoration:none;}
+    color:var(--navy);text-decoration:none;}
+  .tablewrap:focus-visible{outline:3px solid var(--gold-bright);outline-offset:2px;}
   .brand svg{width:24px;height:24px;flex:none;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;white-space:nowrap;
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;white-space:nowrap;
     text-decoration:none;color:var(--navy);background:var(--card);padding:8px 15px;
     border:1.5px solid rgba(22,49,74,.35);border-radius:999px;}
   .home:hover,.home:focus-visible{border-color:var(--navy);}
-  h1{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(34px,6.5vw,52px);
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,6.5vw,52px);
     line-height:.98;text-transform:uppercase;margin-top:18px;max-width:16ch;}
   .byline{margin-top:14px;padding:12px 16px;background:var(--card);
     border-left:4px solid var(--gold-bright);border-top:1px solid var(--line);
     border-right:1px solid var(--line);border-bottom:1px solid var(--line);
     font-size:14.5px;color:var(--ink);max-width:68ch;}
-  .checked{display:inline-block;margin-top:14px;font-family:'Barlow Condensed';
+  .checked{display:inline-block;margin-top:14px;font-family:var(--display);
     font-weight:800;font-size:13px;letter-spacing:.14em;text-transform:uppercase;
     border:3px double var(--brick);color:var(--brick);padding:6px 12px;
     transform:rotate(-1.4deg);border-radius:3px;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:clamp(24px,4vw,32px);
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(24px,4vw,32px);
     text-transform:uppercase;line-height:1.02;margin:44px 0 10px;}
   p{max-width:68ch;color:var(--ink);}
   p + p{margin-top:10px;}
   .tablewrap{overflow-x:auto;margin-top:18px;border:2px solid var(--navy);
     background:var(--card);}
   table{width:100%;min-width:780px;border-collapse:collapse;font-size:14px;}
-  th{background:var(--navy);color:#DCE4EE;font-family:'Barlow Condensed';font-weight:700;
+  th{background:var(--navy);color:#DCE4EE;font-family:var(--display);font-weight:700;
     font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;text-align:left;
     padding:10px 12px;white-space:nowrap;}
   td{padding:12px;border-top:1px solid #EDEAE1;vertical-align:top;color:var(--ink);}
   td:first-child{font-weight:700;color:var(--navy);white-space:nowrap;}
   td:first-child small{display:block;font-weight:500;color:var(--slate);font-size:12px;}
-  .price{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:var(--navy);
+  .price{font-family:var(--display);font-weight:800;font-size:16px;color:var(--navy);
     font-variant-numeric:tabular-nums;white-space:nowrap;}
-  .price small{display:block;font-family:'Barlow';font-weight:500;font-size:11.5px;
+  .price small{display:block;font-family:var(--sans);font-weight:500;font-size:11.5px;
     color:var(--slate);white-space:normal;}
   tr.us{background:var(--turf-tint);}
   tr.us td{border-top:2px solid var(--turf);}
@@ -77,13 +80,13 @@
   .pick{margin-top:14px;display:grid;gap:12px;}
   .pick > div{background:var(--card);border:1px solid var(--line);
     border-left:4px solid var(--navy);padding:14px 16px;font-size:14.5px;color:var(--ink);}
-  .pick b{font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+  .pick b{font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.03em;text-transform:uppercase;color:var(--navy);display:block;
     margin-bottom:3px;}
   .pick > div.usrec{border-left-color:var(--turf);}
   .cta{margin-top:40px;padding:20px 22px;background:var(--card);
     border:2px solid var(--navy);text-align:left;}
-  .cta .btn{display:inline-block;margin-top:12px;font-family:'Barlow Condensed';
+  .cta .btn{display:inline-block;margin-top:12px;font-family:var(--display);
     font-weight:800;font-size:17px;letter-spacing:.1em;text-transform:uppercase;
     text-decoration:none;color:var(--navy);padding:12px 24px;
     background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);
@@ -95,8 +98,9 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="topbar"><a class="brand" href="../index.html"><svg class="avmark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylcClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylcClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
+  <header class="topbar"><a class="brand" href="../index.html"><svg class="avmark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylcClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylcClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></header>
 
+  <main id="main">
   <h1>Fantasy football tools, compared honestly</h1>
 
   <p class="byline"><b>Who wrote this:</b> the person who makes Beat Your League — one of the
@@ -106,7 +110,9 @@
 
   <span class="checked">Prices checked Aug 22, 2026</span>
 
-  <div class="tablewrap">
+  <!-- A region that scrolls sideways must take keyboard focus, or a keyboard
+       user cannot reach its right-hand columns (axe, Oct 2026). -->
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Prices compared, scrolls sideways">
   <table>
     <tr><th>Product</th><th>Price</th><th>Best at</th><th>Falls short</th></tr>
 
@@ -222,6 +228,7 @@
     <a class="btn" style="background:none;border:2px solid var(--navy);clip-path:none" href="../index.html">What it costs</a>
   </div>
 
+  </main>
   <footer>
     Prices and terms checked by hand on Aug 22, 2026 from each product's own public pages;
     they change, and their pages are the source of truth. Product names belong to their

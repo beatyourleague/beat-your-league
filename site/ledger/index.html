@@ -19,37 +19,40 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+
+<!-- Self-hosted type (site/fonts, OFL): no request leaves the site. -->
+<link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFFFFF;--turf:#1E7A46;--flag:#F2C230;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFFFFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:860px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  a.brand{text-decoration:none;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  a.brand{text-decoration:none;padding:3px 0;}
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
   header .brand svg.mark{width:22px;height:22px;flex:none;}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:42px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:42px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:560px;}
   main{padding:24px 28px 34px;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;margin:26px 0 6px;}
+  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;margin:26px 0 6px;}
   .note{font-size:13px;color:var(--slate);line-height:1.5;margin-bottom:10px;}
   .record{display:flex;align-items:baseline;gap:14px;background:var(--card);
     border:2px solid var(--navy);padding:16px 18px;}
-  .record b{font-family:'Barlow Condensed';font-weight:800;font-size:52px;line-height:1;}
+  .record b{font-family:var(--display);font-weight:800;font-size:52px;line-height:1;}
   .record span{font-size:14px;color:var(--slate);font-weight:600;}
   table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--navy);
     font-size:14px;font-variant-numeric:tabular-nums;}
-  th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-weight:800;
+  th{background:var(--navy);color:#C9D4E2;font-family:var(--display);font-weight:800;
     font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:8px 10px;text-align:left;}
   td{padding:9px 10px;border-top:1px solid #EDEAE1;}
   th.num,td.num{text-align:right;}
@@ -59,10 +62,10 @@
   .stamp-miss{color:var(--brick);font-weight:800;}
   .stamp-tie,.stamp-void{color:var(--slate);font-weight:800;}
   .empty{background:var(--card);border:2px solid var(--navy);padding:26px;line-height:1.6;}
-  .empty b{font-family:'Barlow Condensed';font-weight:800;font-size:28px;text-transform:uppercase;}
+  .empty b{font-family:var(--display);font-weight:800;font-size:28px;text-transform:uppercase;}
   .empty p{margin-top:10px;font-size:14.5px;color:var(--ink2);max-width:560px;}
   .stampbox{display:inline-block;margin-top:16px;border:2px solid var(--turf);color:var(--turf);
-    font-family:'Barlow Condensed';font-weight:800;letter-spacing:.16em;font-size:13px;
+    font-family:var(--display);font-weight:800;letter-spacing:.16em;font-size:13px;
     text-transform:uppercase;padding:5px 12px;transform:rotate(-2deg);}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
@@ -83,7 +86,7 @@
     recorded before kickoff and graded in the open. Yours start the week you set
     up your team.</p>
     <a href="../join/index.html" style="display:inline-block;background:var(--turf);color:#fff;
-      text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+      text-decoration:none;font-family:var(--display);font-weight:800;font-size:17px;
       letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up my team</a>
   </div>
   <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not picks. No betting

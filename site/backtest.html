@@ -20,32 +20,34 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- Self-hosted type (site/fonts, OFL): no request leaves the site. -->
+<link rel="preload" href="fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
+  :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:860px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  a.brand{text-decoration:none;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  a.brand{text-decoration:none;padding:3px 0;}
+  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
   header .brand svg.mark{width:22px;height:22px;flex:none;}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:8px 28px 34px;}
   main h1{display:none;}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:25px;text-transform:uppercase;
+  h2{font-family:var(--display);font-weight:800;font-size:25px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
-  h3{font-family:'Barlow Condensed';font-weight:800;font-size:19px;text-transform:uppercase;margin:20px 0 6px;}
+  h3{font-family:var(--display);font-weight:800;font-size:19px;text-transform:uppercase;margin:20px 0 6px;}
   p{font-size:14.5px;line-height:1.6;color:var(--ink2);margin:8px 0;}
   ul{margin:8px 0 8px 20px;} li{font-size:14.5px;line-height:1.6;color:var(--ink2);margin:3px 0;}
   /* The page's own claim, drawn. */
@@ -54,7 +56,7 @@
   .calfig figcaption{margin-top:9px;font-size:13px;line-height:1.6;color:var(--slate);}
   table{width:100%;border-collapse:collapse;background:var(--card);border:2px solid var(--navy);
     font-size:13.5px;margin:12px 0;font-variant-numeric:tabular-nums;}
-  th{background:var(--navy);color:#C9D4E2;font-family:'Barlow Condensed';font-weight:800;
+  th{background:var(--navy);color:#C9D4E2;font-family:var(--display);font-weight:800;
     font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;padding:8px 9px;text-align:left;}
   td{padding:8px 9px;border-top:1px solid #EDEAE1;}
   b{color:var(--navy);}
@@ -139,7 +141,7 @@
     <p style="margin:0 0 12px;font-size:15px;">That's the record, failures included.
     Your reports get graded the same way, in public, every Monday.</p>
     <a href="join/index.html" style="display:inline-block;background:var(--turf);color:#fff;
-      text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+      text-decoration:none;font-family:var(--display);font-weight:800;font-size:17px;
       letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up your team</a>
   </div>
   <footer><b>Beat Your League</b> — analysis, not picks. Every number here is reproducible
