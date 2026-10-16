@@ -26,7 +26,8 @@ from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAV
                            MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE, PAGE_META,
                            SECTION_MARK, TEMPLATE_PATH, cancel_destination, esc,
                            extract_design, font_preloads, landmarks, mark_svg,
-                           number_sections, sender_html)
+                           number_sections, sender_html, cancel_html,
+                           cancel_lines, unsubscribe_target)
 from render.sender import sender_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -228,6 +229,14 @@ def _header(meta: Mapping[str, Any]) -> str:
 
 
 def _footer(meta: Mapping[str, Any]) -> str:
+    if meta.get("seat"):
+        # A League Pass seat has no billing to cancel (launch review C4).
+        return (
+            f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}<br>'
+            f'{esc(WEEKLY_PROMISE)}<br>'
+            f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
+            f'{sender_html()}{cancel_html(seat=True)}</footer>'
+        )
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}">{esc(label)}</a>.' if href else "")
     return (
@@ -309,10 +318,13 @@ def text_summary(report: Mapping[str, Any]) -> str:
                      f'{(row.get("team") or "—"):<4} {bye:<14} {last}')
     lines += ["", f"  {FORM_BASIS}", "", WEEKLY_PROMISE, "",
               NO_BETTING_LINE, NFLVERSE_LINE]
-    href, label = cancel_destination()
-    if href:
-        lines += ["", f"CANCEL: {label} — {href}"]
-    lines += ["", f"{CANCEL_HEAD.upper()} {CANCEL_BODY}"]
+    if report["meta"].get("seat"):
+        lines += ["", *cancel_lines(seat=True)]
+    else:
+        href, label = cancel_destination()
+        if href:
+            lines += ["", f"CANCEL: {label} — {href}"]
+        lines += ["", f"{CANCEL_HEAD.upper()} {CANCEL_BODY}"]
     # Who sent it (CAN-SPAM, CASL; launch audit L3, GATE-9).
     if sender_line():
         lines += ["", sender_line()]
@@ -436,6 +448,8 @@ def email_html(report: Mapping[str, Any]) -> str:
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
               if href else "")
+    way_out = (cancel_html(seat=True) if meta.get("seat") else
+               f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}')
     scoring = scoring_name(meta)
     return (
         f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
@@ -466,14 +480,13 @@ def email_html(report: Mapping[str, Any]) -> str:
         + f'<tr><td style="background:{PAPER};padding:20px 26px 26px 26px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(WEEKLY_PROMISE)}<br>{esc(NO_BETTING_LINE)}<br>'
-        f'{esc(NFLVERSE_LINE)}<br>{sender_html()}'
-        f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}</p></td></tr>'
+        f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{way_out}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )
 
 
 def preseason_message(email: str, slug: str, report: Mapping[str, Any],
-                      purchased_at: str = ""):
+                      purchased_at: str = "", seat: bool = False):
     """The pre-season report as a Message, keyed so it can only be sent once.
 
     Keyed on the PURCHASE, exactly like the welcome and for the same reason: a
@@ -489,6 +502,11 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
     """
     from run.delivery import Message
 
+    if seat:
+        # ``seat``: a League Pass seat's roster report, sent when the claim
+        # lands outside the Tuesday-to-kickoff window (LP-I4). A seat pays
+        # nothing, so its way out is the stop route, never a billing page.
+        report = {**report, "meta": {**report["meta"], "seat": True}}
     meta = report["meta"]
     hits = len(report["collisions"])
     ahead = " ahead" if meta.get("season_started") else ""
@@ -503,5 +521,5 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
         html=email_html(report),
         text=text_summary(report),
         key=f"preseason-{purchased_at or meta['season']}-{slug}",
-        unsubscribe=cancel_destination()[0] or None,
+        unsubscribe=unsubscribe_target(seat),
     )

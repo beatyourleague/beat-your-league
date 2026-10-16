@@ -179,8 +179,9 @@ def _terms_date() -> str:
 
 
 # What happens next, row by row — the thanks page's three rows (site/
-# thanks.html), so the page and the email describe one sequence. A seat's
-# first report is the next Tuesday run (run/tuesday.py), so it has no "today".
+# thanks.html), so the page and the email describe one sequence. A matched
+# seat gets its first email the day it is claimed, by the same rules as a
+# purchase (run/intake.py, LP-I4), so a seat has a "today" too.
 NEXT_TODAY = ("Your first report. This week's lineup if the week's games "
               "haven't started, otherwise your roster report: the byes that "
               "leave you short and last season under your scoring.")
@@ -194,9 +195,8 @@ NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
 
 
 def _next_rows(seat: bool) -> list[tuple[str, str]]:
-    rows = [] if seat else [("Today", NEXT_TODAY)]
-    return rows + [("Every Tuesday", NEXT_TUESDAY),
-                   ("Saturday, if needed", NEXT_SATURDAY)]
+    return [("Today", NEXT_TODAY), ("Every Tuesday", NEXT_TUESDAY),
+            ("Saturday, if needed", NEXT_SATURDAY)]
 
 
 # A seat link is one long unbroken string; unwrapped, it pushed the email
@@ -362,10 +362,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                    *([sender] if sender else [])]
     text = "\n".join(text_lines) + "\n"
 
-    # A buyer's first report goes out the day they pay (run/intake.py), so
-    # their subject says it is on its way; a seat's first one is the next
-    # Tuesday run.
-    subject = ("Your seat is in — first report lands Tuesday morning"
+    # A first report goes out the day they pay or claim (run/intake.py; a
+    # seat since LP-I4), so both subjects say it is on its way.
+    subject = ("Your seat is in — your first report is on its way"
                if seat else
                "You're in — your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,

@@ -460,3 +460,27 @@ def test_the_product_is_a_report_never_a_file_on_any_surface() -> None:
             hits = [m.group(0) for m in pattern.finditer(page)
                     if "on file" not in page[max(0, m.start() - 5):m.end() + 8]]
             assert not hits, f"{name} calls the product a file: {hits}"
+
+
+def test_a_seats_roster_report_gives_its_stop_route_not_a_billing_page(monkeypatch) -> None:
+    """A League Pass seat claimed outside the Tuesday-to-kickoff window gets
+    the roster report as its first email (LP-I4), and the intake passes
+    seat=True. Before render.preseason accepted it the call raised TypeError —
+    caught per signup as FIRST FILE FAILED, so a seat got nothing — and the
+    footer would have pointed someone who pays nothing at a billing page (C4).
+    A paying buyer's roster report still carries the billing route."""
+    from render.preseason import email_html, preseason_message, text_summary
+
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/test")
+    report = _report()
+    seat = preseason_message("seat@example.com", "abcdef0123", report, seat=True)
+    assert seat.unsubscribe.startswith("mailto:") and "subject=stop" in seat.unsubscribe
+    for body in (seat.html, seat.text):
+        assert "within 10 business days" in body
+        assert "billing" not in body.lower()
+    assert "seat" not in report["meta"], "the caller's report was mutated"
+    paid = preseason_message("fan@example.com", "abcdef0123", report)
+    assert paid.unsubscribe == "https://billing.stripe.com/p/test"
+    assert "billing.stripe.com/p/test" in paid.html
+    assert "billing.stripe.com/p/test" in paid.text
+    assert "within 10 business days" not in email_html(report) + text_summary(report)
