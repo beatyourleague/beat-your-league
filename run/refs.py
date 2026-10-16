@@ -29,6 +29,7 @@ can attribute), so it must be exhaustively testable without a network.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import re
 from dataclasses import dataclass
 
@@ -184,11 +185,15 @@ ROSTER_MARKER_V3 = "3"
 # truncated ref fails loudly instead of decoding as a shorter roster.
 # The lineup shapes added with v4 (engine.subscriber.LINEUP_SHAPES) need no new
 # field: the slots have always been carried one letter each. v2 and v3 still
-# decode exactly as before, and never carry a tag — the page that issued them
-# never appended one, so nothing is ever stripped from them.
+# decode exactly as before. The page only ever appends a tag to a v4 ref, but
+# the tag is read by ONE rule for every version — run/intake.split_via's: a
+# trailing "_via-<tag>" comes off only when what is left is a whole, readable
+# roster ref. For v4 the count makes that exact; a v3 has no count, which is
+# why the page no longer issues one.
 ROSTER_MARKER_V4 = "4"
 VIA_SEPARATOR = "_via-"
 VIA_RE = re.compile(r"^[a-z0-9-]{1,24}$")
+_VIA_TAIL = re.compile(r"^(?P<ref>.+)_via-(?P<via>[a-z0-9-]{1,24})$")
 _V4_SETTINGS_RE = re.compile(r"^([a-z])([a-z])([A-Z]+)(\d{2})$")
 
 # One char, at a FIXED position (settings[1]), so slots stay unambiguous:
@@ -337,25 +342,29 @@ def with_via(ref: str, via: str | None) -> str:
 
 def split_via(ref: str) -> tuple[str, str | None]:
     """(the ref without its source tag, the tag or None). Contract C5: every
-    decoder strips the tag before decoding, and this is the one place that
-    knows where it starts — after exactly 4 characters a player, as the v4
-    count says, never wherever "_via-" happens to occur. A v2/v3 ref, or
-    anything this cannot read, comes back whole with None; decode_roster is
-    where an unreadable ref is refused."""
+    decoder strips the tag before decoding, by the rule run/intake.split_via
+    applies — the tail comes off only when the remainder is a whole, readable
+    roster ref — so the page, the intake and every decoder read one ref one
+    way (tests/test_intake.py pins the two Python copies to each other and to
+    the browser's). A v4 remainder is readable only when its payload is
+    exactly the count's 4 characters a player, so a roster whose own base64url
+    happens to end "_via-..." is never cut short. Anything this cannot read
+    comes back whole with None; decode_roster is where it is refused.
+
+    "Readable" is decode_roster's own answer, tag and all, exactly as the
+    intake asks it — so a ref somebody tagged twice by hand splits at the
+    LAST tag in every copy, never at the last in one and not at all in
+    another."""
     if not isinstance(ref, str):
         return ref, None
-    parts = ref.split("-", 2)
-    if (len(parts) != 3 or len(parts[0]) != 2
-            or parts[0][1] != ROSTER_MARKER_V4):
+    match = _VIA_TAIL.match(ref)
+    if not match or not is_roster_ref(match.group("ref")):
         return ref, None
-    match = _V4_SETTINGS_RE.match(parts[1])
-    if not match:
+    try:
+        decode_roster(match.group("ref"))
+    except RefError:
         return ref, None
-    size = 4 * int(match.group(4))
-    tail = parts[2][size:]
-    if tail.startswith(VIA_SEPARATOR) and VIA_RE.match(tail[len(VIA_SEPARATOR):]):
-        return ref[:len(ref) - len(tail)], tail[len(VIA_SEPARATOR):]
-    return ref, None
+    return match.group("ref"), match.group("via")
 
 
 def is_roster_ref(ref: str) -> bool:
@@ -373,8 +382,13 @@ def decode_roster(ref: str) -> RosterRef:
     """
     if not isinstance(ref, str) or not STRIPE_REF_RE.match(ref):
         raise RefError(f"not a Stripe-safe reference: {ref!r}")
-    whole = ref
-    ref, via = split_via(ref)
+    core, via = split_via(ref)
+    return dataclasses.replace(_decode_core(core), via=via)
+
+
+def _decode_core(ref: str) -> RosterRef:
+    """A roster ref with no source tag on it -> the roster. Raises on anything
+    it cannot read with certainty."""
     # maxsplit: the payload is base64url and legitimately contains "-".
     parts = ref.split("-", 2)
     if len(parts) != 3:
@@ -402,7 +416,7 @@ def decode_roster(ref: str) -> RosterRef:
             # Anything after the counted payload that is not a well-formed tag
             # (split_via took that off already) — or a payload cut short — is
             # a ref we cannot read with certainty. Never a shorter roster.
-            raise RefError(f"the roster in {whole!r} is not the {count} "
+            raise RefError(f"the roster in {ref!r} is not the {count} "
                            f"players its count says")
     elif version == ROSTER_MARKER_V3:
         if len(settings) < 2 or settings[1] not in SIZES:
@@ -436,5 +450,4 @@ def decode_roster(ref: str) -> RosterRef:
         slots=tuple(SLOTS[c] for c in slot_codes),
         player_ids=ids,
         league_size=league_size,
-        via=via,
     )

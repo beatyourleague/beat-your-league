@@ -512,6 +512,7 @@ const SIZE_CODE = { 8: "a", 10: "b", 12: "c", 14: "d" };
 // and "-"). Mirrors run/refs.py ROSTER_MARKER_V4 / split_via.
 const VIA_SEPARATOR = "_via-";
 const VIA_RE = /^[a-z0-9-]{1,24}$/;
+const VIA_TAIL = /^(.+)_via-([a-z0-9-]{1,24})$/;
 const V4_SETTINGS = /^([a-z])([a-z])([A-Z]+)(\d{2})$/;
 
 function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
@@ -552,20 +553,22 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
   return ref;
 }
 
-// (the ref without its source tag, the tag or null) — contract C5. The tag
-// starts after exactly 4 characters a player, as the v4 count says; a v2/v3
-// ref never carried one and comes back whole. Mirrors run/refs.py split_via.
+// (the ref without its source tag, the tag or null) — contract C5, by the one
+// rule run/intake.split_via and run/refs.split_via apply: the tail comes off
+// only when what is left is a whole, readable roster ref (for v4, exactly the
+// count's 4 characters a player) — readable by decodeRoster itself, tag and
+// all, so a ref tagged twice by hand splits at its last tag here too. Mirrors
+// run/refs.py split_via.
 function splitVia(ref) {
   if (typeof ref !== "string") return [ref, null];
-  const parts = splitRef(ref);
-  if (!parts || parts[0].length !== 2 || parts[0][1] !== "4") return [ref, null];
-  const m = V4_SETTINGS.exec(parts[1]);
-  if (!m) return [ref, null];
-  const tail = parts[2].slice(4 * Number(m[4]));
-  if (tail.startsWith(VIA_SEPARATOR) && VIA_RE.test(tail.slice(VIA_SEPARATOR.length))) {
-    return [ref.slice(0, ref.length - tail.length), tail.slice(VIA_SEPARATOR.length)];
+  const m = VIA_TAIL.exec(ref);
+  if (!m || !/^[a-z][234]-/.test(m[1])) return [ref, null];
+  try {
+    decodeRoster(m[1]);
+  } catch (err) {
+    return [ref, null];
   }
-  return [ref, null];
+  return [m[1], m[2]];
 }
 
 // ``ref`` with "_via-<tag>" appended, or unchanged: an unusable tag is
@@ -616,6 +619,11 @@ function unpackOne(value) {
 function decodeRoster(ref) {
   if (typeof ref !== "string" || !REF_RE.test(ref)) throw new Error("not a Stripe-safe reference");
   const [core, via] = splitVia(ref);
+  return Object.assign(decodeCore(core), { via });
+}
+
+// A roster ref with no source tag on it -> the roster. Mirrors _decode_core.
+function decodeCore(core) {
   const parts = splitRef(core);
   if (!parts) throw new Error("expected 3 fields");
   const [head, settings, packed] = parts;
@@ -650,7 +658,7 @@ function decodeRoster(ref) {
   if (new Set(playerIds).size !== playerIds.length) throw new Error("the same player appears twice");
   if (n < slotCodes.length) throw new Error("more starting slots than players");
   return { plan, scoring, slots: [...slotCodes].map((c) => slotNames[c]), playerIds,
-           leagueSize, via };
+           leagueSize, via: null };
 }
 
 // ---------------------------------------------------------------- //

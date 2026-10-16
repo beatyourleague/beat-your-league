@@ -3691,7 +3691,9 @@ def test_the_renewal_date_is_stated_and_computed_from_today() -> None:
                 "\nconsole.log(JSON.stringify([new Date(2026, 9, 15), new Date(2028, 1, 29),"
                 " new Date(2026, 11, 31)].map(renewsOn)));")
     assert got == ["Oct 15, 2027", "Feb 28, 2029", "Dec 31, 2027"]
-    assert 'unless you cancel — bought today, on " + renewsOn(new Date())' in prose(JOIN)
+    # "bought today, on Oct 15, 2027" read as a purchase date a year away.
+    assert 'unless you cancel — bought today, it renews on " + renewsOn(new Date())' in prose(JOIN)
+    assert '" — bought today, it renews on " + renewsOn(new Date())' in JOIN
     assert JOIN.count('<span class="renews-on"></span>') == 2
 
 

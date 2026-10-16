@@ -194,7 +194,13 @@ def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict
     report is returned untouched (the same object), so nothing it prints
     moves. The week-1 promise that "the number on each call starts in Week 4"
     is not true of a shape whose number waits on its grade, so that sentence
-    says what is."""
+    says what is.
+
+    The game plan is the one place a number is already WORDS when this runs:
+    a benched starter-calibre player paired with the call that sits him reads
+    "Start X over Y at WR · 64%" (engine/solo_report.py). That line becomes
+    the plain one the same builder writes when no call is paired — "Bench Y
+    — X starts at WR" — so the decision stays and only the number goes."""
     shape = shape_for_slots(slots)
     if shape is not None and shape.graded:
         return report
@@ -209,6 +215,11 @@ def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict
     for item in report.get("checklist") or []:
         action = item.get("action")
         if isinstance(action, str):
+            action = _PAIRED_CALL.sub(r"Bench \g<over> — \g<start> starts at \g<slot>",
+                                      action)
+            # Any other " · 64%" a later line format carries goes too: in
+            # this shape no sentence may hold a number nobody graded.
+            action = _TRAILING_PERCENT.sub("", action)
             item["action"] = _WEEK_FOUR_PROMISE.sub(
                 "the number on each call starts once this lineup shape is "
                 "graded.", action)
@@ -218,6 +229,10 @@ def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict
 
 
 _WEEK_FOUR_PROMISE = re.compile(r"the number on each call starts in Week 4[^.]*\.")
+# engine/solo_report.py's paired game-plan line, exactly as it is built.
+_PAIRED_CALL = re.compile(
+    r"^Start (?P<start>.+?) over (?P<over>.+) at (?P<slot>\S+) · \d{1,3}%$")
+_TRAILING_PERCENT = re.compile(r" · \d{1,3}%(?=$|[ .,;)])")
 
 
 @dataclass(frozen=True)

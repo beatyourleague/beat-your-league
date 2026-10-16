@@ -11,6 +11,8 @@ projections, plans and Saturday check all still work.
 from __future__ import annotations
 
 import copy
+import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -108,6 +110,37 @@ def test_an_ungraded_shape_prints_no_number_and_says_why() -> None:
     assert extract_published_calls(out) == []
 
 
+def test_the_game_plan_keeps_its_decision_and_loses_its_number() -> None:
+    """Reproduction (Oct 16 2026): the withholding cleared every row and the
+    closest call, and left the game plan alone — where a benched starter-
+    calibre player paired with the call that sits him is written as words,
+    "Start Rome Odunze over Saquon Barkley at FLEX · 64%". A two-FLEX
+    subscriber would have read a percentage no arm graded in the first line
+    of their report. The line becomes the one engine/solo_report.py writes
+    when no call is paired; nothing else in the plan moves. Mutation-checked:
+    dropping the rewrite fails the first assertion."""
+    report = _report()
+    report["checklist"] = [
+        {"action": "Start Rome Odunze over Saquon Barkley at FLEX · 64%",
+         "detail": "Saquon Barkley: RB3 last season. Projects 9.1, Rome Odunze 10.4."},
+        {"action": "Start Josh Allen over Lamar Jackson at SUPER_FLEX · 7%"},
+        {"action": "Watch Chase Brown · 58%"},
+        {"action": "Bench Amon-Ra St. Brown — he can't play this week"},
+    ]
+    before = copy.deepcopy(report["checklist"])
+    out = withhold_ungraded_odds(report, LINEUP_SHAPES["flex2"].slots)
+    actions = [item["action"] for item in out["checklist"]]
+    assert actions == ["Bench Saquon Barkley — Rome Odunze starts at FLEX",
+                       "Bench Lamar Jackson — Josh Allen starts at SUPER_FLEX",
+                       "Watch Chase Brown",
+                       "Bench Amon-Ra St. Brown — he can't play this week"]
+    assert out["checklist"][0]["detail"] == before[0]["detail"]
+    # A graded shape's plan keeps its number.
+    graded = _report()
+    graded["checklist"] = copy.deepcopy(before)
+    assert withhold_ungraded_odds(graded, T1)["checklist"] == before
+
+
 @pytest.mark.parametrize("code", sorted(GRADED_SHAPES))
 def test_a_graded_shape_is_left_exactly_as_built(code) -> None:
     """The withholding may only ever REMOVE from ungraded shapes: a graded
@@ -179,6 +212,8 @@ def test_report_for_withholds_every_number_in_an_ungraded_shape(week6) -> None:
         assert projections, code
         assert report["checklist"], code
         assert [row["slot"] for row in report["lineup"]] == list(LINEUP_SHAPES[code].slots)
+        # Nowhere in what the renderers read — row, plan, closest call.
+        assert not re.search(r"\d%", json.dumps(report)), code
 
 
 def test_the_saturday_check_works_on_an_ungraded_shape(week6) -> None:

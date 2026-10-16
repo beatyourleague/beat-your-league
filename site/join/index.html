@@ -398,9 +398,11 @@ Baltimore Ravens
       <b id="done-head">You're all set.</b>
       <ol>
         <li id="seat-note" style="display:none">There's nothing for you to pay — the
-        seat comes out of your league's League Pass, so your first report lands
-        the Tuesday after the pass goes through. You get your <b>own</b> report,
-        built from the roster you just entered.</li>
+        seat comes out of your league's League Pass, and you get your <b>own</b>
+        report, built from the roster you just entered. Your first report lands
+        the day the seat is matched to the pass — this week's report if the week's
+        games haven't started, otherwise your roster report — then a new one every
+        Tuesday. If it can't be matched to a League Pass, we email you to say so.</li>
         <li id="update-note" style="display:none">We've emailed a button to confirm
         the change — press it and your next report, and Saturday's final check, use
         this roster. It only goes to the address your reports go to, and nothing
@@ -453,7 +455,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=18f6e90bc2"></script>
+<script src="roster.js?v=e2a9d110b7"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -1281,7 +1283,7 @@ function firstReportTiming(w, now) {
 function firstChipText() {
   if (FIRST && FIRST.when === "before") return "This week's report today";
   if (FIRST && FIRST.when === "after") return "Weekly reports from " + FIRST.tuesday;
-  return "A report the day you join";
+  return SEAT_MODE ? "A report the day it's matched" : "A report the day you join";
 }
 function setChips(list) {
   $("header-chips").replaceChildren();
@@ -1322,7 +1324,7 @@ function renewsOn(now) {
 }
 function fillRenewalDates() {
   document.querySelectorAll(".renews-on").forEach((span) => {
-    span.textContent = " — bought today, on " + renewsOn(new Date());
+    span.textContent = " — bought today, it renews on " + renewsOn(new Date());
   });
 }
 
@@ -1499,8 +1501,10 @@ if (TRY_MODE) {
     "Your league has a League Pass, so your seat is already paid for. Enter your " +
     "own roster and you get your own report — not a copy of anyone else's. " +
     "Nothing to pay.";
-  setChips(["Seat already paid — League Pass", "Your own report",
-            "First report next Tuesday"]);
+  // A matched seat is sent its first report the day it is claimed, by the
+  // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
+  // promise before seats had a first email.
+  setChips(["Seat already paid — League Pass", "Your own report", FIRST_CHIP]);
   $("submit").textContent = "Claim my seat — already paid";
   nothingToPay("3 · Claim");
   $("lbl-email").textContent = "Your email — your reports go here";
@@ -1538,7 +1542,7 @@ if (TRY_MODE) {
   // actually renews — the season-pass sentence would be a wrong disclosure —
   // and the day it does (LP-I11), so a commissioner can budget the dues.
   const passTerms = "The League Pass is $99 and renews once a year at $99 " +
-    "unless you cancel — bought today, on " + renewsOn(new Date()) + ". We email " +
+    "unless you cancel — bought today, it renews on " + renewsOn(new Date()) + ". We email " +
     "you before it bills, and you cancel yourself any time from your own billing " +
     "page. Refunds are no-questions until your second weekly report's week kicks " +
     "off — one per league.";
@@ -1633,11 +1637,12 @@ if (RESTORED) {
 drawShapeNote();
 fillRenewalDates();
 
-// When the first report lands — see firstReportTiming. Only for a purchase:
-// a seat, an update and a free report each say their own timing.
+// When the first report lands — see firstReportTiming. For a purchase and a
+// seat (whose first email follows the same rules, LP-I4); an update and a
+// free report each say their own timing.
 (function () {
   try {
-    if (SEAT_MODE || UPDATE_MODE || TRY_MODE || !window.fetch) return;
+    if (UPDATE_MODE || TRY_MODE || !window.fetch) return;
     fetch("../week.json", { cache: "no-cache",
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))

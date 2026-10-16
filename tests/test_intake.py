@@ -834,21 +834,24 @@ def test_the_tag_can_never_be_read_off_the_roster_itself() -> None:
     end, wherever it appears, would silently drop the subscriber's last
     players. Built here: the last two players pack to "_via" and "-abc". With
     the count the payload's end is known, so both languages read no tag and
-    the whole roster; a v3 ref is never stripped at all."""
+    the whole roster. A v3 ref has no count, so the same payload under v3 is
+    cut by the intake's rule — every decoder agrees with it, which is exactly
+    why the page issues v4 and never tags a v3."""
     import base64
+    from run.intake import split_via as intake_split
     from run.refs import _pack_one, decode_roster, split_via
     tail = base64.urlsafe_b64decode("_via-abc")
     blob = b"".join(_pack_one(pid).to_bytes(3, "big") for pid in ROSTER[:9]) + tail
     packed = base64.urlsafe_b64encode(blob).decode().rstrip("=")
     assert packed.endswith("_via-abc")
     ref = "s4-pcQRRWWTFKD11-" + packed
-    assert split_via(ref) == (ref, None)
+    assert split_via(ref) == (ref, None) == intake_split(ref)
     back = decode_roster(ref)
     assert back.via is None and len(back.player_ids) == 11
     js = run_js(f"console.log(JSON.stringify(R.decodeRoster({json.dumps(ref)})))")
     assert js["via"] is None and len(js["playerIds"]) == 11
     v3 = "s3-pcQRRWWTFKD-" + packed
-    assert split_via(v3) == (v3, None) and len(decode_roster(v3).player_ids) == 11
+    assert split_via(v3) == intake_split(v3) == (v3[:-len("_via-abc")], "abc")
 
 
 def test_a_bad_tag_is_dropped_never_refused_and_a_bad_tail_is_refused() -> None:
@@ -888,3 +891,81 @@ def test_older_refs_still_decode_in_both_languages() -> None:
         assert (back.player_ids, back.league_size, back.via) == (tuple(ROSTER), size, None)
         js = run_js(f"console.log(JSON.stringify(R.decodeRoster({json.dumps(ref)})))")
         assert (tuple(js["playerIds"]), js["leagueSize"], js["via"]) == (tuple(ROSTER), size, None)
+
+
+def test_every_decoder_strips_a_tag_exactly_as_the_intake_does() -> None:
+    """Contract C5 addendum: run/intake.split_via strips "_via-<tag>" before a
+    payment's ref is stored or decoded, taking the suffix only when what is
+    left still decodes. run/refs.split_via (which decode_roster calls, so the
+    registry, the waitlist and every Tuesday read agree) and the browser's
+    R.splitVia (the ?ref= restore) apply that one rule, pinned here over refs
+    the page issues and refs it never would. Mutation-checked: dropping the
+    remainder-decodes test from either Python copy, or the count check from
+    a v4 decode, fails this."""
+    from run.intake import split_via as intake_split
+    from run.refs import encode_roster, split_via
+    refs = []
+    for code, shape in _shapes().items():
+        ids = ROSTER[: max(len(shape.slots), 10)]
+        plain = encode_roster("season", "ppr", shape.slots, ids)
+        refs += [plain, plain + "_via-reddit", plain + "_via-x-post"]
+    plain = refs[0]
+    v3 = _as_v3(plain)
+    refs += [v3, v3 + "_via-reddit", plain + "_via-", plain + "_via-UP",
+             plain + "_via-" + "a" * 25, plain[:-4] + "_via-reddit",
+             plain + "AAAA_via-reddit", "s3-zz_via-x", "nonsense_via-x", "",
+             # Tagged twice by hand: every copy splits at the LAST tag.
+             plain + "_via-reddit_via-x", v3 + "_via-a_via-b"]
+    want = [intake_split(ref) for ref in refs]
+    assert [split_via(ref) for ref in refs] == want
+    got = run_js(f"console.log(JSON.stringify({json.dumps(refs)}.map((r) => R.splitVia(r))))")
+    assert [tuple(pair) for pair in got] == [tuple(pair) for pair in want]
+    # And they say something: tags come off v4 refs, junk is left for the
+    # decoder to refuse.
+    assert split_via(plain + "_via-reddit") == (plain, "reddit")
+    assert split_via(plain + "_via-UP") == (plain + "_via-UP", None)
+    assert split_via(plain[:-4] + "_via-reddit")[1] is None
+    assert split_via(plain + "_via-reddit_via-x") == (plain + "_via-reddit", "x")
+
+
+def test_every_seat_link_the_intake_builds_prefills_the_join_page() -> None:
+    """Contract C4 + C8 across the language boundary: run/updates.seat_url
+    writes s/n/t from a pass payer's own setup, and the join page applies
+    them only when they are values it offers (a radio value, or a code
+    R.shapeFromCode knows) — anything else is silently left for the leaguemate
+    to pick. So a shape the intake can name but the page cannot read would
+    send eleven leaguemates a link that quietly drops their lineup. Every
+    shape, every scoring rule, every size: the link's values round-trip to the
+    same slots in the browser."""
+    import re
+    from types import SimpleNamespace
+    from urllib.parse import parse_qs, urlsplit
+    from run.trial import TEMPLATES
+    from run.updates import seat_url
+    join = JS.with_name("index.html").read_text(encoding="utf-8")
+
+    def offered(name: str) -> set[str]:
+        return set(re.findall(rf'name="{name}" value="([^"]+)"', join))
+
+    assert set(TEMPLATES) == set(_shapes()), "a shape the seat link cannot name"
+    links = []
+    for code, slots in TEMPLATES.items():
+        for scoring in ("ppr", "half_ppr", "standard"):
+            for size in (8, 10, 12, 14):
+                roster = SimpleNamespace(scoring=scoring, league_size=size, slots=slots)
+                url = seat_url("https://beatyourleague.test", "s3cret", "payer@example.com",
+                               roster)
+                query = {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
+                assert query["s"] in offered("scoring") and query["n"] in offered("size")
+                assert re.fullmatch(r"[0-9a-f]{20}", query["pass"])
+                links.append((query["t"], list(slots)))
+    got = run_js(
+        f"console.log(JSON.stringify({json.dumps(links)}.map(([t]) => {{"
+        f" const s = R.shapeFromCode(t); return s && [s.base, s.kicker, s.defense,"
+        f" R.shapeSlots(s.base, s.kicker, s.defense)]; }})))")
+    for (code, slots), shape in zip(links, got):
+        assert shape is not None, code
+        base, kicker, defense, back = shape
+        assert back == slots, code
+        assert base in offered("template"), code
+        assert {"yes", "no"} <= offered("kicker") and {"yes", "no"} <= offered("defense")
