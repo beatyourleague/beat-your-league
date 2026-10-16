@@ -868,19 +868,26 @@ def test_the_privacy_policy_stands_on_its_own() -> None:
 
 
 def test_the_privacy_policy_does_not_claim_more_privacy_than_we_deliver() -> None:
-    """The no-cookies claim is only honest while it is true, and the pages DO
-    reach one third party: Google Fonts sees a visitor's IP. Saying "no
-    trackers" while silently loading a Google stylesheet is the kind of small
-    untruth that discredits the whole page, so the policy names it."""
+    """The no-cookies claim is only honest while it is true. The pages used to
+    reach one third party — Google Fonts saw every visitor's IP — and the
+    policy had to say so. Contract C7 self-hosts the type (site/fonts), and the
+    policy now makes the stronger claim: loading a page makes no request to
+    any third party. That claim is only true while NO page under site/ links
+    a font CDN, so every page is swept, the generated ones included (a stale
+    sample still carrying the old <link> would falsify it)."""
     pages = [p for p in SITE.rglob("*.html")]
-    fonts = [p for p in pages
-             if "fonts.googleapis.com" in p.read_text(encoding="utf-8")]
+    cdn = re.compile(r"fonts\.googleapis\.com|fonts\.gstatic\.com|use\.typekit|fonts\.bunny")
+    still = sorted(str(p.relative_to(SITE)) for p in pages
+                   if cdn.search(p.read_text(encoding="utf-8")))
     whole = (SITE / "privacy.html").read_text(encoding="utf-8")
-    privacy = whole[whole.find("<body>"):]           # body only, same reason
-    if fonts:
-        assert re.search(r"google fonts", privacy, re.I), (
-            f"{len(fonts)} pages load Google Fonts and the privacy policy does "
-            f"not mention it, while claiming no trackers")
+    privacy = prose(whole[whole.find("<body>"):])    # body only, same reason
+    assert re.search(r"makes no request to any third party", privacy), \
+        "the policy must state the no-third-party claim the self-hosted type makes true"
+    assert not re.search(r"google fonts", privacy, re.I), \
+        "the policy still names a processor the site no longer uses"
+    assert not still, (
+        f"{len(still)} page(s) still load type from a font CDN while the privacy "
+        f"policy says no page makes a third-party request: {', '.join(still)}")
     for page in pages:
         text = page.read_text(encoding="utf-8")
         for tracker in ("googletagmanager", "google-analytics", "gtag(",
@@ -2801,8 +2808,16 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     assert "@media (max-width:430px)" in LANDING, "the hero card's narrow treatment is gone"
     compact = LANDING.split("@media (max-width:430px)")[1].split("\n  }")[0]
     assert ".frow{" in compact, "the hero card's columns no longer tighten on a phone"
-    assert ".fname{white-space:normal" in compact, \
-        "names truncate again on a phone — the one card whose job is to be believed"
+    # Launch review D5, measured in Chrome: the wrap rule lived only in that
+    # 430px block, so from 431px to 880px — where the phone is 286px wide —
+    # "Amon-Ra St. Brown" truncated to "Amon-Ra St. …" (scrollWidth 117 >
+    # clientWidth 94). The phone's name column is narrow at EVERY viewport, so
+    # the rule is a base rule now, outside every media query.
+    style = LANDING.split("<style>")[1].split("</style>")[0]
+    base = re.sub(r"@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}", "", style)
+    assert re.search(r"\.screen \.fname\{white-space:normal;overflow:visible", base), \
+        "names truncate again inside the phone at some width — the one card " \
+        "whose job is to be believed"
 
     # Grid children must be allowed to shrink, or nowrap text forces the row
     # wider than the viewport again.
@@ -3108,8 +3123,10 @@ def test_the_join_page_loads_the_roster_parser_it_was_tested_with() -> None:
 def test_the_live_sample_says_what_it_is_and_the_cron_keeps_it_fresh() -> None:
     """site/this-week.html is this week's report for the sample roster, so the
     site shows the product running now rather than only a 2024 replay. It must
-    say what it is, carry no internal slot code, record nothing, and be
-    rebuilt and committed by the weekly cron."""
+    say what it is, carry no internal slot code, and be rebuilt and committed
+    by the weekly cron. Its odds are published, so they are recorded on the
+    public record before kickoff like any other published probability (G04,
+    principle 2) — it is a sample, never a subscriber."""
     page = (SITE / "this-week.html").read_text(encoding="utf-8")
     assert "THIS WEEK'S REPORT" in page and "sample roster" in page
     assert "SUPER_FLEX" not in page and "Reply to this email" not in page
@@ -3340,7 +3357,14 @@ def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
     for name, page in pages.items():
         assert 'a.setAttribute("href", carryVia(a.getAttribute("href"), VIA))' in page, \
             f"{name} defines carryVia but never applies it"
-        assert not re.search(r"localStorage|sessionStorage|document\.cookie", page), \
+        # One exception, and it is not the tag: the join page may keep a League
+        # Pass buyer's own address in that tab's session storage under ONE key,
+        # for thanks.html to prefill the group-chat line (LP-I9). It never
+        # leaves the browser and thanks.html deletes it once read.
+        kept = re.sub(r'sessionStorage\.(?:setItem|getItem|removeItem)\(\s*'
+                      r'(?:PAID_EMAIL_KEY|["\']byl_paid_email["\'])', "", page) \
+            if name == "join" else page
+        assert not re.search(r"localStorage|sessionStorage|document\.cookie", kept), \
             f"{name} stores something in the browser"
     # The landing and league-pass write hrefs in script (the open state's
     # CTAs, the Buy button): the tag is applied AFTER the last of them.
@@ -3575,3 +3599,529 @@ def test_the_pass_buyers_thank_you_states_the_pass_refund_limit() -> None:
     assert '<span id="refund-limit">one per person</span>' in THANKS
     branch = _js_code(THANKS).split('get("plan") === "pass") {')[1]
     assert 'getElementById("refund-limit").textContent = "one per league"' in branch
+
+
+# --------------------------------------------------------------------- #
+# world-class round 2 (Oct 15 2026) — the site: self-hosted type (C7), the
+# hero (D3-D6), positioning (GTM-5, SS-I6, I8), the live-week links (PC-01),
+# the copy (PC-03, PC-10, PE-11, BE-D4), legal (L6, L7), League Pass (LP-D7,
+# LP-I5, LP-I6, LP-I8, LP-I9) and the site furniture (I4, I5, I12, I14)
+# --------------------------------------------------------------------- #
+
+FONTS = SITE / "fonts"
+FONTS_CSS = (FONTS / "fonts.css").read_text(encoding="utf-8")
+LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
+TERMS = (SITE / "terms.html").read_text(encoding="utf-8")
+PRIVACY = (SITE / "privacy.html").read_text(encoding="utf-8")
+# The hand-written pages; the generated ones are checked through their
+# generators below.
+_STATIC = ("index.html", "how-it-works.html", "league-pass.html", "thanks.html",
+           "terms.html", "privacy.html", "404.html", "legal.html", "compare/index.html",
+           "confidence.html", "projections.html", "no-call.html")
+_PAPER = ("how-it-works.html", "terms.html", "privacy.html", "thanks.html", "404.html")
+
+
+def _font_faces(css: str) -> list[dict[str, str]]:
+    faces = []
+    for block in re.findall(r"@font-face\s*\{([^}]*)\}", css):
+        def get(key: str, block: str = block) -> str:
+            found = re.search(rf"{key}\s*:\s*([^;]+)", block)
+            return found.group(1).strip() if found else ""
+        faces.append({"family": get("font-family").strip("'\""), "weight": get("font-weight"),
+                      "style": get("font-style") or "normal", "src": get("src"),
+                      "block": block})
+    return faces
+
+
+def _style(page: str) -> str:
+    return "\n".join(re.findall(r"<style>(.*?)</style>", page, re.S))
+
+
+def test_the_type_is_self_hosted_with_every_face_a_page_sets() -> None:
+    """Contract C7 (launch review W1, W2, D2). Every page linked
+    fonts.googleapis.com as a render-blocking cross-origin stylesheet, and on a
+    slow phone the swap to Barlow moved the page by a quarter of a screen (CLS
+    join 0.43-0.54, sample 0.27, how-it-works 0.23-0.25, terms 0.24): Barlow
+    Condensed had no fallback at all and rendered in Times first.
+
+    Now: one same-origin fonts.css naming the eleven faces the site actually
+    sets (measured page by page in Chrome: Barlow 400-800, Barlow Condensed
+    600/700/800/900 and 800/900 italic), each a latin woff2 that exists, with
+    font-display:swap, under the OFL that ships beside them."""
+    real = [f for f in _font_faces(FONTS_CSS) if "url(" in f["src"]]
+    wanted = {("Barlow", w, "normal") for w in ("400", "500", "600", "700", "800")} | \
+        {("Barlow Condensed", w, "normal") for w in ("600", "700", "800", "900")} | \
+        {("Barlow Condensed", w, "italic") for w in ("800", "900")}
+    assert {(f["family"], f["weight"], f["style"]) for f in real} == wanted
+    for face in real:
+        name = re.search(r"url\(([^)]+\.woff2)\)", face["src"]).group(1)
+        data = (FONTS / name).read_bytes()
+        assert data[:4] == b"wOF2", f"{name} is not a woff2 file"
+        assert len(data) < 40_000, f"{name} is not a latin subset ({len(data)} bytes)"
+        assert "font-display:swap" in face["block"].replace(" ", "")
+        assert "unicode-range" in face["block"], f"{name} claims glyphs it lacks"
+    licence = (FONTS / "OFL.txt").read_text(encoding="utf-8")
+    assert "SIL OPEN FONT LICENSE Version 1.1" in licence and "Barlow Project Authors" in licence
+
+
+def test_every_stack_falls_back_to_a_metric_matched_face_first() -> None:
+    """D2's cause was the fallback, not the font: Arial at a different width,
+    or Times for the condensed face, re-wrapped every line when Barlow landed.
+    Each fallback face is local Arial (or Arimo / Liberation Sans, which share
+    its metrics) scaled to Barlow's measured width per weight, with Barlow's
+    own ascent and descent, so nothing moves on swap. Measured in Chrome over
+    the site's own copy: every fallback lands within 0.02% of its face's width,
+    as written AND uppercased. That takes two faces per weight — Barlow's
+    capitals are narrower against Arial's than its lower case (0.86 against
+    0.96 at 400) — so each weight has a general face and a capitals face
+    (unicode-range A-Z, defined after it so it wins for its range). Tuned to
+    sentences alone, a sample's masthead chips (uppercase, 700) wrapped in the
+    fallback and unwrapped on swap: CLS 0.20 at 768px on Slow 4G. The faces
+    are named exactly as the report template's stacks name them (addendum a),
+    and every hand-written page uses those stacks."""
+    fallbacks = [f for f in _font_faces(FONTS_CSS) if "url(" not in f["src"]]
+    assert {f["family"] for f in fallbacks} == {"Barlow Fallback", "Barlow Condensed Fallback"}
+    slots: dict[tuple[str, str, str], list[str]] = {}
+    for face in fallbacks:
+        caps = "unicode-range:U+0041-005A" in face["block"].replace(" ", "")
+        slots.setdefault((face["family"], face["weight"], face["style"]), []).append(
+            "caps" if caps else "all")
+    assert all(kinds == ["all", "caps"] for kinds in slots.values()), \
+        f"every fallback weight needs a general face, then a capitals face: {slots}"
+    for face in fallbacks:
+        for descriptor in ("size-adjust", "ascent-override", "descent-override",
+                           "line-gap-override"):
+            assert descriptor in face["block"], f"{face['family']} {face['weight']}: no {descriptor}"
+        assert "local('Arial" in face["src"] and "local('Arimo" in face["src"]
+        size = float(re.search(r"size-adjust:([\d.]+)%", face["block"]).group(1))
+        ascent = float(re.search(r"ascent-override:([\d.]+)%", face["block"]).group(1))
+        descent = float(re.search(r"descent-override:([\d.]+)%", face["block"]).group(1))
+        # Barlow's own vertical metrics are 1.0 em up and 0.2 em down; an
+        # override is a share of the size-adjusted em.
+        assert abs(ascent * size / 100 - 100) < 0.1 and abs(descent * size / 100 - 20) < 0.1
+    template = (SITE.parent / "rival-report-template.html").read_text(encoding="utf-8")
+    for stack in ("--display:'Barlow Condensed','Barlow Condensed Fallback'",
+                  "--sans:'Barlow','Barlow Fallback'"):
+        assert stack in template, f"the report template no longer names {stack}"
+        for name in _STATIC:
+            assert stack in _style((SITE / name).read_text(encoding="utf-8")), name
+
+
+@pytest.mark.parametrize("name", _STATIC)
+def test_every_page_links_its_own_type_and_preloads_what_exists(name: str) -> None:
+    """C7: a relative fonts.css (root-absolute on 404.html, which is served at
+    any depth), a preload only for files that exist, and no font-family that
+    names Barlow without its fallback face (a bare 'Barlow Condensed' was the
+    Times flash)."""
+    page = (SITE / name).read_text(encoding="utf-8")
+    prefix = "/" if name == "404.html" else "../" * name.count("/")
+    assert f'<link rel="stylesheet" href="{prefix}fonts/fonts.css">' in page
+    preloads = re.findall(r'<link rel="preload" href="([^"]+)" as="font" '
+                          r'type="font/woff2" crossorigin>', page)
+    assert 1 <= len(preloads) <= 2, f"{name} preloads {len(preloads)} faces"
+    for href in preloads:
+        assert (FONTS / href.rsplit("/", 1)[1]).is_file() and href.startswith(prefix + "fonts/")
+    assert not re.search(r"font-family:\s*'Barlow", _style(page).split("--sans:", 1)[1]), \
+        f"{name} sets Barlow without its fallback stack"
+
+
+def test_the_generators_and_images_use_the_self_hosted_type() -> None:
+    """Addendum (b): the ledger and backtest generators, the og card and the
+    brand renderer still fetched Google Fonts. The two pages link the site's
+    own fonts.css (the ledger one level down); the two image renderers embed
+    the woff2 files, because Chrome refuses a file:// font in a file:// page
+    (and a missing file refuses rather than rendering in Arial); the report
+    template's preload helper reads the real fonts.css."""
+    from render import brand, og
+    from render.backtest_site import HEAD
+    from render.report import font_preloads
+    assert '<link rel="stylesheet" href="fonts/fonts.css">' in HEAD
+    assert '<link rel="stylesheet" href="../fonts/fonts.css">' in LEDGER
+    for source in ("render/backtest_site.py", "render/ledger_site.py", "render/og.py",
+                   "render/brand.py"):
+        assert "googleapis" not in (SITE.parent / source).read_text(encoding="utf-8"), source
+    card = og.build_html(LANDING)
+    assert card.count("src:url(data:font/woff2;base64,") == len(og.CARD_FACES)
+    assert "src:url(data:font/woff2;base64," in brand.logo_html()
+    with pytest.raises(og.OgError):
+        og.embedded_fonts(font_dir=SITE / "no-such-folder")
+    tags = font_preloads()
+    assert tags.count('rel="preload"') == 2 and "barlow-condensed-800.woff2" in tags \
+        and "barlow-400.woff2" in tags
+
+
+def test_the_hero_report_is_on_screen_from_the_first_frame() -> None:
+    """Launch review D3, reproduced at 1280x800 in Chrome: the script removed
+    .screen.opened before first paint, so the first frame showed the card's
+    header with an EMPTY body (rows held at opacity 0), then an inbox for two
+    seconds; the rows reached full opacity at ~2.6s — the page's proof arrived
+    last. The hero card is no longer an animated card, nothing in the CSS can
+    hide the open email, and the motion is additive: the notification drops in
+    over the open report."""
+    hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
+    card = re.search(r'<div class="([^"]*)" id="hero-card"', hero).group(1)
+    assert "anim" not in card.split(), "the hero card is held back until it animates"
+    css = _style(LANDING)
+    assert not re.search(r"\.screen[^{]*#hero-card[^{]*\{[^}]*opacity:\s*0", css)
+    assert ".opened" not in css and 'classList.remove("opened")' not in LANDING
+    arrive = _js_function(LANDING, "arrive")
+    assert 'notif.classList.add("go")' in arrive
+    for gone in ("heroCard", "mailrow", "play("):
+        assert gone not in arrive, f"the arrival sequence still drives {gone}"
+
+
+def test_the_status_bar_clears_the_island_at_every_phone_size() -> None:
+    """Launch review D4, measured in Chrome: a fixed 92px island on the 286px
+    phone (every viewport up to 880px) sat over the first signal bar — at 390px
+    the island spanned x 149-241 and the bar x 235.1-237.8. The island is a
+    share of the screen now, and the status bar is three columns with the
+    island's own width in the middle, so the icons sit in the right "ear"."""
+    css = _style(LANDING)
+    island = re.search(r"\.island\{([^}]*)\}", css).group(1)
+    width = re.search(r"width:(\d+)%", island)
+    assert width, "the island is sized in pixels again"
+    bar = re.search(r"\.statusbar\{([^}]*)\}", css).group(1)
+    assert f"grid-template-columns:1fr {width.group(1)}% 1fr" in bar
+    assert re.search(r"\.statusbar \.icons\{[^}]*grid-column:3", css)
+
+
+def test_reduced_motion_never_glides_the_page() -> None:
+    """Launch review D6: html{scroll-behavior:smooth} survived reduced motion,
+    and the sticky "Tell me when it opens" scrolled ~4,500px over most of a
+    second for a visitor who asked for none (measured at 390px). The
+    reduced-motion block turns it off, and the capture links scroll with
+    behavior "auto" under it."""
+    block = LANDING.split("@media (prefers-reduced-motion: reduce){\n")[1].split("\n  }")[0]
+    assert "html{scroll-behavior:auto;}" in block
+    assert 'behavior: reduced ? "auto" : "smooth"' in LANDING
+
+
+def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at() -> None:
+    """Panel review BE-I11: on a phone the tick label "TOSS-UP" sat right above
+    "70%" and read as one phrase. The tick's meaning is a legend line under the
+    figure, and the card says what the call IS (PC-03): the closest call that
+    carries odds on that roster, not a coin flip."""
+    assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
+    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
+    assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
+    note = prose(LANDING).split("The close one, called")[1][:300]
+    assert "The week's closest call on this roster, decided:" in note
+    assert "go back and forth" not in prose(LANDING)
+
+
+def test_the_comparison_is_the_tools_a_manager_already_has() -> None:
+    """GTM-5, SS-I6, I8: the page argued against "rankings", a straw man,
+    while the buyer's real alternatives are the optimizer in their league app
+    and a chatbot — and the rankings-vs-us grid (dashes against checks) read
+    as a stock SaaS section. Now three columns say what each tool does and
+    asks of you, facts only: no claim about anyone's results, and odds
+    promised only where both players are confirmed."""
+    page = prose(markup_only(LANDING))
+    assert "Why not just use rankings" not in page and 'class="versus"' not in LANDING
+    section = LANDING.split('<section class="cmpsec">')[1].split("</section>")[0]
+    heads = re.findall(r'<h3 class="cmphead"><span>([^<]+)</span></h3>', section)
+    assert heads == ["A lineup optimizer", "A chatbot", "Your report"]
+    for column in section.split('<div class="cmpcol')[1:]:
+        assert re.findall(r"<dt>([^<]+)</dt>", column) == ["When", "Close calls", "Late news"]
+    text = prose(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", section, flags=re.S)))
+    assert "wherever both players are confirmed to play" in text
+    for claim in (r"\bbetter\b", r"\bmore (?:often|wins|accurate)\b", r"\bwin(?:s|ning)?\b",
+                  r"\bwrong\b", r"\bbad\b", r"\bworse\b"):
+        assert not re.search(claim, text, re.I), f"the comparison makes a results claim: {claim}"
+    # The rankings argument is one line now, not a section, a card and an FAQ.
+    assert len(re.findall(r"\brankings\b", re.sub(r"<!--.*?-->", "", page), re.I)) == 1
+    assert "Already pay for a fantasy site?" in text
+
+
+def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
+    """I8: twelve questions read as a stock section; the three that compared
+    tools now live in the comparison, and the heading column is sticky beside
+    the answers on a wide screen."""
+    questions = re.findall(r"<summary>(.*?)</summary>", LANDING.split('<section id="faq">')[1])
+    assert 6 <= len(questions) <= 7, questions
+    assert re.search(r"@media \(min-width:881px\)\{\.faqgrid > div:first-child\{position:sticky",
+                     LANDING)
+
+
+def _live_week_gate(page: str) -> bool:
+    return "w.odds >= 3 && w.closest_call" in page and \
+        'querySelectorAll("[data-live-week]")' in page
+
+
+@pytest.mark.parametrize("name", ("index.html", "how-it-works.html", "404.html"))
+def test_every_link_to_the_live_report_waits_for_the_heros_rule(name: str) -> None:
+    """Launch review PC-01, PE-3, F3(3): the hero linked this-week.html only
+    in a week it showed at least three odds and a closest call, while the proof
+    cards' footer, How it works (its PRIMARY button and its body) and the 404
+    page linked it every week — including the bye-heavy one that once left it
+    with nothing to show. Every such link now sits in a `data-live-week`
+    element hidden until the same rule passes, and the pinned sample stands in
+    until then."""
+    page = (SITE / name).read_text(encoding="utf-8")
+    body = re.sub(r"<!--.*?-->", "", markup_only(page), flags=re.S)
+    links = [m.start() for m in re.finditer(r'href="/?this-week\.html"', body)]
+    assert links, f"{name} no longer links this week's report"
+    for at in links:
+        tag = body[body.rfind("<", 0, at):body.find(">", at) + 1]
+        span = body.rfind("<span", 0, at)
+        enclosing = body[span:at] if span >= 0 else ""
+        assert ("data-live-week" in tag and "hidden" in tag) or (
+            "data-live-week" in enclosing.split(">")[0] and "hidden" in enclosing.split(">")[0]
+            and "</span>" not in enclosing), f"{name}: an ungated link to this-week.html"
+    assert _live_week_gate(page), f"{name} never applies the three-odds rule"
+    assert re.search(r'href="/?sample-report\.html"', body), f"{name} lost its pinned fallback"
+
+
+def test_how_it_works_asks_for_the_one_action_it_leads_to() -> None:
+    """PE-3: How it works' primary button was "See this week's report" — the
+    hollow live sample on a bye-heavy week — on the page a skeptic reads last
+    before deciding. Its first CTA is setting up a team."""
+    cta = HOW.split('<div class="cta">')[1].split("</div>")[0]
+    first = re.search(r'<a([^>]*)href="([^"]+)"', cta)
+    assert first.group(2) == "join/index.html" and "ghost" not in first.group(1)
+    assert '<p class="headcta"><a class="btn" href="join/index.html">' in HOW
+
+
+def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() -> None:
+    """PC-10, PE-11: "scored your league's way, every number" and "the odds on
+    each one" overclaim a product that scores full PPR, half-PPR and standard
+    and prints odds only where both players are confirmed to play — a bye-heavy
+    week can carry few. Checked on every surface the review named: the hero,
+    the meta, og and JSON-LD descriptions, and the thank-you page."""
+    import json as _json
+    block = _json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>',
+                                  LANDING, re.S).group(1))
+    product = next(n for n in block["@graph"] if n["@type"] == "Product")
+    surfaces = {
+        "meta": re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1),
+        "og": re.search(r'property="og:description" content="([^"]+)"', LANDING).group(1),
+        "JSON-LD": product["description"],
+        "hero": prose(re.search(r'<p class="sub">(.*?)</p>', LANDING, re.S).group(1)),
+        "thanks": prose(markup_only(THANKS)),
+    }
+    for name, text in surfaces.items():
+        for overclaim in (r"your league's way", r"odds on (?:each one|every close call)",
+                          r"every close call decided and the odds"):
+            assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
+        assert "wherever both players are confirmed to play" in text, name
+    for name in ("meta", "og", "JSON-LD"):
+        assert "half-PPR or standard" in surfaces[name]
+
+
+def test_who_built_it_agrees_with_the_terms() -> None:
+    """Panel review BE-D4: the FAQ and its JSON-LD said "built by fantasy
+    players" while terms §15 and privacy §11 say "an independent solo
+    project". Anonymous, and singular."""
+    for page in (LANDING, HOW):
+        text = prose(page)
+        assert "built by fantasy players" not in text and "We built it because we" not in text
+        assert "one fantasy player built it" in text
+    assert "an independent solo project" in prose(TERMS)
+
+
+def test_the_terms_say_what_unsubscribing_does_on_each_kind_of_email() -> None:
+    """Launch audit L6: terms §4 said clicking "unsubscribe" at the bottom of an
+    email stops the emails. A paid report has no such link — its unsubscribe
+    (the footer link and List-Unsubscribe) opens the billing page, and after
+    cancelling the reports continue to the end of the paid period. Seats and
+    the free emails have a reply-stop route. The contract says exactly that."""
+    from render.report import unsubscribe_target
+    terms = _terms_body()
+    assert 'clicking "unsubscribe" at the bottom of an email stops the' not in terms
+    assert "Unsubscribing, on a paid report, is cancelling." in terms
+    assert re.search(r"continue to the end of the period you've already paid for, then "
+                     r"stop", terms)
+    assert re.search(r"Emails nobody pays for.{0,240}reply \"stop\"", terms)
+    assert "Your league's pass isn't affected" in terms
+    assert unsubscribe_target(seat=True).startswith("mailto:")
+
+
+def test_the_privacy_policy_names_an_accountable_role_and_true_storage() -> None:
+    """Launch audit L7: no accountable title, and GitHub's Actions cache called
+    "private storage" — true only once fork-PR approval or encryption is in
+    place, neither of which the policy can promise. Plus the records the ops
+    work added (addendum f): a waitlist row's roster code, the channel tag on
+    the Stripe customer, a seat claim's pass code, and the sample's recorded
+    odds. Anonymous: a role, never a name."""
+    privacy = _privacy_body()
+    assert "Privacy contact, Beat Your League:" in privacy
+    assert "private storage" not in privacy
+    assert "the storage that automation carries between runs" in privacy
+    section1 = privacy[privacy.find("1. What we collect"):privacy.find("2. What we never")]
+    assert re.search(r"waitlist.{0,260}short code standing for that roster", section1, re.S)
+    assert re.search(r"pass code in your league's own link", section1)
+    assert "the email the pass was bought with" in section1
+    stripe = privacy[privacy.find("Stripe handles payment"):][:600]
+    assert "channel tag" in stripe
+    assert "sample roster's report" in privacy
+    assert "commissioner" not in privacy
+
+
+def test_league_pass_copy_names_the_address_the_seat_page_asks_for() -> None:
+    """Panel review LP-D7: any manager may buy the pass, yet the copy told a
+    leaguemate to enter "your commissioner's email" — so a pass bought by a
+    regular manager sent their league to type the wrong address, and the
+    claim dropped. One phrase on every surface the site owns."""
+    for name, page in (("league-pass", LEAGUE_PASS), ("thanks", THANKS),
+                       ("terms", TERMS), ("privacy", PRIVACY)):
+        # Comments may quote the old wording to explain the fix; a reader
+        # never sees them.
+        text = prose(re.sub(r"<!--.*?-->", "", markup_only(page), flags=re.S))
+        assert "commissioner's email" not in text and "commissioner's pass" not in text, name
+    assert "the email the pass was bought with" in prose(LEAGUE_PASS)
+    assert "the email the pass was bought with" in prose(THANKS)
+
+
+def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
+    """Panel review LP-I5: a commissioner spending shared dues usually asks the
+    league first, and the only line on offer was "I got us the League Pass" —
+    false until paid. The ask is a question, true at any time, shareable at
+    once, and carries no seat link (that goes out only after payment)."""
+    ask = LEAGUE_PASS.split('<div class="steps ask">')[1].split("\n  </div>")[0]
+    line = prose(re.search(r'<p id="ask-text">(.*?)</p>', ask, re.S).group(1))
+    assert line.startswith("Should we put the League Pass")
+    assert "join/" not in ask and "I got us" not in ask
+    assert "league-pass.html" in line
+    assert 'id="ask-share"' in ask
+    assert LEAGUE_PASS.index('class="steps ask"') < LEAGUE_PASS.index("What you do after paying")
+
+
+def test_the_pass_share_is_one_tap_and_prefilled() -> None:
+    """Panel review LP-I6, LP-I9: the pass buyer's one job after paying was a
+    small Copy button, and they had to retype the email they gave the signup
+    page two minutes earlier. Now: one big button using the phone's share
+    sheet where there is one (a copy otherwise), on both pages, from ONE
+    function; and thanks.html prefills the address from the join page's
+    session-storage key, read once and deleted."""
+    assert _js_function(THANKS, "shareLine") == _js_function(LEAGUE_PASS, "shareLine")
+    share = _js_function(THANKS, "shareLine")
+    assert "navigator.share" in share and "navigator.clipboard.writeText" in share
+    assert 'err.name !== "AbortError"' in share, "a cancelled share sheet is not a failure"
+    assert 'const PAID_EMAIL_KEY = "byl_paid_email";' in THANKS
+    branch = _js_code(THANKS).split('get("plan") === "pass") {')[1]
+    assert "sessionStorage.getItem(PAID_EMAIL_KEY)" in branch
+    assert "sessionStorage.removeItem(PAID_EMAIL_KEY)" in branch
+    assert branch.index("try {") < branch.index("sessionStorage.getItem")
+    handler = branch.split('copy.addEventListener("click"')[1]
+    assert handler.index("if (!valid())") < handler.index("shareLine(")
+    assert 'class="sharebtn" id="pass-copy"' in THANKS
+    assert re.search(r"\.passnote \.sharebtn\{[^}]*min-height:(4[4-9]|[5-9]\d)px", THANKS)
+
+
+def test_league_pass_answers_the_commissioners_questions_twice_alike() -> None:
+    """Panel review LP-I8: no page answered late joiners, replaced managers,
+    co-managers, one person in two leagues, or what leaguemates' emails are
+    used for — and How it works never mentioned the pass. The FAQ answers with
+    what the code does (run/intake.py: one seat per address and pass, a
+    claimed seat's first email the same day; render.welcome.SEATS_END), and
+    its JSON-LD says the same words."""
+    import json as _json
+    from render.welcome import SEATS_END
+    block = re.search(r'<script type="application/ld\+json">(.*?)</script>', LEAGUE_PASS, re.S)
+    faq = _json.loads(block.group(1))
+    assert faq["@type"] == "FAQPage"
+    visible = {html.unescape(q): re.sub(r"\s+", " ", html.unescape(a)).strip()
+               for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>",
+                                      LEAGUE_PASS, re.S)}
+    assert {i["name"]: i["acceptedAnswer"]["text"] for i in faq["mainEntity"]} == visible
+    asked = " ".join(visible)
+    for topic in ("join late", "leaves or is replaced", "co-manage", "two leagues",
+                  "emails used for", "cancel or take a refund"):
+        assert topic in asked, topic
+    assert SEATS_END in visible["What happens to the seats if I cancel or take a refund?"]
+    assert 'href="league-pass.html"' in HOW
+
+
+def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
+    """Launch review I4: both cards said "Leave your email above" while, at
+    390px, the form sat ~3,000px above them. The prompt is a link to the form
+    now, and every #watch-form link puts the cursor in the field. The open
+    state's finance rewrite keeps the League Pass link by its href, because the
+    closed line's FIRST link is now the capture link it retires."""
+    for cta in ("monthly-cta", "season-cta"):
+        soon = re.search(rf'<div class="soon" id="{cta}">(.*?)</div>', LANDING).group(1)
+        assert '<a href="#watch-form" data-to-capture>' in soon and "above" not in soon
+    handler = LANDING.split('document.addEventListener("click"')[1].split("\n});")[0]
+    assert "closest('a[href=\"#watch-form\"]')" in handler
+    assert "field.focus({ preventScroll: true })" in handler
+    assert "form.hidden" in handler, "a hidden form must not swallow the click"
+    assert "finance.querySelector('a[href=\"league-pass.html\"]')" in LANDING
+
+
+@pytest.mark.parametrize("name", _PAPER + ("league-pass.html",))
+def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
+    """Launch review I5: only the landing had a nav; How it works, League
+    Pass, terms, privacy, thanks and 404 offered a Home pill alone, so a
+    visitor from a shared link had no route to pricing, a real report or
+    setup. The routes the samples' masthead carries (render.report._site_bar)."""
+    page = (SITE / name).read_text(encoding="utf-8")
+    root = "/" if name == "404.html" else ""
+    nav = re.search(r'<nav class="sitenav" aria-label="Site">(.*?)</nav>', page, re.S)
+    assert nav, f"{name} has no site nav"
+    for href, label in ((f"{root}how-it-works.html", "How it works"),
+                        (f"{root}sample-report.html", "Real report"),
+                        (f"{root}index.html#pricing", "Pricing")):
+        assert re.search(rf'<a href="{re.escape(href)}"[^>]*>{label}</a>', nav.group(1)), \
+            f"{name}: no {label}"
+    assert page.index("sitenav") < page.index("<h1"), "the routes sit above the headline"
+
+
+@pytest.mark.parametrize("name,scheme,colour", [
+    ("index.html", "dark", "#05090F"), ("league-pass.html", "dark", "#05090F"),
+    *[(p, "light", "#101E33") for p in _PAPER]])
+def test_every_page_declares_its_colour_scheme_and_bar_colour(name: str, scheme: str,
+                                                               colour: str) -> None:
+    """Launch review I12: no page declared color-scheme or theme-color, so the
+    dark landing drew light native controls and scrollbars, and Safari's bar
+    stayed untinted. Dark pages say dark; paper pages say light with the
+    masthead's navy, as the generated report pages do (render.report.PAGE_META)."""
+    head = (SITE / name).read_text(encoding="utf-8").split("</head>")[0]
+    assert f'<meta name="color-scheme" content="{scheme}">' in head
+    assert f'<meta name="theme-color" content="{colour}">' in head
+
+
+def test_a_tablet_keeps_its_nav_and_two_pricing_cards() -> None:
+    """Launch review I14, at 768px: the nav showed the logo alone (links and
+    CTA hidden below 880px) and the pricing cards stacked into 724px-wide
+    cards of mostly empty line. The CTA (short label) and How it works stay
+    down to 600px; the cards go one column only at 640px."""
+    css = _style(LANDING)
+    tablet = css.split("@media (max-width:880px){\n")[1].split("\n  }")[0]
+    assert "nav .btn{display:none" not in tablet and ".navlinks .hidesm{display:none" not in tablet
+    assert "nav .btn .short{display:inline;}" in tablet
+    assert ".plans{grid-template-columns:1fr;}" not in tablet
+    assert "@media (max-width:640px){.plans{grid-template-columns:1fr;}}" in css
+    phone = css.split("@media (max-width:599px){")[1].split("\n  }")[0]
+    assert "nav .btn{display:none;}" in phone
+    # The base rule hiding the short label must come BEFORE the media query
+    # that shows it, or the cascade leaves the tablet's button empty (found in
+    # Chrome at 768px while building this).
+    assert css.index("nav .btn .short{display:none;}") < css.index("@media (max-width:880px){\n")
+
+
+def test_the_social_card_uses_the_heros_headline_treatment() -> None:
+    """Launch review I13: the card set "Know who to start." in sentence case,
+    unlike the landing's italic capitals with the payoff on a gold slab, which
+    weakened recall between X and the page. The card rebuilds the landing's
+    own <em> slab from TEXT, so no markup of the page's reaches the card."""
+    from render import og
+    card = og.build_html(LANDING)
+    h1 = re.search(r"\n  h1\{([^}]*)\}", card).group(1)
+    assert "font-style:italic" in h1 and "text-transform:uppercase" in h1
+    assert "<h1>Know who <em><span>to start.</span></em></h1>" in card
+    hostile = LANDING.replace("<em><span>to start.</span></em>",
+                              "<em><span>to <b>start</b>&lt;x&gt;</span></em>", 1)
+    assert "<em><span>to start &lt;x&gt;</span></em>" in og.build_html(hostile)
+    assert og.headline(LANDING) == "Know who to start."
+
+
+def test_the_glossary_defines_the_realistic_range_in_the_reports_words() -> None:
+    """Panel review SS-I1 (addendum d): every report prints a "realistic range"
+    and no page said what it was. How it works carries the report's own
+    definition, verbatim, and no figure."""
+    from render.report import RANGE_DEFINITION
+    glossary = HOW.split('<h2 id="read">')[1].split("<h2>")[0]
+    entry = prose(glossary.split("<dt>Realistic range</dt>")[1].split("</dd>")[0])
+    entry = re.sub(r"<[^>]+>", "", entry).strip()
+    assert entry == RANGE_DEFINITION[0].upper() + RANGE_DEFINITION[1:]
+    assert not re.search(r"\d", entry)

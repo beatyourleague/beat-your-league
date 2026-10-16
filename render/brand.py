@@ -36,7 +36,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from render.og import find_chrome, png_size, render_png
+from render.og import embedded_fonts, find_chrome, png_size, render_png
 from render.report import ICON_GROUND, icon_svg, mark_file, mark_svg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -61,6 +61,9 @@ COLOURS = {
 
 ICON = 512
 LOGO_W, LOGO_H = 1024, 256
+# The wordmark's one face, the site's own self-hosted file (site/fonts),
+# embedded by render.og rather than fetched from Google mid-render.
+WORDMARK_FACE = (("Barlow Condensed", "900", "italic", "barlow-condensed-900i"),)
 SMALL_ICONS = {"apple-touch-icon.png": 180, "icon-192.png": 192, "icon-512.png": 512}
 ICO_SIZES = (16, 32, 48)
 
@@ -68,8 +71,7 @@ ICO_SIZES = (16, 32, 48)
 def _page(body: str, width: int, height: int, ground: str) -> str:
     return f"""<!doctype html>
 <html><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,900&display=swap">
+<style>{embedded_fonts(WORDMARK_FACE)}</style>
 <style>
   *{{margin:0;padding:0;box-sizing:border-box;}}
   html,body{{width:{width}px;height:{height}px;overflow:hidden;}}
