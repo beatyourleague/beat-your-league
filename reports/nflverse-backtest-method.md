@@ -530,7 +530,9 @@ says to check), but any odds whose pair includes him are withheld with the
 reason (`engine.solo_report.hold_unconfirmed`); a player not with his team or
 retired comes off the lineup like a released one (`live_availability`), with
 `keep_frozen_odds` keeping only odds the frozen gate already published.
-Measured on 240 seeded live week-6 rosters, with and without the rule: 202
-odds kept, 5 withheld, 0 added. Replayed weeks are untouched (the release
-holds today's status), this harness is untouched, and no arm is needed for a
-rule that can only withhold.
+Measured on 240 seeded live week-6 rosters, with and without the rule, on the
+players release of 2026-10-16: 206 odds kept, 8 withheld, 0 added (4 rosters
+changed). The 2025 proving weeks 4–5 record the identical 111 calls with the
+same probabilities. Replayed weeks are untouched (the release holds today's
+status), this harness is untouched, and no arm is needed for a rule that can
+only withhold.

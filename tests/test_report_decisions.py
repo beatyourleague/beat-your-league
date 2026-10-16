@@ -769,6 +769,20 @@ def test_a_starter_row_carries_his_season_and_last_three() -> None:
         assert PROJECTION_NOTE in page, name
 
 
+def test_the_emailed_record_and_usage_are_separate_lines() -> None:
+    """The live sample's email at 390px: "2026: 20.4 a game · last 3: 15.4,
+    25.8, 14.6 · last 3: 8.3 targets · 0.7 carries a game" — two "last 3"s on
+    one line, the first his points and the second a usage window."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Hot Start", "RB", "KC"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC")}
+    report = _report(roster, slots=("QB", "RB", "WR", "TE"), yards={RB1: 300})
+    row = _row(report, "Hot Start")
+    row["usage"] = "last 3 games: 25 targets (8.3 a game), 2 carries"
+    email = render_email(report)
+    assert "30.0, 30.0, 30.0 · last 3: 8.3 targets" not in email
+    assert "30.0, 30.0, 30.0<br>last 3: 8.3 targets" in email
+
+
 def test_the_fallback_says_whom_it_skipped() -> None:
     """BE-I1: "Start Drake London over Courtland Sutton at FLEX · 71%" while
     Rhamondre Stevenson (11.3), questionable, sat higher on the bench — read

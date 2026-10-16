@@ -1173,8 +1173,11 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
         name = slot.get("player_name") or "—"
         proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
         bits = call_bits(slot)
-        record = " · ".join(b for b in (form_phrase(slot),
-                                         short_usage(slot.get("usage"))) if b)
+        # His games and his usage on lines of their own: joined, the row read
+        # "2026: 20.4 a game · last 3: 15.4, 25.8, 14.6 · last 3: 8.3 targets"
+        # — two "last 3"s, one of points and one of a usage window.
+        record = form_phrase(slot)
+        usage = short_usage(slot.get("usage"))
         flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
         confidence = slot.get("confidence")
         label = ""
@@ -1201,6 +1204,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
             f'<b>{esc(label)}</b>' if label else "",
             esc(" · ".join(bits)) if bits else "",
             esc(record) if record else "",
+            esc(usage) if usage else "",
             esc(slot["reason"]) if slot.get("reason") else "",
         ]
         details = [d for d in details if d]

@@ -409,10 +409,18 @@ def no_call_explainer(listed: str) -> str:
     graded" stays, and the old closing clause — "otherwise we'd be guessing,
     and you can guess for free" — is gone, because it asserted that a shown
     number is not a guess, which is exactly the claim the grade withholds.
+
+    "When both players are confirmed to play" overstated what a Tuesday report
+    can know (launch review SS-D1): the live sample printed it above odds
+    against a practice-squad player. The sentence now names what the gate
+    checks — both teams play, and neither player carried a designation on last
+    week's injury report. "Only when": the live week's extra checks (reserve
+    lists, the practice squad) only ever withhold more.
     """
     return (f"The % is the chance your starter outscores your best bench "
             f"player at that spot, and the bar starts at 50% (a toss-up). We only "
-            f"give odds when both players are confirmed to play. Rows without "
+            f"give odds when both players' teams play this week and neither was "
+            f"listed questionable, doubtful or out last week. Rows without "
             f"odds this week: {listed}.")
 
 

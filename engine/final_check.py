@@ -43,8 +43,8 @@ from typing import Any, Mapping
 from engine.history import FLEX_ELIGIBILITY
 
 # The inactive list is posted 90 minutes before each kickoff — the moment a
-# player still questionable on his final report is ruled in or out
-# (engine.solo_report.INACTIVES_LEAD; the same clock on both days).
+# player still questionable on his final report is ruled in or out. Tuesday's
+# if/then (engine.solo_report) imports this one: the same clock on both days.
 INACTIVES_LEAD = timedelta(minutes=90)
 NFL_TIME = "America/New_York"
 

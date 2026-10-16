@@ -264,12 +264,16 @@ def test_the_explainer_makes_no_claim_a_shown_number_is_not_a_guess() -> None:
     you can guess for free' from the no-call explainer — it asserts that a
     printed number is not a guess, which is the claim the grade withholds —
     and it stays gone. It still states what a printed number means and when
-    one prints."""
+    one prints — in what the gate checks, never "confirmed to play", which
+    the live sample printed above odds against a practice-squad player
+    (launch review SS-D1)."""
     from render.report import no_call_explainer
     text = no_call_explainer("nobody on your bench is eligible here")
     assert "guess for free" not in text
     assert "outscores your best bench player" in text
-    assert "confirmed to play" in text
+    assert ("only give odds when both players' teams play this week and neither "
+            "was listed questionable, doubtful or out last week") in text
+    assert "confirmed to play" not in text
 
 
 def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:

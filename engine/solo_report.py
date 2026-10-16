@@ -45,11 +45,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from engine.availability import Status, WeekAvailability
+from engine.final_check import INACTIVES_LEAD
 from engine.history import FLEX_ELIGIBILITY, PlayerIndex, Season
 from engine.projection import MIN_GAMES_FOR_CALL, ProjectionModel
 from engine.roster import DEFENSE
@@ -613,10 +614,11 @@ def in_time(other: Mapping[str, Any] | None, watched: Mapping[str, Any] | None,
     return day is None or news is None or day >= news
 
 
-# The inactive list is posted 90 minutes before each kickoff. A questionable
-# player still questionable on his final report is ruled in or out THEN, so a
-# plan that waits on him can only name somebody whose game has not started.
-INACTIVES_LEAD = timedelta(minutes=90)
+# INACTIVES_LEAD (imported from engine.final_check, one definition for
+# Tuesday's plan and Saturday's check): the inactive list is posted 90 minutes
+# before each kickoff. A player still questionable on his final report is
+# ruled in or out THEN, so a plan that waits on him can only name somebody
+# whose game has not started.
 
 
 def _hhmm(clock: str | None) -> tuple[int, int] | None:
