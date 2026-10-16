@@ -1308,15 +1308,25 @@ def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
     return _section(f"Where {rival_label} Is Fragile", 5, body)
 
 
+def no_call_line(regret: Mapping[str, Any]) -> str:
+    """The closest-call section when nothing carries odds: ONE plain line —
+    that there is no call, then the closest decision and why it has none
+    (RQ-06). Every surface prints this same line (launch review RQ-19: a
+    whole section with a "Heads up" box, for an absence, was the longest way
+    to say the shortest thing)."""
+    line = " ".join(t for t in (regret.get("gate"), regret.get("closest")) if t)
+    # The league product's gate starts lowercase ("no coin-flip call…"); a
+    # line on its own starts like a sentence (D10).
+    return line[:1].upper() + line[1:]
+
+
 def section_regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
         # No .call frame: a heavy navy card whose only content is an absence
-        # reads as broken software rather than restraint. The closest decision
-        # still gets its line, with why it carries no odds (RQ-06).
-        closest = (f'<p class="withheldline">{esc(regret["closest"])}</p>'
-                   if regret.get("closest") else "")
+        # reads as broken software rather than restraint — and no Heads-up box
+        # either (RQ-19): the body is the one line.
         return _section("The Week's Closest Call", 6,
-                        gate_note(regret["gate"]) + closest)
+                        f'<p class="field-read">{esc(no_call_line(regret))}</p>')
     confidence = _pct(regret["confidence"])
     # SS-D2: the card says it is the closest call WITH ODDS, and a narrower
     # decision without odds is named beneath it rather than passed over.

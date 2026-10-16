@@ -373,7 +373,7 @@ def build_solo_report(
                    for p in picks],
         "bench": bench,
         "regret": closest_call(picks, players, model, week, availability,
-                               injury_report),
+                               injury_report, bench),
         "pivots_note": pivots_note(plans, unplanned, availability),
         # An empty rival list is correct rather than a placeholder: pivots reads
         # only MY picks' questionable statuses and their alternatives, and the
@@ -1428,11 +1428,14 @@ def even_reason(pick: SlotPick, players: PlayerIndex,
 
 def _named_reason(pick: SlotPick, players: PlayerIndex,
                   availability: WeekAvailability,
-                  injury_report: Mapping[str, Any] | None) -> str:
+                  injury_report: Mapping[str, Any] | None,
+                  bench: Sequence[Mapping[str, Any]] = ()) -> str:
     """Why a slot has no odds, naming who and dated (launch review RQ-06): the
     closest-call section printed the engine's own "not enough games on record
     yet (2 and 5; we want at least 3)" and an undated "availability in doubt
-    (designated Questionable)", naming nobody."""
+    (designated Questionable)", naming nobody. ``bench`` lets a "nobody on
+    your bench" gate name the bench player it really means (F11): "nobody on
+    your bench can play QB" sat above Lamar Jackson's bench row."""
     gate = pick.confidence_gate or ""
     starter = players.name(pick.player_id or "")
     other = players.name(pick.alternative_id) if pick.alternative_id else ""
@@ -1467,6 +1470,11 @@ def _named_reason(pick: SlotPick, players: PlayerIndex,
     if gate.startswith("we don't put odds on defenses"):
         return "we don't put odds on defenses"
     if gate.startswith("nobody on your bench"):
+        held = bench_option_held(pick, bench)
+        if held is not None:
+            why = {"bye": "is on bye", "roster": "can't play this week"}.get(
+                held.get("kind"), "isn't cleared to play yet")
+            return f"{held['name']}, your bench {pick.slot}, {why}"
         return f"nobody on your bench can play {pick.slot}"
     if gate.startswith("no eligible player"):
         return f"nobody on your roster can fill {pick.slot}"
@@ -1497,7 +1505,8 @@ def _decisions(picks: Sequence[SlotPick]) -> list[tuple[float, SlotPick]]:
 def closest_call(picks: Sequence[SlotPick], players: PlayerIndex,
                  model: ProjectionModel, week: int,
                  availability: WeekAvailability,
-                 injury_report: Mapping[str, Any] | None) -> dict[str, Any]:
+                 injury_report: Mapping[str, Any] | None,
+                 bench: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The closest-call section, honest about what "closest" means (launch
     review SS-D2, Oct 2026).
 
@@ -1540,7 +1549,7 @@ def closest_call(picks: Sequence[SlotPick], players: PlayerIndex,
         if narrower:
             _, closer = min(narrower, key=lambda item: (abs(item[0]), item[1].slot_index))
             regret["closer"] = (f"Closer on points: {pair(closer, 'or')} — no odds, "
-                                f"because {_named_reason(closer, players, availability, injury_report)}.")
+                                f"because {_named_reason(closer, players, availability, injury_report, bench)}.")
         return regret
     if not any(p.projection is not None for p in picks):
         return {"gate": "No call with odds yet — nobody has played a game this "
@@ -1549,13 +1558,20 @@ def closest_call(picks: Sequence[SlotPick], players: PlayerIndex,
     if decisions:
         _, nearest = min(decisions, key=lambda item: (abs(item[0]), item[1].slot_index))
         out["closest"] = (f"Closest decision: {pair(nearest, 'over')} — no odds, "
-                          f"because {_named_reason(nearest, players, availability, injury_report)}.")
+                          f"because {_named_reason(nearest, players, availability, injury_report, bench)}.")
         return out
-    # No slot has a real choice in it: say why, about the first one.
-    gated = next((p for p in picks if p.player_id and p.confidence_gate), None)
-    if gated is not None:
-        out["gate"] = (f"No call with odds this week — "
-                       f"{_named_reason(gated, players, availability, injury_report)}.")
+    # No slot has a real choice in it. One reason across the lineup is named;
+    # several are not lined up behind the first slot's, which read as the
+    # only one ("nobody on your bench can play QB" over a lineup of reserve
+    # lists and byes).
+    reasons = list(dict.fromkeys(
+        _named_reason(p, players, availability, injury_report, bench)
+        for p in picks if p.player_id and p.confidence_gate))
+    if len(reasons) == 1:
+        out["gate"] = f"No call with odds this week — {reasons[0]}."
+    elif reasons:
+        out["gate"] = ("No call with odds this week — no starter has a bench "
+                       "player we can compare him with.")
     return out
 
 

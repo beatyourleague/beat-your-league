@@ -422,6 +422,48 @@ def test_with_no_odds_the_section_names_the_closest_decision_and_who() -> None:
     assert "we want at least" not in str(regret)
 
 
+def test_with_no_odds_the_section_is_one_plain_line() -> None:
+    """RQ-19: with no call anywhere the closest-call section still took a
+    whole section with a "Heads up" box, then the closest decision under it.
+    It is one plain line now, the same line on all three surfaces."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              RB2: ("Rookie Twogames", "RB", "KC"), WR1: ("Wade Wideout", "WR", "KC"),
+              TE1: ("Tate Tightend", "TE", "KC")}
+    report = _report(roster, slots=("QB", "RB", "WR", "TE"),
+                     yards={RB1: 90, RB2: 85}, missed={RB2: {1, 2}})
+    line = f"{report['regret']['gate']} {report['regret']['closest']}"
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    browser = render(report, template)
+    section = browser[browser.index("The Week&#x27;s Closest Call"):]
+    section = section[:section.index("</section>")]
+    assert 'class="withheld"' not in section and "Heads up" not in section
+    assert section.count("<p") == 1
+    email = render_email(report)
+    section = email[email.index("The Week&#x27;s Closest Call"):]
+    section = section[:section.index("If/Then for Gameday")]
+    assert "Heads up" not in section and section.count("<p ") == 1
+    for name, page in _surfaces(report).items():
+        assert line in page, name
+    assert f"THE WEEK'S CLOSEST CALL: {line}" in text_summary(report)
+
+
+def test_a_no_bench_gate_names_the_bench_player_it_means() -> None:
+    """F11's rule, in the closest-call line too: a week with no odds read "No
+    call with odds this week — nobody on your bench can play QB" above Lamar
+    Jackson's bench row ("Ruled out for Week 5"). It names him; and when the
+    slots have different reasons, none is passed off as the only one."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), QB2: ("Lamar Backup", "QB", "KC"),
+              RB1: ("Rory Runner", "RB", "KC")}
+    out = dict(designations={QB2: "Out"}, listed={QB2: ("out", "ankle")})
+    one = _report(roster, slots=("QB",), **out)["regret"]
+    assert one["gate"] == ("No call with odds this week — Lamar Backup, your bench "
+                           "QB, isn't cleared to play yet.")
+    two = _report(roster, slots=("QB", "RB"), **out)["regret"]
+    assert two["gate"] == ("No call with odds this week — no starter has a bench "
+                           "player we can compare him with.")
+    assert "nobody on your bench can play QB" not in str(two)
+
+
 def test_a_callout_under_its_label_starts_like_a_sentence() -> None:
     """D10: the week-1 sample printed "Heads up" over "no projected totals yet…",
     "no coin-flip call this week…", "no pivots this week…"."""

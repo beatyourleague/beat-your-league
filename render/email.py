@@ -30,7 +30,7 @@ from render.sender import sender_line
 from render.report import cancel_html, cancel_lines, is_seat
 # The row and section bodies (launch review, Oct 2026), one implementation each.
 from render.report import (NO_PIVOTS, SLOT_DISPLAY, call_bits, form_phrase,
-                           projection_note, row_marked)
+                           no_call_line, projection_note, row_marked)
 from render.report import (
     EMAIL_META,
     sender_html,
@@ -549,11 +549,10 @@ def _fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
 
 def _regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
-        # The gate sentence says there is no call with odds; the closest
-        # decision still gets its line, with why (RQ-06).
-        closest = (f'<p style="{BASE}margin:8px 0 0 0;">{esc(regret["closest"])}</p>'
-                   if regret.get("closest") else "")
-        return _sec(6, "The Week's Closest Call", _gate(regret["gate"]) + closest)
+        # One plain line, no Heads-up box (RQ-19): no call, then the closest
+        # decision and why it has no odds (RQ-06).
+        return _sec(6, "The Week's Closest Call",
+                    f'<p style="{BASE}margin:0;">{esc(no_call_line(regret))}</p>')
     confidence = _pct(regret["confidence"])
     drivers = " · ".join(
         f'{esc(d["label"])} <b>{esc(d["value"])}</b>' for d in regret["drivers"])
@@ -925,9 +924,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     regret = report["regret"]
     lines.append("")
     if "gate" in regret:
-        lines.append(f"THE WEEK'S CLOSEST CALL: {regret['gate']}")
-        if regret.get("closest"):
-            lines.append(f"  {regret['closest']}")
+        lines.append(f"THE WEEK'S CLOSEST CALL: {no_call_line(regret)}")
     else:
         lines.append(
             f"THE WEEK'S CLOSEST CALL: start {regret['start_name']} over "
