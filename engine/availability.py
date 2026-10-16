@@ -134,18 +134,38 @@ ROSTER_OUT = {
 }
 
 
-def roster_out(players_csv) -> dict[str, str]:
+def roster_out(players_csv, statuses: Mapping[str, str] | None = None) -> dict[str, str]:
     """gsis -> why he can't play, from the daily players release. TODAY's
-    status: never apply it to a past week (principle 3)."""
+    status: never apply it to a past week (principle 3). ``statuses`` picks
+    which codes count (ROSTER_OUT unless given)."""
     import csv
+    table = ROSTER_OUT if statuses is None else statuses
     out: dict[str, str] = {}
     with open(players_csv, encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             gsis = (row.get("gsis_id") or "").strip()
             status = (row.get("status") or "").strip().upper()
-            if gsis and status in ROSTER_OUT:
-                out[gsis] = ROSTER_OUT[status]
+            if gsis and status in table:
+                out[gsis] = table[status]
     return out
+
+
+# players.csv statuses the gate was never taught, applied in the REPORT layer
+# only (method §15 C9, launch review SS-D1, Oct 2026). Deliberately NOT in
+# ROSTER_OUT: that table reaches the gate's call state, and C8 measured what a
+# withholding rule at the gate does — it changes which bench player a slot is
+# called against and so can ADD a number. Here they may only remove.
+#
+# Not with the team or retired: he cannot play this week, so he comes off the
+# lineup the way a released player does (engine.solo_report.live_availability).
+LIVE_ONLY_OUT = {"NWT": "not with his team", "RET": "retired"}
+# The practice squad: he can still be elevated as late as Saturday afternoon,
+# so he keeps his seat — but he is not confirmed to play, so no odds that
+# depend on him are printed (engine.solo_report.hold_unconfirmed). An
+# unelevated player scores 0.0, which the ledger grades as a HIT for whoever
+# was called over him: Zach Ertz (DEV, "PS; Vet") was the 2026 week-6 live
+# sample's TE alternative under a printed 80%.
+PRACTICE_SQUAD = {"DEV": "on the practice squad"}
 
 
 def may_publish_confidence(a: PlayerStatus, b: PlayerStatus) -> tuple[bool, str | None]:

@@ -48,15 +48,57 @@ def test_quarterbacks_defenses_and_the_current_week_are_never_read() -> None:
     assert c["recent"] == 18.0, "week 5's own rows leaked into a week-5 report"
 
 
-def test_roster_players_and_last_seasons_starters_are_left_out() -> None:
+def test_last_seasons_starters_are_left_out_and_the_roster_comes_first() -> None:
+    """Launch review BE-I7: a riser already on the roster was dropped, though
+    his projection is built on the role he had BEFORE the rise — the one line
+    in the section a manager can act on this week. He leads now, marked."""
     pool = [{"player_id": pid, "position": "RB", "team": "SEA", "recent": 12.0,
              "earlier": 2.0, "jump": 10.0 - i} for i, pid in
-            enumerate(["a", "b", "c", "d", "e"])]
-    names = SimpleNamespace(name=lambda pid: pid.upper())
+            enumerate(["a", "b", "c", "d", "e", "f"])]
+    names = SimpleNamespace(name=lambda pid: pid.upper(), position=lambda pid: "RB")
     ranks = {"b": ("RB", 10, 200), "c": ("RB", 60, 200)}   # b was an RB10, c an RB60
     rows = rising.for_roster(pool, ["a"], ranks, names)
-    assert [r["name"] for r in rows] == ["C", "D", "E"]
-    assert rows[0]["line"] == "C (SEA, RB): 12.0 touches a game over his last two, up from 2.0 before."
+    assert [r["name"] for r in rows] == ["A", "C", "D", "E"]
+    assert rows[0]["on_roster"] is True
+    assert rows[0]["line"] == ("A (SEA, RB), on your roster: 12.0 touches a game over "
+                               "his last two, up from 2.0 before.")
+    assert rows[1]["line"] == "C (SEA, RB): 12.0 touches a game over his last two, up from 2.0 before."
+    # A starter last season stays out even when he is yours.
+    assert "B" not in [r["name"] for r in rising.for_roster(pool, ["b"], ranks, names)]
+
+
+def test_a_rostered_teammate_at_his_position_is_named() -> None:
+    """BE-I7's own reproduction: Braelon Allen (NYJ RB) rising while the
+    subscriber's Breece Hall (NYJ RB) sat out — nothing connected them."""
+    pool = [{"player_id": "allen", "position": "RB", "team": "NYJ", "recent": 22.0,
+             "earlier": 8.0, "jump": 14.0, "earlier_weeks": [1, 2, 3], "missed": []}]
+    names = SimpleNamespace(name={"allen": "Braelon Allen", "hall": "Breece Hall",
+                                  "wr": "Garrett Wilson"}.get,
+                            position={"hall": "RB", "wr": "WR"}.get)
+    [row] = rising.for_roster(pool, ["wr", "hall"], {}, names,
+                              teams={"hall": "NYJ", "wr": "NYJ"})
+    assert row["line"] == ("Braelon Allen (NYJ, RB): 22.0 touches a game over his last "
+                           "two, up from 8.0 in Weeks 1–3. Same team and position as "
+                           "your Breece Hall.")
+    [alone] = rising.for_roster(pool, ["wr"], {}, names, teams={"wr": "NYJ"})
+    assert "Same team" not in alone["line"]
+
+
+def test_before_says_which_weeks_and_a_return_is_not_a_bigger_role() -> None:
+    """Launch review SS-I13: "up from 0.0 before" never said what "before"
+    covered, and Roschon Johnson's 0.0 was one game followed by two weeks out
+    of the box score — a return, not a role grown from nothing. A week his
+    team was on bye is not a week he missed."""
+    weekly = _weeks(**{"00-0000001": {1: (0, 0), 4: (3, 6), 5: (4, 6)},
+                       "00-0000009": {1: (1, 1), 2: (1, 1), 4: (1, 1), 5: (1, 1)}})
+    # 00-0000009 shares his team (SEA) and played weeks 2 and 4; week 3 nobody
+    # on SEA played — a bye.
+    [c] = rising.candidates(weekly, 6)
+    assert c["earlier_weeks"] == [1] and c["missed"] == [2]
+    line = rising.line("Roschon Johnson", c)
+    assert line.endswith("up from 0.0 in Week 1. He wasn't in the box score in Week 2.")
+    assert rising._weeks([1, 2, 3]) == "Weeks 1–3"
+    assert rising._weeks([1, 2, 3, 6, 7]) == "Weeks 1, 2, 3, 6 and 7"
 
 
 def test_no_number_here_is_a_probability() -> None:

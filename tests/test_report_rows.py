@@ -591,10 +591,13 @@ def test_the_samples_if_then_names_nobody_who_played_thursday(sample10) -> None:
     is ruled out: Move Chase Brown into FLEX" — Brown's Bengals were at
     Baltimore on THURSDAY, before Pollard's Sunday news existed, and the same
     page said "Thursday night: Ja'Marr Chase kicks off". The plan now moves
-    the next FLEX option who plays after the news: Sam LaPorta (DET, Sunday)."""
+    the next FLEX option who plays after the news: Sam LaPorta (DET, Sunday)
+    — and says why Brown, who projects higher, is not the move (SS-I8)."""
     [plan] = [p for p in sample10["pivots"] if "Tony Pollard" in p["condition"]]
-    assert plan["action"] == "Move Sam LaPorta into FLEX (projects 9.5)"
-    assert not any("Chase Brown" in p["action"] for p in sample10["pivots"])
+    assert plan["action"] == ("Move Sam LaPorta into FLEX (projects 9.5). Chase "
+                              "Brown (10.3) plays Thursday, before Tony Pollard's "
+                              "status is known.")
+    assert not any("Move Chase Brown" in p["action"] for p in sample10["pivots"])
     sunday = next(i for i in sample10["checklist"]
                   if i["action"].startswith("Sunday morning"))
     assert sunday["detail"] == "Your if/then below already has the answer either way."

@@ -409,10 +409,18 @@ def no_call_explainer(listed: str) -> str:
     graded" stays, and the old closing clause — "otherwise we'd be guessing,
     and you can guess for free" — is gone, because it asserted that a shown
     number is not a guess, which is exactly the claim the grade withholds.
+
+    "When both players are confirmed to play" overstated what a Tuesday report
+    can know (launch review SS-D1): the live sample printed it above odds
+    against a practice-squad player. The sentence now names what the gate
+    checks — both teams play, and neither player carried a designation on last
+    week's injury report. "Only when": the live week's extra checks (reserve
+    lists, the practice squad) only ever withhold more.
     """
     return (f"The % is the chance your starter outscores your best bench "
             f"player at that spot, and the bar starts at 50% (a toss-up). We only "
-            f"give odds when both players are confirmed to play. Rows without "
+            f"give odds when both players' teams play this week and neither was "
+            f"listed questionable, doubtful or out last week. Rows without "
             f"odds this week: {listed}.")
 
 
@@ -472,11 +480,16 @@ _GATE_PHRASES = (
     # Launch audit F11: the bench HAS a player there, out or not yet cleared;
     # "no bench player at that position" sat beside his bench row.
     ("bench option not cleared", "your bench player at that position isn't cleared to play"),
+    # Method §15 C9: the practice squad plays only if elevated.
+    ("not confirmed to play", "a player in that pair is on the practice squad"),
     ("held: the lineup changed", "the lineup changed around a player who can't play this week"),
     ("nobody on your bench", "no bench player at that position"),
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
     ("no eligible player", "no eligible player with a scoring record"),
+    # Contract C8: a lineup shape no arm has graded (engine.solo_report.SHAPE_GATE).
+    ("odds once this lineup shape is graded",
+     "your lineup shape gets projections only until it's graded"),
 )
 
 
@@ -512,7 +525,8 @@ def row_label(slot: Mapping[str, Any]) -> str:
     # there (launch audit R7). Reports built before the field existed, and the
     # league product, keep the old wording.
     see = " · see if/then" if slot.get("if_then", True) else ""
-    if gate.startswith("we don't put odds on defenses"):
+    if gate.startswith(("we don't put odds on defenses",
+                        "odds once this lineup shape is graded")):
         return "projection only"
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
@@ -529,6 +543,11 @@ def row_label(slot: Mapping[str, Any]) -> str:
         name = held.get("name") or "your bench player"
         return {"bye": f"{name} on bye", "roster": f"{name} can't play"}.get(
             held.get("kind"), f"{name} not cleared yet")
+    if gate.startswith("not confirmed to play"):
+        # Method §15 C9: "not confirmed to play (Zach Ertz: on the practice
+        # squad)" — the row names who.
+        who = gate[len("not confirmed to play"):].strip(" ()").split(":")[0]
+        return f"{who} on practice squad" if who else "practice squad"
     if gate.startswith("held: the lineup changed"):
         return "held this week"
     if gate.startswith("nobody on your bench"):
@@ -536,9 +555,14 @@ def row_label(slot: Mapping[str, Any]) -> str:
     if gate.startswith("no eligible player") or not gate:
         return ""
     if starter_ok and alt:
-        # "waiting on", not "questionable": the row belongs to the STARTER,
-        # and the plain fact is that his odds wait on the bench player's news.
-        return f"start · waiting on {alt}"
+        # The row belongs to the STARTER, who starts either way: a bench
+        # player who projects below him never takes the slot. "Start · waiting
+        # on Jonathan Mingo" beside a 17.2-to-4.7 gap said otherwise (launch
+        # review RQ-18), and never said WHY (BE-D3) — the plain fact is last
+        # week's designation, dated, and the bench row prints it in full.
+        if gate.startswith("availability in doubt"):
+            return f"start · {alt} was questionable"
+        return f"start · {alt} not confirmed"
     if gate.startswith("availability in doubt"):
         return f"questionable{see}"
     return f"status open{see}"
@@ -614,7 +638,12 @@ def extract_design(template_html: str) -> tuple[str, str]:
 
 
 def gate_note(reason: str) -> str:
-    """The one honest way a missing number renders (principle 3)."""
+    """The one honest way a missing number renders (principle 3).
+
+    The label sits on its own line above the reason, so the reason is a
+    sentence and starts like one (launch review D10: "Heads up" over "no
+    projected totals yet…" on the week-1 sample)."""
+    reason = reason[:1].upper() + reason[1:]
     return (f'<div class="withheld"><span class="lab">{esc(NOT_CALLING_IT)}</span>'
             f'{esc(reason)}</div>')
 
@@ -1069,12 +1098,11 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     for slot in slots:
         name = slot.get("player_name") or "—"
         proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
-        bits = []
-        edge = edge_phrase(slot)
-        if edge:
-            bits.append(edge)
-        if slot.get("usage"):
-            bits.append(str(slot["usage"]))
+        # One fact a line: the call's own facts, his games this season, then
+        # the counted usage; and a reason sentence where one is owed.
+        lines = [" · ".join(call_bits(slot)), form_phrase(slot),
+                 str(slot.get("usage") or ""), str(slot.get("reason") or "")]
+        subs = "".join(f'<span class="tsub">{esc(line)}</span>' for line in lines if line)
         flags = [f["text"] for f in (slot.get("flags") or [])]
         # Opponent and kickoff (launch audit F7), straight under the name: it
         # is the fact a manager checks first, and the one that says a starter
@@ -1092,8 +1120,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
             call = (f'<b>{_pct(confidence)}%</b>'
                     f'<span class="cbar" title="Bar starts at 50%, a coin flip">'
                     f'<i style="width:{_bar_from_even(confidence)}%"></i></span>')
-        elif (mixed and slot.get("player_name")
-                and not is_structural_gate(slot.get("confidence_gate"))):
+        elif slot.get("player_name") and row_marked(slot, mixed):
             shown_marker = True
             call = f'<span class="tsub">{esc(row_label(slot))}</span>'
         else:
@@ -1102,7 +1129,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
             f'<tr class="trow"><td class="tslot">{esc(slot["slot"])}</td>'
             f'<td class="tside you"><span class="tname">{esc(name)}</span>{game}'
             + (f'<span class="tflag">{esc(" · ".join(flags))}</span>' if flags else "")
-            + (f'<span class="tsub">{esc(" · ".join(bits))}</span>' if bits else "")
+            + subs
             + f'</td><td class="tpts you">{proj}</td>'
             f'<td class="tcall">{call}</td></tr>')
     head = ('<tr class="thead"><td></td><td>Your lineup</td>'
@@ -1110,15 +1137,36 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     note = ""
     gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
     if gates:
-        head_text = no_call_head(shown_marker, mixed)
+        head_text = no_call_head(shown_marker and mixed, mixed)
         note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
                 f'{esc(no_call_explainer(gate_list(gates)))}</div>')
+    hot = projection_note(slots)
+    if hot:
+        note += f'<div class="withheld">{esc(hot)}</div>'
     seeded_note = (f'<div class="withheld">{esc(SEEDED_SECTION_LINE)}</div>'
                    if report["meta"].get("seeded") else "")
     return _section("The Lineup", 3,
                     f'<table class="tape">{LINEUP_COLS}{head}'
                     f'{"".join(rows)}</table>{_bench_table(report)}'
                     f'{seeded_note}{note}')
+
+
+def row_marked(slot: Mapping[str, Any], mixed: bool) -> bool:
+    """Does a row without odds say why in its own call cell?
+
+    In a MIXED week every one does (launch review I16): the structural rows
+    — the only quarterback, the only kicker — used to show an empty cell
+    beside rows reading 70%, which read as a value we forgot; "no bench QB"
+    reads as what it is. A defense always says "projection only" (RQ-15): its
+    pick rests on a number we don't put odds on, in any week. In a week with
+    no odds anywhere, the note under the table says it once instead."""
+    gate = slot.get("confidence_gate") or ""
+    if not gate or not row_label(slot):
+        return False
+    # So does a lineup shape with no graded arm (contract C8): every row of it
+    # is a projection only, every week, and says so.
+    return mixed or gate.startswith(("we don't put odds on defenses",
+                                     "odds once this lineup shape is graded"))
 
 
 def _bench_table(report: Mapping[str, Any]) -> str:
@@ -1142,12 +1190,16 @@ def _bench_table(report: Mapping[str, Any]) -> str:
         # star must not read as an injury. Out players DO take the flag.
         tag = (f'<span class="tflag">{esc(bench_phrase(entry))}</span>'
                if entry.get("out") else
-               f'<span class="trank">{esc(rank)} last season</span>'
-               if entry.get("notable") and rank else "")
+               (f'<span class="tflag">{esc(entry["note"])}</span>'
+                if entry.get("note") else "")
+               + (f'<span class="trank">{esc(rank)} last season</span>'
+                  if entry.get("notable") and rank else ""))
+        game = (f'<span class="tgame">{esc(entry["game"])}</span>'
+                if entry.get("game") else "")
         rows.append(
             f'<tr class="trow bench"><td class="tslot">{esc(entry["position"])}</td>'
             f'<td class="tside you"><span class="tname">{esc(entry["name"])}</span>'
-            f'{tag}'
+            f'{game}{tag}'
             + (f'<span class="tsub">{esc(bench_form(entry))}</span>'
                if bench_shows_form(entry) else "")
             + '</td>'
@@ -1271,23 +1323,43 @@ def section_fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
     return _section(f"Where {rival_label} Is Fragile", 5, body)
 
 
+def no_call_line(regret: Mapping[str, Any]) -> str:
+    """The closest-call section when nothing carries odds: ONE plain line —
+    that there is no call, then the closest decision and why it has none
+    (RQ-06). Every surface prints this same line (launch review RQ-19: a
+    whole section with a "Heads up" box, for an absence, was the longest way
+    to say the shortest thing)."""
+    line = " ".join(t for t in (regret.get("gate"), regret.get("closest")) if t)
+    # The league product's gate starts lowercase ("no coin-flip call…"); a
+    # line on its own starts like a sentence (D10).
+    return line[:1].upper() + line[1:]
+
+
 def section_regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
         # No .call frame: a heavy navy card whose only content is an absence
-        # reads as broken software rather than restraint.
-        return _section("The Week's Closest Call", 6, gate_note(regret["gate"]))
+        # reads as broken software rather than restraint — and no Heads-up box
+        # either (RQ-19): the body is the one line.
+        return _section("The Week's Closest Call", 6,
+                        f'<p class="field-read">{esc(no_call_line(regret))}</p>')
     confidence = _pct(regret["confidence"])
-    drivers = "".join(
+    # SS-D2: the card says it is the closest call WITH ODDS, and a narrower
+    # decision without odds is named beneath it rather than passed over.
+    label = (f'<span class="drv">{esc(regret["label"])}</span>'
+             if regret.get("label") else "")
+    drivers = label + "".join(
         f'<span class="drv">{esc(d["label"])} <b>{esc(d["value"])}</b></span>'
         for d in regret["drivers"]
     )
+    extra = "".join(f'<p class="why">{esc(regret[key])}</p>'
+                    for key in ("reason", "closer") if regret.get(key))
     body = (
         f'<div class="call"><div class="verdict">Start {esc(regret["start_name"])} '
         f'<span class="over">over</span> {esc(regret["over_name"])}</div>'
         f'<div class="conf"><div class="bar"><i style="width:{confidence}%"></i></div>'
         f'<div class="num">{confidence}%</div></div>'
         f'<div class="drivers">{drivers}</div>'
-        f'<p class="why">{esc(regret["definition"])}</p></div>'
+        f'<p class="why">{esc(regret["definition"])}</p>{extra}</div>'
     )
     return _section("The Week's Closest Call", 6, body)
 
@@ -1308,11 +1380,17 @@ def pivot_action(plan: Mapping[str, Any], meta: Mapping[str, Any] | None = None)
     return action
 
 
+# The league product's empty if/then. The solo report carries its own reason
+# (engine.solo_report.pivots_note) — this sentence was printed beside a
+# questionable starter the report itself was flagging (launch review SS-D3).
+NO_PIVOTS = "No pivots this week — no starter we can check is listed questionable."
+
+
 def section_pivots(plans: list[Mapping[str, Any]],
-                   meta: Mapping[str, Any] | None = None) -> str:
+                   meta: Mapping[str, Any] | None = None,
+                   note: str | None = None) -> str:
     if not plans:
-        body = gate_note("no pivots this week — no starter we can check is "
-                         "listed questionable")
+        body = gate_note(note or NO_PIVOTS)
     else:
         rows = "".join(
             f'<div class="pivot"><div class="if">If</div>'
@@ -1327,6 +1405,17 @@ def section_pivots(plans: list[Mapping[str, Any]],
 RISING_HEAD = "Rising Roles"
 RISING_INTRO = ("Players getting more of the ball lately. Check whether any is "
                 "free in your league.")
+# When one of the risers is already the subscriber's (launch review BE-I7).
+RISING_INTRO_MINE = ("Players getting more of the ball lately — yours first. "
+                     "Check whether the others are free in your league.")
+
+
+def rising_intro(rows: Sequence[Mapping[str, Any]]) -> str:
+    """The section's opening line, true of the rows under it."""
+    mine = [r for r in rows if r.get("on_roster")]
+    if mine and len(mine) == len(rows):
+        return "Players on your roster getting more of the ball lately."
+    return RISING_INTRO_MINE if mine else RISING_INTRO
 
 
 def rising_parts(row: Mapping[str, Any]) -> tuple[str, str]:
@@ -1352,7 +1441,7 @@ def section_rising(rows: Sequence[Mapping[str, Any]]) -> str:
         who, what = rising_parts(row)
         items.append(f'<li><b>{esc(who)}</b> {esc(what)}</li>' if who
                      else f'<li>{esc(what)}</li>')
-    return _section(RISING_HEAD, 8, f'<p class="risingintro">{esc(RISING_INTRO)}</p>'
+    return _section(RISING_HEAD, 8, f'<p class="risingintro">{esc(rising_intro(rows))}</p>'
                                      f'<ul class="rising">{"".join(items)}</ul>')
 
 
@@ -1410,7 +1499,10 @@ def bench_phrase(entry: Mapping[str, Any]) -> str:
         # The engine's own words for WHY (engine.solo_report.absence): a bye, a
         # reserve list, or last week's Out — which is not "can't play" (F2).
         return entry.get("out_text") or "can't play this week"
-    return bench_form(entry)
+    # A questionable designation, dated (launch review BE-D3), or the practice
+    # squad: wherever a lineup row names him, his own row says why.
+    form = bench_form(entry)
+    return f"{entry['note']} · {form}" if entry.get("note") else form
 
 
 def bench_shows_form(entry: Mapping[str, Any]) -> bool:
@@ -1456,6 +1548,61 @@ def edge_phrase(slot: Mapping[str, Any]) -> str:
     if round(edge, 1) == 0:
         return f"even with {name} on your bench"
     return f"{edge:+.1f} over {name} on your bench"
+
+
+def call_bits(slot: Mapping[str, Any]) -> list[str]:
+    """What this start beats and how to read it, every surface's sub-line:
+    the edge, then — launch review, Oct 2026 — the higher-projected bench
+    player the odds skipped because he was questionable (BE-I1), and "toss-up"
+    where either start is as good as the other (RQ-14/RQ-15; the % still
+    prints). Engine facts only; nothing here computes a number."""
+    bits = [b for b in (edge_phrase(slot),) if b]
+    doubtful = slot.get("doubtful_alternative_name")
+    if doubtful and slot.get("alternative_name"):
+        value = slot.get("doubtful_alternative_projected")
+        number = f" ({value:.1f})" if value is not None else ""
+        why = slot.get("doubtful_alternative_why") or "was questionable"
+        bits.append(f"{doubtful}{number} {why}, so the odds are against "
+                    f"{slot['alternative_name']}")
+    if slot.get("tossup"):
+        bits.append("toss-up: either is fine")
+    return bits
+
+
+def form_phrase(slot: Mapping[str, Any]) -> str:
+    """"2026: 17.2 a game · last 3: 22.1, 18.0, 9.4" — a starter's own games
+    under the subscriber's scoring (launch review F8/SS-I9: bench rows printed
+    their last three and starters never did, and a 15.3 projection sat beside
+    no sign of a 27.5-a-game start). A record, never a projection. Named by
+    its season — "this season" on a replayed 2024 sample would be read as now."""
+    per_game = slot.get("season_per_game")
+    if per_game is None:
+        return ""
+    last = list(slot.get("last_three") or [])
+    shown = ", ".join(f"{v:.1f}" for v in last)
+    season = slot.get("season_label")
+    return (f"{season + ': ' if season else 'This season: '}{per_game:.1f} a game"
+            + (f" · last {len(last)}: {shown}" if last else ""))
+
+
+# Launch review F8: a hot start projected well below its average, with nothing
+# saying why. The model is unchanged; this states what it does, in the
+# buyer's words, true of every setup the product ships.
+PROJECTION_NOTE = ("Why a projection can sit below a hot start: it leans toward "
+                   "what his position usually scores, and allows for the chance "
+                   "he misses time.")
+HOT_START_GAP = 3.0
+
+
+def projection_note(slots: Sequence[Mapping[str, Any]]) -> str:
+    """PROJECTION_NOTE, only in a week where a starter's season average sits
+    HOT_START_GAP or more above his projection — the week the question comes up."""
+    for slot in slots:
+        per_game, projected = slot.get("season_per_game"), slot.get("projected")
+        if per_game is not None and projected is not None \
+                and per_game - projected >= HOT_START_GAP:
+            return PROJECTION_NOTE
+    return ""
 
 
 def who_can_cover(rivals: int | None, others: int | None) -> str:
@@ -2026,7 +2173,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
             section_your_week(report["matchup"], report.get("no_opponent")),
             section_your_lineup(report),
             section_regret(report["regret"]),
-            section_pivots(report["pivots"], report["meta"]),
+            section_pivots(report["pivots"], report["meta"], report.get("pivots_note")),
             section_rising(report.get("rising") or []),
             section_receipts(report["receipts"]),
             footer(meta),
@@ -2040,7 +2187,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
         section_tape(report),
         section_fragility(report["fragility"], meta["rival_label"]),
         section_regret(report["regret"]),
-        section_pivots(report["pivots"], report["meta"]),
+        section_pivots(report["pivots"], report["meta"], report.get("pivots_note")),
         section_hype(report["hype"], report.get("waiver_market")),
         section_receipts(report["receipts"]),
         footer(meta),

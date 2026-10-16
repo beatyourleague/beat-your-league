@@ -964,15 +964,24 @@ def _doubtful(pick: SlotPick) -> tuple[str | None, Projection | None]:
     return None, None
 
 
+# A swap worth less than this is a toss-up, not a move (launch review RQ-14,
+# Oct 2026): "Watch Zach Charbonnet: if he's cleared, start him at RB over
+# Rachaad White … 6.5 vs 6.4" sent a reader to check on news worth a tenth of
+# a point. One definition for every line that would ask for a swap.
+SWAP_WORTH_POINTS = 0.5
+
+
 def _clearance_moves_a_seat(pick: SlotPick) -> bool:
-    """Would the doubtful bench player take this slot if he were cleared?
+    """Would the doubtful bench player take this slot if he were cleared —
+    by enough to be worth the Sunday-morning check (SWAP_WORTH_POINTS)?
 
     Compared at the precision the page prints (one decimal), so the checklist,
     the if/then and the lineup row can never disagree about a dead heat."""
     doubt_projection = _doubtful(pick)[1]
     if pick.projection is None or doubt_projection is None:
         return False
-    return round(doubt_projection.mean, 1) > round(pick.projection.mean, 1)
+    gain = round(round(doubt_projection.mean, 1) - round(pick.projection.mean, 1), 1)
+    return gain >= SWAP_WORTH_POINTS
 
 
 def late_news(my_picks: list[SlotPick], players: PlayerIndex,

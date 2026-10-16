@@ -472,12 +472,18 @@ def test_the_thursday_line_names_nobody_already_decided() -> None:
                                   "8:15 PM ET — check his status before then.")
 
 
-def test_a_defense_is_its_not_his() -> None:
+def test_a_defense_has_no_status_to_check() -> None:
+    """R8 made a defense "its", not "his"; launch review RQ-18 went further —
+    "Denver Broncos kicks off at 8:15 PM ET — check its status" asked about a
+    status a defense does not have. What matters is that the lineup must be
+    set before that kickoff."""
     directory = PlayerDirectory([Player("DEF-SEA", "Seattle Seahawks", "DEF", "SEA")])
     items, _ = early_kickoff_items(["DEF-SEA"], player_index(directory),
                                    lambda pid: _game("DEN", THU, "20:15"),
                                    date.fromisoformat(SUN))
-    assert items[0]["action"].endswith("check its status before then.")
+    assert items[0]["action"] == ("Thursday night: Seattle Seahawks kicks off at "
+                                  "8:15 PM ET — set your lineup before then.")
+    assert "status" not in items[0]["action"]
 
 
 # --------------------------------------------------------------------- #

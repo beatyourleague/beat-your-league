@@ -509,3 +509,49 @@ Measured on the same 240 rosters: the published odds are a strict subset of the
 gate's (0 added, 9 removed), and the 2025 proving weeks 4–5 record the identical
 111 calls. This harness is untouched, and the rule still needs no arm, because
 it now really can only withhold.
+
+
+### C9 — the practice squad, and players not with their team (2026-10-15)
+
+The launch review found the live sample printing "Travis Kelce … over Zach
+Ertz on your bench … 80%" with Ertz on the Eagles' practice squad
+(`players.csv` status DEV, "PS; Vet"): elevated three weeks running, so he
+cleared the three-game bar, and never on an injury report, so §6's gate read
+him ACTIVE. An unelevated player scores 0.0, which the ledger grades as a HIT
+for whoever was called over him — a call that flatters the record. The same
+gap held for status NWT (not with his team) and RET (retired), which
+`engine.availability.ROSTER_OUT` (C7) never listed.
+
+Per C8, none of this goes into the gate. In the week being played now only,
+the REPORT layer reads them (`engine.availability.PRACTICE_SQUAD`,
+`LIVE_ONLY_OUT`): a practice-squad player keeps his seat and his place in a
+plan's order (he can be elevated as late as Saturday afternoon, and the plan
+says to check), but any odds whose pair includes him are withheld with the
+reason (`engine.solo_report.hold_unconfirmed`); a player not with his team or
+retired comes off the lineup like a released one (`live_availability`), with
+`keep_frozen_odds` keeping only odds the frozen gate already published.
+Measured on 240 seeded live week-6 rosters, with and without the rule, on the
+players release of 2026-10-16: 206 odds kept, 8 withheld, 0 added (4 rosters
+changed). The 2025 proving weeks 4–5 record the identical 111 calls with the
+same probabilities. Replayed weeks are untouched (the release holds today's
+status), this harness is untouched, and no arm is needed for a rule that can
+only withhold.
+
+
+### C10 — lineup shapes no arm has graded (2026-10-16)
+
+C2 listed "templates other than T1" among the regimes this run never measured;
+the setups method later graded two more (superflex, no K or DEF), and those are
+the only shapes with a grade. The ref carries any slot list, and the picker may
+offer more shapes (launch review contract C8), so a three-receiver lineup would
+have printed odds that no arm had checked. In the report layer, a lineup whose
+offensive slots (QB/RB/WR/TE/FLEX/SUPER_FLEX, as a multiset) are not those of a
+graded shape, or that has more than one kicker or defense slot, keeps every
+seat and projection and prints no odds, with the reason "odds once this lineup
+shape is graded" (`run.solo.shape_graded`,
+`engine.solo_report.hold_ungraded_shape`). One kicker or one defense slot, or
+neither, does not change the judgement: nobody else can play those slots and
+they can play nowhere else, so they move no other slot's call; the kicker's
+calls were graded in the standard shape and a defense never carries odds. It
+can only withhold, so it needs no arm; a shape gets odds when its own
+preregistered arm grades it.

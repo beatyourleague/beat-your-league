@@ -45,12 +45,15 @@ class Usage:
     rz_targets: int | None
     snaps: int | None
     carries: int | None
+    # Passing attempts — a quarterback's volume (launch review RQ-07/SS-I9,
+    # Oct 2026). Defaulted so every older caller still builds a Usage.
+    pass_attempts: int | None = None
 
     @property
     def has_anything(self) -> bool:
         return any(v is not None for v in
                    (self.targets, self.air_yards, self.rz_targets,
-                    self.snaps, self.carries))
+                    self.snaps, self.carries, self.pass_attempts))
 
     def per_game(self, value: int | float | None) -> float | None:
         if value is None or self.weeks <= 0:
@@ -119,18 +122,28 @@ def recent_usage(raw_dir: Path, player_id: str, season: str,
     )
 
 
-def usage_line(usage: Usage) -> str | None:
+def usage_line(usage: Usage, position: str | None = None) -> str | None:
     """The one-line read a buyer gets, or None when there is nothing to say.
 
     Counts with their window attached, because "18 targets" means nothing
     without knowing over how long. No verdict is attached: this states what
     the player was given, and the reader draws the conclusion.
+
+    A quarterback's volume is his passing attempts, not targets (launch
+    review RQ-07): "Josh Allen … 1 target (0.2 a game), 37 carries" was a
+    trick-play catch reported as his role, with the throws that ARE his role
+    missing. So for a QB the line is attempts and carries, and targets go.
     """
     if usage.weeks <= 0 or not usage.has_anything:
         return None
     span = f"last {usage.weeks} game{'s' if usage.weeks != 1 else ''}"
     bits: list[str] = []
-    if usage.targets is not None:
+    quarterback = position == "QB"
+    if quarterback and usage.pass_attempts:
+        per = usage.per_game(usage.pass_attempts)
+        bits.append(f"{usage.pass_attempts} pass attempt"
+                    f"{'' if usage.pass_attempts == 1 else 's'} ({per:.1f} a game)")
+    if usage.targets is not None and not quarterback:
         per = usage.per_game(usage.targets)
         bits.append(f"{usage.targets} target{'' if usage.targets == 1 else 's'}"
                     f" ({per:.1f} a game)")

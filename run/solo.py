@@ -39,7 +39,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import requests
 
@@ -68,7 +68,9 @@ USAGE_WINDOW = 4
 # plus the counted-usage columns. Reading the season twice — once for points and
 # once for usage — doubles both the parse and the memory for no gain, and the
 # second read was the full 150-column row.
-USAGE_COLUMNS = frozenset({"targets", "receiving_air_yards", "carries"})
+# "attempts" is passing attempts: a quarterback's volume (RQ-07), which his
+# usage line reports in place of the targets that were a trick play's noise.
+USAGE_COLUMNS = frozenset({"targets", "receiving_air_yards", "carries", "attempts"})
 SEASON_COLUMNS = SCORING_COLUMNS | USAGE_COLUMNS
 
 
@@ -382,6 +384,12 @@ class WeekData:
     # already reads it for every player it can place on a team; the report
     # reads it for the rest (launch audit R1).
     roster_out: dict = field(default_factory=dict)
+    # Statuses the gate never reads (method §15 C9), live week only: gsis ->
+    # why. ``not_active`` (not with his team, retired) comes off the lineup
+    # like a released player; ``practice_squad`` keeps his seat and loses any
+    # odds he is part of. Report layer only — both may only remove.
+    not_active: dict = field(default_factory=dict)
+    practice_squad: dict = field(default_factory=dict)
 
 
 def _statuses(directory: PlayerDirectory,
@@ -453,7 +461,8 @@ def _is_live_week(cache_dir: Path, season: str, week: int,
         return False
 
 
-def _live_roster_out(players_csv: Path, is_live_week: bool) -> dict[str, str]:
+def _live_roster_out(players_csv: Path, is_live_week: bool,
+                     statuses: Mapping[str, str] | None = None) -> dict[str, str]:
     """Injured reserve / PUP / suspended / released, from TODAY's players
     release — applied only when the week being built is the one being played
     now. The release holds current status only, so applying it to a replayed
@@ -463,7 +472,7 @@ def _live_roster_out(players_csv: Path, is_live_week: bool) -> dict[str, str]:
     if not is_live_week:
         return {}
     try:
-        return roster_out(players_csv)
+        return roster_out(players_csv, statuses)
     except (OSError, ValueError):
         return {}
 
@@ -584,7 +593,8 @@ def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
             played[gsis] = played.get(gsis, 0) + 1
             for key, column in (("targets", "targets"),
                                 ("air_yards", "receiving_air_yards"),
-                                ("carries", "carries")):
+                                ("carries", "carries"),
+                                ("attempts", "attempts")):
                 value = _float(row.get(column))
                 if value is None:
                     continue
@@ -612,6 +622,7 @@ def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
         seen = present.get(gsis, set())
         targets = counted(got, seen, "targets")
         carries = counted(got, seen, "carries")
+        attempts = counted(got, seen, "attempts")
         out[gsis] = Usage(
             weeks=appearances,
             targets=int(targets) if targets is not None else None,
@@ -621,6 +632,7 @@ def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
             rz_targets=None,
             snaps=None,
             carries=int(carries) if carries is not None else None,
+            pass_attempts=int(attempts) if attempts is not None else None,
         )
     return out
 
@@ -715,7 +727,10 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
 
     is_live_week = _is_live_week(cache_dir, season, week, today, session=session)
     roster_out = _live_roster_out(players_csv, is_live_week)
+    from engine.availability import LIVE_ONLY_OUT, PRACTICE_SQUAD
     return WeekData(
+        not_active=_live_roster_out(players_csv, is_live_week, LIVE_ONLY_OUT),
+        practice_squad=_live_roster_out(players_csv, is_live_week, PRACTICE_SQUAD),
         season=season,
         week=week,
         directory=directory,
@@ -968,6 +983,32 @@ COMBO_GRADES = {
 
 
 MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
+SUPERFLEX_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX",
+                      "K", "DEF")
+
+# The lineup shapes a preregistered arm has graded (reports/setups-method.md:
+# standard, superflex, no K or DEF — the "lineup shape" rows of SETTING_GRADES).
+# Contract C8 (launch review, Oct 2026): the picker may offer other shapes, and
+# the ref carries any slot list, so the shape is read off the slots themselves.
+# Any other shape prints projections and no odds until an arm grades it
+# (engine.solo_report.hold_ungraded_shape) — the number is one nothing checked.
+#
+# Judged on the OFFENSE (QB/RB/WR/TE/FLEX/SUPER_FLEX), as a multiset — the order
+# slots are listed in decides no call. A kicker and a defense slot stand alone:
+# nobody else can play there and they can play nowhere else, so having one, or
+# not, changes no other slot's call. The kicker's calls were graded in the
+# standard shape, and a defense never carries odds. At most one of each.
+_STANDALONE = ("K", "DEF")
+GRADED_SHAPES = frozenset(
+    tuple(sorted(s for s in t if s not in _STANDALONE))
+    for t in (MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
+
+
+def shape_graded(slots: Sequence[str]) -> bool:
+    """Has a preregistered arm graded this lineup shape?"""
+    offense = tuple(sorted(s for s in slots if s not in _STANDALONE))
+    return (offense in GRADED_SHAPES
+            and all(list(slots).count(s) <= 1 for s in _STANDALONE))
 
 
 def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:
@@ -1053,7 +1094,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     def usage_lookup(player_id: str) -> str | None:
         line = data.usage.get(player_id)
         if line:
-            return usage_line(line)
+            return usage_line(line, data.players.position(player_id))
         # Week 1: no counted usage exists yet, and an empty row leaves the
         # reader no way to check why this player is starting over that one.
         return _prior_form_line(player_id, data.prior, spec.rule)
@@ -1078,11 +1119,14 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                teams=_row_teams(spec, data),
                                live_teams=_live_teams(spec, data),
                                live_out=_live_out(spec, data),
+                               unconfirmed=_unconfirmed(spec, data),
+                               shape_graded=shape_graded(spec.slots),
                                injury_report=({"week": data.week - 1,
                                                "listed": getattr(data, "listed", {})}
                                               if data.week > 1 else None))
     report["rising"] = rising_for(data.rising, spec.player_ids,
-                                  last_season_ranks, data.players)
+                                  last_season_ranks, data.players,
+                                  teams=_row_teams(spec, data))
     if seeded:
         # §5's section-level disclosure: the seed moves every number in the
         # lineup (seating, projections, edges), not only the calls that carry
@@ -1115,7 +1159,8 @@ def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
     if statuses is None and not live_now:
         return {}
     today = {p.player_id: p.team for p in data.directory.players} if live_now else {}
-    gone = getattr(data, "roster_out", None) or {}
+    gone = {**(getattr(data, "roster_out", None) or {}),
+            **(getattr(data, "not_active", None) or {})}
     out: dict[str, str] = {}
     for pid in spec.player_ids:
         record = (statuses or {}).get(pid) or {}
@@ -1136,7 +1181,8 @@ def _live_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
     a reserve list are left out — neither has a team question to answer."""
     if not getattr(data, "is_live_week", False):
         return {}
-    gone = getattr(data, "roster_out", None) or {}
+    gone = {**(getattr(data, "roster_out", None) or {}),
+            **(getattr(data, "not_active", None) or {})}
     statuses = data.availability.statuses or {}
     wanted = set(spec.player_ids)
     return {p.player_id: str(p.team) for p in data.directory.players
@@ -1146,9 +1192,19 @@ def _live_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:
 
 
 def _live_out(spec: RosterSpec, data: WeekData) -> dict[str, str]:
-    """player -> why he can't play, for this roster, the live week only."""
-    gone = getattr(data, "roster_out", None) or {}
+    """player -> why he can't play, for this roster, the live week only —
+    a reserve list or release (the gate's own table) or a status only the
+    report reads (not with his team, retired: method §15 C9)."""
+    gone = {**(getattr(data, "not_active", None) or {}),
+            **(getattr(data, "roster_out", None) or {})}
     return {pid: gone[pid] for pid in spec.player_ids if pid in gone}
+
+
+def _unconfirmed(spec: RosterSpec, data: WeekData) -> dict[str, str]:
+    """player -> why he isn't confirmed to play though he may (the practice
+    squad), for this roster, the live week only (method §15 C9)."""
+    squad = getattr(data, "practice_squad", None) or {}
+    return {pid: squad[pid] for pid in spec.player_ids if pid in squad}
 
 
 def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
