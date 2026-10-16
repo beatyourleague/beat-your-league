@@ -21,8 +21,20 @@ Rules, each because a post is the one place we speak without a report around it:
 - **The call leads with the question, then a reason, then the number**
   (launch audit). It used to open with the % and a link, and the closest call
   is by construction near a coin flip — a bare "55%" explained nothing. Now it
-  is the question a manager actually asks ("LaPorta or Odunze this week?"),
-  ONE line of facts the report itself prints for that pair, and the % last.
+  is the question a manager actually asks, in their words and with the slot
+  ("Start Odunze or Shaheed at FLEX this week?"), ONE line of facts the
+  report itself prints for that pair, and the % last.
+- **Like with like** (G23, Oct 2026). The fact line once set one player's
+  targets beside the other's points ("Odunze, 26 targets. Shaheed's last
+  three games: 3.4, 12.3 and 4.3 points"), which compares nothing. Both
+  sides now get the SAME measure: last games' points when the report prints
+  them for both, else their counted usage when both have it, else the
+  projection the report prints on both rows.
+- **Only a % that is on the record** (G04). A % posted in public is a
+  published probability, so the drafts are built from the live sample with
+  every odds NOT in the public ledger at the same value withheld
+  (`render.live_sample.recorded_only`): a post can never quote a number that
+  Monday's grading will not settle.
 - **An if/then that changes no seat is not news.** "If X (bench) is cleared:
   keep Y" was drafted as a plan; only plans that move somebody are drafted.
 - **A week with no call still says something true.** No call means no
@@ -35,6 +47,7 @@ Rules, each because a post is the one place we speak without a report around it:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -70,36 +83,70 @@ def _short_names(a: str, b: str) -> tuple[str, str]:
     return (a, b) if short_a.lower() == short_b.lower() else (short_a, short_b)
 
 
-def _games_clause(short: str, games: list[float]) -> str | None:
-    shown = [f"{g:.1f}" for g in games[-3:]]
-    if not shown:
-        return None
-    label = {1: "only game", 2: "last two games"}.get(len(shown), "last three games")
-    listed = (shown[0] if len(shown) == 1
-              else f"{', '.join(shown[:-1])} and {shown[-1]}")
-    return f"{short}'s {label}: {listed} points."
+def _listed(values: list[str]) -> str:
+    return values[0] if len(values) == 1 else f"{', '.join(values[:-1])} and {values[-1]}"
 
 
-def _fact_clauses(report: Mapping[str, Any], player_id: str | None,
-                  short: str) -> list[str]:
-    """What the report prints about one player, best first: the counted usage
-    on his lineup row (quoted verbatim, so the post can never say more than the
-    report did), then his recent games from the bench block."""
+def _row(report: Mapping[str, Any], player_id: str | None) -> Mapping[str, Any]:
+    """The player's row, lineup first then bench ({} when he has none)."""
+    for key in ("lineup", "bench"):
+        for row in report.get(key) or []:
+            if player_id and row.get("player_id") == player_id:
+                return row
+    return {}
+
+
+def _games(row: Mapping[str, Any]) -> list[str]:
+    return [f"{g:.1f}" for g in list(row.get("games") or [])[-3:]]
+
+
+def _usage_kind(usage: str) -> str | None:
+    """What a usage line counts first — "targets" or "carries" — so two lines
+    are compared only when they count the same thing."""
+    match = re.search(r"\d+ (targets|carries)", usage or "")
+    return match.group(1) if match else None
+
+
+def _projections(regret: Mapping[str, Any]) -> tuple[str, str] | None:
+    for driver in regret.get("drivers") or []:
+        if driver.get("label") == "proj":
+            match = re.fullmatch(r"\s*([\d.]+)\s+vs\s+([\d.]+)\s*", str(driver.get("value") or ""))
+            if match:
+                return match.group(1), match.group(2)
+    return None
+
+
+def _like_for_like(report: Mapping[str, Any], regret: Mapping[str, Any],
+                   a: str, b: str) -> list[str]:
+    """One line of facts about BOTH players in the same unit, best first:
+    their last games' points, then their counted usage when both lines count
+    the same thing (quoted verbatim, so the post never says more than the
+    report did), then the projection the report prints on both rows. A line
+    that sets one player's targets beside the other's points compares nothing
+    (G23), so a measure only one of them has is never used."""
+    start, over = _row(report, regret.get("start_id")), _row(report, regret.get("over_id"))
     out: list[str] = []
-    for row in report.get("lineup") or []:
-        if player_id and row.get("player_id") == player_id and row.get("usage"):
-            out.append(f"{short}, {row['usage']}.")
-    for row in report.get("bench") or []:
-        if player_id and row.get("player_id") == player_id:
-            clause = _games_clause(short, list(row.get("games") or []))
-            if clause:
-                out.append(clause)
+    ga, gb = _games(start), _games(over)
+    if len(ga) >= 2 and len(gb) >= 2:
+        out.append(f"Last games, in points: {a} {_listed(ga)}; {b} {_listed(gb)}.")
+    ua, ub = start.get("usage"), over.get("usage")
+    if ua and ub and _usage_kind(ua) and _usage_kind(ua) == _usage_kind(ub):
+        out.append(f"{a}, {ua}; {b}, {ub}.")
+    projected = _projections(regret)
+    if projected:
+        out.append(f"{a} projects {projected[0]} points this week, {b} {projected[1]}.")
     return out
 
 
+def _question(regret: Mapping[str, Any], a: str, b: str) -> str:
+    """What a manager types into a group chat: both names and the slot."""
+    slot = str(regret.get("slot") or "").replace("SUPER_FLEX", "superflex")
+    return f"Start {a} or {b}" + (f" at {slot}" if slot else "") + " this week?"
+
+
 def _call_post(report: Mapping[str, Any], url: str) -> str | None:
-    """Question, one line of facts, then the number. None when no version of
-    it fits, rather than a post cut off mid-thought."""
+    """Question, one like-for-like line of facts, then the number. None when
+    no version of it fits, rather than a post cut off mid-thought."""
     regret = report.get("regret") or {}
     if regret.get("confidence") is None:
         return None
@@ -111,14 +158,10 @@ def _call_post(report: Mapping[str, Any], url: str) -> str | None:
             f"{round(regret['confidence'] * 100)}% to outscore {b}"
             + (" (last season counted in)" if seeded else "")
             + f". Full report: {url}")
-    clauses = (_fact_clauses(report, regret.get("start_id"), a)[:1]
-               + _fact_clauses(report, regret.get("over_id"), b)[:1])
-    # Both players' facts if they fit; failing that, one of them. A call with
-    # no fact at all is the bare number this template exists to replace.
-    for chosen in (clauses, clauses[1:], clauses[:1]):
-        if not chosen:
-            continue
-        text = f"{a} or {b} this week? {' '.join(chosen)} {tail}"
+    # The best like-for-like fact that fits. A call with no fact at all is the
+    # bare number this template exists to replace.
+    for fact in _like_for_like(report, regret, a, b):
+        text = f"{_question(regret, a, b)} {fact} {tail}"
         if len(text) <= LIMIT:
             return text
     return None
@@ -219,10 +262,15 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--processed-dir", type=Path, default=None,
+                        help="where the public ledger lives (default: data/processed)")
     args = parser.parse_args(argv)
     try:
-        from render.live_sample import build
-        report = build()
+        from render.live_sample import PROCESSED_DIR, build, recorded_only
+        # Every % the ledger does not hold at the same value is withheld
+        # before a single post is drafted (G04): the posts are public, so a
+        # number in one must be a number Monday's grading will settle.
+        report = recorded_only(build(), args.processed_dir or PROCESSED_DIR)
     except Exception as exc:  # noqa: BLE001 — keep last week's drafts
         print(f"this week's drafts were not rebuilt ({exc}); the previous file "
               f"stays.")

@@ -1,366 +1,376 @@
 # LAUNCH.md — opening mid-season
 
 Every owner action left before a stranger's payment becomes a Tuesday email, in order, with
-the exact strings. The code is done and tested; nothing here is engineering. Rewritten Sep 29
-2026, in Week 4 of 18 — the Sep 8 launch plan it replaces is in git history.
-
-**Why speed matters now:** a buyer who joins today gets a full file on the day they pay. By
-Week 4 the season has three games on record, so the odds print for every league setup, not
-only the one we graded early. Every week spent on steps 1–4 is a week of the season nobody
-can buy.
+the exact strings. The code is done and tested; nothing here is engineering. Updated Oct 16
+2026, in Week 6 of 18.
 
 ---
 
 ## Where things stand
 
-**Launch readiness (Oct 15 2026):** a full audit — market research, eight buyer personas,
-product, site, operations, economics, legal — is in `reports/launch-readiness.md`. Its
-verdict: a viable product for the busy money-league manager, not ready to take money until
-the steps below are done. **Run `make launch-check`** at any point: every remaining item
-shows as OWNER (yours) or FAIL (code), and it says READY when nothing is left.
+**Run `make launch-check`** (about 8 minutes; `make launch-check-fast` takes one). Every
+remaining item shows as OWNER (yours) or FAIL (code), and it says READY when nothing is left.
+It reads more when you give it more, all read-only:
+- `gh auth login` once: secrets, cron timing, the fork-PR setting.
+- `RESEND_API_KEY` in the shell: whether Resend says the domain is verified.
+- `STRIPE_API_KEY` (the read-only key from section 8): public details, refund and dispute
+  rates, sales against the tax threshold.
+- The accessibility gate needs axe-core once: `npm install --no-save axe-core@4.11.4`.
 
-**The order that matters:** steps 1, 2, 3 and 5 (the form Worker is now part of opening —
-without it roster changes, seats and the waitlist have nowhere to go), then step 4's real
-purchase, then open. Aim for the Week 7 Tuesday (Oct 20); each closed week costs about an
-eighth of what's left of 2026.
+**The order — the same everywhere in this file:**
+1. **Step 5, the form Worker.** First: it needs nothing else.
+2. **Steps 1–3:** fresh payment links, Resend, GitHub secrets. Under an hour, one sitting.
+3. **I put the new links on the join page.** Only once the Worker URL is in: the launch check
+   FAILs a checkout opened without it, because then every roster change is a reply you apply
+   by hand.
+4. **Step 4:** your own purchase, watched end to end.
+5. **Opening morning (step 6):** everyone can buy, and the waitlist gets its one email.
+
+Aim for the Week 7 Tuesday (Oct 20). Each closed week costs about an eighth of what's left of
+2026 (`.venv/bin/python -m run.economics` shows the arithmetic).
 
 Done:
-- `beatyourleague.com` on GitHub Pages; `hello@beatyourleague.com` forwards to your inbox.
-- Terms (Ontario law) and privacy pages. The refund window is counted from each buyer's own
-  purchase and closes when their second weekly file's week kicks off.
-- Three Stripe products and payment links — $39 season pass, $14.99 monthly, $99 League
-  Pass.
+- `beatyourleague.com` on GitHub Pages (see the hosting decision, section 10);
+  `hello@beatyourleague.com` forwards to your inbox.
+- Terms (Ontario law) and privacy pages.
+- Three Stripe products: $39 season pass, $14.99 monthly, $99 League Pass.
 - The Stripe customer portal is on; its login link is in the terms and in every report.
 - The restricted key `github-actions-crons` exists.
 
-**Checkout is closed until step 3 is done** (Sep 29 2026). The join page's payment links are
-emptied and the pricing buttons say "Checkout opens at launch", because nothing reads Stripe
-until step 3's key is set — a buyer could have paid and received no welcome and no file. Steps
-1–3 take under an hour; do them in one sitting, and checkout reopens right after.
+**Checkout has been closed since Sep 29.** The join page's links are empty and the buttons
+say "Checkout opens at launch", because nothing read Stripe without step 3's key.
 
-**First, check Stripe → Payments for anything since Aug 27**, when the links went live. Any
-payment from then was never processed, so that buyer has had nothing. Tell me if there is one:
-the first run after step 3 sends their welcome and first file, and they're owed an apology and
-the offer of a refund.
+**Two checks first:**
+- **Stripe → Payments, anything since Aug 27?** Any payment from then was never processed.
+  Tell me: the first run after step 3 sends that buyer their welcome and first report, and
+  they're owed an apology and the offer of a refund.
+- **Close the old automatic issues (#6–#21)** once this code is pushed. Their titles are
+  dated, so the new runs never comment on them:
+  ```bash
+  for n in $(seq 6 21); do gh issue close $n --comment "Fixed: runs exit quietly until launch."; done
+  ```
 
 ---
 
-## 1. Finish the payment links (~15 min)
+## 1. Fresh payment links (~20 min)
 
-1. Open https://dashboard.stripe.com/payment-links in **live** mode. For each of the three
-   links: open it → **Edit** → switch **Enable Managed Payments** off → **Save**.
-2. While each one is open, check it matches:
+The three links that were live Aug 27–Sep 29 are in this repo's public history, so anyone can
+still open one. Make three new links and switch the old ones off.
+
+1. https://dashboard.stripe.com/payment-links in **live** mode. Open each of the three old
+   links (made Aug 27) → **Deactivate**.
+2. **+ New** — one link per product ($39 season pass, $14.99 monthly, $99 League Pass), each
+   set like this:
 
    | Setting | Should be | Why |
    |---|---|---|
-   | Enable Managed Payments | Off | 3.5% on top of the normal fee, and it makes Stripe the seller, which contradicts the terms. Revisit only if EU sales stop being incidental |
+   | Enable Managed Payments | Off | 3.5% on top, and it makes Stripe the seller, which contradicts the terms |
    | Require customers to accept your terms of service | On | |
-   | Collect customer addresses | On | Tax thresholds count per country and per state. The address stays in Stripe; a test keeps it out of everything that builds reports |
+   | Collect customer addresses | On | Tax thresholds count per country and state; the address stays in Stripe |
    | Customer names, business names, phone | Off | Nothing uses them |
-   | Collect tax automatically | Off | We're registered for tax nowhere yet |
-   | Let customers adjust quantity | Off | One purchase is one roster; a quantity of 2 charges twice for one report |
+   | Collect tax automatically | Off | Not registered for tax anywhere yet |
+   | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
    | Include a free trial | Off | The refund window is the trial |
-   | Limit the number of payments | Off | `run/billing.py` ends monthly billing at season's end from the real schedule |
-   | Promotion codes | Off | The founding rate is the discount, and the terms promise it at every renewal |
-   | After payment | Redirect to `https://beatyourleague.com/thanks.html` — and for the **League Pass link only**, `https://beatyourleague.com/thanks.html?plan=pass` | The pass buyer's thank-you page then shows the seat link and a line to paste in the league chat |
+   | Limit the number of payments | Off | `run/billing.py` ends monthly billing at season's end |
+   | Promotion codes | Off | The founding rate is the discount |
+   | After payment | Redirect to `https://beatyourleague.com/thanks.html` — **League Pass link only:** `https://beatyourleague.com/thanks.html?plan=pass` | |
 
-   If Managed Payments can't be switched off on an existing link, make a replacement link for
-   that product with the settings above, **deactivate** the old one, and send me the new URL
-   and its `plink_` id.
-3. **Settings → Business → Public details:** Terms of service URL
+3. Copy each new link's URL and its `plink_` id. **Send me the three URLs** (not secret).
+4. **Settings → Business → Public details:** Terms of service URL
    `https://beatyourleague.com/terms.html`, Privacy policy URL
    `https://beatyourleague.com/privacy.html`. Public business name **Beat Your League**,
-   support email **hello@beatyourleague.com**, and **no phone number or personal address** —
-   these show on receipts, so they decide whether you stay anonymous.
+   support email **hello@beatyourleague.com**, **no phone number and no personal address** —
+   these print on receipts, so they decide whether you stay anonymous.
 
-   **Settings → Billing → Customer portal:** confirm **Cancel subscriptions** is allowed
-   (the terms promise self-serve cancelling), and set **Cancellation mode** to **At end of
-   billing period** — the terms and every report say reports continue to the end of the
-   period already paid for, then stop.
+   **Settings → Billing → Customer portal:** **Cancel subscriptions** allowed, **Cancellation
+   mode: At end of billing period**.
 
-   **Settings → Business → Branding** (the new logo, Sep 29 2026 — Stripe still shows the
-   old one or none until you do this; it's on the checkout page, receipts and invoices):
-   - **Icon:** upload `site/brand/icon.png`
-   - **Logo:** upload `site/brand/logo.png`
-   - **Brand color:** `#101E33` (navy) · **Accent color:** `#B3402F` (brick). Not the gold:
-     on white it's unreadable as a link or under white text.
-4. **Put the renewal terms above Stripe's Pay button.** It's API-only, with no Dashboard
-   field. In Terminal, from the repo folder, paste this whole line:
+   **Settings → Business → Branding:** icon `site/brand/icon.png`, logo
+   `site/brand/logo.png`, brand color `#101E33`, accent `#B3402F` (not the gold: unreadable
+   on white).
+5. **Renewal terms above Stripe's Pay button** (API only). Replace the three `plink_…`
+   placeholders with the NEW ids, then paste the whole line in Terminal from the repo folder:
    ```bash
-   STRIPE_PAYMENT_LINKS='s:plink_1U8yWRQN4gk9bpTQAg1FZS1o,m:plink_1U8yVmQN4gk9bpTQ0Tk89BjH,p:plink_1U8yTVQN4gk9bpTQydWBQFIB' .venv/bin/python infra/stripe_paylink_text.py
+   STRIPE_PAYMENT_LINKS='s:plink_NEW_SEASON,m:plink_NEW_MONTHLY,p:plink_NEW_PASS' .venv/bin/python infra/stripe_paylink_text.py
    ```
-   At the prompt, paste the `setup-payment-link-text` key (Developers → API keys → **Reveal
-   live key**; it starts `rk_live_`). **Nothing appears as you paste** — that's normal. Never
-   type your Mac password there.
-   - Success is three `[ok ]` lines, then "All three set and verified."
-   - `You cannot use custom_text with Managed Payments` — that link still has it on; redo 1.
-   - `HTTP 401` — the key was cut off; copy it again. `HTTP 403` — the key lacks Payment
-     Links **Write**.
-   - If Stripe won't reveal the key, create a new restricted key with Payment Links **Write**
-     and everything else None, and use that.
-
-   The sentences come from `render/welcome.py`, which a test ties to the pricing page, so
-   Stripe's page can't disagree with ours. The script also makes the **terms box required**,
-   with a line naming the yearly renewal, its amount and 18+ (California's auto-renewal law
-   wants that consent, and a record of it: the intake stamps the time and terms version on
-   each customer). That's why step 3's Terms of service URL must be set first.
-5. **Delete the `setup-payment-link-text` key.** A key that can edit payment links can change
-   what buyers pay, and nothing needs it again.
+   At the prompt, paste the `setup-payment-link-text` key (it starts `rk_live_`; nothing
+   shows as you paste — normal; never your Mac password).
+   - Success: three `[ok ]` lines, then "All three set and verified."
+   - `You cannot use custom_text with Managed Payments`: that link still has it on.
+   - `HTTP 401`: the key was cut off. `HTTP 403`: it lacks Payment Links **Write**.
+   - No key to reveal? Make a restricted key with Payment Links **Write**, everything else None.
+6. **Delete the `setup-payment-link-text` key.** A key that edits payment links can change
+   what buyers pay.
 
 **Tell me** what Terminal printed (it never shows the key).
 
 ## 2. Resend — the sender (~20 min)
 
 1. Free account at resend.com → **Domains → Add domain** → `beatyourleague.com`.
-2. Add every record it shows in **Cloudflare → DNS**, each set to **DNS only** (grey cloud).
-   They sit on subdomains, so they don't collide with the email forwarding. Wait for Resend to
-   show **Verified** (minutes, sometimes an hour).
-3. **API Keys → Create:** permission **Sending access**, domain `beatyourleague.com`. Paste it
-   straight into the GitHub secret in step 3 — nowhere else.
+2. Add every record it shows in **Cloudflare → DNS**, each **DNS only** (grey cloud). Wait for
+   **Verified** (minutes, sometimes an hour).
+3. **API Keys → Create:** **Sending access**, domain `beatyourleague.com`. Straight into the
+   GitHub secret in step 3, nowhere else.
+4. **DMARC (5 min):** Cloudflare → **Email → DMARC Management** → enable, or a TXT record
+   `_dmarc` = `v=DMARC1; p=none; rua=mailto:hello@beatyourleague.com`. After a few clean
+   weeks, `p=quarantine`.
+5. **Reply as hello@, not as you (15 min):** Gmail → Settings → Accounts → **Send mail as** →
+   `hello@beatyourleague.com`, SMTP `smtp.resend.com`, port 465, username `resend`, password
+   = a second Resend key with Sending access. Your personal address never reaches a customer.
+6. **A sender address (~US$10/month):** US and Canadian anti-spam law both want a postal
+   address in commercial email. Rent a virtual mailbox or PO box — never your home — and put
+   it in the GitHub secret `SENDER_POSTAL_ADDRESS` (step 3). Every email prints it; the launch
+   announcement refuses to send without it.
 
-The free tier sends 3,000 a month but only **100 a day**, which the Tuesday run outgrows at
-about 85 subscribers. The $20/month plan goes into PLAN §2's budget table the week that
-happens, and before the free-report button is switched on.
-
-4. **DMARC (5 min):** Cloudflare → your domain → **Email → DMARC Management** → enable, or
-   add a TXT record named `_dmarc` with `v=DMARC1; p=none; rua=mailto:hello@beatyourleague.com`.
-   Inboxes distrust a new sending domain without one. After a few clean weeks, change `p=none`
-   to `p=quarantine`.
-5. **Reply as hello@, not as you (15 min):** in Gmail → Settings → Accounts → **Send mail as**
-   → add `hello@beatyourleague.com`, SMTP server `smtp.resend.com`, port 465, username
-   `resend`, password = a second Resend key with Sending access. Refund and roster emails
-   then go out from hello@, so your personal address never reaches a customer. The privacy
-   policy names Google (Gmail) as the mailbox hello@ forwards to; if that ever changes, the
-   policy changes with it.
-6. **A sender address (decision, ~US$10/month):** US and Canadian anti-spam law want a postal
-   address in marketing email. Rent a virtual mailbox or PO box — never your home — and put it
-   in the GitHub secret `SENDER_POSTAL_ADDRESS` (step 3). The launch announcement refuses to
-   send without it. One question to an Ontario lawyer about online-sale disclosures is worth
-   booking before scale (the audit flags it; not legal advice).
+The free tier sends 100 a day, which one Tuesday outgrows at about 85 recipients. Move to the
+$20/month plan that week (PLAN §2), then `RESEND_PLAN=pro` in your shell tells the launch
+check.
 
 ## 3. GitHub secrets (~10 min)
 
-Open https://github.com/beatyourleague/beat-your-league/settings/secrets/actions → **New
-repository secret**, once per row. Names exactly as written.
+https://github.com/beatyourleague/beat-your-league/settings/secrets/actions → **New repository
+secret**, once per row, names exactly as written:
 
 | Name | Value |
 |---|---|
 | `STRIPE_API_KEY` | the `github-actions-crons` key (Reveal live key) |
-| `STRIPE_PAYMENT_LINKS` | `s:plink_1U8yWRQN4gk9bpTQAg1FZS1o,m:plink_1U8yVmQN4gk9bpTQ0Tk89BjH,p:plink_1U8yTVQN4gk9bpTQydWBQFIB` |
+| `STRIPE_PAYMENT_LINKS` | `s:<new season plink id>,m:<new monthly plink id>,p:<new pass plink id>` |
 | `EMAIL_PROVIDER` | `resend` |
 | `EMAIL_FROM` | `Beat Your League <reports@beatyourleague.com>` |
 | `EMAIL_REPLY_TO` | `hello@beatyourleague.com` |
 | `RESEND_API_KEY` | from step 2 |
 | `SITE_URL` | `https://beatyourleague.com` |
 | `BILLING_PORTAL_URL` | `https://billing.stripe.com/p/login/cNi4gB3Nx3zkcXt1IKaMU00` |
-| `SENDER_POSTAL_ADDRESS` | the rented mailbox address from step 2.6 (one line) |
+| `SENDER_POSTAL_ADDRESS` | the mailbox address from step 2.6 (one line) |
 
-**Also on GitHub (1 min, important):** Settings → Actions → General → **Fork pull request
-workflows from outside collaborators** → **Require approval for all outside collaborators**.
-The repository is public, and without this anyone could open a pull request whose workflow
-reads the automation's cache — which holds subscribers' emails and rosters.
+**Also (1 min, important):** Settings → Actions → General → **Fork pull request workflows
+from outside collaborators** → **Require approval for all outside collaborators**. The repo
+is public; without this a stranger's pull request could read the automation's cache, which
+holds subscribers' emails and rosters.
 
-`github-actions-crons` needs exactly three permissions: Checkout Sessions **Read**, Customers
-**Write**, Subscriptions **Write**; everything else None. If Stripe won't reveal it, recreate
-it with those three. Subscriptions must be **Write**: `run/billing.py` sets every monthly
-subscription to stop at season's end, and with Read only, monthly buyers would be billed
-through the offseason (the daily run goes red if it can't write, so you'd hear about it).
+`github-actions-crons` needs exactly: Checkout Sessions **Read**, Customers **Write**,
+Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
+stops monthly billing at season's end.
 
-Keys go only into these boxes — never into chat, a note or a file. The three remaining
-secrets (`FORM_ENDPOINT`, `FORM_API_KEY`, `UPDATE_SECRET`) come in step 5; until then the
-features that need them stay off rather than half-working.
+Keys go only into these boxes — never into chat, a note or a file.
 
-**Tell me when all nine are in.** I put the three payment links back on the join page and
-switch the pricing buttons on; it's live on the next push, and step 4 needs it.
+**Tell me when all nine are in.** With step 5's Worker live too, I put the new links on the
+join page and switch the pricing buttons on; it's live on the next push.
 
 ## 4. The proving run (~1 hour)
 
-This repo's history includes a cron that could never have mailed anybody and still looked
-green. Nobody else's money moves until you've watched your own go all the way through.
+Nobody else's money moves until you've watched your own go all the way through.
 
-1. **Once checkout has reopened, between a Tuesday morning and that week's first kickoff**
-   (table in section 7), buy the **$39 season pass** at https://beatyourleague.com/join/
-   with your own email and a real card. Enter your real roster.
-2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should finish green.
-3. **Check your inbox for two emails:**
+1. **Between a Tuesday morning and that week's first kickoff** (table in section 8), buy the
+   **$39 season pass** at https://beatyourleague.com/join/ with your own email, a real card
+   and your real roster.
+2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should go green.
+3. **Two emails:**
    - **The welcome:** $39, renews yearly at $39, refunds until your second weekly report's
-     week kicks off, and the cancel link opens your Stripe billing page.
-   - **Your first file:** this week's report, because you bought before kickoff. Open it on
-     your phone and on a computer.
-   - **Open it in the clients we can't test from here:** Gmail (phone and web, with your
-     phone in dark mode), Apple Mail and Outlook if you have them. Look for a header that's
-     lost its navy, tick boxes that vanished, a preview line that reads as clutter, or a
-     message ending in "View entire message". Tell me what you see and I'll fix it.
-4. **Tell me both arrived.** I turn on `CHECKOUT_CAN_COMPLETE`, which retires the "leave your
-   email" box and tells visitors their first file lands today. It's live on the next push.
-5. **Next Tuesday,** confirm the new week's file arrives by about 8:30am ET and the
-   weekly-report run in Actions is green.
+     week kicks off, and a cancel link that opens your Stripe billing page.
+   - **Your first report:** this week's, because you bought before kickoff.
+   - Open both in Gmail (phone in dark mode, and web), Apple Mail and Outlook if you have
+     them. Look for a header that lost its navy, vanished tick boxes, a cluttered preview
+     line, or "View entire message". Tell me what you see.
+4. **Tell me both arrived.** I turn on `CHECKOUT_CAN_COMPLETE` (step 6).
+5. **Next Tuesday:** the new week's report by about 8:30am ET, weekly-report green in Actions.
 
-Then decide what happens to your subscription (section 9): keep it and it starts the public
-record, or cancel and refund it as section 7 describes. A refund doesn't return Stripe's fee
-(about $2.72 on a $39 pass from a Canadian account, or about $1.94 with a USD payout account;
-`.venv/bin/python -m run.economics` shows the arithmetic).
+Then decide about your subscription (section 10). A refund doesn't return Stripe's fee: about
+$2.72 on a $39 pass from a Canadian account, or about $1.94 with a USD payout account.
 
-## 5. The form Worker (~20 min) — the email list, League Pass and roster updates
+## 5. The form Worker (~20 min) — do this first
 
-**Do this one first — it needs nothing from steps 1–4.** While checkout is closed, the
-homepage's "Tell me when it opens" form is the only thing a visitor can do, and until this
-Worker exists it just opens their email app (and does nothing at all on a computer without
-one). Once it's live, the form saves the address on the spot and says so.
+It needs nothing from steps 1–4. One Cloudflare Worker (in the same account as the domain)
+switches on:
+- **The email list** on the homepage and join page. Until then the form opens the visitor's
+  own email app, and does nothing on a computer without one.
+- **League Pass seats**, and each payer's own seat link.
+- **"Roster changed?" in every report**, self-serve: the subscriber pastes the new roster, we
+  email the address on the subscription a button to confirm, and the next report uses it.
+  Without the Worker every change is a reply you apply yourself (`make roster-update`,
+  section 8).
 
-Three features wait on one Cloudflare Worker, in the same account as the domain:
-- **The launch email list** on the homepage and the join page.
-- **League Pass seats.** The League Pass page's button stays hidden until then.
-- **"Roster changed?" links in every report.** Without them, a subscriber's report drifts out of
-  date as waivers change their roster, and every change is a reply you have to apply by hand.
-  With them it's self-serve: the subscriber pastes the new roster, we email the address on
-  their subscription a button to confirm, and the next report — and Saturday's final check —
-  use it. The link is safe to forward: it grants nothing without that inbox.
-
-The Worker ([infra/form-worker.js](infra/form-worker.js), about 60 lines) holds nothing secret
-and decides nothing: every row is checked before it reaches the subscriber list.
+The Worker ([infra/form-worker.js](infra/form-worker.js)) holds nothing secret and decides
+nothing: every row is checked before it reaches the subscriber list.
 
 1. Cloudflare → **Workers & Pages → Create → Worker** → paste `infra/form-worker.js` →
    **Deploy**.
-2. **Storage & Databases → KV** → create a namespace (any name). Worker → **Settings →
-   Bindings → KV namespace**, variable name **`ROWS`**.
+2. **Storage & Databases → KV** → create a namespace. Worker → **Settings → Bindings → KV
+   namespace**, variable name **`ROWS`**.
 3. Worker → **Settings → Variables:** `SITE_ORIGIN` = `https://beatyourleague.com`, and
-   `FORM_API_KEY` = a random string, marked secret. Make one with:
+   `FORM_API_KEY` = a random string, marked secret:
    ```bash
    openssl rand -hex 24
    ```
-4. Make the roster-update secret:
+4. The signing secret — it signs roster-update codes AND each League Pass payer's seat link:
    ```bash
    openssl rand -hex 32
    ```
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
-   `UPDATE_SECRET` = step 4's value.
-6. **Tell me the Worker URL** (it isn't a secret). I wire it into the homepage's email form
-   and the join, confirm and League Pass pages, switch the League Pass button on (the join
-   page's own League Pass checkout opens by itself once the Worker URL is in — it is never
-   sold before seats can be claimed), change the FAQ's roster answer to the link, and — once
-   email sending (step 2) works too — turn on the homepage's "Try it free on your roster"
-   button (`TRIAL_OPEN`). Keep that button on only while the season is running: a free-report
-   request made before the season's first game, or more than 14 days old, is never mailed. Steps 4–5 can wait for launch; steps 1–3 and 6 switch the
-   email list on today.
-
-7. **Put it on your own domain (5 min):** Worker → **Settings → Domains & Routes → Add →
-   Custom domain** → `forms.beatyourleague.com`. Use that as the Worker URL everywhere: a
-   `*.workers.dev` address is easy for browsers and filters to block, and `make launch-check`
-   warns about it.
+   `UPDATE_SECRET` = step 4's value. (`SITE_URL` from step 3 builds the seat links.)
+6. **Your own domain (5 min):** Worker → **Settings → Domains & Routes → Add → Custom
+   domain** → `forms.beatyourleague.com`. Use that as the Worker URL everywhere: a
+   `*.workers.dev` address is easily blocked, and the launch check warns about it.
+7. **Tell me the Worker URL** (not a secret). I wire it into the homepage form and the join,
+   confirm and League Pass pages, switch on the League Pass button and the FAQ's roster
+   answer, and — once email sends (step 2) — the "Try it free" button (`TRIAL_OPEN`).
 8. **Start the crons on time (5 min, same Worker).** GitHub started the Tuesday runs 5–7
-   hours late on Oct 6 and Oct 13, so the Worker now starts them itself and GitHub's own
-   schedules stay as the backup. (a) GitHub → Settings → Developer settings → Personal access
-   tokens → **Fine-grained tokens → Generate new token**: resource owner `beatyourleague`,
-   **Only select repositories → beat-your-league**, Repository permissions → **Actions: Read
-   and write**, nothing else; the longest expiry offered, and put that date in your calendar.
-   (b) Worker → **Settings → Variables and Secrets → Add**, type **Secret**, name
-   `GH_DISPATCH_TOKEN`, value = that token. (c) Worker → **Settings → Triggers → Cron
-   Triggers → Add** → `0,30 * * * *`. Re-pasting the current `infra/form-worker.js` and
-   deploying also turns on automatic deletion of form rows after about 400 days (the privacy
-   policy promises it). Nothing is sent twice if both GitHub and the Worker start a run: every
-   email is keyed.
+   hours late on Oct 6 and 13, so the Worker starts them and GitHub's own schedules stay as
+   the backup.
+   - GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained →
+     Generate**: owner `beatyourleague`, only `beat-your-league`, **Actions: Read and
+     write**, nothing else, the longest expiry — and put that date in your calendar.
+   - Worker → **Settings → Variables and Secrets → Add**, type **Secret**,
+     `GH_DISPATCH_TOKEN` = that token.
+   - Worker → **Settings → Triggers → Cron Triggers → Add** → `17,47 * * * *`.
 
-Until then: the email form falls back to the visitor's own email app, seat claims are
-refused with a reason, and the update link simply doesn't appear in reports.
+   Nothing is sent twice if both start a run: every email is keyed. Re-pasting the current
+   worker also turns on deletion of form rows after about 400 days (the privacy policy
+   promises it).
 
-## 6. Selling from Week 4
+## 6. Opening morning
 
-The order is PLAN §5.1's — subscribers per hour of your time — with one channel held back.
+1. **After step 4's two emails arrive,** I turn on `CHECKOUT_CAN_COMPLETE`: the "leave your
+   email" box retires and the page says the first report lands today.
+2. **The same morning, the waitlist's one email.**
+   - Copy every sign-up that came in by email (to hello@, subject about the launch) into a
+     file `signups.csv` with one column headed `email`.
+   - In Terminal, set the sending details for this window only (`read -s` keeps keys out of
+     your history):
+     ```bash
+     read -s RESEND_API_KEY && export RESEND_API_KEY
+     read -s FORM_API_KEY && export FORM_API_KEY
+     export EMAIL_PROVIDER=resend EMAIL_FROM='Beat Your League <reports@beatyourleague.com>'
+     export SITE_URL=https://beatyourleague.com FORM_ENDPOINT=https://forms.beatyourleague.com
+     export SENDER_POSTAL_ADDRESS='<the mailbox address>'
+     ```
+   - Preview both lists, then send both:
+     ```bash
+     make waitlist-preview && make waitlist-preview LIST=signups.csv
+     make waitlist-send && make waitlist-send LIST=signups.csv
+     ```
+     Anyone on both lists gets one email.
+   - **Commit and push `data/processed/sent.jsonl`.** The crons read the committed copy; it
+     is what stops a second send. Then delete `signups.csv`.
 
-1. **Your own leagues.** A season pass per manager, or the League Pass once step 5 is done.
-   Anyone who sends you their roster can have this week's file on it, free. Copy the roster
-   they sent, then run:
+## 7. Selling
+
+The order is PLAN §5.1's — subscribers per hour of your time.
+
+1. **One handle, three places (30 min, once).** "Beat Your League" on X, Reddit and Discord —
+   the same pseudonymous name, never your personal account. Bio: *"I make Beat Your League, a
+   weekly start/sit report for your own roster"* and the link `beatyourleague.com`. Replies
+   never carry the link; the bio does. In **Google Search Console**, add the domain and verify
+   it with the TXT record it gives you (Cloudflare → DNS). After 2–3 weeks of posting, send me
+   the handles: I add them to the site footer.
+2. **Talk to five managers this week.** Before anyone pays, find out whether they would. Ask
+   five managers you already know (your leagues, a Discord you're in) for their roster, and
+   send each this week's report on it, free:
    ```bash
    pbpaste | .venv/bin/python -m run.trial --email them@example.com --roster - --print
    ```
-   Nothing is emailed from your Mac: it writes a draft and prints a text version to paste
-   back into the chat. Add `--scoring half_ppr`, `--template sf` or `--size 10` to match their
-   league. A name it can't place stops the run and names the line — ask them, don't guess.
-2. **Discords and league group chats.** Ask a mod before mentioning the product. When
-   someone asks what to use, paste the sample report (`beatyourleague.com/sample-report.html`)
-   or this week's (`/this-week.html`) with one line of answer — not the comparison page,
-   which leads with grading the selling pages leave out.
-3. **X replies, about 20 minutes a day.** A number and one line of reasoning in reply to
-   start/sit questions. No links in replies — the product lives in your profile.
-4. **Reddit.** Read each subreddit's rules yourself and ask the mods first. Answers only, no
-   links.
+   Nothing is emailed from your Mac: it prints a text version to paste back. Add
+   `--scoring half_ppr`, `--template sf` or `--size 10` to match their league; a name it
+   can't place stops and names the line (ask, don't guess). Ask each: *Would you have set your
+   lineup differently? What would make you pay? How many teams do you run?* Put their words
+   (no names) under "What managers said" in IDEAS.md.
+3. **Your own leagues.** A season pass each, or the League Pass once seats are live.
+4. **Commissioners, Discord mods, small podcasters — where you already are.** No cold email
+   (your rule): a commissioner in a league you play in, a mod of a Discord you post in, a
+   podcaster whose chat you're in. Offer their league a free week — a `run.trial` report per
+   roster — and a link tagged for them, `beatyourleague.com/?via=<their-name>`, so
+   `make stats` shows what came from them. A revenue share is section 10's call.
+5. **Discords and group chats.** Ask a mod before mentioning the product. When someone asks
+   what to use, paste this week's sample (`beatyourleague.com/this-week.html`) or the
+   pinned one (`/sample-report.html`) with one line of answer.
+6. **X replies, about 20 minutes a day.** Answer real start/sit questions with the product's
+   own facts:
+   ```bash
+   make ask A="Jalen Hurts" B="Bo Nix"
+   ```
+   It prints both players' projection, last three games, usage, status and opponent. Quote a
+   % only with `ARGS=--publish`: that records it on the public record before you post it, and
+   Monday grades it. No links in replies.
+7. **Reddit — answers, not posts.** r/fantasyfootball: answer in the daily start/sit threads
+   only, no links, no self-promotion. r/Fantasy_Football and r/FFCommish: read each one's
+   rules and ask the mods first. At most one post saying you built this every 2–3 weeks, and
+   only where the rules allow it (r/FFCommish: framed as the League Pass for commissioners).
+8. **The weekly drafts.** Tuesday's cron writes `content/this-week.md` from the live sample —
+   the odds in it are only ones already on the public record. `make content` drafts the
+   Monday and Friday posts from the record, one call at a time.
 
 **Held back:** the mention campaign in `content/pitches.md` emails other sites, which you've
-ruled out for now (Sep 2026). It stays written for when that changes.
+ruled out (Sep 2026).
 
-Everything you post follows the site's rule: no "accurate", "proven", "calibrated", "tested"
-or "we hit X%" — the grading doesn't back any of them yet — and nothing about betting.
+Everything you post: no "accurate", "proven", "calibrated", "tested" or "we hit X%", no
+win-loss totals, nothing about betting.
 
-## 7. Every week from here
+## 8. Every week from here
 
-| When (ET) | What runs | What you do |
+| When (ET until Nov 1) | What runs | What you do |
 |---|---|---|
-| Tuesday ~8am, retry at noon | **weekly-report:** new signups, then every subscriber's file | Open your own file |
-| Daily ~10am, plus hourly | **daily-intake:** new purchases, welcomes, first files, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
-| Monday ~9am | **monday-receipts:** grades last week's calls and republishes the public record | Nothing, unless it goes red |
-| Saturday ~noon | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
+| Tuesday 8:17am, retry 12:17pm | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
+| Daily 10:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
+| Saturday 12:17pm | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
+| Monday 9:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
 
-Times are an hour earlier from Nov 1, when the clocks change. A red run opens a GitHub issue,
-and GitHub emails you about it. A run that fails the same way again comments on the open issue
-instead of opening another, so close each issue once it's fixed.
+UTC: Tue 12:17 and 16:17, daily 14:17 and :47 hourly, Sat 16:17, Mon 13:17. The Worker
+starts each on time (`17,47 * * * *`); GitHub's schedules are the backup. From Nov 1 the ET
+times are an hour earlier.
 
-**If an issue titled "A scheduled run did not happen" appears,** it names the run and the
-week (the daily watchdog checks that each Tuesday's reports and each Saturday's check really
-ran). Before that week's first kickoff, run that workflow by hand from the Actions tab —
-nobody is mailed twice. After kickoff, don't: the Tuesday run now refuses to build a report
-about games already underway, and that week is lost.
+A red run opens a GitHub issue and GitHub emails you. The same failure again comments on the
+open issue instead, so close each once it's fixed.
 
-**When someone asks to stop.** Mail to hello@ that says stop or unsubscribe (a League Pass
-seat's mail-app unsubscribe button arrives with the subject "stop"):
-- If they **pay**, reply with the billing-page link instead — stopping a payer's emails while
+**"A scheduled run did not happen"** names the run and the week. Before that week's first
+kickoff, run that workflow by hand from Actions (nobody is mailed twice). After kickoff,
+don't: the Tuesday run refuses a week already underway.
+
+**Rebuilding the live sample by hand:** `make live-sample` before the week's first kickoff
+records its odds on the public record — commit the ledger file with the page.
+`make live-sample ARGS=--no-record` previews.
+
+**A roster change sent by email** (until the Worker is live, or a subscriber who'd rather
+reply): put the names they sent in a file, one per line, then
+```bash
+make roster-update EMAIL=fan@example.com ROSTER=names.txt
+```
+It needs `UPDATE_SECRET` and `FORM_ENDPOINT` in the shell. `ARGS=--dry-run` resolves the
+names and posts nothing. The next hourly intake applies it.
+
+**When someone asks to stop** (mail to hello@ saying stop or unsubscribe; a League Pass
+seat's unsubscribe button arrives with the subject "stop"):
+- If they **pay**, reply with the billing-page link — stopping a payer's emails while
   billing continues is the one wrong answer.
-- Otherwise run this, then commit and push within 10 business days (the crons read the
-  committed list, which holds a digest, never the address):
+- Otherwise run this, then commit and push within 10 business days:
   ```bash
   .venv/bin/python -m run.suppress their@example.com
   ```
-- If someone on the list signs up again, `.venv/bin/python -m run.suppress --remove their@example.com`.
+  Someone who signs up again: `.venv/bin/python -m run.suppress --remove their@example.com`.
 
-**How's demand?** Pull, then run:
-```bash
-make stats
-```
-To see a link's signups by channel, post it with `?via=<name>` on the end (for example
-`beatyourleague.com/?via=reddit`): the tag is stored with the form row, never in a cookie.
-For the payments section, export `STRIPE_API_KEY` in your own terminal using a separate
-restricted key with **Read** on Subscriptions, Checkout Sessions and Refunds (nothing else);
-the cron key has no Refunds permission, and without it that one line says so.
-It prints counts only (waitlist, free-report requests, roster updates, seat claims, and what
-went out each week) and never an address. The form rows need `FORM_ENDPOINT` and
-`FORM_API_KEY` in your shell; without them it prints the rest.
+**How's demand?** Pull, then `make stats`: counts only (waitlist, free-report requests,
+roster updates, seat claims, sends by week, paid signups by `?via=` tag), never an address.
+It needs `FORM_ENDPOINT` and `FORM_API_KEY` for the form rows and, for payments, a separate
+restricted key in `STRIPE_API_KEY` with **Read** on Subscriptions, Checkout Sessions, Charges
+and Refunds (the cron key can't read refunds).
 
-**The season's end.** Week 17's report tells subscribers it's championship week on the big
-platforms' default settings and that a Week 18 report follows for leagues that play it. Week
-18's says it's the last, warns about rested starters, and repeats what their plan does next
-(monthly stops billing itself; season pass renews on its anniversary with a notice first).
-After the last game every weekly job exits quietly until the next season's schedule is out.
+**The season's end.** Week 17's report says it's championship week on the big platforms'
+defaults and a Week 18 report follows; Week 18's says it's the last and what the plan does
+next. After the last game every weekly job exits quietly until the next schedule is out.
 
 **A refund request, in three checks:**
-1. **Is it inside the window?** Find the first week below whose kickoff comes after they paid
-   (Stripe shows the payment time). That week's report was their first weekly file, and their
-   window closes at the kickoff **one row further down**. If they paid within two hours of a
-   kickoff, start from the next row instead — their first file may have been the roster file.
-   *Example: paid Wed Oct 7 → first file Week 5 → window closes Thu Oct 15, 8:15pm ET.*
-   The one exception: if a send of ours ever ran late and their second file reached them after
-   its week kicked off, they have a week from that send. A late send would have opened an
-   issue; ask me and I'll check the send log.
-2. **Is it their first refund?** Search their email under **Customers** for an earlier
-   refund. One per person (one per league for a League Pass); if there's one, this purchase
-   is final.
-3. **Issue it:** their subscription → **Cancel subscription → Immediately**, and refund the
-   last payment in full. A refund on its own leaves the subscription active, and it would bill
-   again. The reports stop by themselves once a payment is fully refunded.
+1. **Inside the window?** Find the first week below whose kickoff comes after they paid
+   (Stripe shows the time). That week's report was their first weekly report; their window
+   closes at the kickoff **one row further down**. Paid within two hours of a kickoff? Start
+   from the next row. *Example: paid Wed Oct 21 → first report Week 7 → closes Thu Oct 29,
+   8:15pm ET.* If a send of ours ran late and their second report arrived after its week
+   kicked off, they have a week from that send — ask me and I'll check the send log.
+2. **Their first refund?** Search their email under **Customers**. One per person (one per
+   league for a League Pass).
+3. **Issue it:** their subscription → **Cancel subscription → Immediately**, then refund the
+   last payment in full. The reports stop by themselves.
 
 | Week | First kickoff (ET) |
 |---|---|
-| 4 | Thu Oct 1, 8:15pm |
-| 5 | Thu Oct 8, 8:15pm |
 | 6 | Thu Oct 15, 8:15pm |
 | 7 | Thu Oct 22, 8:15pm |
 | 8 | Thu Oct 29, 8:15pm |
@@ -375,30 +385,127 @@ After the last game every weekly job exits quietly until the next season's sched
 | 17 | Thu Dec 31, 8:15pm |
 | 18 | Sun Jan 10, 1:00pm — Saturday games are usually added late; recheck |
 
-From the published NFL schedule the product itself reads. A flexed game can move a row.
+From the published NFL schedule the product reads. A flexed game can move a row.
 
-## 8. Dates you pre-committed to (PLAN §6)
+## 9. The dates you pre-committed to (PLAN §6)
 
-The gates were written before the season so results can't move them. Opening in Week 4 puts
-the big one ten days after opening:
-- **Oct 11:** at least 40 paid subscribers, and at least 30% of trials from outside your own
-  network.
-- **The pivot rule:** under 25 subscribers and under 5 from outside your network on Oct 11
-  means stop building product. Spend the rest of the season building the graded public record
-  and publishing the weekly posts, and relaunch in August 2027.
+**Oct 11 was read on Oct 16, late and honestly: it measured nothing.** Checkout never opened:
+0 subscribers, 0 free reports, 0 trials from outside your network. The pivot rule's words —
+under 25 subscribers on Oct 11 means stop building product — were met by default, not by a
+verdict from buyers. The proposal for what replaces it is the first decision below.
 
-Opening this late makes Oct 11 hard to reach, and PLAN says not to move it. Your own test
-subscription doesn't count toward it.
+## 10. Decisions waiting on you
 
-## 9. Decisions waiting on you
+Each has a recommendation. None is decided until you say so.
 
-- **Start the public record.** Nothing has been recorded or graded yet, because a call is
-  recorded only when a report is mailed to a subscriber, and there are none. Keeping your test
-  subscription from step 4 starts it: it's a real subscription, so its calls are recorded
-  before kickoff and graded every Monday like anyone's, and the weekly posts (`run/posts.py`)
-  finally have graded rows to draft from.
-- **The report changes from the Week-4 review:** confidence bars drawn from 50%, the Regret
-  Score, the first screen, and "last three games" lines for starters. None of them blocks
-  selling.
-- **A postal address** is needed only if you ever email a list (US anti-spam law). Reports to
-  paying subscribers don't need one, and there's no list today.
+**Reset the targets to a proof season** (PLAN §6, §8). The Oct 11 gates and "~100 paying
+subscribers by January" were written for a September launch. *Recommend:* stop feature work
+except launch blockers and defects a paying customer would hit, and adopt PLAN §6's proposed
+proof-season gates — by Nov 10, at least 30 free reports sent and at least 10 paid; by Dec 22
+(Week 16), about 30 purchases plus 2 League Passes and the first graded rows on the public
+record. Under 5 paid from 30 free reports on Nov 10 means stop selling hours and spend the
+rest of the season on the 2027 work below.
+
+**A USD payout account.** Stripe converts every US-dollar sale to Canadian dollars at 2%:
+$0.78 of each $39 pass, and it keeps that on a refund. *Recommend:* add a USD bank account in
+Stripe → Settings → Payouts before the first sale (check your bank's fees for it). Then
+`STRIPE_PAYOUT_CURRENCY=usd` in your shell clears the launch-check line.
+
+**Hosting, and the public repo.** GitHub's terms say Pages isn't for running an online
+business or a site mainly for commercial transactions, and this site exists to sell a
+subscription. The repo is public too, so the selling strategy in CLAUDE.md, the status in
+PLAN and this file are one search from the brand name. *Recommend:* make the repo private and
+serve `site/` from Cloudflare Pages (free plan; the domain is already on Cloudflare). What it
+costs: a private repo gets 2,000 free Actions minutes a month, and the hourly intake alone is
+about 720 runs (twice that while GitHub's backup cron fires too), so drop GitHub's hourly
+backup once the Worker has a few on-time weeks, then check Settings → Billing after the first
+month — paid minutes need a PLAN §2 line. Steps, when you say go: Cloudflare → Workers &
+Pages → Create → Pages → connect the repo, no build command, output `site`, build watch path
+`site/*` (so the crons' hourly commits don't rebuild it — the free plan allows 500 builds a
+month); add `beatyourleague.com` as its custom domain; then I retire `pages.yml` and you
+switch GitHub Pages off and the repo to private.
+
+**January part-month charges.** Monthly billing stops Jan 13, eight days after the last
+weekly report so a failed Tuesday can retry. A monthly buyer whose billing day is Jan 6–12
+pays a part-month ($0.48–$3.38) after their last report, while the card says billing stops
+when the season does. *Recommend:* never start a period that contains no weekly report —
+cancel those subscriptions at the end of the period already paid (the Saturday check rides
+it). A small change in `run/billing.py`; then the card is true as written.
+
+**A list you own.** Every lead today gets one email, ever, so nobody from 2026 can be reached
+in August 2027. *Recommend:* one unticked box — "Email me when the 2027 season opens" — on the
+free-report form, the waitlist, the last report and your cancel replies, stored as its own
+form row and held to the waitlist's one-email rule. Build it before the last report (Jan 5).
+
+**The renewal date, and next season's roster.** A pass renews on its purchase anniversary, so
+an October buyer renews mid-season 2027 still holding a 2026 roster (rosters don't roll to a
+new season yet). *Recommend:* nobody has paid yet, so anchor every pass to one late-August
+renewal date before the first sale (the notice lands in July), stated on the card and in the
+terms; and build the roster roll — hold reports until a post-draft roster is confirmed —
+before July 2027 either way.
+
+**A price for a second team.** Each team is its own subscription today, so a manager with
+three leagues stops at one. *Recommend:* not before the first ten buyers; then a "+$19 per
+extra team, same renewal date" add-on on one checkout (one payment, several rosters). The FAQ
+already says each team is its own subscription, which stays true until then.
+
+**A seat cap per League Pass.** One $99 pass honours unlimited seats, so a payer's address
+leaked from a group chat is a free-report generator. *Recommend:* 16 seats, first claimed
+wins, stated on the League Pass page and in the terms; claims past 16 reported to the payer as
+a count, never names.
+
+**The League Pass refund window.** It closes when the payer's second report's week kicks off,
+but seats start the Tuesday after they claim — leaguemates may have seen one report or none
+when the commissioner loses the refund on the league's money. *Recommend:* count a pass's
+window from the first seat's first weekly report. Terms §5 and the pass welcome change
+together.
+
+**Buyers from Thursday night to Sunday.** They get the roster report that day and no lineup
+for this Sunday, while the card says "Your first report the day you sign up". *Recommend:* now,
+say on the card which report lands today ("join before Thursday's kickoff for this week's
+lineup"); a same-week lineup over games not yet played is a 2027 idea that needs its own
+preregistered test.
+
+**Late news: practice reports and gameday inactives.** Wednesday–Friday practice
+participation is already in the injury file the product reads, unused until Saturday.
+Gameday inactives (90 minutes before kickoff) have no free, licensed, timely source.
+*Recommend:* add practice participation to the Saturday check's detail now (facts only, no
+new email); a Thursday "practice watch" email only if Saturday checks show people act on
+news; no inactives email without a paid source (PLAN §2 first).
+
+**Re-pin the flagship sample.** The landing's closest call is Bijan Robinson over Chase Brown
+at 70%, which reads as "start your studs". *Recommend:* re-pin by a rule written before
+looking — the live sample's roster rule applied to 2024, week 10 — and quote whatever close
+call it prints. Every pinned landing figure moves in one deliberate commit.
+
+**The offseason.** Nothing carries a subscriber past the week 10–12 elimination cliff or into
+the 2027 renewal. *Recommend:* a "your season, graded" email in January, built from each
+subscriber's own record; a free post-draft roster check as the August lead magnet (IDEAS).
+
+**Counting visits.** No analytics, by promise, so visits → free report → paid can't be
+measured, only the end of the funnel. *Recommend:* once on Cloudflare, use its own traffic
+counts for the domain (no script on the page, no cookie) and reword privacy §3 to say exactly
+that; otherwise drop any target based on visits.
+
+**The look.** Navy and gold, slanted italic caps and stadium glows are the daily-fantasy and
+betting apps' style, which works against "not a betting product". *Recommend:* after opening,
+pilot an editorial version on one page (upright headlines, square buttons, no glows) and
+compare before touching the rest.
+
+**The graded record on social.** The drafts quote one recorded call at a time, never a total
+or a rate. *Recommend:* keep it so until the record holds 30+ graded rows and you've read
+them; marketing the record is a decision, not a default.
+
+**A partner share.** Commissioners, mods and podcasters (section 7.4) may want something.
+*Recommend:* a 30% first-year share paid by hand, counted from their `?via=` tag in
+`make stats`, offered only once someone asks.
+
+**Keep your own subscription.** The live sample has recorded its odds every week since Oct 15,
+so the public record grows without a subscriber. *Recommend:* keep your step-4 subscription
+anyway — it adds a real roster's calls to the record, graded every Monday.
+
+**A sender postal address.** US (CAN-SPAM) and Canadian (CASL) law both want one in
+commercial email; every email now prints it, and the launch announcement refuses to send
+without it. *Recommend:* rent a virtual mailbox or PO box before step 3, never a home address,
+and book one Ontario-lawyer question on online-sale disclosures before scale (not legal
+advice).

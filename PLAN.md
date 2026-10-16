@@ -1,10 +1,11 @@
 # Beat Your League — Master Plan (0 → Automated)
 
 Owner: solo operator + Claude Code. Budget hard cap: **$100** (plan below uses ≤ $68 through launch).
-**Where this stands (Sep 29 2026, Week 4 of 18):** the Sep 8 launch did not happen and no payment
-has ever been processed. Checkout opens mid-season once the owner's setup in `LAUNCH.md` is done.
-§3 is rewritten for that; the decisions elsewhere stand, and passages they overtook are marked
-where they sit.
+**Where this stands (Oct 16 2026, Week 6 of 18):** the Sep 8 launch did not happen, checkout is
+still closed, and no payment has ever been processed. It opens once the owner's setup in
+`LAUNCH.md` is done — the form Worker first, then the payment links (LAUNCH, "The order"). The
+Oct 11 gates were read late and measured nothing (§6); a proof-season reset is proposed and
+waits on the owner (LAUNCH §10). Passages events overtook are marked where they sit.
 This file is the business plan. `CLAUDE.md` is the engineering spec. `LAUNCH.md` is the owner's
 setup checklist. When they conflict, fix whichever is wrong.
 
@@ -224,7 +225,9 @@ show anyway.
 | Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
 | Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94 | no fixed cost |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
-| Resend Pro | $20/mo | **trigger: when subscribers + trials exceed 90.** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000 |
+| Resend Pro | $20/mo | **trigger: past about 85 recipients on one day (subscribers + free reports).** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000. `make launch-check` counts it |
+| Sender mailbox | ≈US$10/mo | a rented mailbox or PO box for the postal address commercial email must carry (US and Canadian law) — never a home address |
+| GitHub Actions minutes | $0 while public | **only if the repo goes private** (LAUNCH §10, hosting): 2,000 free minutes a month, and the hourly intake is ~720 runs. Any paid minutes get their own line here first |
 | Capafy listing (optional side bet) | $0.99 | closed-source skill version |
 | **Total through launch** | **≤ $68** | leaves buffer inside the $100 cap |
 
@@ -252,15 +255,16 @@ the plan-level view.
 | Mention campaign | **Written, on hold** — the owner is not emailing other sites for now (`content/pitches.md`) |
 | `robots.txt`, JSON-LD | **Done.** No `sitemap.xml` or canonical links yet — hygiene, not a lever |
 
-### Now → January, from Week 4
-1. **Open checkout** — LAUNCH.md steps 1–4. Every week this slips is a week of the season nobody
-   can buy.
-2. **Deploy the form Worker** — LAUNCH.md step 5: League Pass seats and self-serve roster updates.
-3. **Sell to people** in §5.1's order; LAUNCH.md section 6 has the commands.
-4. **Start the public record.** A call is recorded only when a report is mailed, so nothing
-   exists until the first subscriber — or the owner's own test subscription (LAUNCH.md
-   section 9).
-5. **Read the §6 gates on their dates.** Oct 11 arrives about ten days after checkout opens.
+### Now → January, from Week 6
+1. **Deploy the form Worker** — LAUNCH.md step 5, first: without it roster changes, seats and
+   the email list have nowhere to go, and checkout does not open before it.
+2. **Open checkout** — LAUNCH.md steps 1–4 and 6, with fresh payment links. Every week this
+   slips is a week of the season nobody can buy.
+3. **Talk to five managers, then sell to people** in §5.1's order; LAUNCH.md section 7 has
+   the commands.
+4. **The public record is running.** Since Oct 15 the live sample records its odds before
+   each week's first kickoff and Monday grades them, so the record grows with no subscriber.
+5. **Decide the proof-season gates** (§6, LAUNCH §10). The Oct 11 gates measured nothing.
 
 ### Weekly loop, once checkout is open
 - **Tue:** the cron builds and mails every subscriber's file; the owner opens their own as QA.
@@ -613,7 +617,8 @@ kickoff settles the late-send exception.
 
 Why this is the right shape: it is disclosed pre-purchase (so it is a term, not a trap), it costs
 an honest customer nothing, and it removes the only version of the loop worth running. Note the
-operator eats the payment-processing fee on every refund — roughly $1–1.50 a cycle — so even
+operator eats the payment-processing fee on every refund — about $2.72 on a $39 pass from this
+Canadian account, about $1.94 with a USD payout account (`run/economics.py`) — so even
 without abuse, refunds are never free; that is a reason to prevent the *causes* of refunds, not to
 obstruct the refunds themselves. Enforcement is manual and trivial at this scale: refunds are
 issued by the operator in the Stripe dashboard (LAUNCH.md section 7), where prior refunds against
@@ -684,16 +689,17 @@ cites Reddit least of all the major engines (~0.1%) while Google's AI surfaces l
 does little for Gemini. The Gemini-shaped play is YouTube, and **declining it is the right call for
 a solo part-timer — but name the cost:** we are not buying Gemini visibility this season.
 
-### 5.2 The launch waitlist (built Aug 18 2026; never connected)
+### 5.2 The launch waitlist (built Aug 18 2026; connects with the form Worker)
 
 Built as the one thing the site could honestly ask for before checkout opened: **one email when
 signups open, nothing else, no card, unsubscribe in one click.** The volume promise is
 test-pinned, because a list collected on "one message" and then mailed weekly is an audience
 burned once and permanently.
 
-**Status (Sep 29 2026): no list backend was ever connected, so no address was collected and there
-is no launch broadcast to send.** While checkout is closed the landing capture falls back to a
-prefilled email to the contact inbox; once a purchase can complete (`CHECKOUT_CAN_COMPLETE`) the
+**Status (Oct 16 2026): the list backend is the form Worker (LAUNCH step 5), not yet deployed.**
+Until then the landing capture opens a prefilled email to hello@, so any sign-ups so far are in
+that inbox; LAUNCH step 6 turns them into a CSV and sends the one promised email on opening
+morning (`make waitlist-send`). Once a purchase can complete (`CHECKOUT_CAN_COMPLETE`) the
 capture retires. The machinery stays for the next time checkout is closed ahead of a season:
 `infra/form-worker.js` accepts `kind:"waitlist"` rows, `run/waitlist.py` sends the one promised
 email through the same idempotent send log as the weekly batch, and `FORBIDDEN_CLAIMS` keeps its
@@ -703,9 +709,13 @@ copy to what exists.
 
 1. **Your own league and the leagues you're already in.** The fastest channel there is, and the
    League Pass's natural home once seats are live. Twelve managers who already know you, in a
-   group chat you already post in. It does not scale and does not need to. *(Do this first —
-   LAUNCH.md section 6.)*
-2. **Discords and league group chats.** Human mods you can actually ask permission from.
+   group chat you already post in. It does not scale and does not need to. Start with five
+   free reports and three questions (LAUNCH.md section 7.2) — it is also the cheapest way to
+   close §9's largest gap.
+2. **Discords and league group chats — and the people who run them.** Human mods you can
+   actually ask permission from. Commissioners, mods and small podcasters the owner already
+   talks to can be offered a free week for their league and a `?via=` link (LAUNCH 7.4); no
+   cold email.
 3. **Founder-disclosed comparison content** (`site/compare/`). Verified working right now by a
    direct competitor: Scoutcast's co-founder wrote a "best fantasy football apps" piece, disclosed
    authorship, and it ranks live — while omitting LeagueVision, STACKED and FantasyPros. **The
@@ -752,23 +762,31 @@ search volume — those competitors have essentially no third-party review footp
 | Publish the availability-controlled calibration table as accuracy | `backtest.md` itself calls it a diagnostic. Already decided; do not undo it |
 
 ### Detail — X (ranked 7th; see §5.1 for the order)
-- **Setup, once, before checkout opens:** bio + pinned backtest thread. Build a list of 25–30 fantasy accounts:
-  2–3 giants (e.g., Matthew Berry, FantasyPros) for reach-surfing, the rest mid-size grinders (5–50K followers)
-  because they actually engage back. Turn on notifications for the 10 most active.
-- **Data-replies — the core growth mechanic (20 min/day):** 15–20 replies daily to start/sit questions and hot
-  takes, each carrying a number plus one line of reasoning ("Achane 64/36 over Hall — 71% route rate is
-  the tiebreaker"). A calibrated number in a sea of vibes-replies is a free product demo. Never link in replies.
-- **Posting windows:** Tue morning (waiver panic), Thu evening + Sun morning (lineup dread). Use the three
+- **Setup, once, before checkout opens:** one pseudonymous "Beat Your League" handle (the same on
+  Reddit and Discord), a bio saying the owner makes it, the link in the bio, and this week's live
+  sample pinned (LAUNCH 7.1). Build a list of 25–30 fantasy accounts: 2–3 giants (e.g., Matthew
+  Berry, FantasyPros) for reach-surfing, the rest mid-size grinders (5–50K followers) because
+  they actually engage back. Turn on notifications for the 10 most active.
+- **Data-replies — the core growth mechanic (20 min/day):** 15–20 replies daily to real start/sit
+  questions, each built with `make ask A=… B=…`: the product's own facts for both players
+  (projection, last three games, usage, status, opponent). A % appears only through
+  `make ask … ARGS=--publish`, which records it on the public record first so Monday grades it —
+  a number posted in public is a published probability (principle 2). Never link in replies.
+- **Posting windows:** Tue morning (waiver panic), Thu evening + Sun morning (lineup dread). Use the
   formats below.
-- **Signature move:** every Monday, quote-tweet Friday's own call with the box score attached — hit or miss.
-  Public self-grading is rare enough to be a spectacle; it is also the brand.
+- **One recorded call at a time, never a tally.** A Monday post may quote one call the record
+  settled, as published and as scored; no win-loss totals or hit rates anywhere (the selling
+  rule). Whether the graded record is ever marketed socially is an owner decision (LAUNCH §10).
 
 ### Detail — Reddit (rules-first; read them yourself before posting)
-- r/fantasyfootball plus 2–3 smaller subs. Read each sub's rules page first; message mods before ever
-  mentioning a tool — one permission ask beats one ban.
-- 5–10 genuinely good, data-backed answers per day in the daily start/sit threads. Zero links in posts or
-  comments; the product lives in the profile only. Highest purchase-intent channel on this list: it demos the
-  product at the exact moment of need.
+- r/fantasyfootball: answers only, in the daily start/sit threads. r/Fantasy_Football and
+  r/FFCommish: read each sub's rules page first and message the mods before ever mentioning a
+  tool — one permission ask beats one ban.
+- 5–10 genuinely good answers per day, built with `make ask`. Zero links in posts or comments;
+  the product lives in the handle's profile only. Highest purchase-intent channel on this list:
+  it demos the product at the exact moment of need.
+- At most one post disclosing the builder every 2–3 weeks, and only where a sub's rules allow
+  it (r/FFCommish: framed as the League Pass for commissioners).
 
 ### Detail — Discords & league group chats (ranked 1st–2nd)
 - Sleeper communities and podcast Discords, same value-first conduct as Reddit.
@@ -779,19 +797,22 @@ search volume — those competitors have essentially no third-party review footp
 ### Later — only once the ledger has a record
 - **Facebook fantasy groups:** large, older, underserved by data content. Weekly repost of the week's
   best-performing post, 15 min/week, optional.
-- **Podcast / newsletter pitches** *(on hold with the mention campaign, and only once the record has
-  graded rows)*: "a solo builder's engine went X% on coin-flip calls through
-  October" is a bookable story; an August pitch with no track record is not.
+- **Podcast / newsletter pitches** *(on hold with the mention campaign)*: only once the record
+  has graded rows AND the owner has decided to market it (LAUNCH §10) — a hit rate in a pitch
+  is the record on the pitch.
 
 **Three recurring public formats (pipeline-drafted, human-edited):**
-1. **Receipts Monday** — graded ledger, wins AND misses, receipt cards.
+1. **Receipts Monday** — one recorded call per post, as published and as settled (the owner's
+   notes list every settled call, misses included); never a total or a rate.
 2. ~~**Hype Meter Wednesday**~~ — retired: it needed the league's transaction log (§0).
 3. **Coin-Flip Friday** — one genuinely hard start/sit, our call, our confidence, our reasoning.
 
-**Launch levers:** backtest thread (proof) · build-in-public numbers (trust) · league-mate testimonials (social
-proof). (The gift-your-rival referral left with the rival, §0.)
+**Launch levers:** this week's live sample (proof) · the handle's answers (reach) · league-mates who
+used it, in their own words and with consent (`content/testimonials.md`). (The gift-your-rival
+referral left with the rival, §0.)
 
-**Proof assets:** public prediction ledger on GH Pages, linked in bio. Every claim traceable.
+**Proof assets:** the public record exists, graded every Monday, linked from the site footer —
+not from the bio or the pitch (the selling rule). Every claim traceable.
 
 **Time budget:** ~30–40 min/day in season (replies + one post), consistent with the §3 ops loop. If a day
 slips, replies beat posts.
@@ -801,10 +822,12 @@ slips, replies beat posts.
 Same rule the grading code already enforces on the model, applied to the business: written down
 before the season, never adjusted after results.
 
-**Status (Sep 29 2026): none has been read.** The Aug 31 gate passed, and the Oct 6 gate (three
-sends) passes, before checkout could serve a single buyer. The rest stand as written and are read
-on their dates. Oct 11 arrives about ten days after checkout opens, so the pivot rule below is
-the one to take seriously.
+**Status (Oct 16 2026): read late, and they measured nothing.** The Aug 31 and Oct 6 gates passed
+before checkout could serve a single buyer. Oct 11 was read on Oct 16: checkout never opened, so
+0 subscribers, 0 free reports, 0 trials from outside the owner's network. The pivot rule's
+words (under 25 on Oct 11 → stop building product) were met by default, not by a verdict from
+buyers. The table below is kept as written — it is the record of what was pre-committed — and
+the proposed proof-season gates beneath it replace it only when the owner says so (LAUNCH §10).
 
 | Read by | Metric | Green | Red → do this |
 |---|---|---|---|
@@ -822,6 +845,18 @@ product. Spend the rest of the season on exactly two things — generate graded 
 publish the weekly content feed — then relaunch in August 2027. That is a materially better
 position than any amount of feature work bought in October 2026.
 
+**Proposed proof-season gates (Oct 16 2026 — binding only once the owner adopts them).** Dated
+from the week checkout actually opens, written before any buyer exists:
+
+| Read by | Metric | Green | Red → do this |
+|---|---|---|---|
+| **Nov 10** | Free reports sent (hand-run or self-serve) | ≥30 | <15 → the selling hours aren't happening; fix that before anything else |
+| **Nov 10** | Paid purchases | ≥10, ≥3 from outside your own leagues | <5 from ≥30 free reports → stop selling hours; spend the season on the 2027 work (season roll, owned list) |
+| **Dec 22** (Week 16) | Purchases + League Passes | ~30 + 2 | Fewer → 2026 was the proof season; write down why before August |
+| **Dec 22** | Graded rows on the public record | ≥30 | Fewer → find which week's calls never settled |
+
+Until then: no new features except launch blockers and defects a paying customer would hit.
+
 Leading indicators watched weekly: trial signups, Tuesday open rate, free→paid conversion, League
 Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, follower count.
 
@@ -829,9 +864,9 @@ Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, f
 
 - **Sleeper licensing (§0)** → retired as a risk by leaving Sleeper (Aug 18 2026);
   `test_no_sleeper_in_the_paid_path` keeps it retired.
-- **A late opening** → four of eighteen weeks are gone before the first sale, and the Oct 11 gates
-  arrive about ten days after it. Mitigation: open this week, sell to people rather than pages
-  (§5.1), and read §6 honestly rather than moving it.
+- **A late opening** → six of eighteen weeks are gone before the first sale, and the Oct 11 gates
+  passed with checkout closed. Mitigation: open the week the Worker and secrets are in, sell to
+  people rather than pages (§5.1), and judge 2026 by the proof-season gates (§6) once adopted.
 - **Free substitutes** → ffwrapped (free, no login, "manager profiles & rivalries"), GridIQ (free,
   weekly grades and points-left-on-bench), My Fantasy Analyzer (free FAAB suggestions), and
   Sleeper's own matchup screen. Mitigation: compete on the file *arriving* and on the published
@@ -860,9 +895,10 @@ it this season, and the correct move is to run 2026 deliberately as **the paid p
 2027 asset**: a real ledger, measured calibration, an aged corpus, a year-old domain and a
 renewal cohort — all pointed at the August 2027 draft peak.
 
-So: by Jan, an automated system with ≤3 hrs/week human input, ~100 paying subscribers, a public
-track record holding real graded rows, ~50 published dated pages, and a product a stranger can be
-told about in one sentence. The old "1,000+ email list" target is retired — it was never measured
+So: by Jan, an automated system with ≤3 hrs/week human input, a public track record holding real
+graded rows, ~50 published dated pages, and a product a stranger can be told about in one
+sentence. *(The "~100 paying subscribers" written here in August assumed a September launch; the
+proposed replacement is §6's proof-season target, ~30 purchases + 2 League Passes by Week 16.)* The old "1,000+ email list" target is retired — it was never measured
 against a channel that could deliver it.
 
 ## 9. Evidence, and what is NOT verified
@@ -890,8 +926,9 @@ The product refuses to publish a number it cannot stand behind. The plan gets th
 **The largest gap: zero voice-of-customer.** Not one fantasy manager's own words were read; Reddit
 was blocked at the tool level in every research lens. Every demand claim in this plan is revealed
 preference from vendor pricing pages, and *"three competitors sell this"* is equally consistent
-with *"three competitors are failing to sell this."* **It is still the largest gap (Sep 29 2026):
-no payment has been processed yet, so selling to people (LAUNCH.md section 6) is what closes it.** No
+with *"three competitors are failing to sell this."* **It is still the largest gap (Oct 16 2026):
+no payment has been processed yet. Five free reports to managers the owner already knows, with
+three questions each (LAUNCH.md section 7.2), is the cheapest way to start closing it.** No
 competitor's subscriber count, revenue or download figure was confirmed anywhere.
 
 **Unknowable from public data:** free-to-paid conversion for this niche (no benchmark exists;

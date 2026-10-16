@@ -26,40 +26,63 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_DIR = REPO_ROOT / "data" / "registry"
+# The public record (Oct 2026): every published probability, append-only and
+# immutable once graded (RULES L1-L4), committed and graded every Monday. The
+# live sample now RECORDS its odds there before kickoff (render/live_sample.py),
+# so a test that builds the page without pointing the ledger at tmp_path would
+# put a row on the public record that no report ever carried — and RULE L4
+# makes a row impossible to take back.
+LEDGER_DIR = REPO_ROOT / "data" / "processed" / "ledger"
+# Each off-limits tree, with why — the failure names the one that was touched.
+OFF_LIMITS = {
+    REGISTRY_DIR: ("holds subscriber emails and decides who gets mailed on "
+                   "Tuesday", "Build a registry under tmp_path and pass the "
+                   "path explicitly instead."),
+    LEDGER_DIR: ("is the public record — append-only, and a graded row can "
+                 "never be taken back", "Pass a processed/ledger directory "
+                 "under tmp_path (every recorder takes one) instead."),
+}
 
 
-def _snapshot() -> dict[str, float]:
-    if not REGISTRY_DIR.is_dir():
+def _snapshot(root: Path = REGISTRY_DIR) -> dict[str, float]:
+    if not root.is_dir():
         return {}
     # Recursive: data/registry/first-plans/<season>/ (Oct 2026) is a write
-    # path too, and a top-level-only snapshot could not see it.
-    return {str(p.relative_to(REGISTRY_DIR)): p.stat().st_mtime_ns
-            for p in REGISTRY_DIR.rglob("*") if p.is_file()}
+    # path too, and a top-level-only snapshot could not see it. A ledger's
+    # flock file is not part of the record (gitignored, zero bytes, touched by
+    # any recorder that finds nothing new to write) — the rows are; so locks
+    # are left out and a single recorded row is still caught.
+    return {str(p.relative_to(root)): p.stat().st_mtime_ns
+            for p in root.rglob("*") if p.is_file() and p.suffix != ".lock"}
 
 
 @pytest.fixture(autouse=True)
 def registry_is_off_limits():
-    """No test may create, modify or delete anything under data/registry/.
+    """No test may create, modify or delete anything under data/registry/ or
+    data/processed/ledger/.
 
-    It holds subscriber emails and drives who gets mailed. Tests that need a
-    registry build one under tmp_path and pass the path explicitly — every
-    function in run/sync.py and run/registry.py accepts one for this reason.
+    The registry holds subscriber emails and drives who gets mailed; the ledger
+    is the public record. Tests that need either build one under tmp_path and
+    pass the path explicitly — every function in run/sync.py, run/registry.py
+    and engine/ledger.py accepts one for this reason.
     """
-    before = _snapshot()
+    before = {root: _snapshot(root) for root in OFF_LIMITS}
     yield
-    after = _snapshot()
-    if before == after:
-        return
-    created = sorted(set(after) - set(before))
-    removed = sorted(set(before) - set(after))
-    changed = sorted(n for n in set(before) & set(after) if before[n] != after[n])
-    raise AssertionError(
-        "this test wrote to the real data/registry/ — that directory holds "
-        "subscriber emails and decides who gets mailed on Tuesday.\n"
-        f"  created: {created or 'none'}\n"
-        f"  modified: {changed or 'none'}\n"
-        f"  deleted: {removed or 'none'}\n"
-        "Build a registry under tmp_path and pass the path explicitly instead.")
+    for root, (why, instead) in OFF_LIMITS.items():
+        after = _snapshot(root)
+        if before[root] == after:
+            continue
+        created = sorted(set(after) - set(before[root]))
+        removed = sorted(set(before[root]) - set(after))
+        changed = sorted(n for n in set(before[root]) & set(after)
+                         if before[root][n] != after[n])
+        raise AssertionError(
+            f"this test wrote to the real {root.relative_to(REPO_ROOT)}/ — that "
+            f"directory {why}.\n"
+            f"  created: {created or 'none'}\n"
+            f"  modified: {changed or 'none'}\n"
+            f"  deleted: {removed or 'none'}\n"
+            f"{instead}")
 
 
 # --------------------------------------------------------------------- #

@@ -12,14 +12,16 @@ URL = "https://beatyourleague.com/this-week.html"
 
 def _report(**over) -> dict:
     report = {
-        "meta": {"week": 5},
-        "regret": {"start_id": "00-0038542", "start_name": "Sam LaPorta",
+        "meta": {"week": 5, "season": "2026", "league_id": "typed-ppr-12-2026",
+                 "my_roster_id": 1},
+        "regret": {"slot": "FLEX", "start_id": "00-0038542", "start_name": "Sam LaPorta",
                    "over_id": "00-0039919", "over_name": "Rome Odunze",
                    "confidence": 0.554,
                    "drivers": [{"label": "proj", "value": "10.6 vs 9.7"},
                                {"label": "games this season", "value": "4 vs 4"}]},
         "lineup": [{"slot": "FLEX", "player_id": "00-0038542",
                     "player_name": "Sam LaPorta", "confidence": 0.554,
+                    "alternative_id": "00-0039919", "alternative_name": "Rome Odunze",
                     "usage": "last 4 games: 26 targets (6.5 a game)"},
                    {"slot": "RB", "player_id": "00-0040784",
                     "player_name": "Quinshon Judkins", "confidence": None,
@@ -57,29 +59,64 @@ def test_every_post_fits_says_sample_and_links_the_live_report() -> None:
 def test_the_call_leads_with_the_question_then_a_fact_then_the_number() -> None:
     """Launch audit: the closest call is by construction near a coin flip, and
     the post opened with the % and a link — nothing a reader could weigh. It
-    now asks what a manager asks, gives the report's own facts for the pair,
-    and only then the number."""
+    now asks what a manager asks (both names and the slot), gives one line of
+    the report's own facts for the pair, and only then the number."""
     text = _named(drops.drafts(_report()), "The closest call")
-    assert text.startswith("LaPorta or Odunze this week? ")
-    usage = "LaPorta, last 4 games: 26 targets (6.5 a game)."      # verbatim
-    games = "Odunze's last three games: 7.4, 15.4 and 5.0 points."
-    assert usage in text and games in text
-    assert text.index(usage) < text.index("55%") and text.index(games) < text.index("55%")
+    assert text.startswith("Start LaPorta or Odunze at FLEX this week? ")
+    fact = "LaPorta projects 10.6 points this week, Odunze 9.7."
+    assert fact in text and text.index(fact) < text.index("55%")
     assert "starts LaPorta: 55% to outscore Odunze" in text
 
 
+def test_the_fact_line_compares_like_with_like() -> None:
+    """Reproduction (G23, Oct 2026): the live draft read "Odunze, last 4 games:
+    26 targets (6.5 a game). Shaheed's last three games: 3.4, 12.3 and 4.3
+    points." — one player's targets beside the other's points, which compares
+    nothing. Both sides now get the same measure, or that measure is not used:
+    points for both when the report prints games for both, usage for both
+    when both lines count the same thing, else the projection on both rows."""
+    text = _named(drops.drafts(_report()), "The closest call")
+    assert "26 targets" not in text and "7.4, 15.4 and 5.0" not in text, \
+        "a measure only one of the two players has"
+    # Games for both: points beside points.
+    lineup = [{**_report()["lineup"][0], "games": [12.0, 8.5, 9.1]}] + _report()["lineup"][1:]
+    text = _named(drops.drafts(_report(lineup=lineup)), "The closest call")
+    assert "Last games, in points: LaPorta 12.0, 8.5 and 9.1; Odunze 15.4, 5.0" not in text
+    assert "Last games, in points: LaPorta 12.0, 8.5 and 9.1; Odunze 7.4, 15.4 and 5.0." in text
+    # Usage for both, only when both lines count the same thing.
+    bench = [{"player_id": "00-0039919", "name": "Rome Odunze", "games": [],
+              "usage": "last 4 games: 31 targets (7.8 a game)"}]
+    text = _named(drops.drafts(_report(bench=bench)), "The closest call")
+    assert ("LaPorta, last 4 games: 26 targets (6.5 a game); Odunze, last 4 games: "
+            "31 targets (7.8 a game).") in text
+    carries = [{**bench[0], "usage": "last 4 games: 61 carries"}]
+    text = _named(drops.drafts(_report(bench=carries)), "The closest call")
+    assert "61 carries" not in text and "projects 10.6" in text
+
+
+def test_a_call_with_no_like_for_like_fact_is_not_drafted() -> None:
+    """A bare number is what the template exists to replace: with no measure
+    both players share, there is no closest-call post at all."""
+    regret = {**_report()["regret"], "drivers": []}
+    names = [p["name"] for p in drops.drafts(_report(regret=regret, bench=[]))]
+    assert "The closest call" not in names
+
+
 def test_the_fact_line_gives_way_before_the_post_is_dropped() -> None:
-    """Long names push the post past 280: one player's fact goes first, the
-    question and the number never do."""
-    long_a, long_b = "Christopher Longname-Hyphenated", "Bartholomew Extralongsurname"
+    """Long names push the post past 280: a shorter like-for-like fact takes
+    the place of a long one; the question and the number never go."""
+    long_a, long_b = "Christopher Longname-Hyphen", "Bartholomew Extralongsurname"
     regret = {**_report()["regret"], "start_name": long_a, "over_name": long_b}
     lineup = [{**_report()["lineup"][0], "player_name": long_a,
-               "usage": "last 4 games: 26 targets (6.5 a game), 31 carries, "
-                        "4 inside the 20"}]
-    text = _named(drops.drafts(_report(regret=regret, lineup=lineup)), "The closest call")
+               "games": [12.25, 18.5, 9.75]}]
+    bench = [{"player_id": "00-0039919", "name": long_b,
+              "games": [6.1, 7.4, 15.4, 5.0]}]
+    text = _named(drops.drafts(_report(regret=regret, lineup=lineup, bench=bench)),
+                  "The closest call")
     assert len(text) <= drops.LIMIT
-    assert text.startswith("Longname-Hyphenated or Extralongsurname this week? ")
-    assert "55%" in text and text.count("last") == 1
+    assert text.startswith("Start Longname-Hyphen or Extralongsurname at FLEX this week? ")
+    assert "55%" in text
+    assert "Last games" not in text and "projects 10.6" in text, "the long line did not give way"
 
 
 def test_surnames_say_which_player_they_mean() -> None:
@@ -95,7 +132,8 @@ def test_a_seeded_call_keeps_its_disclosure_in_the_post() -> None:
     """A weeks 2-3 call counts last season in, and the preregistered method
     makes that disclosure travel with the call on every surface."""
     regret = {**_report()["regret"],
-              "drivers": [{"label": "seeded", "value": "last season counted in"}]}
+              "drivers": [{"label": "proj", "value": "10.6 vs 9.7"},
+                          {"label": "seeded", "value": "last season counted in"}]}
     text = _named(drops.drafts(_report(regret=regret)), "The closest call")
     assert "55% to outscore Odunze (last season counted in)." in text
 
@@ -187,3 +225,35 @@ def test_the_drafter_reads_no_subscriber_data() -> None:
     src = (ROOT / "run" / "drops.py").read_text(encoding="utf-8")
     for private in ("run.rosters", "run.tuesday", "reports/subscribers", "registry"):
         assert private not in src.split('"""', 2)[2], private
+
+
+def test_a_post_quotes_only_odds_on_the_record(tmp_path, monkeypatch) -> None:
+    """Reproduction (G04, Oct 2026): `python -m run.drops` posted "Our sample
+    roster's report starts Odunze: 63% to outscore Shaheed" while nothing was
+    in the ledger, so a public probability went out that Monday's grading
+    could never settle. The drafts are built from `recorded_only(build())`:
+    with an empty ledger no draft carries a %; once that exact call is
+    recorded at that value, it may be quoted."""
+    import render.live_sample as live
+    from engine.ledger import extract_published_calls, ledger_path, record_calls
+
+    monkeypatch.setattr(live, "build", lambda *a, **k: _report())
+    out = tmp_path / "this-week.md"
+    assert drops.main(["--out", str(out), "--processed-dir", str(tmp_path / "empty")]) == 0
+    text = out.read_text(encoding="utf-8")
+    assert "%" not in text, "a draft quoted odds the ledger does not hold"
+    assert "Rising roles" in text, "withholding the odds must not empty the page"
+
+    ledger = tmp_path / "ledger-dir"
+    record_calls(ledger_path(ledger, "typed-ppr-12-2026"), extract_published_calls(_report()))
+    drops.main(["--out", str(out), "--processed-dir", str(ledger)])
+    assert "55% to outscore Odunze" in out.read_text(encoding="utf-8")
+
+
+def test_the_drafter_withholds_before_it_drafts() -> None:
+    """The order is the rule: recorded_only runs on the report BEFORE drafts()
+    sees it, so no template can reach an unrecorded number."""
+    src = (ROOT / "run" / "drops.py").read_text(encoding="utf-8")
+    body = src.split("def main", 1)[1]
+    assert "recorded_only(build()" in body
+    assert body.index("recorded_only(") < body.index("drafts(report)")

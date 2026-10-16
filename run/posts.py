@@ -29,6 +29,15 @@ the post exists to report. Two formats survive honestly; the third does not,
 and pretending otherwise would put a fabricated column in the one place the
 brand is "we publish what we can defend".
 
+**ONE CALL AT A TIME, NEVER A TALLY** (GTM-4, AFTER-6, Oct 2026). The
+selling rule is "sell the win, keep the record off the pitch": no win-loss
+totals, no hit rates, no "we went 7-3" anywhere a stranger reads. Principle 2
+is kept by the public record itself (the ledger page, graded every Monday,
+misses included); these drafts may quote a recorded call one at a time, each
+with the number it was published at and the box score that settled it, and
+never sum them. Whether the graded record is ever marketed socially is an
+owner decision (LAUNCH.md section 10), not a template default.
+
 **Nothing here grades.** `run/monday.py` owns settlement (RULE L1-L4, the
 box-scores-in finality rule, the shrink guard). These drafts READ what it
 settled. A second grader is how a public record starts answering the same
@@ -42,8 +51,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from engine.ledger import (GRADED, LedgerCall, ledger_summary,
-                           load_all_ledgers, scoring_of)
+from engine.ledger import GRADED, LedgerCall, load_all_ledgers, scoring_of
 from render.cards import write_receipt_cards
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -92,15 +100,37 @@ def latest_week(calls: list[LedgerCall]) -> tuple[str, int] | None:
 # Receipts Monday
 # --------------------------------------------------------------------- #
 
+def _settled_line(call: LedgerCall) -> str:
+    got = "" if call.pick_points is None else (
+        f" — {call.pick_points:.1f} to {call.over_points:.1f}")
+    return (f"- **{call.outcome.upper()}** · {call.pick_name} over "
+            f"{call.over_name} at {call.confidence:.0%} ({call.slot}, "
+            f"{scoring_of(call.league_id)}){got}")
+
+
+def _one_call_post(call: LedgerCall) -> str:
+    """One recorded call, as a post: the call as it was published and the box
+    score that settled it. Never a tally (GTM-4)."""
+    got = ("" if call.pick_points is None else
+           f" {call.pick_name} {call.pick_points:.1f}, {call.over_name} "
+           f"{call.over_points:.1f}.")
+    return (f"> Week {call.week}, recorded before kickoff: {call.pick_name} over "
+            f"{call.over_name}, {call.confidence:.0%}.{got}")
+
+
 def receipts_monday(processed_dir: Path = PROCESSED_DIR,
                     out_dir: Path = CONTENT_DIR,
                     week: tuple[str, int] | None = None) -> tuple[Path, str]:
-    """What the record settled, in the buyer's words — from the ledger only."""
+    """What the record settled, one call at a time — from the ledger only.
+
+    The owner's notes list every settled call, misses included, so the
+    choice of what to post is made knowing all of it; each draft quotes ONE
+    call. No line sums them: a win-loss total or a hit rate is the record on
+    the pitch, which the selling rule keeps off every public surface."""
     calls = settled(processed_dir)
     target = week or latest_week(calls)
     week_calls = ([c for c in calls
                    if (c.season, c.week) == target] if target else [])
-    overall = ledger_summary(calls)
 
     lines = [
         "# Receipts Monday — draft"
@@ -108,7 +138,7 @@ def receipts_monday(processed_dir: Path = PROCESSED_DIR,
         "",
         "> Human edits before posting. Every number is read from the public",
         "> ledger — the calls we actually sent, graded against real box scores.",
-        "> Nothing here comes from a subscriber's file.",
+        "> Nothing here comes from a subscriber's report.",
         "",
     ]
     if not week_calls:
@@ -116,11 +146,7 @@ def receipts_monday(processed_dir: Path = PROCESSED_DIR,
             "## Nothing settled this week",
             "",
             "Either no call cleared the bar (an honest quiet week) or the games",
-            "aren't final yet. The honest post, if you want one:",
-            "",
-            "> No graded calls this week — nothing cleared the bar we set before",
-            "> the season. The rules were locked before Week 1 and the ledger only",
-            "> counts calls we actually sent.",
+            "aren't final yet. Nothing to post today.",
             "",
             "---",
             FOOT,
@@ -128,48 +154,27 @@ def receipts_monday(processed_dir: Path = PROCESSED_DIR,
         return (_write(out_dir / "receipts-monday.md", "\n".join(lines) + "\n"),
                 "nothing settled")
 
-    hits = [c for c in week_calls if c.outcome == "hit"]
-    misses = [c for c in week_calls if c.outcome == "miss"]
     cards = write_receipt_cards(week_calls, out_dir / "cards")
-
-    def line(call: LedgerCall) -> str:
-        got = "" if call.pick_points is None else (
-            f" — {call.pick_points:.1f} to {call.over_points:.1f}")
-        return (f"- **{call.outcome.upper()}** · {call.pick_name} over "
-                f"{call.over_name} at {call.confidence:.0%} ({call.slot}, "
-                f"{scoring_of(call.league_id)}){got}")
-
     lines += [
-        f"## Week {target[1]}: {len(hits)} hit, {len(misses)} miss",
+        f"## Week {target[1]}, as settled (your notes, not a post)",
         "",
-        *[line(call) for call in week_calls],
+        *[_settled_line(call) for call in week_calls],
         "",
-        f"Season to date: {overall['hits']}-{overall['misses']} on "
-        f"{overall['graded']} graded call(s)"
-        + (f", {overall['hit_rate']:.0%}" if overall['hit_rate'] is not None
-           else "") + ".",
+        "Every call is on the public record either way. Post one at a time,",
+        "never a total or a rate.",
         "",
-        "Draft:",
+        "Drafts, one per call:",
         "",
-        f"> Receipts Monday. Week {target[1]}: we went {len(hits)}-{len(misses)}"
-        " on the calls we published.",
     ]
-    if misses:
-        worst = min(misses, key=lambda c: (c.pick_points or 0) - (c.over_points or 0))
-        lines += [
-            f"> The one that hurt: {worst.pick_name} over {worst.over_name} at "
-            f"{worst.confidence:.0%} — it went the other way.",
-        ]
+    for call in week_calls:
+        lines += [_one_call_post(call), ""]
     lines += [
-        "> Every call above was recorded before kickoff and graded against the",
-        "> real box score. Hits and misses both, same page, no edits after.",
-        "",
-        f"Cards rendered: {len(cards)} (attach the miss too — that is the point).",
+        f"Cards rendered: {len(cards)}, one per call.",
         "",
         "---",
         FOOT,
     ]
-    verdict = f"{len(hits)}-{len(misses)} week {target[1]}"
+    verdict = f"{len(week_calls)} call(s) week {target[1]}"
     return (_write(out_dir / "receipts-monday.md", "\n".join(lines) + "\n"),
             verdict)
 
@@ -233,12 +238,7 @@ def coinflip_friday(processed_dir: Path = PROCESSED_DIR,
         "",
         "> Coin-Flip Friday. The closest call we published this week:",
         f"> **{call.pick_name} over {call.over_name}, {call.confidence:.0%}.**",
-        "> Recorded when it shipped; graded Monday against the real box score,",
-        "> hit or miss, on the public record.",
-        "",
-        "Monday follow-up (pre-draft the quote-tweet):",
-        "",
-        "> [HIT/MISS]: box score attached. The record keeps score either way.",
+        "> Recorded when it shipped; settled Monday against the box score.",
         "",
         "---",
         FOOT,
@@ -264,18 +264,9 @@ def reply_kit(processed_dir: Path = PROCESSED_DIR,
     """
     stamp = kit_date or datetime.now(timezone.utc).date().isoformat()
     calls = settled(processed_dir)
-    overall = ledger_summary(calls)
     items: list[tuple[str, str]] = []
-
-    if overall["graded"]:
-        rate = (f", {overall['hit_rate']:.0%}"
-                if overall["hit_rate"] is not None else "")
-        items.append((
-            f"Our public record: {overall['hits']}-{overall['misses']} on "
-            f"{overall['graded']} graded calls{rate}",
-            "every call we published, graded against real box scores — link "
-            "the record, never a screenshot",
-        ))
+    # No "our record: 7-3" item. A tally is the record on the pitch (GTM-4);
+    # a reply quotes one recorded call, with the box score that settled it.
     target = latest_week(calls)
     if target:
         week_calls = [c for c in calls if (c.season, c.week) == target]
@@ -295,15 +286,16 @@ def reply_kit(processed_dir: Path = PROCESSED_DIR,
         "",
         "> The day's defensible numbers, one line of reasoning each. Selection",
         "> is the human's job; never link the product in replies.",
-        "> Every number here is from the PUBLIC record — no subscriber's file",
-        "> is ever quoted, and no number appears before it has been graded.",
+        "> Every number here is from the PUBLIC record — no subscriber's report",
+        "> is ever quoted, no number appears before it has been graded, and no",
+        "> reply sums the record: one call at a time.",
         "",
     ]
     for number, why in items:
         lines += [
             f"## {number}",
             f"- Why it's true: {why}",
-            f"- Reply template: \"The receipts say: {number}.\"",
+            f"- Reply template: \"We had {number}, recorded before kickoff.\"",
             "",
         ]
     if not items:

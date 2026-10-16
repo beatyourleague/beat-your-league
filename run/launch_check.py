@@ -1,9 +1,15 @@
 """Launch readiness — `make launch-check`.
 
 Usage:
-    python -m run.launch_check            # everything (≈4 minutes)
+    python -m run.launch_check            # everything (≈8 minutes)
     python -m run.launch_check --fast     # skip the test suite, browser and proving run
-    python -m run.launch_check --offline  # skip DNS and the live site
+    python -m run.launch_check --offline  # skip DNS, the live site and the account APIs
+
+The account gates read GitHub (`gh`, signed in), Stripe (STRIPE_API_KEY) and
+Resend (RESEND_API_KEY) only when those are present in the shell, and only
+ever with GET; without them each says SKIP or OWNER rather than guessing. The
+accessibility gate needs axe-core: set AXE_CORE_PATH to an axe.min.js, or
+`npm install --no-save axe-core@4.11.4` in the repo (LAUNCH.md, "Where things stand").
 
 One command that answers "can we take money today, and will the people who pay
 like what they get?" — as far as a machine can answer it. Every gate is one of:
@@ -28,21 +34,27 @@ that audit's report (reports/launch-readiness.md); this keeps the rest true.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import functools
 import html
+import http.server
 import json
 import os
 import re
 import shutil
 import socket
+import statistics
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 REPO = Path(__file__).resolve().parent.parent
 SITE = REPO / "site"
@@ -77,6 +89,22 @@ REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", 
                     "EMAIL_REPLY_TO", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
                     "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
                     "SENDER_POSTAL_ADDRESS")
+# What each feature stops doing without which secret, so a missing name says
+# what a buyer loses rather than only that a box is empty. UPDATE_SECRET keys
+# two things since Oct 2026: the roster-update confirmation codes AND each
+# League Pass payer's own seat link (run/updates seat token, contract C4), and
+# that link is built on SITE_URL — without either, a payer's welcome falls back
+# to the generic seat page and the claim needs the payer's address typed in.
+FEATURE_SECRETS = {
+    "Taking money and knowing who paid": ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS"),
+    "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "EMAIL_REPLY_TO", "RESEND_API_KEY",
+                          "SENDER_POSTAL_ADDRESS"),
+    "A cancel link that opens the billing page": ("BILLING_PORTAL_URL", "SITE_URL"),
+    "Self-serve roster updates": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET", "SITE_URL"),
+    "A League Pass payer's own seat link": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
+                                            "SITE_URL"),
+    "Free reports and the waitlist": ("FORM_ENDPOINT", "FORM_API_KEY"),
+}
 
 
 @dataclass
@@ -384,14 +412,24 @@ def check_funnel_config() -> list[Gate]:
     gates = []
     if empty:
         gates.append(Gate("Funnel", "Checkout can take money", "OWNER",
-                          f"{len(empty)} of 3 payment links empty — LAUNCH.md steps 1–3, then "
-                          f"they go back into site/join/index.html"))
+                          f"{len(empty)} of 3 payment links empty — LAUNCH.md step 5 (the "
+                          f"Worker) and steps 1–3, then fresh links go into "
+                          f"site/join/index.html"))
     else:
         gates.append(Gate("Funnel", "Checkout can take money", "PASS", "all three payment links set"))
     gates.append(_gate("Funnel", "The landing never sells a checkout that cannot complete",
                        not (open_ and links["STRIPE_LINK_SEASON"] == "")
                        and not (can and empty),
                        "CHECKOUT_OPEN/CHECKOUT_CAN_COMPLETE is on while a payment link is empty"))
+    # OPS-04: a buyer's roster churns from the first waiver run, and without the
+    # form Worker the only way to change it is a reply somebody applies by hand
+    # (`make roster-update`) — a promise of "update any time" that rests on the
+    # owner's inbox. Checkout reopens only once step 5's Worker is live.
+    gates.append(_gate("Funnel", "Checkout never opens before roster changes have a route",
+                       not (open_ and not form),
+                       "CHECKOUT_OPEN is on while the join page's FORM_ENDPOINT is empty — "
+                       "every roster change would be a reply applied by hand; deploy the "
+                       "form Worker (LAUNCH.md step 5) before opening"))
     gates.append(_gate("Funnel", "Landing and League Pass agree on whether checkout is open",
                        landing.get("CHECKOUT_OPEN") == lp.get("CHECKOUT_OPEN"),
                        f"index CHECKOUT_OPEN={landing.get('CHECKOUT_OPEN')}, "
@@ -523,61 +561,264 @@ TEMPLATE_SLOTS = {
 }
 
 
-def check_product_battery() -> list[Gate]:
-    """The sample roster under five setups, joined to TODAY's roster status and
-    the schedule's byes OUTSIDE the report's own availability data — the first
-    version of this check trusted that data and passed a report that started an
-    injured-reserve receiver (launch audit)."""
+def players_today(cache_dir: Path) -> dict[str, dict[str, str]]:
+    """gsis -> {status, team, position} from TODAY's players release, read here
+    rather than through the report's own data. The first version of the
+    battery trusted the report's availability records and passed a report that
+    started an injured-reserve receiver; the second read the gate's
+    carried-forward team, so a player traded onto a team on bye (or released
+    before he played a 2026 snap) was invisible to it too (launch audit GATE-1).
+    """
     import csv
+    out: dict[str, dict[str, str]] = {}
+    with (cache_dir / "players.csv").open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            gsis = (row.get("gsis_id") or "").strip()
+            if gsis:
+                out[gsis] = {"status": (row.get("status") or "").strip().upper(),
+                             "team": (row.get("latest_team") or "").strip(),
+                             "position": (row.get("position") or "").strip()}
+    return out
+
+
+def schedule_byes(cache_dir: Path, season: str, week: int) -> set[str] | None:
+    """Teams with no regular-season game in ``week``, read off games.csv
+    directly — the schedule, not the report's idea of it. None when the week
+    has no games on file (unknown is never "nobody is on bye")."""
+    import csv
+    teams: set[str] = set()
+    playing: set[str] = set()
+    with (cache_dir / "games.csv").open(encoding="utf-8", newline="") as fh:
+        for row in csv.DictReader(fh):
+            if row.get("season") != str(season) or row.get("game_type") != "REG":
+                continue
+            pair = {row.get("home_team") or "", row.get("away_team") or ""} - {""}
+            teams |= pair
+            if row.get("week") == str(week):
+                playing |= pair
+    return (teams - playing) if playing else None
+
+
+def cannot_play(pid: str, today: dict[str, dict[str, str]], byes: set[str]) -> str | None:
+    """Why this player cannot play this week, on today's facts alone: a reserve
+    list or a release (players.csv status), or his CURRENT team's bye. None
+    when nothing today says so. A defense's team is its id."""
     from engine.availability import ROSTER_OUT
-    from engine.subscriber import RosterSpec
-    from render.email import render_email
+    if pid.startswith("DEF-"):
+        team = pid.split("-", 1)[1]
+        return f"{team} on bye" if team in byes else None
+    row = today.get(pid) or {}
+    if row.get("status") in ROSTER_OUT:
+        return ROSTER_OUT[row["status"]]
+    if row.get("team") in byes:
+        return f"{row['team']} on bye"
+    return None
+
+
+def _season_points(rows_by_week: dict, before: int | None = None) -> dict[str, float]:
+    """player -> PPR points over a season's rows, scored by the product's own
+    rule: the only ranking the battery needs is who a real manager would
+    actually roster."""
+    from engine.scoring import preset, score
+    rule = preset("ppr")
+    total: dict[str, float] = {}
+    for week, rows in rows_by_week.items():
+        if before is not None and int(week) >= before:
+            continue
+        for pid, row in rows.items():
+            try:
+                total[pid] = total.get(pid, 0.0) + score(row, rule)
+            except Exception:  # noqa: BLE001 — a row it cannot score ranks nobody
+                continue
+    return total
+
+
+BATTERY_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
+
+
+def battery_rosters(data, today: dict[str, dict[str, str]],
+                    byes: set[str]) -> list[tuple[str, tuple[str, ...], str]]:
+    """(name, player ids, what it tests) for THIS week, built from the data so
+    each keeps testing its hard case whatever the week is:
+
+    - **Sample roster** — the live sample's own (render.live_sample).
+    - **Byes and injuries** — the best players this season who cannot play
+      this week (current team on bye, injured reserve, released), beside
+      enough healthy ones to field a full lineup — so starting any of the
+      first is a defect, not a necessity.
+    - **Moved onto a bye** — the sample with its best player at one position
+      swapped for a player whose CURRENT team is on bye while his last stat
+      row's team is not (traded or signed since): the case the gate's
+      carried-forward team misses.
+    - **Released** — the sample with its best player at one position swapped
+      for a released player the gate never placed on a team (no stat row this
+      season): the teamless case.
+    A case this week cannot supply (no byes in week 1) is left out and said so.
+    """
     from render.live_sample import LIVE_ROSTER
+    known = {p.player_id: p for p in data.directory.players}
+    points = _season_points(data.weekly, before=data.week)
+    prior = _season_points(data.prior)
+    statuses = data.availability.statuses or {}
+
+    def position(pid: str) -> str:
+        player = known.get(pid)
+        return "DEF" if pid.startswith("DEF-") else (player.position if player else "")
+
+    def ranked(pos: str, pool=None) -> list[str]:
+        ids = [pid for pid in (pool if pool is not None else known)
+               if position(pid) == pos and points.get(pid, 0) > 0]
+        return sorted(ids, key=lambda pid: (-points.get(pid, 0), pid))
+
+    sample = tuple(pid for pid in LIVE_ROSTER if pid in known)
+    out = [("Sample roster", sample, "the live sample")]
+
+    heavy: list[str] = []
+    for pos, n_out, n_ok in (("QB", 1, 1), ("RB", 2, 2), ("WR", 2, 3), ("TE", 1, 1),
+                             ("K", 1, 1), ("DEF", 1, 1)):
+        pool = ranked(pos)
+        heavy += [pid for pid in pool if cannot_play(pid, today, byes)][:n_out]
+        heavy += [pid for pid in pool if not cannot_play(pid, today, byes)][:n_ok]
+    if any(cannot_play(pid, today, byes) for pid in heavy):
+        out.append(("Byes and injuries", tuple(heavy), "starters who can't play"))
+
+    def swapped(incoming: str) -> tuple[str, ...]:
+        pos = position(incoming)
+        best = next(iter(ranked(pos, sample)), None)
+        return tuple(incoming if pid == best else pid for pid in sample) \
+            if best else sample + (incoming,)
+
+    moved = [pid for pid in known if not pid.startswith("DEF-") and pid not in sample
+             and position(pid) in BATTERY_POSITIONS
+             and (today.get(pid) or {}).get("team") in byes
+             and (today.get(pid) or {}).get("status") not in ("CUT", "RLS")
+             and (statuses.get(pid) or {}).get("team") not in (None, *byes)]
+    moved.sort(key=lambda pid: (-points.get(pid, 0), pid))
+    if moved:
+        out.append(("Moved onto a bye", swapped(moved[0]),
+                    "a player whose current team is on bye"))
+    released = [pid for pid in known if pid not in sample and pid not in statuses
+                and position(pid) in ("QB", "RB", "WR", "TE")
+                and (today.get(pid) or {}).get("status") in ("CUT", "RLS")]
+    released.sort(key=lambda pid: (-prior.get(pid, 0), pid))
+    if released:
+        out.append(("Released", swapped(released[0]), "a released player with no team"))
+    return out
+
+
+def _battery_setups(name: str) -> tuple[tuple[str, int, str], ...]:
+    # The sample under every setup; each hard case under two (its lineup
+    # shape is what changes which bench player can cover).
+    return BATTERY if name == "Sample roster" else (BATTERY[0], BATTERY[3])
+
+
+@functools.lru_cache(maxsize=1)
+def battery_reports() -> tuple[tuple[str, dict], ...] | str:
+    """(label, report) for every battery roster under its setups, built once
+    per run: the battery's gates and the email-width gate read the same
+    reports. A string is the reason there are none (the offseason)."""
+    from engine.subscriber import RosterSpec
     from run.solo import CACHE_DIR, SeasonOver, load_week_data, report_for
     try:
         data = load_week_data(CACHE_DIR)
     except SeasonOver as exc:
-        return [Gate("Product", "Five league setups build sound reports", "SKIP", str(exc))]
-    status: dict[str, str] = {}
-    with (CACHE_DIR / "players.csv").open(encoding="utf-8", newline="") as fh:
-        for row in csv.DictReader(fh):
-            if (row.get("status") or "").upper() in ROSTER_OUT:
-                status[row["gsis_id"]] = ROSTER_OUT[row["status"].upper()]
-    byes = data.availability.bye_teams or set()
-    known = {p.player_id for p in data.directory.players}
-    roster = tuple(p for p in LIVE_ROSTER if p in known)
-    silent, bad_alt, absurd, defense, wide = [], [], [], [], []
-    for scoring, size, template in BATTERY:
-        label = f"{scoring}/{size}/{template}"
-        report = report_for(RosterSpec(player_ids=roster, slots=TEMPLATE_SLOTS[template],
-                                       scoring=scoring, label="Sample roster"),
-                            data, league_size=size)
-        told = " ".join(c["action"] for c in report["checklist"])
-        for slot in report["lineup"]:
-            pid = slot.get("player_id") or ""
-            team = (data.availability.statuses or {}).get(pid, {}).get("team")
-            cannot = pid in status or (team in byes and not pid.startswith("DEF-")) \
-                or (pid.startswith("DEF-") and pid.split("-", 1)[1] in byes)
+        return str(exc)
+    today = players_today(CACHE_DIR)
+    byes = schedule_byes(CACHE_DIR, data.season, data.week) or set()
+    built = []
+    for name, roster, _why in battery_rosters(data, today, byes):
+        for scoring, size, template in _battery_setups(name):
+            report = report_for(RosterSpec(player_ids=roster, slots=TEMPLATE_SLOTS[template],
+                                           scoring=scoring, label=name),
+                                data, league_size=size)
+            built.append((f"{name} {scoring}/{size}/{template}", report))
+    return tuple(built)
+
+
+def audit_report(label: str, report: dict, today: dict[str, dict[str, str]],
+                 byes: set[str]) -> dict[str, list[str]]:
+    """Every way one report can mishandle a player who cannot play, checked
+    against today's facts (``cannot_play``) rather than the report's own:
+    - silent: started with no out flag, or not named in the checklist;
+    - over_playable: started while a bench player who CAN play, and whom the
+      report itself does not mark out, could fill that slot;
+    - bad_alt: a printed % whose other side — the bench player the call is
+      made against — cannot play (a lineup row's call or the closest call)."""
+    from engine.history import FLEX_ELIGIBILITY
+    found: dict[str, list[str]] = {"silent": [], "over_playable": [], "bad_alt": [],
+                                   "absurd": [], "defense": []}
+    told = " ".join(c["action"] for c in report["checklist"])
+    bench = report.get("bench") or []
+
+    def fits(pos: str, slot: str) -> bool:
+        allowed = FLEX_ELIGIBILITY.get(slot)
+        return pos in allowed if allowed else pos == slot
+
+    for slot in report["lineup"]:
+        pid = slot.get("player_id") or ""
+        why = cannot_play(pid, today, byes) if pid else None
+        if why:
             flagged = any(f.get("kind") == "out" for f in slot.get("flags") or [])
-            if cannot and not (flagged and slot["player_name"].split()[-1] in told):
-                silent.append(f"{label}: {slot['player_name']}")
-            if slot.get("confidence") is not None:
-                if not 0.5 <= slot["confidence"] <= 0.99:
-                    absurd.append(f"{label}: {slot['player_name']}")
-                if slot.get("position") == "DEF":
-                    defense.append(label)
-                if slot.get("alternative_id") in status:
-                    bad_alt.append(f"{label}: {slot.get('alternative_name')}")
+            if not (flagged and slot["player_name"].split()[-1] in told):
+                found["silent"].append(f"{label}: {slot['player_name']} ({why})")
+            cover = [b["name"] for b in bench
+                     if not b.get("out") and not cannot_play(b["player_id"], today, byes)
+                     and fits(b.get("position") or "", slot["slot"])]
+            if cover:
+                found["over_playable"].append(
+                    f"{label}: {slot['player_name']} ({why}) over {cover[0]}")
+        if slot.get("confidence") is not None:
+            if not 0.5 <= slot["confidence"] <= 0.99:
+                found["absurd"].append(f"{label}: {slot['player_name']}")
+            if slot.get("position") == "DEF":
+                found["defense"].append(label)
+            alt = cannot_play(slot.get("alternative_id") or "", today, byes)
+            if alt:
+                found["bad_alt"].append(f"{label}: {slot['player_name']} over "
+                                        f"{slot.get('alternative_name')} ({alt})")
+    regret = report.get("regret") or {}
+    if regret.get("confidence") is not None:
+        alt = cannot_play(regret.get("over_id") or "", today, byes)
+        if alt:
+            found["bad_alt"].append(f"{label}: closest call against "
+                                    f"{regret.get('over_name')} ({alt})")
+    return found
+
+
+def check_product_battery() -> list[Gate]:
+    """The sample roster under five setups and three hard-case rosters built
+    for this week, each joined to TODAY's roster status and the SCHEDULE's
+    byes outside the report's own availability data (see players_today)."""
+    from render.email import render_email
+    from run.solo import CACHE_DIR, load_week_data
+    built = battery_reports()
+    if isinstance(built, str):
+        return [Gate("Product", "Every battery roster builds a sound report", "SKIP", built)]
+    data = load_week_data(CACHE_DIR)
+    today = players_today(CACHE_DIR)
+    byes = schedule_byes(CACHE_DIR, data.season, data.week) or set()
+    found: dict[str, list[str]] = {}
+    wide = []
+    for label, report in built:
+        for key, items in audit_report(label, report, today, byes).items():
+            found.setdefault(key, []).extend(items)
         if len(render_email(report).encode("utf-8")) >= 100_000:
             wide.append(label)
-    n = len(BATTERY)
+    rosters = list(dict.fromkeys(label.rsplit(" ", 1)[0] for label, _ in built))
+    missing = [name for name in ("Byes and injuries", "Moved onto a bye", "Released")
+               if name not in rosters]
+    scope = (f"{len(built)} reports: {', '.join(rosters)}"
+             + (f" (no {', '.join(missing).lower()} case exists this week)" if missing else ""))
     return [
         _gate("Product", "No player who can't play is started without a flag and a checklist line",
-              not silent, "; ".join(silent[:4]), f"{n} setups, this week"),
-        _gate("Product", "No call is made against a player on injured reserve or suspended",
-              not bad_alt, "; ".join(bad_alt[:4])),
+              not found["silent"], "; ".join(found["silent"][:4]), scope),
+        _gate("Product", "No player who can't play is started over a bench player who can",
+              not found["over_playable"], "; ".join(found["over_playable"][:4])),
+        _gate("Product", "No % is printed against a player on bye, on a reserve list or released",
+              not found["bad_alt"], "; ".join(found["bad_alt"][:4])),
         _gate("Product", "Every % in every setup is between 50 and 99, none on a defense",
-              not absurd and not defense, "; ".join((absurd + defense)[:4])),
+              not found["absurd"] and not found["defense"],
+              "; ".join((found["absurd"] + found["defense"])[:4])),
         _gate("Product", "Every setup's email stays under Gmail's clip", not wide, ", ".join(wide)),
     ]
 
@@ -602,37 +843,89 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def check_browser() -> list[Gate]:
+def _browser_tools() -> tuple[str, str] | None:
     chrome = os.environ.get("CHROME_PATH") or (CHROME if Path(CHROME).exists()
                                                else shutil.which("google-chrome")
                                                or shutil.which("chromium"))
     node = shutil.which("node")
-    if not chrome or not node:
-        return [Gate("Browser", "Pages load cleanly in a real browser", "SKIP",
-                     "needs Chrome and node")]
-    import http.server
-    import functools
-    port = _free_port()
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(SITE))
-    http.server.SimpleHTTPRequestHandler.log_message = lambda *a, **k: None
+    return (chrome, node) if chrome and node else None
+
+
+class _Handler(http.server.SimpleHTTPRequestHandler):
+    """A static server with two stand-ins the join flows need: a Stripe
+    payment link (/__stripe/<plan>) that answers with a blank page, and the
+    form Worker (/__form) that accepts any row. The browser records what left
+    the page; nothing here stores it."""
+
+    def log_message(self, *args, **kwargs) -> None:   # noqa: D102 — quiet
+        return
+
+    def _reply(self, body: bytes, kind: str) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:                          # noqa: N802
+        if self.path.startswith("/__stripe/"):
+            return self._reply(b"<!doctype html><title>stub checkout</title>", "text/html")
+        return super().do_GET()
+
+    def do_POST(self) -> None:                         # noqa: N802
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        return self._reply(b'{"ok":true}', "application/json")
+
+    def do_OPTIONS(self) -> None:                      # noqa: N802
+        return self._reply(b"", "text/plain")
+
+
+@contextlib.contextmanager
+def _serving(directory: Path, port: int | None = None) -> Iterator[str]:
+    port = port or _free_port()
+    handler = functools.partial(_Handler, directory=str(directory))
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
-            json.dump([{"path": p, "widths": list(w)} for p, w in BROWSER_PAGES], fh)
-        r = subprocess.run([node, str(REPO / "run" / "launch_browser.mjs"),
-                            f"http://127.0.0.1:{port}", chrome, fh.name],
-                           capture_output=True, text=True, timeout=900)
-        results = json.loads(r.stdout or "[]")
-    except (subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
-        return [Gate("Browser", "Pages load cleanly in a real browser", "SKIP", str(exc))]
+        yield f"http://127.0.0.1:{port}"
     finally:
         server.shutdown()
+        server.server_close()
+
+
+def run_browser(jobs: list[dict], base: str, timeout: int = 1500) -> list[dict] | str:
+    """Run launch_browser.mjs over ``jobs`` against ``base``. A string is why it
+    could not run (no Chrome or node, Chrome would not start) — a SKIP, never
+    a pass."""
+    tools = _browser_tools()
+    if not tools:
+        return "needs Chrome and node"
+    chrome, node = tools
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+        json.dump(jobs, fh)
+    try:
+        r = subprocess.run([node, str(REPO / "run" / "launch_browser.mjs"), base, chrome,
+                            fh.name], capture_output=True, text=True, timeout=timeout)
+        results = json.loads(r.stdout or "[]")
+    except (subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        return f"{type(exc).__name__}: {exc}"
+    finally:
+        Path(fh.name).unlink(missing_ok=True)
     fatal = [x["fatal"] for x in results if "fatal" in x]
-    if fatal:
-        return [Gate("Browser", "Pages load cleanly in a real browser", "SKIP", fatal[0])]
+    return fatal[0] if fatal else results
+
+
+def check_browser() -> list[Gate]:
+    with _serving(SITE) as base:
+        results = run_browser([{"path": p, "widths": list(w)} for p, w in BROWSER_PAGES], base)
+    if isinstance(results, str):
+        return [Gate("Browser", "Pages load cleanly in a real browser", "SKIP", results)]
+    broken = [f"{x['path']}: {x['jobError']}" for x in results if "jobError" in x]
+    results = [x for x in results if "jobError" not in x]
     label = lambda x: f"{x['path']} @{x['width']}"  # noqa: E731
-    errors = [f"{label(x)}: {x['errors'][0][:120]}" for x in results if x["errors"]]
+    errors = [f"{label(x)}: {x['errors'][0][:120]}" for x in results if x["errors"]] + broken
     # The 404 page is fetched as a 404 on purpose.
     failed = [f"{label(x)}: {x['failed'][0]}" for x in results
               if x["failed"] and x["path"] != "404.html"]
@@ -653,6 +946,317 @@ def check_browser() -> list[Gate]:
         _gate("Browser", "Pages load in under 8 seconds locally", not slow, "; ".join(slow[:4]),
               fail="WARN"),
     ]
+
+
+def check_email_widths() -> list[Gate]:
+    """GATE-2: the emails this week's run would send, at a true 390px phone.
+    A test pins the 2024 sample's email; the live week and the battery are
+    what real inboxes get, and a long player name or a new row only shows up
+    there."""
+    from render.email import render_email
+    from render.live_sample import build
+    from run.solo import SeasonOver
+    emails: list[tuple[str, str]] = []
+    try:
+        emails.append(("this week's sample", render_email(build())))
+    except SeasonOver as exc:
+        return [Gate("Browser", "Every email fits a 390px phone", "SKIP", f"offseason: {exc}")]
+    built = battery_reports()
+    if not isinstance(built, str):
+        emails += [(label, render_email(report)) for label, report in built]
+    with tempfile.TemporaryDirectory() as tmp:
+        names = {}
+        for i, (label, page) in enumerate(emails):
+            names[f"email-{i}.html"] = label
+            (Path(tmp) / f"email-{i}.html").write_text(page, encoding="utf-8")
+        with _serving(Path(tmp)) as base:
+            results = run_browser([{"path": name, "widths": [390], "settle": 300}
+                                   for name in names], base)
+    if isinstance(results, str):
+        return [Gate("Browser", "Every email fits a 390px phone", "SKIP", results)]
+    wide = [f"{names.get(x['path'], x['path'])} ({x.get('scrollWidth')}px)" for x in results
+            if x.get("overflow") or "jobError" in x]
+    return [_gate("Browser", "Every email fits a 390px phone (this week, every battery setup)",
+                  not wide, "; ".join(wide[:4]), f"{len(results)} emails at 390px")]
+
+
+# The join page's constants the flows point at local stand-ins.
+JOIN_CONSTANTS = ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS",
+                  "FORM_ENDPOINT", "NOTIFY_LIST_ENDPOINT")
+STUB_PLAN = {"season": "season", "monthly": "monthly", "league_pass": "pass"}
+FLOW_EMAIL = "buyer.flow@example.com"
+FLOW_PAYER = "commish.flow@example.com"
+FLOW_VIA = "launch-check"
+FLOW_TOKEN = "0123456789abcdef0123"
+# (mode, which copy, query, what leaves the page, the plan a checkout ref carries)
+FLOWS = (
+    ("season", "open", f"?via={FLOW_VIA}", "checkout", "season"),
+    ("monthly", "open", "?plan=monthly", "checkout", "monthly"),
+    ("League Pass", "open", "?plan=pass", "checkout", "league_pass"),
+    ("seat (payer's address)", "open", "?pass=1", "seat", None),
+    ("seat (payer's link)", "open", f"?pass={FLOW_TOKEN}&s=half_ppr&n=10&t=sf", "seat", None),
+    ("free report", "open", f"?try=1&via={FLOW_VIA}", "trial", None),
+    ("roster update", "open", "?update=1", "update_request", None),
+    ("closed checkout", "closed", "", "waitlist", None),
+)
+
+
+def join_copy(dest: Path, base: str, links_open: bool) -> list[str]:
+    """site/ copied to ``dest`` with the join page's payment links and form
+    endpoint pointed at this run's stand-ins (``links_open``: whether the
+    payment links are set at all). -> the constants it could not find."""
+    shutil.copytree(SITE, dest)
+    page = dest / "join" / "index.html"
+    text = page.read_text(encoding="utf-8")
+    values = {"STRIPE_LINK_SEASON": f"{base}/__stripe/season" if links_open else "",
+              "STRIPE_LINK_MONTHLY": f"{base}/__stripe/monthly" if links_open else "",
+              "STRIPE_LINK_PASS": f"{base}/__stripe/pass" if links_open else "",
+              "FORM_ENDPOINT": f"{base}/__form", "NOTIFY_LIST_ENDPOINT": f"{base}/__form"}
+    missing = []
+    for name, value in values.items():
+        text, n = re.subn(rf'^const {name} = "[^"]*";', f'const {name} = "{value}";', text,
+                          flags=re.M)
+        if n != 1:
+            missing.append(name)
+    page.write_text(text, encoding="utf-8")
+    return missing
+
+
+def flow_roster(directory_json: Path) -> tuple[str, set[str]]:
+    """The live sample's roster as a buyer would paste it — names from the
+    page's own player list — and the ids it must resolve to."""
+    from render.live_sample import LIVE_ROSTER
+    names = {row[1]: row[0] for row in json.loads(
+        directory_json.read_text(encoding="utf-8"))["players"]}
+    ids = [pid for pid in LIVE_ROSTER if pid in names]
+    return "\n".join(names[pid] for pid in ids) + "\n", set(ids)
+
+
+def audit_flow(mode: str, kind: str, plan: str | None, query: str, result: dict,
+               roster_ids: set[str], base: str) -> list[str]:
+    """What is wrong with one completed join flow, read off what actually left
+    the page. Empty means it is right. The rules: a Stripe hand-off carries
+    exactly our two parameters, a ref Stripe will keep (^[A-Za-z0-9_-]{1,200}$
+    — Stripe silently DROPS anything else while still taking the money), that
+    decodes to the plan of the link it was sent to and the roster that was
+    checked, a channel tag only as given, and the locked email exactly as
+    typed; a form row carries the typed email and a decodable ref, once."""
+    from run.intake import split_via
+    from run.refs import STRIPE_REF_RE, RefError, decode_roster
+    problems: list[str] = []
+    if result.get("error"):
+        return [f"{mode}: {result['error']}"]
+    asked = urllib.parse.parse_qs(query.lstrip("?"))
+
+    def check_ref(ref: str | None, want_plan: str | None) -> Any:
+        if not ref:
+            problems.append(f"{mode}: no roster reference")
+            return None
+        if len(ref) > 200 or not STRIPE_REF_RE.match(ref):
+            problems.append(f"{mode}: a reference Stripe would drop ({len(ref)} chars)")
+            return None
+        core, via = split_via(ref)
+        if via is not None and via != (asked.get("via") or [None])[0]:
+            problems.append(f"{mode}: carries channel tag {via!r} nobody gave it")
+        try:
+            decoded = decode_roster(core)
+        except RefError as exc:
+            problems.append(f"{mode}: the reference does not decode ({exc})")
+            return None
+        if want_plan and decoded.plan != want_plan:
+            problems.append(f"{mode}: a {decoded.plan} reference sent to the {want_plan} link")
+        if set(decoded.player_ids) != roster_ids:
+            problems.append(f"{mode}: the reference holds a different roster than was checked")
+        return decoded
+
+    if kind == "checkout":
+        url = result.get("handoff")
+        if not url:
+            return [f"{mode}: never reached checkout"]
+        parsed = urllib.parse.urlparse(url)
+        if f"{parsed.scheme}://{parsed.netloc}{parsed.path}" != f"{base}/__stripe/{STUB_PLAN[plan]}":
+            problems.append(f"{mode}: sent to {parsed.path}, not the {plan} link")
+        params = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        if set(params) != {"client_reference_id", "locked_prefilled_email"}:
+            problems.append(f"{mode}: hand-off parameters {sorted(params)}")
+        check_ref((params.get("client_reference_id") or [None])[0], plan)
+        if (params.get("locked_prefilled_email") or [None])[0] != FLOW_EMAIL:
+            problems.append(f"{mode}: the locked email is not the one typed")
+        return problems
+
+    rows = result.get("posted") or []
+    if len(rows) != 1:
+        return [f"{mode}: posted {len(rows)} rows (one expected)"]
+    try:
+        row = json.loads(rows[0])
+    except (TypeError, ValueError):
+        return [f"{mode}: posted something that isn't JSON"]
+    if str(row.get("kind") or "seat") != kind:
+        problems.append(f"{mode}: posted kind {row.get('kind')!r}, not {kind!r}")
+    if row.get("email") != FLOW_EMAIL:
+        problems.append(f"{mode}: the posted email is not the one typed")
+    if "via" in row and row["via"] != (asked.get("via") or [None])[0]:
+        problems.append(f"{mode}: posted channel tag {row['via']!r}")
+    if kind == "waitlist":
+        if row.get("ref"):
+            check_ref(row["ref"], None)
+        return problems
+    decoded = check_ref(row.get("ref"), None)
+    if kind == "seat":
+        if "pass_token" in row:
+            # The payer's own link (contract C4): the token is the payer, and
+            # the league's settings arrive prefilled from the link.
+            if row["pass_token"] != (asked.get("pass") or [None])[0]:
+                problems.append(f"{mode}: posted a different pass token")
+            if decoded is not None and (decoded.scoring, decoded.league_size,
+                                        len(decoded.slots)) != ("half_ppr", 10, 10):
+                problems.append(f"{mode}: the link's settings were not carried")
+        elif row.get("covered_by") != FLOW_PAYER:
+            problems.append(f"{mode}: the commissioner's address is not the one typed")
+    return problems
+
+
+def audit_plan_switch(switched: dict | None) -> list[str]:
+    """Season ⇄ monthly on the page rewrites the button and the terms line
+    above it, and switching back restores the season pass exactly — a buyer
+    must never read the season pass's renewal terms above a monthly button."""
+    from render.welcome import MONTHLY_PRICE, SEASON_PRICE
+    if not switched or not switched.get("after"):
+        return ["season: the page offers no switch to monthly"]
+    before, after, back = switched["before"], switched["after"], switched["back"]
+    problems = []
+    if SEASON_PRICE not in before["button"] + before["terms"]:
+        problems.append(f"season: {SEASON_PRICE} is not on the button or terms line")
+    if MONTHLY_PRICE not in after["button"] or MONTHLY_PRICE not in after["terms"]:
+        problems.append(f"monthly: the button or terms line still reads {after}")
+    if SEASON_PRICE in after["terms"]:
+        problems.append("monthly: the season pass's terms are still above the button")
+    if back != before:
+        problems.append("season: switching back did not restore the season pass")
+    return problems
+
+
+def check_join_flows() -> list[Gate]:
+    """GATE-5: every join mode completed in a real browser, on a copy of the
+    site whose payment links and form endpoint are local stand-ins, and the
+    hand-off or row that left the page checked as the intake will read it.
+    The only earlier check read the page's source text."""
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    with tempfile.TemporaryDirectory() as tmp:
+        missing = (join_copy(Path(tmp) / "open", base, True)
+                   + join_copy(Path(tmp) / "closed", base, False))
+        if missing:
+            return [Gate("Browser", "Every join mode hands off a well-formed purchase or row",
+                         "FAIL", f"join page constants not found: {sorted(set(missing))}")]
+        roster_text, roster_ids = flow_roster(Path(tmp) / "open" / "join" / "players.json")
+        jobs = [{"kind": "flow", "mode": mode, "path": f"{copy}/join/index.html{query}",
+                 "width": 390, "roster": roster_text, "email": FLOW_EMAIL, "payer": FLOW_PAYER,
+                 "planSwitch": mode == "season"} for mode, copy, query, _k, _p in FLOWS]
+        with _serving(Path(tmp), port):
+            results = run_browser(jobs, base)
+    name = "Every join mode hands off a well-formed purchase or row"
+    if isinstance(results, str):
+        return [Gate("Browser", name, "SKIP", results)]
+    by_mode = {r.get("mode"): r for r in results}
+    problems: list[str] = []
+    for mode, _copy, query, kind, plan in FLOWS:
+        result = by_mode.get(mode) or {"error": "no result"}
+        problems += audit_flow(mode, kind, plan, query, result, roster_ids, base)
+        if mode == "season" and not result.get("error"):
+            problems += audit_plan_switch(result.get("switched"))
+    errors = [f"{r['mode']}: {r['errors'][0][:100]}" for r in results if r.get("errors")]
+    return [_gate("Browser", name, not problems, "; ".join(problems[:5]),
+                  f"{len(FLOWS)} modes: {', '.join(m for m, *_ in FLOWS)}"),
+            _gate("Browser", "No script errors while completing the join modes", not errors,
+                  "; ".join(errors[:3]))]
+
+
+def axe_core_path() -> Path | None:
+    """axe-core's browser bundle: AXE_CORE_PATH, or `npm install --no-save
+    axe-core@4.11.4` in the repo. Not vendored — the gate SKIPs without it."""
+    for candidate in (os.environ.get("AXE_CORE_PATH"),
+                      REPO / "node_modules" / "axe-core" / "axe.min.js"):
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    return None
+
+
+# Every page a buyer sells themselves on, and every join mode.
+A11Y_PAGES = SELLING + ("join/index.html?plan=monthly", "join/index.html?plan=pass",
+                        "join/index.html?pass=1", "join/index.html?try=1",
+                        "join/index.html?update=1", "join/confirm.html")
+
+
+def check_accessibility() -> list[Gate]:
+    """GATE-19: axe-core over every selling page and every join mode at 390 and
+    1280. Serious and critical violations FAIL (a screen-reader user cannot
+    complete the purchase, or cannot read the price); moderate and minor are
+    listed as a WARN."""
+    name = "No serious accessibility problem on a selling page or join mode"
+    axe = axe_core_path()
+    if axe is None:
+        return [Gate("Browser", name, "SKIP", "axe-core not found — set AXE_CORE_PATH or "
+                     "`npm install --no-save axe-core@4.11.4` in the repo")]
+    with _serving(SITE) as base:
+        results = run_browser([{"kind": "axe", "path": p, "widths": [390, 1280],
+                                "axe": str(axe)} for p in A11Y_PAGES], base)
+    if isinstance(results, str):
+        return [Gate("Browser", name, "SKIP", results)]
+    serious, minor = [], []
+    for x in results:
+        if "jobError" in x:
+            serious.append(f"{x['path']}: could not run ({x['jobError'][:80]})")
+            continue
+        for v in x.get("violations") or []:
+            line = f"{x['path']} @{x['width']}: {v['id']} ×{v['nodes']} ({v['help']})"
+            (serious if v.get("impact") in ("serious", "critical") else minor).append(line)
+    found = list(dict.fromkeys(serious))
+    return [_gate("Browser", name, not found, "; ".join(found[:4])
+                  + (f" … {len(found)} in all" if len(found) > 4 else ""),
+                  f"{len(results)} page loads, axe-core"),
+            _gate("Browser", "No moderate or minor accessibility problems", not minor,
+                  "; ".join(list(dict.fromkeys(minor))[:4]), fail="WARN")]
+
+
+# Lighthouse's mobile budget for "good": the largest paint by 2.5s and a
+# layout that moves under 0.1, on the network and CPU a mid-range phone has.
+LCP_BUDGET_MS = 2500
+CLS_BUDGET = 0.1
+SPEED_RUNS = 3
+
+
+def check_speed() -> list[Gate]:
+    """GATE-20: each selling page on Slow 4G with a 4x slower CPU, median of
+    three fresh loads. The only earlier speed gate was an unthrottled
+    localhost load event, which practically cannot fail. Served from this
+    machine there is no DNS or TLS handshake to pay for, so the figure is a
+    little kinder than a real phone's: a page near the budget is over it."""
+    with _serving(SITE) as base:
+        results = run_browser([{"kind": "perf", "path": p, "width": 390, "runs": SPEED_RUNS}
+                               for p in SELLING], base, timeout=2400)
+    if isinstance(results, str):
+        return [Gate("Browser", "The largest paint lands within 2.5s on a phone", "SKIP", results)]
+    slow, shifty, unmeasured, seen = [], [], [], []
+    for x in results:
+        lcps = [v for v in x.get("lcp") or [] if v is not None]
+        clss = [v for v in x.get("cls") or [] if v is not None]
+        if "jobError" in x or not lcps:
+            unmeasured.append(x["path"])
+            continue
+        lcp, cls = statistics.median(lcps), statistics.median(clss) if clss else 0.0
+        seen.append(f"{x['path']} {lcp / 1000:.1f}s/{cls:.2f}")
+        if lcp > LCP_BUDGET_MS:
+            slow.append(f"{x['path']} {lcp / 1000:.1f}s")
+        if cls > CLS_BUDGET:
+            shifty.append(f"{x['path']} {cls:.2f}")
+    return [_gate("Browser", "The largest paint lands within 2.5s on a phone (Slow 4G, 4x CPU)",
+                  not slow and not unmeasured,
+                  "; ".join(slow[:5] + [f"{p}: not measured" for p in unmeasured[:2]]),
+                  f"median of {SPEED_RUNS}: " + ", ".join(seen[:4])
+                  + (" …" if len(seen) > 4 else "")),
+            _gate("Browser", "The layout does not jump while it loads (CLS ≤ 0.1)", not shifty,
+                  "; ".join(shifty[:5]), fail="WARN")]
 
 
 # --------------------------------------------------------------------- #
@@ -709,12 +1313,19 @@ def check_live() -> list[Gate]:
     gates.append(_gate("Live", "Every key page on the live site answers 200", not bad,
                        "; ".join(bad[:5]), LIVE))
     try:
-        ahead = subprocess.run(["git", "rev-list", "--count", "@{u}..HEAD"], cwd=REPO,
-                               capture_output=True, text=True).stdout.strip()
+        counted = subprocess.run(["git", "rev-list", "--count", "@{u}..HEAD"], cwd=REPO,
+                                 capture_output=True, text=True)
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "site"], cwd=REPO,
                                capture_output=True, text=True).stdout.strip()
     except OSError:
-        ahead, dirty = "", ""
+        counted, dirty = None, ""
+    # A branch with no upstream answers nothing (rev-list fails): that is "can't
+    # tell", never "pushed".
+    if counted is None or counted.returncode:
+        gates.append(Gate("Live", "The live site is what is in the repo", "SKIP",
+                          "this branch has no upstream to compare with"))
+        return gates
+    ahead = counted.stdout.strip()
     gates.append(Gate("Live", "The live site is what is in the repo",
                       "WARN" if (ahead not in ("", "0") or dirty) else "PASS",
                       (f"{ahead} commit(s) not pushed" if ahead not in ("", "0") else "")
@@ -736,8 +1347,16 @@ def check_secrets() -> list[Gate]:
                      "names exist in Settings → Secrets → Actions: " + ", ".join(REQUIRED_SECRETS))]
     missing = [n for n in REQUIRED_SECRETS if n not in names]
     return [_gate("Owner", "GitHub Actions secrets are set", not missing,
-                  "missing: " + ", ".join(missing), f"all {len(REQUIRED_SECRETS)} present",
-                  fail="OWNER")]
+                  "missing: " + ", ".join(missing) + " — " + features_off(missing),
+                  f"all {len(REQUIRED_SECRETS)} present", fail="OWNER")]
+
+
+def features_off(missing: Iterable[str]) -> str:
+    """Which features stop working without these secrets, in the owner's
+    words — so "UPDATE_SECRET missing" reads as what a buyer loses."""
+    gone = set(missing)
+    off = [feature for feature, needs in FEATURE_SECRETS.items() if gone & set(needs)]
+    return ("off until then: " + "; ".join(off)) if off else "nothing a buyer sees"
 
 
 def check_compliance() -> list[Gate]:
@@ -753,14 +1372,9 @@ def check_compliance() -> list[Gate]:
     gates.append(_gate("Compliance", "The welcome email states renewal, amount and how to cancel",
                        "renews once a year" in body and "$39" in body and "Cancel" in body,
                        "the acknowledgment email lost a disclosure"))
-    from render.sender import postal_address
-    address = postal_address()
-    gates.append(Gate("Compliance", "Commercial email carries a postal address (CAN-SPAM, CASL)",
-                      "PASS" if address else "OWNER",
-                      address or "SENDER_POSTAL_ADDRESS is not set here — the launch "
-                                 "announcement refuses to send without it. Rent a mailbox "
-                                 "(never a home address) and set it as a GitHub secret and "
-                                 "in your shell"))
+    # The postal address (CAN-SPAM, CASL) is check_email_senders' question now:
+    # it renders every email type and looks for the block in each, where this
+    # gate only asked whether the variable was set (GATE-9).
     import sys as _sys
     _sys.path.insert(0, str(REPO))
     from infra.stripe_paylink_text import MESSAGES, TOS_MESSAGES
@@ -787,6 +1401,506 @@ def check_compliance() -> list[Gate]:
     gates.append(_gate("Compliance", "Form rows expire as the privacy policy says",
                        "expirationTtl" in worker,
                        "infra/form-worker.js stores rows forever; privacy.html promises ~13 months"))
+    gates += check_seat_link()
+    return gates
+
+
+def check_seat_link() -> list[Gate]:
+    """A League Pass payer's welcome names the ONE link their league shares
+    (contract C4): built from UPDATE_SECRET (the seat-token key) and SITE_URL.
+    The code is checked here with stand-ins. Whether the two secrets exist on
+    the crons is the secrets gate's question (FEATURE_SECRETS): without them
+    the welcome falls back to the generic seat page plus "tell them your
+    email", which is the owner's step, not a defect."""
+    from render.welcome import welcome_message
+    from run.refs import RosterRef
+    from run.updates import seat_url
+    roster = RosterRef(plan="league_pass", scoring="ppr", slots=TEMPLATE_SLOTS["std"],
+                       player_ids=tuple(f"00-00000{i:02d}" for i in range(9)), league_size=12)
+    link = seat_url("https://example.com", "launch-check-secret", "payer@example.com", roster)
+    page = welcome_message("payer@example.com", "league_pass", "abcdef0123", "2026",
+                           seat_link=link).html if link else ""
+    shown = bool(link) and (link in page or html.escape(link) in page)
+    return [_gate("Compliance", "A League Pass payer's welcome carries their league's seat link",
+                  shown, "built from UPDATE_SECRET and SITE_URL, the link is missing from the "
+                         "pass welcome")]
+
+
+@contextlib.contextmanager
+def _env(name: str, value: str | None) -> Iterator[None]:
+    """``name`` set to ``value`` (None: unset) for the block, then restored."""
+    before = os.environ.get(name)
+    if value is None:
+        os.environ.pop(name, None)
+    else:
+        os.environ[name] = value
+    try:
+        yield
+    finally:
+        if before is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = before
+
+
+# A transactional reply to the reader's own request, with no ask in it and no
+# list behind it: the roster-change confirmation. Exempt from both checks, as
+# tests/test_email_safety.py exempts it.
+TRANSACTIONAL = ("roster confirmation",)
+WAY_OUT = re.compile(r"cancel|reply \"stop\"|only email we.ll send you|unsubscrib", re.I)
+
+
+def email_samples() -> list[tuple[str, str, str | None]]:
+    """(name, html, List-Unsubscribe or None) for every email the product
+    sends, built by the same functions the runners call, around THIS week's
+    live report where a report is involved."""
+    import copy
+
+    from engine.final_check import Change
+    from render.email import render_email
+    from render.final_check import render_final_check
+    from render.live_sample import build
+    from render.renewal import Renewal, renewal_message
+    from render.report import unsubscribe_target
+    from render.roster_update import confirm_email
+    from render.welcome import welcome_message
+    report = build()
+
+    def variant(**meta) -> str:
+        out = copy.deepcopy(report)
+        out["meta"].update(meta)
+        return render_email(out)
+
+    week = int(report["meta"]["week"])
+    out = [("weekly report", render_email(report), unsubscribe_target(False)),
+           ("free report", variant(trial=True), None),
+           ("seat report", variant(plan="league_pass"), unsubscribe_target(True)),
+           ("Saturday final check",
+            render_final_check({"week": week, "players": {}},
+                               [Change("swap", "Start X at RB", "Y is out.")],
+                               datetime.now(timezone.utc)), unsubscribe_target(False)),
+           ("roster confirmation",
+            confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24,
+                          ["A", "B"])[1], None)]
+    for plan in ("season", "monthly", "league_pass", "seat"):
+        msg = welcome_message("a@example.com", plan, "abcdef0123", str(report["meta"]["season"]),
+                              purchased_at=datetime.now(timezone.utc).isoformat())
+        out.append((f"welcome ({plan})", msg.html, msg.unsubscribe))
+    from datetime import date
+    msg = renewal_message(Renewal("a@example.com", "$39.00 USD", date.today() + timedelta(days=30),
+                                  "year", plan="season"))
+    out.append(("renewal notice", msg.html, msg.unsubscribe))
+    roster = roster_report()
+    if roster is not None:
+        from render.preseason import preseason_message
+        msg = preseason_message("a@example.com", "abcdef0123", roster)
+        out.append(("roster report", msg.html, msg.unsubscribe))
+    from run.waitlist import messages
+    msg = messages(["a@example.com"], "https://example.com/join/")[0]
+    out.append(("launch announcement", msg.html, msg.unsubscribe))
+    return out
+
+
+def roster_report() -> dict | None:
+    """The purchase-day roster report for the live sample's roster, built the
+    way render/preseason.py's own entry point builds it. None if it cannot."""
+    try:
+        from engine.nflverse_backtest import TEMPLATE_T1
+        from engine.preseason import build_preseason_report
+        from engine.subscriber import RosterSpec
+        from render.live_sample import LIVE_ROSTER
+        from run.solo import CACHE_DIR, current_season, load_week_data
+        season = current_season(CACHE_DIR)
+        data = load_week_data(CACHE_DIR, str(int(season) - 1), 10, live=False)
+        known = {p.player_id for p in data.directory.players}
+        spec = RosterSpec(player_ids=tuple(p for p in LIVE_ROSTER if p in known),
+                          slots=TEMPLATE_T1, scoring="ppr", label="Your Team")
+        return build_preseason_report(spec, data.directory, data.prior, str(season),
+                                      CACHE_DIR, prior_season=str(int(season) - 1))
+    except Exception:  # noqa: BLE001 — the gate names it as not built
+        return None
+
+
+def audit_senders(samples: list[tuple[str, str, str | None]], line: str) -> dict[str, list[str]]:
+    """Which emails lack the sender block (``line``) and which give the reader
+    no way out — neither a List-Unsubscribe header nor a cancel or stop route
+    in the body."""
+    missing, no_way_out = [], []
+    for name, page, unsubscribe in samples:
+        text = html.unescape(page)
+        if name in TRANSACTIONAL:
+            continue
+        if line not in text:
+            missing.append(name)
+        if not unsubscribe and not WAY_OUT.search(visible_text(page)):
+            no_way_out.append(name)
+    return {"missing": missing, "no_way_out": no_way_out}
+
+
+PROBE_ADDRESS = "PO Box 0, Launch Check ON A1A 1A1"
+
+
+def check_email_senders() -> list[Gate]:
+    """GATE-9: every email type, rendered, carries who sent it (CAN-SPAM,
+    CASL) and a way out. Unset SENDER_POSTAL_ADDRESS is the owner's step, so
+    the code is checked under a stand-in address and the gate says OWNER; set,
+    a single email without the block FAILS. The first version checked only
+    that the variable was set — and the final check, all four welcomes, the
+    renewal notice and the roster report never printed it (launch audit L3)."""
+    from render.sender import postal_address, sender_line
+    from run.solo import SeasonOver
+    real = postal_address()
+    try:
+        with _env("SENDER_POSTAL_ADDRESS", real or PROBE_ADDRESS):
+            samples = email_samples()
+            line = sender_line() or ""
+    except SeasonOver as exc:
+        return [Gate("Email", "Every email names its sender and a way out", "SKIP",
+                     f"offseason: {exc}")]
+    found = audit_senders(samples, line)
+    names = [n for n, *_ in samples]
+    gates = []
+    if found["missing"]:
+        gates.append(Gate("Email", "Every email carries the sender block (name, postal address, "
+                                   "contact)", "FAIL",
+                          f"missing from: {', '.join(found['missing'])}"
+                          + ("" if real else " (checked under a stand-in address)")))
+    elif not real:
+        gates.append(Gate("Email", "Every email carries the sender block (name, postal address, "
+                                   "contact)", "OWNER",
+                          f"all {len(names)} email types print it once SENDER_POSTAL_ADDRESS is "
+                          f"set — a rented mailbox, never a home (LAUNCH.md step 2.6)"))
+    else:
+        gates.append(Gate("Email", "Every email carries the sender block (name, postal address, "
+                                   "contact)", "PASS", f"{len(names)} email types"))
+    gates.append(_gate("Email", "Every email gives a way out (List-Unsubscribe or a cancel/stop "
+                                "route)", not found["no_way_out"],
+                       f"none in: {', '.join(found['no_way_out'])}", ", ".join(names)))
+    return gates
+
+
+# --------------------------------------------------------------------- #
+# gates: the accounts (read-only; each needs its own credential in the shell)
+# --------------------------------------------------------------------- #
+
+def _gh_json(path: str) -> Any:
+    """`gh api <path>` as JSON, or None when gh is missing, signed out or the
+    call fails. GET only."""
+    if not shutil.which("gh"):
+        return None
+    try:
+        r = subprocess.run(["gh", "api", path], cwd=REPO, capture_output=True, text=True,
+                           timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode or not r.stdout.strip():
+        return None
+    try:
+        return json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def workflow_crons(name: str) -> list[str]:
+    """The literal cron strings in .github/workflows/<name>."""
+    text = (REPO / ".github" / "workflows" / name).read_text(encoding="utf-8")
+    return re.findall(r'^\s*-\s*cron:\s*"([^"]+)"', text, re.M)
+
+
+def _cron_fires(cron: str, day: datetime) -> list[datetime]:
+    """Every UTC time ``cron`` fires on ``day``'s date. Numbers, comma lists
+    and * only — the only syntax the workflows use (infra/form-worker.js
+    refuses anything else for the same reason)."""
+    minute, hour, dom, month, dow = cron.split()
+
+    def matches(field: str, value: int) -> bool:
+        return field == "*" or value in {int(v) for v in field.split(",")}
+    if not (matches(dom, day.day) and matches(month, day.month)
+            and matches(dow, (day.weekday() + 1) % 7)):
+        return []
+    hours = range(24) if hour == "*" else [int(h) for h in hour.split(",")]
+    minutes = range(60) if minute == "*" else [int(m) for m in minute.split(",")]
+    base = day.replace(hour=0, minute=0, second=0, microsecond=0)
+    return [base + timedelta(hours=h, minutes=m) for h in hours for m in minutes]
+
+
+def first_start_delays(starts: list[datetime], crons: list[str]
+                       ) -> list[tuple[datetime, timedelta]]:
+    """(the day's first slot, how long after it the day's first run started),
+    newest day first, for a workflow whose ``crons`` fire on given days. A
+    subscriber waits on the FIRST run of the day, measured against the FIRST
+    slot: the Tuesday retry slot is a backup, never the time a report is due.
+    A day with no slot (a manual run on a Thursday) is nobody's day."""
+    by_day: dict = {}
+    for at in starts:
+        by_day.setdefault(at.date(), []).append(at)
+    out = []
+    for day in sorted(by_day, reverse=True):
+        midnight = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+        fires = sorted(t for cron in crons for t in _cron_fires(cron, midnight))
+        after = [at for at in by_day[day] if fires and at >= fires[0]]
+        if after:
+            out.append((fires[0], min(after) - fires[0]))
+    return out
+
+
+def _runs(workflow: str, per_page: int = 100) -> list[dict] | None:
+    data = _gh_json(f"repos/{{owner}}/{{repo}}/actions/workflows/{workflow}/runs?per_page={per_page}")
+    if not isinstance(data, dict) or not isinstance(data.get("workflow_runs"), list):
+        return None
+    return [r for r in data["workflow_runs"]
+            if r.get("event") in ("schedule", "workflow_dispatch") and r.get("created_at")]
+
+
+def _when(stamp: str) -> datetime:
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+LATE = timedelta(minutes=60)
+
+
+def audit_cron_runs(runs: dict[str, list[dict]], now: datetime) -> dict[str, list[str]]:
+    """How late the last two Tuesday and Saturday runs started against their
+    slot, and how many runs the hourly-plus-daily intake actually got over
+    the past week (GitHub's own scheduler dropped most hourly runs in Oct
+    2026; the Worker now dispatches them)."""
+    found: dict[str, list[str]] = {"late": [], "ok": [], "daily": []}
+    for workflow in ("weekly.yml", "saturday.yml"):
+        starts = [_when(r["created_at"]) for r in runs.get(workflow) or []]
+        # The Worker's dispatch and GitHub's backup are two runs for one slot;
+        # the earlier one is the one that mailed people.
+        for slot, delay in first_start_delays(starts, workflow_crons(workflow))[:2]:
+            line = f"{workflow} {slot:%a %b %d %H:%M}Z +{int(delay.total_seconds() // 60)} min"
+            (found["late"] if delay > LATE else found["ok"]).append(line)
+    daily = [r for r in runs.get("daily.yml") or []
+             if now - _when(r["created_at"]) <= timedelta(days=7)]
+    expected = 7 * 24 + 7
+    found["daily"].append(f"{len(daily)} of about {expected} intake runs in 7 days")
+    if len(daily) < 0.8 * expected:
+        found["late"].append(found["daily"][0])
+    return found
+
+
+def check_cron_timing() -> list[Gate]:
+    """GATE-12: did the last two Tuesday and Saturday runs start on time, and
+    did the intake run every hour this past week. GitHub started the Tuesday
+    runs 5-7 hours late on Oct 6 and 13 (OPS-01); the watchdog only alarms
+    when a run never happened."""
+    name = "The crons start on time (last two Tuesday and Saturday runs, a week of intake)"
+    runs = {w: _runs(w) for w in ("weekly.yml", "saturday.yml", "daily.yml")}
+    if any(v is None for v in runs.values()):
+        return [Gate("Owner", name, "SKIP", "needs `gh` signed in to this repo (gh auth login)")]
+    found = audit_cron_runs(runs, datetime.now(timezone.utc))
+    if not found["ok"] and not found["late"]:
+        return [Gate("Owner", name, "SKIP", "no scheduled run on record yet")]
+    return [_gate("Owner", name, not found["late"], "late: " + "; ".join(found["late"][:4])
+                  + " — set the Worker's Cron Trigger (LAUNCH.md step 5.8)",
+                  "; ".join(found["ok"][:4] + found["daily"]), fail="WARN")]
+
+
+# What GitHub calls the setting that makes an outside pull request wait for
+# approval before its workflows run (Settings → Actions → General).
+FORK_POLICY = "all_external_contributors"
+
+
+def check_fork_approval() -> list[Gate]:
+    """GATE-14: pull requests from outside collaborators need approval before
+    their workflows run — the automation's cache holds subscribers' emails and
+    rosters, and the repository is public."""
+    name = "Outside pull requests need approval before their workflows run"
+    data = _gh_json("repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval")
+    policy = data.get("approval_policy") if isinstance(data, dict) else None
+    if policy == FORK_POLICY:
+        return [Gate("Owner", name, "PASS", policy)]
+    return [Gate("Owner", name, "OWNER",
+                 (f"set to {policy!r}" if policy else "can't read it from here (gh signed out?)")
+                 + " — Settings → Actions → General → Fork pull request workflows → "
+                   "Require approval for all outside collaborators (LAUNCH.md step 3)")]
+
+
+def _get_json(url: str, key: str) -> tuple[int, Any]:
+    """GET ``url`` with a bearer key -> (HTTP status, JSON or None). Never
+    raises, never echoes the key: a status of 0 means it could not connect."""
+    import requests
+    try:
+        r = requests.get(url, headers={"Authorization": f"Bearer {key}"}, timeout=20)
+    except requests.RequestException:
+        return 0, None
+    try:
+        return r.status_code, r.json()
+    except ValueError:
+        return r.status_code, None
+
+
+def check_resend_domain() -> list[Gate]:
+    """GATE-13: Resend says the sending domain is verified. DNS records being
+    present (check_dns) is not the same as Resend having checked them."""
+    name = f"Resend has verified {DOMAIN}"
+    key = os.environ.get("RESEND_API_KEY", "")
+    if not key:
+        return [Gate("Email", name, "OWNER", "RESEND_API_KEY is not in this shell — verify the "
+                                             "domain in Resend (LAUNCH.md step 2)")]
+    status, body = _get_json("https://api.resend.com/domains", key)
+    if status != 200 or not isinstance(body, dict):
+        return [Gate("Email", name, "SKIP",
+                     f"Resend answered HTTP {status} (a sending-only key can't list domains)")]
+    rows = [d for d in body.get("data") or [] if isinstance(d, dict) and d.get("name") == DOMAIN]
+    state = rows[0].get("status") if rows else None
+    return [_gate("Email", name, state == "verified",
+                  f"{DOMAIN} is {state or 'not added'} in Resend (LAUNCH.md step 2)", "verified",
+                  fail="OWNER")]
+
+
+STRIPE = "https://api.stripe.com/v1"
+
+
+def audit_stripe_account(account: dict) -> list[str]:
+    """What the buyer-facing business details would give away or leave out:
+    receipts and the checkout page show them."""
+    profile = account.get("business_profile") or {}
+    problems = []
+    if not str(profile.get("support_email") or "").endswith("@" + DOMAIN):
+        problems.append(f"support email is {profile.get('support_email') or 'unset'}, not hello@{DOMAIN}")
+    if profile.get("support_phone"):
+        problems.append("a support phone number is public")
+    address = profile.get("support_address") or {}
+    if any(address.get(k) for k in ("line1", "line2", "postal_code")):
+        problems.append("a support address is public (a rented mailbox only, never a home)")
+    if re.search(PERSONAL_DOMAINS, str(profile.get("support_email") or ""), re.I):
+        problems.append("the support email is a personal address")
+    return problems
+
+
+def check_stripe_account() -> list[Gate]:
+    """GATE-15: Stripe's public details — what every receipt prints."""
+    name = "Stripe's public details keep the owner anonymous"
+    key = os.environ.get("STRIPE_API_KEY", "")
+    if not key:
+        return [Gate("Owner", name, "OWNER", "STRIPE_API_KEY is not in this shell — check "
+                     "Settings → Business → Public details by hand (LAUNCH.md step 1.4)")]
+    status, body = _get_json(f"{STRIPE}/account", key)
+    if status != 200 or not isinstance(body, dict):
+        return [Gate("Owner", name, "SKIP", f"Stripe answered HTTP {status} — this key can't "
+                     "read the account; check Public details by hand (LAUNCH.md step 1.4)")]
+    problems = audit_stripe_account(body)
+    return [_gate("Owner", name, not problems, "; ".join(problems), "support email on the "
+                  "domain, no phone, no address", fail="OWNER")]
+
+
+REFUND_WARN = 0.10
+DISPUTE_WARN = 0.0075
+
+
+def audit_charge_rates(charges: list[dict]) -> tuple[int, float, float]:
+    """(paid charges, refunded share, disputed share) over ``charges``."""
+    paid = [c for c in charges if c.get("paid") and c.get("status") == "succeeded"]
+    if not paid:
+        return 0, 0.0, 0.0
+    refunded = sum(1 for c in paid if c.get("refunded") or (c.get("amount_refunded") or 0) > 0)
+    disputed = sum(1 for c in paid if c.get("disputed"))
+    return len(paid), refunded / len(paid), disputed / len(paid)
+
+
+def _stripe_charges(key: str, days: int) -> list[dict]:
+    from run.stats import _stripe_list
+    since = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp())
+    return _stripe_list("charges", [("created[gte]", str(since))], key)
+
+
+def check_refund_rates() -> list[Gate]:
+    """GATE-16: refunds and disputes as a share of the last 30 days' charges.
+    Card networks start watching an account near 0.75% disputes; a refund
+    rate past 10% means the first reports are not landing."""
+    name = "Refunds and disputes stay low (last 30 days)"
+    key = os.environ.get("STRIPE_API_KEY", "")
+    if not key:
+        return [Gate("Economics", name, "SKIP", "needs STRIPE_API_KEY with Charges read")]
+    try:
+        n, refunds, disputes = audit_charge_rates(_stripe_charges(key, 30))
+    except Exception as exc:  # noqa: BLE001 — a read failure is a SKIP, never a zero
+        from run.stats import _safe
+        return [Gate("Economics", name, "SKIP", f"couldn't read charges ({_safe(exc)})")]
+    if not n:
+        return [Gate("Economics", name, "SKIP", "no charge yet")]
+    bad = ([f"refunds {refunds:.0%} (over {REFUND_WARN:.0%})"] if refunds > REFUND_WARN else []) \
+        + ([f"disputes {disputes:.2%} (at or over {DISPUTE_WARN:.2%})"]
+           if disputes >= DISPUTE_WARN else [])
+    return [_gate("Economics", name, not bad, "; ".join(bad) + f" of {n} charges",
+                  f"{n} charges: refunds {refunds:.0%}, disputes {disputes:.2%}", fail="WARN")]
+
+
+def count_recipients(registry: Path | None = None) -> tuple[int, int] | str:
+    """(paid subscribers on the registry, free reports waiting) — the people
+    one Tuesday mails. A string is why it can't be counted here."""
+    from run.rosters import RosterRegistryError, load_rosters
+    from run.rosters import DEFAULT_ROSTERS
+    path = registry or DEFAULT_ROSTERS
+    if not path.is_file():
+        return "no registry on this machine (it lives in the Actions cache)"
+    try:
+        subscribers = load_rosters(path)
+    except RosterRegistryError as exc:
+        return f"registry unreadable ({exc})"
+    pending = 0
+    endpoint = os.environ.get("FORM_ENDPOINT", "")
+    if endpoint:
+        try:
+            from run.delivery import load_sent
+            from run.intake import fetch_seats
+            from run.solo import CACHE_DIR, current_season
+            from run.trials import not_before, pending as pending_trials, season_start
+            rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"))
+            season = current_season(CACHE_DIR)
+            since = not_before(datetime.now(timezone.utc), season_start(CACHE_DIR, season))
+            pending = len(pending_trials(rows, {s.email for s in subscribers}, load_sent(),
+                                         season, since=since))
+        except Exception:  # noqa: BLE001 — subscribers alone still answer the question
+            pending = 0
+    return len({s.email for s in subscribers}), pending
+
+
+def check_volume() -> list[Gate]:
+    """GATE-17: one Tuesday's recipients against the free email tier (100 a
+    day, so about 85 subscribers once welcomes and first reports share the
+    day), and four quarters of sales against the GST/HST small-supplier
+    threshold. Not tax advice: the threshold is watched, not computed."""
+    from run.economics import (GST_HST_THRESHOLD_CAD, RESEND_FREE_RECIPIENTS, USD_PER_CAD)
+    gates = []
+    counted = count_recipients()
+    pro = os.environ.get("RESEND_PLAN", "").lower() == "pro"
+    if isinstance(counted, str):
+        gates.append(Gate("Economics", "One Tuesday fits the email plan", "SKIP", counted))
+    else:
+        subs, waiting = counted
+        total = subs + waiting
+        gates.append(_gate("Economics", "One Tuesday fits the email plan",
+                           total <= RESEND_FREE_RECIPIENTS or pro,
+                           f"{subs} subscribers + {waiting} free reports waiting = {total}, over "
+                           f"the free tier's ~{RESEND_FREE_RECIPIENTS} — move to Resend Pro "
+                           "($20/mo, PLAN §2) and set RESEND_PLAN=pro here",
+                           f"{total} of ~{RESEND_FREE_RECIPIENTS}" + (" (Resend Pro)" if pro else ""),
+                           fail="WARN"))
+    key = os.environ.get("STRIPE_API_KEY", "")
+    if not key:
+        gates.append(Gate("Economics", "Sales stay under the GST/HST registration threshold",
+                          "SKIP", "needs STRIPE_API_KEY with Charges read"))
+        return gates
+    try:
+        charges = _stripe_charges(key, 365)
+    except Exception as exc:  # noqa: BLE001
+        from run.stats import _safe
+        gates.append(Gate("Economics", "Sales stay under the GST/HST registration threshold",
+                          "SKIP", f"couldn't read charges ({_safe(exc)})"))
+        return gates
+    gross_usd = sum(((c.get("amount") or 0) - (c.get("amount_refunded") or 0)) / 100
+                    for c in charges if c.get("paid") and c.get("status") == "succeeded")
+    gross_cad = gross_usd / USD_PER_CAD
+    share = gross_cad / GST_HST_THRESHOLD_CAD
+    status = "PASS" if share < 0.8 else "WARN" if share < 1 else "OWNER"
+    gates.append(Gate("Economics", "Sales stay under the GST/HST registration threshold", status,
+                      f"about C${gross_cad:,.0f} over the last 365 days of C$"
+                      f"{GST_HST_THRESHOLD_CAD:,} ({share:.0%})"
+                      + ("" if status == "PASS" else " — book the accountant question now")))
     return gates
 
 
@@ -820,13 +1934,21 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("prices", check_prices), ("funnel configuration", check_funnel_config),
         ("season clock", check_week_json), ("this week's report", check_product),
         ("five league setups", check_product_battery),
-        ("compliance text", check_compliance), ("owner secrets", check_secrets),
-        ("economics", check_economics),
+        ("compliance text", check_compliance), ("every email's sender and way out",
+                                                check_email_senders),
+        ("owner secrets", check_secrets), ("economics", check_economics),
     ]
     if not offline:
-        steps += [("email DNS", check_dns), ("live site", check_live)]
+        steps += [("email DNS", check_dns), ("live site", check_live),
+                  ("Resend domain", check_resend_domain), ("Stripe public details",
+                                                           check_stripe_account),
+                  ("refunds and disputes", check_refund_rates), ("email volume and tax",
+                                                                 check_volume),
+                  ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval)]
     if not fast:
-        steps += [("browser", check_browser), ("proving run", check_proving),
+        steps += [("browser", check_browser), ("email width", check_email_widths),
+                  ("join flows", check_join_flows), ("accessibility", check_accessibility),
+                  ("phone speed", check_speed), ("proving run", check_proving),
                   ("test suite", check_tests)]
     gates: list[Gate] = []
     for label, fn in steps:
