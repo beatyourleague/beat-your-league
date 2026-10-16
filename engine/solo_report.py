@@ -292,8 +292,19 @@ def build_solo_report(
             if late is not None:          # a fallback even for a game-day call
                 covered[pid] = late
         else:
-            unplanned[pid] = no_stand_in_line(name, pick.slot,
-                                              [players.name(e) for e in early])
+            # Bench players who can play the slot but were ruled out last week
+            # are named too (F11), as "unless he's cleared" — or, when his game
+            # comes first, among the ones who play too early.
+            held = [entry for entry in bench
+                    if entry.get("out_kind") == "designation"
+                    and _fits(entry.get("position"), pick.slot)]
+            on_time = [e["name"] for e in held
+                       if in_time(game_of(e["player_id"]), game_of(pid), sunday)]
+            unplanned[pid] = no_stand_in_line(
+                name, pick.slot,
+                [players.name(e) for e in early]
+                + [e["name"] for e in held if e["name"] not in on_time],
+                on_time)
     watch_items, watch_plans = cleared_plans(bench, picks, players, game_of,
                                              sunday)
     # Starters first, as pivots() always ordered them; then the bench players
@@ -311,6 +322,16 @@ def build_solo_report(
     deciding = [p.player_id for p in picks if p.player_id and not _certainly_out(p)]
     deciding += [pid for _, _, starter, pid in news if not starter]
     early_items, early_ids = early_kickoff_items(deciding, players, game_of, sunday)
+    # A questionable starter seated level with a healthy bench player says why,
+    # on his row and on the game-plan line that benches that player — which
+    # read "Bench George Pickens — Zay Flowers starts at WR. … Projects 9.6,
+    # Zay Flowers 9.6." with nothing to say why (launch review BE-I9/SS-I7).
+    reasons = {p.player_id: even_reason(p, players, availability, game_of, sunday,
+                                        covered) for p in picks if p.player_id}
+    for item in notable:
+        why = reasons.get(item.pop("_starter", None) or "")
+        if why:
+            item["detail"] = f"{item['detail']} {why}"
 
     report: dict[str, Any] = {
         "meta": {
@@ -368,8 +389,7 @@ def build_solo_report(
                          held=bench_option_held(p, bench),
                          model=model, week=week, availability=availability,
                          season_label=str(season.season),
-                         reason=even_reason(p, players, availability, game_of,
-                                            sunday, covered))
+                         reason=reasons.get(p.player_id or ""))
                    for p in picks],
         "bench": bench,
         "regret": closest_call(picks, players, model, week, availability,
@@ -838,7 +858,11 @@ def starter_plans(name: str, pick: SlotPick, final: Cover | None,
     clock = (f" at {_et(first)}, before {name}'s inactives (about "
              f"{_et(theirs - INACTIVES_LEAD)})" if first and theirs else
              f" before {name}'s status is known")
-    move = (f"start {who}" if final.mover is None else "make that move")
+    # The move spelled out, never "make that move": the row above may be the
+    # other ruling's, and a reader acting at 12:55 PM reads one line.
+    move = (f"start {who}" if final.mover is None else
+            f"move {players.name(final.mover)} to {slot} and start {who} at "
+            f"{final.flex_slot}")
     rows.append({"condition": f"{name} ({slot}) is still questionable on game day",
                  "action": (f"{who} kicks off{clock}. Decide before then: {move}, "
                             f"or keep {name} and take a zero if he sits."),
@@ -846,14 +870,24 @@ def starter_plans(name: str, pick: SlotPick, final: Cover | None,
     return rows
 
 
-def no_stand_in_line(name: str, slot: str, early: Sequence[str]) -> str:
+def no_stand_in_line(name: str, slot: str, early: Sequence[str],
+                     held: Sequence[str] = ()) -> str:
     """The game plan's sentence for a questionable starter with no if/then —
-    never "your if/then already has the answer" (launch audit R7)."""
+    never "your if/then already has the answer" (launch audit R7).
+
+    ``held``: bench players who can play the slot but were ruled out on last
+    week's report — F11's rule here too: "If Terry McLaurin is out, nobody on
+    your bench can play WR" sat above DeVonta Smith's bench row and his own
+    "if he's cleared" plan (launch review, 2026 week 6)."""
+    names = list(held)
+    either = (", ".join(names[:-1]) + f" or {names[-1]}") if len(names) > 1 else \
+        (names[0] if names else "")
+    unless = f" unless {either} is cleared" if held else ""
     if early:
         return (f"If {name} is out, nobody on your bench can step in at {slot} "
-                f"in time — {_join_words(list(early))} "
+                f"in time{unless} — {_join_words(list(early))} "
                 f"{'plays' if len(early) == 1 else 'play'} before {name}'s status is known.")
-    return f"If {name} is out, nobody on your bench can play {slot}."
+    return f"If {name} is out, nobody on your bench can play {slot}{unless}."
 
 
 def pivots_note(plans: Sequence[Mapping[str, Any]], unplanned: Mapping[str, str],
@@ -1056,10 +1090,13 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
     room = MAX_NOTABLE_ITEMS - (1 if gone else 0)
     merge_key: dict[int, tuple[str, str]] = {}
     sources: list[Mapping[str, Any]] = []
-    for entry in deciding[:room]:
+    for entry in deciding:
+        if len(items) >= room:
+            break
         rank = f"{entry['last_season_rank']} last season."
         doubtful = (availability.classify(entry["player_id"]).status.value
                     == "questionable")
+        instead, paired = None, False
         if not entry["games"]:
             action = f"Bench {entry['name']} — no games this season yet"
             detail = rank
@@ -1085,12 +1122,15 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
                           and getattr(pick, "confidence", None) is not None)
                 if _even_pair(pick, entry["player_id"], entry["projected"],
                               availability):
-                    # RQ-14: a dead-even pair is not an instruction. "Start
-                    # Drake London over George Pickens · 50%" at 9.6 each read
-                    # as a call; the percentage still prints, as on the row.
+                    # RQ-14: a dead-even pair is not an instruction, so it is
+                    # not on the action list. "Start Drake London over George
+                    # Pickens at WR · 50%" at 9.6 each read as a call. When the
+                    # pair is the row's own (the % and the name are on it),
+                    # the row's "toss-up: either is fine" says it all.
+                    if paired:
+                        continue
                     action = (f"{who} or {entry['name']} at {slot} — a toss-up, "
-                              f"either is fine"
-                              + (f" · {round(pick.confidence * 100)}%" if paired else ""))
+                              f"keep whichever you have")
                 elif paired:
                     action = (f"Start {who} over {entry['name']} at {slot} · "
                               f"{round(pick.confidence * 100)}%")
@@ -1103,9 +1143,15 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
                           + (fallback_sentence(pick, entry["name"], players,
                                                model, week, availability)
                              if paired else ""))
-        items.append({"action": action, "detail": detail,
-                      "deadline": "before this week's first kickoff",
-                      "urgency": "now"})
+        item = {"action": action, "detail": detail,
+                "deadline": "before this week's first kickoff", "urgency": "now"}
+        if (instead is not None and not paired
+                and getattr(instead[3], "alternative_id", None) == entry["player_id"]):
+            # The starter's row may owe a reason for sitting this player
+            # (even_reason), which needs the schedule; build_solo_report
+            # appends it and drops this key.
+            item["_starter"] = instead[3].player_id
+        items.append(item)
         sources.append(entry)
     items = _merge_same_starter(items, merge_key, sources)
     if gone:
@@ -1543,7 +1589,11 @@ def closest_call(picks: Sequence[SlotPick], players: PlayerIndex,
                       round(call.alternative_projection.mean, 1), availability):
             reason += " A toss-up: either is fine."
         regret["reason"] = reason
-        gap = round(call.projection.mean - call.alternative_projection.mean, 1)
+        # At the precision the page prints, like ``_decisions``: compared raw,
+        # a 9.6-vs-9.6 call "lost" to another 9.6-vs-9.6 one, and the card
+        # named a "closer" decision whose printed gap was the same.
+        gap = round(round(call.projection.mean, 1)
+                    - round(call.alternative_projection.mean, 1), 1)
         narrower = [(g, p) for g, p in decisions
                     if p.confidence is None and abs(g) < abs(gap)]
         if narrower:

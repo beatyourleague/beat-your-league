@@ -854,11 +854,15 @@ def text_summary(report: Mapping[str, Any]) -> str:
             confidence = row_label(slot)
         elif mixed:
             confidence = ""
-        elif slot.get("projected") is None and slot.get("usage"):
+        elif (meta.get("lineup_as_set") and slot.get("projected") is None
+                and slot.get("usage")):
             # Week 1. The checklist says the slots are filled in last season's
             # scoring order and that the figure is "shown on each line" — true
             # of both HTML surfaces, and it was NOT true here, which made that
             # sentence a false statement in the half that goes in every email.
+            # Week 1 only: mid-season, a starter on injured reserve has no
+            # projection either, and his counted usage printed in the call
+            # column ("De'Von Achane — last 2 games: 7 targets…" over "OUT").
             confidence = slot["usage"]
         else:
             confidence = ""

@@ -283,6 +283,79 @@ def test_with_no_cover_at_all_the_if_then_says_who_and_why() -> None:
         assert "no starter we can check is listed questionable" not in page, name
 
 
+def test_no_cover_names_the_bench_player_who_could_be_cleared() -> None:
+    """r04 (2026 week 6): "If Terry McLaurin is out, nobody on your bench can
+    play WR" while DeVonta Smith — ruled out in Week 5, a bench WR with his own
+    "if he's cleared" plan — sat two lines below. F11's rule: the sentence
+    names him instead of denying he is there."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Terry Doubt", "WR", "WAS"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("Devon Ruledout", "WR", "PHI")}
+    report = _report(roster, slots=("QB", "RB", "WR", "TE"),
+                     yards={WR1: 90, WR2: 40},
+                     designations={WR1: "Questionable", WR2: "Out"},
+                     listed={WR1: ("questionable", "hamstring"),
+                             WR2: ("out", "hamstring")})
+    line = ("If Terry Doubt is out, nobody on your bench can play WR unless "
+            "Devon Ruledout is cleared.")
+    assert report["pivots_note"] == f"No pivots this week. {line}"
+    assert any(line in (i.get("detail") or "") for i in report["checklist"]), \
+        report["checklist"]
+    for name, page in _surfaces(report).items():
+        assert "nobody on your bench can play WR." not in page, name
+    # Cleared or not, a Thursday player is locked before a Sunday starter's
+    # news: he is named as too early, never as the way out.
+    early = _report(roster, slots=("QB", "RB", "WR", "TE"),
+                    yards={WR1: 90, WR2: 40},
+                    designations={WR1: "Questionable", WR2: "Out"},
+                    listed={WR1: ("questionable", "hamstring"),
+                            WR2: ("out", "hamstring")},
+                    schedule=_schedule(PHI=_game("NYG", THU, "20:15")))
+    assert early["pivots_note"] == (
+        "No pivots this week. If Terry Doubt is out, nobody on your bench can step "
+        "in at WR in time — Devon Ruledout plays before Terry Doubt's status is known.")
+
+
+def test_a_game_day_call_spells_out_the_slide_it_asks_for() -> None:
+    """r14: "Decide before then: make that move, or keep Terry McLaurin…" —
+    "that move" was the row above's, and a reader acting at 12:55 PM reads one
+    line. The slide is named in full."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Terry Monday", "WR", "WAS"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("Kal Flex", "WR", "CHI"), RB2: ("Al Sunday", "RB", "NO")}
+    report = _report(roster, yards={WR1: 90, WR2: 80, RB1: 70, RB2: 40},
+                     designations={WR1: "Questionable"},
+                     listed={WR1: ("questionable", "hamstring")},
+                     schedule=_schedule(WAS=_game("SF", MON, "20:15"),
+                                        CHI=_game("ATL", SUN), NO=_game("NYG", SUN)))
+    rows = _plans(report, "Terry Monday")
+    assert rows[0]["action"].startswith("Move Kal Flex to WR and start Al Sunday at FLEX")
+    assert "that move" not in rows[1]["action"]
+    assert ("Decide before then: move Kal Flex to WR and start Al Sunday at FLEX, or "
+            "keep Terry Monday and take a zero if he sits.") in rows[1]["action"]
+
+
+def test_the_game_plan_line_benching_an_even_player_says_why() -> None:
+    """r03 (2026 week 6): "Bench George Pickens — Zay Flowers starts at WR …
+    Projects 9.6, Zay Flowers 9.6." Flowers was questionable; the row said why
+    he starts (Pickens plays after his news), the game plan did not."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Zay Doubt", "WR", "BAL"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("George Even", "WR", "PIT")}
+    report = _report(roster, slots=("QB", "RB", "WR", "TE"), yards={WR1: 70, WR2: 70},
+                     designations={WR1: "Questionable"},
+                     listed={WR1: ("questionable", "foot")},
+                     ranks={WR2: ("WR", 6, 120)},
+                     schedule=_schedule(BAL=_game("CLE", SUN),
+                                        PIT=_game("GB", SUN, "20:20")))
+    reason = _row(report, "Zay Doubt")["reason"]
+    assert reason == ("George Even plays after Zay Doubt's status is known, so you "
+                      "can wait for the news and still switch.")
+    item = next(i for i in report["checklist"] if "George Even" in i["action"])
+    assert item["detail"].endswith(reason)
+    assert all("_starter" not in i for i in report["checklist"])
+
+
 def test_a_quiet_week_says_nobody_was_questionable_in_plain_words() -> None:
     roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
               WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
@@ -402,6 +475,46 @@ def test_the_closest_call_names_a_closer_decision_that_has_no_odds() -> None:
     for name, page in pages.items():
         assert "Closer on points: Remy Even or Bo Bench" in page, name
         assert "closest call with odds" in page.lower(), name
+
+
+def test_a_closer_decision_is_closer_at_the_precision_the_page_prints() -> None:
+    """r03 (2026 week 6): the card read "Drake London over George Pickens …
+    9.6 vs 9.6" and then "Closer on points: Zay Flowers or George Pickens at
+    WR, 9.6 vs 9.6" — the call's gap was compared unrounded (0.06 → 0.1)
+    against the other's printed 0.0, so an equal gap was called closer."""
+    from engine.solo_report import closest_call
+
+    def proj(pid, mean):
+        return Projection(player_id=pid, as_of_week=6, active_mean=mean, active_sd=4.0,
+                          appear_probability=1.0, games=5, rostered_weeks=5,
+                          position="WR")
+
+    class Model:
+        def observations(self, pid, week):
+            return []
+
+    players = player_index(PlayerDirectory([Player("a", "Drake Even", "WR", "KC"),
+                                            Player("q", "Zay Doubt", "WR", "BAL"),
+                                            Player("p", "George Bench", "WR", "SF")]))
+    ok = PlayerStatus(Status.ACTIVE, "no injury designation", "w5")
+    call = SlotPick("WR", 3, "a", proj("a", 9.64), ok, 0.5, None, "p",
+                    proj("p", 9.58), [])
+    doubt = SlotPick("WR", 4, "q", proj("q", 9.61),
+                     PlayerStatus(Status.QUESTIONABLE, "designated Questionable", "w5"),
+                     None, "availability in doubt (designated Questionable)", "p",
+                     proj("p", 9.58), [])
+    availability = WeekAvailability("2026", 6, "w5", {}, frozenset())
+    regret = closest_call([call, doubt], players, Model(), 6, availability,
+                          {"week": 5, "listed": {}})
+    assert regret["start_name"] == "Drake Even"
+    assert "closer" not in regret, regret.get("closer")
+    doubt.projection = proj("q", 9.75)      # prints 9.8 vs 9.6: wider, still not closer
+    assert "closer" not in closest_call([call, doubt], players, Model(), 6,
+                                        availability, {"week": 5, "listed": {}})
+    call.projection = proj("a", 10.4)       # prints 10.4 vs 9.6: now the other is closer
+    assert closest_call([call, doubt], players, Model(), 6, availability,
+                        {"week": 5, "listed": {}})["closer"].startswith(
+        "Closer on points: Zay Doubt or George Bench at WR")
 
 
 def test_with_no_odds_the_section_names_the_closest_decision_and_who() -> None:
@@ -535,9 +648,11 @@ def test_a_questionable_starter_level_with_a_healthy_one_says_why_he_starts() ->
 
 
 def test_a_dead_even_pair_is_a_toss_up_not_an_instruction() -> None:
-    """RQ-14: "Start Drake London over George Pickens at WR · 50% … Projects 9.6,
-    Drake London 9.6". The percentage still prints — it is the published
-    number — but the plan and the row say either is fine."""
+    """RQ-14: r03's game plan opened "Start Drake London over George Pickens at
+    WR · 50% … Projects 9.6, Drake London 9.6" — a coin flip on the action
+    list. The percentage still prints on the row (it is the published number)
+    and the row says either is fine; the game plan, a list of things to do,
+    no longer carries it."""
     roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
               WR1: ("Drew Level", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
               WR2: ("Gus Level", "WR", "SF")}
@@ -546,8 +661,9 @@ def test_a_dead_even_pair_is_a_toss_up_not_an_instruction() -> None:
     row = _row(report, "Drew Level") if any(
         s["player_name"] == "Drew Level" for s in report["lineup"]) else _row(report, "Gus Level")
     assert row["confidence"] is not None and row["tossup"] is True
-    item = next(i for i in report["checklist"] if "toss-up" in i["action"])
-    assert "either is fine" in item["action"] and not item["action"].startswith("Start ")
+    benched = ({"Drew Level", "Gus Level"} - {row["player_name"]}).pop()
+    assert not any(benched in i["action"] for i in report["checklist"]), \
+        report["checklist"]
     for name, page in _surfaces(report).items():
         assert "toss-up: either is fine" in page, name
     # The points arm on its own: a pair with no odds (RQ-15's defenses, 6.3 vs
@@ -760,6 +876,27 @@ def test_a_quarterbacks_usage_is_his_passing_volume() -> None:
     assert usage_line(usage, "WR") == "last 4 games: 1 target (0.2 a game), 37 carries"
     assert short_usage(usage_line(usage, "QB")) == ("last 4: 35.5 pass attempts · "
                                                    "9.2 carries a game")
+
+
+def test_mid_season_an_out_starters_usage_is_not_printed_as_his_call() -> None:
+    """r10 (2026 week 6), plain text: "RB  De'Von Achane  —  last 2 games: 7
+    targets (3.5 a game), 23 carries" — the week-1 rule (a row with no
+    projection shows its basis in the call column) fired on a starter on
+    injured reserve, so his usage sat where a call goes, above "OUT"."""
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Ira Reserve", "RB", "MIA"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC")}
+    report = _report(roster, slots=("QB", "RB", "WR", "TE"),
+                     reserve={RB1: "on injured reserve"})
+    row = _row(report, "Ira Reserve")
+    assert row["projected"] is None and not report["meta"]["lineup_as_set"]
+    row["usage"] = "last 2 games: 7 targets (3.5 a game), 23 carries"
+    def line() -> str:
+        [row_line] = [x for x in text_summary(report).splitlines()
+                      if x.startswith("  RB ") and "Ira Reserve" in x]
+        return row_line
+    assert "targets" not in line(), line()
+    report["meta"]["lineup_as_set"] = True          # week 1: the basis prints
+    assert line().endswith("23 carries")
 
 
 def test_the_superflex_row_lines_up_in_plain_text() -> None:
