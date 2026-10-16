@@ -18,22 +18,26 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#101E33">
+<meta name="color-scheme" content="light">
+<!-- Self-hosted fonts (contract C7); the two above-the-fold faces first. -->
+<link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../fonts/fonts.css">
 <style>
   :root{--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',sans-serif;color:var(--navy);padding:14px 8px 44px;}
+  body{background:#E7E4DA;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;letter-spacing:.24em;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:15px;letter-spacing:.24em;
     text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:22px;flex:none;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
@@ -42,7 +46,7 @@
   main a,p a,li a{color:var(--brick);text-decoration:underline;
     text-underline-offset:2px;text-decoration-thickness:1px;}
   main a:hover,p a:hover,li a:hover{color:var(--navy);}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
+  header h1{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
   main{padding:10px 28px 34px;}
   .done{display:flex;align-items:center;gap:16px;margin-top:18px;}
@@ -58,10 +62,10 @@
   .steps{list-style:none;margin:18px 0 6px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .steps li{margin:0;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--flag);
     padding:12px 14px;font-size:13.5px;line-height:1.5;}
-  .steps li b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+  .steps li b{display:block;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:15px;
     letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;}
   @media (max-width:600px){.steps{grid-template-columns:1fr;}}
-  h2{font-family:'Barlow Condensed';font-weight:800;font-size:24px;text-transform:uppercase;
+  h2{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:24px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
   p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
   ul{margin-left:20px;}
@@ -71,7 +75,7 @@
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
   .confirm{margin:22px 0 8px;display:flex;flex-direction:column;gap:12px;align-items:flex-start;}
-  button{font-family:'Barlow',sans-serif;font-weight:800;font-size:16px;color:var(--navy);
+  button{font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-weight:800;font-size:16px;color:var(--navy);
     background:var(--flag);border:0;border-radius:6px;padding:13px 24px;cursor:pointer;}
   button:disabled{opacity:.55;cursor:default;}
   .msg{font-size:14.5px;line-height:1.6;}

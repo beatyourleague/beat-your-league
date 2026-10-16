@@ -1133,7 +1133,11 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # a row-level flag, so the section says so once.
         report["meta"]["seeded"] = True
     report["meta"]["last_week"] = data.last_week
-    return report
+    # Contract C8: a lineup shape no arm has graded prints no odds — the
+    # lineup, projections and plans stand, and every number is withheld with
+    # its reason. Last, so it sees every number the report carries.
+    from engine.subscriber import withhold_ungraded_odds
+    return withhold_ungraded_odds(report, spec.slots)
 
 
 def _row_teams(spec: RosterSpec, data: WeekData) -> dict[str, str]:

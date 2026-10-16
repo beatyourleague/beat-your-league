@@ -487,9 +487,11 @@ _GATE_PHRASES = (
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
     ("no eligible player", "no eligible player with a scoring record"),
-    # Contract C8: a lineup shape no arm has graded (engine.solo_report.SHAPE_GATE).
+    # Contract C8: a lineup shape no preregistered arm has graded prints no
+    # odds at all. Without its own phrase it fell through to "a player's
+    # status isn't confirmed yet" — false about a confirmed starter.
     ("odds once this lineup shape is graded",
-     "your lineup shape gets projections only until it's graded"),
+     "your lineup shape hasn't been graded yet, so it carries no odds"),
 )
 
 
@@ -528,6 +530,10 @@ def row_label(slot: Mapping[str, Any]) -> str:
     if gate.startswith(("we don't put odds on defenses",
                         "odds once this lineup shape is graded")):
         return "projection only"
+    if gate.startswith("odds once this lineup shape is graded"):
+        # C8: the reason is the shape, never this row's players — "waiting on"
+        # a bench player whose news decides nothing would be a false reason.
+        return "projection only · odds once this lineup shape is graded"
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
         # a starter with five games and a usage line counting four of them —
@@ -586,6 +592,8 @@ def short_gate(gate: str | None, slot: str) -> str:
         return f"{NO_CALL} · too few games yet"
     if gate.startswith("we don't put a number on defenses"):
         return f"{NO_CALL} · defenses not graded yet"
+    if gate.startswith("odds once this lineup shape is graded"):
+        return f"{NO_CALL} · lineup shape not graded yet"
     if gate.startswith("no eligible player"):
         return NO_CALL
     return f"{NO_CALL} · status unconfirmed"

@@ -276,13 +276,23 @@ def test_league_size_survives_the_browser_to_tuesday_trip() -> None:
 
     # A v2 ref predates the field and still decodes — as 12, which is exactly
     # what the engine used for everyone while the question was discarded.
-    v3 = encode_roster("season", "ppr", tuple(slots), tuple(ids), league_size=14)
+    v3 = _as_v3(encode_roster("season", "ppr", tuple(slots), tuple(ids),
+                              league_size=14))
+    assert decode_roster(v3).league_size == 14
     v2 = v3.replace("s3-pd", "s2-p", 1)
     assert decode_roster(v2).league_size == DEFAULT_LEAGUE_SIZE
 
     # And an unknown size code is refused rather than guessed.
     with pytest.raises(Exception):
         decode_roster(v3.replace("s3-pd", "s3-pz", 1))
+
+
+def _as_v3(v4: str) -> str:
+    """The v3 spelling of a v4 ref: the same fields without the roster count —
+    what the page issued before v4, and what must keep decoding."""
+    head, settings, packed = v4.split("-", 2)
+    assert head.endswith("4") and settings[-2:].isdigit()
+    return f"{head[0]}3-{settings[:-2]}-{packed}"
 
 
 # --------------------------------------------------------------------- #
@@ -370,6 +380,79 @@ def test_an_unrecognised_seat_payload_refuses_instead_of_reading_it_as_empty() -
 # and kickoff text each stopped a signup. Both parsers now handle them, and
 # these pin the outcome on both sides against the shipped directory.
 
+# BE-D1 (Oct 2026): what a real ESPN roster table copies out. Captured by
+# loading a public ESPN team page (Week 6 2026) in headless Chrome and
+# serialising the roster table the way a copy does (Selection.toString over the
+# <table>): ONE CELL PER LINE — slot, name, injury tag, team, position,
+# opponent, kickoff, then the stat columns. Through the old parsers every team
+# line and every home opponent became a team defense: this copy read as the
+# Texans, Falcons, Bears, Ravens, Commanders, Raiders, Bills, Bengals, Jets,
+# Seahawks, Eagles and Patriots, the tally said "Looks right", and the report
+# would have started a defense the subscriber does not own. The table's own
+# headings and totals ("SLOT", "OPRK", "%ROST", "TOTALS", "7th") each stopped
+# the signup as an unknown player. The phone-width copy carries opponents and
+# kickoffs; the desktop one, read before the schedule loaded, shows "--".
+ESPN_TABLE_COPY = (
+    "STARTERS\tNFL WEEK 6\t2026 SEASON\nSLOT\nPLAYER\nOPP\nSTATUS\nPROJ\n"
+    "SCORE\nOPRK\n%ST\n%ROST\n+/-\nPRK\nFPTS\nAVG\nLAST\nQB\n\nC.J. Stroud\n"
+    "HOU\nQB\n@JAX\nSun 9:30 AM\n16.1\n--\n7th\n17.6\n42.9\n+0.5\n16\n"
+    "101.18\n20.2\n22.94\nRB\n\nBijan Robinson\nATL\nRB\nCHI\nSun 1:00 PM\n"
+    "23.1\n--\n7th\n99.7\n99.9\n0\n2\n121.2\n24.2\n15.8\nRB\n\n"
+    "Kyle Monangai\nQ\nCHI\nRB\n@ATL\nSun 1:00 PM\n10.1\n--\n12th\n17.2\n"
+    "80.1\n+0.2\n19\n59.3\n14.8\n--\nWR\n\nZay Flowers\nBAL\nWR\n@CLE\n"
+    "Sun 1:00 PM\n16.4\n--\n24th\n88.4\n98.9\n+0.1\n8\n81.8\n20.5\n14.6\nWR\n"
+    "\nTerry McLaurin\nWSH\nWR\n@SF\nMon 8:15 PM\n12.3\n--\n7th\n52.0\n92.0\n"
+    "+0.1\n48\n42.3\n10.6\n12.2\nTE\n\nBrock Bowers\nQ\nLV\nTE\nBUF\n"
+    "Sun 4:25 PM\n19.6\n--\n15th\n95.9\n99.9\n0\n5\n71.2\n23.7\n23.0\nFLEX\n"
+    "\nTre Tucker\nLV\nWR\nBUF\nSun 4:25 PM\n10.4\n--\n32nd\n16.2\n38.4\n"
+    "+2.7\n31\n51.8\n10.4\n7.5\nD/ST\n\nPatriots\nNE\nD/ST\nNYJ\n"
+    "Sun 1:00 PM\n6.7\n--\n19th\n67.2\n75.2\n+5.9\n5\n38.0\n7.6\n6.0\nK\n\n"
+    "Evan McPherson\nCIN\nK\n*BYE*\n--\n--\n--\n--\n12.4\n27.8\n-4.7\n5\n"
+    "55.6\n11.1\n6.6\nTOTALS\n114.7\n0.0\n622.38\n143.14\n108.64\nBench\n\n"
+    "A.J. Brown\nIR\nNE\nWR\nNYJ\nSun 1:00 PM\n0.0\n--\n10th\n9.7\n94.5\n0\n"
+    "135\n5.6\n5.6\n--\nBench\n\nZach Charbonnet\nO\nSEA\nRB\n@DEN\n"
+    "Thu 8:15 PM\n0.0\n--\n26th\n0.2\n57.6\n+0.1\n--\n--\n--\n--\nBench\n\n"
+    "Dontayvion Wicks\nQ\nPHI\nWR\nCAR\nSun 1:00 PM\n8.4\n--\n9th\n10.9\n"
+    "41.5\n-1.4\n35\n49.0\n9.8\n11.3\nBench\n\nSam Darnold\nSEA\nQB\n@DEN\n"
+    "Thu 8:15 PM\n16.3\n--\n14th\n14.2\n40.8\n-1.9\n26\n63.8\n16.0\n10.3\n"
+    "Bench\n\nKeon Coleman\nBUF\nWR\n@LV\nSun 4:25 PM\n7.1\n--\n20th\n9.7\n"
+    "33.6\n-1.5\n34\n49.4\n9.9\n7.7\nBench\n\nMarvin Harrison Jr.\nHOU\nWR\n"
+    "@JAX\nSun 9:30 AM\n3.4\n--\n25th\n7.7\n75.8\n+0.3\n91\n19.5\n4.9\n--\n"
+    "TOTALS\n35.2\n0.0\n187.3\n46.11\n29.3\n"
+)
+
+ESPN_DESKTOP_COPY = (
+    "STARTERS\tNFL WEEK 6\t2026 SEASON\nSLOT\nPLAYER\nOPP\nSTATUS\nPROJ\n"
+    "SCORE\nOPRK\n%ST\n%ROST\n+/-\nPRK\nFPTS\nAVG\nLAST\nQB\n\nC.J. Stroud\n"
+    "HOU\nQB\n--\n16.1\n--\n7th\n17.6\n42.9\n+0.5\n16\n101.18\n20.2\n22.94\n"
+    "RB\n\nBijan Robinson\nATL\nRB\n--\n23.1\n--\n7th\n99.7\n99.9\n0\n2\n"
+    "121.2\n24.2\n15.8\nRB\n\nKyle Monangai\nQ\nCHI\nRB\n--\n10.1\n--\n12th\n"
+    "17.2\n80.1\n+0.2\n19\n59.3\n14.8\n--\nWR\n\nZay Flowers\nBAL\nWR\n--\n"
+    "16.4\n--\n24th\n88.4\n98.9\n+0.1\n8\n81.8\n20.5\n14.6\nWR\n\n"
+    "Terry McLaurin\nWSH\nWR\n--\n12.3\n--\n7th\n52.0\n92.0\n+0.1\n48\n42.3\n"
+    "10.6\n12.2\nTE\n\nBrock Bowers\nQ\nLV\nTE\n--\n19.6\n--\n15th\n95.9\n"
+    "99.9\n0\n5\n71.2\n23.7\n23.0\nFLEX\n\nTre Tucker\nLV\nWR\n--\n10.4\n--\n"
+    "32nd\n16.2\n38.4\n+2.7\n31\n51.8\n10.4\n7.5\nD/ST\n\nPatriots\nNE\n"
+    "D/ST\n--\n6.7\n--\n19th\n67.2\n75.2\n+5.9\n5\n38.0\n7.6\n6.0\nK\n\n"
+    "Evan McPherson\nCIN\nK\n*BYE*\n--\n--\n--\n--\n12.4\n27.8\n-4.7\n5\n"
+    "55.6\n11.1\n6.6\nTOTALS\n114.7\n0.0\n622.38\n143.14\n108.64\nBench\n\n"
+    "A.J. Brown\nIR\nNE\nWR\n--\n0.0\n--\n10th\n9.7\n94.5\n0\n135\n5.6\n5.6\n"
+    "--\nBench\n\nZach Charbonnet\nO\nSEA\nRB\n--\n0.0\n--\n26th\n0.2\n57.6\n"
+    "+0.1\n--\n--\n--\n--\nBench\n\nDontayvion Wicks\nQ\nPHI\nWR\n--\n8.4\n"
+    "--\n9th\n10.9\n41.5\n-1.4\n35\n49.0\n9.8\n11.3\nBench\n\nSam Darnold\n"
+    "SEA\nQB\n--\n16.3\n--\n14th\n14.2\n40.8\n-1.9\n26\n63.8\n16.0\n10.3\n"
+    "Bench\n\nKeon Coleman\nBUF\nWR\n--\n7.1\n--\n20th\n9.7\n33.6\n-1.5\n34\n"
+    "49.4\n9.9\n7.7\nBench\n\nMarvin Harrison Jr.\nHOU\nWR\n--\n3.4\n--\n"
+    "25th\n7.7\n75.8\n+0.3\n91\n19.5\n4.9\n--\nTOTALS\n35.2\n0.0\n187.3\n"
+    "46.11\n29.3\n"
+)
+
+ESPN_ROSTER = ["C.J. Stroud", "Bijan Robinson", "Kyle Monangai", "Zay Flowers",
+                  "Terry McLaurin", "Brock Bowers", "Tre Tucker",
+                  "New England Patriots", "Evan McPherson", "A.J. Brown",
+                  "Zach Charbonnet", "Dontayvion Wicks", "Sam Darnold",
+                  "Keon Coleman", "Marvin Harrison Jr."]
+
 PASTES = {
     "yahoo": ("QB\nJosh Allen\nBuf - QB\nQ\nRB\nSaquon Barkley\nPhi - RB\nO\nWR\n"
               "Ja'Marr Chase\nCin - WR\nAmon-Ra St. Brown\nDet - WR\nTE\nGeorge Kittle\n"
@@ -408,6 +491,21 @@ PASTES = {
                     "Sam LaPorta", "Bijan Robinson", "Chase Brown", "DJ Moore",
                     "Kenneth Walker III", "Michael Pittman", "Marvin Harrison Jr.",
                     "Brian Thomas Jr."]),
+    "espn-table": (ESPN_TABLE_COPY, ESPN_ROSTER),
+    "espn-desktop": (ESPN_DESKTOP_COPY, ESPN_ROSTER),
+    # The verifier's own reproduction (BE-D1): name, team and position each on
+    # their own line, a home opponent after the position, a defense written
+    # "Eagles D/ST" with its tag on the next line, and a back whose team line
+    # disagrees with our list (ESPN said "Sea", the list says KC) — that one is
+    # a team line because a position line follows it.
+    "espn-lines": ("Jalen Hurts\nPhi\nQB\nCAR\nJonathan Taylor\nInd\nRB\n@HOU\n"
+                   "Kenneth Walker III\nSea\nRB\nPuka Nacua\nLAR\nWR\nDrake London\n"
+                   "Atl\nWR\nTravis Kelce\nKC\nTE\nLAC\nHarrison Butker\nKC\nK\n"
+                   "Eagles D/ST\nD/ST\nNYJ\nRhamondre Stevenson\nNE\nRB\n"
+                   "Courtland Sutton\nDen\nWR",
+                   ["Jalen Hurts", "Jonathan Taylor", "Kenneth Walker III", "Puka Nacua",
+                    "Drake London", "Travis Kelce", "Harrison Butker",
+                    "Philadelphia Eagles", "Rhamondre Stevenson", "Courtland Sutton"]),
 }
 
 
@@ -483,6 +581,23 @@ REVIEW_CASES = [
     # Whitespace the two languages disagree about.
     ("Josh Allen\x85Q", ["Josh Allen"]), ("Josh Allen\x1cQ", ["Josh Allen"]),
     ("Josh Allen QB BUF", ["Josh Allen"]),
+    # BE-D1. A bare team code is read in CONTEXT: right after a player it is
+    # his team line (his team, or a position line follows it), and after his
+    # own position line it is his opponent. Elsewhere it is still a defense.
+    ("Jalen Hurts\nPhi\nQB", ["Jalen Hurts"]),
+    ("Jalen Hurts\nPhi\nQB\nCAR", ["Jalen Hurts"]),
+    ("Kenneth Walker III\nSea\nRB", ["Kenneth Walker III"]),
+    ("Patriots\nNE\nD/ST\nNYJ", ["New England Patriots"]),
+    ("Josh Allen\nKC", ["Josh Allen", "Kansas City Chiefs"]),
+    ("KC\nQB\nJosh Allen", ["Kansas City Chiefs", "Josh Allen"]),
+    ("Josh Allen\nBuf - QB\nDEF\nKC", ["Josh Allen", "Kansas City Chiefs"]),
+    # A tab row with a player's team and his opponent but no player cell is
+    # not an entry; before, the opponent's code became that team's defense.
+    ("QB\tJalen Hurts\nPhiQB\tCAR\tSun 1:00 PM", ["Jalen Hurts"]),
+    ("BUF\tQB", []),
+    # Cells glued together by a copy with no space between them.
+    ("Eagles D/STD/ST", ["Philadelphia Eagles"]), ("Jalen HurtsQ", ["Jalen Hurts"]),
+    ("SeaWR", []), ("PHIQB", []),
 ]
 # Decoration words glued to accented letters: the two languages must AGREE.
 AGREE_ONLY = ["Josh Allen éNA", "Allenéout", "ÉPM", "Josh Allen Ñ", "Zoë Kravitz"]
@@ -570,16 +685,18 @@ def test_a_typeahead_add_keeps_every_choice_already_made_on_the_list() -> None:
     choice and a junk line is removable; the person picks Jane and removes the
     junk — on the LIST, which the paste box never learns. Adding a player used
     to re-read the box and bring both problems back, blocking checkout.
-    R.addPick appends the tapped player (twins included, as resolution gives
-    them) and leaves every earlier row exactly as decided, without touching
-    the array it was given."""
+    R.addPick appends the tapped player and leaves every earlier row exactly
+    as decided, without touching the array it was given. A tapped row carries
+    no near-name swap: the person read the full name and chose it, which is
+    the exact-name case (I15, Oct 2026 — the swap offered on an exact name
+    read as doubt about a household name)."""
     got = run_js(
         "const d = R.buildDirectory({players: ["
         "['John Smith','00-0000001','WR','MIN'],['Jane Smith','00-0000002','WR','CHI'],"
         "['Bijan Robinson','00-0000003','RB','ATL'],['Brian Robinson','00-0000004','RB','ATL'],"
         "['Josh Allen','00-0000005','QB','BUF']],"
         " confusable: [['00-0000003','00-0000004']]});\n"
-        "const matches = R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nBench total 98.2');\n"
+        "const matches = R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nWaiver note 98.2');\n"
         "const before = matches.map(m => m.player ? m.player.name : 'OPEN ' + m.reason);\n"
         "matches[1] = {typed: 'J. Smith', player: d.byId.get('00-0000002'), candidates: [], twins: []};\n"
         "matches.splice(2, 1);\n"
@@ -588,11 +705,267 @@ def test_a_typeahead_add_keeps_every_choice_already_made_on_the_list() -> None:
         "console.log(JSON.stringify({before, untouched: matches.length === kept.length,"
         " after: after.map(m => m.player ? m.player.name : 'OPEN ' + m.reason),"
         " twins: after[after.length - 1].twins.map(t => t.name),"
-        " reread: R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nBench total 98.2\\nBijan Robinson')"
+        " reread: R.resolveAll(d, 'Josh Allen\\nJ. Smith\\nWaiver note 98.2\\nBijan Robinson')"
         ".map(m => m.player ? m.player.name : 'OPEN ' + m.reason)}))")
     assert got["before"] == ["Josh Allen", "OPEN ambiguous", "OPEN unknown"]
     assert got["after"] == ["Josh Allen", "Jane Smith", "Bijan Robinson"]
     assert got["untouched"] is True
-    assert got["twins"] == ["Brian Robinson"]
+    assert got["twins"] == []
     # The trap it replaces: re-reading the box undoes both decisions.
     assert got["reread"] == ["Josh Allen", "OPEN ambiguous", "OPEN unknown", "Bijan Robinson"]
+
+
+# --------------------------------------------------------------------- #
+# exact names never offer a swap (I15, Oct 2026)
+# --------------------------------------------------------------------- #
+
+def test_an_exact_full_name_offers_no_near_name_swap_in_either_language() -> None:
+    """Reproduction (I15): a Yahoo paste of "Bijan Robinson" — the exact name —
+    still showed "not Brian Robinson? tap to swap", which reads as doubt about
+    a household name. The swap is offered only when what was typed is NOT the
+    full name letter for letter (case and spacing aside)."""
+    from engine.roster import exact_name
+    cases = [("Bijan Robinson", True), ("bijan  robinson", True),
+             ("Bijan Robinson RB ATL", True), ("BijanRobinson", False),
+             ("B. Robinson", False), ("Kenneth Walker", False)]
+    names = {"Kenneth Walker": "Kenneth Walker III"}
+    teams = {"ATL"}
+    for typed, want in cases:
+        name = names.get(typed, "Bijan Robinson")
+        assert exact_name(typed, name, teams) is want, typed
+    got = run_js(
+        f"const teams = new Set(['ATL']);\n"
+        f"console.log(JSON.stringify({json.dumps(cases)}.map(([t]) => "
+        f"R.exactName(t, {json.dumps(names)}[t] || 'Bijan Robinson', teams))))")
+    assert got == [want for _, want in cases]
+    # And the resolver acts on it: the exact name carries no twin, a run-together
+    # spelling of the same name still does.
+    pair = [["Bijan Robinson", "00-0000003", "RB", "ATL"],
+            ["Brian Robinson", "00-0000004", "RB", "ATL"]]
+    twins = run_js(
+        f"const d = R.buildDirectory({{players: {json.dumps(pair)},"
+        f" confusable: [['00-0000003','00-0000004']]}});\n"
+        f"console.log(JSON.stringify(['Bijan Robinson', 'BIJAN ROBINSON', 'BijanRobinson']"
+        f".map((t) => R.resolveLine(d, t).twins.map((p) => p.name))))")
+    assert twins == [[], [], ["Brian Robinson"]]
+
+
+def test_ungluing_never_splits_a_team_code() -> None:
+    """The glued-tag split (BE-D1: "PhiQB", "Jalen HurtsQ") must never cut a
+    real team code in two — "DET" is not "DE" + "T", "LAC" is not "LA" + "C".
+    Every code and alias, both languages, comes through whole."""
+    from engine.roster import TEAM_ALIASES, _unglue
+    directory = _python_directory()
+    codes = sorted({p.team for p in directory.players if p.team} | set(TEAM_ALIASES))
+    teams = set(codes)
+    assert [_unglue(c, teams) for c in codes] == codes
+    got = run_js(f"const teams = new Set({json.dumps(codes)});\n"
+                 f"console.log(JSON.stringify({json.dumps(codes)}.map((c) => R.unglue(c, teams))))")
+    assert got == codes
+    glued = ["PhiQB", "PHIQB", "Jalen HurtsQ", "Eagles D/STD/ST", "SeaWR", "DK Metcalf",
+             "AJ Brown", "CeeDee Lamb", "JuJu Smith-Schuster", "LaPorta"]
+    want = ["Phi QB", "PHI QB", "Jalen Hurts Q", "Eagles D/ST D/ST", "Sea WR",
+            "DK Metcalf", "AJ Brown", "CeeDee Lamb", "JuJu Smith-Schuster", "LaPorta"]
+    assert [_unglue(g, teams) for g in glued] == want
+    got = run_js(f"const teams = new Set({json.dumps(codes)});\n"
+                 f"console.log(JSON.stringify({json.dumps(glued)}.map((c) => R.unglue(c, teams))))")
+    assert got == want
+
+
+# --------------------------------------------------------------------- #
+# the v4 reference: the roster count, and the source tag it makes safe
+# --------------------------------------------------------------------- #
+
+def _shapes():
+    from engine.subscriber import LINEUP_SHAPES
+    return LINEUP_SHAPES
+
+
+def test_every_lineup_shape_is_the_same_in_the_browser_and_python() -> None:
+    """Contract C8: the page builds the slots from a base and two answers; the
+    engine reads them back as a shape. The two tables are one contract."""
+    shapes = _shapes()
+    got = run_js(
+        "const out = {};\n"
+        "for (const base of Object.keys(R.SHAPE_BASES)) for (const k of [true, false])"
+        " for (const d of [true, false]) { const code = R.shapeCode(base, k, d);"
+        " out[code] = {slots: R.shapeSlots(base, k, d), graded: R.GRADED_SHAPES.includes(code),"
+        " back: R.shapeOfSlots(R.shapeSlots(base, k, d)).code,"
+        " fromCode: R.shapeFromCode(code).base}; }\n"
+        "out['std-nokd-alias'] = R.shapeFromCode('std-nokd').code;\n"
+        "console.log(JSON.stringify(out))")
+    alias = got.pop("std-nokd-alias")
+    assert alias == "nokd"
+    assert set(got) == set(shapes)
+    for code, shape in shapes.items():
+        assert tuple(got[code]["slots"]) == shape.slots, code
+        assert got[code]["graded"] is shape.graded, code
+        assert got[code]["back"] == code and got[code]["fromCode"] == shape.base, code
+
+
+@pytest.mark.parametrize("via", [None, "reddit", "x-post", "a" * 24])
+def test_every_shape_round_trips_with_its_tag_in_both_languages(via) -> None:
+    """The page writes a v4 ref (roster count + optional "_via-<tag>", contract
+    C5); Tuesday reads it. Built in the browser, decoded by Python AND by the
+    browser's own decoder (the ?ref= restore, contract C6), for every shape."""
+    from run.refs import decode_roster, encode_roster, split_via
+    for code, shape in _shapes().items():
+        ids = ROSTER[: max(len(shape.slots), 10)]
+        js = run_js(
+            f"const ref = R.withVia(R.encodeRoster('monthly', 'half_ppr', "
+            f"{json.dumps(list(shape.slots))}, {json.dumps(ids)}, 10), {json.dumps(via)});\n"
+            f"console.log(JSON.stringify({{ref, back: R.decodeRoster(ref)}}))")
+        py = encode_roster("monthly", "half_ppr", shape.slots, ids, 10, via=via)
+        assert js["ref"] == py, code
+        assert len(py) <= 200 and py.split("-", 1)[0] == "m4"
+        back = decode_roster(py)
+        assert back.slots == shape.slots and back.player_ids == tuple(ids)
+        assert back.via == via and back.league_size == 10 and back.plan == "monthly"
+        assert split_via(py) == ((py[: -len(f"_via-{via}")], via) if via else (py, None))
+        b = js["back"]
+        assert (tuple(b["slots"]), tuple(b["playerIds"]), b["via"], b["leagueSize"],
+                b["plan"], b["scoring"]) == (shape.slots, tuple(ids), via, 10,
+                                             "monthly", "half_ppr")
+
+
+def test_the_tag_can_never_be_read_off_the_roster_itself() -> None:
+    """Why v4 carries the count. base64url's alphabet includes "_" and "-", so
+    a packed roster can itself END in "_via-..." — and reading the tag off the
+    end, wherever it appears, would silently drop the subscriber's last
+    players. Built here: the last two players pack to "_via" and "-abc". With
+    the count the payload's end is known, so both languages read no tag and
+    the whole roster. A v3 ref has no count, so the same payload under v3 is
+    cut by the intake's rule — every decoder agrees with it, which is exactly
+    why the page issues v4 and never tags a v3."""
+    import base64
+    from run.intake import split_via as intake_split
+    from run.refs import _pack_one, decode_roster, split_via
+    tail = base64.urlsafe_b64decode("_via-abc")
+    blob = b"".join(_pack_one(pid).to_bytes(3, "big") for pid in ROSTER[:9]) + tail
+    packed = base64.urlsafe_b64encode(blob).decode().rstrip("=")
+    assert packed.endswith("_via-abc")
+    ref = "s4-pcQRRWWTFKD11-" + packed
+    assert split_via(ref) == (ref, None) == intake_split(ref)
+    back = decode_roster(ref)
+    assert back.via is None and len(back.player_ids) == 11
+    js = run_js(f"console.log(JSON.stringify(R.decodeRoster({json.dumps(ref)})))")
+    assert js["via"] is None and len(js["playerIds"]) == 11
+    v3 = "s3-pcQRRWWTFKD-" + packed
+    assert split_via(v3) == intake_split(v3) == (v3[:-len("_via-abc")], "abc")
+
+
+def test_a_bad_tag_is_dropped_never_refused_and_a_bad_tail_is_refused() -> None:
+    """Attribution must not cost a sale: an unusable tag leaves the ref as it
+    was (the page still checks out). But a tail after the counted roster that
+    is not a well-formed tag is a ref nobody can read with certainty — refused
+    in both languages, never decoded as a shorter roster."""
+    from run.refs import RefError, decode_roster, encode_roster, with_via
+    ref = encode_roster("season", "ppr", SLOTS, ROSTER)
+    for bad in ("Reddit", "has space", "x" * 25, "", None, "a_b"):
+        assert with_via(ref, bad) == ref
+        assert run_js(f"console.log(JSON.stringify(R.withVia({json.dumps(ref)}, "
+                      f"{json.dumps(bad)})))") == ref
+    assert with_via(with_via(ref, "one"), "two") == with_via(ref, "one")
+    for broken in (ref + "_via-", ref + "_via-UP", ref + "AAAA", ref[:-4]):
+        with pytest.raises(RefError):
+            decode_roster(broken)
+        thrown = run_js(f"let e = null; try {{ R.decodeRoster({json.dumps(broken)}); }}"
+                        f" catch (x) {{ e = x.message; }} console.log(JSON.stringify(e))")
+        assert thrown, broken
+    # A full 30-player roster with the longest tag still fits Stripe.
+    big = [f"00-{n:07d}" for n in range(1, 31)]
+    longest = encode_roster("league_pass", "standard",
+                            _shapes()["sf"].slots, big, 14, via="z" * 24)
+    assert len(longest) <= 200 and longest.endswith("_via-" + "z" * 24)
+
+
+def test_older_refs_still_decode_in_both_languages() -> None:
+    """No v3 ref may break: the browser restores and Tuesday reads one exactly
+    as before (no count, no tag)."""
+    from run.refs import decode_roster, encode_roster
+    v4 = encode_roster("season", "standard", SLOTS, ROSTER, 8)
+    v3 = _as_v3(v4)
+    v2 = v3.replace("s3-sa", "s2-s", 1)
+    for ref, size in ((v3, 8), (v2, 12)):
+        back = decode_roster(ref)
+        assert (back.player_ids, back.league_size, back.via) == (tuple(ROSTER), size, None)
+        js = run_js(f"console.log(JSON.stringify(R.decodeRoster({json.dumps(ref)})))")
+        assert (tuple(js["playerIds"]), js["leagueSize"], js["via"]) == (tuple(ROSTER), size, None)
+
+
+def test_every_decoder_strips_a_tag_exactly_as_the_intake_does() -> None:
+    """Contract C5 addendum: run/intake.split_via strips "_via-<tag>" before a
+    payment's ref is stored or decoded, taking the suffix only when what is
+    left still decodes. run/refs.split_via (which decode_roster calls, so the
+    registry, the waitlist and every Tuesday read agree) and the browser's
+    R.splitVia (the ?ref= restore) apply that one rule, pinned here over refs
+    the page issues and refs it never would. Mutation-checked: dropping the
+    remainder-decodes test from either Python copy, or the count check from
+    a v4 decode, fails this."""
+    from run.intake import split_via as intake_split
+    from run.refs import encode_roster, split_via
+    refs = []
+    for code, shape in _shapes().items():
+        ids = ROSTER[: max(len(shape.slots), 10)]
+        plain = encode_roster("season", "ppr", shape.slots, ids)
+        refs += [plain, plain + "_via-reddit", plain + "_via-x-post"]
+    plain = refs[0]
+    v3 = _as_v3(plain)
+    refs += [v3, v3 + "_via-reddit", plain + "_via-", plain + "_via-UP",
+             plain + "_via-" + "a" * 25, plain[:-4] + "_via-reddit",
+             plain + "AAAA_via-reddit", "s3-zz_via-x", "nonsense_via-x", "",
+             # Tagged twice by hand: every copy splits at the LAST tag.
+             plain + "_via-reddit_via-x", v3 + "_via-a_via-b"]
+    want = [intake_split(ref) for ref in refs]
+    assert [split_via(ref) for ref in refs] == want
+    got = run_js(f"console.log(JSON.stringify({json.dumps(refs)}.map((r) => R.splitVia(r))))")
+    assert [tuple(pair) for pair in got] == [tuple(pair) for pair in want]
+    # And they say something: tags come off v4 refs, junk is left for the
+    # decoder to refuse.
+    assert split_via(plain + "_via-reddit") == (plain, "reddit")
+    assert split_via(plain + "_via-UP") == (plain + "_via-UP", None)
+    assert split_via(plain[:-4] + "_via-reddit")[1] is None
+    assert split_via(plain + "_via-reddit_via-x") == (plain + "_via-reddit", "x")
+
+
+def test_every_seat_link_the_intake_builds_prefills_the_join_page() -> None:
+    """Contract C4 + C8 across the language boundary: run/updates.seat_url
+    writes s/n/t from a pass payer's own setup, and the join page applies
+    them only when they are values it offers (a radio value, or a code
+    R.shapeFromCode knows) — anything else is silently left for the leaguemate
+    to pick. So a shape the intake can name but the page cannot read would
+    send eleven leaguemates a link that quietly drops their lineup. Every
+    shape, every scoring rule, every size: the link's values round-trip to the
+    same slots in the browser."""
+    import re
+    from types import SimpleNamespace
+    from urllib.parse import parse_qs, urlsplit
+    from run.trial import TEMPLATES
+    from run.updates import seat_url
+    join = JS.with_name("index.html").read_text(encoding="utf-8")
+
+    def offered(name: str) -> set[str]:
+        return set(re.findall(rf'name="{name}" value="([^"]+)"', join))
+
+    assert set(TEMPLATES) == set(_shapes()), "a shape the seat link cannot name"
+    links = []
+    for code, slots in TEMPLATES.items():
+        for scoring in ("ppr", "half_ppr", "standard"):
+            for size in (8, 10, 12, 14):
+                roster = SimpleNamespace(scoring=scoring, league_size=size, slots=slots)
+                url = seat_url("https://beatyourleague.test", "s3cret", "payer@example.com",
+                               roster)
+                query = {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
+                assert query["s"] in offered("scoring") and query["n"] in offered("size")
+                assert re.fullmatch(r"[0-9a-f]{20}", query["pass"])
+                links.append((query["t"], list(slots)))
+    got = run_js(
+        f"console.log(JSON.stringify({json.dumps(links)}.map(([t]) => {{"
+        f" const s = R.shapeFromCode(t); return s && [s.base, s.kicker, s.defense,"
+        f" R.shapeSlots(s.base, s.kicker, s.defense)]; }})))")
+    for (code, slots), shape in zip(links, got):
+        assert shape is not None, code
+        base, kicker, defense, back = shape
+        assert back == slots, code
+        assert base in offered("template"), code
+        assert {"yes", "no"} <= offered("kicker") and {"yes", "no"} <= offered("defense")

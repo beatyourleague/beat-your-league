@@ -19,8 +19,16 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Paper page: the browser's own bar and controls match the navy header and
+     stay light, whatever the visitor's system theme (I12). -->
+<meta name="theme-color" content="#101E33">
+<meta name="color-scheme" content="light">
+<!-- Fonts are self-hosted (contract C7): no request leaves for a font
+     service, and the two faces above the fold load first. fonts.css carries
+     metric-matched fallbacks, so the swap does not move the layout. -->
+<link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../fonts/fonts.css">
 <style>
   :root{
     --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
@@ -28,37 +36,37 @@
     --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:#E7E4DA;font-family:'Barlow',-apple-system,sans-serif;color:var(--navy);
+  body{background:#E7E4DA;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;color:var(--navy);
     padding:14px 8px 44px;-webkit-font-smoothing:antialiased;}
   .page{max-width:560px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
     padding:24px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed';font-weight:800;font-size:15px;
+  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:15px;
     letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
   .brand svg.mark{width:22px;height:22px;flex:none;}
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
   a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow',sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
+  .home{font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
     text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
     padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
   .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
-  header h1{font-family:'Barlow Condensed';font-weight:800;font-size:38px;line-height:.95;
+  header h1{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:38px;line-height:.95;
     text-transform:uppercase;margin-top:8px;}
   header p{margin-top:10px;font-size:14px;color:#C9D4E2;line-height:1.5;}
   section{padding:20px 24px 24px;border-top:3px double var(--line);}
-  .eyebrow{font-family:'Barlow Condensed';font-weight:800;font-size:14px;
+  .eyebrow{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:14px;
     letter-spacing:.24em;text-transform:uppercase;color:var(--slate);margin-bottom:12px;}
   input[type=text], input[type=email]{width:100%;padding:12px 14px;font:inherit;font-size:16px;
     border:2px solid var(--navy);background:var(--card);}
-  button{font-family:'Barlow Condensed';font-weight:800;font-size:16px;
+  button{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;padding:12px 22px;margin-top:10px;
     background:var(--turf);color:#fff;border:none;cursor:pointer;}
   button:disabled{background:var(--slate);cursor:default;}
   .cards{display:grid;gap:8px;margin-top:6px;}
   .cardbtn{display:block;width:100%;text-align:left;background:var(--card);
     border:1px solid var(--line);padding:12px 14px;margin:0;color:var(--navy);
-    font-family:'Barlow';text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
+    font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
   .cardbtn small{display:block;font-weight:500;color:var(--slate);font-size:12.5px;margin-top:2px;}
   .cardbtn{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;}
   .cardbtn:hover{border-color:var(--turf);transform:translateY(-2px);
@@ -81,18 +89,18 @@
     font-size:13.5px;line-height:1.5;color:#14502E;}
   .ok:empty{display:none;}
   .scout{background:var(--card);border:2px solid var(--navy);padding:16px 18px;margin-top:6px;}
-  .scout .lead{font-family:'Barlow Condensed';font-weight:800;font-size:21px;
+  .scout .lead{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:21px;
     text-transform:uppercase;line-height:1.12;}
-  .scout .big{font-family:'Barlow Condensed';font-weight:800;font-size:46px;color:var(--brick);
+  .scout .big{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:46px;color:var(--brick);
     line-height:1;margin:10px 0 0;font-variant-numeric:tabular-nums;}
-  .scout .big small{display:block;font-family:'Barlow';font-size:13px;font-weight:700;
+  .scout .big small{display:block;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-size:13px;font-weight:700;
     color:var(--slate);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
   .scout ul{margin:12px 0 0 18px;font-size:14px;line-height:1.65;color:var(--ink2);}
   .scout .cite{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);
     font-size:12px;color:var(--slate);line-height:1.55;}
   .scout .kicker{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:600;}
   .checkout{display:inline-block;margin-top:14px;background:var(--turf);color:#fff;
-    text-decoration:none;font-family:'Barlow Condensed';font-weight:800;font-size:17px;
+    text-decoration:none;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:17px;
     letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;
     transition:transform .15s ease;}
   .checkout:hover{transform:translateY(-2px);}
@@ -109,14 +117,14 @@
   .suggest:empty{display:none;}
   .sugrow{display:block;width:100%;text-align:left;background:none;border:none;
     border-bottom:1px solid var(--line);padding:10px 12px;margin:0;cursor:pointer;
-    font-family:'Barlow';font-size:15px;color:var(--navy);text-transform:none;
+    font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-size:15px;color:var(--navy);text-transform:none;
     letter-spacing:0;font-weight:600;}
   .sugrow:last-child{border-bottom:0;}
   .sugrow:hover,.sugrow:focus{background:var(--turf-tint);}
   .sugrow small{color:var(--slate);font-weight:500;}
   .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px 16px;margin-top:8px;
     font-size:14px;line-height:1.6;display:none;}
-  .done > b{font-family:'Barlow Condensed';font-weight:800;font-size:18px;
+  .done > b{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:18px;
     text-transform:uppercase;letter-spacing:.06em;color:var(--turf);}
   .done ol{margin:8px 0 0 18px;}
   .done li{margin-top:6px;}
@@ -188,6 +196,18 @@
   .opts input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}
   .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:#fff;}
   .opts label:has(input:focus-visible){outline:3px solid var(--flag);outline-offset:2px;}
+  /* The first controls in the funnel, tapped by a thumb: 44px tall on touch
+     (I10 measured them at 35). */
+  @media (pointer:coarse){.opts label{min-height:44px;display:inline-flex;align-items:center;}}
+  /* A field's label stays on screen once the field is typed in (LP-D6): the
+     placeholder alone vanished, and the seat form's two addresses swapped. */
+  label.optlabel{display:block;}
+  .optlabel + input{margin-top:6px;}
+  /* The platform name on a lineup chip. Its own margin, because on touch the
+     chip is a flex box and the space before it collapses. */
+  .optsub{font-weight:600;text-transform:none;letter-spacing:0;color:var(--slate);
+    margin-left:.3em;}
+  .opts label:has(input:checked) .optsub{color:#C9D4E2;}
   #player-search{border-radius:3px;}
   textarea{border-radius:3px;}
   #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:3px;}
@@ -217,7 +237,7 @@
   .side{position:sticky;top:22px;background:linear-gradient(180deg,#182A45,var(--navy));
     color:var(--paper);border-radius:4px;padding:22px 22px 20px;
     box-shadow:0 30px 60px -30px rgba(16,30,51,.5);}
-  .side h2{font-family:'Barlow Condensed';font-weight:800;font-size:22px;letter-spacing:.04em;
+  .side h2{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:22px;letter-spacing:.04em;
     text-transform:uppercase;color:var(--flag);}
   .side ul{list-style:none;margin-top:12px;display:grid;gap:11px;}
   .side li{display:grid;grid-template-columns:18px 1fr;gap:9px;font-size:14px;line-height:1.5;
@@ -227,7 +247,7 @@
   .side li b{color:#fff;}
   .side .proof{margin-top:18px;padding-top:16px;border-top:1px solid rgba(246,244,238,.14);
     font-size:13.5px;line-height:1.5;color:#C9D4E2;}
-  .side .proof b{display:block;font-family:'Barlow Condensed';font-weight:800;font-size:34px;
+  .side .proof b{display:block;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:34px;
     color:var(--flag);line-height:1;margin-bottom:4px;}
   .side a{color:var(--flag);}
   .side .trust{margin-top:16px;padding-top:14px;border-top:1px solid rgba(246,244,238,.14);
@@ -258,22 +278,25 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's report: the
-    lineup we'd set, with the odds on every close call. <b>$39 for the season</b>,
-    at a founding rate locked in for every renewal.</p>
+    lineup we'd set, with the odds wherever both players are confirmed to play.
+    <b>$39 for the season</b>, at a founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
-    yet. You're welcome to set up now to see how it works, but
-    nothing is saved until it does; leave your email on the
-    <a href="../index.html">front page</a> and we'll send exactly one message when it opens.</div>
+    yet. You're welcome to set up now: once you check your roster it stays in this
+    page's address, so a bookmark brings it back. Leave your email on the
+    <a href="../index.html#watch-form">front page</a> and we'll send exactly one message when it opens.</div>
     <div class="beta-chips" id="header-chips">
-      <span>$39 / season · founding rate</span><span>Cancel any time</span><span>First report the day you join</span>
+      <span>$39 / season · founding rate</span><span>Cancel any time</span><span class="first-chip">A report the day you join</span>
     </div>
   </header>
 
   <main id="main">
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
-    <div class="note">Scoring and league size decide how every player in your
-    report is scored, so every number matches your league.</div>
+    <div class="note" id="seat-settings" style="display:none"></div>
+    <div class="note">Full PPR, half PPR or standard scoring with 4-point passing
+    touchdowns, in a league of 8 to 14 teams: every number in your report is worked
+    out that way. Six-point passing touchdowns and TE premium aren't scored yet —
+    pick the closest.</div>
     <div class="optlabel" id="lbl-scoring">Scoring</div>
     <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
@@ -287,14 +310,29 @@
       <label><input type="radio" name="size" value="12" checked>12 teams</label>
       <label><input type="radio" name="size" value="14">14 teams</label>
     </div>
+    <!-- Lineup shapes (contract C8): a base, then whether the league starts a
+         kicker and a team defense. Named by the app whose default it is, which
+         is how a manager recognises their own league. -->
     <div class="optlabel" id="lbl-template">Starting lineup</div>
     <div class="opts" id="opt-template" role="radiogroup" aria-labelledby="lbl-template">
-      <label><input type="radio" name="template" value="std" checked>Standard lineup</label>
+      <label><input type="radio" name="template" value="std" checked>Standard <span class="optsub">· ESPN's default</span></label>
+      <label><input type="radio" name="template" value="flex2">Two FLEX <span class="optsub">· Sleeper's default</span></label>
+      <label><input type="radio" name="template" value="wr3">Three WR <span class="optsub">· Yahoo's default</span></label>
       <label><input type="radio" name="template" value="sf">Superflex</label>
-      <label><input type="radio" name="template" value="nokd">No K or DEF</label>
     </div>
-    <div class="note">Standard is QB, 2 RB, 2 WR, TE, FLEX, K and DEF. Superflex adds a
-    second flex that can take a quarterback.</div>
+    <div class="optlabel" id="lbl-kicker">Kicker</div>
+    <div class="opts" id="opt-kicker" role="radiogroup" aria-labelledby="lbl-kicker">
+      <label><input type="radio" name="kicker" value="yes" checked>Starts a K</label>
+      <label><input type="radio" name="kicker" value="no">No K</label>
+    </div>
+    <div class="optlabel" id="lbl-defense">Team defense</div>
+    <div class="opts" id="opt-defense" role="radiogroup" aria-labelledby="lbl-defense">
+      <label><input type="radio" name="defense" value="yes" checked>Starts a DEF</label>
+      <label><input type="radio" name="defense" value="no">No DEF</label>
+    </div>
+    <div class="note" id="shape-note" aria-live="polite">Your lineup: QB, 2 RB, 2 WR,
+    TE, FLEX, K and DEF. Superflex adds a second flex that can take a quarterback;
+    Yahoo's FLEX is the W/R/T spot.</div>
   </section>
 
   <section id="step-roster">
@@ -320,6 +358,7 @@ Baltimore Ravens
     <!-- Above the list, so a problem shows under the button that found it
          rather than a screen further down on a phone (launch audit PC-08). -->
     <div class="tally" id="tally" role="status" aria-live="polite" tabindex="-1"></div>
+    <button type="button" id="defenses-ok" class="retry" style="display:none"></button>
     <div id="rows"></div>
   </section>
 
@@ -334,17 +373,20 @@ Baltimore Ravens
         <label><input type="radio" name="plan" value="season" autocomplete="off" checked>Season pass · $39</label>
         <label><input type="radio" name="plan" value="monthly" autocomplete="off">Monthly · $14.99</label>
       </div>
-      <div class="optlabel" id="lbl-email" style="display:none">Where reports go</div>
+      <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
       <div id="pass-field" style="display:none">
+        <label class="optlabel" id="lbl-pass-email" for="pass-email">The email the
+        League Pass was bought with</label>
         <input type="email" id="pass-email" autocomplete="off"
-               placeholder="your commissioner's email">
-        <div class="note">The address they bought the League Pass with — that is how
-        your seat is matched to their pass.</div>
+               placeholder="buyer@example.com" aria-describedby="pass-email-note">
+        <div class="note" id="pass-email-note">Whoever bought your league's pass —
+        it doesn't have to be the commissioner. It's how your seat is matched to
+        their pass, so it has to be the address they paid with.</div>
       </div>
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The season pass is <b>$39 and renews once
-      a year at $39 unless you cancel</b>. We email you before it bills, and you cancel
+      a year at $39 unless you cancel</b><span class="renews-on"></span>. We email you before it bills, and you cancel
       yourself any time from your own billing page. Refunds are no-questions until
       your second report's week kicks off — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
@@ -356,9 +398,11 @@ Baltimore Ravens
       <b id="done-head">You're all set.</b>
       <ol>
         <li id="seat-note" style="display:none">There's nothing for you to pay — the
-        seat comes out of your commissioner's League Pass, so your first report lands
-        the Tuesday after their pass goes through. You get your <b>own</b> report,
-        built from the roster you just entered.</li>
+        seat comes out of your league's League Pass, and you get your <b>own</b>
+        report, built from the roster you just entered. Your first report lands
+        the day the seat is matched to the pass — this week's report if the week's
+        games haven't started, otherwise your roster report — then a new one every
+        Tuesday. If it can't be matched to a League Pass, we email you to say so.</li>
         <li id="update-note" style="display:none">We've emailed a button to confirm
         the change — press it and your next report, and Saturday's final check, use
         this roster. It only goes to the address your reports go to, and nothing
@@ -370,9 +414,9 @@ Baltimore Ravens
         <li id="pay-note">Card details never touch our systems — Stripe handles the
         payment and we never see, transmit or store them.</li>
         <li id="renew-note">The season pass is <b>$39 today and renews once a year at $39
-        unless you cancel</b> — we email you before any renewal, and you can cancel
+        unless you cancel</b><span class="renews-on"></span>. We email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
-        <li id="first-note">Your first report lands <b>the day you join</b>. Refunds are no-questions
+        <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
         until your second report's week kicks off — one per person, and a
         re-subscription after a refund is final.
         Changed your mind later?
@@ -385,8 +429,8 @@ Baltimore Ravens
 
   <footer>
     We store the minimum: your email, your scoring settings and your roster. We never
-    ask for a password, and we never connect to your league — checkout runs on Stripe's
-    own secure page. Analysis, not picks — fantasy decisions are yours to make. Must be 18+.<br>
+    ask for a password, and we never connect to your league<span id="footer-checkout"> — checkout runs on Stripe's
+    own secure page</span>. Analysis, not picks — fantasy decisions are yours to make. Must be 18+.<br>
     <a href="../terms.html">Terms &amp; refunds</a> &middot;
     <a href="../privacy.html">Privacy</a>
   </footer>
@@ -394,9 +438,9 @@ Baltimore Ravens
 <aside class="side">
   <h2>What lands in your inbox</h2>
   <ul>
-    <li><span><b>Your first report today</b>, then a new one every Tuesday morning</span></li>
+    <li><span id="side-first"><b>A report the day you join</b>, then a new one every Tuesday morning</span></li>
     <li><span>Every slot decided for <b>your roster, your scoring</b></span></li>
-    <li><span><b>The odds on the close calls</b>, so you know how sure to be</span></li>
+    <li><span><b>The odds</b> wherever both players are confirmed to play, so you know how sure to be</span></li>
     <li><span>An <b>if/then plan</b> for late injury news, and a <b>Saturday final
       check</b> when it changes your lineup</span></li>
     <li><span>Your lineup set in <b>about ninety seconds</b></span></li>
@@ -411,7 +455,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=450f52df98"></script>
+<script src="roster.js?v=e2a9d110b7"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -496,11 +540,33 @@ if (VIA) {
     a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
   });
 }
+// ?ref=<ref> — a roster checked here before, coming back (contract C6): the
+// launch email's "finish setting up" link, or this page's own address
+// bookmarked while checkout was closed (BE-I3). Decoded by roster.js, the
+// twin of what decodes it on Tuesday; anything unreadable is an ordinary
+// visit, never a half-restored roster.
+const RESTORED = (() => {
+  try { return QUERY.get("ref") ? R.decodeRoster(QUERY.get("ref")) : null; }
+  catch (err) { return null; }
+})();
+// The channel a sale came from rides on the ref itself (contract C5): this
+// visit's own tag, else the one the restored roster was saved with.
+const SOURCE = VIA || (RESTORED && RESTORED.via) || undefined;
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
-// season pass, so a mangled link can never silently downgrade the sale.
-const WANTS_MONTHLY = QUERY.get("plan") === "monthly";
-const WANTS_PASS = QUERY.get("plan") === "pass";
+// season pass, so a mangled link can never silently downgrade the sale. A
+// restored roster with no ?plan= comes back as the plan it was saved under.
+const PLAN_PARAM = QUERY.get("plan") ||
+  (RESTORED && !QUERY.has("pass") && !QUERY.has("update") && !QUERY.has("try")
+    ? ({ monthly: "monthly", league_pass: "pass" })[RESTORED.plan] || "" : "");
+const WANTS_MONTHLY = PLAN_PARAM === "monthly";
+const WANTS_PASS = PLAN_PARAM === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
+// ?pass=<20 hex> — the seat link a League Pass buyer's welcome email carries
+// (contract C4): the pass is named by a code only the intake can make, so a
+// leaguemate types no buyer's address and cannot mistype one. ?pass=1 (the
+// generic link) keeps asking for the address the pass was bought with.
+const PASS_TOKEN = SEAT_MODE && /^[0-9a-f]{20}$/.test(QUERY.get("pass") || "")
+  ? QUERY.get("pass") : "";
 // The plan being bought RIGHT NOW. It starts from the card they clicked and
 // can be switched on the page (Oct 9 2026): a mid-season buyer arriving from
 // the hero used to see only the $39 season pass, with monthly reachable only
@@ -557,23 +623,28 @@ if (SEAT_MODE || UPDATE_MODE || TRY_MODE) {
   if (side) side.hidden = true;
 }
 
-const TEMPLATES = {
-  std: ["QB","RB","RB","WR","WR","TE","FLEX","K","DEF"],
-  sf:  ["QB","RB","RB","WR","WR","TE","FLEX","SUPER_FLEX","K","DEF"],
-  nokd:["QB","RB","RB","WR","WR","TE","FLEX"],
-};
-
 const $ = (id) => document.getElementById(id);
 // ``stale``: the box was typed in since the list on screen was read from it.
 // ``listed``: the launch list already has this visitor's email (one row a visit).
+// ``defensesOk``: the defense count the buyer confirmed as all theirs (BE-D1).
 const state = { directory: null, matches: [], ready: false, dirFailed: false,
-                dirLoading: false, stale: false, listed: false };
+                dirLoading: false, stale: false, listed: false, defensesOk: null };
 
 function radio(name) {
   const picked = document.querySelector(`input[name="${name}"]:checked`);
   return picked ? picked.value : null;
 }
-function template() { return TEMPLATES[radio("template")] || TEMPLATES.std; }
+// The lineup is the base plus the kicker and defense answers, built by
+// roster.js from the same table engine/subscriber.py holds (contract C8), so
+// the slots the ref carries are a shape Tuesday knows — graded or not.
+function shapeChoice() {
+  const base = radio("template") in R.SHAPE_BASES ? radio("template") : "std";
+  return { base, kicker: radio("kicker") !== "no", defense: radio("defense") !== "no" };
+}
+function template() {
+  const s = shapeChoice();
+  return R.shapeSlots(s.base, s.kicker, s.defense);
+}
 // The size radios were rendered, labelled as mattering, and never read: every
 // subscriber got a 12-team report and a 12-team ledger bucket regardless of
 // what they picked. Found Aug 24 2026 by running the intake path for real.
@@ -615,6 +686,7 @@ function loadDirectory() {
     .then((payload) => {
       state.directory = R.buildDirectory(payload);
       showError("err-roster", "");
+      restoreRoster();
     })
     .catch(() => {
       if (state.directory) return;          // an earlier attempt already won
@@ -769,6 +841,8 @@ function draw(focusAt) {
       left.appendChild(textCell("who", match.typed));
       left.appendChild(textCell("why", match.reason === "ambiguous"
         ? "more than one player goes by that name — pick one"
+        : match.reason === "gone"
+        ? "not in this season's player list any more — remove it, and add whoever replaced him"
         : "we don't have anybody by that name"));
     }
     row.appendChild(left);
@@ -810,13 +884,25 @@ function draw(focusAt) {
   const ids = state.matches.filter((m) => m.player).map((m) => m.player.id);
   const unresolved = state.matches.length - ids.length;
   const duplicated = ids.length - new Set(ids).size;
+  const defenses = state.matches.filter((m) => m.player && m.player.position === "DEF").length;
   const tally = $("tally");
+  const confirm = $("defenses-ok");
+  confirm.style.display = "none";
   let problem = "";
   if (unresolved) {
     problem = unresolved + (unresolved === 1 ? " line we couldn't read" :
       " lines we couldn't read") + " — fix or remove them to continue.";
   } else if (duplicated) {
     problem = "The same player is listed twice — remove one.";
+  } else if (defenses > 2 && state.defensesOk !== defenses) {
+    // BE-D1: a table copy's team and opponent columns once became eleven
+    // defenses under "Looks right", and the report started one the buyer did
+    // not own. More than two is asked about, never waved through; a buyer who
+    // really holds them says so in one tap.
+    problem = defenses + " team defenses on this list — did some come from a " +
+      "team or opponent column? Remove the ones you don't own.";
+    confirm.textContent = "All " + defenses + " are mine";
+    confirm.style.display = "block";
   } else if (ids.length < slots.length) {
     problem = "Your lineup has " + slots.length + " starting spots and you've " +
       "listed " + ids.length + (ids.length === 1 ? " player" : " players") +
@@ -832,6 +918,7 @@ function draw(focusAt) {
   tally.textContent = problem ||
     (ids.length + " players read, " + slots.length + " starting spots. Looks right.");
   $("step-email").classList.toggle("hidden", !state.ready);
+  keepInAddress();
   if (Number.isInteger(focusAt)) {
     const rows = list.querySelectorAll(".row");
     const target = rows[Math.min(focusAt, rows.length - 1)];
@@ -839,6 +926,106 @@ function draw(focusAt) {
     (control || tally).focus();
   }
 }
+
+$("defenses-ok").addEventListener("click", () => {
+  state.defensesOk = state.matches.filter((m) => m.player && m.player.position === "DEF").length;
+  draw();
+  $("tally").focus();
+});
+
+// The ref for the roster on the list, under the plan checkout would charge
+// for — built in ONE place, through roster.js (the twin tests/test_intake.py
+// runs against run/refs.py), for the payment, the waitlist and the address.
+function checkoutRef() {
+  return R.encodeRoster(
+    WANTS_PASS ? "league_pass" : (monthlyChosen ? "monthly" : "season"),
+    radio("scoring"), template(), state.matches.map((m) => m.player.id), leagueSize());
+}
+
+// BE-I3: a checked roster is kept in this page's own address (?ref=), so a
+// phone visitor who checked fifteen names while checkout was closed loses
+// nothing to a closed tab — a bookmark or a reload brings it back. The ref is
+// the one checkout would use (contract C6) and carries no email: the address
+// is never put in a URL. Replaced in place, so Back still leaves the page.
+function keepInAddress() {
+  if (!state.ready || !window.history || !history.replaceState) return;
+  let ref;
+  try {
+    ref = R.withVia(checkoutRef(), SOURCE);
+  } catch (err) {
+    return;
+  }
+  const params = new URLSearchParams(location.search);
+  params.set("ref", ref);
+  history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
+}
+
+// The roster a ?ref= carried, back on the list exactly as it was entered — by
+// id, never re-read from names (a name can come back ambiguous). A player the
+// directory no longer has is shown, not dropped.
+function restoreRoster() {
+  if (!RESTORED || !state.directory || state.matches.length) return;
+  state.matches = RESTORED.playerIds.map((id) => {
+    const player = state.directory.byId.get(id);
+    return player ? { typed: player.name, player, candidates: [], twins: [] }
+                  : { typed: "A player from your saved roster", player: null,
+                      candidates: [], reason: "gone" };
+  });
+  $("roster-text").value = state.matches.filter((m) => m.player)
+    .map((m) => m.player.name).join("\n") + "\n";
+  state.stale = false;
+  draw();
+}
+
+// Settings radios from a code that arrived in the address — a restored ref
+// (C6) or a seat link's s/n/t (C4). Only values the page itself offers are
+// applied; anything else leaves that question as it was.
+function setRadio(name, value) {
+  const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if (input) input.checked = true;
+  return Boolean(input);
+}
+function applyShape(shape) {
+  if (!shape) return false;
+  return setRadio("template", shape.base) && setRadio("kicker", shape.kicker ? "yes" : "no")
+    && setRadio("defense", shape.defense ? "yes" : "no");
+}
+
+// Lineup words for the note: "QB, 2 RB, 2 WR, TE, 2 FLEX, K and DEF".
+function lineupWords(slots) {
+  const names = { SUPER_FLEX: "superflex" };
+  const parts = [];
+  slots.forEach((slot, i) => {
+    if (i && slots[i - 1] === slot) return;
+    let n = 1;
+    while (slots[i + n] === slot) n++;
+    parts.push((n > 1 ? n + " " : "") + (names[slot] || slot));
+  });
+  return parts.length > 1 ? parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1]
+                          : parts.join("");
+}
+
+// The lineup in words, and — for a shape no arm has graded yet — what its
+// report carries (contract C8): everything but the odds.
+function drawShapeNote() {
+  const s = shapeChoice();
+  const code = R.shapeCode(s.base, s.kicker, s.defense);
+  let text = "Your lineup: " + lineupWords(template()) + ".";
+  if (s.base === "sf") text += " The superflex spot can take a quarterback.";
+  if (s.base === "wr3") text += " Yahoo's FLEX is the W/R/T spot.";
+  if (!R.GRADED_SHAPES.includes(code)) {
+    text += " This lineup gets everything except the odds for now: the lineup set, " +
+      "projections, the if/then plan and the Saturday check.";
+  }
+  $("shape-note").textContent = text;
+}
+
+$("step-league").addEventListener("change", () => {
+  drawShapeNote();
+  // The tally counts starting spots and the kept address encodes the
+  // settings, so both follow a change made after the roster was checked.
+  if (state.matches.length && !state.stale) draw();
+});
 
 function wireEnter(formId, buttonId) {
   const form = $(formId), btn = $(buttonId);
@@ -870,12 +1057,9 @@ $("form-email").addEventListener("submit", (event) => {
     showError("err-email", "Check your roster above first.");
     return;
   }
-  const ids = state.matches.map((m) => m.player.id);
   let ref;
   try {
-    ref = R.encodeRoster(
-      WANTS_PASS ? "league_pass" : (monthlyChosen ? "monthly" : "season"),
-      radio("scoring"), template(), ids, leagueSize());
+    ref = checkoutRef();
   } catch (err) {
     showError("err-email", "Something went wrong reading your roster — reload " +
       "and try again.");
@@ -904,6 +1088,10 @@ $("form-email").addEventListener("submit", (event) => {
     submitTrial(email, ref);
     return;
   }
+  // The channel tag rides on what checkout carries (contract C5) — and on the
+  // waitlist's copy of it, which is the ref checkout WOULD have used (C6).
+  // An unusable tag is dropped, never refused: attribution must not cost a sale.
+  const tagged = R.withVia(ref, SOURCE);
 
   const link = WANTS_PASS ? PASS_LINK
              : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
@@ -912,13 +1100,15 @@ $("form-email").addEventListener("submit", (event) => {
   if (!link) {
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
-    // is kept — EMAIL ONLY, and they are told exactly that.
+    // is kept WITH the checked roster (contract C6): the launch email links
+    // back here with it, so the work done today is not redone at launch (I1).
+    // Without one, the roster is kept only in this page's own address.
     if (closedAction(otherLink) === "list") {
       if (state.listed) return;            // one row a visit; the button is off
       $("submit").disabled = true;          // a second press mid-flight is a second row
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "waitlist", email: email, via: VIA }),
+        body: JSON.stringify({ kind: "waitlist", email: email, ref: tagged, via: SOURCE }),
         signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
       // fetch resolves on a 400 too — "we kept your email" after the backend
       // rejected the row would be this page claiming a save that didn't happen.
@@ -927,47 +1117,52 @@ $("form-email").addEventListener("submit", (event) => {
         // A done message, and the button stops: it used to show in the red
         // alert box and post another row on every press (launch audit F6).
         state.listed = true;
-        showOk("Checkout isn't open just yet — we're finishing setup. Your roster " +
-          "isn't saved (redoing it takes a minute), but we kept your email: " +
-          "you'll get the link the morning checkout opens.");
+        showOk("Checkout isn't open just yet — we kept your email and this roster. " +
+          "The morning it opens you'll get one email, with a link that brings this " +
+          "roster back ready to check out.");
         noteClosedFor(link, otherLink);
       }).catch(() => {
         $("submit").disabled = false;
         showError("err-email", "Checkout isn't open just yet, and that didn't send — " +
-          "check your connection and try again. Your roster isn't saved.");
+          "check your connection and try again. Your roster isn't saved with us, " +
+          "but it's kept in this page's address.");
       });
       return;
     }
     if (WANTS_PASS && OWN_PLAN_HREF) {
       showError("err-email", "The League Pass isn't open just yet — nothing was " +
-        "charged, and your roster isn't saved. A plan for your own team is open " +
-        "now: the link is at the top of this page.");
+        "charged, and your roster isn't saved with us (it's kept in this page's " +
+        "address). A plan for your own team is open now: the link is at the top " +
+        "of this page.");
       return;
     }
     showError("err-email", (WANTS_PASS ? "The League Pass" : "Checkout") +
-      " isn't open just yet. Your roster isn't saved, but leave your email on " +
-      "the front page and you'll get one message the morning checkout opens.");
+      " isn't open just yet. Your roster isn't saved with us, but it's kept in " +
+      "this page's address — bookmark it and it comes back. Leave your email on " +
+      "the front page for one message the morning checkout opens.");
     return;
   }
   if (WANTS_PASS) showSeatLink();
   window.location.assign(
     link + (link.indexOf("?") === -1 ? "?" : "&") +
-    "client_reference_id=" + encodeURIComponent(ref) +
+    "client_reference_id=" + encodeURIComponent(tagged) +
     "&locked_prefilled_email=" + encodeURIComponent(email));
 });
 
 function submitSeat(email, ref) {
-  // A seat naming no payer is an unpaid report waiting to be sent, so the
-  // commissioner's address is required before anything is posted.
-  const payer = $("pass-email").value.trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payer)) {
-    showError("err-email", "We need your commissioner's email — the address they " +
-      "bought the League Pass with.");
+  // A seat naming no pass is an unpaid report waiting to be sent. A seat link
+  // carrying the pass's own code (contract C4) names it already; the generic
+  // link (?pass=1) needs the address the pass was bought with before anything
+  // is posted. Whoever bought it — it need not be the commissioner (LP-D7).
+  const payer = PASS_TOKEN ? "" : $("pass-email").value.trim();
+  if (!PASS_TOKEN && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payer)) {
+    showError("err-email", "We need the email the League Pass was bought with — " +
+      "it's in the message that sent you here.");
     return;
   }
-  if (payer.toLowerCase() === email.toLowerCase()) {
-    showError("err-email", "That's your own address. We need the one your " +
-      "commissioner paid with.");
+  if (!PASS_TOKEN && payer.toLowerCase() === email.toLowerCase()) {
+    showError("err-email", "That's your own address. We need the one the League " +
+      "Pass was bought with.");
     return;
   }
   if (!FORM_ENDPOINT) {
@@ -975,9 +1170,12 @@ function submitSeat(email, ref) {
       "Nothing was sent or saved.");
     return;
   }
+  const row = PASS_TOKEN
+    ? { kind: "seat", email: email, ref: ref, via: SOURCE, pass_token: PASS_TOKEN }
+    : { kind: "seat", email: email, covered_by: payer, ref: ref, via: SOURCE };
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email, covered_by: payer, ref: ref, via: VIA }),
+    body: JSON.stringify(row),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
@@ -1028,7 +1226,7 @@ function submitTrial(email, ref) {
   }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "trial", email: email, ref: ref, via: VIA }),
+    body: JSON.stringify({ kind: "trial", email: email, ref: ref, via: SOURCE }),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
@@ -1045,18 +1243,89 @@ function showSeatLink() {
   // Only on the way to Stripe. Rendered earlier it is a shareable link before
   // any payment, so an abandoned checkout leaves a league of people each told
   // their seat is claimed while every claim is dropped on Tuesday.
+  // The link itself comes in the buyer's welcome email, after the payment
+  // (contract C4): that one names THIS pass by a code, so a leaguemate types
+  // no buyer's address and cannot mistype it (LP-D1). The generic link
+  // (pass=1), which asks for the address, is the email's fallback.
   const share = $("seat-share");
   share.replaceChildren();
   share.appendChild(document.createTextNode(
     "Once your payment goes through, the pass covers every manager in your " +
-    "league. Send them this link then — each enters their own roster and " +
-    "claims their own seat, nothing to pay. They'll be asked for the email you " +
-    "pay with, so send them that too. Seats only work after the pass is paid " +
-    "for: "));
-  const code = document.createElement("b");
-  code.textContent = location.href.split(/[?#]/)[0] + "?pass=1";
-  share.appendChild(code);
+    "league. Your welcome email has the link to send them, and what to send " +
+    "with it — each enters their own roster and claims their own seat, nothing " +
+    "to pay. Seats only work after the pass is paid for."));
   share.style.display = "block";
+}
+
+// ---- when the first report lands (PC-02) ------------------------------
+// "Today" is true only while this week's first kickoff is ahead: a buyer
+// before it is sent this week's report the same day, a buyer after it gets the
+// roster report today and the next weekly report on Tuesday
+// (run/intake.py _first_file; week 1 always starts with the roster report).
+// The page learns which from site/week.json — written from the NFL schedule by
+// the Tuesday build, never typed — and until it can tell, it says the sentence
+// that is true either way.
+const FIRST_CHIP = {};                    // marks the chip that names it
+let FIRST = null;                          // null | {when, tuesday}
+function firstReportTiming(w, now) {
+  if (!w || !Number.isInteger(w.week) || typeof w.first_kickoff !== "string") return null;
+  const kickoff = new Date(w.first_kickoff);
+  if (isNaN(kickoff) || !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) return null;
+  const lands = new Date(w.lands_on + "T00:00:00");
+  // A clock that has run out (the next report's day has come, or the build
+  // was missed) says nothing; so does the season's last week once it starts.
+  if (!(now < lands)) return null;
+  if (Number.isInteger(w.last_week) && w.week >= w.last_week && now >= kickoff) return null;
+  if (w.week > 1 && now < kickoff) return { when: "before" };
+  return { when: "after", tuesday: lands.toLocaleDateString("en-US",
+    { weekday: "short", month: "short", day: "numeric" }) };
+}
+function firstChipText() {
+  if (FIRST && FIRST.when === "before") return "This week's report today";
+  if (FIRST && FIRST.when === "after") return "Weekly reports from " + FIRST.tuesday;
+  return SEAT_MODE ? "A report the day it's matched" : "A report the day you join";
+}
+function setChips(list) {
+  $("header-chips").replaceChildren();
+  list.forEach((text) => {
+    const chip = document.createElement("span");
+    if (text === FIRST_CHIP) chip.className = "first-chip";
+    chip.textContent = text === FIRST_CHIP ? firstChipText() : text;
+    $("header-chips").appendChild(chip);
+  });
+}
+function drawFirst() {
+  document.querySelectorAll("#header-chips .first-chip")
+    .forEach((chip) => { chip.textContent = firstChipText(); });
+  const side = $("side-first"), note = document.querySelector("#first-note .first-when");
+  const b = (words) => { const el = document.createElement("b"); el.textContent = words; return el; };
+  const t = (words) => document.createTextNode(words);
+  if (FIRST && FIRST.when === "before") {
+    side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
+    note.replaceChildren(t("This week's report lands "), b("today"), t("."));
+  } else if (FIRST && FIRST.when === "after") {
+    side.replaceChildren(b("Your roster report today"),
+      t(", your first weekly report " + FIRST.tuesday));
+    note.replaceChildren(t("Your roster report lands "), b("today"),
+      t("; your first weekly report, " + FIRST.tuesday + "."));
+  } else {
+    side.replaceChildren(b("A report the day you join"), t(", then a new one every Tuesday morning"));
+    note.replaceChildren(t("A report lands "), b("the day you join"), t("."));
+  }
+}
+
+// LP-I11: the renewal disclosure names the actual date, computed from today —
+// the anniversary, and the month's last day when it has no such date (Feb 29).
+function renewsOn(now) {
+  const year = now.getFullYear() + 1, month = now.getMonth();
+  const day = Math.min(now.getDate(), new Date(year, month + 1, 0).getDate());
+  return new Date(year, month, day).toLocaleDateString("en-US",
+    { month: "short", day: "numeric", year: "numeric" });
+}
+function fillRenewalDates() {
+  document.querySelectorAll(".renews-on").forEach((span) => {
+    span.textContent = " — bought today, it renews on " + renewsOn(new Date());
+  });
 }
 
 // The static markup IS the season pass: its pitch, chips, terms and button.
@@ -1073,6 +1342,8 @@ function nothingToPay(stepLabel) {
   document.querySelector(".progress .s3").textContent = stepLabel;
   $("currency-note").style.display = "none";
   document.querySelector(".secure").style.display = "none";
+  // No checkout here, so the footer must not describe one (LP-D7).
+  $("footer-checkout").style.display = "none";
 }
 // Say it is not open BEFORE they paste fifteen names (the free report and the
 // roster update used to say so only at submit — the late disappointment the
@@ -1126,13 +1397,17 @@ function closedNoteNodes(action) {
                  "nobody pays for a seat that can't be used. A plan for your own team " +
                  "is open now: "), link(OWN_PLAN_HREF, "set that up instead"), text(".")];
   }
-  const head = text(lead + ". You're welcome to set up now to see how it works, but " +
-                    "nothing is saved until it does; ");
+  // The work is kept either way (BE-I3, I1): a checked roster stays in this
+  // page's address, and with the list connected it is kept with the email.
+  const head = text(lead + ". You're welcome to set up now: once your roster is " +
+                    "checked it stays in this page's address, so a bookmark brings it " +
+                    "back. ");
   if (action === "list") {
-    return [head, text("leave your email below, at step 3, and we'll send exactly one " +
-                       "message when it opens.")];
+    return [head, text("Then leave your email below, at step 3: we'll keep it with " +
+                       "your roster and send exactly one message when it opens, with " +
+                       "a link that brings the roster back.")];
   }
-  return [head, text("leave your email on the "), link("../index.html", "front page"),
+  return [head, text("Leave your email on the "), link("../index.html#watch-form", "front page"),
           text(" and we'll send exactly one message when it opens.")];
 }
 function noteClosedFor(link, other) {
@@ -1161,15 +1436,10 @@ function noteClosedFor(link, other) {
 function monthlyPlan() {
   $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
-    "team's report: the lineup we'd set, with the odds on every close call. " +
-    "$14.99 a month, and billing stops on its own when the season ends.";
-  $("header-chips").replaceChildren();
-  ["$14.99 / month", "Cancel any time", "First report the day you join"]
-    .forEach((text) => {
-      const chip = document.createElement("span");
-      chip.textContent = text;
-      $("header-chips").appendChild(chip);
-    });
+    "team's report: the lineup we'd set, with the odds wherever both players are " +
+    "confirmed to play. $14.99 a month, and billing stops on its own when the " +
+    "season ends.";
+  setChips(["$14.99 / month", "Cancel any time", FIRST_CHIP]);
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time. " +
@@ -1185,6 +1455,8 @@ function seasonPlan() {
     $(id).replaceChildren(...nodes.map((n) => n.cloneNode(true)));
   });
   $("submit").textContent = SEASON_SUBMIT;
+  fillRenewalDates();
+  drawFirst();
   noteClosedFor(STRIPE_LINK_SEASON, STRIPE_LINK_MONTHLY);
 }
 
@@ -1193,12 +1465,8 @@ if (TRY_MODE) {
     "Try it free. Enter your league's settings and your roster, and we'll email " +
     "you this week's report for your team — your lineup decided, with the odds " +
     "wherever both players are confirmed to play. One per person, no card.";
-  $("header-chips").replaceChildren();
-  ["Free — no card", "This week's report", "One per person"].forEach((text) => {
-    const chip = document.createElement("span");
-    chip.textContent = text;
-    $("header-chips").appendChild(chip);
-  });
+  setChips(["Free — no card", "This week's report", "One per person"]);
+  $("lbl-email").textContent = "Where to send your free report";
   $("submit").textContent = "Email me my free report";
   nothingToPay("3 · Send");
   $("pay-note").style.display = "none";
@@ -1214,13 +1482,8 @@ if (TRY_MODE) {
     "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
     "and your next report is built from it. Nothing to pay. Enter the address " +
     "your reports go to and we'll email you a button to confirm it.";
-  $("header-chips").replaceChildren();
-  ["Roster update", "Nothing to pay", "Confirmed by email"]
-    .forEach((text) => {
-      const chip = document.createElement("span");
-      chip.textContent = text;
-      $("header-chips").appendChild(chip);
-    });
+  setChips(["Roster update", "Nothing to pay", "Confirmed by email"]);
+  $("lbl-email").textContent = "The address your reports go to";
   $("submit").textContent = "Update my roster";
   nothingToPay("3 · Confirm");
   $("pay-note").style.display = "none";
@@ -1231,19 +1494,22 @@ if (TRY_MODE) {
   $("first-note").style.display = "none";
   $("update-note").style.display = "list-item";
 } else if (SEAT_MODE) {
+  // Whoever bought the pass, not necessarily the commissioner (LP-D7): the
+  // League Pass page sells it to any manager, and this page once sent their
+  // leaguemates looking for the wrong person's address.
   $("header-pitch").textContent =
-    "Seat already paid by your commissioner. Enter your own roster and you get " +
-    "your own report — not a copy of theirs. Nothing to pay.";
-  $("header-chips").replaceChildren();
-  ["Seat already paid by your commissioner", "Your own report",
-   "First report next Tuesday"].forEach((text) => {
-    const chip = document.createElement("span");
-    chip.textContent = text;
-    $("header-chips").appendChild(chip);
-  });
+    "Your league has a League Pass, so your seat is already paid for. Enter your " +
+    "own roster and you get your own report — not a copy of anyone else's. " +
+    "Nothing to pay.";
+  // A matched seat is sent its first report the day it is claimed, by the
+  // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
+  // promise before seats had a first email.
+  setChips(["Seat already paid — League Pass", "Your own report", FIRST_CHIP]);
   $("submit").textContent = "Claim my seat — already paid";
   nothingToPay("3 · Claim");
-  $("pass-field").style.display = "block";
+  $("lbl-email").textContent = "Your email — your reports go here";
+  // A seat link that names its pass (contract C4) asks for no buyer's address.
+  $("pass-field").style.display = PASS_TOKEN ? "none" : "block";
   $("seat-note").style.display = "list-item";
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
@@ -1267,22 +1533,19 @@ if (TRY_MODE) {
   // The pass buyer must never read a $39 pitch above a $99 button — every
   // price on the page has to be the one this purchase actually costs.
   $("header-pitch").textContent = "Set up once, and every Tuesday every manager " +
-    "in your league gets their own report: the lineup we'd set, with the odds on " +
-    "every close call. One League Pass covers all of it — $99 " +
-    "for the whole league's season.";
-  $("header-chips").replaceChildren();
-  ["$99 / league / season", "Covers every manager", "First report the day you join"]
-    .forEach((text) => {
-      const chip = document.createElement("span");
-      chip.textContent = text;
-      $("header-chips").appendChild(chip);
-    });
+    "in your league gets their own report: the lineup we'd set, with the odds " +
+    "wherever both players are confirmed to play. One League Pass covers all of " +
+    "it — $99 for the whole league's season.";
+  setChips(["$99 / league / season", "Covers every manager", FIRST_CHIP]);
+  $("lbl-email").textContent = "Your email — your own report and the receipt go here";
   // The pass is $99, and the renewal disclosure must name the amount that
-  // actually renews — the season-pass sentence would be a wrong disclosure.
+  // actually renews — the season-pass sentence would be a wrong disclosure —
+  // and the day it does (LP-I11), so a commissioner can budget the dues.
   const passTerms = "The League Pass is $99 and renews once a year at $99 " +
-    "unless you cancel. We email you before it bills, and you cancel yourself any " +
-    "time from your own billing page. Refunds are no-questions until your second " +
-    "weekly report's week kicks off — one per league.";
+    "unless you cancel — bought today, it renews on " + renewsOn(new Date()) + ". We email " +
+    "you before it bills, and you cancel yourself any time from your own billing " +
+    "page. Refunds are no-questions until your second weekly report's week kicks " +
+    "off — one per league.";
   $("renew-note").textContent = passTerms;
   $("terms-line").textContent = passTerms;
 }
@@ -1308,6 +1571,7 @@ function applyPlan() {
   showError("err-email", "");
   showOk("");
   if (monthlyChosen) { monthlyPlan(); } else { seasonPlan(); }
+  keepInAddress();
 }
 // Whether the button on screen is the closed plan's "Switch to …": a buyer
 // choosing between season and monthly, whose choice cannot take money while
@@ -1341,6 +1605,51 @@ if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   // restored AFTER this script ran: draw whatever is actually checked.
   window.addEventListener("pageshow", applyPlan);
 }
+
+// Settings that arrived in the address. A restored roster (contract C6)
+// brings back the settings it was checked under; a seat link (contract C4,
+// LP-I3) carries its league's own — the buyer's scoring, size and lineup —
+// so eleven leaguemates do not each re-pick them, and says so, editable.
+const SCORING_WORDS = { ppr: "Full PPR", half_ppr: "Half PPR", standard: "Standard scoring" };
+const BASE_WORDS = { std: "Standard lineup", flex2: "Two FLEX lineup",
+                     wr3: "Three WR lineup", sf: "Superflex lineup" };
+function shapeWords(shape) {
+  const missing = [shape.kicker ? "" : "K", shape.defense ? "" : "DEF"].filter(Boolean);
+  return BASE_WORDS[shape.base] + (missing.length ? ", no " + missing.join(" or ") : "");
+}
+if (RESTORED) {
+  setRadio("scoring", RESTORED.scoring);
+  setRadio("size", String(RESTORED.leagueSize));
+  applyShape(R.shapeOfSlots(RESTORED.slots));
+} else if (SEAT_MODE) {
+  const told = [];
+  const scoring = QUERY.get("s"), size = QUERY.get("n");
+  const shape = R.shapeFromCode(QUERY.get("t") || "");
+  if (scoring && SCORING_WORDS[scoring] && setRadio("scoring", scoring)) told.push(SCORING_WORDS[scoring]);
+  if (size && /^\d{1,2}$/.test(size) && setRadio("size", size)) told.push(size + " teams");
+  if (shape && applyShape(shape)) told.push(shapeWords(shape));
+  if (told.length) {
+    $("seat-settings").textContent = "Your league's settings, from its League Pass: " +
+      told.join(" · ") + ". Not right? Change them below.";
+    $("seat-settings").style.display = "block";
+  }
+}
+drawShapeNote();
+fillRenewalDates();
+
+// When the first report lands — see firstReportTiming. For a purchase and a
+// seat (whose first email follows the same rules, LP-I4); an update and a
+// free report each say their own timing.
+(function () {
+  try {
+    if (UPDATE_MODE || TRY_MODE || !window.fetch) return;
+    fetch("../week.json", { cache: "no-cache",
+      signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => { FIRST = firstReportTiming(w, new Date()); drawFirst(); })
+      .catch(() => {});
+  } catch (e) { /* the sentence true either way stays */ }
+})();
 </script>
 </body>
 </html>

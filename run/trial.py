@@ -34,18 +34,18 @@ import hashlib
 import sys
 from pathlib import Path
 
-from engine.subscriber import RosterSpec
+from engine.subscriber import LINEUP_SHAPES, RosterSpec
 from render.email import render_email, subject_for, text_summary
 from run.delivery import DRY_PROVIDER, DeliveryError, Message, build_provider, send_all
 from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
 
 # The same lineup shapes the signup page offers, so a trial mirrors what the
-# person would actually buy.
-TEMPLATES = {
-    "std": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"),
-    "sf": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF"),
-    "nokd": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX"),
-}
+# person would actually buy — READ from the one table (contract C8), never
+# copied: run/updates.template_code turns a pass payer's slots into the seat
+# link's t= from this map, and a shape missing here sent eleven leaguemates a
+# link that left their lineup unpicked. The three graded codes come first.
+TEMPLATES = {code: shape.slots for code, shape in sorted(
+    LINEUP_SHAPES.items(), key=lambda item: (not item[1].graded,))}
 
 
 class TrialError(RuntimeError):

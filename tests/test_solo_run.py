@@ -590,8 +590,12 @@ def test_a_team_defense_publishes_no_confidence(tmp_path) -> None:
     reason in the buyer's own words.
     """
     cache = _cache(tmp_path)
-    spec = RosterSpec(player_ids=_spec().player_ids + ("DEF-KC", "DEF-SF"),
-                      slots=SLOTS + ("DEF",), scoring="ppr")
+    # The standard lineup, K included: a DEF-but-no-K lineup is a shape no arm
+    # has graded, which prints no odds on ANY row (contract C8) — that would
+    # pass the defense half of this test for the wrong reason and fail the
+    # collateral-damage half below.
+    spec = RosterSpec(player_ids=_spec().player_ids + (_pid(60), "DEF-KC", "DEF-SF"),
+                      slots=SLOTS + ("K", "DEF"), scoring="ppr")
     report = solo.report_for(spec, solo.load_week_data(cache, SEASON, WEEK,
                                                         session=OFFLINE),
                              cache_dir=cache)

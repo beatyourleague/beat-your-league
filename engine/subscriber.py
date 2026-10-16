@@ -58,8 +58,9 @@ turns it into either evidence or a correction.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 from engine.history import (FLEX_ELIGIBILITY, PlayerIndex, Season, Team,
                             TeamWeek)
@@ -77,6 +78,161 @@ DID_NOT_PLAY = 0.0
 
 class SubscriberError(ValueError):
     """A roster we cannot turn into a league-season."""
+
+
+# --------------------------------------------------------------------- #
+# lineup shapes — the one table every surface reads (contract C8)
+# --------------------------------------------------------------------- #
+#
+# WHY A TABLE. The signup page, the free report, the launch check and the
+# backtest each kept their own copy of "the lineups we offer", and a copy is
+# how two surfaces drift. A shape is a BASE (the slots before K and DEF) plus
+# whether the league starts a kicker and a team defense. The slots are always
+# in this order — base, then K, then DEF — because that is the order the
+# graded templates were measured in, and an identical list in another order
+# would read as a different, ungraded shape.
+#
+# WHY ONLY THREE ARE GRADED. reports/setups-method.md graded the standard
+# lineup, superflex and "no K or DEF" (run.solo.SETTING_GRADES). Sleeper's
+# default (two FLEX), Yahoo's (three WR) and the K-only / DEF-only variants
+# have never been measured, so their reports print NO odds — the lineup,
+# projections, if/then and Saturday check all still work, and the reason is
+# printed instead of a number — until a preregistered arm grades them
+# (reports/lineup-shapes-method.md). Printing a % nobody graded would be
+# exactly the unbacked claim principle 1 forbids.
+
+@dataclass(frozen=True)
+class LineupShape:
+    code: str                  # what the join page and a seat link carry
+    base: str                  # std | flex2 | wr3 | sf
+    kicker: bool
+    defense: bool
+    slots: tuple[str, ...]
+    label: str                 # in the buyer's words, platform named
+
+    @property
+    def graded(self) -> bool:
+        return self.code in GRADED_SHAPES
+
+
+# The bases, in the order the page offers them. "Standard" is ESPN's default
+# lineup; the platform names are how a buyer recognises their own league.
+SHAPE_BASES: dict[str, tuple[tuple[str, ...], str]] = {
+    "std": (("QB", "RB", "RB", "WR", "WR", "TE", "FLEX"), "Standard"),
+    "flex2": (("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "FLEX"), "Two FLEX"),
+    "wr3": (("QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX"), "Three WR"),
+    "sf": (("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX"), "Superflex"),
+}
+
+# The graded three, by the codes the signup page has always used for them
+# ("nokd" predates this table and stays its name: run/trial.py and the
+# launch check spell it that way).
+GRADED_SHAPES = frozenset({"std", "sf", "nokd"})
+
+# The reason a row carries no odds in an ungraded shape, in the buyer's words.
+UNGRADED_SHAPE_GATE = "odds once this lineup shape is graded"
+
+
+def shape_code(base: str, kicker: bool, defense: bool) -> str:
+    """The code for a base plus the K/DEF choice. "std" without either is
+    "nokd", its historical name; every other variant appends -nok, -nod or
+    -nokd."""
+    if base not in SHAPE_BASES:
+        raise SubscriberError(f"unknown lineup base {base!r}")
+    suffix = "" if kicker and defense else "-nod" if kicker else \
+        "-nok" if defense else "-nokd"
+    if base == "std" and suffix == "-nokd":
+        return "nokd"
+    return base + suffix
+
+
+def _shape(base: str, kicker: bool, defense: bool) -> LineupShape:
+    slots, name = SHAPE_BASES[base]
+    extra = (("K",) if kicker else ()) + (("DEF",) if defense else ())
+    missing = [w for w, has in (("K", kicker), ("DEF", defense)) if not has]
+    label = name + (f", no {' or '.join(missing)}" if missing else "")
+    return LineupShape(code=shape_code(base, kicker, defense), base=base,
+                       kicker=kicker, defense=defense, slots=slots + extra,
+                       label=label)
+
+
+LINEUP_SHAPES: dict[str, LineupShape] = {
+    shape.code: shape
+    for shape in (_shape(base, kicker, defense)
+                  for base in SHAPE_BASES
+                  for kicker in (True, False)
+                  for defense in (True, False))
+}
+# A spelling a seat link or an old page may carry, mapped to its shape.
+_SHAPE_ALIASES = {"std-nokd": "nokd"}
+
+
+def shape_by_code(code: str | None) -> LineupShape | None:
+    code = _SHAPE_ALIASES.get(code or "", code or "")
+    return LINEUP_SHAPES.get(code)
+
+
+def shape_for_slots(slots: Iterable[str]) -> LineupShape | None:
+    """The shape these exact slots are, or None — a slot list in any other
+    order or with any other content is not a shape we offer."""
+    wanted = tuple(slots)
+    return next((s for s in LINEUP_SHAPES.values() if s.slots == wanted), None)
+
+
+def graded_shape(slots: Iterable[str]) -> bool:
+    """May a report for this lineup print odds? Only a graded shape's may."""
+    shape = shape_for_slots(slots)
+    return shape is not None and shape.graded
+
+
+def withhold_ungraded_odds(report: dict[str, Any], slots: Iterable[str]) -> dict[str, Any]:
+    """Contract C8, applied to a built report: in a lineup shape no arm has
+    graded, no number prints. It may only REMOVE — every row that carried a
+    confidence keeps its seat, its projection and its edge and loses the
+    number, with the reason; the closest call goes with them; so the ledger,
+    which records what the report printed, records nothing. A graded shape's
+    report is returned untouched (the same object), so nothing it prints
+    moves. The week-1 promise that "the number on each call starts in Week 4"
+    is not true of a shape whose number waits on its grade, so that sentence
+    says what is.
+
+    The game plan is the one place a number is already WORDS when this runs:
+    a benched starter-calibre player paired with the call that sits him reads
+    "Start X over Y at WR · 64%" (engine/solo_report.py). That line becomes
+    the plain one the same builder writes when no call is paired — "Bench Y
+    — X starts at WR" — so the decision stays and only the number goes."""
+    shape = shape_for_slots(slots)
+    if shape is not None and shape.graded:
+        return report
+    for row in report.get("lineup") or []:
+        if row.get("confidence") is None:
+            continue
+        row["confidence"] = None
+        row["confidence_gate"] = UNGRADED_SHAPE_GATE
+        row["flags"] = [f for f in row.get("flags") or [] if f.get("kind") != "seeded"]
+    if (report.get("regret") or {}).get("confidence") is not None:
+        report["regret"] = {"gate": f"no coin-flip call this week — {UNGRADED_SHAPE_GATE}"}
+    for item in report.get("checklist") or []:
+        action = item.get("action")
+        if isinstance(action, str):
+            action = _PAIRED_CALL.sub(r"Bench \g<over> — \g<start> starts at \g<slot>",
+                                      action)
+            # Any other " · 64%" a later line format carries goes too: in
+            # this shape no sentence may hold a number nobody graded.
+            action = _TRAILING_PERCENT.sub("", action)
+            item["action"] = _WEEK_FOUR_PROMISE.sub(
+                "the number on each call starts once this lineup shape is "
+                "graded.", action)
+    report.setdefault("meta", {})["ungraded_shape"] = (
+        shape.label if shape is not None else "this lineup")
+    return report
+
+
+_WEEK_FOUR_PROMISE = re.compile(r"the number on each call starts in Week 4[^.]*\.")
+# engine/solo_report.py's paired game-plan line, exactly as it is built.
+_PAIRED_CALL = re.compile(
+    r"^Start (?P<start>.+?) over (?P<over>.+) at (?P<slot>\S+) · \d{1,3}%$")
+_TRAILING_PERCENT = re.compile(r" · \d{1,3}%(?=$|[ .,;)])")
 
 
 @dataclass(frozen=True)

@@ -246,8 +246,36 @@ class PlayerDirectory:
             return None
         resolved = [(c, m) for c, m in results if m.resolved]
         players = [(c, m) for c, m in resolved if not m.player.is_defense]
+        # BE-D1 (Oct 2026): "PhiQB<tab>CAR<tab>Sun 1:00 PM" — the player's
+        # team-and-position cell, his OPPONENT's code, his kickoff — read as
+        # the Panthers defense, because a lone code cell resolves to one. When
+        # nothing but bare codes resolved, the row is judged whole, the way a
+        # one-line row is: codes beside a position tag or matchup text and no
+        # DEF tag are a player's team or opponent, not a roster entry.
+        if not players and resolved and all(
+                self._code_only(cell) for cell, _ in resolved):
+            if _is_blank(_strip_decoration(" ".join(cells), self._teams)):
+                return None
         pool = players or resolved or results
         return max(pool, key=lambda pair: len(pair[0]))[1]
+
+    def _code_only(self, line: str) -> str | None:
+        """The team (nflverse code) when this row reads as a defense ONLY
+        because it is a bare team code — "PHI", "Phi", "LAR" — with no DEF tag
+        anywhere on it; otherwise None. Those are the rows a table copy makes
+        out of a player's team column or his opponent's, so they are the only
+        ones whose meaning depends on the lines around them."""
+        cells = [c for c in (part.strip() for part in line.split("\t")) if c]
+        raw = _unglue(_tidy(" ".join(cells)), self._teams)
+        if _DEFENSE_TAG.search(raw):
+            return None
+        tokens = _strip_decoration(" ".join(cells), self._teams).split()
+        if len(tokens) != 1:
+            return None
+        word = tokens[0].upper()
+        if word not in self._teams and word not in TEAM_ALIASES:
+            return None
+        return TEAM_ALIASES.get(word, word)
 
     def resolve_all(self, lines: list[str]) -> list[Match]:
         """Every non-blank line, in order. Blank means no LETTER survives
@@ -255,16 +283,45 @@ class PlayerDirectory:
         position, not a roster entry, and a line of emoji or bullets is not
         one either; but a line of letters in ANY script is reported back, never
         dropped. The same player on consecutive lines is one entry: Yahoo prints
-        a defense's name and then its "Den - DEF" row."""
+        a defense's name and then its "Den - DEF" row.
+
+        **A bare team code is read in context (BE-D1, Oct 2026).** ESPN's
+        roster table copies out one cell per line — "Jalen Hurts / Phi / QB /
+        CAR" — and every team-code line became a team defense: a real copy
+        produced eleven defenses for a roster that owned one, the tally said
+        "Looks right", and the report started the Broncos. After an entry, a
+        bare code is that entry's TEAM line when it is his team or the next
+        line is a position tag (a player whose team moved since our list was
+        built), and once his own position line has been read a bare code is
+        his OPPONENT. Neither is a roster entry. A bare code anywhere else is
+        still a defense, as typed."""
+        lines = list(lines)
         out: list[Match] = []
-        for line in lines:
+        # What has been read since the last entry: its team line, its own
+        # position line. None before the first entry.
+        block: dict[str, bool] | None = None
+        for index, line in enumerate(lines):
             match = self._resolve_row(line)
             if match is None:
+                tags = _position_line(line, self._teams)
+                if block is not None and tags and _plays(out[-1].player, tags):
+                    block["position"] = True
                 continue
+            code = self._code_only(line)
+            if code and block is not None:
+                last = out[-1].player
+                if not block["team"] and not block["position"] and (
+                        (last is not None and _canonical(last.team) == code)
+                        or _position_line(_next_line(lines, index), self._teams)):
+                    block["team"] = True
+                    continue
+                if block["position"]:
+                    continue
             if (match.resolved and out and out[-1].resolved
                     and out[-1].player.player_id == match.player.player_id):
                 continue
             out.append(match)
+            block = {"team": False, "position": False}
         return out
 
 
@@ -302,9 +359,15 @@ _DECORATION = re.compile(
     r"\b(?:W/R/T|R/W/T|W/R|W/T|OP)\b"
     r"|\b(?:QB|RB|WR|TE|FB|DEF|DST|D/ST|FLEX|BN|BE|IR|TAXI|SUPER_FLEX|SFLEX"
     r"|BENCH|STARTERS?|RESERVES?|OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA|AM|PM)\b"
+    # ESPN's roster table copies its column headings and totals row out with
+    # the players (BE-D1, a real copy, Oct 2026): each one stopped the signup
+    # as "we don't have anybody by that name". "%ST" and "%ROST" only with
+    # their percent sign — a bare ST is the St. of Amon-Ra St. Brown.
+    r"|\b(?:SLOT|PLAYERS?|OPP|STATUS|PROJ|SCORE|OPRK|PRK|FPTS|AVG|LAST|TOTALS?"
+    r"|NFL|WEEK|SEASON)\b|%\s*(?:ST|ROST)\b|\b\d+(?:ST|ND|RD|TH)\b"
     r"|\bVS\.?(?=\s|$)"
     r"|\b(?:MON|TUE|WED|THU|FRI|SAT|SUN)\b.*$"
-    r"|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+]+|\d+(?:\.\d+)?",
+    r"|\bBYE\b.*$|\([^)]*\)|\[[^\]]*\]|[-–—•|,:*@+%]+|\d+(?:\.\d+)?",
     # ASCII: the browser's \b is ASCII-only, and the two parsers must agree
     # character for character on what a word boundary is.
     re.I | re.A)
@@ -324,6 +387,96 @@ _WHITESPACE = re.compile(r"[\s\u0085\u001c-\u001f\u00a0\u2028\u2029\ufeff]+")
 
 def _tidy(line: str) -> str:
     return _WHITESPACE.sub(" ", line or "").strip()
+
+
+# Tags a table copy glues onto the cell before them when the cells carry no
+# whitespace between them (BE-D1, a real ESPN copy): "PhiQB" (team + position),
+# "Jalen HurtsQ" (name + injury status), "Eagles D/STD/ST" (the defense tag
+# twice). Uppercase only, longest first; the browser twin is character-equal.
+_GLUE_TAG = r"(?:D/ST|DST|DEF|SSPD|SUSP|DTD|OUT|PUP|NFI|IR|QB|RB|WR|TE|FB|K|Q|O|D|P)"
+_GLUED_TO_NAME = re.compile(rf"^([A-Za-z.'-]*[a-z.'])((?:{_GLUE_TAG})+)$", re.A)
+_GLUED_CODE = re.compile(rf"^([A-Z]{{2,3}})((?:{_GLUE_TAG})+)$", re.A)
+_DOUBLED_DEFENSE = re.compile(r"^(?:D/ST|DST|DEF){2,}$", re.A)
+_ONE_TAG = re.compile(_GLUE_TAG, re.A)
+
+
+def _unglue(raw: str, teams: set[str] | None = None) -> str:
+    """Put the missing space back between a cell and a tag glued onto it.
+
+    Three shapes, each narrow on purpose, because a real name must never be
+    split: a tag run after a LOWERCASE letter ("HurtsQ", "PhiQB" — no real
+    name ends lowercase-then-capital), a tag run after a team code
+    ("PHIQB", only when the code is a real team), and a doubled defense tag
+    ("D/STD/ST"). "DK Metcalf" and "AJ Brown" are untouched: all-caps tokens
+    split only behind a team code. ``test_no_directory_player_is_mangled``
+    holds that across every name in the directory, in both languages."""
+    words = []
+    for word in raw.split(" "):
+        glued = _GLUED_TO_NAME.match(word)
+        # A token that IS a team code is never split: "SFO" is San Francisco,
+        # not SF plus an "O" (out) tag.
+        is_code = bool(teams) and (word.upper() in teams or word.upper() in TEAM_ALIASES)
+        coded = None if is_code else _GLUED_CODE.match(word)
+        if _DOUBLED_DEFENSE.match(word):
+            words.extend(_ONE_TAG.findall(word))
+        elif glued:
+            words.extend([glued.group(1), *_ONE_TAG.findall(glued.group(2))])
+        elif coded and teams and (coded.group(1) in teams
+                                  or coded.group(1) in TEAM_ALIASES):
+            words.extend([coded.group(1), *_ONE_TAG.findall(coded.group(2))])
+        else:
+            words.append(word)
+    return " ".join(words)
+
+
+_POSITION_WORDS = frozenset({"QB", "RB", "WR", "TE", "K", "FB", "DEF", "DST"})
+_PLAYER_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "FB"})
+
+
+def _position_line(line: str | None, teams: set[str] | None = None) -> frozenset[str]:
+    """The position tags a line holds when it holds NOTHING else ("QB",
+    "D/ST", "RB/WR") — the third cell of a table copy's player block — or
+    an empty set."""
+    raw = _unglue(_tidy(line or ""), teams).upper().replace("D/ST", "DST")
+    words = [w for w in re.split(r"[\s/,]+", raw) if w]
+    if words and all(w in _POSITION_WORDS for w in words):
+        return frozenset(words)
+    return frozenset()
+
+
+def _plays(player: Player | None, tags: frozenset[str]) -> bool:
+    """Is this position line the entry's OWN position? For an entry we could
+    not resolve only a player position counts — a "DEF" header after an
+    unknown name is as likely the next slot's label."""
+    if player is None:
+        return bool(tags & _PLAYER_POSITIONS)
+    if player.is_defense:
+        return bool(tags & {"DEF", "DST"})
+    return player.position in tags or (player.position == "FB" and "RB" in tags)
+
+
+def _canonical(team: str | None) -> str | None:
+    team = (team or "").upper()
+    return TEAM_ALIASES.get(team, team) or None
+
+
+def _next_line(lines: list[str], index: int) -> str | None:
+    """The next line with anything on it."""
+    for line in lines[index + 1:]:
+        if _tidy(line):
+            return line
+    return None
+
+
+def exact_name(typed: str, name: str, teams: set[str] | None = None) -> bool:
+    """Is what was typed this player's FULL name, letter for letter (case and
+    spacing aside)? I15 (Oct 2026): "Bijan Robinson" pasted exactly still
+    offered "not Brian Robinson? tap to swap", which reads as doubt about a
+    household name. A near-name alternate is offered only when this is False.
+    The browser's twin decides it the same way (tests/test_intake.py)."""
+    def fold(text: str) -> str:
+        return " ".join(text.lower().split())
+    return fold(_strip_decoration(typed, teams)) == fold(name)
 
 
 def _is_blank(cleaned: str) -> bool:
@@ -351,7 +504,7 @@ def _strip_decoration(line: str, teams: set[str] | None = None,
     ``keep_lead`` keeps a team code that LEADS the line: "KC Concepcion WR CLE"
     is a player named KC, and stripping both codes leaves "Concepcion".
     """
-    raw = _tidy(line)
+    raw = _unglue(_tidy(line), teams)
     text = re.sub(r"\s+", " ", _DECORATION.sub(" ", raw)).strip()
     text = re.sub(r"(?<=[^\s.]) K(?= |$)", "", text, flags=re.I).strip()
     # Single-letter injury tags (Q, O, D, P) trail a name or stand alone on a
@@ -374,7 +527,9 @@ def _strip_decoration(line: str, teams: set[str] | None = None,
         # note ("vs. MIA", "BUF (Bye 7)", "Buf - Q") — not a defense. Read as
         # one it silently added a defense the subscriber does not own. A defense
         # carries DEF/DST/D/ST or stands alone ("KC").
-        if (len(tokens) == 1 and is_team(tokens[0]) and not _DEFENSE_TAG.search(raw)
+        # Every word a team code counts the same way: "PhiQB CAR Sun 1:00 PM"
+        # is a player's own team and his opponent (BE-D1), not two defenses.
+        if (tokens and all(is_team(t) for t in tokens) and not _DEFENSE_TAG.search(raw)
                 and (_POSITION_TAG.search(raw) or _NOISE.search(raw) or removed_tag)):
             return ""
         kept = [w for i, w in enumerate(tokens)
