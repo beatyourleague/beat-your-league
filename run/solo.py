@@ -39,7 +39,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import requests
 
@@ -983,6 +983,23 @@ COMBO_GRADES = {
 
 
 MEASURED_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
+SUPERFLEX_TEMPLATE = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX",
+                      "K", "DEF")
+
+# The lineup shapes a preregistered arm has graded (reports/setups-method.md:
+# standard, superflex, no K or DEF — the "lineup shape" rows of SETTING_GRADES).
+# Contract C8 (launch review, Oct 2026): the picker may offer other shapes, and
+# the ref carries any slot list, so the shape is read off the slots themselves.
+# Any other shape prints projections and no odds until an arm grades it
+# (engine.solo_report.hold_ungraded_shape) — the number is one nothing checked.
+# Compared as a multiset: the order slots are listed in decides no call.
+GRADED_SHAPES = frozenset(tuple(sorted(t)) for t in (
+    MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE))
+
+
+def shape_graded(slots: Sequence[str]) -> bool:
+    """Has a preregistered arm graded this lineup shape?"""
+    return tuple(sorted(slots)) in GRADED_SHAPES
 
 
 def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:
@@ -1094,6 +1111,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                live_teams=_live_teams(spec, data),
                                live_out=_live_out(spec, data),
                                unconfirmed=_unconfirmed(spec, data),
+                               shape_graded=shape_graded(spec.slots),
                                injury_report=({"week": data.week - 1,
                                                "listed": getattr(data, "listed", {})}
                                               if data.week > 1 else None))

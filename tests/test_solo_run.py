@@ -1052,3 +1052,23 @@ def test_the_live_weeks_row_shows_todays_team() -> None:
     Data.is_live_week = False
     assert solo._row_teams(spec, Data) == {mover: "ARI"}
     assert solo._live_teams(spec, Data) == {}
+
+
+def test_an_ungraded_lineup_shape_reaches_the_report_with_no_odds(tmp_path) -> None:
+    """Contract C8, wired: the runner reads the shape off the subscriber's own
+    slots. The same roster, with its FLEX swapped for a second FLEX-eligible
+    receiver slot no arm has graded, keeps its projections and prints no odds."""
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    graded = solo.report_for(_spec(), data, cache_dir=cache)
+    assert any(s.get("confidence") is not None for s in graded["lineup"]), \
+        "the fixture must publish odds for the comparison to mean anything"
+    shape = RosterSpec(player_ids=_spec().player_ids,
+                       slots=("QB", "RB", "RB", "WR", "WR", "TE", "WR"),
+                       scoring="ppr", label="Your Team")
+    assert not solo.shape_graded(shape.slots)
+    report = solo.report_for(shape, data, cache_dir=cache)
+    assert all(s.get("confidence") is None for s in report["lineup"])
+    assert any(s.get("confidence_gate") == "odds once this lineup shape is graded"
+               for s in report["lineup"])
+    assert any(s.get("projected") is not None for s in report["lineup"])

@@ -487,6 +487,9 @@ _GATE_PHRASES = (
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
     ("no eligible player", "no eligible player with a scoring record"),
+    # Contract C8: a lineup shape no arm has graded (engine.solo_report.SHAPE_GATE).
+    ("odds once this lineup shape is graded",
+     "your lineup shape gets projections only until it's graded"),
 )
 
 
@@ -522,7 +525,8 @@ def row_label(slot: Mapping[str, Any]) -> str:
     # there (launch audit R7). Reports built before the field existed, and the
     # league product, keep the old wording.
     see = " · see if/then" if slot.get("if_then", True) else ""
-    if gate.startswith("we don't put odds on defenses"):
+    if gate.startswith(("we don't put odds on defenses",
+                        "odds once this lineup shape is graded")):
         return "projection only"
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
@@ -1159,7 +1163,10 @@ def row_marked(slot: Mapping[str, Any], mixed: bool) -> bool:
     gate = slot.get("confidence_gate") or ""
     if not gate or not row_label(slot):
         return False
-    return mixed or gate.startswith("we don't put odds on defenses")
+    # So does a lineup shape with no graded arm (contract C8): every row of it
+    # is a projection only, every week, and says so.
+    return mixed or gate.startswith(("we don't put odds on defenses",
+                                     "odds once this lineup shape is graded"))
 
 
 def _bench_table(report: Mapping[str, Any]) -> str:

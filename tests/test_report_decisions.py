@@ -66,7 +66,8 @@ def _report(roster: dict[str, tuple[str, str, str]], *,
             live_out: dict[str, str] | None = None,
             unconfirmed: dict[str, str] | None = None,
             ranks: dict | None = None,
-            prior_form: dict | None = None) -> dict:
+            prior_form: dict | None = None,
+            shape_graded: bool = True) -> dict:
     """Week 5 of 2026 through the real builders. ``roster``: pid -> (name,
     position, team); every other knob is a fact about the week."""
     yards = yards or {}
@@ -94,7 +95,7 @@ def _report(roster: dict[str, tuple[str, str, str]], *,
         teams={pid: team for pid, (_, _, team) in roster.items()},
         injury_report={"week": 4, "listed": listed or {}},
         live_out=live_out, unconfirmed=unconfirmed,
-        last_season_ranks=ranks, prior_form=prior_form)
+        last_season_ranks=ranks, prior_form=prior_form, shape_graded=shape_graded)
 
 
 def _surfaces(report: dict) -> dict[str, str]:
@@ -423,6 +424,42 @@ def test_a_placed_player_not_with_his_team_comes_off_without_adding_odds() -> No
     assert all(s["player_name"] != "Wade Gone" for s in after["lineup"])
     assert _published(after) <= _published(before)
     assert _bench(after, "Wade Gone")["out_text"] == "not with his team"
+
+
+def test_an_ungraded_lineup_shape_prints_projections_and_no_odds() -> None:
+    """Contract C8: the picker may offer lineup shapes beyond the three the
+    setups method graded, and the ref carries any slot list — a three-receiver
+    roster would have printed odds nothing had checked. An ungraded shape
+    keeps every seat and projection and prints no odds, with the reason."""
+    from run.solo import (GRADED_SHAPES, MEASURED_TEMPLATE, NO_K_OR_DEF_TEMPLATE,
+                          SUPERFLEX_TEMPLATE, shape_graded)
+    from engine.nflverse_backtest import TEMPLATE_T1
+    from engine.setups_backtest import TEMPLATE_NKD, TEMPLATE_SF
+    # The graded shapes are the arms' own templates, whatever order a ref lists.
+    assert (MEASURED_TEMPLATE, SUPERFLEX_TEMPLATE, NO_K_OR_DEF_TEMPLATE) == (
+        TEMPLATE_T1, TEMPLATE_SF, TEMPLATE_NKD)
+    assert len(GRADED_SHAPES) == 3
+    assert shape_graded(tuple(reversed(TEMPLATE_SF)))
+    assert not shape_graded(TEMPLATE_T1 + ("WR",))
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
+              WR2: ("Wes Slotman", "WR", "KC"), WR3: ("Will Deepman", "WR", "KC")}
+    kwargs = dict(yards={WR1: 90, WR2: 80, WR3: 40})
+    graded = _report(roster, **kwargs)
+    report = _report(roster, shape_graded=False, **kwargs)
+    assert _published(graded) and not _published(report)
+    assert [s["projected"] for s in report["lineup"]] == \
+        [s["projected"] for s in graded["lineup"]]
+    wr = _row(report, "Wade Wideout")
+    assert wr["confidence_gate"] == "odds once this lineup shape is graded"
+    assert row_label(wr) == "projection only"
+    assert report["regret"]["gate"] == "No call with odds this week."
+    assert report["regret"]["closest"].endswith(
+        "because odds start once this lineup shape is graded.")
+    for name, page in _surfaces(report).items():
+        assert "projection only" in page, name
+        assert "your lineup shape gets projections only until it's graded" in page, name
+        assert not re.search(r"\b\d{2}% vs\b", page), name
 
 
 def test_hold_unconfirmed_only_ever_removes() -> None:

@@ -144,6 +144,7 @@ def build_solo_report(
     live_teams: Mapping[str, str] | None = None,
     live_out: Mapping[str, str] | None = None,
     unconfirmed: Mapping[str, str] | None = None,
+    shape_graded: bool = True,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data.
 
@@ -159,7 +160,9 @@ def build_solo_report(
     ``live_availability``), and no odds appear that the frozen gate did not
     already publish (``keep_frozen_odds``). ``unconfirmed`` (player -> why: the
     practice squad, the live week only) keeps his seat and loses any odds he
-    is part of (``hold_unconfirmed``, method §15 C9).
+    is part of (``hold_unconfirmed``, method §15 C9). ``shape_graded`` False
+    (a lineup shape no preregistered arm has graded — contract C8) keeps every
+    seat and projection and prints no odds (``hold_ungraded_shape``).
     """
     if not re.fullmatch(r"\d{4}", str(season.season)):
         raise WeekReportError(
@@ -210,6 +213,8 @@ def build_solo_report(
     # The practice squad keeps its seats and loses its odds (method §15 C9).
     unconfirmed = dict(unconfirmed or {})
     picks = hold_unconfirmed(picks, unconfirmed, players)
+    if not shape_graded:
+        picks = hold_ungraded_shape(picks)
     my_range = _team_range(picks)
 
     # Every rostered player accounted for. Week 1 has no projections, so the
@@ -536,6 +541,27 @@ def hold_unconfirmed(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
             pick.confidence_gate = (f"{UNCONFIRMED_GATE} ({players.name(who)}: "
                                     f"{unconfirmed[who]})")
             pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
+    return list(picks)
+
+
+# Why a slot prints no odds when the subscriber's lineup shape has no graded
+# arm (contract C8): the picker may offer shapes beyond the three the setups
+# method graded (standard, superflex, no K or DEF), and a number from an
+# ungraded shape is one nothing has checked. Projection only until an arm
+# grades it — the shape, not the player, is the reason.
+SHAPE_GATE = "odds once this lineup shape is graded"
+
+
+def hold_ungraded_shape(picks: Sequence[SlotPick]) -> list[SlotPick]:
+    """Every pick keeps its seat and projection and loses its odds. Removes
+    only — like ``hold_unconfirmed`` — so it needs no arm of its own."""
+    for pick in picks:
+        if pick.confidence is None:
+            continue
+        pick.confidence = None
+        pick.confidence_gate = SHAPE_GATE
+        # The seeded disclosure travels with a number, and the number is gone.
+        pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
     return list(picks)
 
 
@@ -1517,6 +1543,8 @@ def _named_reason(pick: SlotPick, players: PlayerIndex,
         return "the lineup changed around a player who can't play this week"
     if gate.startswith("we don't put odds on defenses"):
         return "we don't put odds on defenses"
+    if gate.startswith(SHAPE_GATE):
+        return "odds start once this lineup shape is graded"
     if gate.startswith("nobody on your bench"):
         held = bench_option_held(pick, bench)
         if held is not None:

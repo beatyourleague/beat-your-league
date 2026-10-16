@@ -536,3 +536,17 @@ changed). The 2025 proving weeks 4–5 record the identical 111 calls with the
 same probabilities. Replayed weeks are untouched (the release holds today's
 status), this harness is untouched, and no arm is needed for a rule that can
 only withhold.
+
+
+### C10 — lineup shapes no arm has graded (2026-10-16)
+
+C2 listed "templates other than T1" among the regimes this run never measured;
+the setups method later graded two more (superflex, no K or DEF), and those are
+the only shapes with a grade. The ref carries any slot list, and the picker may
+offer more shapes (launch review contract C8), so a three-receiver lineup would
+have printed odds that no arm had checked. In the report layer, a lineup whose
+slots (as a multiset) are not one of the three graded shapes keeps every seat
+and projection and prints no odds, with the reason "odds once this lineup shape
+is graded" (`run.solo.shape_graded`, `engine.solo_report.hold_ungraded_shape`).
+It can only withhold, so it needs no arm; a shape gets odds when its own
+preregistered arm grades it.
