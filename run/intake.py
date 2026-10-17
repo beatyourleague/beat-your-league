@@ -42,8 +42,8 @@ only when that pass was really bought and its subscription is active now
 confirm it by email before it becomes a seat, and a re-claim — a roster
 change — is confirmed the same way (OPS-R1). Confirmed seats live in the
 intake's own seat log, so their identity outlives the Worker's rows (OPS-R6).
-One seat per (address, pass), at most one per other team in the payer's
-league (OPS-R7), claimed again each season (LP2-D3). A claim that matches no
+One seat per (address, pass), at most as many as the payer's league has
+teams (OPS-R7), claimed again each season (LP2-D3). A claim that matches no
 pass is told so, once (LP-D1). A new seat gets its first email the day it is
 confirmed, by the same rules as a purchase (LP-I4).
 
@@ -249,8 +249,9 @@ def _stamp(signup: RosterSignup) -> int:
 # makes the refs differ, so nothing collapsed them. Now one address with one
 # roster (players, lineup, scoring and size: the CONTENT, never the ref
 # string) gets one report. Nothing is cancelled or refunded here, ever: the
-# other subscription keeps billing until its owner cancels it, the welcome
-# of the newer purchase says so plainly, and the operator log flags it.
+# other subscription bills until its owner cancels it (if they have not
+# already — the log keeps cancelled purchases too), the welcome of the newer
+# purchase says so plainly, and the operator log flags it.
 
 # Which purchase a merged row is built from: the pass carries seats and the
 # billing the season-end line must describe; then the yearly pass; then monthly.
@@ -282,7 +283,12 @@ def merge_same_roster(signups: Iterable[RosterSignup]) -> Merged:
     """One row per (address, roster content). The kept row is the purchase
     _KEEP_ORDER prefers, carrying the OLDEST purchase's slug and time: its
     send keys, stored plans and receipts are the history this person already
-    has, so nothing restarts and the week's report is not mailed twice. Pure."""
+    has, so nothing restarts and the week's report is not mailed twice.
+
+    Two League Passes are never one row, even for one roster: each is its own
+    league's seat link and seat count (LP2-D4), and merging them would hand
+    one league's seats the other's link. Only a season or monthly purchase
+    folds into a pass (the oldest one). Pure."""
     groups: dict[tuple, list[RosterSignup]] = {}
     order: list[tuple] = []
     for signup in signups:
@@ -293,6 +299,10 @@ def merge_same_roster(signups: Iterable[RosterSignup]) -> Merged:
     out = Merged(signups=[])
     for key in order:
         held = sorted(groups[key], key=_stamp)
+        passes = [s for s in held if s.plan == LEAGUE_PASS]
+        if len(passes) > 1:
+            out.signups.extend(passes[1:])
+            held = [s for s in held if s.plan != LEAGUE_PASS or s is passes[0]]
         if len(held) == 1:
             out.signups.append(held[0])
             continue
@@ -584,9 +594,12 @@ class PassInfo:
 
     @property
     def seat_cap(self) -> int:
-        """Every other team in the payer's league — the pass covers "every
-        member of one league" and no more (OPS-R7)."""
-        return max(0, int(self.league_size) - 1)
+        """As many seats as the payer's league has teams (OPS-R7): one for
+        every other team, and one to spare for a co-manager (the League Pass
+        page says each co-manager claims their own seat). The pass covers
+        "every member of one league"; a seat link forwarded outside it used
+        to mean unlimited free reports on one $99 purchase."""
+        return max(0, int(self.league_size))
 
 
 def pass_infos(signups: Iterable[RosterSignup],
@@ -637,6 +650,17 @@ class SeatEntry:
     @property
     def at(self) -> datetime | None:
         return _received({"received_at": self.claimed_at})
+
+
+def _seated_at(entry: SeatEntry) -> datetime:
+    """When this confirmed claim was first seen confirmed — the moment its
+    seat existed, which is what a full pass's order is by (OPS-R7). The
+    claim's own stamp stands in for an entry written without one."""
+    try:
+        at = datetime.fromisoformat(entry.confirmed_at)
+    except ValueError:
+        return entry.at or _EPOCH
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
 
 
 def load_seat_log(path: Path) -> list[SeatEntry]:
@@ -875,8 +899,9 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     stored plans and update link never move. A claim for the roster already
     held changes nothing and is not mailed.
 
-    A pass carries at most ``PassInfo.seat_cap`` seats, earliest first claim
-    first (OPS-R7); later ones are told the league's seats are taken. Claims
+    A pass carries at most ``PassInfo.seat_cap`` seats, in the order they were
+    confirmed (OPS-R7) — a served seat is never displaced by an older claim
+    confirmed later; the rest are told the league's seats are taken. Claims
     and logged seats from before ``season_from`` are retired: each season's
     seat is claimed with that season's roster (LP2-D3).
 
@@ -939,33 +964,40 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     seats: dict[tuple[str, str], list[SeatEntry]] = {}
     for entry in sorted(entries, key=lambda e: e.at or _EPOCH):
         seats.setdefault((entry.email.lower(), entry.pass_id), []).append(entry)
-    by_pass: dict[str, list[tuple[datetime, str, list[SeatEntry], Any]]] = {}
+    by_pass: dict[str, list[tuple[datetime, datetime, str, list[SeatEntry]]]] = {}
     for (email, pass_id), held in seats.items():
         owner = by_id.get(pass_id)
         if owner is None or not owner.entitled:
             out.lapsed += 1
             continue
-        try:
-            roster = decode_roster(held[-1].ref)
-        except RefError as exc:
-            out.problems.append(f"a logged seat for {_no_email(email)} stopped "
-                                f"decoding ({exc}) — not served")
-            continue
-        if known_ids and any(pid not in known_ids for pid in roster.player_ids):
-            out.problems.append(f"the seat of {_no_email(email)} names a player the "
-                                f"directory no longer has — not served this run")
-            continue
-        by_pass.setdefault(pass_id, []).append((held[0].at or _EPOCH, email, held, roster))
+        # Confirmed first, then (for seats confirmed in one run) claimed first.
+        by_pass.setdefault(pass_id, []).append(
+            (min(_seated_at(entry) for entry in held), held[0].at or _EPOCH, email, held))
 
     taken: dict[str, int] = {}
     for pass_id, group in by_pass.items():
         owner = by_id[pass_id]
-        group.sort(key=lambda item: (item[0], item[1]))
-        for index, (_first_at, email, held, roster) in enumerate(group):
+        # The cap counts every confirmed seat in the order it was CONFIRMED,
+        # before anything this run might fail to build: a seat already being
+        # served is never displaced by an older claim confirmed later, and a
+        # seat skipped for one run (a directory hiccup) never lets one past
+        # the cap in for that run — with a welcome — only to drop it again.
+        group.sort(key=lambda item: item[:3])
+        for index, (_seated, _claimed, email, held) in enumerate(group):
             if index >= owner.seat_cap:
                 out.overflow += 1
                 out.full.append({"email": email, "received_at": held[0].claimed_at,
                                  "ref": held[0].ref, "pass_id": pass_id})
+                continue
+            try:
+                roster = decode_roster(held[-1].ref)
+            except RefError as exc:
+                out.problems.append(f"a logged seat for {_no_email(email)} stopped "
+                                    f"decoding ({exc}) — not served")
+                continue
+            if known_ids and any(pid not in known_ids for pid in roster.player_ids):
+                out.problems.append(f"the seat of {_no_email(email)} names a player "
+                                    f"the directory no longer has — not served this run")
                 continue
             row = _seat_row(email, owner, held, roster)
             out.rows.append(row)
@@ -979,8 +1011,9 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
         if len(group) > owner.seat_cap:
             out.problems.append(
                 f"League Pass {pass_id} is full: {len(group) - owner.seat_cap} "
-                f"confirmed seat(s) past its league's {owner.league_size} teams "
-                f"are not served (the earliest claims are kept)")
+                f"confirmed seat(s) past its {owner.seat_cap} seats (one per team "
+                f"in a {owner.league_size}-team league) are not served — the first "
+                f"seats confirmed are kept")
 
     # Every live claim that would change something is mailed its code.
     pending: list[PendingSeat] = []

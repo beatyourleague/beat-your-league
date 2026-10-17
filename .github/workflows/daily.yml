@@ -292,8 +292,9 @@ jobs:
       - name: Fail the run if a paid signup could not be served
         if: always() && steps.intake.outputs.code == '1'
         run: |
-          echo "run.intake exited 1 — a paid signup is blocked, or Stripe could"
-          echo "not be read. See the sweep step's log."
+          echo "run.intake exited 1 — a paid signup is blocked, Stripe could not"
+          echo "be read, or League Pass seat links match no pass (a rotated"
+          echo "UPDATE_SECRET). See the sweep step's log."
           exit 1
       # Exit 2 is "STRIPE_API_KEY unset", the expected pre-launch state.
       # A monthly subscription left with no stop date WILL be charged through

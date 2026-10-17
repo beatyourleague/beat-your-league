@@ -53,7 +53,10 @@ _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
 
 def update_token(email: str, secret: str) -> str:
     """The per-subscriber credential. Deterministic, so no state is kept and
-    every report carries the same link; rotating the secret invalidates all."""
+    every report carries the same link; rotating the secret invalidates all.
+    The same secret signs League Pass seat links, which must outlive a
+    rotation: name the old value in UPDATE_SECRET_PREVIOUS for as long as its
+    seat links are out there (``signing_secrets``, OPS-R10)."""
     if not secret:
         raise ValueError("an update token needs a secret")
     digest = hmac.new(secret.encode("utf-8"), email.strip().lower().encode("utf-8"),

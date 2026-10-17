@@ -129,37 +129,44 @@ def _site() -> str:
 # What each plan is called in a sentence about it (LP2-D1).
 _PLAN_NAME = {"season": "season pass", "monthly": "monthly plan",
               "league_pass": "League Pass", "pass": "League Pass"}
+TWICE_HEAD = "One report for this roster"
+TWICE_SUBJECT = "You're in — one report a week for this roster, not two"
 
 
 def duplicate_line(plan: str, duplicate: str | None) -> str | None:
-    """The sentence a purchase gets when this address ALREADY holds another
+    """The sentence a purchase gets when this address ALSO bought another
     subscription for the same roster (LP2-D1), or None.
 
     A commissioner who had the $39 season pass and then bought the $99 League
     Pass for the same team was charged for both and got two identical reports
     every Tuesday, with nothing anywhere saying so. The intake now sends one
     report; this tells them, once, in the acknowledgment of the newer
-    purchase, that the other subscription still bills and that cancelling it
-    is theirs to do from the billing page. It cancels nothing and promises no
-    refund: both are the subscriber's call, under the terms they agreed to."""
-    if not duplicate or duplicate == plan or (plan in PAYER_PLANS
-                                              and duplicate in PAYER_PLANS):
+    purchase, that the other subscription may still bill and that cancelling
+    it is theirs to do from the billing page. It cancels nothing and promises
+    no refund: both are the subscriber's call, under the terms they agreed to.
+
+    The intake judges "the same roster" from the purchase LOG, which also
+    holds a subscription cancelled or refunded long ago — so the older one is
+    "if it is still active", never "it keeps billing", which would be a false
+    statement about somebody's money whenever they had already cancelled it.
+    Two League Passes are two leagues' seats and are never merged."""
+    if not duplicate or (plan in PAYER_PLANS and duplicate in PAYER_PLANS):
         return None
     other = _PLAN_NAME.get(duplicate, "subscription")
-    if plan in PAYER_PLANS:
-        # The pass covers the buyer's own team, so the older plan is the spare.
-        return (f"This address already has the {other} for this same roster. "
-                f"Your League Pass covers your own team too, so you get one report "
-                f"a week, not two — and the {other} keeps billing until you cancel "
-                f"it, which you can do yourself on your billing page.")
     mine = _PLAN_NAME.get(plan, "subscription")
-    if duplicate in PAYER_PLANS:
+    if plan not in PAYER_PLANS and duplicate in PAYER_PLANS:
+        # The pass already covers the buyer's own team: THIS purchase is the
+        # spare, and it is certainly active — it was just bought.
         return (f"Your League Pass already covers this same roster, so you get one "
-                f"report a week, not two — and this {mine} keeps billing until you "
+                f"report a week, not two. This {mine} bills on its own until you "
                 f"cancel it, which you can do yourself on your billing page.")
-    return (f"This address already has the {other} for this same roster, so you "
-            f"get one report a week, not two. Each keeps billing until you cancel "
-            f"it, which you can do yourself on your billing page.")
+    earlier = f"an earlier {other}" if duplicate == plan else f"the {other}"
+    covered = (" Your League Pass covers your own team too, so you get one report "
+               "a week, not two." if plan in PAYER_PLANS else
+               " You get one report a week for it, not two.")
+    return (f"This address also bought {earlier} for this same roster.{covered} "
+            f"If that one is still active, it keeps billing until you cancel it, "
+            f"which you can do yourself on your billing page.")
 
 
 def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
@@ -230,8 +237,12 @@ NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")
 
 
-def _next_rows(seat: bool) -> list[tuple[str, str]]:
-    return [("Today", NEXT_TODAY), ("Every Tuesday", NEXT_TUESDAY),
+def _next_rows(seat: bool, carries_on: bool = False) -> list[tuple[str, str]]:
+    """``carries_on``: a second purchase of a roster this address already
+    gets reports for (LP2-D1). Its reports simply continue, so "Today: your
+    first report" would promise something the intake does not send."""
+    today = [] if carries_on else [("Today", NEXT_TODAY)]
+    return [*today, ("Every Tuesday", NEXT_TUESDAY),
             ("Saturday, if needed", NEXT_SATURDAY)]
 
 
@@ -314,6 +325,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     preheader = (f"You {verb} {bought.split(' — ')[0]}. What happens next, and "
                  + ("how to stop it." if seat else "your terms in writing."))
 
+    twice = None if seat else duplicate_line(plan, duplicate)
+
     # ---------------------------------------------------------------- html
     para = f'<p style="{BASE}font-size:15px;margin:0 0 10px 0;">'
     rows_html = "".join(
@@ -322,18 +335,18 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'vertical-align:top;width:30%;border-top:1px solid {LINE};">'
         f'{esc(when_)}</td><td style="{BASE}padding:9px 0;'
         f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
-        for when_, what in _next_rows(seat))
+        for when_, what in _next_rows(seat, carries_on=bool(twice)))
     blocks = []
-    twice = None if seat else duplicate_line(plan, duplicate)
     twice_text = None
     if twice:
-        # First, before anything else: it is about money already being spent.
+        # First, before anything else: it is about money being spent. The
+        # route is its own sentence — a bare lowercase link label trailing
+        # "your billing page." read as a fragment.
         href, label = _cancel_destination()
-        link_html = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
-                     if href else "")
-        twice_text = twice + (f" {label}: {href}" if href else "")
-        blocks.append(_block("You already have this roster",
-                             f"{para}{esc(twice)}{link_html}</p>"))
+        link_html = (f' Where to cancel: <a href="{esc(href)}" style="color:{NAVY};">'
+                     f'{esc(label)}</a>.' if href else "")
+        twice_text = twice + (f" Where to cancel: {label}: {href}" if href else "")
+        blocks.append(_block(TWICE_HEAD, f"{para}{esc(twice)}{link_html}</p>"))
     if share:
         lead, link, paste = share
         inner = para + esc(lead) + "</p>"
@@ -397,14 +410,15 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     # ---------------------------------------------------------------- text
     text_lines = ["BEAT YOUR LEAGUE", "YOU'RE IN.", "", opener]
     if twice_text:
-        text_lines += ["", "YOU ALREADY HAVE THIS ROSTER", twice_text]
+        text_lines += ["", TWICE_HEAD.upper(), twice_text]
     if share:
         lead, link, paste = share
         text_lines += ["", "SEND YOUR LEAGUE THIS", lead]
         if link:
             text_lines += [link, "", "Or paste this into your league chat:", paste]
     text_lines += ["", "WHAT HAPPENS NEXT",
-                   *[f"{when_}: {what}" for when_, what in _next_rows(seat)],
+                   *[f"{when_}: {what}" for when_, what
+                     in _next_rows(seat, carries_on=bool(twice))],
                    "", "THE TERMS, IN WRITING", *terms,
                    f"{terms_ref}: " + (terms_url or "on our site's terms page."),
                    "", CANCEL_HEAD.upper(), stop_text,
@@ -414,9 +428,10 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text = "\n".join(text_lines) + "\n"
 
     # A first report goes out the day they pay or claim (run/intake.py; a
-    # seat since LP-I4), so both subjects say it is on its way.
-    subject = ("Your seat is in — your first report is on its way"
-               if seat else
+    # seat since LP-I4), so both subjects say it is on its way — except a
+    # second purchase of a roster already served, whose reports carry on.
+    subject = ("Your seat is in — your first report is on its way" if seat else
+               TWICE_SUBJECT if twice else
                "You're in — your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,
     # so the key moved with it and `servable` — the projection of an

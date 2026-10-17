@@ -14,8 +14,8 @@ and nowhere else:
   "Your seat request is in" — and when the address they typed was not the one
   the pass was bought with, the claim was dropped with a line in a CI log and
   nobody ever told them.
-- **The pass is full** (OPS-R7). A pass covers one seat for each other team
-  in its league, and no more.
+- **The pass is full** (OPS-R7). A pass covers as many seats as its league
+  has teams, and no more.
 
 Each has two readers: the leaguemate who did claim, who needs to know what
 happens or what to check, and somebody whose address a stranger typed, who
@@ -57,8 +57,8 @@ CONFIRM_IGNORE = ("Didn't ask for this? Ignore this email — nothing is set up 
 
 FULL_SUBJECT = "That League Pass has no seats left"
 FULL_LEDE = ("You asked for a seat on a League Pass with this address. That pass "
-             "covers one seat for each other team in its league, and they are "
-             "all taken, so no seat was set up and no reports are coming.")
+             "covers as many seats as its league has teams, and they are all "
+             "taken, so no seat was set up and no reports are coming.")
 FULL_CHECK = ("If one of those seats should be yours, ask whoever bought your "
               "league's pass.")
 

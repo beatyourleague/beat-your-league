@@ -753,17 +753,19 @@ def test_a_season_starts_the_day_after_the_last_ones_final_game() -> None:
 
 
 # --------------------------------------------------------------------- #
-# OPS-R7 — one seat per other team in the league
+# OPS-R7 — as many seats as the league has teams
 # --------------------------------------------------------------------- #
 
-def test_a_pass_carries_one_seat_per_other_team_and_says_when_it_is_full() -> None:
+def test_a_pass_carries_as_many_seats_as_its_league_has_teams() -> None:
     """Reproduced (OPS-R7): twenty addresses claiming through one 12-team
     pass's link were all honoured — twenty-one reports a week on one $99
-    purchase. A pass carries at most league size - 1 seats, the earliest
-    confirmed claims first; a confirmed seat past the cap and any new claim
-    on a full pass are told the league's seats are taken (never mailed a
-    confirmation), while a seat holder's roster change still is."""
-    small = [intake.PassInfo("commish@example.com", PASS_SUB, 4, "cus_commish01")]
+    purchase. A pass carries at most as many seats as its league has teams
+    (every other team plus a co-manager), the first confirmed first; a
+    confirmed seat past the cap and any new claim on a full pass are told
+    the league's seats are taken (never mailed a confirmation), while a seat
+    holder's roster change still is."""
+    small = [intake.PassInfo("commish@example.com", PASS_SUB, 3, "cus_commish01")]
+    assert intake.PassInfo("p@example.com", PASS_SUB, 12).seat_cap == 12
     claims = [_claim(email=f"m{i}@example.com", hours=40 - i) for i in range(5)]
     swept = intake.sweep_seats(claims, small, None, SECRET,
                                confirm_codes=[_code(c) for c in claims])
@@ -778,6 +780,36 @@ def test_a_pass_carries_one_seat_per_other_team_and_says_when_it_is_full() -> No
     assert [r for r in again.full if r["email"] == "late@example.com"]
     assert [p.email for p in again.awaiting] == ["m0@example.com"]
     assert again.awaiting[0].change
+
+
+def test_a_served_seat_is_never_displaced_by_an_older_claim_confirmed_later() -> None:
+    """Reproduced in the end-to-end run against the real Worker: the cap
+    ordered seats by when they were CLAIMED, so a claim made early and
+    confirmed days later took the place of a seat already welcomed and
+    served — which then dropped mid-season with a "no seats left" note. A
+    pass's seats are ordered by when each was CONFIRMED (the moment it
+    existed); a seat skipped for one run never lets one past the cap in."""
+    small = [intake.PassInfo("commish@example.com", PASS_SUB, 2, "cus_commish01")]
+    early = _claim(email="early@example.com", hours=50)     # claimed first ...
+    a = _claim(email="a@example.com", hours=40)
+    b = _claim(email="b@example.com", hours=30)
+    first = intake.sweep_seats([early, a, b], small, None, SECRET,
+                               confirm_codes=[_code(a), _code(b)],
+                               now=NOW - timedelta(hours=20))
+    assert sorted(r["email"] for r in first.rows) == ["a@example.com", "b@example.com"]
+    later = intake.sweep_seats([early, a, b], small, None, SECRET,   # ... confirmed last
+                               confirm_codes=[_code(early)], log=first.confirmed)
+    assert sorted(r["email"] for r in later.rows) == ["a@example.com", "b@example.com"], \
+        "a seat already served was displaced by an older claim confirmed later"
+    assert [r["email"] for r in later.full] == ["early@example.com"]
+    # A served seat this run cannot build (its player left the directory)
+    # still holds its place: nobody past the cap is let in for one run.
+    from run.refs import decode_roster
+    seat_players = set(decode_roster(SEAT_REF).player_ids)
+    gone = sorted(seat_players)[0]
+    held = intake.sweep_seats([early, a, b], small, (set(PLAYERS) | seat_players) - {gone},
+                              SECRET, log=[*first.confirmed, *later.confirmed])
+    assert held.rows == [] and [r["email"] for r in held.full] == ["early@example.com"]
 
 
 def test_the_full_note_is_held_to_the_seat_notes_rules() -> None:
@@ -904,8 +936,10 @@ def test_one_roster_bought_twice_by_one_address_is_one_report_and_the_welcome_sa
     every Tuesday, both renewing, and nothing anywhere said so. Now one row
     (the pass, under the season pass's slug so its history continues), the
     operator log flags it, and the newer purchase's welcome says plainly that
-    the season pass keeps billing until they cancel it from their billing
-    page. Nothing is cancelled or refunded on anyone's behalf."""
+    the season pass, if still active, keeps billing until they cancel it from
+    their billing page — and promises no "first report today", because their
+    reports simply carry on. Nothing is cancelled or refunded on anyone's
+    behalf."""
     sends = _capture_sends(monkeypatch, tmp_path)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS)
     stripe["sessions"] = [
@@ -920,8 +954,13 @@ def test_one_roster_bought_twice_by_one_address_is_one_report_and_the_welcome_sa
     welcomes = {m.key: m for m in sends if m.key.startswith("welcome-")}
     assert len(welcomes) == 2, "a purchase went unacknowledged"
     [upgrade] = [m for m in welcomes.values() if "$99" in m.text]
-    assert "already has the season pass for this same roster" in upgrade.text
-    assert "keeps billing until you cancel it" in upgrade.text
+    assert "also bought the season pass for this same roster" in upgrade.text
+    assert "If that one is still active, it keeps billing until you cancel it" \
+        in upgrade.text
+    assert "Today:" not in upgrade.text and "first report" not in upgrade.subject, \
+        "an upgrade was promised a first report the intake does not send"
+    [first] = [m for m in welcomes.values() if m is not upgrade]
+    assert "Today:" in first.text and "one report" not in first.text
     assert all("/v1/subscriptions" not in url for url, _form in stripe["posts"]), \
         "something was cancelled on the subscriber's behalf"
     different = encode_roster("season", "half_ppr", list(SLOTS), PLAYERS)
@@ -932,15 +971,37 @@ def test_one_roster_bought_twice_by_one_address_is_one_report_and_the_welcome_sa
         "two different setups were merged into one report"
 
 
+def test_two_league_passes_are_never_merged_into_one_row() -> None:
+    """Two League Passes on one roster are two leagues' seat links and seat
+    counts (LP2-D4): merged, one league's seats would carry the other's link.
+    Only a season or monthly purchase folds into a pass."""
+    one = intake.RosterSignup("a@example.com", PASS_REF, "league_pass", "1",
+                              subscription_id="sub_passone01")
+    two = intake.RosterSignup("a@example.com", PASS_REF, "league_pass", "2",
+                              subscription_id="sub_passtwo02")
+    own = intake.RosterSignup("a@example.com", REF, "season", "3")
+    merged = intake.merge_same_roster([one, two, own])
+    assert sorted(s.subscription_id or "" for s in merged.signups) == \
+        ["sub_passone01", "sub_passtwo02"], "two passes became one row"
+    assert merged.duplicates == {own.key: "league_pass"}
+
+
 def test_the_duplicate_line_names_the_other_subscription_and_cancels_nothing() -> None:
+    """The purchase log keeps subscriptions cancelled or refunded long ago,
+    so the OLDER one is "if it is still active" — "it keeps billing" was a
+    false statement about money whenever they had already cancelled it. A
+    second purchase of the same plan (a double purchase) is said too."""
     from render.welcome import duplicate_line
     assert duplicate_line("league_pass", None) is None
-    assert duplicate_line("season", "season") is None
+    assert duplicate_line("league_pass", "pass") is None
+    again = duplicate_line("season", "season")
+    assert "an earlier season pass" in again and "If that one is still active" in again
     upgrade = duplicate_line("league_pass", "monthly")
     assert "monthly plan" in upgrade and "billing page" in upgrade
+    assert "If that one is still active" in upgrade
     later = duplicate_line("season", "league_pass")
-    assert "League Pass already covers" in later and "this season pass" in later
-    for line in (upgrade, later, duplicate_line("monthly", "season")):
+    assert "League Pass already covers" in later and "This season pass bills" in later
+    for line in (upgrade, later, again, duplicate_line("monthly", "season")):
         for word in ("refund", "we cancel", "cancelled", "calibrated", "tested",
                      "proven", "accurate", " file"):
             assert word not in line.lower(), (word, line)
