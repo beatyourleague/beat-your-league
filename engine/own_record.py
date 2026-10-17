@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from engine.decisions import HIT, MISS, grade
+from engine.projection import printed_percent
 from engine.scoring import ScoringRule, score
 
 EMPTY_NOTE = ("Your results start here: once this week's games are final, every "
@@ -84,7 +85,7 @@ def own_record(plans: Sequence[Mapping[str, Any]],
 
 def call_line(call: Mapping[str, Any]) -> str:
     """One graded call, the same words on every surface."""
-    pct = (f" · {round(call['confidence'] * 100)}%"
+    pct = (f" · {printed_percent(call['confidence'])}%"
            if call.get("confidence") is not None else "")
     verdict = "came in" if call["outcome"] == HIT else "missed"
     return (f"{call['text']}{pct} — {call['got']:.1f} to {call['other']:.1f}, "

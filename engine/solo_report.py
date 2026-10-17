@@ -50,9 +50,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 from engine.availability import Status, WeekAvailability
-from engine.final_check import INACTIVES_LEAD
+from engine.final_check import (INACTIVES_LEAD, clauses, elevation_note,
+                                first_to_kick_off, rank_covers)
 from engine.history import FLEX_ELIGIBILITY, PlayerIndex, Season
-from engine.projection import MIN_GAMES_FOR_CALL, ProjectionModel
+from engine.projection import (MIN_GAMES_FOR_CALL, ProjectionModel, printed_percent,
+                               stored_confidence)
 from engine.roster import DEFENSE
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
                                _team_week)
@@ -216,6 +218,14 @@ def build_solo_report(
     picks = hold_unconfirmed(picks, unconfirmed, players)
     if not shape_graded:
         picks = hold_ungraded_shape(picks, shape_gate or SHAPE_GATE)
+    # One number per call (recheck ENG-6/RQ2-03): rounded ONCE, to what the
+    # ledger records, before any surface reads it — the game plan printed the
+    # raw 0.765 as 77% beside a row, a closest call and a ledger entry at 76%,
+    # and a printed 52% could miss its toss-up label. After the seat is
+    # decided and every hold applied, so no pick or gate moves.
+    for pick in picks:
+        if pick.confidence is not None:
+            pick.confidence = stored_confidence(pick.confidence)
     my_range = _team_range(picks)
 
     # Every rostered player accounted for. Week 1 has no projections, so the
@@ -284,16 +294,34 @@ def build_solo_report(
     starter_rows: list[dict[str, Any]] = []
     unplanned: dict[str, str] = {}
     covered: dict[str, Cover] = {}
+    # Who each game-day plan already moves -> whose plan it is (recheck
+    # ENG-4). A game-day plan is carried out alone, at the inactives, and two
+    # of them may both be needed, so no player is named in two — Saturday's
+    # rule too. In lineup order, as Saturday works through them. A ruling
+    # before game day is Saturday's to re-plan with the whole roster, so its
+    # row names each starter's best cover, as Saturday's swap does when that
+    # is the only news.
+    taken: dict[str, str] = {}
+    # When each player's news must be acted on (RQ2-07), for the late-news line.
+    decide_at: dict[str, datetime] = {}
     for name, pick, is_starter, pid in news:
         if not is_starter:
+            moment = decision_moment(pid, game_of, before=pick.player_id)
+            if moment is not None:
+                decide_at[pid] = moment
             continue
-        final, late, early = stand_in(pick, spec, picks, players, model,
-                                      availability, week, game_of, sunday,
-                                      unconfirmed)
-        rows = starter_plans(name, pick, final, late,
-                             covers(pick, spec, picks, players, model,
-                                    availability, week, unconfirmed),
-                             players, game_of)
+        options = covers(pick, spec, picks, players, model, availability, week,
+                         unconfirmed)
+        found = stand_in(pick, options, game_of, sunday, taken)
+        final, late, early = found.final, found.late, found.too_early
+        moment = decision_moment(pid, game_of, cover=None if found.late else found.early)
+        if moment is not None:
+            decide_at[pid] = moment
+        rows = starter_plans(name, pick, found, options, players, game_of, taken)
+        gameday = found.late or found.early
+        if gameday is not None:
+            for moved in gameday.moving:
+                taken.setdefault(moved, name)
         if rows:
             starter_rows += rows
             if late is not None:          # a fallback even for a game-day call
@@ -351,6 +379,9 @@ def build_solo_report(
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "my_roster_id": SUBSCRIBER_ROSTER_ID,
             "my_label": spec.label,
+            # Who the subject and masthead name the team after — fixed by the
+            # roster on file, never by this week's projections (RQ2-06).
+            "team_lead": team_lead(spec, players, prior_form, last_season_ranks),
             # No opponent exists. These keys stay present and null so the
             # renderers can branch on them rather than KeyError, and so the
             # shape of a solo report is visibly the same contract.
@@ -377,11 +408,17 @@ def build_solo_report(
                                          availability=availability,
                                          early_calls=early_calls,
                                          extra=(early_items + watch_items
+                                                + practice_squad_items(
+                                                    picks, unconfirmed, players,
+                                                    game_of)
                                                 + superflex_items(
                                                     picks, players, prior_form,
                                                     last_season_ranks,
-                                                    len(season.teams) or 12)),
+                                                    len(season.teams) or 12,
+                                                    bench=bench, game_of=game_of,
+                                                    sunday=sunday)),
                                          late_news_skip=early_ids,
+                                         late_news_when=decide_at.get,
                                          news=news, planned=planned,
                                          unplanned=unplanned, standins=standins),
         "matchup": _matchup(spec, my_range, team_range_gate(picks, standins)),
@@ -417,6 +454,36 @@ def build_solo_report(
                         if any(p.confidence is not None for p in picks) else None),
     }
     return report
+
+
+def team_lead(spec: RosterSpec, players: PlayerIndex,
+              prior_form: Mapping[str, float] | None,
+              ranks: Mapping[str, tuple[str, int, int]] | None) -> str | None:
+    """The player a subscriber's team is named after: the one who scored the
+    most per game last season under their own scoring, among those with a
+    rank (half a season or more — engine.preseason.RANK_MIN_GAMES); with
+    nobody ranked, the first player on the roster as they gave it. Kickers and
+    defenses never name a team.
+
+    Panel review RQ2-06: the name came from that week's highest-projected
+    starter, so one subscription was "Bijan Robinson's team", then "Garrett
+    Wilson's", then "Jayden Daniels's" (8 of 12 proving-run subscriptions
+    changed name in five weeks, one to a bye-week receiver) — and a manager
+    with two teams could not tell their emails apart by it. Last season and
+    the roster on file are fixed, so the name only moves when the roster does.
+    A record, never a projection."""
+    form, ranked = prior_form or {}, ranks or {}
+    named = [pid for pid in spec.player_ids
+             if players.position(pid) not in _UNNAMED_POSITIONS
+             and not pid.startswith(f"{DEFENSE}-")]
+    scored = [pid for pid in named if pid in ranked and pid in form]
+    if scored:
+        best = min(scored, key=lambda pid: (-form[pid], pid))
+        return players.name(best)
+    return players.name(named[0]) if named else None
+
+
+_UNNAMED_POSITIONS = frozenset({"K", DEFENSE})
 
 
 # --------------------------------------------------------------------- #
@@ -740,60 +807,59 @@ def covers(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
     slide through a flex: the live sample said "nobody on your bench can step
     in at WR in time" about Zay Flowers while Rome Odunze sat at FLEX and could
     move across with a bench player taking the FLEX; Saturday's check already
-    made that move, so Tuesday's plan and Saturday's disagreed. Ranked as
-    Saturday ranks them: the higher-projected incoming player, a player with no
-    games this season last, a straight swap before a slide, a questionable
-    player after a healthy one, then the id. A practice-squad player (method
-    §15 C9) comes after everyone confirmed — he plays only if elevated, and
-    the plan says to check — and is never the one sliding across.
+    made that move, so Tuesday's plan and Saturday's disagreed. Ranked by
+    Saturday's own function (``engine.final_check.rank_covers``, recheck
+    ENG-4): a practice-squad player (method §15 C9) after everyone confirmed —
+    he plays only if elevated, and the plan says to check; the
+    higher-projected incoming player, a player with no games this season
+    last; a healthy player before a questionable one; a straight swap before
+    a slide; then the ids.
 
-    Nobody OUT, and no questionable starter as the mover: a plan built on a
-    second doubt is not a plan."""
+    Nobody OUT, and no questionable or practice-squad starter as the mover: a
+    plan built on a second doubt is not a plan."""
     unconfirmed = unconfirmed or {}
     seated = {p.player_id for p in picks if p.player_id}
+    slots = [(p.slot, p.player_id) for p in picks]
+    index = next(i for i, p in enumerate(picks) if p is pick)
 
-    def usable(pid: str, slot: str) -> bool:
+    def fits(pid: str, slot: str) -> bool:
         info = players.get(pid)
-        return (pid not in seated and info is not None and info.eligible_for(slot)
-                and availability.classify(pid).status is not Status.OUT)
+        return info is not None and info.eligible_for(slot)
 
-    bench = [pid for pid in spec.player_ids if pid not in seated]
-    found: list[tuple[tuple, Cover]] = []
+    def playing(pid: str) -> bool:
+        return availability.classify(pid).status is not Status.OUT
 
-    def add(incoming: str, mover: str | None = None, flex: str | None = None) -> None:
-        value = _printed(model, incoming, week)
-        doubt = availability.classify(incoming).status is Status.QUESTIONABLE
-        squad = incoming in unconfirmed
-        key = (squad, value is None, -(value or 0.0), mover is not None, doubt,
-               incoming, mover or "")
-        found.append((key, Cover(incoming, value, mover, flex, squad)))
-
-    for pid in bench:
-        if usable(pid, pick.slot) and model.project(pid, week) is not None:
-            add(pid)
-    for other in picks:
-        mover = other.player_id
-        if (other is pick or not mover or other.slot not in FLEX_ELIGIBILITY
-                or mover in unconfirmed or (players.get(mover) is None)
-                or not players.get(mover).eligible_for(pick.slot)
-                or availability.classify(mover).status in (Status.OUT,
-                                                           Status.QUESTIONABLE)):
-            continue
-        for pid in bench:
-            if usable(pid, other.slot) and model.project(pid, week) is not None:
-                add(pid, mover, other.slot)
-    return [cover for _, cover in sorted(found, key=lambda item: item[0])]
+    ranked = rank_covers(
+        index, slots, [pid for pid in spec.player_ids if pid not in seated],
+        eligible_for=fits,
+        value=lambda pid: _printed(model, pid, week),
+        questionable=lambda pid: (availability.classify(pid).status
+                                  is Status.QUESTIONABLE),
+        practice_squad=lambda pid: pid in unconfirmed,
+        incoming_ok=lambda pid: playing(pid) and model.project(pid, week) is not None,
+        mover_ok=playing)
+    return [Cover(incoming, _printed(model, incoming, week),
+                  slots[via][1] if via is not None else None,
+                  slots[via][0] if via is not None else None,
+                  incoming in unconfirmed)
+            for incoming, via in ranked]
 
 
-def stand_in(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
-             players: PlayerIndex, model: ProjectionModel,
-             availability: WeekAvailability, week: int,
+@dataclass(frozen=True)
+class StandIn:
+    """Who covers a questionable starter, ruling by ruling (``stand_in``)."""
+    final: Cover | None = None     # ruled out on his final report
+    late: Cover | None = None      # ruled out at the inactives
+    early: Cover | None = None     # no ``late``: the game-day cover who kicks off first
+    too_early: list[str] = ()      # straight swaps too early for either clock
+    held: tuple[Cover, ...] = ()   # in-time covers another game-day plan already moves
+
+
+def stand_in(pick: SlotPick, options: Sequence[Cover],
              game_of: Callable[[str], Mapping[str, Any] | None],
              sunday: date | None,
-             unconfirmed: Mapping[str, str] | None = None,
-             ) -> tuple[Cover | None, Cover | None, list[str]]:
-    """(best cover if he is ruled out on his final report, best cover if he
-    is ruled out at the inactives, the straight swaps too early for either).
+             taken: Mapping[str, str] | None = None) -> StandIn:
+    """Who covers ``pick``'s starter, from ``options`` (``covers``, best first).
 
     Two clocks because there are two rulings (RQ-01). An Out or Doubtful on
     the final report — two days before his game — is in before game day, so
@@ -802,21 +868,32 @@ def stand_in(pick: SlotPick, spec: RosterSpec, picks: Sequence[SlotPick],
     his own kickoff, and only someone whose game has not started can.
     Nobody in time for either: no plan, and the game plan says so (launch
     audit R3/C1: the published sample moved Chase Brown, Thursday night, into
-    Tony Pollard's slot on Sunday-morning news)."""
+    Tony Pollard's slot on Sunday-morning news).
+
+    ``taken`` (player -> the starter whose game-day plan moves him) bars the
+    game-day covers only: the final-report ruling reaches Saturday's check,
+    which re-plans the whole lineup (recheck ENG-4)."""
+    taken = taken or {}
     watched = game_of(pick.player_id or "")
-    options = covers(pick, spec, picks, players, model, availability, week,
-                     unconfirmed)
 
     def ok(cover: Cover, clock: Callable[[str], bool]) -> bool:
         return all(clock(pid) for pid in cover.moving)
 
-    final = next((c for c in options
-                  if ok(c, lambda pid: in_time(game_of(pid), watched, sunday))), None)
-    late = next((c for c in options
-                 if ok(c, lambda pid: after_inactives(game_of(pid), watched))), None)
-    early = [c.incoming for c in options if c.mover is None
-             and not in_time(game_of(c.incoming), watched, sunday)]
-    return final, late, list(dict.fromkeys(early))
+    def on_final(cover: Cover) -> bool:
+        return ok(cover, lambda pid: in_time(game_of(pid), watched, sunday))
+
+    def free(cover: Cover) -> bool:
+        return not any(pid in taken for pid in cover.moving)
+
+    final = next((c for c in options if on_final(c)), None)
+    late = next((c for c in options if free(c)
+                 and ok(c, lambda pid: after_inactives(game_of(pid), watched))), None)
+    early = (None if late is not None else
+             next((c for c in options if free(c) and on_final(c)), None))
+    held = tuple(c for c in options if on_final(c) and not free(c))
+    too_early = [c.incoming for c in options if c.mover is None
+                 and not in_time(game_of(c.incoming), watched, sunday)]
+    return StandIn(final, late, early, list(dict.fromkeys(too_early)), held)
 
 
 def cover_action(cover: Cover, slot: str, players: PlayerIndex) -> str:
@@ -824,8 +901,8 @@ def cover_action(cover: Cover, slot: str, players: PlayerIndex) -> str:
     Rome Odunze to WR and start Devin Neal at FLEX" (Saturday's own words)."""
     number = (f" (projects {cover.value:.1f})" if cover.value is not None
               else " (no games this season yet)")
-    squad = (f". {players.name(cover.incoming)} is on the practice squad: check "
-             f"he's been elevated" if cover.practice_squad else "")
+    squad = (f". {elevation_note(players.name(cover.incoming))}"
+             if cover.practice_squad else "")
     if cover.mover is None:
         return f"Move {players.name(cover.incoming)} into {slot}{number}{squad}"
     return (f"Move {players.name(cover.mover)} to {slot} and start "
@@ -851,23 +928,36 @@ def _skipped_line(chosen: Cover, options: Sequence[Cover], name: str,
     return ""
 
 
-def starter_plans(name: str, pick: SlotPick, final: Cover | None,
-                  late: Cover | None, options: Sequence[Cover],
-                  players: PlayerIndex,
-                  game_of: Callable[[str], Mapping[str, Any] | None]
+def _kickoff_of(game_of: Callable[[str], Mapping[str, Any] | None]
+                ) -> Callable[[str], datetime | None]:
+    return lambda pid: kickoff(game_of(pid))
+
+
+def starter_plans(name: str, pick: SlotPick, found: StandIn,
+                  options: Sequence[Cover], players: PlayerIndex,
+                  game_of: Callable[[str], Mapping[str, Any] | None],
+                  taken: Mapping[str, str] | None = None,
                   ) -> list[dict[str, Any]]:
     """The if/then rows for one questionable starter (RQ-01).
 
     - One cover works for both rulings: one row, as always.
-    - The better cover plays before his inactives but after his final report:
-      two rows — that cover if he is ruled out before game day, the late one
-      if he sits as a game-day call.
+    - The better cover plays before his inactives but after his final report,
+      or another game-day plan already moves him: two rows — that cover if he
+      is ruled out before game day, the late one if he sits as a game-day call,
+      saying which of the two it is.
     - Only an early cover: the row for a ruling before game day, and the
       decision an expert makes on Sunday — the cover kicks off first, so start
       him before then or keep the starter and take a zero if he sits. Facts and
-      a choice; no number is attached to either side."""
+      a choice; no number is attached to either side.
+    - Every game-day cover is another plan's: said, by name.
+
+    The kickoff a plan is timed by belongs to whoever in it plays first — the
+    flex starter sliding across, as often as the bench player (recheck
+    ENG-1/RQ2-01) — and he is the one named."""
+    taken = taken or {}
     slot, about = pick.slot, pick.player_id
-    final = final or late
+    late = found.late
+    final = found.final or late
     if final is None:
         return []
     if late is not None and late == final:
@@ -878,30 +968,74 @@ def starter_plans(name: str, pick: SlotPick, final: Cover | None,
                  "about": about}]
     rows = [{"condition": f"{name} ({slot}) is ruled out before game day",
              "action": _finish(cover_action(final, slot, players)), "about": about}]
-    first = min((k for k in (kickoff(game_of(pid)) for pid in final.moving) if k),
-                default=None)
-    theirs = kickoff(game_of(about or ""))
+    watched = game_of(about or "")
+    theirs = kickoff(watched)
     if late is not None:
+        first_id, _ = first_to_kick_off(final.moving, _kickoff_of(game_of))
+        holder = next((pid for pid in final.moving if pid in taken), None)
+        if not all(after_inactives(game_of(pid), watched) for pid in final.moving):
+            why = (f". {players.name(first_id)} kicks off first" if first_id else "")
+        elif holder is not None:
+            why = (f". {players.name(holder)} is {taken[holder]}'s game-day "
+                   f"fallback")
+        else:
+            why = ""
         rows.append({"condition": f"{name} ({slot}) sits as a game-day call",
-                     "action": _finish(cover_action(late, slot, players)
-                                       + (f". {players.name(final.incoming)} kicks "
-                                          f"off first" if first else "")),
+                     "action": _finish(cover_action(late, slot, players) + why),
                      "about": about})
         return rows
-    who = players.name(final.incoming)
+    early = found.early
+    if early is None:
+        # Every cover in time is another starter's game-day plan (recheck
+        # ENG-4): each said by name, never "nobody".
+        holders = list(dict.fromkeys(
+            pid for cover in (found.held or (final,)) for pid in cover.moving
+            if pid in taken))
+        facts = [f"{players.name(pid)} is {taken[pid]}'s game-day fallback"
+                 for pid in holders]
+        facts.append(f"nobody else can step in after {name}'s inactives")
+        rows.append({"condition": f"{name} ({slot}) is still questionable on game day",
+                     "action": (f"{clauses(facts)} — keep {name} and take a zero "
+                                f"if he sits."),
+                     "about": about})
+        return rows
+    who = players.name(early.incoming)
+    first_id, first = first_to_kick_off(early.moving, _kickoff_of(game_of))
     clock = (f" at {_et(first)}, before {name}'s inactives (about "
              f"{_et(theirs - INACTIVES_LEAD)})" if first and theirs else
              f" before {name}'s status is known")
     # The move spelled out, never "make that move": the row above may be the
     # other ruling's, and a reader acting at 12:55 PM reads one line.
-    move = (f"start {who}" if final.mover is None else
-            f"move {players.name(final.mover)} to {slot} and start {who} at "
-            f"{final.flex_slot}")
+    move = (f"start {who}" if early.mover is None else
+            f"move {players.name(early.mover)} to {slot} and start {who} at "
+            f"{early.flex_slot}")
+    squad = f" {elevation_note(who)}." if early.practice_squad else ""
     rows.append({"condition": f"{name} ({slot}) is still questionable on game day",
-                 "action": (f"{who} kicks off{clock}. Decide before then: {move}, "
-                            f"or keep {name} and take a zero if he sits."),
+                 "action": (f"{players.name(first_id) if first_id else who} kicks "
+                            f"off{clock}. Decide before then: {move}, or keep "
+                            f"{name} and take a zero if he sits.{squad}"),
                  "about": about})
     return rows
+
+
+def decision_moment(player_id: str,
+                    game_of: Callable[[str], Mapping[str, Any] | None], *,
+                    cover: Cover | None = None,
+                    before: str | None = None) -> datetime | None:
+    """When the news on ``player_id`` must be acted on (Eastern): his
+    inactives, 90 minutes before his own kickoff — or earlier, when the plan
+    needs a ``cover`` who kicks off first, or when acting means benching a
+    starter (``before``) whose game starts first (panel review RQ2-07: a
+    Monday-night questionable was told to check on Sunday morning)."""
+    own = kickoff(game_of(player_id))
+    moments = [own - INACTIVES_LEAD] if own is not None else []
+    if cover is not None:
+        _, first = first_to_kick_off(cover.moving, _kickoff_of(game_of))
+        moments += [first] if first is not None else []
+    if before:
+        theirs = kickoff(game_of(before))
+        moments += [theirs] if theirs is not None else []
+    return min(moments) if moments else None
 
 
 def no_stand_in_line(name: str, slot: str, early: Sequence[str],
@@ -1167,7 +1301,7 @@ def bench_report(spec: RosterSpec, picks: Sequence[Any], players: PlayerIndex,
                               f"keep whichever you have")
                 elif paired:
                     action = (f"Start {who} over {entry['name']} at {slot} · "
-                              f"{round(pick.confidence * 100)}%")
+                              f"{printed_percent(pick.confidence)}%")
                 else:
                     action = f"Bench {entry['name']} — {who} starts at {slot}"
                     merge_key[len(items)] = (who, slot)
@@ -1413,7 +1547,7 @@ def _even_pair(pick: SlotPick, other_id: str | None, other_value: float | None,
     if abs(gap) < TOSSUP_POINTS:
         return True
     return (pick.alternative_id == other_id and pick.confidence is not None
-            and round(pick.confidence * 100) <= TOSSUP_PERCENT)
+            and printed_percent(pick.confidence) <= TOSSUP_PERCENT)
 
 
 def _doubt_words(availability: WeekAvailability | None, player_id: str) -> str:
@@ -1458,7 +1592,10 @@ def _form_facts(row: dict[str, Any], pick: SlotPick, players: PlayerIndex,
         # season, so no row may quote an edge over him.
         row["edge"] = None
         row["alternative_projected"] = None
-    if pick.doubtful_alternative_id:
+    if pick.doubtful_alternative_id and pick.confidence is not None:
+        # The skipped player explains the ODDS, so he rides only on a row that
+        # prints them (recheck ENG-7). The pick keeps him for late news and
+        # the if/then (engine.week_report._doubtful).
         row["doubtful_alternative_name"] = players.name(pick.doubtful_alternative_id)
         row["doubtful_alternative_projected"] = _printed(
             model, pick.doubtful_alternative_id, week)
@@ -1547,6 +1684,14 @@ def _named_reason(pick: SlotPick, players: PlayerIndex,
         return f"{held.replace(':', ' is', 1)}" if held else "a player isn't confirmed to play"
     if gate.startswith("held: the lineup changed"):
         return "the lineup changed around a player who can't play this week"
+    # A shape-level hold is about no player (recheck ENG-8): in a week whose
+    # context input couldn't be read, a two-FLEX report blamed a healthy James
+    # Cook ("his status isn't confirmed yet") for odds the missing input held.
+    if gate.startswith(SHAPE_INPUT_GATE):
+        return "an input these odds need is missing this week"
+    if gate.startswith("held:"):
+        # Any other hold is about the lineup, never one player's status.
+        return "this lineup's odds are on hold this week"
     if gate.startswith("we don't put odds on defenses"):
         return "we don't put odds on defenses"
     if gate.startswith(SHAPE_GATE):
@@ -1685,9 +1830,22 @@ def _at_depth(ranks: Mapping[str, tuple[str, int, int]], form: Mapping[str, floa
 def superflex_items(picks: Sequence[SlotPick], players: PlayerIndex,
                     prior_form: Mapping[str, float] | None,
                     ranks: Mapping[str, tuple[str, int, int]] | None,
-                    league_size: int) -> list[dict[str, str]]:
+                    league_size: int, *,
+                    bench: Sequence[Mapping[str, Any]] = (),
+                    game_of: Callable[[str], Mapping[str, Any] | None] | None = None,
+                    sunday: date | None = None) -> list[dict[str, str]]:
     """A superflex holding a non-quarterback, said once (launch review RQ-16):
     the first thing an expert flags, and the report said nothing.
+
+    Only when no quarterback on the roster can fill it (panel review RQ2-04,
+    COPY F10). With a bench quarterback who can play, the slot went to the
+    higher projection and the row says so — "has no quarterback … a second
+    quarterback off your waiver wire may be worth a look" sat above Daniel
+    Jones on the bench. With one out only on last week's report, his status
+    is open: that is said, by name, when the SFLEX starter plays before the
+    news is in (Lamar Jackson behind a Thursday-night Rashid Shaheed);
+    otherwise his "if he's cleared" line, if any, is the plan. The waiver
+    line never prints with a quarterback on the bench.
 
     The figures are last season's record under this subscriber's scoring, at
     the depth a full league starts (two per team: the 24th of each in a
@@ -1698,11 +1856,38 @@ def superflex_items(picks: Sequence[SlotPick], players: PlayerIndex,
     items: list[dict[str, str]] = []
     form, ranked = prior_form or {}, ranks or {}
     depth = 2 * league_size
+    quarterbacks = [entry for entry in bench if entry.get("position") == "QB"]
     for pick in picks:
         if pick.slot != "SUPER_FLEX" or not pick.player_id:
             continue
         position = players.position(pick.player_id)
         if position == "QB":
+            continue
+        if any(not entry.get("out") for entry in quarterbacks):
+            continue
+        name = players.name(pick.player_id)
+        open_status = [entry for entry in quarterbacks
+                       if entry.get("out_kind") == "designation"]
+        if open_status:
+            qb = open_status[0]
+            mine = (game_of or (lambda _pid: None))(pick.player_id)
+            if in_time(mine, (game_of or (lambda _pid: None))(qb["player_id"]),
+                       sunday):
+                continue                  # his "if he's cleared" line is the plan
+            day = _game_day(mine)
+            when = day.strftime("%A") if day else "first"
+            # Not "no quarterback": there is one, whose status is open (COPY
+            # F10). The choice, with no number on either side.
+            items.append({
+                "action": (f"{name} ({position}) starts at {pick.slot} — "
+                           f"{qb['name']}'s status isn't out yet"),
+                "detail": (f"{qb['name']}: {qb.get('out_text') or 'status open'}. "
+                           f"{name} plays {when}, before that news is in. Decide "
+                           f"before then: {name} there, or {qb['name']} before "
+                           f"his status is known."),
+                "deadline": _deadline(mine),
+                "urgency": "deadline",
+            })
             continue
         detail = ""
         quarterback = _at_depth(ranked, form, "QB", depth)
@@ -1712,7 +1897,7 @@ def superflex_items(picks: Sequence[SlotPick], players: PlayerIndex,
                       f"{_ordinal(quarterback[0])}-best quarterback averaged "
                       f"{quarterback[1]:.1f} a game and the {_ordinal(other[0])}-best "
                       f"{POSITION_WORDS.get(position, position)} {other[1]:.1f}.")
-            if quarterback[1] > other[1]:
+            if quarterback[1] > other[1] and not quarterbacks:
                 detail += (" A second quarterback off your waiver wire may be "
                            "worth a look.")
         items.append({
@@ -1771,6 +1956,32 @@ def _week_sunday(schedule: Mapping[str, Mapping[str, Any]]) -> date | None:
     sundays = [day for day in (_game_day(g) for g in schedule.values())
                if day is not None and day.weekday() == 6]
     return min(sundays) if sundays else None
+
+
+def practice_squad_items(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
+                         players: PlayerIndex,
+                         game_of: Callable[[str], Mapping[str, Any] | None]
+                         ) -> list[dict[str, str]]:
+    """A STARTER on the practice squad, said in the game plan (recheck ENG-3,
+    method §15 C9). With Sam LaPorta on bye, Zach Ertz started at TE and only
+    the row's flag said he plays only if elevated — and scores 0 if not. A
+    fact and a check, no number; a bench player's elevation rides on the
+    plan that names him (``elevation_note``)."""
+    items: list[dict[str, str]] = []
+    for pick in picks:
+        pid = pick.player_id
+        if not pid or pid not in unconfirmed:
+            continue
+        name = players.name(pid)
+        items.append({
+            "action": f"Check {name} has been elevated",
+            "detail": (f"{name} starts at {pick.slot} from the practice squad: he "
+                       f"plays only if his team elevates him, by the afternoon "
+                       f"before his game, and scores 0 if it doesn't."),
+            "deadline": _deadline(game_of(pid)),
+            "urgency": "deadline",
+        })
+    return items
 
 
 def _deadline(game: Mapping[str, Any] | None) -> str:

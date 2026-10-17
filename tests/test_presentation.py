@@ -218,38 +218,55 @@ def test_two_teams_emails_can_be_told_apart() -> None:
     """Reproduction (BE-I5): the same manager with two teams got two emails
     with the subject "Week 6: your lineup, decided" over a header reading
     "Your league · 12 teams · Full PPR". The subject and header now name the
-    team by its highest-projected starter."""
+    team by its lead player (engine.solo_report.team_lead) — and, since panel
+    review RQ2-06, by the roster on file rather than this week's projections,
+    so the name holds from week to week: it moved from "Bijan Robinson's team"
+    to "Garrett Wilson's" to "Jayden Daniels's" for one subscription."""
     report = _subscriber(plan="season")
-    lead = max((s for s in report["lineup"] if s.get("projected") is not None
-                and s["slot"] not in ("K", "DEF")), key=lambda s: s["projected"])
-    team = f"{lead['player_name']}'s team"
+    lead = report["meta"]["team_lead"]
+    assert lead, "the report names its team"
+    team = f"{lead}'s team"
     assert subject_for(report) == f"Week {report['meta']['week']} — {team}: your lineup, decided"
     for name, doc in _surfaces(report).items():
         assert team in doc.split("GAME PLAN")[0].split("Game Plan")[0], name
-    other = copy.deepcopy(report)
-    for slot in other["lineup"]:
-        if slot.get("player_name") == lead["player_name"]:
-            slot["projected"] = 0.1
+    # A week whose projections reorder the starters keeps the name...
+    moved = copy.deepcopy(report)
+    for slot in moved["lineup"]:
+        if slot.get("player_name") != lead and slot.get("projected") is not None:
+            slot["projected"] = 99.0
+    assert subject_for(moved) == subject_for(report)
+    # ...while another roster, with another lead, reads differently.
+    other = _as(report, team_lead="Someone Else")
     assert subject_for(other) != subject_for(report)
 
 
 def test_a_kicker_or_defense_never_names_a_team_and_week_one_still_does() -> None:
-    """A defense out-projecting the skill players must not make "the Denver
-    Broncos's team"; and Week 1, with no projections, still names the team
-    after its first starter (the quarterback) under the opening-lineup
-    promise."""
+    """A defense or a kicker must not make "the Denver Broncos's team"; and
+    Week 1, with no projections, names the same team as every other week,
+    under the opening-lineup promise."""
+    from engine.roster import Player, PlayerDirectory
+    from engine.solo_report import team_lead
+    from engine.subscriber import RosterSpec, player_index
+    people = [Player("DEF-DEN", "Denver Broncos", "DEF", "DEN"),
+              Player("00-0000901", "Big Leg", "K", "BAL"),
+              Player("00-0000902", "Steady Back", "RB", "KC"),
+              Player("00-0000903", "Hot Receiver", "WR", "KC")]
+    players = player_index(PlayerDirectory(people))
+    spec = RosterSpec(player_ids=tuple(p.player_id for p in people),
+                      slots=("RB", "WR"), scoring="ppr")
+    assert team_lead(spec, players, None, None) == "Steady Back"
+    form = {"DEF-DEN": 30.0, "00-0000901": 25.0, "00-0000902": 12.0,
+            "00-0000903": 14.0}
+    ranks = {"00-0000901": ("K", 1, 32), "00-0000902": ("RB", 20, 80),
+             "00-0000903": ("WR", 12, 120)}
+    assert team_lead(spec, players, form, ranks) == "Hot Receiver"
     report = _subscriber(plan="season")
-    report["lineup"] += [
-        {"slot": "K", "player_name": "Big Leg", "projected": 50.0},
-        {"slot": "DEF", "player_name": "Denver Broncos", "projected": 60.0}]
     named = rr.team_name(report)
-    assert named and "Big Leg" not in named and "Broncos" not in named, named
     for slot in report["lineup"]:
         slot["projected"] = None
-    first = report["lineup"][0]
-    assert rr.team_name(report) == f"{first['player_name']}'s team"
+    assert rr.team_name(report) == named
     assert subject_for(report) == (f"Week {report['meta']['week']} — "
-                                   f"{first['player_name']}'s team: your opening lineup")
+                                   f"{named}: your opening lineup")
     for demo in ({"historical_demo": True}, {"live_demo": True}, {"trial": True}):
         assert rr.team_name(_as(report, **demo)) is None, demo
 

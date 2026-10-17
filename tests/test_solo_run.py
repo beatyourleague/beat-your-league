@@ -137,15 +137,17 @@ def _cache(tmp_path: Path, *, weeks: int = 5, injuries: bool = True,
                 "receiving_tds", "rushing_yards", "rushing_tds", "passing_yards",
                 "passing_tds", "targets", "receiving_air_yards", "carries"])
 
-    _write(cache / f"stats_team_week_{season}.csv",
-           [{"team": team, "season": season, "week": week, "season_type": "REG",
-             "def_sacks": 3, "def_interceptions": 1,
-             # A team's OFFENSIVE counts ride along in this release, which is
-             # what made a defense's usage line describe its own offense.
-             "targets": 32, "carries": 28}
-            for week in range(1, weeks + 1) for team in teams],
-           ["team", "season", "week", "season_type", "def_sacks",
-            "def_interceptions", "targets", "carries"])
+    # Last season's too: week 1 orders defenses by their record (RQ2-02).
+    for which, last in ((season, weeks), (str(int(season) - 1), 8)):
+        _write(cache / f"stats_team_week_{which}.csv",
+               [{"team": team, "season": which, "week": week, "season_type": "REG",
+                 "def_sacks": 3, "def_interceptions": 1,
+                 # A team's OFFENSIVE counts ride along in this release, which
+                 # is what made a defense's usage line describe its own offense.
+                 "targets": 32, "carries": 28}
+                for week in range(1, last + 1) for team in teams],
+               ["team", "season", "week", "season_type", "def_sacks",
+                "def_interceptions", "targets", "carries"])
 
     rows = []
     if injuries:

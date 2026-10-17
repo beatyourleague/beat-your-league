@@ -489,6 +489,10 @@ _GATE_PHRASES = (
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
     ("no eligible player", "no eligible player with a scoring record"),
+    # Week 1 (panel review RQ2-02): the note read "a player's status isn't
+    # confirmed yet" above a lineup with no injury report to be confirmed by —
+    # the true reason is that nobody has played.
+    ("no game record yet", "nobody has played a game this season yet"),
     # Contract C8: a lineup shape no preregistered arm has graded prints no
     # odds at all. Without its own phrase it fell through to "a player's
     # status isn't confirmed yet" — false about a confirmed starter.
@@ -691,6 +695,11 @@ def team_name(report: Mapping[str, Any]) -> str | None:
     meta = report.get("meta") or {}
     if not is_subscriber_report(meta):
         return None
+    if meta.get("team_lead"):
+        # Fixed by the roster on file (engine.solo_report.team_lead, panel
+        # review RQ2-06): the same subscription keeps the same name every
+        # week. The projection rule below is for reports built before it.
+        return f"{meta['team_lead']}'s team"
     starters = [s for s in (report.get("lineup") or [])
                 if s.get("player_name") and s.get("slot") not in _UNNAMED_SLOTS]
     if not starters:
@@ -836,8 +845,12 @@ def _generated_stamp(meta: Mapping[str, Any]) -> str:
         return "Built this week"
     if meta.get("historical_demo"):
         # The sample is a replay: say so in the stamp itself, or the build
-        # date and the season it replays look like a contradiction.
-        return stamp.strftime(f"Rebuilt %b %d, %Y from the {meta.get('season')} "
+        # date and the season it replays look like a contradiction. Dated on
+        # the buyer's clock like every other stamp (recheck ENG-10): read off
+        # UTC, a build after 8 PM ET was dated tomorrow.
+        from zoneinfo import ZoneInfo
+        local = stamp.astimezone(ZoneInfo("America/New_York"))
+        return local.strftime(f"Rebuilt %b %d, %Y from the {meta.get('season')} "
                               f"season archive")
     return "Built " + eastern(stamp)
 
@@ -1569,7 +1582,10 @@ def call_bits(slot: Mapping[str, Any]) -> list[str]:
     prints). Engine facts only; nothing here computes a number."""
     bits = [b for b in (edge_phrase(slot),) if b]
     doubtful = slot.get("doubtful_alternative_name")
-    if doubtful and slot.get("alternative_name"):
+    # Only beside odds that print (recheck ENG-7): a row whose number a later
+    # hold withheld — the practice squad, a held lineup, an ungraded shape —
+    # read "…was questionable, so the odds are against Zach Ertz" with no odds.
+    if doubtful and slot.get("alternative_name") and slot.get("confidence") is not None:
         value = slot.get("doubtful_alternative_projected")
         number = f" ({value:.1f})" if value is not None else ""
         why = slot.get("doubtful_alternative_why") or "was questionable"

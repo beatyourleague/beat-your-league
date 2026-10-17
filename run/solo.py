@@ -390,6 +390,13 @@ class WeekData:
     # odds he is part of. Report layer only — both may only remove.
     not_active: dict = field(default_factory=dict)
     practice_squad: dict = field(default_factory=dict)
+    # Last season's team-defense games under the product's defense scoring
+    # (RULE S4): DEF id -> points in each game played. A RECORD, never a model
+    # input: the positional prior, the field and the anchor read ``prior``,
+    # which carries no defense rows, and none of them may move. Week 1 orders
+    # defenses by it (panel review RQ2-02) as it orders every other position
+    # by ``prior`` — it started New England over Seattle on the ids alone.
+    prior_defense: dict = field(default_factory=dict)
 
 
 def _statuses(directory: PlayerDirectory,
@@ -718,6 +725,9 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         raise SoloError(
             f"could not load {int(season) - 1} for the positional prior: {exc}"
         ) from exc
+    # Read only for week 1, the one week that orders defenses by it.
+    prior_defense = (_prior_defense(cache_dir, str(int(season) - 1), session=session)
+                     if week <= 1 else {})
 
     # The week we project FROM must be complete before we build anything —
     # same rule engine/ledger.py applies before it grades, from the same
@@ -729,6 +739,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
     roster_out = _live_roster_out(players_csv, is_live_week)
     from engine.availability import LIVE_ONLY_OUT, PRACTICE_SQUAD
     return WeekData(
+        prior_defense=prior_defense,
         not_active=_live_roster_out(players_csv, is_live_week, LIVE_ONLY_OUT),
         practice_squad=_live_roster_out(players_csv, is_live_week, PRACTICE_SQUAD),
         season=season,
@@ -1125,6 +1136,9 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     # slot, and a line saying so. It is a record of what happened, never a
     # projection for this week — see _place_without_projections.
     prior_form = _prior_form(data.prior, spec.rule)
+    # Defenses too, from their own record (RQ2-02): it orders them in week 1
+    # and is printed beside them, like every other position's.
+    prior_form.update(_defense_form(data))
     # Last season's positional rank under THIS subscriber's rule — the same
     # function the roster file prints, so "RB14" means one thing everywhere.
     from engine.preseason import positional_ranks, prior_season_form
@@ -1137,6 +1151,10 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
             return usage_line(line, data.players.position(player_id))
         # Week 1: no counted usage exists yet, and an empty row leaves the
         # reader no way to check why this player is starting over that one.
+        if player_id.startswith("DEF-"):
+            # Only before any game this season: from week 2 a defense's row
+            # carries its own games, and a second record beside them is noise.
+            return _defense_form_line(player_id, data) if data.week <= 1 else None
         return _prior_form_line(player_id, data.prior, spec.rule)
 
     if projections_out is not None:
@@ -1270,6 +1288,42 @@ def _prior_form(prior: Mapping[int, Mapping[str, Mapping[str, str]]],
             totals[player_id] = totals.get(player_id, 0.0) + score(row, rule)
             games[player_id] = games.get(player_id, 0) + 1
     return {pid: totals[pid] / games[pid] for pid in totals if games[pid]}
+
+
+def _prior_defense(cache_dir: Path, season: str, *,
+                   session: requests.Session | None = None) -> dict[str, list[float]]:
+    """DEF id -> last season's points in each game, scored as the product
+    scores defenses (RULE S4). A completed season, read from the cache; an
+    outage is an empty record (the defenses then keep their id order and no
+    figure prints beside them), never a reason to refuse the report."""
+    from engine.scoring import score_defense
+    from ingest.nflverse import defense_rows
+    try:
+        rows = defense_rows(cache_dir, season, live=False, session=session)
+    except NflverseError:
+        return {}
+    out: dict[str, list[float]] = {}
+    for week in sorted(rows):
+        for abbr, row in rows[week].items():
+            points = score_defense(row, row.get("points_allowed"))
+            if points is not None:
+                out.setdefault(f"DEF-{abbr}", []).append(points)
+    return out
+
+
+def _defense_form(data: WeekData) -> dict[str, float]:
+    """DEF id -> last season's points per game played (``_prior_defense``)."""
+    return {pid: sum(games) / len(games)
+            for pid, games in (getattr(data, "prior_defense", None) or {}).items()
+            if games}
+
+
+def _defense_form_line(player_id: str, data: WeekData) -> str | None:
+    games = (getattr(data, "prior_defense", None) or {}).get(player_id) or []
+    if not games:
+        return None
+    return (f"last season: {sum(games) / len(games):.1f} a game over {len(games)} "
+            f"game{'s' if len(games) != 1 else ''}")
 
 
 def _prior_form_line(player_id: str,

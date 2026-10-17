@@ -21,7 +21,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Collection, Mapping, Sequence
 
@@ -295,7 +295,14 @@ def optimal_lineup(
         confidence = None
         gate: str | None = None
         alt_projection = projections.get(alt_id) if alt_id else None
-        if alt_id is None or alt_projection is None:
+        if not TEAM_DEFENSE_CONFIDENCE_CALIBRATED and pid.startswith(f"{DEFENSE}-"):
+            # A defense row never carries odds, whoever is on the bench — so
+            # that is its reason, checked first (recheck ENG-9): with the only
+            # bench defense on bye the row read "Detroit Lions on bye", as if
+            # odds would print with a playable one. Reason text only: nothing
+            # here can publish, and the graded-defenses harness lifts the flag.
+            gate = DEFENSE_GATE
+        elif alt_id is None or alt_projection is None:
             gate = "nobody on your bench is eligible here"
         elif (projection.evidence < MIN_GAMES_FOR_CALL
               or alt_projection.evidence < MIN_GAMES_FOR_CALL):
@@ -1274,6 +1281,7 @@ def checklist(
     planned: Collection[str] | None = None,
     unplanned: Mapping[str, str] | None = None,
     standins: Mapping[str, Sequence[str]] | None = None,
+    late_news_when: Callable[[str], datetime | None] | None = None,
 ) -> list[dict[str, str]]:
     """The game plan. ``extra`` items (the solo report's kickoff and
     cleared-player lines) go immediately before the late-news line, which
@@ -1284,7 +1292,9 @@ def checklist(
     ``news`` (late_news, timed), ``planned`` (players an if/then is printed
     for) with ``unplanned`` (player -> the sentence for one who has none), and
     ``standins`` (absent starter -> bench players out only on last week's
-    report who could start there)."""
+    report who could start there), and ``late_news_when`` (player -> when
+    his news must be acted on, Eastern) so the late-news line names that day.
+    """
     seated = [p for p in my_picks if p.player_id is not None]
     items: list[dict[str, str]] = []
     if current_starters is None:
@@ -1294,6 +1304,13 @@ def checklist(
         # branch below exists to avoid. State the lineup instead of comparing
         # to one.
         if not seated or not any(p.projection for p in seated):
+            # Week 1 sets a lineup too (panel review RQ2-02): the slots ARE
+            # filled, in last season's scoring order, and the reader still has
+            # to type them in before the first kickoff — a Thursday opener
+            # included. Placement only: no projection, no percentage; the
+            # basis item below says what the order is and is not.
+            if seated:
+                items.append(_set_lineup_item(seated, players, stakes))
             # State the BASIS, not just the absence. The slots are filled, so a
             # reader who is told only "this is not a recommendation" is left to
             # guess why these players are in them — and the honest answer is
@@ -1322,15 +1339,7 @@ def checklist(
             # It used to be one run-on sentence ("Set this lineup: Josh Allen
             # at QB, Saquon Barkley at RB, …") that was the longest line of the
             # "30-second" plan.
-            listed = " · ".join(f"{p.slot} {players.name(p.player_id or '')}"
-                                for p in seated)
-            items.append({
-                "action": f"Set this lineup{_stakes_clause(stakes)}"
-                          f"{_behind_sentence(stakes)}",
-                "detail": listed,
-                "deadline": "before this week's first kickoff",
-                "urgency": "now",
-            })
+            items.append(_set_lineup_item(seated, players, stakes))
         # A slot nobody can fill is the most actionable thing in the report and
         # used to be silent: the lineup simply rendered "(empty)" and the
         # checklist said nothing, so a subscriber with no kicker rostered would
@@ -1430,7 +1439,8 @@ def checklist(
         items.extend(extra)
         items.extend(_late_news_item(my_picks, players, availability,
                                      skip=late_news_skip, news=news,
-                                     planned=planned, unplanned=unplanned))
+                                     planned=planned, unplanned=unplanned,
+                                     when=late_news_when))
         return items
 
     changes = [
@@ -1500,6 +1510,21 @@ def checklist(
     return items
 
 
+def _set_lineup_item(seated: list[SlotPick], players: PlayerIndex,
+                     stakes: Mapping[str, Any] | None) -> dict[str, str]:
+    """"Set this lineup" with the lineup, slot first so it scans like the
+    lineup screen it gets typed into."""
+    listed = " · ".join(f"{p.slot} {players.name(p.player_id or '')}"
+                        for p in seated)
+    return {
+        "action": f"Set this lineup{_stakes_clause(stakes)}"
+                  f"{_behind_sentence(stakes)}",
+        "detail": listed,
+        "deadline": "before this week's first kickoff",
+        "urgency": "now",
+    }
+
+
 def _by_standins(picks: list[SlotPick], cover: Mapping[str, Sequence[str]]
                  ) -> list[tuple[tuple[str, ...], list[SlotPick]]]:
     """Absent starters who have stand-ins, grouped by WHO the stand-ins are,
@@ -1527,6 +1552,7 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
                     news: list[tuple[str, SlotPick, bool, str]] | None = None,
                     planned: Collection[str] | None = None,
                     unplanned: Mapping[str, str] | None = None,
+                    when: Callable[[str], datetime | None] | None = None,
                     ) -> list[dict[str, str]]:
     """``skip``: players another item already times — a Thursday-night player
     told to check his status on Sunday morning is told it three days after his
@@ -1535,12 +1561,39 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
     With ``planned`` given, "your if/then already has the answer" is said only
     of players an if/then is printed for (launch audit R7: it was said of a
     lone quarterback with nobody behind him, and of three players whose plans
-    the cap had dropped); anyone else gets ``unplanned``'s plain sentence."""
+    the cap had dropped); anyone else gets ``unplanned``'s plain sentence.
+
+    ``when`` (player -> the moment his news must be acted on, Eastern: his
+    inactives, or an earlier cover's kickoff) puts each player on his own day
+    (panel review RQ2-07): a Monday-night questionable whose cover plays the
+    same game was told "Sunday morning: check his status (gameday morning)"
+    while the call is made at Monday's inactives, about 6:45 PM ET. Sunday,
+    or no clock at all, keeps the Sunday-morning line."""
     if news is None:
         news = late_news(my_picks, players, availability)
     watch = [entry for entry in news if entry[3] not in skip]
     if not watch:
         return []
+    buckets: dict[date | None, list[tuple[tuple, datetime | None]]] = {}
+    for entry in watch:
+        moment = when(entry[3]) if when is not None else None
+        day = moment.date() if moment is not None and moment.weekday() != 6 else None
+        buckets.setdefault(day, []).append((entry, moment))
+    sunday = next((m.date() for group in buckets.values() for _, m in group
+                   if m is not None and m.weekday() == 6), None)
+    order = sorted(buckets, key=lambda day: day or sunday or date.min)
+    return [_late_news_line([e for e, _ in buckets[day]],
+                            [m for _, m in buckets[day] if m is not None],
+                            day, planned, unplanned)
+            for day in order]
+
+
+def _late_news_line(watch: list[tuple[str, SlotPick, bool, str]],
+                    moments: list[datetime], day: date | None,
+                    planned: Collection[str] | None,
+                    unplanned: Mapping[str, str] | None) -> dict[str, str]:
+    """One day's "check his status" line — Sunday morning, or the day and
+    the time the news is acted on."""
     names = [name for name, _, _, _ in watch]
     who = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     if planned is None:
@@ -1554,13 +1607,19 @@ def _late_news_item(my_picks: list[SlotPick], players: PlayerIndex,
                  if answered else [])
         parts += [line for line in missing if line]
         detail = " ".join(parts)
-    return [{
-        "action": f"Sunday morning: check {who}'s status" if len(names) == 1
-                  else f"Sunday morning: check on {who}",
+    label, deadline = "Sunday morning", "gameday morning"
+    if day is not None:
+        label = day.strftime("%A")
+        first = min(moments)
+        deadline = (f"by {label} {first.hour % 12 or 12}:{first.minute:02d} "
+                    f"{'AM' if first.hour < 12 else 'PM'} ET")
+    return {
+        "action": f"{label}: check {who}'s status" if len(names) == 1
+                  else f"{label}: check on {who}",
         **({"detail": detail} if detail else {}),
-        "deadline": "gameday morning",
+        "deadline": deadline,
         "urgency": "deadline",
-    }]
+    }
 
 
 # --------------------------------------------------------------------- #
