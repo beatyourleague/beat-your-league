@@ -51,7 +51,7 @@ import threading
 import time
 import urllib.parse
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator
@@ -494,7 +494,91 @@ def check_week_json() -> list[Gate]:
                  "WARN" if stale else "PASS",
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
                  + (" — stale until the next Tuesday build (the hero shows its static sentence)"
-                    if stale else ""))]
+                    if stale else "")),
+            recorded_odds_gate(w)]
+
+
+def _instant(stamp: Any) -> datetime | None:
+    try:
+        when = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
+def recorded_odds_gate(week: dict) -> Gate:
+    """G24 / R1 / BE2-D3: site/this-week.html is public proof, and a % on it
+    that the ledger does not hold is a published probability with nothing
+    grading it — principle 2's failure on the one page the landing links as
+    the product. render/live_sample.write_week_json says whether this week's
+    odds went on the record (``recorded``) and whether the page was rebuilt
+    after the week's first kickoff (``after_kickoff``, which it must then say
+    on the page). Reproduced on Oct 17 2026: week.json carried 2 odds, no
+    ``recorded`` and a build time a day after Thursday's kickoff, with nothing
+    on the record — and no gate looked."""
+    name = "This week's sample prints only recorded odds"
+    odds = int(week.get("odds") or 0)
+    problems = []
+    if odds > 0 and not week.get("recorded"):
+        problems.append(f"site/this-week.html prints {odds} % the ledger does not hold — "
+                        f"rebuild with `make live-sample ARGS=--force`")
+    built, first = _instant(week.get("built_at")), _instant(week.get("first_kickoff"))
+    if built and first and built > first and not week.get("after_kickoff"):
+        problems.append("built after the week's first kickoff but does not say so")
+    if problems:
+        return Gate("Site", name, "FAIL", "; ".join(problems))
+    return Gate("Site", name, "PASS",
+                f"{odds} % on the page, all on the record" if odds else "no % on the page")
+
+
+def ledger_rows(processed_dir: Path, season: str) -> tuple[int, int, list[str]]:
+    """(calls on the record for ``season``, typed-* stores holding them, stores
+    that could not be read) — the roster product's stores only, deduplicated
+    as the grader reads them (engine.ledger.load_ledger)."""
+    from engine.ledger import LedgerError, load_ledger
+    calls = stores = 0
+    broken = []
+    for path in sorted((Path(processed_dir) / "ledger").glob(f"typed-*-{season}/calls.jsonl")):
+        try:
+            held = len(load_ledger(path))
+        except (LedgerError, OSError) as exc:
+            broken.append(f"{path.parent.name} ({exc})")
+            continue
+        calls += held
+        stores += 1 if held else 0
+    return calls, stores, broken
+
+
+def check_record(processed_dir: Path | None = None, today: date | None = None) -> list[Gate]:
+    """G25: the public record holds this season's calls — counted, never
+    assumed. Every published % is recorded when it is delivered (run/tuesday)
+    and the live sample records its own before kickoff, so once the first
+    Tuesday that could carry odds has passed — Week 2's, when the sample's
+    measured setup gets them — an empty record means the recording is not
+    happening, whatever the code says. Reproduced Oct 17 2026, Week 6: no
+    typed-* store existed at all, and nothing in the launch check said so."""
+    from render.live_sample import PROCESSED_DIR, next_report_day
+    from run.solo import CACHE_DIR, current_season
+    today = today or date.today()
+    name = "The public record holds this season's calls"
+    try:
+        season = current_season(CACHE_DIR, today)
+        first = next_report_day(CACHE_DIR, season, 1)
+    except Exception as exc:  # noqa: BLE001 — the schedule can't say
+        return [Gate("Record", name, "SKIP", f"the schedule can't say: {exc}")]
+    calls, stores, broken = ledger_rows(processed_dir or PROCESSED_DIR, season)
+    held = f"{calls} call(s) on the record for {season} in {stores} typed-* store(s)"
+    if broken:
+        return [Gate("Record", name, "FAIL", f"{held}; unreadable: {', '.join(broken)}")]
+    due = first is not None and today >= date.fromisoformat(first)
+    if calls == 0 and due:
+        return [Gate("Record", name, "WARN",
+                     f"{held}, though odds could be recorded from {first} (Week 2's report "
+                     f"Tuesday): the live sample and every delivered report record theirs, "
+                     f"so nothing is being recorded")]
+    return [Gate("Record", name, "PASS",
+                 held + ("" if due or first is None else
+                         f" — nothing can be recorded before {first}"))]
 
 
 # --------------------------------------------------------------------- #
@@ -952,18 +1036,23 @@ def check_email_widths() -> list[Gate]:
     """GATE-2: the emails this week's run would send, at a true 390px phone.
     A test pins the 2024 sample's email; the live week and the battery are
     what real inboxes get, and a long player name or a new row only shows up
-    there."""
+    there. Every other email too (other_email_samples, at its longest): the
+    gate measured only reports, so a welcome, a seat note or the launch
+    announcement could scroll sideways on launch day with this gate green."""
     from render.email import render_email
     from render.live_sample import build
     from run.solo import SeasonOver
     emails: list[tuple[str, str]] = []
     try:
-        emails.append(("this week's sample", render_email(build())))
+        sample = build()
+        emails.append(("this week's sample", render_email(sample)))
     except SeasonOver as exc:
         return [Gate("Browser", "Every email fits a 390px phone", "SKIP", f"offseason: {exc}")]
     built = battery_reports()
     if not isinstance(built, str):
         emails += [(label, render_email(report)) for label, report in built]
+    season = str((sample.get("meta") or {}).get("season") or date.today().year)
+    emails += [(name, page) for name, page, _ in other_email_samples(season)]
     with tempfile.TemporaryDirectory() as tmp:
         names = {}
         for i, (label, page) in enumerate(emails):
@@ -976,7 +1065,8 @@ def check_email_widths() -> list[Gate]:
         return [Gate("Browser", "Every email fits a 390px phone", "SKIP", results)]
     wide = [f"{names.get(x['path'], x['path'])} ({x.get('scrollWidth')}px)" for x in results
             if x.get("overflow") or "jobError" in x]
-    return [_gate("Browser", "Every email fits a 390px phone (this week, every battery setup)",
+    return [_gate("Browser", "Every email fits a 390px phone (this week, every battery setup, "
+                             "every other email)",
                   not wide, "; ".join(wide[:4]), f"{len(results)} emails at 390px")]
 
 
@@ -996,9 +1086,18 @@ FLOWS = (
     ("seat (payer's address)", "open", "?pass=1", "seat", None),
     ("seat (payer's link)", "open", f"?pass={FLOW_TOKEN}&s=half_ppr&n=10&t=sf", "seat", None),
     ("free report", "open", f"?try=1&via={FLOW_VIA}", "trial", None),
-    ("roster update", "open", "?update=1", "update_request", None),
+    # Every report links the update page WITH its subscription's settings
+    # (run/updates.public_update_url, FUNNEL F1); a bare link — an old report,
+    # a typed address — makes the subscriber tick that the settings on screen
+    # are their league's (``FLOW_TICKS``). The bare flow alone FAILED once the
+    # box arrived, because nothing here ticked it.
+    ("roster update (report link)", "open", "?update=1&s=half_ppr&n=10&t=sf",
+     "update_request", None),
+    ("roster update (bare link)", "open", "?update=1", "update_request", None),
     ("closed checkout", "closed", "", "waitlist", None),
 )
+# Boxes a buyer must tick in a mode before its button posts anything.
+FLOW_TICKS = {"roster update (bare link)": ["settings-ok"]}
 
 
 def join_copy(dest: Path, base: str, links_open: bool) -> list[str]:
@@ -1102,15 +1201,21 @@ def audit_flow(mode: str, kind: str, plan: str | None, query: str, result: dict,
             check_ref(row["ref"], None)
         return problems
     decoded = check_ref(row.get("ref"), None)
+    # Settings a link carried (a seat link, a report's update link — the one
+    # s/n/t format, run/updates.settings_params) must be the ones posted:
+    # an update REPLACES the subscription's settings with the ref's.
+    if decoded is not None and asked.get("s"):
+        from run.trial import TEMPLATES
+        want = ((asked.get("s") or [""])[0], int((asked.get("n") or ["0"])[0]),
+                tuple(TEMPLATES.get((asked.get("t") or [""])[0], ())))
+        if (decoded.scoring, decoded.league_size, tuple(decoded.slots)) != want:
+            problems.append(f"{mode}: the link's settings were not carried")
     if kind == "seat":
         if "pass_token" in row:
             # The payer's own link (contract C4): the token is the payer, and
             # the league's settings arrive prefilled from the link.
             if row["pass_token"] != (asked.get("pass") or [None])[0]:
                 problems.append(f"{mode}: posted a different pass token")
-            if decoded is not None and (decoded.scoring, decoded.league_size,
-                                        len(decoded.slots)) != ("half_ppr", 10, 10):
-                problems.append(f"{mode}: the link's settings were not carried")
         elif row.get("covered_by") != FLOW_PAYER:
             problems.append(f"{mode}: the commissioner's address is not the one typed")
     return problems
@@ -1152,7 +1257,8 @@ def check_join_flows() -> list[Gate]:
         roster_text, roster_ids = flow_roster(Path(tmp) / "open" / "join" / "players.json")
         jobs = [{"kind": "flow", "mode": mode, "path": f"{copy}/join/index.html{query}",
                  "width": 390, "roster": roster_text, "email": FLOW_EMAIL, "payer": FLOW_PAYER,
-                 "planSwitch": mode == "season"} for mode, copy, query, _k, _p in FLOWS]
+                 "planSwitch": mode == "season", "tick": FLOW_TICKS.get(mode, [])}
+                for mode, copy, query, _k, _p in FLOWS]
         with _serving(Path(tmp), port):
             results = run_browser(jobs, base)
     name = "Every join mode hands off a well-formed purchase or row"
@@ -1450,21 +1556,19 @@ TRANSACTIONAL = ("roster confirmation",)
 WAY_OUT = re.compile(r"cancel|reply \"stop\"|only email we.ll send you|unsubscrib", re.I)
 
 
-def email_samples() -> list[tuple[str, str, str | None]]:
+def email_samples(report: dict | None = None) -> list[tuple[str, str, str | None]]:
     """(name, html, List-Unsubscribe or None) for every email the product
     sends, built by the same functions the runners call, around THIS week's
-    live report where a report is involved."""
+    live report where a report is involved (``report``, built when not
+    given)."""
     import copy
 
     from engine.final_check import Change
     from render.email import render_email
     from render.final_check import render_final_check
     from render.live_sample import build
-    from render.renewal import Renewal, renewal_message
     from render.report import unsubscribe_target
-    from render.roster_update import confirm_email
-    from render.welcome import welcome_message
-    report = build()
+    report = report if report is not None else build()
 
     def variant(**meta) -> str:
         out = copy.deepcopy(report)
@@ -1478,26 +1582,64 @@ def email_samples() -> list[tuple[str, str, str | None]]:
            ("Saturday final check",
             render_final_check({"week": week, "players": {}},
                                [Change("swap", "Start X at RB", "Y is out.")],
-                               datetime.now(timezone.utc)), unsubscribe_target(False)),
-           ("roster confirmation",
-            confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24,
-                          ["A", "B"])[1], None)]
-    for plan in ("season", "monthly", "league_pass", "seat"):
-        msg = welcome_message("a@example.com", plan, "abcdef0123", str(report["meta"]["season"]),
-                              purchased_at=datetime.now(timezone.utc).isoformat())
-        out.append((f"welcome ({plan})", msg.html, msg.unsubscribe))
-    from datetime import date
-    msg = renewal_message(Renewal("a@example.com", "$39.00 USD", date.today() + timedelta(days=30),
-                                  "year", plan="season"))
-    out.append(("renewal notice", msg.html, msg.unsubscribe))
+                               datetime.now(timezone.utc)), unsubscribe_target(False))]
+    out += other_email_samples(str(report["meta"]["season"]))
     roster = roster_report()
     if roster is not None:
         from render.preseason import preseason_message
         msg = preseason_message("a@example.com", "abcdef0123", roster)
         out.append(("roster report", msg.html, msg.unsubscribe))
+    return out
+
+
+# A pass payer's seat link at its longest: one unbroken string, which once
+# pushed the welcome 17px past a 390px phone (render/welcome.py).
+SAMPLE_SEAT_LINK = "https://example.com/join/?pass=" + "0" * 20 + "&s=half_ppr&n=14&t=flex2-nokd"
+
+
+def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
+    """Every email that is not built around a weekly report, as the runners
+    build them, each in its longest form: the roster-change confirmation with
+    every setting moving, every welcome (and the League Pass bought over a
+    season pass, with its seat link), the renewal notice, the three notes a
+    League Pass seat claim can get, and the launch announcement with and
+    without a saved roster. (name, html, List-Unsubscribe or None)."""
+    from render.renewal import Renewal, renewal_message
+    from render.report import seat_stop_href
+    from render.roster_update import confirm_email
+    from render.seat_claim import confirm_email as seat_confirm_email
+    from render.seat_claim import full_email, unmatched_email
+    from render.welcome import welcome_message
+    from run.refs import encode_roster
     from run.waitlist import messages
+    import render.live_sample as live_sample
+    import render.sample as sample
+    on_file = {"scoring": "ppr", "league_size": 12, "slots": TEMPLATE_SLOTS["std"]}
+    wanted = {"scoring": "half_ppr", "league_size": 10, "slots": TEMPLATE_SLOTS["sf"]}
+    out = [("roster confirmation",
+            confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24,
+                          ["A", "B"], settings=wanted, on_file=on_file)[1], None)]
+    bought = datetime.now(timezone.utc).isoformat()
+    for plan in ("season", "monthly", "league_pass", "seat"):
+        msg = welcome_message("a@example.com", plan, "abcdef0123", season, purchased_at=bought)
+        out.append((f"welcome ({plan})", msg.html, msg.unsubscribe))
+    msg = welcome_message("a@example.com", "league_pass", "abcdef0123", season,
+                          purchased_at=bought, seat_link=SAMPLE_SEAT_LINK, duplicate="season")
+    out.append(("welcome (League Pass over a season pass)", msg.html, msg.unsubscribe))
+    msg = renewal_message(Renewal("a@example.com", "$39.00 USD", date.today() + timedelta(days=30),
+                                  "year", plan="season"))
+    out.append(("renewal notice", msg.html, msg.unsubscribe))
+    out += [("failed seat claim", unmatched_email("https://example.com")[1], seat_stop_href()),
+            ("seat pass full", full_email("https://example.com")[1], seat_stop_href()),
+            ("seat confirmation",
+             seat_confirm_email("https://example.com/join/confirm.html?c=" + "a" * 24
+                                + "&k=seat", ["A", "B"])[1], seat_stop_href())]
     msg = messages(["a@example.com"], "https://example.com/join/")[0]
     out.append(("launch announcement", msg.html, msg.unsubscribe))
+    ref = encode_roster("season", "ppr", sample.SLOTS, list(live_sample.LIVE_ROSTER),
+                        league_size=12) + "_via-reply-kit"
+    msg = messages(["a@example.com"], "https://example.com/join/", {"a@example.com": ref})[0]
+    out.append(("launch announcement (saved roster)", msg.html, msg.unsubscribe))
     return out
 
 
@@ -1932,7 +2074,8 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("site links", check_links), ("page basics", check_page_basics),
         ("scripts", check_scripts), ("selling copy", check_selling_copy),
         ("prices", check_prices), ("funnel configuration", check_funnel_config),
-        ("season clock", check_week_json), ("this week's report", check_product),
+        ("season clock", check_week_json), ("the public record", check_record),
+        ("this week's report", check_product),
         ("five league setups", check_product_battery),
         ("compliance text", check_compliance), ("every email's sender and way out",
                                                 check_email_senders),

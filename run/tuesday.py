@@ -207,9 +207,12 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # carries (render/report.season_end_lines); with it ride the pass
         # payer's seat count and the day the roster was set.
         report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link))
+        # The link carries this subscription's own scoring, size and lineup
+        # (FUNNEL F1): an update replaces the settings on file with the ones
+        # the page posts, and a bare link opened on the page's defaults.
         report["meta"]["update_url"] = public_update_url(
             os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
-            os.environ.get("FORM_ENDPOINT", ""))
+            os.environ.get("FORM_ENDPOINT", ""), roster=subscriber)
         # The Receipts are THIS subscriber's calls (engine/own_record.py),
         # never the shared preset ledger counted as if it were theirs. With no
         # plans stored yet it is the honest empty state.

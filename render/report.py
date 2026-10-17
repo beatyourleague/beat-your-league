@@ -2035,7 +2035,11 @@ def roster_as_of(meta: Mapping[str, Any]) -> str:
     was set (``meta["roster_as_of"]``: the signup, or the last confirmed
     update). A subscriber whose trade has not reached us can see at a glance
     that this report predates it, beside the route that fixes it. Empty when
-    the run did not say, or said something that is not a date."""
+    the run did not say, or said something that is not a date.
+
+    The year prints when it is not the report's season (LP2-D3): a renewed
+    season pass keeps the roster from its purchase day, and "as of Aug 20"
+    on a 2026 report read as last week's roster when it was last season's."""
     from datetime import date
     raw = meta.get("roster_as_of")
     try:
@@ -2044,7 +2048,9 @@ def roster_as_of(meta: Mapping[str, Any]) -> str:
         day = None
     if day is None or not is_subscriber_report(meta):
         return ""
-    return f"This report used your roster as of {day:%b} {day.day}."
+    season = str(meta.get("season") or "")
+    year = f", {day.year}" if season.isdigit() and int(season) != day.year else ""
+    return f"This report used your roster as of {day:%b} {day.day}{year}."
 
 
 # The update link is PUBLIC and grants nothing (run/updates.py, confirm-by-

@@ -58,8 +58,13 @@ def _all_emails() -> dict[str, str]:
                {"week": 10, "players": {}},
                [Change("swap", "Start X at RB", "Y is out.")],
                datetime(2024, 11, 9, 16, tzinfo=timezone.utc)),
+           # With the settings it applies, one of them moving (FUNNEL F1).
            "roster confirmation": confirm_email(
-               "https://x.test/join/confirm.html?c=" + "a" * 24, ["A", "B"])[1]}
+               "https://x.test/join/confirm.html?c=" + "a" * 24, ["A", "B"],
+               settings={"scoring": "half_ppr", "league_size": 10,
+                         "slots": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")},
+               on_file={"scoring": "ppr", "league_size": 10,
+                        "slots": ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX")})[1]}
     for plan in ("season", "monthly", "league_pass", "seat"):
         out[f"welcome {plan}"] = welcome_message(
             "a@b.co", plan, "abc123", "2026",

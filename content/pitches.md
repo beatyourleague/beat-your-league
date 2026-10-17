@@ -28,7 +28,7 @@ are a channel.
 >
 > Hey [name] — I make a small fantasy football tool and I'll keep this to four sentences.
 >
-> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are healthy and playing, and an if/then plan for late news.
+> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.
 >
 > Two things you can check in under a minute: our full backtest with the failing buckets left
 > in ([site]/backtest.html), and the only published answer I know of to "how accurate are

@@ -89,11 +89,13 @@
 <div class="sheet">
   <header>
     <div class="topbar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
-    <h1>Confirm your roster</h1>
+    <h1 id="head">Confirm your roster</h1>
     <!-- Only what the intake does with the code (run/updates.py): a request
          is live for 7 days, and confirming one retires every older request
-         for that subscription (COPY:F2). -->
-    <p>You asked to change the roster your reports are built from. Press the button within
+         for that subscription (COPY:F2). A seat claim's code lives 7 days
+         from the claim too (run/intake.py sweep_seats), so a seat button
+         says the same. -->
+    <p id="intro">You asked to change the roster your reports are built from. Press the button within
     7 days of asking and your next report uses the new one.</p>
   </header>
   <main>
@@ -117,13 +119,28 @@ const FORM_ENDPOINT = "";
 // nothing on this page can make a change on its own.
 const CODE = new URLSearchParams(location.search).get("c") || "";
 const VALID = /^[0-9a-f]{24}$/.test(CODE);
+// A League Pass seat claim is confirmed on this same page (OPS-R1): the
+// claim email links ?c=<code>&k=seat (run/updates.seat_confirm_url) and the
+// POST is the same {kind:"confirm", code} — the intake tells a seat's code
+// from a roster request's. Only the words change, so a leaguemate claiming a
+// seat is not asked to "use my new roster" for reports they don't get yet.
+const SEAT = new URLSearchParams(location.search).get("k") === "seat";
 const go = document.getElementById("go");
 const msg = document.getElementById("msg");
 function say(text, kind) { msg.textContent = text; msg.className = "msg " + (kind || ""); }
+if (SEAT) {
+  document.title = "Beat Your League — Confirm your League Pass seat";
+  document.getElementById("head").textContent = "Confirm your League Pass seat";
+  document.getElementById("intro").textContent = "You asked for a seat on your " +
+    "league's League Pass, or to change the roster on the seat you hold. Press the " +
+    "button within 7 days of asking and it's set up within the hour.";
+  go.textContent = "Yes, set up my seat";
+}
 if (!VALID) {
   go.disabled = true;
-  say("This link isn't complete. Open the button in the email again — or reply to " +
-      "any report with your roster and we'll update it.", "bad");
+  say(SEAT ? "This link isn't complete. Open the button in the email again."
+           : "This link isn't complete. Open the button in the email again — or reply to " +
+             "any report with your roster and we'll update it.", "bad");
 }
 // Nothing happens on load, deliberately: mail scanners open every link in an
 // inbox, and a page that confirmed on load would let a scanner confirm a
@@ -131,8 +148,9 @@ if (!VALID) {
 go.addEventListener("click", () => {
   if (!VALID) return;
   if (!FORM_ENDPOINT) {
-    say("Roster updates aren't open just yet. Reply to any report with your roster " +
-        "and your report follows it from the next Tuesday.", "bad");
+    say(SEAT ? "Seats aren't open just yet — nothing was set up."
+             : "Roster updates aren't open just yet. Reply to any report with your roster " +
+               "and your report follows it from the next Tuesday.", "bad");
     return;
   }
   go.disabled = true;
@@ -146,8 +164,16 @@ go.addEventListener("click", () => {
     // Received, not yet applied: the Worker takes any code-shaped string, and
     // only the intake can tell whether this one is still live. "Confirmed.
     // It's applied" was said to a week-old button that changed nothing
-    // (COPY:F2), so the page says exactly when it applies.
-    say("Received. If you asked for this change in the last 7 days and haven't " +
+    // (COPY:F2), so the page says exactly when it applies. A seat's code
+    // lives 7 days from the claim, and a pass holds only as many seats as
+    // its league has teams (OPS-R7), so a seat is not "Confirmed" here
+    // either: the intake decides, and says so by email when it can't.
+    say(SEAT
+      ? "Received. If you asked in the last 7 days, your seat is set up within the " +
+        "hour and your first report follows the same day — unless your league's " +
+        "seats are all taken, when we email you to say so. If this was a roster " +
+        "change, your next report uses it."
+      : "Received. If you asked for this change in the last 7 days and haven't " +
         "confirmed a newer one since, it's applied within the hour, and your next " +
         "report — and Saturday's final check — use your new roster. An older " +
         "button changes nothing: ask again from the link in any report.", "ok");

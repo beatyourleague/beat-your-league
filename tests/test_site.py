@@ -231,15 +231,46 @@ def test_a_seat_claimed_in_week_1_is_promised_the_roster_report_it_gets() -> Non
     and the join page's seat note promised a seat claimed before a week's
     games "that week's lineup if the week's games haven't started" — but
     run/intake._first_file sends a weekly report only from Week 2, so all
-    through Week 1 the first email is the roster report."""
+    through Week 1 the first email is the roster report. The welcome email's
+    "Today" row (render/welcome.NEXT_TODAY) said the same untrue thing to
+    every Week-1 buyer and seat, and is held to the same sentence."""
+    from render.welcome import NEXT_TODAY
     lp = prose((SITE / "league-pass.html").read_text(encoding="utf-8"))
     seat = prose(re.search(r'<li id="seat-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
-    for name, text in (("league pass", lp), ("seat note", seat)):
-        assert not re.search(r"(?:that|this) week's (?:lineup|report) if the week's", text), name
+    for name, text in (("league pass", lp), ("seat note", seat), ("welcome", NEXT_TODAY)):
+        assert not re.search(r"(?:that|this) week's (?:lineup|report) if the week's", text,
+                             re.I), name
         assert re.search(r"(?:that|this) week's (?:lineup|report) if it's Week 2 or later "
                          r"and the week's games haven't started, otherwise (?:their|your) "
-                         r"roster report", text), name
+                         r"roster report", text, re.I), name
     assert lp.count("if it's Week 2 or later and the week's games haven't started") == 3
+
+
+def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
+    """OPS-R1, the join page's half, reproduced: a seat claim became a seat
+    only once the claimed address pressed a mailed button (run/intake.py
+    sweep_seats), and the page still answered a claim with "Your seat request
+    is in." and promised a first report "the day the seat is matched" — so a
+    leaguemate who never opened the email waited for a report that could not
+    come. The page says the button is coming, that nothing is set up until
+    it is pressed and for how long it works, and times the first report from
+    the confirmation. Never "we've emailed": the next hourly run sends it
+    (FUNNEL F11's rule)."""
+    from run.updates import EXPIRY_DAYS
+    seat = prose(re.search(r'<li id="seat-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
+    for promise in ("We'll email a button to the address you entered, usually within the hour",
+                    "Nothing is set up until it's pressed",
+                    f"the button works for {EXPIRY_DAYS} days",
+                    "Your first report lands the day you confirm",
+                    "or your league's seats are all taken, we email you to say so"):
+        assert promise in seat, promise
+    assert "We've emailed" not in seat and "matched to the pass" not in seat
+    submit = _js_function(JOIN, "submitSeat")
+    assert '$("done-head").textContent = "Next: confirm your seat from your inbox.";' in submit
+    assert "Your seat request is in" not in JOIN
+    for fn in ("firstChipText", "drawFirst"):
+        assert "matched" not in _js_function(JOIN, fn), fn
+    assert "A report the day it's confirmed" in _js_function(JOIN, "firstChipText")
 
 
 def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> None:
@@ -4093,6 +4124,75 @@ def test_the_update_and_confirm_pages_promise_only_what_happens() -> None:
     assert "An older button changes nothing" in confirm
 
 
+def _run_confirm_page(search: str, endpoint: str) -> dict:
+    """join/confirm.html's script under node, with a stub DOM: the page as it
+    stands after load and after the button is pressed (fetch answers 200)."""
+    import json as _json
+    code = re.search(r"<script>(.*?)</script>", CONFIRM, re.S).group(1)
+    code = code.replace('const FORM_ENDPOINT = "";',
+                        f"const FORM_ENDPOINT = {_json.dumps(endpoint)};")
+    return _node(
+        "const els = {}; const el = (id) => els[id] || (els[id] = {id, textContent: '',"
+        " className: '', disabled: false, handlers: {}, addEventListener(t, f) {"
+        " this.handlers[t] = f; }});\n"
+        "el('head').textContent = 'Confirm your roster'; el('go').textContent ="
+        " 'Yes, use my new roster';\n"
+        "globalThis.document = { title: 'Beat Your League — Confirm your roster',"
+        " getElementById: el };\n"
+        f"globalThis.location = {{ search: {_json.dumps(search)} }};\n"
+        "globalThis.window = globalThis;\n"
+        "const posted = [];\n"
+        "globalThis.fetch = (url, opts) => { posted.push(JSON.parse(opts.body));"
+        " return Promise.resolve({ ok: true }); };\n"
+        + code +
+        "\nconst before = { title: document.title, head: el('head').textContent,"
+        " intro: el('intro').textContent, button: el('go').textContent,"
+        " msg: el('msg').textContent, disabled: el('go').disabled };\n"
+        "if (el('go').handlers.click) el('go').handlers.click();\n"
+        "setTimeout(() => console.log(JSON.stringify({ before, after:"
+        " el('msg').textContent, posted })), 20);\n")
+
+
+def test_a_seat_confirmation_says_seat_on_the_confirm_page() -> None:
+    """OPS-R1's page half, reproduced: a seat claim is now confirmed from the
+    claimed inbox, and its email links join/confirm.html?c=<code>&k=seat
+    (run/updates.seat_confirm_url) — a page that said "Confirm your roster",
+    "Yes, use my new roster" and "your next report uses the new one" to a
+    leaguemate who has no reports yet, and with no backend told them to
+    "reply to any report". In seat mode it names the seat; the POST is the
+    same {kind:"confirm", code}; and, like the roster page (COPY:F2), it
+    never says "Confirmed" for a code only the intake can judge — a seat's
+    code lives 7 days and a full pass takes no more seats. Run under node."""
+    from run.updates import seat_confirm_url
+    good = "a" * 24
+    assert seat_confirm_url("https://x.test", good).endswith(f"?c={good}&k=seat")
+    seat = _run_confirm_page(f"?c={good}&k=seat", "https://w.test")
+    assert seat["before"]["head"] == "Confirm your League Pass seat"
+    assert seat["before"]["title"] == "Beat Your League — Confirm your League Pass seat"
+    assert seat["before"]["button"] == "Yes, set up my seat"
+    assert seat["before"]["intro"] == (
+        "You asked for a seat on your league's League Pass, or to change the roster on "
+        "the seat you hold. Press the button within 7 days of asking and it's set up "
+        "within the hour.")
+    assert seat["posted"] == [{"kind": "confirm", "code": good}]
+    assert seat["after"].startswith("Received. If you asked in the last 7 days, your seat "
+                                    "is set up within the hour and your first report "
+                                    "follows the same day"), seat["after"]
+    assert "seats are all taken" in seat["after"] and "Confirmed" not in seat["after"]
+    closed = _run_confirm_page(f"?c={good}&k=seat", "")
+    assert closed["after"] == "Seats aren't open just yet — nothing was set up."
+    assert closed["posted"] == []
+    broken = _run_confirm_page("?c=zz&k=seat", "https://w.test")
+    assert broken["before"]["disabled"] and "reply to any report" not in broken["before"]["msg"]
+    # The roster page is unchanged by it.
+    roster = _run_confirm_page(f"?c={good}", "https://w.test")
+    assert roster["before"]["head"] == "Confirm your roster"
+    assert roster["before"]["button"] == "Yes, use my new roster"
+    assert roster["after"].startswith("Received. If you asked for this change")
+    assert "Didn't ask for this? Close this page — nothing changes unless you press the " \
+           "button." in prose(CONFIRM)
+
+
 def test_the_chips_are_a_thumb_tall_on_touch() -> None:
     """I10: the first controls in the funnel measured 35px on touch."""
     assert "@media (pointer:coarse){.opts label{min-height:44px;" in JOIN
@@ -4586,10 +4686,40 @@ def test_league_pass_answers_the_commissioners_questions_twice_alike() -> None:
     assert {i["name"]: i["acceptedAnswer"]["text"] for i in faq["mainEntity"]} == visible
     asked = " ".join(visible)
     for topic in ("join late", "leaves or is replaced", "co-manage", "two leagues",
-                  "emails used for", "cancel or take a refund"):
+                  "emails used for", "cancel or take a refund", "How many seats",
+                  "switch to the League Pass"):
         assert topic in asked, topic
     assert SEATS_END in visible["What happens to the seats if I cancel or take a refund?"]
     assert 'href="league-pass.html"' in HOW
+
+
+def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None:
+    """OPS-R7 / LP2-D1, the copy half. A pass now carries as many seats as its
+    league has teams, in confirmation order (run/intake.PassInfo.seat_cap), a
+    seat counts only once its inbox confirms it (OPS-R1), and a second
+    purchase of the same roster folds into one report (merge_same_roster) —
+    and no page said any of it: the operative terms promised "every member of
+    one league" with no limit, the co-manager answer promised a seat with no
+    "while they last", and a season-pass holder buying the pass had no answer
+    about the subscription that keeps billing. The terms, the FAQ and the code
+    say the same thing now; the terms change moved TERMS_VERSION with it."""
+    from run.intake import PassInfo
+    from render.welcome import TERMS_VERSION
+    assert PassInfo(payer="p@x.test", pass_id="sub_1", league_size=12).seat_cap == 12
+    terms = prose(TERMS)
+    assert ("A League Pass covers every member of one league who enters their roster "
+            "individually, up to as many seats as the league has teams, in the order they "
+            "are confirmed by email;") in terms
+    assert TERMS_VERSION >= "2026-10-17", "a change to the terms must move their version"
+    lp = prose(LEAGUE_PASS)
+    assert ("As many as your league has teams — one for every other manager, plus one to "
+            "spare for a co-manager. Seats go to the managers who confirm theirs first") in lp
+    assert "and each gets the report, while your league's seats last." in lp
+    assert ("Your League Pass covers your own team, so you still get one report a week, not "
+            "two. Your other subscription doesn't stop on its own") in lp
+    for page in (lp, prose(THANKS)):
+        assert "the day they confirm their seat (we email them a button)" in page
+        assert "the day they claim their seat" not in page
 
 
 def test_the_closed_pricing_cards_take_you_into_the_form() -> None:

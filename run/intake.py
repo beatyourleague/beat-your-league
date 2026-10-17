@@ -1436,12 +1436,28 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
               file=sys.stderr)
 
 
-def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
+def _on_file(request: PendingRequest, rows: Iterable[Mapping]) -> Mapping | None:
+    """The registry row a request would change — the subscription as it
+    stands, by the same (address, origin) target ``validate_requests`` chose."""
+    for row in rows:
+        if (str(row.get("email", "")).lower() == request.email
+                and str(row.get("origin") or slug_of(str(row.get("ref", ""))))
+                == request.replaces):
+            return row
+    return None
+
+
+def _send_confirmations(awaiting: list[PendingRequest], data,
+                        on_file: Iterable[Mapping] = ()) -> None:
     """One confirmation per request, ever, to the address on the subscription
     only. The per-address daily allowance is applied where requests are
     validated (run/updates.py), so what arrives here is already bounded; the
     send-log key carries no date, so a request row that lives on in the Worker
-    is never mailed twice. Idempotent through the send log like every message."""
+    is never mailed twice. Idempotent through the send log like every message.
+
+    ``on_file`` is the registry as the requests were judged against it: the
+    email prints the settings the change applies, a moved one as old → new
+    (FUNNEL F1 — an update replaces the scoring, size and lineup on file)."""
     if not awaiting:
         return
     from render.roster_update import confirm_email
@@ -1454,12 +1470,15 @@ def _send_confirmations(awaiting: list[PendingRequest], data) -> None:
               f"UPDATE_SECRET is not set, so none were sent.")
         return
     names = getattr(data, "players", None) if data is not None else None
+    rows = list(on_file)
     messages = []
     for request in awaiting:
         from run.refs import decode_roster
-        ids = decode_roster(request.ref).player_ids
-        listed = [names.name(pid) for pid in ids] if names is not None else []
-        subject, html, text = confirm_email(confirm_url(site, request.code), listed)
+        roster = decode_roster(request.ref)
+        listed = [names.name(pid) for pid in roster.player_ids] if names is not None else []
+        subject, html, text = confirm_email(confirm_url(site, request.code), listed,
+                                            settings=roster,
+                                            on_file=_on_file(request, rows))
         messages.append(Message(to=request.email, subject=subject, html=html,
                                 text=text, key=confirmation_key(request)))
     provider = build_provider(None)
@@ -2072,7 +2091,7 @@ def main(argv: list[str] | None = None) -> int:
         # report for a seat that was not written.
         seat_signups = seat_signups_from(rows, seats.first_claimed)
         _send_welcomes(servable, seat_signups, known_season, merged.duplicates)
-        _send_confirmations(awaiting, data)
+        _send_confirmations(awaiting, data, on_file=current)
         now = datetime.now(timezone.utc)
         _send_seat_confirmations(seats.awaiting, data)
         _send_unmatched_notes(seats.unmatched, now)

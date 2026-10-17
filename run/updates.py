@@ -137,6 +137,22 @@ def template_code(slots: Iterable[str]) -> str | None:
                  if tuple(slots_of) == shape), None)
 
 
+def settings_params(roster) -> list[str]:
+    """``s=&n=&t=`` for a roster's scoring, league size and lineup, in the
+    form the join page's settingsFromLink() reads. ONE writer for the seat
+    link and the report's update link, so the two formats cannot drift: a
+    value the page does not offer is simply left out (the page then leaves
+    that setting for the reader to pick)."""
+    params: list[str] = []
+    if roster.scoring in _SCORING_PARAMS:
+        params.append(f"s={roster.scoring}")
+    params.append(f"n={int(roster.league_size)}")
+    code = template_code(roster.slots)
+    if code:
+        params.append(f"t={code}")
+    return params
+
+
 def seat_url(site_url: str, secret: str, payer_email: str, roster,
              pass_id: str = "") -> str | None:
     """The one link a pass payer shares: SITE_URL/join/?pass=<token>&s=&n=&t=
@@ -148,12 +164,7 @@ def seat_url(site_url: str, secret: str, payer_email: str, roster,
     if not site or not secret:
         return None
     params = [f"pass={seat_token(payer_email, secret, pass_id)}"]
-    if roster.scoring in _SCORING_PARAMS:
-        params.append(f"s={roster.scoring}")
-    params.append(f"n={int(roster.league_size)}")
-    code = template_code(roster.slots)
-    if code:
-        params.append(f"t={code}")
+    params += settings_params(roster)
     return f"{site}/join/?" + "&".join(params)
 
 
@@ -702,14 +713,27 @@ def confirm_url(site_url: str, code: str) -> str | None:
     return f"{site}/join/confirm.html?c={code}" if site else None
 
 
-def public_update_url(site_url: str, secret: str, endpoint: str) -> str | None:
+def public_update_url(site_url: str, secret: str, endpoint: str,
+                      roster=None) -> str | None:
     """The link every report carries. It grants nothing — which is why it may
     be forwarded — and it renders only when the whole flow can work: a site to
-    land on, a backend to post to, a secret to sign confirmations with."""
+    land on, a backend to post to, a secret to sign confirmations with.
+
+    ``roster`` is the subscription's own (anything with scoring, league_size
+    and slots — a RosterSubscriber or a decoded RosterRef). With it the link
+    carries ``&s=&n=&t=`` exactly as a seat link does (FUNNEL F1): an update
+    REPLACES the settings on file with the ones the page posts, and the bare
+    ``?update=1`` landed on the page's defaults (Full PPR, 12 teams, standard
+    lineup), so a half-PPR ten-team subscriber had to notice and re-pick all
+    three — or tick a box saying defaults were right. With all three in the
+    link the page shows them, says they stand, and needs no box. The settings
+    are not a credential (they are printed in the report the link sits in),
+    so the link stays safe to forward."""
     site = (site_url or "").rstrip("/")
     if not site or not secret or not endpoint:
         return None
-    return f"{site}/join/?update=1"
+    params = ["update=1"] + (settings_params(roster) if roster is not None else [])
+    return f"{site}/join/?" + "&".join(params)
 
 
 # --------------------------------------------------------------------- #

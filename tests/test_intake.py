@@ -1016,3 +1016,47 @@ def test_every_seat_link_the_intake_builds_prefills_the_join_page() -> None:
         assert back == slots, code
         assert base in offered("template"), code
         assert {"yes", "no"} <= offered("kicker") and {"yes", "no"} <= offered("defense")
+
+
+def test_every_report_update_link_prefills_the_join_page() -> None:
+    """FUNNEL F1 across the language boundary: a report's update link
+    (run/updates.public_update_url, given the subscription's roster) carries
+    s/n/t in the seat link's format, and the join page's update mode applies
+    them only when they are values it offers. Its gate trusts the link's
+    settings — and drops the "tick that these are your league's" box — only
+    when all three arrived (``told.length === 3``), so a link whose lineup
+    code the page cannot read would leave a subscriber confirming by hand
+    settings the report already knew. Every shape, scoring rule and offered
+    size: three values, each one the page offers, and the code round-trips to
+    the same slots in the browser."""
+    import re
+    from types import SimpleNamespace
+    from urllib.parse import parse_qs, urlsplit
+    from run.trial import TEMPLATES
+    from run.updates import public_update_url
+    join = JS.with_name("index.html").read_text(encoding="utf-8")
+
+    def offered(name: str) -> set[str]:
+        return set(re.findall(rf'name="{name}" value="([^"]+)"', join))
+
+    # Without a roster it is the bare link (nothing to prefill; the box asks).
+    assert public_update_url("https://x.test", "s", "https://w.test") == \
+        "https://x.test/join/?update=1"
+    links = []
+    for code, slots in TEMPLATES.items():
+        for scoring in ("ppr", "half_ppr", "standard"):
+            for size in (8, 10, 12, 14):
+                roster = SimpleNamespace(scoring=scoring, league_size=size, slots=slots)
+                url = public_update_url("https://x.test/", "s", "https://w.test", roster)
+                assert url.startswith("https://x.test/join/?update=1&"), url
+                query = {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
+                assert set(query) == {"update", "s", "n", "t"}, url
+                assert query["s"] == scoring and query["s"] in offered("scoring")
+                assert query["n"] == str(size) and query["n"] in offered("size")
+                links.append((query["t"], list(slots)))
+    got = run_js(
+        f"console.log(JSON.stringify({json.dumps(links)}.map(([t]) => {{"
+        f" const s = R.shapeFromCode(t); return s && R.shapeSlots(s.base, s.kicker,"
+        f" s.defense); }})))")
+    for (code, slots), back in zip(links, got):
+        assert back == slots, code
