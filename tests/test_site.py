@@ -3704,18 +3704,45 @@ def test_the_typeahead_closes_when_the_tap_is_meant_for_something_else() -> None
     was "Javonte Williams"); a tap meant for the box added him, and neither
     Escape nor a click outside closed it. It now closes on Escape, on a press
     outside it, and when focus leaves for anything but the list — never on a
-    press inside it, which would remove the name being tapped. Driven in
-    headless Chrome by the verification flow; the wiring is pinned here."""
+    press inside the LIST, which would remove the name being tapped. A tap on
+    the field itself is not a press in the list: the first fix counted it as
+    one, so tapping the field, typing and pressing the keyboard's "Done" left
+    all eight rows up (driven in headless Chrome at 390 and 1280). The
+    handlers are run here under node against stand-in elements."""
     code = _js_code(JOIN)
-    assert 'document.addEventListener("pointerdown", (event) => {' in code
-    outside = code.split('document.addEventListener("pointerdown", (event) => {')[1].split("});")[0]
-    assert "pressInList = addWrap.contains(event.target);" in outside
-    assert "if (!pressInList) closeSuggestions();" in outside
-    leave = code.split('addWrap.addEventListener("focusout", (event) => {')[1].split("});")[0]
-    assert "if (pressInList || addWrap.contains(event.relatedTarget)) return;" in leave
-    assert "closeSuggestions();" in leave
+    block = code[code.index("const addWrap = searchBox ?"):code.index("\nif (searchBox) {")]
+    got = _node(r"""
+const handlers = {doc: {}, wrap: {}, field: {}};
+const on = (bag) => (type, fn) => { (bag[type] = bag[type] || []).push(fn); };
+const fire = (bag, type, event) => (bag[type] || []).forEach((fn) => fn(event));
+let rows = 8, focused = 0;
+const field = {id: "field", addEventListener: on(handlers.field), focus() { focused++; }};
+const row = {id: "row"}, outside = {id: "outside"};
+const suggestBox = {contains: (n) => n === row, get childElementCount() { return rows; },
+                    replaceChildren() { rows = 0; }};
+const wrap = {contains: (n) => n === row || n === field, addEventListener: on(handlers.wrap)};
+field.closest = () => wrap;
+const document = {addEventListener: on(handlers.doc)};
+const searchBox = field;
+function renderSuggestions() { rows = 8; }
+""" + block + r"""
+const out = [];
+const press = (target) => fire(handlers.doc, "pointerdown", {target});
+const leave = (relatedTarget) => fire(handlers.wrap, "focusout", {relatedTarget});
+press(field); leave(null); out.push(["field tapped, then Done", rows]);
+rows = 8; press(row); leave(null); out.push(["a name tapped", rows]);
+press(outside); out.push(["a press outside", rows]);
+rows = 8; fire(handlers.doc, "keydown", {}); leave(row); out.push(["Tab onto a row", rows]);
+leave(outside); out.push(["Tab past the list", rows]);
+rows = 8; focused = 0;
+fire(handlers.wrap, "keydown", {key: "Escape", preventDefault() {}});
+out.push(["Escape", rows, focused]);
+fire(handlers.field, "focus", {}); out.push(["focus again", rows]);
+console.log(JSON.stringify(out));""")
+    assert got == [["field tapped, then Done", 0], ["a name tapped", 8],
+                   ["a press outside", 0], ["Tab onto a row", 8],
+                   ["Tab past the list", 0], ["Escape", 0, 1], ["focus again", 8]], got
     esc = code.split('addWrap.addEventListener("keydown", (event) => {')[1].split("});")[0]
-    assert 'event.key !== "Escape"' in esc
     assert esc.index("searchBox.focus();") < esc.index("closeSuggestions();"), \
         "focus first, or the field's focus handler redraws the list Escape closed"
 
@@ -3855,8 +3882,19 @@ def test_a_roster_update_never_quietly_replaces_the_settings_on_file() -> None:
     Run under node: the gate, every way round."""
     code = _js_code(JOIN)
     assert "if (UPDATE_MODE) prefillUpdateSettings();" in code
+    # The box comes after the settings it vouches for, inside step 1: placed
+    # above them it was ticked before a single setting was in view.
+    assert (JOIN.index('id="shape-note"') < JOIN.index('id="settings-ok-wrap"')
+            < JOIN.index('<section id="step-roster">'))
     prefill = _js_function(JOIN, "prefillUpdateSettings")
     assert "settingsFromLink()" in prefill and "told.length === 3" in prefill
+    # A reload restores the roster (?ref=) with the settings chosen on this
+    # page; the link's older ones never overwrite them, and the box confirms
+    # what is on screen. So the prefill runs after the restore, and skips the
+    # link when there is one.
+    assert "const told = RESTORED ? [] : settingsFromLink();" in prefill
+    assert code.index("if (RESTORED) {\n  setRadio(") < code.index(
+        "if (UPDATE_MODE) prefillUpdateSettings();")
     assert "They stay as they are unless you change them here." in prose(prefill)
     assert "replaces the settings on file" in prose(prefill)
     submit = _js_function(JOIN, "submitUpdate")
@@ -3917,6 +3955,8 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     draw = _js_function(JOIN, "drawFirst")
     assert draw.index("if (!canStartToday()) {") < draw.index('FIRST.when === "before"')
     assert "once checkout opens" in prose(draw)
+    # A seat has no checkout: closed, it waits for seats to open.
+    assert 'SEAT_MODE ? ", once seats open" : ", once checkout opens"' in draw
     # drawFirst runs at first paint and on every plan switch, so the static
     # "A report the day you join" never outlives a closed checkout.
     assert "drawFirst();" in _js_function(JOIN, "monthlyPlan")

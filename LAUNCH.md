@@ -327,7 +327,9 @@ don't: the Tuesday run refuses a week already underway.
 
 **Rebuilding the live sample by hand:** `make live-sample` before the week's first kickoff
 records its odds on the public record — commit the ledger file with the page.
-`make live-sample ARGS=--no-record` previews.
+`make live-sample ARGS=--no-record` previews. After the first kickoff it refuses: leave the
+page as it stands until Tuesday. A forced rebuild (`--force`) records nothing, so don't publish
+one — Week 6's page was rebuilt that way on Oct 16 and printed odds that are on no record.
 
 **A roster change sent by email** (until the Worker is live, or a subscriber who'd rather
 reply): put the names they sent in a file, one per line, then

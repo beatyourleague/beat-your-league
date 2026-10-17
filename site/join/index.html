@@ -308,9 +308,6 @@
          Prefilled from the report's link when it carries them; otherwise the
          subscriber says these are right before anything is sent. -->
     <div class="note" id="update-settings" style="display:none"></div>
-    <label class="settings-ok" id="settings-ok-wrap" style="display:none"><input
-      type="checkbox" id="settings-ok"> These are my league's settings now —
-      scoring, league size and starting lineup.</label>
     <div class="note">Full PPR, half PPR or standard scoring with 4-point passing
     touchdowns, in a league of 8 to 14 teams: every number in your report is worked
     out that way. Six-point passing touchdowns and TE premium aren't scored yet —
@@ -351,6 +348,10 @@
     <div class="note" id="shape-note" aria-live="polite">Your lineup: QB, 2 RB, 2 WR,
     TE, FLEX, K and DEF. Superflex adds a second flex that can take a quarterback;
     Yahoo's FLEX is the W/R/T spot.</div>
+    <!-- After the settings it vouches for, so it is ticked having seen them. -->
+    <label class="settings-ok" id="settings-ok-wrap" style="display:none"><input
+      type="checkbox" id="settings-ok"> These are my league's settings now —
+      scoring, league size and starting lineup.</label>
   </section>
 
   <section id="step-roster">
@@ -778,14 +779,18 @@ function renderSuggestions() {
 // it; focusing the field again brings it back. A press INSIDE the list never
 // closes it: tapping a name moves focus off the field before the tap's click
 // lands (Safari does not focus a button at all), and closing on that blur
-// would remove the name being tapped.
+// would remove the name being tapped. Only a press on the LIST counts as one:
+// a tap on the field itself must not keep the list up when the keyboard's
+// "Done" later blurs it. The list stays drawn over the page rather than in
+// flow on purpose — collapsing an in-flow list on a press moves the page under
+// the finger, and the tap's click then lands on whatever slid there.
 const addWrap = searchBox ? searchBox.closest(".addwrap") : null;
 let pressInList = false;
 function closeSuggestions() { suggestBox.replaceChildren(); }
 if (addWrap) {
   document.addEventListener("pointerdown", (event) => {
-    pressInList = addWrap.contains(event.target);
-    if (!pressInList) closeSuggestions();
+    pressInList = suggestBox.contains(event.target);
+    if (!addWrap.contains(event.target)) closeSuggestions();
   });
   // A key press means the pointer is no longer what moves focus.
   document.addEventListener("keydown", () => { pressInList = false; }, true);
@@ -1413,9 +1418,11 @@ function drawFirst() {
   const b = (words) => { const el = document.createElement("b"); el.textContent = words; return el; };
   const t = (words) => document.createTextNode(words);
   if (!canStartToday()) {
-    side.replaceChildren(b("A report the day you join"),
-      t(", once checkout opens — then a new one every Tuesday morning"));
-    note.replaceChildren(t("A report lands "), b("the day you join"), t(", once checkout opens."));
+    // A seat has no checkout to wait for; it waits for seats to open.
+    const day = SEAT_MODE ? "the day your seat is matched" : "the day you join";
+    const opens = SEAT_MODE ? ", once seats open" : ", once checkout opens";
+    side.replaceChildren(b("A report " + day), t(opens + " — then a new one every Tuesday morning"));
+    note.replaceChildren(t("A report lands "), b(day), t(opens + "."));
   } else if (FIRST && FIRST.when === "before") {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
@@ -1760,20 +1767,22 @@ function settingsFromLink() {
 }
 // FUNNEL F1: an update sends this page's settings, and they REPLACE the ones
 // on file. Known from the link, they stand unless changed here; not known,
-// the subscriber says they are right before anything is posted.
+// the subscriber says they are right before anything is posted. A roster
+// restored from this page's own address (?ref=, after a reload) carries the
+// settings chosen here last, which the link's must not overwrite — so those
+// are confirmed by the box too.
 let UPDATE_SETTINGS_FROM_LINK = false;
 function prefillUpdateSettings() {
-  const told = settingsFromLink();
+  const told = RESTORED ? [] : settingsFromLink();
   UPDATE_SETTINGS_FROM_LINK = told.length === 3;
   $("update-settings").textContent = UPDATE_SETTINGS_FROM_LINK
     ? "Your league's settings, from your report: " + told.join(" · ") +
       ". They stay as they are unless you change them here."
     : "An update replaces the settings on file with the ones below, so set them " +
-      "to your league's as it is now, then tick the box.";
+      "to your league's as it is now, then tick the box under them.";
   $("update-settings").style.display = "block";
   $("settings-ok-wrap").style.display = UPDATE_SETTINGS_FROM_LINK ? "none" : "flex";
 }
-if (UPDATE_MODE) prefillUpdateSettings();
 if (RESTORED) {
   setRadio("scoring", RESTORED.scoring);
   setRadio("size", String(RESTORED.leagueSize));
@@ -1786,6 +1795,7 @@ if (RESTORED) {
     $("seat-settings").style.display = "block";
   }
 }
+if (UPDATE_MODE) prefillUpdateSettings();
 drawShapeNote();
 fillRenewalDates();
 drawFirst();

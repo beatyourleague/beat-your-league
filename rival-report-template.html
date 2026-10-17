@@ -262,11 +262,14 @@
      65-71px at 360-390, and "questionable · see if/then" ran its 74px word
      through the table's right border. The four-column grid (and only it: its
      call column is the LAST of four, never the five-column Tape's 4th) gives
-     the call room from the name column; !important because the widths ride
-     inline on the col elements. A word that still cannot fit breaks rather than
-     crossing the border. */
+     the call room from the name column, and the points column and the slot
+     column enough for "Proj" (41px, 4px past a 12% column at 360) and "FLEX";
+     !important because the widths ride inline on the col elements. A word
+     that still cannot fit breaks rather than crossing the border. */
   @media (max-width:420px){
-    .tape col:nth-child(2):nth-last-child(3){width:51% !important;}
+    .tape col:nth-child(1):nth-last-child(4){width:10% !important;}
+    .tape col:nth-child(2):nth-last-child(3){width:48% !important;}
+    .tape col:nth-child(3):nth-last-child(2){width:14% !important;}
     .tape col:nth-child(4):last-child{width:28% !important;}
     .tcall{overflow-wrap:anywhere;}
   }

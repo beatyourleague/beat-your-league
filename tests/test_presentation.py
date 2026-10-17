@@ -375,20 +375,29 @@ def test_the_call_column_holds_its_longest_word_on_a_phone() -> None:
     """Panel R4, reproduced by a geometry probe on both published samples:
     td.tcall holding "questionable · see if/then" measured scrollWidth 74
     against clientWidth 65/68/71 at 360/375/390, and the report's border was
-    drawn through "questionab|le". The four-column lineup's call column takes
-    room from the name column at 420px and under (measured after: 86/91/95,
-    no overflow at 360-414, desktop widths unchanged), and a word that still
-    cannot fit breaks inside the cell. The <col> widths ride inline, which is
-    why the phone rule must be !important; the five-column Tape is untouched."""
+    drawn through "questionab|le". The same probe found the "Proj" head 4px
+    past its 12% column and "FLEX" 1px past its 9% one at 360. At 420px and
+    under the four-column lineup now takes its widths from this rule —
+    measured after on the regenerated sample: no cell of either table
+    overflows at 360, 375, 390, 414 or 1280 (call cell 86/91/95/102px), and
+    desktop widths are unchanged. The <col> widths ride inline, which is why
+    the phone rule must be !important; the five-column Tape is untouched."""
     css = rr.extract_design(TEMPLATE)[0]
     phone = css.split("@media (max-width:420px){", 1)[1].split("\n  }", 1)[0]
-    assert ".tape col:nth-child(4):last-child{width:28% !important;}" in phone
-    assert ".tape col:nth-child(2):nth-last-child(3){width:51% !important;}" in phone
+    widths = dict(re.findall(r"\.tape col:nth-child\((\d)\):(?:nth-last-child\(\d\)|last-child)"
+                             r"\{width:(\d+)% !important;\}", phone))
+    assert widths == {"1": "10", "2": "48", "3": "14", "4": "28"}, widths
+    assert sum(int(w) for w in widths.values()) == 100
+    # Each selector names its column by position from BOTH ends, so it can
+    # only ever match a four-column group.
+    for n, last in (("1", "nth-last-child(4)"), ("2", "nth-last-child(3)"),
+                    ("3", "nth-last-child(2)"), ("4", "last-child")):
+        assert f".tape col:nth-child({n}):{last}{{" in phone, n
     assert ".tcall{overflow-wrap:anywhere;}" in phone
-    # The rule targets exactly the four-column grid's call and name columns.
     four = re.findall(r'width:(\d+)%', rr.LINEUP_COLS)
     assert len(four) == 4 and rr.TAPE_COLS.count("<col>") == 5
-    assert 9 + 51 + 12 + 28 == 100 and int(four[0]) == 9 and int(four[2]) == 12
+    # The call column on a 360px phone (a 314px table): room for its 74px word.
+    assert 314 * int(widths["4"]) / 100 - 10 >= 74
 
 
 def test_a_generated_page_declares_its_colour_scheme_and_bar_colour() -> None:
