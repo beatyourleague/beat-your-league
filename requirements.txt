@@ -3,3 +3,8 @@ requests==2.34.2
 
 # Development / tests:
 pytest==9.1.1
+# The workflow tests parse .github/workflows/*.yml, and the paid-path import
+# walk reads which runners the crons execute. Unpinned, CI never had it: the
+# walk crashed and every workflow rule skipped, so the suite was red on GitHub
+# from Aug 26 2026 while passing on any machine that happened to have PyYAML.
+PyYAML==6.0.3

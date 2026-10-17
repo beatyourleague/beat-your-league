@@ -44,7 +44,7 @@ jobs:
       # contract would be unenforced here exactly as it was everywhere else.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       # -rs lists every SKIP with its reason. data/ and reports/ are gitignored
       # in full, so ~19 tests that read locally-generated artifacts cannot run
       # here — and a skip nobody can see is how a suite quietly stops testing
