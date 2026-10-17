@@ -1099,7 +1099,7 @@ take money until LAUNCH.md's owner steps are done; treat 2026 as a proof season.
   (render/welcome.py), which must equal terms.html's "Last updated" date (tested).
 - **Commercial email carries a sender address** from `SENDER_POSTAL_ADDRESS` (render/sender.py
   — a rented mailbox, never a home); the launch announcement refuses to send without one.
-- **Crons start from the form Worker** (scheduled(), `0,30 * * * *`, secret GH_DISPATCH_TOKEN),
+- **Crons start from the form Worker** (scheduled(), `17,47 * * * *`, secret GH_DISPATCH_TOKEN),
   GitHub's schedules as backup; `run/watchdog.py` goes red when a Tuesday send or Saturday check
   never happened — its only evidence is the run's own marker (`run-tuesday-<season>-wNN` /
   `run-saturday-…`, written at the end of every run that got as far as sending, failures
@@ -1107,7 +1107,8 @@ take money until LAUNCH.md's owner steps are done; treat 2026 as a proof season.
   when some subscriber bought before the run was due (unknown purchase times count as owed);
   the 14:00 once-a-day steps claim the UTC day (`run-daily-<date>`), so the Worker dispatch
   plus GitHub's cron run them once; pre-launch (no registry, no Stripe key) Tuesday/Saturday exit 0 "not set up
-  yet". The hourly intake runs at :30, never alongside Tuesday/Saturday.
+  yet". The hourly intake runs at :47, never alongside Tuesday/Saturday; every GitHub backup
+  cron sits off the top of the hour (Tue 12:17/16:17, daily 14:17, Sat 16:17, Mon 13:17 UTC).
 - **The Tuesday run refuses a derived week that has kicked off** (a late backup run or a hand
   re-run would publish calls about games underway); "week underway" is the first kickoff to the
   minute, not the UTC date. A first email belongs to an unserved PURCHASE — the hourly intake
@@ -1174,6 +1175,63 @@ finding reproduced and then re-attacked by a second agent before it counted. Rul
   they paid with; type-to-add appends one row so earlier choices survive.
 - **The roster report sent after kickoff lists only the weeks still ahead** (`from_week`),
   subject included, and says "weekly report".
+
+**The world-class pass (Oct 15–16 2026) — six-lens panel, then six build agents.** A buyer, a
+commissioner, a skeptical veteran (benchmarked live against FantasyPros, Yahoo, Sleeper, 4for4,
+Rotowire and USA TODAY Sports Fantasy), a designer, a founder and a report-quality expert
+scored the product 4–6.5/10 against the category and found 35 verified defects; every
+code-side item was built, merged and pinned. Rules it left:
+- **A plan waits for the news it names, to the minute.** An Out/Doubtful on the final report is
+  in by game-day morning; a player still questionable is ruled on at the inactives, 90 minutes
+  before HIS kickoff (`engine.final_check.INACTIVES_LEAD`, one clock for Tuesday and Saturday,
+  which now passes kickoffs into every `Now`). A cover who kicks off first gets "Decide before
+  then". London 9:30 AM ET is early. The if/then tries a FLEX slide, like Saturday, and an
+  empty if/then gives the true reason by name.
+- **The practice squad is not confirmed to play** (method §15 C9; live week, report layer only):
+  the seat stays, the odds go. No buyer surface says "confirmed to play" — the explainer and
+  every selling page say what the gate checks ("both players are healthy and playing").
+- **The closest call is the closest call WITH odds**, labelled so; a narrower decision without
+  odds is named. A toss-up (printed 52% or less, or under 0.5 points) reads "either is fine"
+  and leaves the game plan. Rows carry facts, never new numbers: season per-game and last 3,
+  QB pass attempts, dated bench designations and kickoffs, why a higher-projected bench option
+  was skipped. Subscriber reports name the team by its top starter (subject and masthead), are
+  stamped in ET, date the roster in use, and define the realistic range (no coverage figure).
+- **One rule for graded lineups: `engine.subscriber.graded_slots`, judged on the OFFENSE** (K
+  and DEF change no other slot's call). The engine, the signup page (roster.js twin) and the
+  report-level withholding all ask it; two lists had disagreed. **Two FLEX (Sleeper's default)
+  and three WR (Yahoo's) graded B** under `reports/lineup-shapes-method.md` (frozen a199a01,
+  run once: four arms, all B), so every lineup the page offers prints odds — except in a week
+  whose context input can't be read, when those two fall back to a model their arms never
+  measured and hold their odds with the true reason (`run.solo.graded_configuration`).
+- **Ledger identity carries the lineup's offense** (`engine.subscriber.ledger_store_id`):
+  `typed-ppr-12-2026` for standard (unchanged), `typed-ppr-12-sf-2026` otherwise. Standard and
+  superflex had published 0.788 and 0.772 for one pair under one call id. The anchor reads the
+  offense too, so "standard, no kicker" runs the standard model.
+- **The live sample's odds are recorded** before the week's first kickoff, into the store a
+  subscriber with that setup uses; after kickoff it refuses to rebuild unless `--force`, which
+  records nothing. Drafted posts quote only `recorded_only(build())`, never a tally.
+- **League Pass is a group product now:** a per-pass seat link (`?pass=<HMAC token>&s=&n=&t=`,
+  UPDATE_SECRET) in the payer's welcome and on every pass report, settings prefilled; a claim
+  that matches no pass is told so once by email; a re-claim is a roster change, never a second
+  seat; the payer's report counts claimed seats (count only); `meta["plan"]` is
+  season|monthly|pass|league_pass and drives the season-end and forward lines; seats re-claim
+  each season with their new roster; a seat's first email arrives the day it's claimed.
+- **Channel tags reach the purchase** (`_via-<tag>` on the ref, `byl_via` on the Customer,
+  `make stats` counts paid signups by channel); a closed checkout keeps the roster with the
+  waitlist row and the launch email restores it (`join/?ref=`).
+- **Operator tools:** `make roster-update EMAIL=… ROSTER=…` applies an emailed roster change
+  through the confirmed-update path; `make waitlist-send` sends the one launch email.
+- **Type is self-hosted** (`site/fonts`, OFL, metric-matched fallbacks fitted in Chrome), so
+  no page makes a third-party request and a font swap moves nothing (CLS ~0 on Slow 4G).
+- **`make launch-check` grew the panel's gates:** the product battery on four live-week
+  rosters (byes and injuries, a current-team bye, a released player), joining every starter
+  AND every alternative to players.csv and the schedule; every email at a true 390px; every
+  join mode completed in Chrome against stub endpoints; axe-core on every selling page and
+  join mode (AXE_CORE_PATH, or `npm install --no-save axe-core@4.11.4`); LCP/CLS on Slow 4G;
+  and read-only account gates (cron delay, fork-PR approval, Resend domain, Stripe public
+  details, refunds and disputes, free-tier capacity, GST/HST) that SKIP or OWNER without
+  credentials. Checkout open while the join page has no FORM_ENDPOINT is a FAIL: the Worker
+  comes first. tests/conftest.py guards data/processed/ledger like data/registry.
 
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
