@@ -142,7 +142,9 @@ def test_an_unknown_name_is_refused_with_a_plain_reason(
         directory: PlayerDirectory) -> None:
     match = directory.resolve("Nobody McFakename")
     assert not match.resolved and not match.candidates
-    assert match.reason == "we don't have anybody by that name"
+    # Not "we don't have anybody by that name": a misspelling is somebody we
+    # may well have (FUNNEL F9).
+    assert match.reason == "we couldn't find that name — check the spelling"
     # Buyer vocabulary: no ids, no jargon, no version numbers.
     assert "gsis" not in (match.reason or "").lower()
 

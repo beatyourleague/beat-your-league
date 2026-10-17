@@ -98,6 +98,10 @@ class Match:
     typed: str
     player: Player | None
     candidates: tuple[Player, ...] = ()
+    # The candidates fit PART of what was typed ("Hurts" -> Jalen Hurts): a
+    # choice even when there is one, never a pick (RULE R3). The browser's
+    # reason "partial".
+    partial: bool = False
 
     @property
     def resolved(self) -> bool:
@@ -109,10 +113,15 @@ class Match:
         if self.resolved:
             return None
         if not self.candidates:
-            return "we don't have anybody by that name"
+            # Not "we don't have anybody by that name": a misspelling or a
+            # nickname is somebody we may well have (FUNNEL F9).
+            return "we couldn't find that name — check the spelling"
+        names = ", ".join(c.name for c in self.candidates)
+        if self.partial:
+            return (f"did you mean {names}?" if len(self.candidates) == 1
+                    else f"that's part of more than one player's name — {names}")
         noun = "team" if all(c.is_defense for c in self.candidates) else "player"
-        return (f"more than one {noun} goes by that name — "
-                f"{', '.join(c.name for c in self.candidates)}")
+        return f"more than one {noun} goes by that name — {names}"
 
 
 class PlayerDirectory:
@@ -133,6 +142,13 @@ class PlayerDirectory:
                 key = (first[:1].lower(), normalize(rest))
                 if key[1]:
                     self._by_initial.setdefault(key, []).append(player)
+        # Part of a name typed on its own ("Hurts", "St. Brown", "Puka"): the
+        # lookup of last resort, and its answer is always a choice (RULE R3).
+        self._by_part: dict[str, list[Player]] = {}
+        for player in players:
+            if not player.is_defense:
+                for key in _name_part_keys(player.name):
+                    self._by_part.setdefault(key, []).append(player)
         # Defenses are matched separately: a manager writes them a dozen ways
         # ("Ravens", "BAL DEF", "Baltimore Ravens D/ST"), and none of those is
         # the display name of a person.
@@ -207,6 +223,16 @@ class PlayerDirectory:
                 return Match(typed=typed, player=found[0])
             if found:
                 return Match(typed=typed, player=None, candidates=tuple(found))
+        # Last: part of a name. Never a pick, even when one player fits — a
+        # pasted "Allen" with one Allen in the directory is still a guess at
+        # which Allen (RULE R3). Every fit, by name: this side has no scoring
+        # to rank on, and the browser's eight-by-points list is a display cap,
+        # not a different answer — both say "choose", neither picks.
+        part = normalize(cleaned)
+        fits = self._by_part.get(part, []) if len(part) >= 3 else []
+        if fits:
+            return Match(typed=typed, player=None, partial=True,
+                         candidates=tuple(sorted(fits, key=lambda p: (p.name, p.player_id))))
         return first
 
     def _resolve_plain(self, typed: str, keep_lead: bool = False) -> Match:
@@ -383,6 +409,19 @@ _NOISE = re.compile(
     r"|\b(?:OUT|DTD|SSPD|SUSP|PUP|NFI|INJ|NA)\b|\d", re.I | re.A)
 # Every kind of whitespace the browser's \s does not know about is a plain space.
 _WHITESPACE = re.compile(r"[\s\u0085\u001c-\u001f\u00a0\u2028\u2029\ufeff]+")
+
+
+def _name_part_keys(name: str) -> set[str]:
+    """The parts of a name a manager types on its own (FUNNEL F9, BE2-D2): the
+    first name and every tail — "Brown" and "St. Brown" from "Amon-Ra St.
+    Brown", "Walker" from "Kenneth Walker III" (the suffix folds away). Under
+    three letters is too little to go on. Mirrors roster.js namePartKeys."""
+    words = [w for w in re.split(r"[\s-]+", (name or "").strip()) if w]
+    if len(words) < 2:
+        return set()
+    keys = {normalize(words[0])} | {normalize(" ".join(words[i:]))
+                                    for i in range(1, len(words))}
+    return {key for key in keys if len(key) >= 3}
 
 
 def _tidy(line: str) -> str:

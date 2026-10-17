@@ -484,3 +484,52 @@ def test_a_seats_roster_report_gives_its_stop_route_not_a_billing_page(monkeypat
     assert "billing.stripe.com/p/test" in paid.html
     assert "billing.stripe.com/p/test" in paid.text
     assert "within 10 business days" not in email_html(report) + text_summary(report)
+
+
+def test_a_week_one_buyer_is_never_told_the_season_is_weeks_away(monkeypatch) -> None:
+    """COPY:F5, reproduced with load_week_data(today=2026-09-08) and
+    today=2026-09-12: run/intake.py sets season_started = week > 1, so all
+    through Week 1 — two days before kickoff and after it — the roster report
+    was titled "Your Pre-Season Report" and opened "Your season doesn't start
+    for a couple of weeks". The message now reads Week 1's first kickoff off
+    the schedule when it is built: within a week of it, or once it has passed,
+    the report is the in-season Roster Report, and the opener names the day
+    (or says Week 1 is under way). Every surface of the message says it."""
+    from datetime import datetime, timedelta, timezone
+
+    import render.preseason as pre
+
+    kick = datetime(2026, 9, 10, 0, 20, tzinfo=timezone.utc)   # Wed Sep 9, 8:20 PM ET
+    monkeypatch.setattr(pre, "_season_first_kickoff", lambda season, cache_dir=None: kick)
+    report = _report()
+    assert not report["meta"]["season_started"]
+
+    def sent_at(now):
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+        monkeypatch.setattr(pre, "datetime", Clock)
+        message = pre.preseason_message("fan@example.com", "abcdef0123", report)
+        return message.text, _prose(message.html)
+
+    for now in (kick - timedelta(days=2), kick + timedelta(days=2)):
+        text, html = sent_at(now)
+        for body in (text, html):
+            assert "couple of weeks" not in body
+            assert "PRE-SEASON" not in body.upper(), now
+            assert "ROSTER REPORT" in body.upper(), now
+    assert "Week 1 kicks off Wednesday, Sep 9" in sent_at(kick - timedelta(days=2))[0]
+    assert "Week 1 is under way" in sent_at(kick + timedelta(days=2))[0]
+    # Weeks out it is still the pre-season report — dated, never "a couple of weeks".
+    text, _ = sent_at(kick - timedelta(days=21))
+    assert "PRE-SEASON" in text.upper() and "Week 1 kicks off Wednesday, Sep 9" in text
+    # No schedule to read: the undated opener, true whenever it is sent.
+    monkeypatch.setattr(pre, "_season_first_kickoff", lambda season, cache_dir=None: None)
+    text, _ = sent_at(kick)
+    assert pre.OPENER in text and "couple of weeks" not in pre.OPENER
+    # The caller's report is never mutated, and the season-started path is
+    # untouched (Week 2 on: the in-season opener, no date lookup needed).
+    assert "first_kickoff" not in report["meta"]
+    later = _report(season_started=True, from_week=9)
+    assert pre.opener(later["meta"]) == pre.IN_SEASON_OPENER

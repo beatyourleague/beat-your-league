@@ -128,6 +128,13 @@
     text-transform:uppercase;letter-spacing:.06em;color:var(--turf);}
   .done ol{margin:8px 0 0 18px;}
   .done li{margin-top:6px;}
+  /* A confirmation with one item showing (free report, seat, update) is a
+     sentence, not a list: a lone "1." sat in front of it (panel R5). */
+  .done ol.single{list-style:none;margin-left:0;}
+  .settings-ok{display:flex;gap:9px;align-items:flex-start;margin-top:14px;padding:11px 12px;
+    background:#fff;border:1.5px solid var(--navy);font-size:13.5px;font-weight:700;
+    line-height:1.45;cursor:pointer;}
+  .settings-ok input{margin-top:2px;width:18px;height:18px;flex:none;}
   .hidden{display:none;}
   footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
@@ -278,7 +285,8 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Set up once, and every Tuesday you get your team's report: the
-    lineup we'd set, with the odds wherever both players are healthy and playing.
+    lineup we'd set, with the odds wherever both players are playing, off the injury
+    report and have enough games on record (not on team defenses).
     <b>$39 for the season</b>, at a founding rate locked in for every renewal.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now: once you check your roster it stays in this
@@ -293,6 +301,16 @@
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
     <div class="note" id="seat-settings" style="display:none"></div>
+    <!-- A roster update REPLACES the settings on file with these: the intake
+         reads scoring, size and lineup from the new roster code. The page sat
+         on its defaults (Full PPR, 12 teams, standard), so a half-PPR 10-team
+         subscriber's update quietly re-scored every later report (FUNNEL F1).
+         Prefilled from the report's link when it carries them; otherwise the
+         subscriber says these are right before anything is sent. -->
+    <div class="note" id="update-settings" style="display:none"></div>
+    <label class="settings-ok" id="settings-ok-wrap" style="display:none"><input
+      type="checkbox" id="settings-ok"> These are my league's settings now —
+      scoring, league size and starting lineup.</label>
     <div class="note">Full PPR, half PPR or standard scoring with 4-point passing
     touchdowns, in a league of 8 to 14 teams: every number in your report is worked
     out that way. Six-point passing touchdowns and TE premium aren't scored yet —
@@ -388,7 +406,7 @@ Baltimore Ravens
       <p class="terms-line" id="terms-line">The season pass is <b>$39 and renews once
       a year at $39 unless you cancel</b><span class="renews-on"></span>. We email you before it bills, and you cancel
       yourself any time from your own billing page. Refunds are no-questions until
-      your second report's week kicks off — one per person.</p>
+      your second weekly report's week kicks off — one per person.</p>
       <button id="submit" type="submit">Continue to checkout — $39</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
     </form>
@@ -400,13 +418,19 @@ Baltimore Ravens
         <li id="seat-note" style="display:none">There's nothing for you to pay — the
         seat comes out of your league's League Pass, and you get your <b>own</b>
         report, built from the roster you just entered. Your first report lands
-        the day the seat is matched to the pass — this week's report if the week's
-        games haven't started, otherwise your roster report — then a new one every
+        the day the seat is matched to the pass — this week's report if it's Week 2 or later and
+        the week's games haven't started, otherwise your roster report — then a new one every
         Tuesday. If it can't be matched to a League Pass, we email you to say so.</li>
-        <li id="update-note" style="display:none">We've emailed a button to confirm
-        the change — press it and your next report, and Saturday's final check, use
-        this roster. It only goes to the address your reports go to, and nothing
-        changes until it's pressed.</li>
+        <!-- What the intake actually does (run/updates.py validate_requests),
+             never "we've emailed": nothing is mailed at submit, and nothing
+             is mailed at all for an unchanged roster, an address with no
+             subscription, or a fourth request in a day (FUNNEL F11). -->
+        <li id="update-note" style="display:none">If this is the address your
+        reports go to and the roster or settings differ from the ones on file,
+        we'll email that address a button to confirm the change, usually within
+        the hour. Press it within 7 days and your next report, and Saturday's
+        final check, use this roster and these settings. Nothing changes until
+        it's pressed. We send at most three of these a day to one address.</li>
         <li id="trial-note" style="display:none">It's built from the roster you just
         entered and usually lands within the hour. From the week's first kickoff
         until Tuesday it waits for the next week's report, so it's never about games
@@ -417,7 +441,7 @@ Baltimore Ravens
         unless you cancel</b><span class="renews-on"></span>. We email you before any renewal, and you can cancel
         yourself any time from your own account page.</li>
         <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
-        until your second report's week kicks off — one per person, and a
+        until your second weekly report's week kicks off — one per person, and a
         re-subscription after a refund is final.
         Changed your mind later?
         <a href="../terms.html#cancel">Cancelling takes about a minute</a> in your
@@ -440,7 +464,8 @@ Baltimore Ravens
   <ul>
     <li><span id="side-first"><b>A report the day you join</b>, then a new one every Tuesday morning</span></li>
     <li><span>Every slot decided for <b>your roster, your scoring</b></span></li>
-    <li><span><b>The odds</b> wherever both players are healthy and playing, so you know how sure to be</span></li>
+    <li><span><b>The odds</b> wherever both players are playing, off the injury report and
+      have enough games on record (not on team defenses), so you know how sure to be</span></li>
     <li><span>An <b>if/then plan</b> for late injury news, and a <b>Saturday final
       check</b> when it changes your lineup</span></li>
     <li><span>Your lineup set in <b>about ninety seconds</b></span></li>
@@ -449,13 +474,13 @@ Baltimore Ravens
   your roster and your league's scoring.
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
-    <span>Risk-free: full refund, no questions, until your second report's week kicks off</span>
+    <span>Risk-free: full refund, no questions, until your second weekly report's week kicks off</span>
     <span>Cancel yourself online, any time</span>
     <span>No league login, no password — just your roster</span>
   </div>
 </aside>
 </div>
-<script src="roster.js?v=13d8f098e2"></script>
+<script src="roster.js?v=632c4eddea"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -531,7 +556,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
@@ -554,10 +579,13 @@ const RESTORED = (() => {
 const SOURCE = VIA || (RESTORED && RESTORED.via) || undefined;
 // ?plan=monthly | ?plan=pass — which card they came from. Anything else is the
 // season pass, so a mangled link can never silently downgrade the sale. A
-// restored roster with no ?plan= comes back as the plan it was saved under.
-const PLAN_PARAM = QUERY.get("plan") ||
-  (RESTORED && !QUERY.has("pass") && !QUERY.has("update") && !QUERY.has("try")
-    ? ({ monthly: "monthly", league_pass: "pass" })[RESTORED.plan] || "" : "");
+// restored roster comes back as the plan it was saved under, whatever ?plan=
+// says: the ref is the choice made LAST. A buyer who arrived from the monthly
+// card, switched to the season pass and bookmarked the page came back on
+// monthly at $14.99, because ?plan= won (FUNNEL F8).
+const RESTORED_PLAN = RESTORED && !QUERY.has("pass") && !QUERY.has("update") && !QUERY.has("try")
+  ? ({ monthly: "monthly", league_pass: "pass" })[RESTORED.plan] || "" : null;
+const PLAN_PARAM = RESTORED_PLAN !== null ? RESTORED_PLAN : QUERY.get("plan") || "";
 const WANTS_MONTHLY = PLAN_PARAM === "monthly";
 const WANTS_PASS = PLAN_PARAM === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
@@ -699,8 +727,8 @@ function loadDirectory() {
 $("retry-dir").addEventListener("click", loadDirectory);
 loadDirectory();
 
-// Type-to-add: most people fix a roster one player at a time, and a typeahead
-// beats retyping into a paste box. Suggestions come from the same published
+// Type-to-add: fixing a roster one player at a time is what a typeahead is
+// for, and it beats retyping into a paste box. Suggestions come from the same published
 // directory the resolver uses, so anything added this way resolves by
 // construction. Every rendered string is a TEXT node — names are not markup.
 const searchBox = $("player-search");
@@ -742,6 +770,40 @@ function renderSuggestions() {
     row.addEventListener("click", () => addPlayer(player));
     suggestBox.appendChild(row);
   }
+}
+// The list is drawn OVER the paste box and the "Check my roster" button, so a
+// tap meant for either landed on whichever name sat there, and nothing but
+// clearing the field closed it (FUNNEL F2). It closes on Escape, when focus
+// leaves the field for anything but the list, and on a press anywhere outside
+// it; focusing the field again brings it back. A press INSIDE the list never
+// closes it: tapping a name moves focus off the field before the tap's click
+// lands (Safari does not focus a button at all), and closing on that blur
+// would remove the name being tapped.
+const addWrap = searchBox ? searchBox.closest(".addwrap") : null;
+let pressInList = false;
+function closeSuggestions() { suggestBox.replaceChildren(); }
+if (addWrap) {
+  document.addEventListener("pointerdown", (event) => {
+    pressInList = addWrap.contains(event.target);
+    if (!pressInList) closeSuggestions();
+  });
+  // A key press means the pointer is no longer what moves focus.
+  document.addEventListener("keydown", () => { pressInList = false; }, true);
+  addWrap.addEventListener("focusout", (event) => {
+    if (pressInList || addWrap.contains(event.relatedTarget)) return;
+    closeSuggestions();
+  });
+  addWrap.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !suggestBox.childElementCount) return;
+    event.preventDefault();
+    // Focus first: from a row, the field's focus handler would otherwise
+    // redraw the list this key just closed.
+    searchBox.focus();
+    closeSuggestions();
+  });
+  searchBox.addEventListener("focus", () => {
+    if (!suggestBox.childElementCount) renderSuggestions();
+  });
 }
 if (searchBox) {
   searchBox.addEventListener("input", renderSuggestions);
@@ -788,6 +850,23 @@ $("roster-text").addEventListener("input", () => {
   tally.className = "tally bad";
   tally.textContent = 'Your roster changed — hit "Check my roster" again.';
 });
+
+// Why a row is not on the roster yet, in the buyer's words. Part of a name
+// ("Hurts", "Allen") is offered as a choice, even when one player fits —
+// RULE R3, nothing is guessed — and "we don't have anybody by that name" is
+// gone: it was said beside a typeahead that listed him (FUNNEL F9, BE2-D2),
+// and a misspelling is somebody we may well have.
+function whyUnread(match) {
+  if (match.reason === "partial") {
+    return match.candidates.length === 1 ? "did you mean him? Tap his name to add him"
+      : "that's part of more than one player's name — pick one, or type the full name";
+  }
+  if (match.reason === "ambiguous") return "more than one player goes by that name — pick one";
+  if (match.reason === "gone") {
+    return "not in this season's player list any more — remove it, and add whoever replaced him";
+  }
+  return "we couldn't find that name — check the spelling, or find him with “Add a player” above";
+}
 
 // ``focusAt``: after a remove or a choice, keyboard focus goes to the row now
 // at that display position (or the tally), rather than falling to the page.
@@ -839,11 +918,7 @@ function draw(focusAt) {
     } else {
       // Shown back verbatim — never dropped.
       left.appendChild(textCell("who", match.typed));
-      left.appendChild(textCell("why", match.reason === "ambiguous"
-        ? "more than one player goes by that name — pick one"
-        : match.reason === "gone"
-        ? "not in this season's player list any more — remove it, and add whoever replaced him"
-        : "we don't have anybody by that name"));
+      left.appendChild(textCell("why", whyUnread(match)));
     }
     row.appendChild(left);
 
@@ -890,8 +965,14 @@ function draw(focusAt) {
   confirm.style.display = "none";
   let problem = "";
   if (unresolved) {
-    problem = unresolved + (unresolved === 1 ? " line we couldn't read" :
-      " lines we couldn't read") + " — fix or remove them to continue.";
+    // A row offering names was READ; it is waiting on a pick, and the count
+    // says so rather than calling it unreadable.
+    const choose = state.matches.filter((m) => !m.player && (m.candidates || []).length).length;
+    const unread = unresolved - choose;
+    problem = [choose ? choose + (choose === 1 ? " line needs" : " lines need") + " a pick" : "",
+               unread ? unread + (unread === 1 ? " line we couldn't read" :
+                 " lines we couldn't read") : ""].filter(Boolean).join(" and ") +
+      " — fix or remove them to continue.";
   } else if (duplicated) {
     problem = "The same player is listed twice — remove one.";
   } else if (defenses > 2 && state.defensesOk !== defenses) {
@@ -957,6 +1038,9 @@ function keepInAddress() {
   }
   const params = new URLSearchParams(location.search);
   params.set("ref", ref);
+  // The ref carries the plan, so a stale ?plan= beside it is dropped rather
+  // than left to disagree with it (FUNNEL F8).
+  if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) params.delete("plan");
   history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
 }
 
@@ -1203,6 +1287,12 @@ function submitUpdate(email, ref) {
       "your report follows it from the next Tuesday.");
     return;
   }
+  // The settings ride in the ref and replace the ones on file (FUNNEL F1).
+  if (!UPDATE_SETTINGS_FROM_LINK && !$("settings-ok").checked) {
+    showError("err-email", "Check your league's settings at step 1 first — an " +
+      "update replaces the ones on file — and tick the box there.");
+    return;
+  }
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(TOKEN_UPDATE
@@ -1216,7 +1306,7 @@ function submitUpdate(email, ref) {
     // address and the slug against the subscription before anything changes.
     $("form-email").style.display = "none";
     $("done-head").textContent = TOKEN_UPDATE ? "Your roster update is in."
-                                              : "Check your inbox.";
+                                              : "Your request is in.";
     $("done").style.display = "block";
   }).catch(() => {
     showError("err-email", "That didn't send — check your connection and try " +
@@ -1286,7 +1376,23 @@ function firstReportTiming(w, now) {
   return { when: "after", tuesday: lands.toLocaleDateString("en-US",
     { weekday: "short", month: "short", day: "numeric" }) };
 }
+// Whether pressing the button on screen can start what a delivery date
+// describes: the chosen plan's payment link exists, or — for a seat — there is
+// a backend to post the claim to. While it cannot, the page names no date:
+// "Weekly reports from Tue, Oct 20" and "Your roster report today" sat
+// directly under "Checkout isn't open just yet", promising a delivery for a
+// purchase nobody could make (FUNNEL F4, panel R3).
+function canStartToday() {
+  if (SEAT_MODE) return Boolean(FORM_ENDPOINT);
+  return Boolean(WANTS_PASS ? PASS_LINK : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON);
+}
+function closedChipText() {
+  if (SEAT_MODE) return "Seats open soon";
+  if (WANTS_PASS) return "League Pass opens soon";
+  return monthlyChosen ? "Monthly opens soon" : "Season pass opens soon";
+}
 function firstChipText() {
+  if (!canStartToday()) return closedChipText();
   if (FIRST && FIRST.when === "before") return "This week's report today";
   if (FIRST && FIRST.when === "after") return "Weekly reports from " + FIRST.tuesday;
   return SEAT_MODE ? "A report the day it's matched" : "A report the day you join";
@@ -1306,7 +1412,11 @@ function drawFirst() {
   const side = $("side-first"), note = document.querySelector("#first-note .first-when");
   const b = (words) => { const el = document.createElement("b"); el.textContent = words; return el; };
   const t = (words) => document.createTextNode(words);
-  if (FIRST && FIRST.when === "before") {
+  if (!canStartToday()) {
+    side.replaceChildren(b("A report the day you join"),
+      t(", once checkout opens — then a new one every Tuesday morning"));
+    note.replaceChildren(t("A report lands "), b("the day you join"), t(", once checkout opens."));
+  } else if (FIRST && FIRST.when === "before") {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
   } else if (FIRST && FIRST.when === "after") {
@@ -1328,9 +1438,15 @@ function renewsOn(now) {
   return new Date(year, month, day).toLocaleDateString("en-US",
     { month: "short", day: "numeric", year: "numeric" });
 }
+// Only while a purchase can complete today: "bought today, it renews on Oct
+// 17, 2027" beside a checkout that cannot open dates a purchase that cannot
+// happen (panel R3). Closed, the undated "renews once a year" form stands.
+function renewalDate() {
+  return canStartToday() ? " — bought today, it renews on " + renewsOn(new Date()) : "";
+}
 function fillRenewalDates() {
   document.querySelectorAll(".renews-on").forEach((span) => {
-    span.textContent = " — bought today, it renews on " + renewsOn(new Date());
+    span.textContent = renewalDate();
   });
 }
 
@@ -1350,6 +1466,8 @@ function nothingToPay(stepLabel) {
   document.querySelector(".secure").style.display = "none";
   // No checkout here, so the footer must not describe one (LP-D7).
   $("footer-checkout").style.display = "none";
+  // Every mode that pays nothing shows exactly one confirmation line.
+  document.querySelector("#done ol").classList.add("single");
 }
 // Say it is not open BEFORE they paste fifteen names (the free report and the
 // roster update used to say so only at submit — the late disappointment the
@@ -1443,16 +1561,18 @@ function monthlyPlan() {
   $("submit").textContent = "Continue to checkout — $14.99/mo";
   $("header-pitch").textContent = "Set up once, and every Tuesday you get your " +
     "team's report: the lineup we'd set, with the odds wherever both players are " +
-    "healthy and playing. $14.99 a month, and billing stops on its own when the " +
+    "playing, off the injury report and have enough games on record (not on team " +
+    "defenses). $14.99 a month, and billing stops on its own when the " +
     "season ends.";
   setChips(["$14.99 / month", "Cancel any time", FIRST_CHIP]);
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops at the end of the season by itself, " +
     "because there's no product in the offseason. Cancel yourself any time. " +
-    "Refunds are no-questions until your second report's week kicks off — " +
+    "Refunds are no-questions until your second weekly report's week kicks off — " +
     "one per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
+  drawFirst();
   noteClosedFor(STRIPE_LINK_MONTHLY, STRIPE_LINK_SEASON);
 }
 
@@ -1470,7 +1590,8 @@ if (TRY_MODE) {
   $("header-pitch").textContent =
     "Try it free. Enter your league's settings and your roster, and we'll email " +
     "you this week's report for your team — your lineup decided, with the odds " +
-    "wherever both players are healthy and playing. One per person, no card.";
+    "wherever both players are playing, off the injury report and have enough " +
+    "games on record (not on team defenses). One per person, no card.";
   setChips(["Free — no card", "This week's report", "One per person"]);
   $("lbl-email").textContent = "Where to send your free report";
   $("submit").textContent = "Email me my free report";
@@ -1485,9 +1606,10 @@ if (TRY_MODE) {
   document.querySelector(".secure").style.display = "none";
 } else if (UPDATE_MODE) {
   $("header-pitch").textContent =
-    "Update your roster. Paste it as it stands now — trades, pickups, drops — " +
-    "and your next report is built from it. Nothing to pay. Enter the address " +
-    "your reports go to and we'll email you a button to confirm it.";
+    "Update your roster. Check your league's settings, paste your roster as it " +
+    "stands now — trades, pickups, drops — and your next report is built from " +
+    "both. Nothing to pay. Enter the address your reports go to and we'll email " +
+    "it a button to confirm the change.";
   setChips(["Roster update", "Nothing to pay", "Confirmed by email"]);
   $("lbl-email").textContent = "The address your reports go to";
   $("submit").textContent = "Update my roster";
@@ -1540,7 +1662,8 @@ if (TRY_MODE) {
   // price on the page has to be the one this purchase actually costs.
   $("header-pitch").textContent = "Set up once, and every Tuesday every manager " +
     "in your league gets their own report: the lineup we'd set, with the odds " +
-    "wherever both players are healthy and playing. One League Pass covers all of " +
+    "wherever both players are playing, off the injury report and have enough " +
+    "games on record (not on team defenses). One League Pass covers all of " +
     "it — $99 for the whole league's season.";
   setChips(["$99 / league / season", "Covers every manager", FIRST_CHIP]);
   $("lbl-email").textContent = "Your email — your own report and the receipt go here";
@@ -1548,7 +1671,7 @@ if (TRY_MODE) {
   // actually renews — the season-pass sentence would be a wrong disclosure —
   // and the day it does (LP-I11), so a commissioner can budget the dues.
   const passTerms = "The League Pass is $99 and renews once a year at $99 " +
-    "unless you cancel — bought today, it renews on " + renewsOn(new Date()) + ". We email " +
+    "unless you cancel" + renewalDate() + ". We email " +
     "you before it bills, and you cancel yourself any time from your own billing " +
     "page. Refunds are no-questions until your second weekly report's week kicks " +
     "off — one per league.";
@@ -1623,17 +1746,40 @@ function shapeWords(shape) {
   const missing = [shape.kicker ? "" : "K", shape.defense ? "" : "DEF"].filter(Boolean);
   return BASE_WORDS[shape.base] + (missing.length ? ", no " + missing.join(" or ") : "");
 }
-if (RESTORED) {
-  setRadio("scoring", RESTORED.scoring);
-  setRadio("size", String(RESTORED.leagueSize));
-  applyShape(R.shapeOfSlots(RESTORED.slots));
-} else if (SEAT_MODE) {
+// The s/n/t a link carried — a seat link's (run/updates.seat_url) or a
+// report's update link in the same format — applied to the radios, in words.
+// Only values the page offers are applied; anything else is left to pick.
+function settingsFromLink() {
   const told = [];
   const scoring = QUERY.get("s"), size = QUERY.get("n");
   const shape = R.shapeFromCode(QUERY.get("t") || "");
   if (scoring && SCORING_WORDS[scoring] && setRadio("scoring", scoring)) told.push(SCORING_WORDS[scoring]);
   if (size && /^\d{1,2}$/.test(size) && setRadio("size", size)) told.push(size + " teams");
   if (shape && applyShape(shape)) told.push(shapeWords(shape));
+  return told;
+}
+// FUNNEL F1: an update sends this page's settings, and they REPLACE the ones
+// on file. Known from the link, they stand unless changed here; not known,
+// the subscriber says they are right before anything is posted.
+let UPDATE_SETTINGS_FROM_LINK = false;
+function prefillUpdateSettings() {
+  const told = settingsFromLink();
+  UPDATE_SETTINGS_FROM_LINK = told.length === 3;
+  $("update-settings").textContent = UPDATE_SETTINGS_FROM_LINK
+    ? "Your league's settings, from your report: " + told.join(" · ") +
+      ". They stay as they are unless you change them here."
+    : "An update replaces the settings on file with the ones below, so set them " +
+      "to your league's as it is now, then tick the box.";
+  $("update-settings").style.display = "block";
+  $("settings-ok-wrap").style.display = UPDATE_SETTINGS_FROM_LINK ? "none" : "flex";
+}
+if (UPDATE_MODE) prefillUpdateSettings();
+if (RESTORED) {
+  setRadio("scoring", RESTORED.scoring);
+  setRadio("size", String(RESTORED.leagueSize));
+  applyShape(R.shapeOfSlots(RESTORED.slots));
+} else if (SEAT_MODE) {
+  const told = settingsFromLink();
   if (told.length) {
     $("seat-settings").textContent = "Your league's settings, from its League Pass: " +
       told.join(" · ") + ". Not right? Change them below.";
@@ -1642,6 +1788,7 @@ if (RESTORED) {
 }
 drawShapeNote();
 fillRenewalDates();
+drawFirst();
 
 // When the first report lands — see firstReportTiming. For a purchase and a
 // seat (whose first email follows the same rules, LP-I4); an update and a

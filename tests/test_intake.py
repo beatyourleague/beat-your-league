@@ -659,6 +659,53 @@ def test_no_directory_player_is_mangled_by_the_decoration_stripping() -> None:
     assert len(both_wrong) <= 12, f"stripping mangles real names: {both_wrong}"
 
 
+def test_part_of_a_name_is_offered_as_a_choice_never_refused_or_picked() -> None:
+    """FUNNEL F9 / BE2-D2, reproduced in node against the shipped directory: a
+    phone-style paste of "Hurts", "Kelce", "Butker", "Stevenson", "Sutton" and
+    "McConkey" read "we don't have anybody by that name" with only a REMOVE
+    button, while the typeahead on the same page offered each of them as the
+    one match. Now part of a name — the first name or any tail of it — comes
+    back as a CHOICE in both languages: one player is still one tap, never a
+    silent pick (RULE R3); several are the typeahead's top eight; and the
+    plain reading always goes first, so a full name is untouched."""
+    if not INDEX.is_file():
+        pytest.skip("players.json not built — run `make index`")
+    directory = _python_directory()
+    typed = ["Hurts", "Kelce", "Butker", "Stevenson", "Sutton", "McConkey", "Puka",
+             "St. Brown", "Smith-Njigba", "Allen", "Nobody McFakename", "Josh Allen"]
+    got = run_js(
+        f"const fs = require('fs');\n"
+        f"const d = R.buildDirectory(JSON.parse(fs.readFileSync({str(INDEX)!r},'utf8')));\n"
+        f"console.log(JSON.stringify({json.dumps(typed)}.map(t => {{\n"
+        f"  const m = R.resolveLine(d, t);\n"
+        f"  return [m.player ? m.player.name : null, m.reason || null,"
+        f" (m.candidates || []).map(c => c.name)]; }})))")
+    js = dict(zip(typed, got))
+    for word, name in (("Hurts", "Jalen Hurts"), ("Kelce", "Travis Kelce"),
+                       ("Butker", "Harrison Butker"), ("Stevenson", "Rhamondre Stevenson"),
+                       ("Sutton", "Courtland Sutton"), ("McConkey", "Ladd McConkey"),
+                       ("Puka", "Puka Nacua"), ("St. Brown", "Amon-Ra St. Brown"),
+                       ("Smith-Njigba", "Jaxon Smith-Njigba")):
+        assert js[word] == [None, "partial", [name]], f"browser {word}: {js[word]}"
+        py = directory.resolve(word)
+        assert not py.resolved and py.partial, f"python {word}: {py}"
+        assert [c.name for c in py.candidates] == [name], f"python {word}: {py.candidates}"
+        assert py.reason == f"did you mean {name}?"
+    # Several fit: a choice, the typeahead's eight in the browser (ranked by who
+    # has scored), every one in Python (which has no scoring to rank on).
+    player, reason, names = js["Allen"]
+    assert player is None and reason == "partial" and len(names) == 8
+    assert names[0] == "Josh Allen" and "Keenan Allen" in names
+    py = directory.resolve("Allen")
+    assert py.partial and set(names) <= {c.name for c in py.candidates}
+    # Nothing fits: still "unknown", in words that are true of a misspelling.
+    assert js["Nobody McFakename"] == [None, "unknown", []]
+    assert not directory.resolve("Nobody McFakename").candidates
+    # The plain reading goes first: a full name resolves exactly as before.
+    assert js["Josh Allen"][0] == "Josh Allen"
+    assert directory.resolve("Josh Allen").player.name == "Josh Allen"
+
+
 def test_the_typeahead_ranks_by_who_people_mean_and_enter_never_guesses() -> None:
     """Launch audit PC-09, in the browser's own code: a surname search lists the
     player who has actually scored first, and Enter adds only an exact name or

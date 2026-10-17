@@ -17,7 +17,7 @@ from render.report import buyer_slots
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -42,11 +42,26 @@ IN_SEASON_OPENER = (
     "scoring. No calls in here — those come in your weekly report, where they "
     "can be graded.")
 
-OPENER = ("Your season doesn't start for a couple of weeks, so this report makes "
-          "no calls — there's nothing played to base one on, and we don't put a "
-          "number on a guess. What it does instead is tell you the two things "
-          "already decided: where the schedule leaves you short, and what your "
-          "roster actually did last season under your scoring.")
+# Before the season's record exists. Three forms, because a Week-1 buyer —
+# next season's peak buying window — was told "Your season doesn't start for
+# a couple of weeks" two days before kickoff and after it (COPY:F5): the run
+# calls the season started only from Week 2, and nothing here knew the date.
+# Each form is true whenever it is used; the undated one is for a schedule
+# that cannot be read.
+_OPENER_TAIL = ("we don't put a number on a guess. What it does instead is tell "
+                "you the two things already decided: where the schedule leaves "
+                "you short, and what your roster actually did last season under "
+                "your scoring.")
+OPENER = ("This season hasn't played enough yet to base a call on, so this "
+          "report makes none — and " + _OPENER_TAIL)
+OPENER_DATED = ("Week 1 kicks off {day}, so this report makes no calls — "
+                "there's nothing played this season to base one on, and "
+                + _OPENER_TAIL)
+OPENER_UNDER_WAY = ("Week 1 is under way, but one week isn't a record, so this "
+                    "report makes no calls — " + _OPENER_TAIL)
+# Within this long of the first kickoff the report is no longer "pre-season":
+# it is the roster report a Week-1 buyer keeps all season.
+WEEK_ONE_WINDOW = timedelta(days=7)
 
 WEEKLY_PROMISE = ("From your first Tuesday you get the weekly report: your lineup "
                   "set slot by slot, and the odds on every call we'll stand "
@@ -104,9 +119,49 @@ PRESEASON_TITLE = "Your Pre-Season Report"
 INSEASON_TITLE = "Your Roster Report"
 
 
-def file_title(report: Mapping[str, Any]) -> str:
-    return (INSEASON_TITLE if report["meta"].get("season_started")
-            else PRESEASON_TITLE)
+def first_kickoff(meta: Mapping[str, Any]) -> datetime | None:
+    """The season's first kickoff, as ``preseason_message`` stamped it on the
+    meta (an aware ISO time), or None."""
+    raw = meta.get("first_kickoff")
+    if not isinstance(raw, str):
+        return None
+    try:
+        at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+def week_one_near(meta: Mapping[str, Any], now: datetime | None = None) -> bool:
+    """Week 1 is under way, or kicks off within WEEK_ONE_WINDOW."""
+    kick = first_kickoff(meta)
+    now = now or datetime.now(timezone.utc)
+    return kick is not None and kick - now <= WEEK_ONE_WINDOW
+
+
+def in_season(meta: Mapping[str, Any], now: datetime | None = None) -> bool:
+    """Whether this report is the in-season roster report: the run says the
+    season has started (Week 2 on), or Week 1's games are days away or
+    being played."""
+    return bool(meta.get("season_started")) or week_one_near(meta, now)
+
+
+def opener(meta: Mapping[str, Any], now: datetime | None = None) -> str:
+    """The sentence that sets expectations, true on the day it is sent."""
+    if meta.get("season_started"):
+        return IN_SEASON_OPENER
+    kick = first_kickoff(meta)
+    if kick is None:
+        return OPENER
+    if (now or datetime.now(timezone.utc)) >= kick:
+        return OPENER_UNDER_WAY
+    from zoneinfo import ZoneInfo
+    local = kick.astimezone(ZoneInfo("America/New_York"))
+    return OPENER_DATED.format(day=f"{local:%A}, {local:%b} {local.day}")
+
+
+def file_title(report: Mapping[str, Any], now: datetime | None = None) -> str:
+    return INSEASON_TITLE if in_season(report["meta"], now) else PRESEASON_TITLE
 
 
 # The scoring preset in the buyer's words. The plain-text half printed the raw
@@ -217,13 +272,13 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'<header class="bug"><div class="brand">{mark_svg()}'
         f'<span>Beat Your League</span></div>'
         f'<h1>{esc(meta["season"])} · '
-        f'{esc(INSEASON_TITLE if meta.get("season_started") else PRESEASON_TITLE)}'
+        f'{esc(INSEASON_TITLE if in_season(meta) else PRESEASON_TITLE)}'
         f'</h1>'
         f'<div class="sub">{esc(meta.get("label") or "Your Team")} · '
         f'{esc(scoring)} · {esc(len(meta.get("slots") or []))} starting spots'
         f' &nbsp;—&nbsp; built {esc(_stamp())}</div></header>'
         f'<section><p class="read">'
-        f'{esc(IN_SEASON_OPENER if meta.get("season_started") else OPENER)}'
+        f'{esc(opener(meta))}'
         f'</p></section>'
     )
 
@@ -286,7 +341,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     lines = [f'{meta["season"]} · {file_title(report).upper()}',
              f'{meta.get("label") or "Your Team"} · {scoring_name(meta)}',
              "",
-             (IN_SEASON_OPENER if meta.get("season_started") else OPENER),
+             opener(meta),
              "", BYE_HEAD.upper()]
     if not report["collisions"]:
         lines.append(f"  {bye_none(meta)}")
@@ -354,6 +409,9 @@ def main(argv: list[str] | None = None) -> int:
                       slots=TEMPLATE_T1, scoring=args.scoring, label="Your Team")
     report = build_preseason_report(spec, data.directory, data.prior, str(season),
                                     args.cache, prior_season=str(int(season) - 1))
+    kick = _season_first_kickoff(str(season), args.cache)
+    if kick is not None:
+        report["meta"]["first_kickoff"] = kick.isoformat()
     if args.show:
         print(text_summary(report))
     out = args.out or (REPO_ROOT / "reports" / f"preseason-{season}.html")
@@ -472,7 +530,7 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'color:#B9C2D0;">{esc(meta.get("label") or "Your Team")} · {esc(scoring)}'
         f'</div></td></tr>'
         f'<tr><td style="{BASE}padding:20px 26px 0 26px;">'
-        f'{esc(IN_SEASON_OPENER if meta.get("season_started") else OPENER)}'
+        f'{esc(opener(meta))}'
         f'</td></tr>'
         + block(BYE_HEAD, bye_rows, BYE_BASIS)
         + (block(THIN_HEAD, thin_rows, THIN_BASIS) if thin_rows else "")
@@ -483,6 +541,17 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{way_out}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )
+
+
+def _season_first_kickoff(season: str, cache_dir: Path | None = None) -> datetime | None:
+    """Week 1's first kickoff off the cached schedule, or None when it cannot
+    be read — then the undated opener, which is true either way, is used."""
+    try:
+        from run.solo import CACHE_DIR
+        from run.trials import season_start
+        return season_start(cache_dir or CACHE_DIR, season) if season else None
+    except Exception:  # noqa: BLE001 — a missing schedule must not stop a send
+        return None
 
 
 def preseason_message(email: str, slug: str, report: Mapping[str, Any],
@@ -507,6 +576,12 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
         # lands outside the Tuesday-to-kickoff window (LP-I4). A seat pays
         # nothing, so its way out is the stop route, never a billing page.
         report = {**report, "meta": {**report["meta"], "seat": True}}
+    if not report["meta"].get("season_started") and "first_kickoff" not in report["meta"]:
+        # Read when the message is built — the moment it is sent — so the
+        # opener and the title are true on the day it lands (COPY:F5).
+        kick = _season_first_kickoff(str(report["meta"].get("season", "")))
+        if kick is not None:
+            report = {**report, "meta": {**report["meta"], "first_kickoff": kick.isoformat()}}
     meta = report["meta"]
     hits = len(report["collisions"])
     ahead = " ahead" if meta.get("season_started") else ""

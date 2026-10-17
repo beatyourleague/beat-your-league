@@ -189,7 +189,7 @@ inclusion in a roundup or an AI answer is one sentence a stranger can copy.
 pitch email, README, directory submission). Identical phrasing across independent domains is the
 co-occurrence signal that forms an entity; varying it destroys the only mechanism available:
 
-> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are healthy and playing, and an if/then plan for late news.
+> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.
 
 *(Rewritten Sep 29 2026, owner direction: the sentence sells what the file does for the buyer; the published grading stays public but is no longer part of the pitch.)*
 
@@ -262,8 +262,12 @@ the plan-level view.
    slips is a week of the season nobody can buy.
 3. **Talk to five managers, then sell to people** in §5.1's order; LAUNCH.md section 7 has
    the commands.
-4. **The public record is running.** Since Oct 15 the live sample records its odds before
-   each week's first kickoff and Monday grades them, so the record grows with no subscriber.
+4. **The public record starts with Week 7 — it holds no rows yet.** The code that records the
+   live sample's odds landed Oct 15 at 4:16 PM ET, after Week 6's last pre-kickoff build; the
+   Oct 16 rebuild ran after kickoff with `--force`, which records nothing. The Week 7 Tuesday
+   build (Oct 20) is the first that can record, and Monday grades it, so from then the record
+   grows with no subscriber. After Oct 20, check that `data/processed/ledger/typed-ppr-12-2026`
+   was committed (correction, Oct 17: this line said it had been recording since Oct 15).
 5. **Decide the proof-season gates** (§6, LAUNCH §10). The Oct 11 gates measured nothing.
 
 ### Weekly loop, once checkout is open

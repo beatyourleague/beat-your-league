@@ -117,7 +117,8 @@ From `run/economics.py` (assumptions at its top) and the audit's model.
 | Net per season pass after Stripe, 8% refunds, disputes | about $32.93 |
 | Net per League Pass | about $84, plus an expected renewal |
 | Break-even on this season's fixed costs | a handful of purchases (mailbox, domain) |
-| Base case for 2026, open Week 7 | about 30 purchases + 2 League Passes, about $880 pre-tax, about 75 owner hours |
+| Base case for 2026, open Week 7 | about 30 purchases + 2 League Passes: about $1,114 after Stripe, refunds, disputes and fixed costs (`run/economics.py`; the audit's first hand estimate was about $880) |
+| Owner time for that base case | about 64 hours — PLAN §5's own budget of ~35 min a day for 12 weeks (49 h), the weekly QA-and-refunds hour (12 h) and setup (3 h) — so about $17 an hour. `run/economics.py` still counts selling at 20 minutes a day (about 43 h, "about $26 an hour"); read its hourly figure as an upper bound until it is updated |
 | 100 subscribers by Week 10 | would need 5,000–20,000 visitors in 2–3 weeks: not organic |
 | Paid ads | cost $50–$300 per buyer against about $42 of value: none this season |
 | Biggest lever | the refund rate: 15% costs about $128, 25% about $310 per 50 purchases |

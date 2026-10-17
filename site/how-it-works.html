@@ -144,11 +144,21 @@
       <dt>The percentage on a row</dt>
       <dd>The chance your starter outscores your best bench player at that spot. 50% is a coin flip,
       and the bar starts there. A 70% call is a strong lean, not a lock: it can still lose.</dd>
+      <!-- Every check the odds gate makes, in plain words (COPY:F7): the
+           selling pages' short form is "playing, off the injury report and
+           enough games on record (not on team defenses)". -->
       <dt>Rows with no percentage</dt>
-      <dd>We only give odds when both players' teams play this week and neither was listed questionable, doubtful or out last week — and never on defenses. Those rows
+      <dd>We only give odds when both players' teams play this week, neither was listed
+      questionable, doubtful or out on last week's injury report or sits on a reserve list
+      or the practice squad, and both have enough games on record: three this season, or —
+      in Weeks 2 and 3, for full-PPR, 12-team standard lineups that start a kicker and a
+      defense — last season counted in. Never on defenses, and never in Week 1. Those rows
       still get a projection, and the report says why there's no number.</dd>
-      <dt>The week's closest call</dt>
-      <dd>The one decision that could go either way, with a side picked and how sure to be.</dd>
+      <!-- The report's own label (COPY:F4, SS2-D2): the closest call WITH
+           odds, and a narrower decision without them is named beside it. -->
+      <dt>The week's closest call with odds</dt>
+      <dd>The tightest decision that carries a percentage, with a side picked and how sure to
+      be. If a closer one has no odds this week, the report names it too.</dd>
       <dt>If/then for gameday</dt>
       <dd>What to do if a questionable player is ruled out, decided in advance so Sunday morning
       isn't a scramble.</dd>
@@ -231,7 +241,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }

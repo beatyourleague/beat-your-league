@@ -230,6 +230,17 @@ function buildDirectory(payload) {
     Object.keys(TEAM_ALIASES).filter((a) => TEAM_ALIASES[a] === team)
       .forEach((a) => teamKeys.add(normalize(a)));
   }
+  // Part of a name, typed on its own: "Hurts", "St. Brown", "Puka". A lookup
+  // of last resort whose answer is ALWAYS a choice, even when one player fits
+  // (RULE R3). Mirrors PlayerDirectory._by_part.
+  const byPart = new Map();
+  for (const player of byId.values()) {
+    if (player.position === "DEF") continue;
+    for (const key of namePartKeys(player.name)) {
+      if (!byPart.has(key)) byPart.set(key, []);
+      byPart.get(key).push(player);
+    }
+  }
   const confusable = new Map();
   for (const [a, b] of payload.confusable || []) {
     if (!confusable.has(a)) confusable.set(a, []);
@@ -237,8 +248,29 @@ function buildDirectory(payload) {
     confusable.get(a).push(b);
     confusable.get(b).push(a);
   }
-  return { byName, byId, byInitial, teamKeys, teams, confusable, season: payload.season };
+  return { byName, byId, byInitial, byPart, teamKeys, teams, confusable,
+           season: payload.season };
 }
+
+// The parts of a name a manager types on its own (FUNNEL F9, BE2-D2: a pasted
+// "Hurts", "Kelce" or "Butker" read "we don't have anybody by that name" while
+// the typeahead on the same page listed him): the first name, and every tail
+// of the name — "Brown" and "St. Brown" from "Amon-Ra St. Brown", "Njigba"
+// and "Smith-Njigba", "Walker" from "Kenneth Walker III" (the suffix folds
+// away). Under three letters is too little to go on ("A.J.", "Bo").
+// Mirrors engine/roster.py _name_part_keys.
+function namePartKeys(name) {
+  const words = (name || "").trim().split(/[\s-]+/).filter(Boolean);
+  if (words.length < 2) return [];
+  const keys = new Set([normalize(words[0])]);
+  for (let i = 1; i < words.length; i++) keys.add(normalize(words.slice(i).join(" ")));
+  return [...keys].filter((key) => key.length >= 3);
+}
+
+// How many players a part-name choice offers: the typeahead's eight, ranked
+// the typeahead's way, so a pasted "Williams" offers the list that typing it
+// into "Add a player" shows first.
+const PART_CHOICES = 8;
 
 // ---------------------------------------------------------------- //
 // resolution — RULE R3: ambiguity is RETURNED, never resolved
@@ -283,6 +315,15 @@ function resolveLine(directory, typed) {
     const found = directory.byInitial.get(init[1].toLowerCase() + "|" + normalize(init[2])) || [];
     if (found.length === 1) return ok(found[0]);
     if (found.length) return { typed, player: null, candidates: found, reason: "ambiguous" };
+  }
+  // Last: part of a name. Never a pick, even when one player fits — a pasted
+  // "Allen" with one Allen in the directory is still a guess at which Allen,
+  // and the person typing is the one who knows (RULE R3).
+  const part = normalize(cleaned);
+  const fits = part.length >= 3 && directory.byPart ? directory.byPart.get(part) || [] : [];
+  if (fits.length) {
+    return { typed, player: null, reason: "partial",
+             candidates: [...fits].sort(byRelevance).slice(0, PART_CHOICES) };
   }
   return first;
 }
@@ -434,16 +475,19 @@ function suggestPlayers(directory, query, limit) {
                : full.includes(q) ? 2 : -1;
     if (tier >= 0) ranked.push({ tier, player });
   }
+  ranked.sort((a, b) => (a.tier - b.tier) || byRelevance(a.player, b.player));
+  return ranked.slice(0, limit || 8).map((entry) => entry.player);
+}
+
+// Who has actually scored the most first (unknown sorts last), then the name
+// and the id, so the order is the same on every visit.
+function byRelevance(a, b) {
   const points = (p) => (p.relevance === null || p.relevance === undefined
                          ? -Infinity : p.relevance);
-  ranked.sort((a, b) => {
-    if (a.tier !== b.tier) return a.tier - b.tier;
-    const pa = points(a.player), pb = points(b.player);
-    if (pa !== pb) return pb > pa ? 1 : -1;
-    if (a.player.name !== b.player.name) return a.player.name < b.player.name ? -1 : 1;
-    return a.player.id < b.player.id ? -1 : a.player.id > b.player.id ? 1 : 0;
-  });
-  return ranked.slice(0, limit || 8).map((entry) => entry.player);
+  const pa = points(a), pb = points(b);
+  if (pa !== pb) return pb > pa ? 1 : -1;
+  if (a.name !== b.name) return a.name < b.name ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 // Enter adds a suggestion only when it cannot be the wrong one: the query IS a

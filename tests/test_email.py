@@ -490,6 +490,31 @@ def test_the_cancel_route_is_reachable_on_both_halves(tmp_path, monkeypatch) -> 
         "the plain-text half has no way to reach the cancel route"
 
 
+def test_the_cancel_block_names_only_what_it_links(monkeypatch) -> None:
+    """COPY:F14, reproduced: with BILLING_PORTAL_URL set, every paid footer's
+    "Done with this?" paragraph said "the exact steps are on our terms page"
+    while its only link was billing.stripe.com, and the public samples printed
+    the whole block with no link at all. The body gives the steps itself and
+    names no page; the one link after it is the place named — the billing
+    page, the terms page's steps, or on a published sample (which sits beside
+    terms.html) the relative steps link."""
+    from render.report import CANCEL_BODY, CANCEL_TEXT, cancel_html
+    assert "terms page" not in CANCEL_BODY and "terms page" not in CANCEL_TEXT
+    monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/login/x")
+    paid = cancel_html()
+    assert re.findall(r'href="([^"]+)"', paid) == ["https://billing.stripe.com/p/login/x"]
+    assert "terms" not in re.sub(r"<[^>]+>", "", paid)
+    monkeypatch.delenv("BILLING_PORTAL_URL")
+    monkeypatch.setenv("SITE_URL", "https://example.com")
+    assert re.findall(r'href="([^"]+)"', cancel_html()) == ["https://example.com/terms.html#cancel"]
+    assert ">the exact steps, on our terms page</a>" in cancel_html()
+    monkeypatch.delenv("SITE_URL")
+    assert "href" not in cancel_html(), "nothing configured: prose, never a dead link"
+    sample = cancel_html(sample=True)
+    assert re.findall(r'href="([^"]+)"', sample) == ["terms.html#cancel"]
+    assert "href" not in cancel_html(seat=True, sample=True)
+
+
 def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
     """render/report.py's footer renders _forward_line() and update_line()
     ADJACENT (report.py:1050-1051, mirrored in email.py). The first invites

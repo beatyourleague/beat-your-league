@@ -10,6 +10,7 @@ is about to ship a dark pattern (PLAN.md §4, CLAUDE.md principle 3).
 from __future__ import annotations
 
 import html
+import json
 import re
 from pathlib import Path
 
@@ -45,6 +46,13 @@ def markup_only(page: str) -> str:
 
 
 LANDING_PROSE, JOIN_PROSE = prose(LANDING), prose(JOIN)
+
+# What the odds gate checks, in the selling pages' plain words (COPY:F7).
+# "wherever both players are healthy and playing" promised odds on a pair the
+# gate withholds — every team defense (graded D), every pair short of its
+# record — and claimed health a Tuesday report cannot know.
+GATE_CLAUSE = ("wherever both players are playing, off the injury report and have "
+               "enough games on record (not on team defenses)")
 
 
 def _price(pattern: str) -> str:
@@ -196,12 +204,16 @@ def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
         assert not loose.search(text), \
             f"{name} still promises a refund after the second file's games"
     kickoff = re.compile(r"second\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
-    # The selling pages may say it shorter ("your second report's week kicks
-    # off"); the terms, which define a weekly report, and the welcome email
-    # keep the precise form.
-    selling = re.compile(r"second\s+(?:weekly\s+)?report's\s+week\s+kicks\s+off", re.I)
+    # COPY:F8: the selling pages used to say it shorter ("your second report's
+    # week kicks off") beside a card that calls the day-one ROSTER report "your
+    # first report" — so a mid-week joiner read a window a week shorter than
+    # terms §5's, which counts weekly reports only. Every surface says "weekly".
+    for name, page in _buyer_surfaces().items():
+        text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
+        assert not re.search(r"second\s+report's\s+week", text, re.I), \
+            f"{name} counts the refund window in reports, not weekly reports"
     for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE)):
-        assert selling.search(page), f"{name} page does not say when the window closes"
+        assert kickoff.search(page), f"{name} page does not say when the window closes"
     for name, page in (
                        ("league pass", prose((SITE / "league-pass.html")
                                              .read_text(encoding="utf-8"))),
@@ -212,6 +224,46 @@ def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
         assert kickoff.search(page), f"{name} page does not say when the window closes"
     assert kickoff.search(welcome.REFUND_TERMS)
     assert kickoff.search(welcome.REFUND_TERMS_LEAGUE)
+
+
+def test_a_seat_claimed_in_week_1_is_promised_the_roster_report_it_gets() -> None:
+    """COPY:F5's twins, reproduced: league-pass.html (FAQ, JSON-LD, step 3)
+    and the join page's seat note promised a seat claimed before a week's
+    games "that week's lineup if the week's games haven't started" — but
+    run/intake._first_file sends a weekly report only from Week 2, so all
+    through Week 1 the first email is the roster report."""
+    lp = prose((SITE / "league-pass.html").read_text(encoding="utf-8"))
+    seat = prose(re.search(r'<li id="seat-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
+    for name, text in (("league pass", lp), ("seat note", seat)):
+        assert not re.search(r"(?:that|this) week's (?:lineup|report) if the week's", text), name
+        assert re.search(r"(?:that|this) week's (?:lineup|report) if it's Week 2 or later "
+                         r"and the week's games haven't started, otherwise (?:their|your) "
+                         r"roster report", text), name
+    assert lp.count("if it's Week 2 or later and the week's games haven't started") == 3
+
+
+def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> None:
+    """COPY:F12, reproduced: the FAQ and its JSON-LD said "full-PPR 12-team
+    standard lineups get them from Week 2", but run/solo.seeded_scope wants
+    the exact measured template — a "Standard · ESPN's default" lineup with
+    No K or No DEF, offered on join, gets no odds until Week 4. The sentence
+    is checked against the scope function over every shape the page offers."""
+    from engine.subscriber import LINEUP_SHAPES, RosterSpec
+    from render.sample import SAMPLE_ROSTER
+    from run.solo import seeded_scope
+    early = sorted(code for code, shape in LINEUP_SHAPES.items()
+                   if seeded_scope(RosterSpec(player_ids=SAMPLE_ROSTER, slots=shape.slots,
+                                              scoring="ppr", label="x"), 12, week=2))
+    assert early == ["std"], early     # standard, with a kicker and a defense
+    for scoring, size in (("half_ppr", 12), ("ppr", 10)):
+        assert not seeded_scope(RosterSpec(player_ids=SAMPLE_ROSTER, slots=LINEUP_SHAPES["std"].slots,
+                                           scoring=scoring, label="x"), size, week=2)
+    said = ("full-PPR, 12-team standard lineups that start a kicker and a defense get "
+            "them from Week 2, and every other setup from Week 4")
+    faq = LANDING.split("<summary>When do the numbers start?</summary>")[1].split("</details>")[0]
+    assert said in prose(faq)
+    assert said in LANDING.split('"name": "When do the numbers start?"')[1].split("}}")[0]
+    assert "full-PPR 12-team standard lineups get them from Week 2" not in LANDING_PROSE
 
 
 def test_the_terms_define_the_file_the_refund_window_counts() -> None:
@@ -488,8 +540,13 @@ def test_no_payment_details_are_collected_by_us() -> None:
 
 def test_join_collects_only_the_stated_minimum() -> None:
     inputs = re.findall(r'<input[^>]*type="([a-z]+)"', JOIN)
-    assert set(inputs) <= {"text", "email", "radio"}, \
+    assert set(inputs) <= {"text", "email", "radio", "checkbox"}, \
         f"unexpected input types: {inputs}"
+    # One checkbox, and it collects nothing: the roster update's "these are my
+    # league's settings" (FUNNEL F1) gates the submit and is never posted.
+    boxes = re.findall(r'<input[^>]*type="checkbox"[^>]*>', re.sub(r"\s+", " ", JOIN))
+    assert boxes == ['<input type="checkbox" id="settings-ok">'], boxes
+    assert "settings-ok" not in _js_function(JOIN, "submitUpdate").split("fetch(")[1]
     assert re.search(r"never ask for a password", JOIN_PROSE, re.I)
     assert re.search(r"never connect to your league", JOIN_PROSE, re.I)
 
@@ -3344,8 +3401,9 @@ def test_the_league_pass_is_never_sold_before_its_seats_can_be_claimed() -> None
             "the pass link is read somewhere other than PASS_LINK, the only place "
             f"the seat gate lives: {uses}")
     # Every place a plan's link is resolved — the up-front note, the submit,
-    # the first paint — resolves the pass through the gate.
-    assert code.count("WANTS_PASS ? PASS_LINK") == 3
+    # the first paint, and whether a delivery date may be named (canStartToday)
+    # — resolves the pass through the gate.
+    assert code.count("WANTS_PASS ? PASS_LINK") == 4
     # The gate itself, run: an empty endpoint sells no pass, whatever the link.
     line = re.search(r"const PASS_LINK = [^;]*;", JOIN).group(0)
     got = _node(
@@ -3364,7 +3422,34 @@ def _funnel_pages() -> dict[str, str]:
     from render.live_sample import VIA_SCRIPT
     return {"landing": LANDING, "join": JOIN, "how-it-works": HOW,
             "league-pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
-            "this-week (live sample)": VIA_SCRIPT}
+            "this-week (live sample)": VIA_SCRIPT,
+            # FUNNEL F5 / BE2-D1: the published samples carry it too
+            # (render/sample.page), from the live sample's one script.
+            "sample-report": SAMPLE_REPORT, "sample-first-week": FIRST_WEEK_SAMPLE}
+
+
+def test_a_tag_survives_the_detour_through_the_sample_report(monkeypatch) -> None:
+    """FUNNEL F5 / BE2-D1, reproduced: index.html?via=promo left all seven
+    sample-report.html links bare (the funnel list left the samples out), and
+    the sample's own "Get this for your team" links had no carry at all, so
+    landing -> "See a real report" -> join -> checkout produced a ref with no
+    _via- suffix and `make stats` counted the sale nowhere. The samples are
+    now built with the live sample's carry script, before </body>."""
+    import render.sample as sample
+    monkeypatch.setattr(sample, "render",
+                        lambda report, template: '<html><body><a href="join/index.html">'
+                                                 'Get this</a></body></html>')
+    page = sample.page({})
+    assert page.index("function carryVia(") < page.index("</body>")
+    assert 'a.setAttribute("href", carryVia(a.getAttribute("href"), VIA))' in page
+    main = inspect_source(sample.main)
+    assert "page(report)" in main and "render(report" not in main, \
+        "the sample is written without the tag carry"
+
+
+def inspect_source(fn) -> str:
+    import inspect
+    return inspect.getsource(fn)
 
 
 def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
@@ -3422,8 +3507,11 @@ def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
         ("../how-it-works.html", "x", "../how-it-works.html?via=x"),
         ("this-week.html", "x", "this-week.html?via=x"),
         ("league-pass.html", "x", "league-pass.html?via=x"),
+        # The proof pages carry it on to join (FUNNEL F5, BE2-D1).
+        ("sample-report.html", "x", "sample-report.html?via=x"),
+        ("../sample-report.html", "x", "../sample-report.html?via=x"),
+        ("sample-first-week.html", "x", "sample-first-week.html?via=x"),
         # Not a page that reads it, not ours, or already tagged: untouched.
-        ("sample-report.html", "x", "sample-report.html"),
         ("terms.html#cancel", "x", "terms.html#cancel"),
         ("compare/index.html", "x", "compare/index.html"),
         ("#watch-form", "x", "#watch-form"),
@@ -3585,6 +3673,53 @@ def test_adding_a_player_keeps_every_choice_already_made() -> None:
     assert "state.stale = false" in check
 
 
+def test_a_row_that_needs_a_pick_says_so_and_never_says_nobody_has_that_name() -> None:
+    """FUNNEL F9 / BE2-D2, the page's half (the resolver is twin-tested in
+    tests/test_intake.py): "Allen" and "Kelce" read "we don't have anybody by
+    that name" beside a typeahead that listed them, and the tally called them
+    "lines we couldn't read". A part-name row offers its players as buttons
+    (the existing choice row) with a sentence that asks for the pick; the
+    tally counts picks apart from unreadable lines. Run under node."""
+    assert "we don't have anybody by that name" not in _js_code(JOIN) + markup_only(JOIN)
+    fn = _js_function(JOIN, "whyUnread")
+    got = _node(fn + "\nconsole.log(JSON.stringify(["
+                "{reason: 'partial', candidates: [{}]}, {reason: 'partial', candidates: [{}, {}]},"
+                "{reason: 'ambiguous', candidates: [{}, {}]}, {reason: 'unknown', candidates: []},"
+                "{reason: 'gone', candidates: []}].map(whyUnread)));")
+    assert got[0] == "did you mean him? Tap his name to add him"
+    assert got[1].startswith("that's part of more than one player's name — pick one")
+    assert got[2] == "more than one player goes by that name — pick one"
+    assert got[3].startswith("we couldn't find that name") and "Add a player" in got[3]
+    assert got[4].startswith("not in this season's player list")
+    draw = _js_function(JOIN, "draw")
+    assert 'textCell("why", whyUnread(match))' in draw
+    assert '" line needs" : " lines need") + " a pick"' in draw
+    # The part-name candidates are the choice row's buttons, like "J Taylor".
+    assert "const options = match.player ? (match.twins || []) : match.candidates;" in draw
+
+
+def test_the_typeahead_closes_when_the_tap_is_meant_for_something_else() -> None:
+    """FUNNEL F2, reproduced at 360-1280: after typing "wil", the list sat over
+    the paste box and "Check my roster" (elementFromPoint at the box's centre
+    was "Javonte Williams"); a tap meant for the box added him, and neither
+    Escape nor a click outside closed it. It now closes on Escape, on a press
+    outside it, and when focus leaves for anything but the list — never on a
+    press inside it, which would remove the name being tapped. Driven in
+    headless Chrome by the verification flow; the wiring is pinned here."""
+    code = _js_code(JOIN)
+    assert 'document.addEventListener("pointerdown", (event) => {' in code
+    outside = code.split('document.addEventListener("pointerdown", (event) => {')[1].split("});")[0]
+    assert "pressInList = addWrap.contains(event.target);" in outside
+    assert "if (!pressInList) closeSuggestions();" in outside
+    leave = code.split('addWrap.addEventListener("focusout", (event) => {')[1].split("});")[0]
+    assert "if (pressInList || addWrap.contains(event.relatedTarget)) return;" in leave
+    assert "closeSuggestions();" in leave
+    esc = code.split('addWrap.addEventListener("keydown", (event) => {')[1].split("});")[0]
+    assert 'event.key !== "Escape"' in esc
+    assert esc.index("searchBox.focus();") < esc.index("closeSuggestions();"), \
+        "focus first, or the field's focus handler redraws the list Escape closed"
+
+
 def test_a_duplicate_row_names_the_player_not_a_line_number() -> None:
     """Launch audit F9, reproduced: a Sleeper paste plus "Josh Allen" again
     from the search box showed "you already listed this player on line 1" on
@@ -3605,7 +3740,11 @@ def test_the_landing_invents_no_behaviour_of_people_it_has_never_observed() -> N
     block = re.search(r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S)
     texts = {"landing": prose(markup_only(LANDING)),
              "landing JSON-LD": _json.dumps(_json.loads(block.group(1)))}
-    for page in ("join/index.html", "league-pass.html", "how-it-works.html", "thanks.html"):
+    # COPY:F9: terms §8 said "For most people that is $39" — an unbacked claim
+    # about what customers pay, wrong for monthly and the League Pass — and
+    # the 404 "Here's where most people meant to go."
+    for page in ("join/index.html", "league-pass.html", "how-it-works.html", "thanks.html",
+                 "terms.html", "404.html", "privacy.html"):
         texts[page] = prose(markup_only((SITE / page).read_text(encoding="utf-8")))
     claim = re.compile(r"\bmost (?:managers|people|players|subscribers|buyers|commissioners|"
                        r"fantasy players|of (?:you|our))\b|\b(?:managers|people|subscribers) "
@@ -3671,7 +3810,7 @@ def test_no_join_copy_promises_odds_on_every_close_call() -> None:
     """PE-11: bye-heavy weeks, gated players and ungraded lineups carry none,
     so the promise is the true one — odds wherever both players are confirmed."""
     assert not re.search(r"odds on (?:every|each) close call", JOIN_PROSE, re.I)
-    assert JOIN_PROSE.count("wherever both players are healthy and playing") >= 4
+    assert JOIN_PROSE.count(GATE_CLAUSE) >= 4
 
 
 def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
@@ -3697,10 +3836,44 @@ def test_seat_links_name_their_pass_and_bring_their_settings() -> None:
     token_row = seat.split("? {")[1].split("}")[0]
     assert "covered_by" not in token_row, "a coded seat link must not post a typed payer"
     assert '$("pass-field").style.display = PASS_TOKEN ? "none" : "block"' in code
-    prefill = code.split("} else if (SEAT_MODE) {\n  const told")[1].split("\n}\n")[0]
+    read = _js_function(JOIN, "settingsFromLink")
     for param in ('QUERY.get("s")', 'QUERY.get("n")', 'QUERY.get("t")'):
-        assert param in prefill
-    assert "Not right? Change them below." in prose(prefill)
+        assert param in read
+    seat_branch = code.split("} else if (SEAT_MODE) {\n  const told")[1].split("\n}\n")[0]
+    assert "settingsFromLink()" in seat_branch
+    assert "Not right? Change them below." in prose(seat_branch)
+
+
+def test_a_roster_update_never_quietly_replaces_the_settings_on_file() -> None:
+    """FUNNEL F1, reproduced: join/index.html?update=1 sat on the page's
+    defaults (Full PPR, 12 teams, standard + K + DEF) and posted them in the
+    ref — run/updates.apply_updates takes scoring, size and slots from it — so
+    a half-PPR 10-team subscriber's update re-scored every later report under
+    the wrong rules. The update page now reads the report link's s/n/t (the
+    seat link's format) and says they stand; without them it refuses to post
+    until the subscriber ticks that the settings on screen are their league's.
+    Run under node: the gate, every way round."""
+    code = _js_code(JOIN)
+    assert "if (UPDATE_MODE) prefillUpdateSettings();" in code
+    prefill = _js_function(JOIN, "prefillUpdateSettings")
+    assert "settingsFromLink()" in prefill and "told.length === 3" in prefill
+    assert "They stay as they are unless you change them here." in prose(prefill)
+    assert "replaces the settings on file" in prose(prefill)
+    submit = _js_function(JOIN, "submitUpdate")
+    gate = 'if (!UPDATE_SETTINGS_FROM_LINK && !$("settings-ok").checked) {'
+    assert gate in submit and submit.index(gate) < submit.index("fetch(FORM_ENDPOINT"), \
+        "the settings check must come before anything is posted"
+    # The gate, run: link settings or a ticked box let it through, nothing else.
+    body = submit.split(gate)[1].split("return;")[0]
+    got = _node(
+        "const out = [];\n"
+        "for (const [fromLink, ticked] of [[false, false], [false, true], [true, false]]) {\n"
+        "  const UPDATE_SETTINGS_FROM_LINK = fromLink; let posted = true;\n"
+        "  const $ = () => ({ checked: ticked });\n"
+        "  const showError = () => { posted = false; };\n"
+        f"  if (!UPDATE_SETTINGS_FROM_LINK && !$(\"settings-ok\").checked) {{{body} posted = false; }}\n"
+        "  out.push(posted);\n}\nconsole.log(JSON.stringify(out));")
+    assert got == [False, True, True]
 
 
 def test_the_seat_page_asks_for_whoever_bought_the_pass_with_visible_labels() -> None:
@@ -3725,9 +3898,54 @@ def test_the_renewal_date_is_stated_and_computed_from_today() -> None:
                 " new Date(2026, 11, 31)].map(renewsOn)));")
     assert got == ["Oct 15, 2027", "Feb 28, 2029", "Dec 31, 2027"]
     # "bought today, on Oct 15, 2027" read as a purchase date a year away.
-    assert 'unless you cancel — bought today, it renews on " + renewsOn(new Date())' in prose(JOIN)
     assert '" — bought today, it renews on " + renewsOn(new Date())' in JOIN
+    assert '"unless you cancel" + renewalDate() + ". We email' in JOIN
     assert JOIN.count('<span class="renews-on"></span>') == 2
+
+
+def test_a_closed_checkout_names_no_delivery_date() -> None:
+    """FUNNEL F4 / panel R3, reproduced on the closed page at 390 and 1280:
+    under "Checkout isn't open just yet" the header chip read "Weekly reports
+    from Tue, Oct 20", the sidebar "Your roster report today, your first
+    weekly report Tue, Oct 20", and step 3 "bought today, it renews on Oct 17,
+    2027" — for a purchase nobody could make that day (the same in
+    ?plan=monthly, ?plan=pass and seat mode with no backend). The chip, the
+    sidebar, the first-note and the renewal date all ask canStartToday()
+    first; run under node for every mode."""
+    for fn in ("firstChipText", "renewalDate"):
+        assert "canStartToday()" in _js_function(JOIN, fn), fn
+    draw = _js_function(JOIN, "drawFirst")
+    assert draw.index("if (!canStartToday()) {") < draw.index('FIRST.when === "before"')
+    assert "once checkout opens" in prose(draw)
+    # drawFirst runs at first paint and on every plan switch, so the static
+    # "A report the day you join" never outlives a closed checkout.
+    assert "drawFirst();" in _js_function(JOIN, "monthlyPlan")
+    assert re.search(r"\ndrawShapeNote\(\);\nfillRenewalDates\(\);\ndrawFirst\(\);\n", JOIN)
+    src = "\n".join(_js_function(JOIN, f) for f in
+                    ("canStartToday", "closedChipText", "firstChipText", "renewalDate",
+                     "renewsOn"))
+    cases = [  # seat, pass, monthly, season link, monthly link, pass link, form
+        [False, False, False, "", "", "", ""],
+        [False, False, True, "x", "", "", ""],
+        [False, True, False, "x", "x", "", ""],
+        [True, False, False, "", "", "", ""],
+        [False, False, False, "x", "", "", ""],
+        [True, False, False, "", "", "", "https://forms.example"],
+    ]
+    got = _node(
+        src + "\nconst FIRST = {when: 'after', tuesday: 'Tue, Oct 20'};\n"
+        "const out = [];\n"
+        f"for (const c of {json.dumps(cases)}) {{\n"
+        "  globalThis.SEAT_MODE = c[0]; globalThis.WANTS_PASS = c[1];\n"
+        "  globalThis.monthlyChosen = c[2]; globalThis.STRIPE_LINK_SEASON = c[3];\n"
+        "  globalThis.STRIPE_LINK_MONTHLY = c[4]; globalThis.PASS_LINK = c[5];\n"
+        "  globalThis.FORM_ENDPOINT = c[6];\n"
+        "  out.push([firstChipText(), renewalDate() ? 'dated' : '']);\n}\n"
+        "console.log(JSON.stringify(out));")
+    assert got == [["Season pass opens soon", ""], ["Monthly opens soon", ""],
+                   ["League Pass opens soon", ""], ["Seats open soon", ""],
+                   ["Weekly reports from Tue, Oct 20", "dated"],
+                   ["Weekly reports from Tue, Oct 20", "dated"]]
 
 
 def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
@@ -3770,6 +3988,69 @@ def test_a_closed_checkout_keeps_the_roster() -> None:
     assert "state.directory.byId.get(id)" in restore and "resolveAll" not in restore
     assert 'R.decodeRoster(QUERY.get("ref"))' in _js_code(JOIN)
     assert "SOURCE = VIA || (RESTORED && RESTORED.via)" in _js_code(JOIN)
+
+
+def test_a_restored_roster_comes_back_under_the_plan_it_was_saved_under() -> None:
+    """FUNNEL F8, reproduced on both copies: join/index.html?plan=monthly ->
+    check a roster -> choose the season pass; the address became
+    ?plan=monthly&ref=s4-…, and reopening it checked Monthly, read "Continue
+    to checkout — $14.99/mo" and re-encoded the ref as m4-…, because ?plan=
+    outranked the ref. The ref is the choice made last: it wins, and the
+    address drops the stale ?plan= beside it. Run under node."""
+    keep = _js_function(JOIN, "keepInAddress")
+    assert 'if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) params.delete("plan");' in keep
+    decl = re.search(r"const RESTORED_PLAN = .*?;\nconst PLAN_PARAM = [^;]*;", JOIN, re.S).group(0)
+    cases = [  # query, restored plan
+        ["?plan=monthly&ref=s4", "season"], ["?plan=monthly&ref=p4", "league_pass"],
+        ["?ref=m4", "monthly"], ["?plan=monthly", None], ["?plan=pass", None],
+        ["?pass=1&ref=s4", "season"], ["?update=1&plan=monthly&ref=s4", "season"],
+    ]
+    got = _node(
+        "const out = [];\n"
+        f"for (const [q, plan] of {json.dumps(cases)}) {{\n"
+        "  const QUERY = new URLSearchParams(q);\n"
+        "  const RESTORED = plan ? { plan } : null;\n"
+        f"  {decl}\n  out.push(PLAN_PARAM);\n}}\nconsole.log(JSON.stringify(out));")
+    assert got == ["", "pass", "monthly", "monthly", "pass", "", "monthly"]
+
+
+def test_every_confirmation_with_one_line_reads_as_a_sentence() -> None:
+    """Panel R5, reproduced at 390 (?try=1, submitted): "Your free report is on
+    its way." then a lone "1." before the only visible line — #done is an <ol>
+    whose other items are hidden in that mode, and the same in seat and update
+    mode. Every mode that pays nothing marks the list single."""
+    assert ".done ol.single{list-style:none;margin-left:0;}" in JOIN
+    assert 'document.querySelector("#done ol").classList.add("single");' in \
+        _js_function(JOIN, "nothingToPay")
+    for mode in ("TRY_MODE", "UPDATE_MODE", "SEAT_MODE"):
+        branch = _js_code(JOIN).split(f"\nif ({mode}) {{" if mode == "TRY_MODE"
+                                      else f"}} else if ({mode}) {{")[1][:1600]
+        assert "nothingToPay(" in branch, mode
+
+
+def test_the_update_and_confirm_pages_promise_only_what_happens() -> None:
+    """FUNNEL F11 / COPY:F2, reproduced: right after the update form posted,
+    the page said "Check your inbox. We've emailed a button to confirm the
+    change" — nothing is mailed at submit, and nothing at all for an unchanged
+    roster, an address with no subscription, or a fourth request that day
+    (run/updates.validate_requests). The confirm page said "Confirmed. It's
+    applied within the hour" for any 24-hex code, while the intake ignores a
+    request older than EXPIRY_DAYS or one a newer confirmation retired."""
+    from run.updates import CONFIRMS_PER_DAY, EXPIRY_DAYS
+    note = prose(re.search(r'<li id="update-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
+    assert "We've emailed" not in note and "Check your inbox" not in JOIN_PROSE
+    for promise in ("If this is the address your reports go to",
+                    "differ from the ones on file", "usually within the hour",
+                    f"within {EXPIRY_DAYS} days", "Nothing changes until it's pressed",
+                    "at most three of these a day"):
+        assert promise in note, promise
+    assert CONFIRMS_PER_DAY == 3
+    confirm = prose(CONFIRM)
+    assert "Confirmed. It's applied" not in confirm
+    assert f"Press the button within {EXPIRY_DAYS} days of asking" in confirm
+    assert (f"If you asked for this change in the last {EXPIRY_DAYS} days and haven't "
+            "confirmed a newer one since, it's applied within the hour") in confirm
+    assert "An older button changes nothing" in confirm
 
 
 def test_the_chips_are_a_thumb_tall_on_touch() -> None:
@@ -3998,8 +4279,28 @@ def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at
     assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
     assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
     note = prose(LANDING).split("The close one, called")[1][:300]
-    assert "The week's closest call on this roster, decided:" in note
+    assert "The week's closest call with odds on this roster, decided:" in note
     assert "go back and forth" not in prose(LANDING)
+
+
+def test_the_closest_call_is_named_with_the_reports_own_label() -> None:
+    """COPY:F4 / SS2-D2, reproduced: the landing said "The week's closest call
+    on this roster, decided: Start Bijan Robinson over Chase Brown — 70%" and
+    How it works defined it as "The one decision that could go either way",
+    while the sample they link labels that call "Closest call with odds" and
+    names a closer one: "Closer on points: Tony Pollard or Chase Brown at
+    FLEX, 10.3 vs 10.3 — no odds". Every prose naming says "with odds"."""
+    from engine import solo_report
+    import inspect
+    assert '"Closest call with odds"' in inspect.getsource(solo_report)
+    landing = prose(markup_only(LANDING))
+    assert "closest call with odds on this roster" in landing
+    assert "Closest call with odds: Robinson over Chase Brown, 70%." in landing
+    assert "The week's closest call on this roster" not in landing
+    how = prose(HOW)
+    assert "<dt>The week's closest call with odds</dt>" in how
+    assert "The one decision that could go either way" not in how
+    assert "the report names it too" in how
 
 
 def test_the_comparison_is_the_tools_a_manager_already_has() -> None:
@@ -4017,7 +4318,7 @@ def test_the_comparison_is_the_tools_a_manager_already_has() -> None:
     for column in section.split('<div class="cmpcol')[1:]:
         assert re.findall(r"<dt>([^<]+)</dt>", column) == ["When", "Close calls", "Late news"]
     text = prose(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", section, flags=re.S)))
-    assert "wherever both players are healthy and playing" in text
+    assert GATE_CLAUSE in text
     for claim in (r"\bbetter\b", r"\bmore (?:often|wins|accurate)\b", r"\bwin(?:s|ning)?\b",
                   r"\bwrong\b", r"\bbad\b", r"\bworse\b"):
         assert not re.search(claim, text, re.I), f"the comparison makes a results claim: {claim}"
@@ -4096,9 +4397,35 @@ def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() ->
         for overclaim in (r"your league's way", r"odds on (?:each one|every close call)",
                           r"every close call decided and the odds"):
             assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
-        assert "wherever both players are healthy and playing" in text, name
+        assert GATE_CLAUSE in text, name
     for name in ("meta", "og", "JSON-LD"):
         assert "half-PPR or standard" in surfaces[name]
+
+
+def test_every_selling_page_states_the_odds_gate_in_the_same_plain_words() -> None:
+    """COPY:F7, reproduced on the published sample: the Denver Broncos DEF row
+    (@ KC, Sun; both teams playing, no designation) read "projection only"
+    beneath a landing that promised "the odds wherever both players are
+    healthy and playing" — defenses never get odds (graded D), a pair short
+    of its record gets none either, and "healthy" claimed what a Tuesday report
+    cannot know. Decided: it overclaimed. Every selling page now says what the
+    gate checks, in one clause, and How it works spells out each check."""
+    pages = {"landing": LANDING, "join": JOIN, "thanks": THANKS,
+             "league pass": (SITE / "league-pass.html").read_text(encoding="utf-8"),
+             "how it works": HOW}
+    for name, page in pages.items():
+        # Inline emphasis dropped, so "<b>The odds</b> wherever" is read too.
+        text = prose(re.sub(r"</?(?:b|i|em|strong|span)\b[^>]*>", "", page))
+        assert "healthy and playing" not in text, f"{name} still claims health"
+        # Any "the odds wherever …" is the whole clause, defenses included.
+        for at in [m.start() for m in re.finditer(r"odds wherever", text)]:
+            assert text[at + len("odds "):].startswith(GATE_CLAUSE), \
+                f"{name}: {text[at:at + 160]!r}"
+    explained = prose(HOW.split("<dt>Rows with no percentage</dt>")[1].split("</dd>")[0])
+    for check in ("teams play this week", "questionable, doubtful or out",
+                  "reserve list or the practice squad", "three this season",
+                  "Never on defenses", "never in Week 1"):
+        assert check in explained, check
 
 
 def test_who_built_it_agrees_with_the_terms() -> None:
