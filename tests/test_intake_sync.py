@@ -32,12 +32,14 @@ MONTHLY_LINK, SEASON_LINK, PASS_LINK = "plink_M", "plink_S", "plink_P"
 
 def _session(ref: str | None, *, sid: str = "cs_1", email: str = "fan@example.com",
              created: int = 1000, link: str | None = SEASON_LINK,
-             customer: str | None = "cus_abcd1234", paid: str = "paid") -> dict:
+             customer: str | None = "cus_abcd1234", paid: str = "paid",
+             subscription: str | None = None) -> dict:
     return {
         "id": sid, "created": created, "payment_status": paid,
         "client_reference_id": ref, "payment_link": link,
         "customer": {"id": customer, "email": email} if customer else None,
         "customer_details": {"email": email},
+        **({"subscription": subscription} if subscription else {}),
     }
 
 
@@ -45,12 +47,29 @@ def _page(sessions: list[dict]) -> dict:
     return {"data": sessions, "has_more": False}
 
 
+def _subscriptions(state: dict, url: str) -> dict:
+    """The fake Stripe's subscription list, by the `status` the URL asks for.
+    Unless a test sets state["subscriptions"], every session that started a
+    subscription has an active one on its customer."""
+    from urllib.parse import parse_qs, urlsplit
+    status = parse_qs(urlsplit(url).query).get("status", [""])[0]
+    subs = state.get("subscriptions")
+    if subs is None:
+        subs = [{"id": s["subscription"], "status": "active",
+                 "customer": dict(s.get("customer") or {}), "latest_invoice": None}
+                for s in state["sessions"] if s.get("subscription")]
+    return {"data": [s for s in subs if s.get("status") == status], "has_more": False}
+
+
 @pytest.fixture
 def stripe(monkeypatch):
     """A fake Stripe whose session list the test sets, and a record of writes."""
+    import run.subscriptions as subscriptions
     state: dict = {"sessions": [], "posts": []}
     monkeypatch.setattr(checkout, "_stripe_get",
                         lambda url, key: _page(state["sessions"]))
+    monkeypatch.setattr(subscriptions, "_stripe_get",
+                        lambda url, key: _subscriptions(state, url))
     monkeypatch.setattr(intake, "_stripe_post",
                         lambda url, key, form: state["posts"].append((url, form)) or {})
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
@@ -307,11 +326,20 @@ def test_an_unconfigured_stripe_is_not_reported_as_a_failure(
 # --------------------------------------------------------------------- #
 
 SEAT_REF = encode_roster("season", "ppr", list(SLOTS), PLAYERS[::-1])
+PASS_SUB = "sub_commish01"
+SEAT_SECRET = "test-secret-do-not-ship"
+
+
+def _stamp(hours_ago: float = 1.0) -> str:
+    """A Worker stamp (`new Date().toISOString()`), ``hours_ago`` before now."""
+    from datetime import datetime, timedelta, timezone
+    at = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    return at.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _seat(**over) -> dict:
     row = {"email": "member@example.com", "covered_by": "commish@example.com",
-           "ref": SEAT_REF}
+           "ref": SEAT_REF, "received_at": _stamp()}
     row.update(over)
     return row
 
@@ -321,7 +349,23 @@ def _seats(monkeypatch, *rows: dict) -> None:
     monkeypatch.setattr(intake, "fetch_seats", lambda *a, **k: list(rows))
 
 
+def _seat_confirm(row: dict, pass_id: str = PASS_SUB, secret: str = SEAT_SECRET) -> dict:
+    """The confirm-page row the claimed address sends back when it presses the
+    button in its confirmation email (OPS-R1)."""
+    from run.updates import seat_code
+    return {"kind": "confirm", "received_at": _stamp(0.1),
+            "code": seat_code(row["email"], pass_id, row["ref"],
+                              row["received_at"], secret)}
+
+
+def _confirmed_seats(monkeypatch, *rows: dict, pass_id: str = PASS_SUB) -> None:
+    """Seat claims, each confirmed from its own inbox — what a seat IS now."""
+    monkeypatch.setenv("UPDATE_SECRET", SEAT_SECRET)
+    _seats(monkeypatch, *rows, *(_seat_confirm(r, pass_id) for r in rows))
+
+
 def _pass_session(**over) -> dict:
+    over.setdefault("subscription", PASS_SUB)
     return _session(PASS_REF, sid="cs_pass", email="commish@example.com",
                     link=PASS_LINK, customer="cus_commish01", **over)
 
@@ -333,12 +377,13 @@ def test_a_seat_is_honoured_only_when_a_real_pass_covers_it(
     built from what the LINK took, never from what a seat claims."""
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
     stripe["sessions"] = [_pass_session()]
-    _seats(monkeypatch, _seat())
+    _confirmed_seats(monkeypatch, _seat())
     assert _run(tmp_path) == 0, capsys.readouterr().err
     rows = {s.email: s for s in load_rosters(tmp_path / intake.REGISTRY_NAME)}
     assert set(rows) == {"commish@example.com", "member@example.com"}
     seat = rows["member@example.com"]
     assert seat.is_league_seat and seat.covered_by == "commish@example.com"
+    assert seat.pass_id == PASS_SUB and seat.pass_customer == "cus_commish01"
     # The PAYER is an ordinary subscriber, not a seat: a league_pass row needs
     # covered_by, and the buyer has nobody covering them.
     assert not rows["commish@example.com"].is_league_seat
@@ -442,11 +487,14 @@ def test_a_directory_outage_does_not_reject_every_seat(monkeypatch) -> None:
     """`known_ids=None` means NOT CHECKED, never "nothing is known" — an empty
     set would reject every seat with a confident, wrong reason on the one day a
     data release is unavailable."""
+    claim = _seat()
+    passes = [intake.PassInfo("commish@example.com", PASS_SUB, 12, "cus_commish01")]
+    confirm = [_seat_confirm(claim)]
     rows, problems = intake.seats_to_rows(
-        [_seat()], {"commish@example.com"}, None)
+        [claim], passes, None, SEAT_SECRET, confirm_codes=confirm)
     assert len(rows) == 1 and not problems
     rows, problems = intake.seats_to_rows(
-        [_seat()], {"commish@example.com"}, set(PLAYERS))
+        [claim], passes, set(PLAYERS), SEAT_SECRET, confirm_codes=confirm)
     assert len(rows) == 1, problems
 
 
@@ -514,9 +562,9 @@ def test_a_seat_is_welcomed_without_billing_terms(tmp_path, stripe, directory,
     sent = _capture_sends(monkeypatch, tmp_path)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
     stripe["sessions"] = [_pass_session()]
-    _seats(monkeypatch, _seat())
+    _confirmed_seats(monkeypatch, _seat())
     _run(tmp_path)
-    by_to = {m.to: m for m in sent}
+    by_to = {m.to: m for m in sent if m.key.startswith("welcome-")}
     assert set(by_to) == {"commish@example.com", "member@example.com"}
     seat_msg = by_to["member@example.com"]
     assert "Nothing bills you" in seat_msg.text
@@ -738,7 +786,7 @@ def test_a_row_that_says_where_it_came_from_is_read_exactly_as_one_that_does_not
     from run.trials import pending
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
     stripe["sessions"] = [_pass_session()]
-    _seats(monkeypatch, _seat(via="reply-kit"))
+    _confirmed_seats(monkeypatch, _seat(via="reply-kit"))
     assert _run(tmp_path) == 0, capsys.readouterr().err
     seats = [r for r in load_rosters(tmp_path / intake.REGISTRY_NAME)
              if r.is_league_seat]

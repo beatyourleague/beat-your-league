@@ -42,6 +42,11 @@ DEFAULT_ROSTERS = REPO_ROOT / "data" / "registry" / "rosters.json"
 # and fails the other is a row that syncs and then cannot be loaded.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _CUSTOMER_RE = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
+# A League Pass is identified by its Stripe SUBSCRIPTION (run/intake.py takes
+# it from the session the pass link charged): it outlives a billing-email
+# change, it ends exactly when the pass does, and two passes bought with one
+# address are two of them (OPS-R4/R5, LP2-D2/D4).
+_SUBSCRIPTION_RE = re.compile(r"^sub_[A-Za-z0-9]{4,}$")
 
 PLANS = (SEASON, MONTHLY, LEAGUE_PASS)
 
@@ -96,6 +101,15 @@ class RosterSubscriber:
     # last confirmed update — as YYYY-MM-DD. A report says it beside the
     # roster-change route, so a subscriber can see which roster it read.
     roster_as_of: str | None = None
+    # The League Pass this row belongs to, as its Stripe subscription id: on
+    # a payer's row the pass they bought, on a seat the pass that covers it.
+    # A seat is entitled only while THAT subscription is (run/subscriptions
+    # RULE E2), and its seat link and seat count are per pass, not per payer
+    # address, so one address with two passes has two leagues (LP2-D4).
+    pass_id: str | None = None
+    # A seat's payer as Stripe knows them, resolved when the seat was
+    # confirmed — kept so a later run never has to re-derive it (OPS-R10).
+    pass_customer: str | None = None
 
     @property
     def is_league_seat(self) -> bool:
@@ -104,6 +118,18 @@ class RosterSubscriber:
     @property
     def is_pass_payer(self) -> bool:
         return self.billing == PASS_BILLING
+
+    @property
+    def pass_key(self) -> str | None:
+        """Which pass a payer or seat row belongs to, for counting seats and
+        finding the league's seat link: the pass subscription when the row
+        names one, else the payer's address (rows written before passes had
+        an identity, and the CSV path). None outside a pass league."""
+        if not (self.is_pass_payer or self.is_league_seat):
+            return None
+        if self.pass_id:
+            return self.pass_id
+        return (self.covered_by if self.is_league_seat else self.email or "").lower() or None
 
     @property
     def report_plan(self) -> str:
@@ -212,11 +238,12 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
     if roster_as_of is not None and not _DATE_RE.match(roster_as_of):
         raise RosterRegistryError(
             f"{where}: roster_as_of must be YYYY-MM-DD, got {as_of_raw!r}")
+    pass_id, pass_customer = _pass_fields(raw, plan, billing, where)
     subscriber = RosterSubscriber(
         email=email, ref=ref, player_ids=players, slots=slots, scoring=scoring,
         league_size=size, label=label, plan=plan, covered_by=covered_by,
         stripe_customer_id=stripe_customer_id, origin=origin, billing=billing,
-        roster_as_of=roster_as_of)
+        roster_as_of=roster_as_of, pass_id=pass_id, pass_customer=pass_customer)
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that
@@ -225,6 +252,30 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
     except SubscriberError as exc:
         raise RosterRegistryError(f"{where}: {exc}") from exc
     return subscriber
+
+
+def _pass_fields(raw: dict, plan: str, billing: str | None,
+                 where: str) -> tuple[str | None, str | None]:
+    """A row's (pass_id, pass_customer), each checked for shape and for
+    belonging on this kind of row: a pass id only on a pass payer or a seat,
+    a payer's customer only on a seat (a payer's own is stripe_customer_id)."""
+    pass_id = str(raw.get("pass_id") or "").strip() or None
+    customer = str(raw.get("pass_customer") or "").strip() or None
+    if pass_id is not None:
+        if not _SUBSCRIPTION_RE.match(pass_id):
+            raise RosterRegistryError(
+                f"{where}: pass_id must look like 'sub_...', got {pass_id!r}")
+        if plan != LEAGUE_PASS and billing != PASS_BILLING:
+            raise RosterRegistryError(
+                f"{where}: pass_id belongs on a League Pass payer or seat only")
+    if customer is not None:
+        if not _CUSTOMER_RE.match(customer):
+            raise RosterRegistryError(
+                f"{where}: pass_customer must look like 'cus_...', got {customer!r}")
+        if plan != LEAGUE_PASS:
+            raise RosterRegistryError(
+                f"{where}: pass_customer belongs on a League Pass seat only")
+    return pass_id, customer
 
 
 def _billing(raw: object, plan: str, where: str) -> str | None:
@@ -286,7 +337,7 @@ def to_json(subscribers: list[RosterSubscriber]) -> list[dict]:
             row["covered_by"] = sub.covered_by
         if sub.stripe_customer_id:
             row["stripe_customer_id"] = sub.stripe_customer_id
-        for name in ("origin", "billing", "roster_as_of"):
+        for name in ("origin", "billing", "roster_as_of", "pass_id", "pass_customer"):
             if getattr(sub, name):
                 row[name] = getattr(sub, name)
         rows.append(row)
@@ -337,13 +388,15 @@ def drop_unloadable(rows: list[dict]) -> tuple[list[dict], list[str]]:
 
 
 def league_pass_seats(subscribers: list[RosterSubscriber]) -> dict[str, list[RosterSubscriber]]:
-    """payer email -> the seats their pass is carrying.
+    """pass -> the seats it is carrying, keyed by ``RosterSubscriber.pass_key``.
 
-    There is no league id to group on any more — a seat names the payer, and the
-    payer is what the coverage check reads.
+    There is no league id to group on any more. Grouping on the payer's
+    ADDRESS counted both of one buyer's leagues against each pass ("4 of 12"
+    and "4 of 10" for a 10-team league holding one seat, LP2-D4); the pass
+    itself is the league now.
     """
     out: dict[str, list[RosterSubscriber]] = {}
     for sub in subscribers:
-        if sub.is_league_seat and sub.covered_by:
-            out.setdefault(sub.covered_by.lower(), []).append(sub)
+        if sub.is_league_seat and sub.pass_key:
+            out.setdefault(sub.pass_key, []).append(sub)
     return out

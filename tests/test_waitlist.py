@@ -324,3 +324,49 @@ def test_opening_morning_says_every_missing_setting_at_once(monkeypatch, capsys,
     assert "-m run.waitlist" in preview and "--send" not in preview
     assert "sent.jsonl" in makefile.split("\nwaitlist-preview:", 1)[0].rsplit("\n\n", 1)[1], \
         "the target's comment must say to commit the send log afterwards"
+
+
+def test_the_launch_email_is_the_brands_shell_with_one_button_that_fits_a_phone(
+        monkeypatch) -> None:
+    """Reproduced (PANEL:R2): the one email every waitlister gets was a bare
+    <div> of Arial paragraphs whose call to action was the join URL printed
+    as text twice (the second time after the postal address). With a saved
+    roster that URL runs ~100 characters with a 60-character stretch that
+    cannot wrap, and a 390px phone laid the email out at 579-690px. It now
+    wears the welcome email's shell — masthead, preview line, light-only
+    colour scheme — with ONE button-styled link ("Pick up where you left off"
+    when it carries their roster), the URL only as that button's href, and
+    the sender block once. Every client rule the other emails are held to."""
+    import html as _html
+    import re
+
+    import run.waitlist as wl
+    from test_email_safety import FORBIDDEN
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", "PO Box 123, Toronto ON M5V 1A1")
+    ref = _roster_ref() + "_via-reply-kit"
+    saved, plain = wl.messages(["a@example.com", "b@example.com"],
+                               "https://example.com/join/", {"a@example.com": ref})
+    for message, label in ((saved, "Pick up where you left off"),
+                           (plain, "Set up my team")):
+        page = message.html
+        assert page.lstrip().lower().startswith("<!doctype html")
+        assert 'name="viewport"' in page and 'lang="en"' in page and "<title>" in page
+        assert '<meta name="color-scheme" content="light only">' in page
+        assert "&#847;&zwnj;&nbsp;" in page, "no padded preview line"
+        assert "Signups are open" in page
+        assert not [p for p in FORBIDDEN if re.search(p, page, re.I)]
+        assert not re.findall(r'<table(?![^>]*role="presentation")', page)
+        hrefs = re.findall(r'href="([^"]*)"', page)
+        assert len(hrefs) == 1 and _html.unescape(hrefs[0]) == wl.restore_url(
+            "https://example.com/join/", ref if message is saved else None)
+        assert f">{label}</a>" in page
+        text_nodes = _html.unescape(re.sub(r"<[^>]+>", " ", re.sub(
+            r"<(title|style)[^>]*>.*?</\1>", "", page, flags=re.S)))
+        assert "https://" not in text_nodes, "a URL is printed as text again"
+        assert max((len(w) for w in text_nodes.split()), default=0) <= 40, \
+            "an unbreakable run wider than a phone"
+        assert page.count("PO Box 123") == 1, "the sender block is not printed once"
+    assert wl.SAVED_LINE in _html.unescape(saved.html)
+    assert wl.SAVED_LINE not in _html.unescape(plain.html)
+    # The plain-text half keeps the link printed, where a text client needs it.
+    assert wl.restore_url("https://example.com/join/", ref) in saved.text

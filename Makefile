@@ -109,10 +109,12 @@ waitlist-preview:
 waitlist-send:
 	$(PY) -m run.waitlist --send $(if $(LIST),--list "$(LIST)")
 
-# This week's live sample (site/this-week.html + site/week.json). Built before
-# the week's first kickoff it RECORDS its odds on the public ledger, like a
-# subscriber's report; after kickoff it refuses unless ARGS=--force, which
-# rebuilds and records nothing. ARGS=--no-record previews without recording.
+# This week's live sample (site/this-week.html + site/week.json). Its FIRST
+# build before the week's first kickoff RECORDS its odds on the public ledger,
+# like a subscriber's report; every later build of the week is refused unless
+# ARGS=--force, which records nothing and prints only the odds on the record
+# (after kickoff, only those on games not yet started, and the page says it
+# was rebuilt after the week began). ARGS=--no-record previews before kickoff.
 live-sample:
 	$(PY) -m render.live_sample $(ARGS)
 

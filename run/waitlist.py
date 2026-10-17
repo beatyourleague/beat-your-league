@@ -216,26 +216,74 @@ def messages(addresses: list[str], signup_url: str,
         if ref:
             body = body.replace(f"  {url}\n", f"  {url}\n\n{SAVED_LINE}\n", 1)
         out.append(Message(
-            to=address, subject=SUBJECT, html=_html(body, url), text=body,
+            to=address, subject=SUBJECT,
+            html=_html(body, url, saved=bool(ref), sender=sender), text=body,
             key=f"{CAMPAIGN}-{hashlib.sha256(address.encode()).hexdigest()[:10]}",
             # Gmail and Apple Mail show an Unsubscribe button for this.
             unsubscribe=f"mailto:{CONTACT}?subject=unsubscribe"))
     return out
 
 
-def _html(body: str, signup_url: str) -> str:
-    """Deliberately plain. A launch announcement that renders as soup in Outlook
-    is worse than one that renders as text everywhere, and this is the first
-    thing most of these addresses will ever receive from us."""
-    from render.report import esc
-    paragraphs = "".join(
-        f'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;'
-        f'line-height:1.55;color:#101E33;margin:0 0 14px 0;">{esc(part)}</p>'
-        for part in body.split("\n\n") if part.strip())
-    return (f'<div style="max-width:560px;margin:0 auto;padding:24px;">'
-            f'{paragraphs}<p><a href="{esc(signup_url)}" '
-            f'style="font-family:Arial,Helvetica,sans-serif;font-weight:bold;'
-            f'color:#1E7A46;">{esc(signup_url)}</a></p></div>')
+def _html(body: str, url: str, *, saved: bool, sender: str) -> str:
+    """The launch email in the welcome email's shell (PANEL:R2): navy
+    masthead, a preview line, the message and ONE button.
+
+    It was a bare <div> of Arial paragraphs with the signup URL printed as
+    text twice — the second time after the postal address — and a saved
+    roster's URL (~100 characters, a 60-character run with no break in it)
+    pushed the email to 579-690px on a 390px phone, which zoomed the whole
+    message out. The URL is now only the button's href; the plain-text half
+    (``body``) keeps it printed, where a text client needs it. The words are
+    BODY's own paragraphs, so the two halves cannot say different things."""
+    from render.email import BASE, CARD, DISPLAY, FLAG, FONT, NAVY, PAPER, SMALL
+    from render.report import EMAIL_META, esc, preheader_html
+    label = "Pick up where you left off" if saved else "Set up my team"
+    para = f'<p style="{BASE}font-size:15px;margin:0 0 14px 0;">'
+    parts = [" ".join(line.strip() for line in part.splitlines())
+             for part in body.split("\n\n") if part.strip()]
+    before, after = [], []
+    for part in parts:
+        if part == url:
+            before, after = before + after, []     # the button goes here
+            continue
+        if part == sender:
+            continue                               # the footer carries it
+        after.append(part)
+    # The paragraph after the link is the volume-and-exit promise, set small;
+    # SAVED_LINE, when it is there, stays beside the button it describes.
+    saved_html = (f"{para}{esc(SAVED_LINE)}</p>"
+                  if saved and SAVED_LINE in after else "")
+    rest = [part for part in after if part != SAVED_LINE]
+    body_html = "".join(f"{para}{esc(part)}</p>" for part in before)
+    tail_html = "".join(f'<p style="{SMALL}margin:0 0 6px 0;">{esc(part)}</p>'
+                        for part in rest)
+    button = (
+        f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+        f'style="margin:6px 0 18px 0;"><tr><td style="background:{FLAG};'
+        f'border-radius:4px;"><a href="{esc(url)}" style="display:inline-block;'
+        f'padding:13px 24px;font-family:{FONT};font-size:16px;font-weight:bold;'
+        f'color:{NAVY};text-decoration:none;">{esc(label)}</a></td></tr></table>')
+    return (
+        f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        f'{EMAIL_META}<title>{esc(SUBJECT)}</title></head>'
+        f'<body style="margin:0;padding:0;background:{PAPER};">'
+        f'{preheader_html("Signups are open. Your first report lands the day you join.")}'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{PAPER};"><tr><td align="center" '
+        f'style="padding:18px 8px;"><table role="presentation" width="560" '
+        f'cellpadding="0" cellspacing="0" border="0" '
+        f'style="max-width:560px;width:100%;background:{CARD};">'
+        f'<tr><td style="background:{NAVY};padding:22px 26px;border-left:4px solid {FLAG};">'
+        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
+        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">Beat Your League</div>'
+        f'<div style="font-family:{DISPLAY};font-size:28px;font-weight:bold;'
+        f'text-transform:uppercase;color:{CARD};padding-top:6px;">Signups are open</div>'
+        f'</td></tr><tr><td style="padding:22px 26px 8px 26px;">{body_html}{button}'
+        f'{saved_html}{tail_html}</td></tr>'
+        f'<tr><td style="background:{PAPER};padding:16px 26px 22px 26px;">'
+        f'<p style="{SMALL}margin:0;">{esc(sender)}</p></td></tr>'
+        f'</table></td></tr></table></body></html>\n')
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -121,3 +121,73 @@ def test_the_command_posts_through_the_worker_and_prints_no_address(
     makefile = (Path(__file__).resolve().parent.parent / "Makefile").read_text()
     target = makefile.split("\nroster-update:", 1)[1].split("\n\n", 1)[0]
     assert '-m run.updates --email "$(EMAIL)" --roster "$(ROSTER)"' in target
+
+
+# --------------------------------------------------------------------- #
+# OPS-R8 — a change back to an earlier roster is a change
+# --------------------------------------------------------------------- #
+
+KICKER_X = PLAYERS[:7] + ["00-0000071"]
+KICKER_Y = PLAYERS[:7] + ["00-0000072"]
+
+
+def _stamped(row: dict, received_at: str) -> dict:
+    """The row as the Worker stores it: its own `received_at` stamp."""
+    return dict(row, received_at=received_at)
+
+
+def test_a_change_back_to_an_earlier_roster_is_applied_not_deduped(
+        tmp_path, stripe, monkeypatch, capsys) -> None:
+    """Reproduced (OPS-R8): operator rows X, then Y, then X again (a kicker
+    streamed back and forth). RosterUpdate.key was (email, replaces, ref, "")
+    for every kind:"update" row, so the third collided with the first, was
+    dropped as a duplicate, and the roster silently stayed Y — while the
+    intake printed "1 roster(s) changed" and the command had told the
+    operator "their next report uses it". Every kind:"update" row now carries
+    the Worker's stamp as its nonce: three rows, three log lines, X stands."""
+    from engine.roster import Player, PlayerDirectory
+
+    people = [Player(pid, f"Player {pid}", "WR", "KC")
+              for pid in [*PLAYERS, "00-0000071", "00-0000072"]]
+
+    class _Data:
+        directory = PlayerDirectory(people)
+
+    monkeypatch.setattr(intake, "load_week_data", lambda *a, **k: _Data())
+    stripe["sessions"] = [_session(REF)]
+    monkeypatch.setenv("UPDATE_SECRET", SECRET)
+    rows: list[dict] = []
+    for stamp, ids in (("2026-10-10T10:00:00.000Z", KICKER_X),
+                       ("2026-10-11T10:00:00.000Z", KICKER_Y),
+                       ("2026-10-12T10:00:00.000Z", KICKER_X)):
+        rows.append(_stamped(updates.operator_row("fan@example.com", ids, SECRET), stamp))
+        _seats(monkeypatch, *rows)
+        assert _run(tmp_path) == 0, capsys.readouterr().err
+        [row] = load_rosters(tmp_path / intake.REGISTRY_NAME)
+        assert row.player_ids == tuple(ids), f"the change sent at {stamp} was lost"
+    log = updates.load_update_log(tmp_path / updates.UPDATE_LOG_NAME)
+    assert len(log) == 3 and len({u.key for u in log}) == 3
+    # Re-reading the same Worker rows (every hour, for ~400 days) adds nothing.
+    assert _run(tmp_path) == 0
+    assert len(updates.load_update_log(tmp_path / updates.UPDATE_LOG_NAME)) == 3
+
+
+def test_a_row_logged_before_rows_carried_a_nonce_is_not_logged_again(tmp_path) -> None:
+    """The migration hazard of the fix above: an update logged bare (no
+    nonce) before it existed would, on its next re-read, be logged AGAIN
+    under its new nonce — with a NEW first-seen stamp, so a months-old change
+    became the newest and undid every later one. It is recognised as the same
+    row (logged at or after the Worker received it); a later row with the
+    same roster (A -> B -> A) is still a new update."""
+    path = tmp_path / updates.UPDATE_LOG_NAME
+    bare = updates.RosterUpdate("fan@example.com", "abcdef0123", REF,
+                                seen_at="2026-10-10T11:00:00+00:00")
+    updates.append_update_log([bare], path)
+    same = updates.RosterUpdate("fan@example.com", "abcdef0123", REF,
+                                seen_at="2026-10-17T09:00:00+00:00",
+                                nonce="rx:2026-10-10T10:00:00.000Z")
+    later = updates.RosterUpdate("fan@example.com", "abcdef0123", REF,
+                                 seen_at="2026-10-17T09:00:00+00:00",
+                                 nonce="rx:2026-10-16T10:00:00.000Z")
+    assert updates.append_update_log([same], path) == 0
+    assert updates.append_update_log([later], path) == 1

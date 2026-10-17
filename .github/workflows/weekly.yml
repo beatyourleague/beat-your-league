@@ -178,6 +178,8 @@ jobs:
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+          # A rotated UPDATE_SECRET's old value (OPS-R10; run/updates.py).
+          UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
         run: |
           set +e
           .venv/bin/python -m run.intake --no-mail

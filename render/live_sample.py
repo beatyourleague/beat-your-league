@@ -24,11 +24,27 @@ and the Monday run grades both by the same rules. The ledger is written FIRST
 and the page only after — a page whose odds could not be recorded is not
 published.
 
-**A week that has kicked off is not rebuilt.** A rebuild after Thursday's
-kickoff would print "predictions" about a game underway, and would move odds
-already on the record. It is refused and the published page stays; ``--force``
-rebuilds anyway (a rendering fix) and then records NOTHING, saying so.
-``--no-record`` previews without recording.
+**A week is recorded ONCE: by its first build before kickoff (OPS-R3).** The
+Tuesday cron runs twice (12:17 and the 16:17 retry) and GitHub's backups can
+run hours late, and games.csv (market lines) and players.csv (a Tuesday IR
+move) revalidate in between — so every later build could record a SECOND set
+of calls for the same slots, or print a % that is not the recorded one
+(record_calls keeps the first row per call id). site/week.json now says the
+week was recorded (``recorded``), and a later build before kickoff keeps the
+published page; ``--force`` rebuilds it through ``recorded_only`` — nothing
+new recorded, no odds that are not on the record.
+
+**A week that has kicked off is not rebuilt** unless ``--force``, and a forced
+rebuild after kickoff (a rendering fix) is a different page, said plainly
+(FUNNEL:F3, COPY:F1, G24, R1, SS2-D1, BE2-D3, OPS-R11). It records nothing;
+it prints only odds already on the record from before kickoff, and none on a
+pair whose game has started (a % beside a game that is already final reads as
+a prediction about it); it says under the banner when it was rebuilt and that
+the week had begun; its lineup steps are "for the games still to play", never
+"before this week's first kickoff"; a game already played is "played", and an
+if/then about a player whose game has started is dropped. Withholding only —
+nothing here adds or moves a number. ``--no-record`` previews before kickoff
+without recording.
 
 When the week cannot be built (a data outage, the offseason) the previous page
 stays up and this exits 0: a stale-but-labelled sample beats a cron failure
@@ -38,6 +54,7 @@ that files an issue every week of the offseason.
 from __future__ import annotations
 
 import argparse
+import copy
 import re
 import sys
 from datetime import datetime, timezone
@@ -129,7 +146,11 @@ def with_via_carry(page: str) -> str:
 
 
 def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
-          week: int | None = None) -> dict:
+          week: int | None = None, context: dict | None = None) -> dict:
+    """This week's sample report. ``context``, when given, is filled with the
+    facts a later step needs and the report does not carry: ``teams`` (each
+    rostered player's team this week, for which games have started) and
+    ``missing`` (who can't play, for the thin-week line)."""
     data = load_week_data(cache_dir, season, week)
     known = {p.player_id for p in data.directory.players}
     # A sample player who has left the league since 2024 is dropped rather
@@ -140,7 +161,12 @@ def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
     report = report_for(spec, data, league_size=12)
     report["meta"]["live_demo"] = True
     report["meta"]["anonymized_demo"] = True
-    report["meta"]["thin_week_note"] = thin_week_line(report, absences(data, roster))
+    missing = absences(data, roster)
+    report["meta"]["thin_week_note"] = thin_week_line(report, missing)
+    if context is not None:
+        from run.solo import _row_teams
+        context["teams"] = _row_teams(spec, data)
+        context["missing"] = missing
     return report
 
 
@@ -226,10 +252,168 @@ def share_text(report: Mapping[str, Any]) -> tuple[str, str]:
     lineup = report.get("lineup") or []
     odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
     title = f"Beat Your League — this week's report, Week {meta['week']} of {meta['season']}"
+    when = ("Rebuilt after this week's first kickoff." if meta.get("rebuilt_after_kickoff")
+            else "Rebuilt every Tuesday.")
     desc = (f"Week {meta['week']} of the {meta['season']} NFL season, for a sample "
             f"roster: the lineup we'd set, with odds on {odds} of its "
-            f"{len(lineup)} slots. Rebuilt every Tuesday.")
+            f"{len(lineup)} slots. {when}")
     return title, desc
+
+
+# --------------------------------------------------------------------- #
+# a rebuild after kickoff is a different page, and says so
+# --------------------------------------------------------------------- #
+
+# The checklist's deadline once the week has begun: "before this week's
+# first kickoff" had passed, and the forced Week 6 rebuild still printed it
+# under "Set this lineup" a day after Thursday night's game (COPY:F1, R1).
+STILL_TO_PLAY = "for the games still to play"
+# Said by the closest-call section when no call with odds survives the
+# rebuild (render.report's one-line no-call form).
+AFTER_KICKOFF_CLOSEST = ("No closest call with odds on this rebuild: it was "
+                         "built after this week's first kickoff, and it shows "
+                         "odds only where they were on the record before "
+                         "kickoff and neither game has started.")
+AFTER_KICKOFF_PIVOTS = ("No if/then on this rebuild: it was built after this "
+                        "week's first kickoff, and the games it turned on have "
+                        "started.")
+# The same, for a forced rebuild BEFORE kickoff of a week already recorded:
+# its closest call printed a % the record does not hold (OPS-R3).
+REBUILT_CLOSEST = ("No closest call with odds on this rebuild: it shows only the "
+                   "odds recorded by this week's first build.")
+
+
+def hold_closest(report: dict, sentence: str) -> dict:
+    """A closest call whose % was withheld becomes the one-line no-call form.
+    ``recorded_only`` sets the number to None and leaves the card, which the
+    renderer cannot draw without one (it raised on the forced rebuild)."""
+    regret = report.get("regret") or {}
+    if "gate" not in regret and regret.get("confidence") is None:
+        report["regret"] = {"gate": sentence}
+    return report
+
+
+def kickoff_split(teams: Mapping[str, str], starts: Mapping[str, datetime],
+                  now: datetime) -> tuple[set[str], set[str]]:
+    """(players whose game is still to come, players whose game has kicked
+    off) at ``now``. A player whose team or kickoff is unknown is in NEITHER:
+    he is never "still to come", so a % about him does not print (if we cannot
+    tell, we must not publish — the rule week_has_kicked_off follows), and he
+    is never said to have "played". Pure."""
+    upcoming: set[str] = set()
+    played: set[str] = set()
+    for pid, team in teams.items():
+        start = starts.get(team)
+        if start is None:
+            continue
+        (upcoming if start > now else played).add(pid)
+    return upcoming, played
+
+
+def _past_tense(text: str, names: list[str]) -> str:
+    """"Rashid Shaheed (7.6) plays Thursday" -> "played Thursday", for the
+    players whose game is behind us; nothing else in the sentence moves."""
+    for name in names:
+        who = rf"({re.escape(name)}(?: \([0-9.]+\))?)"
+        # The engine's timing sentence, whole: "X (7.6) plays Thursday,
+        # before Y's status is known" — both halves are behind us.
+        text = re.sub(rf"{who} plays (\w+), before (.+?)'s status is known",
+                      r"\1 played \2, before \3's status was known", text)
+        text = re.sub(rf"{who} plays\b", r"\1 played", text)
+    return text
+
+
+def after_kickoff(report: dict, upcoming: set[str], played_ids: set[str],
+                  names: Mapping[str, str]) -> dict:
+    """The report as a page rebuilt after the week's first kickoff may show
+    it. ``upcoming`` / ``played_ids`` are ``kickoff_split``'s; ``names`` maps
+    id -> name for the tense fix.
+
+    Withholds, never adds or moves (owner rule): a % stays only when BOTH
+    players' games are still to come, otherwise it goes and its row says
+    nothing in the call column (the notice under the banner says why, once);
+    a closest call that goes becomes the one-line no-call form; an if/then
+    about a player whose game is not still to come goes, and a game already
+    played is "played". Run AFTER ``recorded_only``, which has already
+    removed every % not on the record."""
+    def live(*ids) -> bool:
+        return all(str(pid) in upcoming for pid in ids)
+
+    for slot in report.get("lineup") or []:
+        if slot.get("confidence") is not None and not live(
+                slot.get("player_id"), slot.get("alternative_id")):
+            slot["confidence"] = None
+            slot["confidence_gate"] = ""
+    regret = report.get("regret") or {}
+    if "gate" not in regret and (regret.get("confidence") is None
+                                 or not live(regret.get("start_id"), regret.get("over_id"))):
+        report["regret"] = {"gate": AFTER_KICKOFF_CLOSEST}
+    for item in report.get("checklist") or []:
+        if "first kickoff" in str(item.get("deadline") or ""):
+            item["deadline"] = STILL_TO_PLAY
+    played = [names[pid] for pid in sorted(played_ids) if pid in names]
+    plans = report.get("pivots") or []
+    kept = [dict(plan, action=_past_tense(str(plan.get("action") or ""), played),
+                 condition=_past_tense(str(plan.get("condition") or ""), played))
+            for plan in plans if live(plan.get("about"))]
+    if plans and not kept:
+        report["pivots_note"] = AFTER_KICKOFF_PIVOTS
+    report["pivots"] = kept
+    # A checklist step that sends the reader to a dropped if/then ("check
+    # his status — your if/then below has the answer") goes with it.
+    gone = [names[str(plan.get("about"))] for plan in plans
+            if not live(plan.get("about")) and str(plan.get("about")) in names]
+    report["checklist"] = [
+        dict(item, action=_past_tense(str(item.get("action") or ""), played),
+             detail=_past_tense(str(item.get("detail") or ""), played))
+        for item in report.get("checklist") or []
+        if not (any(name in str(item.get("action") or "") for name in gone)
+                and "if/then" in str(item.get("detail") or ""))]
+    report["meta"]["rebuilt_after_kickoff"] = True
+    report["meta"]["thin_week_note"] = None
+    return report
+
+
+def _eastern(at: datetime) -> str:
+    """'Fri Oct 16, 8:03 PM ET' — the clock the site prints every time in."""
+    from zoneinfo import ZoneInfo
+    local = at.astimezone(ZoneInfo("America/New_York"))
+    hour = local.strftime("%I").lstrip("0") or "12"
+    return f"{local:%a %b} {local.day}, {hour}:{local:%M %p} ET"
+
+
+def after_kickoff_line(report: Mapping[str, Any], built: datetime,
+                       first_kickoff: datetime | None) -> str:
+    """The notice under the banner of a page rebuilt after kickoff: when it
+    was built, that the week had begun, and how many slots still show odds.
+    Facts the build computed, nothing else."""
+    lineup = report.get("lineup") or []
+    odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
+    began = (f" ({_eastern(first_kickoff)})" if first_kickoff else "")
+    return (f"Rebuilt {_eastern(built)}, after this week's first kickoff{began}. "
+            f"It shows odds only where they were on the record before kickoff "
+            f"and neither player's game has started — {odds} of its "
+            f"{len(lineup)} slots — and its lineup steps are for the games still "
+            f"to play.")
+
+
+def read_week_json(path: Path) -> dict:
+    """The season clock the last build wrote, or {} (absent or unreadable).
+    Its ``recorded`` flag is how a later build knows the week's odds are
+    already on the record (OPS-R3)."""
+    import json
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def recorded_this_week(prior: Mapping[str, Any], meta: Mapping[str, Any]) -> bool:
+    """Did a build of this same week already record its odds?"""
+    return (bool(prior.get("recorded"))
+            and str(prior.get("season")) == str(meta.get("season"))
+            and str(prior.get("week")) == str(meta.get("week")))
 
 
 def with_week_meta(page: str, report: Mapping[str, Any]) -> str:
@@ -311,7 +495,8 @@ def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
 
 
 def write_week_json(report: dict, path: Path, lands_on: str | None = None,
-                    first_kickoff: str | None = None) -> None:
+                    first_kickoff: str | None = None, *, recorded: bool = False,
+                    after_kickoff: bool = False) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -322,7 +507,12 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     ``first_kickoff`` (ISO-8601 UTC) is the instant this week starts: the join
     page says a buyer's first weekly report comes "today" only before it, and
     "your roster report today, your first weekly report next Tuesday" after
-    (panel review PC-02). Absent, the page keeps the sentence true either way."""
+    (panel review PC-02). Absent, the page keeps the sentence true either way.
+
+    ``recorded``: this week's odds are on the record (by this build or an
+    earlier one of the same week), so no later build may record again
+    (OPS-R3). ``after_kickoff``: this page was rebuilt after the week began.
+    Each is written only when true, so an ordinary week's clock is unchanged."""
     import json
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
@@ -336,6 +526,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         # left it with nothing).
         "odds": odds, "closest_call": "gate" not in (report.get("regret") or {"gate": 1}),
         "first_kickoff": first_kickoff,
+        **({"recorded": True} if recorded else {}),
+        **({"after_kickoff": True} if after_kickoff else {}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
@@ -347,15 +539,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--processed-dir", type=Path, default=PROCESSED_DIR,
                         help="where the public ledger lives")
     parser.add_argument("--force", action="store_true",
-                        help="rebuild a week that has kicked off; records nothing")
+                        help="rebuild a week already published or kicked off; "
+                             "records nothing and prints only recorded odds")
     parser.add_argument("--no-record", action="store_true",
-                        help="a preview: build the page, record nothing")
+                        help="a preview before kickoff: build the page, record nothing")
     parser.add_argument("--now", help="ISO time to judge kickoff against (tests)")
     args = parser.parse_args(argv)
     now = (datetime.fromisoformat(args.now.replace("Z", "+00:00")) if args.now
            else datetime.now(timezone.utc))
+    context: dict = {}
     try:
-        report = build(season=args.season, week=args.week)
+        report = build(season=args.season, week=args.week, context=context)
     except (SoloError, Exception) as exc:  # noqa: BLE001 — keep the last page
         print(f"this week's sample was not rebuilt ({exc}); the previous page "
               f"stays up.")
@@ -364,47 +558,98 @@ def main(argv: list[str] | None = None) -> int:
     from run.solo import week_has_kicked_off
     kicked_off = week_has_kicked_off(CACHE_DIR, str(meta["season"]), int(meta["week"]),
                                      now=now)
+    week_json = args.out.with_name("week.json")
+    already = recorded_this_week(read_week_json(week_json), meta)
     if kicked_off and not args.force:
-        # The page already published for this week carries the odds that are
-        # on the record; a rebuild now could print different ones about games
-        # underway. Not a failure: the cron simply has nothing to do.
+        # Not a failure: the cron simply has nothing to do. Said from the
+        # ledger, not assumed: "its recorded odds stand" was printed in a
+        # week where nothing had been recorded at all (G24).
+        held = sum(1 for s in recorded_only(copy.deepcopy(report),
+                                            args.processed_dir)["lineup"]
+                   if s.get("confidence") is not None)
         print(f"this week's sample was not rebuilt: week {meta['week']} has "
-              f"kicked off, so its published page and recorded odds stand. "
-              f"--force rebuilds it and records nothing.")
+              f"kicked off, so the page published for it stands. The record holds "
+              f"{held} of this week's odds; --force rebuilds the page showing only "
+              f"those, on games not yet started, and records nothing.")
         return 0
-    recording = not (kicked_off or args.no_record)
-    if recording:
+    if already and not (args.force or args.no_record):
+        print(f"this week's sample was already built and recorded before kickoff; "
+              f"the published page stands. --force rebuilds it through the record "
+              f"(no new odds, nothing recorded).")
+        return 0
+    starts = _kickoffs(str(meta["season"]), int(meta["week"]))
+    first = min(starts.values()) if starts else None
+    recorded = already
+    if kicked_off:
+        # Only odds already on the record, and none about a game underway.
+        report = recorded_only(report, args.processed_dir)
+        upcoming, played = kickoff_split(context.get("teams") or {}, starts, now)
+        names = {str(s.get("player_id")): str(s.get("player_name"))
+                 for s in [*(report.get("lineup") or []), *(report.get("bench") or [])]
+                 if s.get("player_id") and s.get("player_name")}
+        names.update({str(s.get("alternative_id")): str(s.get("alternative_name"))
+                      for s in report.get("lineup") or []
+                      if s.get("alternative_id") and s.get("alternative_name")})
+        report = after_kickoff(report, upcoming, played, names)
+        print("nothing recorded: the week has kicked off (--force); the page "
+              "shows only odds on the record, on games not yet started")
+    elif already:
+        # A later build before kickoff, forced: the record made by the first
+        # build stands, and the page may print nothing it does not hold.
+        report = hold_closest(recorded_only(report, args.processed_dir),
+                              REBUILT_CLOSEST)
+        report["meta"]["thin_week_note"] = thin_week_line(
+            report, context.get("missing") or [])
+        print("nothing recorded: this week was recorded by its first build "
+              "(--force); the page shows only those odds")
+    elif args.no_record:
+        print("nothing recorded: --no-record")
+    else:
         try:
             added = record(report, args.processed_dir)
         except Exception as exc:  # noqa: BLE001 — publish nothing unrecorded
             print(f"this week's sample was NOT published: its odds could not be "
                   f"recorded ({exc}). The previous page stays up.", file=sys.stderr)
             return 1
+        recorded = True
         print(f"recorded the sample's odds on the public ledger: {added} new "
               f"row(s) in {meta['league_id']}")
-    else:
-        print("nothing recorded: "
-              + ("the week has kicked off (--force)" if kicked_off else "--no-record"))
     page = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
-    page = with_thin_week(with_week_meta(page, report), meta.get("thin_week_note"))
+    page = with_thin_week(with_week_meta(page, report),
+                          report["meta"].get("thin_week_note"))
+    if kicked_off:
+        # Stamped with the moment the report says it was built (the banner's
+        # own clock), so the page states one build time, not two.
+        try:
+            built = datetime.fromisoformat(str(report["meta"].get("generated_at")))
+        except ValueError:
+            built = now
+        page = with_thin_week(page, after_kickoff_line(
+            report, built if built.tzinfo else built.replace(tzinfo=timezone.utc), first))
     args.out.write_text(with_via_carry(page), encoding="utf-8")
     try:
         lands_on = next_report_day(CACHE_DIR, report["meta"]["season"],
                                    report["meta"]["week"])
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
-    try:
-        from run.saturday import kickoffs
-        starts = kickoffs(CACHE_DIR, report["meta"]["season"], report["meta"]["week"])
-        first = min(starts.values()).astimezone(timezone.utc) if starts else None
-        first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
-    except Exception:  # noqa: BLE001 — no instant means the either-way sentence
-        first_kickoff = None
-    write_week_json(report, args.out.with_name("week.json"), lands_on, first_kickoff)
+    first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
+    write_week_json(report, week_json, lands_on, first_kickoff,
+                    recorded=recorded, after_kickoff=kicked_off)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")
     return 0
+
+
+def _kickoffs(season: str, week: int) -> dict[str, datetime]:
+    """team -> kickoff (UTC) this week, or {} when the schedule cannot say —
+    which every reader takes as "started" (a % is withheld) or "unknown"."""
+    try:
+        from run.saturday import kickoffs
+        return {team: at.astimezone(timezone.utc)
+                for team, at in kickoffs(CACHE_DIR, season, week).items()}
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 if __name__ == "__main__":

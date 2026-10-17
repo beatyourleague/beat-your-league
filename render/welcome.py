@@ -126,6 +126,42 @@ def _site() -> str:
     return os.environ.get("SITE_URL", "").rstrip("/")
 
 
+# What each plan is called in a sentence about it (LP2-D1).
+_PLAN_NAME = {"season": "season pass", "monthly": "monthly plan",
+              "league_pass": "League Pass", "pass": "League Pass"}
+
+
+def duplicate_line(plan: str, duplicate: str | None) -> str | None:
+    """The sentence a purchase gets when this address ALREADY holds another
+    subscription for the same roster (LP2-D1), or None.
+
+    A commissioner who had the $39 season pass and then bought the $99 League
+    Pass for the same team was charged for both and got two identical reports
+    every Tuesday, with nothing anywhere saying so. The intake now sends one
+    report; this tells them, once, in the acknowledgment of the newer
+    purchase, that the other subscription still bills and that cancelling it
+    is theirs to do from the billing page. It cancels nothing and promises no
+    refund: both are the subscriber's call, under the terms they agreed to."""
+    if not duplicate or duplicate == plan or (plan in PAYER_PLANS
+                                              and duplicate in PAYER_PLANS):
+        return None
+    other = _PLAN_NAME.get(duplicate, "subscription")
+    if plan in PAYER_PLANS:
+        # The pass covers the buyer's own team, so the older plan is the spare.
+        return (f"This address already has the {other} for this same roster. "
+                f"Your League Pass covers your own team too, so you get one report "
+                f"a week, not two — and the {other} keeps billing until you cancel "
+                f"it, which you can do yourself on your billing page.")
+    mine = _PLAN_NAME.get(plan, "subscription")
+    if duplicate in PAYER_PLANS:
+        return (f"Your League Pass already covers this same roster, so you get one "
+                f"report a week, not two — and this {mine} keeps billing until you "
+                f"cancel it, which you can do yourself on your billing page.")
+    return (f"This address already has the {other} for this same roster, so you "
+            f"get one report a week, not two. Each keeps billing until you cancel "
+            f"it, which you can do yourself on your billing page.")
+
+
 def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
     """(the lead-in, the link, the message to paste) a League Pass payer sends
     their league; None for anybody else.
@@ -231,10 +267,13 @@ def _block(title: str, inner: str) -> str:
 
 
 def welcome_message(email: str, plan: str, slug: str, season: str,
-                    purchased_at: str = "", seat_link: str | None = None) -> Message:
+                    purchased_at: str = "", seat_link: str | None = None,
+                    duplicate: str | None = None) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
-    league seat link (C4), or None to fall back to the generic seat page."""
+    league seat link (C4), or None to fall back to the generic seat page.
+    ``duplicate`` is the plan of another subscription this address already
+    holds for the same roster (``duplicate_line``)."""
     bought, terms = _plan_terms(plan)
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
@@ -285,6 +324,16 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
         for when_, what in _next_rows(seat))
     blocks = []
+    twice = None if seat else duplicate_line(plan, duplicate)
+    twice_text = None
+    if twice:
+        # First, before anything else: it is about money already being spent.
+        href, label = _cancel_destination()
+        link_html = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
+                     if href else "")
+        twice_text = twice + (f" {label}: {href}" if href else "")
+        blocks.append(_block("You already have this roster",
+                             f"{para}{esc(twice)}{link_html}</p>"))
     if share:
         lead, link, paste = share
         inner = para + esc(lead) + "</p>"
@@ -347,6 +396,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
 
     # ---------------------------------------------------------------- text
     text_lines = ["BEAT YOUR LEAGUE", "YOU'RE IN.", "", opener]
+    if twice_text:
+        text_lines += ["", "YOU ALREADY HAVE THIS ROSTER", twice_text]
     if share:
         lead, link, paste = share
         text_lines += ["", "SEND YOUR LEAGUE THIS", lead]

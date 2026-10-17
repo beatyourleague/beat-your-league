@@ -86,16 +86,43 @@ SEAT_TOKEN_LENGTH = 20
 _SCORING_PARAMS = ("ppr", "half_ppr", "standard")
 
 
-def seat_token(payer_email: str, secret: str) -> str:
-    """hmac_sha256(UPDATE_SECRET, b"seat:" + canonical(payer)) as hex, first 20.
-    Canonical as the free report canonicalises a mailbox (run/trials), so a
-    payer's `+tag` or Gmail dots never make two passes out of one."""
+def seat_token(payer_email: str, secret: str, pass_id: str = "") -> str:
+    """hmac_sha256(UPDATE_SECRET, b"seat:" + canonical(payer) [+ b"|" + pass])
+    as hex, first 20. Canonical as the free report canonicalises a mailbox
+    (run/trials), so a payer's `+tag` or Gmail dots never make two passes out
+    of one.
+
+    ``pass_id`` binds the PASS as well as the payer (LP2-D4): hashing the
+    address alone gave a buyer of two leagues' passes one token for both, so
+    a leaguemate in both leagues lost a seat to a "roster change" and each
+    pass counted the other league's seats. A pass with no identity (the
+    generic fallback) keeps the address-only token."""
     if not secret:
         raise ValueError("a seat token needs a secret")
     from run.trials import canonical_email
     message = b"seat:" + canonical_email(payer_email).encode("utf-8")
+    if pass_id:
+        message += b"|" + pass_id.encode("utf-8")
     return hmac.new(secret.encode("utf-8"), message,
                     hashlib.sha256).hexdigest()[:SEAT_TOKEN_LENGTH]
+
+
+def signing_secrets(current: str, previous: str = "") -> list[str]:
+    """The secret new links and codes are signed with, then any it replaced.
+
+    UPDATE_SECRET signs seat links that live in a season of forwarded reports
+    and in a welcome email nobody can recall. Rotating it re-read every
+    stored claim made through an old link as "matches no League Pass", dropped
+    every seat from the registry and exited 0 (reproduced, OPS-R10). So a
+    rotation names the old value in UPDATE_SECRET_PREVIOUS (comma-separated)
+    for as long as its links are out there: claims are MATCHED against every
+    secret here, while everything new is signed with ``current`` alone.
+    Confirmed seats never need a secret again — the intake keeps the pass
+    they were confirmed on (run/intake.py's seat log)."""
+    out = [current] if current else []
+    out += [s.strip() for s in (previous or "").split(",")
+            if s.strip() and s.strip() != current]
+    return out
 
 
 def template_code(slots: Iterable[str]) -> str | None:
@@ -107,15 +134,17 @@ def template_code(slots: Iterable[str]) -> str | None:
                  if tuple(slots_of) == shape), None)
 
 
-def seat_url(site_url: str, secret: str, payer_email: str, roster) -> str | None:
+def seat_url(site_url: str, secret: str, payer_email: str, roster,
+             pass_id: str = "") -> str | None:
     """The one link a pass payer shares: SITE_URL/join/?pass=<token>&s=&n=&t=
     with the payer's own scoring, league size and lineup. None without a site
     or a secret — then the welcome keeps the generic link and the email
-    instruction, rather than printing a link that cannot be matched."""
+    instruction, rather than printing a link that cannot be matched.
+    ``pass_id`` is the pass's own identity (``seat_token``)."""
     site = (site_url or "").rstrip("/")
     if not site or not secret:
         return None
-    params = [f"pass={seat_token(payer_email, secret)}"]
+    params = [f"pass={seat_token(payer_email, secret, pass_id)}"]
     if roster.scoring in _SCORING_PARAMS:
         params.append(f"s={roster.scoring}")
     params.append(f"n={int(roster.league_size)}")
@@ -145,10 +174,15 @@ class RosterUpdate:
     replaces: str            # slug of the registry row being changed
     ref: str                 # the new roster
     seen_at: str             # first seen by the intake, ISO
-    # Confirm-by-email updates only: the request's own code and the Worker's
-    # timestamp for it. Two different requests for the SAME roster (A -> B -> A)
-    # are two different updates; without the nonce the second collided with the
-    # first in the log, was deduped away, and the roster silently stayed B.
+    # What makes two updates to the SAME roster two updates. A confirmed
+    # request carries its own code; a kind:"update" row (the operator's
+    # `make roster-update`, or a legacy token update) carries the Worker's
+    # stamp, as "rx:<received_at>". Two changes back to one roster (A -> B ->
+    # A) are two updates; without a nonce the second collided with the first
+    # in the log, was deduped away, and the roster silently stayed B — while
+    # the intake printed "1 roster(s) changed" and the operator had been told
+    # "their next report uses it" (OPS-R8, reproduced for operator rows after
+    # it was fixed for confirmed ones).
     nonce: str = ""
     request_ts: str = ""
 
@@ -175,11 +209,40 @@ def load_update_log(path: Path) -> list[RosterUpdate]:
     return out
 
 
+def _already_logged_bare(update: RosterUpdate,
+                         bare: Mapping[tuple[str, str, str], list[str]]) -> bool:
+    """Is this Worker-stamped update the same row as one logged before rows
+    carried a nonce? The Worker keeps every row ~400 days and the intake
+    re-reads them all every hour, so a row logged bare would otherwise be
+    logged AGAIN under its new nonce — with a NEW first-seen stamp, making a
+    months-old change the newest and undoing everything after it. It is the
+    same row exactly when the bare entry was first seen at or after the
+    Worker received this one; a later row with the same roster (A -> B -> A)
+    was received after it and is a new update."""
+    if not update.nonce.startswith("rx:"):
+        return False
+    received = _parse_ts(update.nonce[3:])
+    if received is None:
+        return False
+    received = received if received.tzinfo else received.replace(tzinfo=timezone.utc)
+    for seen in bare.get((update.email.lower(), update.replaces, update.ref), []):
+        at = _parse_ts(seen)
+        if at is not None and (at if at.tzinfo else at.replace(tzinfo=timezone.utc)) >= received:
+            return True
+    return False
+
+
 def append_update_log(updates: Iterable[RosterUpdate], path: Path) -> int:
     """Append the updates not already logged; a logged update keeps its
     first-seen stamp forever, which is what makes the sweep idempotent."""
-    known = {u.key for u in load_update_log(path)}
-    fresh = [u for u in updates if u.key not in known]
+    logged = load_update_log(path)
+    known = {u.key for u in logged}
+    bare: dict[tuple[str, str, str], list[str]] = {}
+    for u in logged:
+        if not u.nonce:
+            bare.setdefault((u.email.lower(), u.replaces, u.ref), []).append(u.seen_at)
+    fresh = [u for u in updates
+             if u.key not in known and not _already_logged_bare(u, bare)]
     if not fresh:
         return 0
     Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -214,8 +277,11 @@ def validate_updates(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
         for row in registry_rows
     }
     stamp = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    seen: set[tuple[str, str, str]] = set()
-    for row in rows:
+    seen: set[tuple[str, str, str, str]] = set()
+    # Oldest first by the Worker's stamp, so rows first seen in the same run
+    # land in the log in the order they were sent, and the newest of them is
+    # the one latest_per_target keeps (it breaks a first-seen tie by position).
+    for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
         email = str(row.get("email") or "").strip().lower()
         token = str(row.get("token") or "").strip()
         replaces = str(row.get("replaces") or "").strip()
@@ -275,11 +341,14 @@ def validate_updates(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                             f"{len(missing)} player id(s) the directory does not "
                             f"have — not applied")
             continue
-        key = (email, replaces, ref)
+        received = str(row.get("received_at") or "").strip()
+        nonce = f"rx:{received}" if received else ""
+        key = (email, replaces, ref, nonce)
         if key in seen:
             continue
         seen.add(key)
-        out.append(RosterUpdate(email=email, replaces=replaces, ref=ref, seen_at=stamp))
+        out.append(RosterUpdate(email=email, replaces=replaces, ref=ref,
+                                seen_at=stamp, nonce=nonce))
     return out, problems
 
 
@@ -443,6 +512,34 @@ def confirm_code(email: str, replaces: str, ref: str, secret: str, ts: str = "")
     message = f"confirm|{email.strip().lower()}|{replaces}|{ref}|{ts}"
     return hmac.new(secret.encode("utf-8"), message.encode("utf-8"),
                     hashlib.sha256).hexdigest()[:CONFIRM_CODE_LENGTH]
+
+
+def seat_code(email: str, pass_id: str, ref: str, ts: str, secret: str) -> str:
+    """The code that turns one League Pass seat CLAIM into a seat (OPS-R1).
+
+    The seat link rides on every pass report, and those reports are written to
+    be forwarded, so holding the link proves nothing about who is claiming.
+    Honouring a claim on sight let anyone with it enrol a stranger's address
+    for weekly mail, or replace a seat holder's roster with nobody told — the
+    "a leaguemate sets my lineup" attack the confirm-by-email update flow
+    exists to stop. So a claim is mailed this code, at the claimed address
+    only, and becomes a seat only when it comes back through the confirm
+    page's button. It binds the address, the pass, the roster and the
+    Worker's stamp on the claim, so every claim has its own and none can be
+    replayed onto another. A different prefix from ``confirm_code`` keeps the
+    two flows' codes apart over the one confirm page."""
+    if not secret:
+        raise ValueError("a seat confirmation code needs a secret")
+    message = f"seat-confirm|{email.strip().lower()}|{pass_id}|{ref}|{ts}"
+    return hmac.new(secret.encode("utf-8"), message.encode("utf-8"),
+                    hashlib.sha256).hexdigest()[:CONFIRM_CODE_LENGTH]
+
+
+def seat_confirm_url(site_url: str, code: str) -> str | None:
+    """The confirm page, told it is confirming a SEAT (``k=seat``) so it can
+    say so; the POST it makes is the same {kind:"confirm", code}."""
+    site = (site_url or "").rstrip("/")
+    return f"{site}/join/confirm.html?c={code}&k=seat" if site else None
 
 
 def same_roster(ref_a: str, ref_b: str) -> bool:

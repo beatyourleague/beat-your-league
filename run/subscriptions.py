@@ -68,6 +68,10 @@ class PaidList:
     # the run so a revoked entitlement is a visible event rather than a
     # subscriber who quietly stopped appearing.
     refunded: frozenset[str] = frozenset()
+    # RULE E2 (Stripe only): the subscriptions that are entitled right now —
+    # active or trialing, and not refunded in full. None on the CSV path,
+    # which cannot tell one subscription from another.
+    subscription_ids: frozenset[str] | None = None
 
     def covers(self, email: str) -> bool:
         return email.strip().lower() in self.emails
@@ -80,6 +84,8 @@ class PaidList:
           2. their league is covered by somebody's League Pass;
           3. the email on file is paying — the fallback for hand-added entries
              and for the CSV path, which has no customer ids at all.
+
+        A roster product League Pass SEAT answers to RULE E2 instead, below.
         """
         customer = getattr(subscriber, "stripe_customer_id", None)
         if customer and customer in self.customer_ids:
@@ -87,6 +93,20 @@ class PaidList:
         league = getattr(subscriber, "league_id", None)
         if league and league in self.covered_leagues:
             return True
+        if (self.subscription_ids is not None and hasattr(subscriber, "pass_id")
+                and getattr(subscriber, "covered_by", None)):
+            # RULE E2 — A SEAT LIVES ON ITS PASS, NOT ON ITS PAYER'S ADDRESS.
+            # Route 3 asked "does the payer's address hold ANY entitled
+            # subscription", so a refunded or cancelled $99 pass kept eleven
+            # seats served whenever the payer still had a $14.99 monthly
+            # (reproduced, OPS-R4 / LP2-D2) — and a payer who changed their
+            # billing email in the portal dropped every seat, because the seat
+            # named the purchase-time address (OPS-R5). The seat now names the
+            # pass subscription itself (run/intake.py stamps it from the
+            # session the pass link took), which no email change moves and
+            # which ends exactly when that pass does. A seat that names no
+            # pass is not entitled: fail closed.
+            return getattr(subscriber, "pass_id", None) in self.subscription_ids
         payer = getattr(subscriber, "covered_by", None) or subscriber.email
         # A seat whose payer cannot be found is NOT entitled — a League Pass
         # seat must die with the pass that bought it, or a lapsed commissioner
@@ -198,6 +218,7 @@ def load_paid_from_stripe(api_key: str | None = None,
     emails: set[str] = set()
     customer_ids: set[str] = set()
     covered_leagues: set[str] = set()
+    subscription_ids: set[str] = set()
     refunded: list[str] = []
     for status in statuses:
         # A LIST of pairs, not a dict: `expand[]` has to repeat, and a dict can
@@ -228,6 +249,9 @@ def load_paid_from_stripe(api_key: str | None = None,
                 if fully_refunded(subscription):
                     refunded.append(str(subscription.get("id")))
                     continue
+                sub_id = subscription.get("id")
+                if isinstance(sub_id, str) and sub_id.startswith("sub_"):
+                    subscription_ids.add(sub_id)
                 email = (customer.get("email") or "").strip().lower()
                 if email:
                     emails.add(email)
@@ -251,7 +275,8 @@ def load_paid_from_stripe(api_key: str | None = None,
                     status_column=",".join(statuses),
                     customer_ids=frozenset(customer_ids),
                     covered_leagues=frozenset(covered_leagues),
-                    refunded=frozenset(refunded))
+                    refunded=frozenset(refunded),
+                    subscription_ids=frozenset(subscription_ids))
 
 
 def resolve_paid_list(csv_path: Path | None = None) -> PaidList:
