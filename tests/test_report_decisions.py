@@ -857,6 +857,7 @@ def test_the_fallback_says_whom_it_skipped() -> None:
     from render.report import call_bits
     assert "Rhett Doubt (11.3) was questionable, so the odds are against Cort " \
            "Sutton" in call_bits({"edge": 5.8, "alternative_name": "Cort Sutton",
+                                  "confidence": 0.71,
                                   "doubtful_alternative_name": "Rhett Doubt",
                                   "doubtful_alternative_projected": 11.3})
 

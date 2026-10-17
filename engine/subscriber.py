@@ -390,6 +390,7 @@ def build_season(
     # sample would shrink his standard deviation into false confidence. Found
     # by reading the numbers out of a real run, not by a test.
     on_roster = set(spec.player_ids)
+    field = list(field) if field is not None else None     # read twice below
     field_ids = [pid for pid in (field or ()) if pid not in on_roster]
 
     weeks: dict[int, dict[int, TeamWeek]] = {}
@@ -444,6 +445,17 @@ def build_season(
         waiver_budget=None,
     )
     result.weeks = weeks
+    # The positional prior is the FIELD's, whoever else this subscriber
+    # rosters (recheck ENG-5). The subscriber's own players sit in roster 1 on
+    # top of the field, so a deep bench player outside it — a third-string
+    # quarterback with 2026 rows — joined the pool: adding Shedeur Sanders to
+    # a bench moved Josh Allen's projection 25.9 -> 25.4 and the QB call
+    # 0.85 -> 0.84 under ONE call id, and the shared ledger kept whichever
+    # subscriber ran first. Built from the field alone, the prior is the same
+    # for everyone in a store; a rostered player outside it keeps his own form
+    # and is shrunk toward it like anyone else. A roster inside the field
+    # draws exactly the pool it always did.
+    result.prior_pool = frozenset(field) if field is not None else None
     # The other teams in the league genuinely EXIST — we simply do not know
     # their rosters. Recording them is what makes `len(season.teams)` honest,
     # and that count is buyer-visible: it is the denominator in "8 of the other

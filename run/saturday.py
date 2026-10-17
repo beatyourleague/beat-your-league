@@ -64,7 +64,7 @@ PLANS_DIR = REPO_ROOT / "data" / "plans"
 # players.csv roster statuses that mean he cannot play this week, whatever the
 # injury report says: a player moved to injured reserve on Thursday simply
 # stops appearing on it.
-from engine.availability import ROSTER_OUT  # noqa: E402 — one definition, shared
+from engine.availability import PRACTICE_SQUAD, ROSTER_OUT  # noqa: E402 — one definition, shared
 # Below this share of still-to-play teams with ANY row in the week's report,
 # the report is not in yet. Measured on 2024: every team that played filed
 # every week but one (week 1, 31 of 32), so a real report clears this easily.
@@ -344,11 +344,14 @@ def state_for(player_id: str, *, starts: Mapping[str, datetime],
     if status in ROSTER_OUT:
         return Now("out", ROSTER_OUT[status], locked=locked, final=True,
                    kickoff=kickoff)
+    # The practice squad (method §15 C9): an option, ranked last, with the
+    # elevation check said — never a silent start (recheck ENG-3).
+    squad = status in PRACTICE_SQUAD
     if player_id in listed:
         designation, injury = listed[player_id]
         return Now(designation, _reason(designation, injury),
-                   locked=locked, final=final, kickoff=kickoff)
-    return Now(locked=locked, final=final, kickoff=kickoff)
+                   locked=locked, final=final, kickoff=kickoff, practice_squad=squad)
+    return Now(locked=locked, final=final, kickoff=kickoff, practice_squad=squad)
 
 
 def check_report_is_in(starts: Mapping[str, datetime], filed: set[str],

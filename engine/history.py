@@ -206,6 +206,11 @@ class Season:
     teams: dict[int, Team] = field(default_factory=dict)
     weeks: dict[int, dict[int, TeamWeek]] = field(default_factory=dict)
     transactions: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
+    # The players the positional prior is built from, when that is narrower
+    # than everyone rostered (engine.subscriber.build_season: the rosterable
+    # field). None — every league read from Sleeper, every backtest — means
+    # everyone on a roster, as it always has.
+    prior_pool: frozenset[str] | None = None
 
     @property
     def starting_slots(self) -> tuple[str, ...]:

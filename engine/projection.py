@@ -179,6 +179,23 @@ def probability_outscores(a: Projection, b: Projection) -> float:
     return min(1.0, max(0.0, a_wins / (1.0 - tie_mass)))
 
 
+def stored_confidence(confidence: float) -> float:
+    """The confidence as it is recorded (the ledger, every row) and printed —
+    rounded once, to three places. Applied by the subscriber report after the
+    pick is made; the frozen harnesses grade the raw number and never call it."""
+    return round(confidence, 3)
+
+
+def printed_percent(confidence: float) -> int:
+    """The whole percentage a reader sees for a STORED confidence — the same
+    formula as render.report._pct (pinned equal by test). The game plan
+    formatted the raw 0.5945 as 59% while the row, the closest call and the
+    ledger read the stored 0.595 as 60% (recheck ENG-6/RQ2-03), so every
+    printed percentage and the toss-up test read the stored value through
+    this one function."""
+    return max(0, min(100, round(confidence * 100)))
+
+
 def _normal_beats(mean_a: float, sd_a: float, mean_b: float, sd_b: float) -> float:
     spread = math.sqrt(sd_a ** 2 + sd_b ** 2)
     if spread <= 0:
@@ -243,6 +260,9 @@ class ProjectionModel:
         # player_id -> position, resolved once.
         self._position: dict[str, str] = {}
         self._prior_cache: dict[tuple[str, int], PositionPrior] = {}
+        # Who the positional prior is built from (Season.prior_pool); None is
+        # everyone rostered, which is every season but a subscriber's.
+        self._pool = getattr(season, "prior_pool", None)
         self._ingest(season)
 
     def _ingest(self, season: Season) -> None:
@@ -295,6 +315,8 @@ class ProjectionModel:
         appearances = 0
         for player_id, weeks in self._rostered.items():
             if self.position_of(player_id) != position:
+                continue
+            if self._pool is not None and player_id not in self._pool:
                 continue
             skip = self._skipped(player_id, before_week)
             opportunities += sum(1 for week in weeks
