@@ -41,7 +41,7 @@ PASS_PRICE = "$99"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
-TERMS_VERSION = "2026-10-15"
+TERMS_VERSION = "2026-10-17"
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "
@@ -226,9 +226,14 @@ def _terms_date() -> str:
 # its first email the day its claim is CONFIRMED from its own inbox — the run
 # that sends this welcome — by the same rules as a purchase (run/intake.py,
 # LP-I4, OPS-R1), so a seat has a "today" too.
-NEXT_TODAY = ("Your first report. This week's lineup if the week's games "
-              "haven't started, otherwise your roster report: the byes that "
-              "leave you short and last season under your scoring.")
+# "Week 2 or later" because run/intake._first_file sends a week's report only
+# when ``data.week > 1``; without it a Week-1 buyer was promised this week's
+# lineup and sent the roster report. The same condition league-pass.html and
+# the join seat note state (COPY:F5).
+NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
+              "and the week's games haven't started, otherwise your roster "
+              "report: the byes that leave you short and last season under "
+              "your scoring.")
 # "The odds on the close calls", never "every": a slot gets odds only when both
 # players are confirmed to play, and a bye-heavy week can have few (PE-11).
 NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "

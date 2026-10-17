@@ -254,11 +254,17 @@ def test_the_welcome_names_the_plan_the_purchase_date_and_the_terms(monkeypatch)
     # Stripe's `created`, as run/intake passes it: 2026-10-15 16:00 UTC.
     msg = welcome_message("fan@example.com", "season", "abc123def0", "2026",
                           purchased_at="1792080000")
+    # The terms' own date, read from the version consent is recorded against
+    # (render.welcome.TERMS_VERSION), so a change to the terms moves it here.
+    from datetime import date
+    from render.welcome import TERMS_VERSION
+    terms = date.fromisoformat(TERMS_VERSION)
     for doc in (msg.html, msg.text):
         assert "the season pass" in doc
         assert "Purchased October 15, 2026." in doc
         assert "https://example.com/terms.html" in doc
-        assert re.search(r"terms you agreed to \(last updated October 15, 2026\)", doc)
+        assert re.search(rf"terms you agreed to \(last updated {terms:%B} {terms.day}, "
+                         rf"{terms.year}\)", doc)
     monthly = _msg("monthly")
     assert "the monthly plan" in monthly.text
     pass_ = _msg("league_pass")

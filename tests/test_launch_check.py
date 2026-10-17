@@ -366,6 +366,34 @@ def test_a_seat_link_row_carries_its_token_and_the_links_settings() -> None:
                          set(ids), BASE)
 
 
+def test_a_report_update_link_must_post_the_settings_it_carried() -> None:
+    """FUNNEL F1 in the browser gate: every report now links the update page
+    with its subscription's s/n/t, and an update REPLACES the settings on file
+    with the posted ref's. The gate's only update flow opened a bare
+    ``?update=1``, which since the settings box arrived posted nothing (the
+    gate FAILED on the real tree, Oct 17 2026). Now both flows run — the
+    report link, whose posted ref must carry the link's settings exactly, and
+    the bare link with its box ticked."""
+    import json
+    from run.refs import encode_roster
+    modes = {mode: query for mode, _copy, query, _k, _p in lc.FLOWS}
+    query = modes["roster update (report link)"]
+    assert "s=" in query and "n=" in query and "t=" in query
+    assert modes["roster update (bare link)"] == "?update=1"
+    assert lc.FLOW_TICKS["roster update (bare link)"] == ["settings-ok"]
+    slots = ("QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF")
+    ids = tuple(f"00-00000{i:02d}" for i in range(10))
+    good = {"kind": "update_request", "email": lc.FLOW_EMAIL,
+            "ref": encode_roster("season", "half_ppr", slots, ids, 10)}
+    assert lc.audit_flow("update", "update_request", None, query,
+                         {"posted": [json.dumps(good)]}, set(ids), BASE) == []
+    for scoring, size, shape in (("ppr", 10, slots), ("half_ppr", 12, slots),
+                                 ("half_ppr", 10, slots[:7] + ("FLEX", "K", "DEF"))):
+        wrong = {**good, "ref": encode_roster("season", scoring, shape, ids, size)}
+        assert lc.audit_flow("update", "update_request", None, query,
+                             {"posted": [json.dumps(wrong)]}, set(ids), BASE), (scoring, size)
+
+
 def test_the_plan_switch_must_rewrite_the_button_and_the_terms() -> None:
     season = {"button": "Continue to checkout — $39", "terms": "renews once a year at $39"}
     monthly = {"button": "Continue to checkout — $14.99/mo", "terms": "Monthly is $14.99"}
@@ -617,3 +645,121 @@ def test_every_missing_secret_says_what_a_buyer_loses() -> None:
 
 def test_the_pass_welcome_carries_the_seat_link() -> None:
     assert lc.check_seat_link()[0].status == "PASS"
+
+
+# --------------------------------------------------------------------- #
+# Recheck (Oct 17 2026): the live sample's odds, the record, every email
+# --------------------------------------------------------------------- #
+
+_WEEK = {"season": "2026", "week": 6, "lands_on": "2026-10-20",
+         "built_at": "2026-10-14T12:00:00+00:00", "first_kickoff": "2026-10-16T00:15:00Z"}
+
+
+def test_a_live_sample_printing_unrecorded_odds_fails() -> None:
+    """G24 / R1 / BE2-D3, reproduced from the committed site/week.json of Oct
+    17 2026: 2 odds, no ``recorded``, built a day after Thursday's kickoff and
+    not saying so, with nothing on the record — and no launch-check gate read
+    either flag. Each half fails on its own; a page whose odds are on the
+    record, or that shows none, passes; a page rebuilt after kickoff passes
+    only when it says so."""
+    gate = lc.recorded_odds_gate
+    assert gate({**_WEEK, "odds": 2}).status == "FAIL"
+    assert "prints 2 %" in gate({**_WEEK, "odds": 2}).detail
+    assert gate({**_WEEK, "odds": 2, "recorded": True}).status == "PASS"
+    assert gate({**_WEEK, "odds": 0}).status == "PASS"
+    late = {**_WEEK, "odds": 0, "built_at": "2026-10-17T00:03:38+00:00"}
+    assert gate(late).status == "FAIL" and "does not say so" in gate(late).detail
+    assert gate({**late, "after_kickoff": True}).status == "PASS"
+    both = gate({**late, "odds": 3})
+    assert both.status == "FAIL" and "prints 3 %" in both.detail and "does not say" in both.detail
+
+
+def test_the_season_clock_check_carries_the_recorded_odds_gate(site) -> None:
+    import json
+    (site / "week.json").write_text(json.dumps({**_WEEK, "odds": 4}), encoding="utf-8")
+    assert _status(lc.check_week_json(), "only recorded odds") == "FAIL"
+    (site / "week.json").write_text(json.dumps({**_WEEK, "odds": 4, "recorded": True}),
+                                    encoding="utf-8")
+    assert _status(lc.check_week_json(), "only recorded odds") == "PASS"
+
+
+def test_an_empty_record_warns_once_odds_could_have_been_recorded(tmp_path, monkeypatch) -> None:
+    """G25, reproduced on Oct 17 2026 (Week 6): no typed-* store existed, so
+    not one published % was on the record — and nothing said so, because no
+    gate counted. The gate counts this season's calls as the grader reads
+    them; zero is a WARN from Week 2's report Tuesday on and a PASS before
+    it; an unreadable store is a FAIL; another season's store, or the retired
+    product's, never counts."""
+    import json
+    from dataclasses import asdict
+    from datetime import date
+    import render.live_sample as live
+    import run.solo as solo
+    from engine.ledger import LedgerCall, ledger_path
+    monkeypatch.setattr(solo, "current_season", lambda cache, today=None: "2026")
+    monkeypatch.setattr(live, "next_report_day", lambda cache, season, week: "2026-09-15")
+    week6, preseason = date(2026, 10, 17), date(2026, 9, 1)
+    [gate] = lc.check_record(tmp_path, week6)
+    assert gate.status == "WARN" and "0 call(s)" in gate.detail and "2026-09-15" in gate.detail
+    assert lc.check_record(tmp_path, preseason)[0].status == "PASS"
+    call = LedgerCall(call_id="c1", source="slot", league_id="typed-ppr-12-2026",
+                      season="2026", week=6, roster_id=1, slot="RB", pick_id="a",
+                      pick_name="A", over_id="b", over_name="B", confidence=0.61)
+    # Another season's store and a Sleeper-era store are not this record.
+    for store in ("typed-ppr-12-2025", "289646328504385536"):
+        path = ledger_path(tmp_path, store)
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(asdict(call)) + "\n", encoding="utf-8")
+    assert lc.check_record(tmp_path, week6)[0].status == "WARN"
+    path = ledger_path(tmp_path, "typed-ppr-12-sf-2026")
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(asdict(call)) + "\n", encoding="utf-8")
+    [gate] = lc.check_record(tmp_path, week6)
+    assert gate.status == "PASS" and "1 call(s)" in gate.detail, gate
+    path.write_text("not json\n", encoding="utf-8")
+    assert lc.check_record(tmp_path, week6)[0].status == "FAIL"
+
+
+def test_every_email_the_product_sends_is_in_the_samples(monkeypatch) -> None:
+    """S6/S7: the three notes a seat claim gets, the League Pass bought over a
+    season pass, and the launch announcement that restores a saved roster
+    were never built by the launch check — so neither the sender gate nor the
+    390px gate ever saw them. Each is built here as its runner builds it, and
+    each that is not a transactional reply carries the sender block and a way
+    out (a seat note's List-Unsubscribe is the seat stop route)."""
+    from render.report import seat_stop_href
+    from render.sender import sender_line
+    monkeypatch.setenv("SENDER_POSTAL_ADDRESS", lc.PROBE_ADDRESS)
+    samples = lc.other_email_samples("2026")
+    names = {name: (page, unsub) for name, page, unsub in samples}
+    for name in ("failed seat claim", "seat pass full", "seat confirmation",
+                 "welcome (League Pass over a season pass)", "launch announcement",
+                 "launch announcement (saved roster)", "roster confirmation"):
+        assert name in names, name
+    for name in ("failed seat claim", "seat pass full", "seat confirmation"):
+        assert names[name][1] == seat_stop_href(), name
+    assert "k=seat" in names["seat confirmation"][0]
+    assert "not two" in names["welcome (League Pass over a season pass)"][0]
+    assert "ref=" in names["launch announcement (saved roster)"][0]
+    assert "→" in names["roster confirmation"][0], "the confirmation sample shows no change"
+    assert lc.audit_senders(samples, sender_line() or "") == {"missing": [], "no_way_out": []}
+
+
+def test_a_non_report_email_wider_than_a_phone_fails(monkeypatch) -> None:
+    """S7, reproduced by breaking one: the width gate measured only reports,
+    so a seat note laid out at 640px passed it. Every other email is measured
+    now, and the one that overflows is named."""
+    _needs_browser()
+    import render.email as email
+    import render.live_sample as live
+    import render.seat_claim as seat_claim
+    narrow = ('<!doctype html><html><head><meta name="viewport" '
+              'content="width=device-width"></head><body><p>ok</p></body></html>')
+    wide = narrow.replace("<p>ok</p>", '<table width="640"><tr><td>wide</td></tr></table>')
+    monkeypatch.setattr(live, "build", lambda *a, **k: {"meta": {"season": "2026"}})
+    monkeypatch.setattr(email, "render_email", lambda report: narrow)
+    monkeypatch.setattr(lc, "battery_reports", lambda: ())
+    monkeypatch.setattr(seat_claim, "full_email", lambda site="": ("s", wide, "t"))
+    [gate] = lc.check_email_widths()
+    assert gate.status == "FAIL" and "seat pass full" in gate.detail, gate
+    assert "this week's sample" not in gate.detail

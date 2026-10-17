@@ -225,6 +225,20 @@ def test_the_report_says_which_roster_it_used() -> None:
     assert "as of Oct 3" in text_summary(last)
 
 
+def test_a_roster_from_another_season_says_its_year() -> None:
+    """LP2-D3, the report half, reproduced: a season pass renewed into 2026
+    keeps the roster from its 2025 purchase day, and its report said "This
+    report used your roster as of Aug 20." — read as five weeks ago, when it
+    was last season's roster. The year prints whenever it is not the
+    report's season, on every surface; a date in the season keeps none."""
+    renewed = _subscriber(plan="season", roster_as_of="2025-08-20")
+    assert renewed["meta"]["season"] == "2026"
+    for name, doc in _surfaces(renewed).items():
+        assert re.search(r"This report used your roster as of Aug 20, 2025\.", doc), name
+    assert rr.roster_as_of({"solo": True, "season": "2026",
+                            "roster_as_of": "2026-08-20"}).endswith("as of Aug 20.")
+
+
 # --------------------------------------------------------------------- #
 # BE-I5 / BE-I10 — telling two teams apart, on the buyer's clock
 # --------------------------------------------------------------------- #
@@ -549,6 +563,40 @@ def test_the_preview_line_describes_this_report() -> None:
     line = _preheader(render_email(gated))
     assert "call worth arguing" not in line and "Closest call" not in line
     assert line.startswith(report["checklist"][0]["action"].rstrip(".")), line
+
+
+def test_the_preview_line_says_what_the_closest_call_card_says() -> None:
+    """COPY:F4, reproduced on the published sample's shape: the card is
+    labelled "Closest call with odds" whenever it names a narrower decision
+    without odds (regret["closer"]), and the preview still said "Closest
+    call:"; and a toss-up — printed 52% or less, or the card's "either is
+    fine" — previewed as "start X over Y, 51%", the instruction the card and
+    the row decline to give. The preview takes the card's label and its
+    toss-up wording."""
+    report = _subscriber(plan="season")
+    base = dict(report["regret"])
+    assert "gate" not in base
+
+    def preview(**regret) -> str:
+        out = _as(report)
+        out["regret"] = {**base, **regret}
+        out["regret"] = {k: v for k, v in out["regret"].items() if v is not None}
+        return _preheader(render_email(out))
+
+    start, over = base["start_name"], base["over_name"]
+    plain = preview(confidence=0.64, closer=None, reason="")
+    assert plain.startswith(f"Closest call: start {start} over {over}, 64%."), plain
+    closer = preview(confidence=0.64, closer="Closer on points: A or B at RB, 9.9 vs 9.8 — "
+                                             "no odds, because B isn't confirmed.")
+    assert closer.startswith(f"Closest call with odds: start {start} over {over}, 64%."), closer
+    for tossup in (preview(confidence=0.52, closer=None, reason=""),
+                   preview(confidence=0.58, closer=None,
+                           reason="A projects 9.9 to B's 9.8. A toss-up: either is fine.")):
+        assert "either is fine" in tossup and "%" not in tossup, tossup
+        assert f"start {start} over" not in tossup, tossup
+        assert tossup.startswith(f"Closest call: {start} or {over}"), tossup
+    assert preview(confidence=0.53, closer=None, reason="").startswith(
+        f"Closest call: start {start} over {over}, 53%.")
 
 
 # --------------------------------------------------------------------- #

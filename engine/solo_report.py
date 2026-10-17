@@ -1527,6 +1527,9 @@ def _slot(pick, players: PlayerIndex, usage_lookup, *,
 # PRINTED percentage, so a row never says "53%" and "toss-up" together.
 TOSSUP_PERCENT = 52
 TOSSUP_POINTS = SWAP_WORTH_POINTS
+# What the closest-call card's reason says of a toss-up; the inbox preview
+# (render.email.preheader_for) reads it there rather than restating the test.
+TOSSUP_SENTENCE = "A toss-up: either is fine."
 
 
 def _confirmed(availability: WeekAvailability | None, player_id: str | None) -> bool:
@@ -1768,7 +1771,7 @@ def closest_call(picks: Sequence[SlotPick], players: PlayerIndex,
             reason += f" Last three: {start} {_three(mine)}; {over} {_three(theirs)}."
         if _even_pair(call, call.alternative_id,
                       round(call.alternative_projection.mean, 1), availability):
-            reason += " A toss-up: either is fine."
+            reason += f" {TOSSUP_SENTENCE}"
         regret["reason"] = reason
         # At the precision the page prints, like ``_decisions``: compared raw,
         # a 9.6-vs-9.6 call "lost" to another 9.6-vs-9.6 one, and the card

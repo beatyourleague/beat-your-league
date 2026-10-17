@@ -953,6 +953,34 @@ def test_a_request_changes_nothing_until_the_inbox_confirms_it(
     assert row.ref == NEW_REF and row.origin == slug_of(REF)
 
 
+def test_the_confirmation_shows_the_settings_the_change_applies(
+        tmp_path, stripe, directory, monkeypatch) -> None:
+    """FUNNEL F1 / COPY:F2, reproduced: an update REPLACES the scoring, size
+    and lineup on file with the ones the page posted (run/updates.
+    apply_updates), and the confirmation listed only the players — so a Full
+    PPR subscriber whose request carried Half PPR confirmed a re-scoring of
+    every later report without being shown it, and was never told the button
+    stops working after EXPIRY_DAYS. The email now prints every setting the
+    change applies, a moved one as old → new, on both halves."""
+    from run.updates import EXPIRY_DAYS
+    sends = _confirm_env(monkeypatch, tmp_path)
+    stripe["sessions"] = [_session(REF)]               # Full PPR on file
+    _updates(monkeypatch, _request(_ts()))              # NEW_REF is Half PPR
+    assert _run(tmp_path) == 0
+    [mail] = _confirms(sends)
+    import html as html_lib
+    want = "Settings: Full PPR → Half PPR · 12 teams · Standard lineup, no K or DEF"
+    assert want in mail.text
+    assert want.replace("Settings:", "Settings:</b>") in html_lib.unescape(mail.html)
+    limit = f"The button works for {EXPIRY_DAYS} days after the change was asked for."
+    assert limit in mail.text and limit in mail.html
+    # A request that keeps the settings shows them plainly, with no arrow.
+    from render.roster_update import settings_line
+    from run.refs import decode_roster
+    assert settings_line(decode_roster(REF), decode_roster(REF)) == \
+        "Full PPR · 12 teams · Standard lineup, no K or DEF"
+
+
 def test_a_strangers_request_never_kills_the_code_already_in_the_inbox(
         tmp_path, stripe, directory, monkeypatch) -> None:
     """Reproduced by review: the newest request per subscription overwrote the

@@ -416,12 +416,20 @@ Baltimore Ravens
     <div class="done" id="done">
       <b id="done-head">You're all set.</b>
       <ol>
+        <!-- A claim is a request until the claimed address confirms it
+             (OPS-R1, run/intake.py sweep_seats): the next hourly run mails
+             the button, so nothing has been emailed yet at submit
+             (FUNNEL F11's rule for updates, applied to seats). -->
         <li id="seat-note" style="display:none">There's nothing for you to pay — the
         seat comes out of your league's League Pass, and you get your <b>own</b>
-        report, built from the roster you just entered. Your first report lands
-        the day the seat is matched to the pass — this week's report if it's Week 2 or later and
-        the week's games haven't started, otherwise your roster report — then a new one every
-        Tuesday. If it can't be matched to a League Pass, we email you to say so.</li>
+        report, built from the roster you just entered. We'll email a button to
+        the address you entered, usually within the hour: press it and your seat
+        is set up within the hour. Nothing is set up until it's pressed, and the
+        button works for 7 days. Your first report lands the day you confirm —
+        this week's report if it's Week 2 or later and the week's games haven't
+        started, otherwise your roster report — then a new one every Tuesday. If
+        it can't be matched to a League Pass, or your league's seats are all
+        taken, we email you to say so.</li>
         <!-- What the intake actually does (run/updates.py validate_requests),
              never "we've emailed": nothing is mailed at submit, and nothing
              is mailed at all for an unchanged roster, an address with no
@@ -1275,9 +1283,11 @@ function submitSeat(email, ref) {
   }).then((response) => {
     if (!response.ok) throw new Error("rejected");
     // Claimed, not granted: the seat is honoured only if a pass really covers
-    // it, and that is checked on Tuesday, not here.
+    // it and the claimed address confirms it from its own inbox (OPS-R1) —
+    // the next hourly intake mails the button, so nothing is in the inbox
+    // yet, and the heading says what to do next rather than that it's done.
     $("form-email").style.display = "none";
-    $("done-head").textContent = "Your seat request is in.";
+    $("done-head").textContent = "Next: confirm your seat from your inbox.";
     $("done").style.display = "block";
   }).catch(() => {
     showError("err-email", "That didn't send — check your connection and try " +
@@ -1400,7 +1410,7 @@ function firstChipText() {
   if (!canStartToday()) return closedChipText();
   if (FIRST && FIRST.when === "before") return "This week's report today";
   if (FIRST && FIRST.when === "after") return "Weekly reports from " + FIRST.tuesday;
-  return SEAT_MODE ? "A report the day it's matched" : "A report the day you join";
+  return SEAT_MODE ? "A report the day it's confirmed" : "A report the day you join";
 }
 function setChips(list) {
   $("header-chips").replaceChildren();
@@ -1419,7 +1429,7 @@ function drawFirst() {
   const t = (words) => document.createTextNode(words);
   if (!canStartToday()) {
     // A seat has no checkout to wait for; it waits for seats to open.
-    const day = SEAT_MODE ? "the day your seat is matched" : "the day you join";
+    const day = SEAT_MODE ? "the day your seat is confirmed" : "the day you join";
     const opens = SEAT_MODE ? ", once seats open" : ", once checkout opens";
     side.replaceChildren(b("A report " + day), t(opens + " — then a new one every Tuesday morning"));
     note.replaceChildren(t("A report lands "), b(day), t(opens + "."));
@@ -1636,7 +1646,7 @@ if (TRY_MODE) {
     "Your league has a League Pass, so your seat is already paid for. Enter your " +
     "own roster and you get your own report — not a copy of anyone else's. " +
     "Nothing to pay.";
-  // A matched seat is sent its first report the day it is claimed, by the
+  // A matched seat is sent its first report the day it is confirmed, by the
   // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
   // promise before seats had a first email.
   setChips(["Seat already paid — League Pass", "Your own report", FIRST_CHIP]);

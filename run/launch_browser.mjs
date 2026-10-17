@@ -19,7 +19,7 @@
 //               {"kind": "perf", "path": ..., "width": 390, "runs": 3},
 //               {"kind": "flow", "path": "open/join/index.html?plan=monthly",
 //                "width": 390, "mode": "monthly", "roster": "...", "email": "...",
-//                "payer": "...", "planSwitch": true}]
+//                "payer": "...", "planSwitch": true, "tick": ["settings-ok"]}]
 // Prints one JSON array to stdout. No dependencies: Node's own WebSocket.
 
 import { spawn } from "node:child_process";
@@ -320,6 +320,11 @@ async function flowJob(port, job) {
     }
     await evaluate(s, `(() => {
       document.getElementById("email").value = ${JSON.stringify(job.email)};
+      // Boxes the mode asks a buyer to tick first (job.tick), as a buyer would.
+      for (const id of ${JSON.stringify(job.tick || [])}) {
+        const box = document.getElementById(id);
+        if (box && !box.checked) box.click();
+      }
       const field = document.getElementById("pass-field");
       const payer = document.getElementById("pass-email");
       if (payer && field && getComputedStyle(field).display !== "none") {

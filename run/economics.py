@@ -61,10 +61,17 @@ SUBSTACK_CUT = 0.10
 # number to sell with.
 RENEWAL_RATES = (0.30, 0.50, 0.70)    # share of 2026 buyers who are still paying in 2027
 BASE_CASE = {"season": 30, "league_pass": 2}   # the launch audit's base case for 2026
+# Selling is PLAN §5's own time budget, "~30–40 min/day in season (replies +
+# one post)" — taken at its middle. It was counted at the 20 minutes of the
+# replies alone, which put the base case at about $26 an hour against the
+# launch-readiness audit's $17 for the same season (G26): the hourly figure
+# the owner reads must be the one PLAN's own budget implies.
+SELLING_MIN_PER_DAY = 35
 OWNER_HOURS = {                       # what the season costs in the owner's time
     "setup left (LAUNCH steps 1–5)": 3.0,
     "Tuesday QA, refunds, replies (1 h a week)": 1.0 * 12,
-    "selling: replies and leagues (20 min a day)": 20 / 60 * 7 * 12,
+    f"selling: replies and one post ({SELLING_MIN_PER_DAY} min a day, PLAN §5)":
+        SELLING_MIN_PER_DAY / 60 * 7 * 12,
 }
 WEEKS_LEFT = 12                       # weeks 7–18, opening Oct 20
 HOURLY_NOTE = "owner time is unpaid; this is what it earns, not what it costs"
@@ -281,14 +288,41 @@ def doc_fee_mismatches(text: str, source: str) -> list[str]:
     return bad
 
 
+READINESS = REPO_ROOT / "reports" / "launch-readiness.md"
+FEE_DOCS = (REPO_ROOT / "PLAN.md", REPO_ROOT / "LAUNCH.md", READINESS)
+
+
 def docs_fee_mismatches(paths: tuple[Path, ...] | None = None) -> list[str]:
     out = []
-    for path in paths or (REPO_ROOT / "PLAN.md", REPO_ROOT / "LAUNCH.md"):
+    for path in paths or FEE_DOCS:
         try:
             out += doc_fee_mismatches(path.read_text(encoding="utf-8"), path.name)
         except OSError:
             out.append(f"{path.name}: unreadable")
     return out
+
+
+def base_case_figures() -> tuple[str, str, str]:
+    """The base case as reports/launch-readiness.md states it: the season's
+    net after fixed costs, the owner's hours, and what that earns an hour."""
+    net, hours = base_case_net(), owner_hours()
+    return (f"about ${net:,.0f}", f"about {hours:.0f} hours", f"about ${net / hours:.0f} an hour")
+
+
+def readiness_base_case_mismatches(path: Path | None = None) -> list[str]:
+    """Each base-case figure the model computes that launch-readiness.md does
+    not state (G26). The audit put the season at about 64 owner-hours and $17
+    an hour while this model counted 20 selling minutes a day and printed $26
+    — two documents the owner reads, two different answers to "is this worth
+    my time?". Read whitespace-normalised, so a hand-wrapped line still
+    counts."""
+    path = path or READINESS
+    try:
+        text = " ".join(path.read_text(encoding="utf-8").split())
+    except OSError:
+        return [f"{path.name}: unreadable"]
+    return [f"{path.name} does not state {figure!r}"
+            for figure in base_case_figures() if figure not in text]
 
 
 def summary_lines() -> list[tuple[str, str, str]]:
@@ -322,15 +356,17 @@ def summary_lines() -> list[tuple[str, str, str]]:
         stale = "| Stripe | 2.9% + 30¢ per charge |" in plan or "3.7%" in plan
     except OSError:
         stale = False
-    mismatched = docs_fee_mismatches()
+    mismatched = docs_fee_mismatches() + readiness_base_case_mismatches()
     rows.append(("PLAN.md's fee figure matches this model",
                  "WARN" if stale else "PASS",
                  "PLAN.md still assumes 3.7% — the real figure is about "
                  f"{fee / SEASON:.1%}" if stale else f"about {fee / SEASON:.1%}"))
-    rows.append(("Every fee and refund-cost figure in PLAN.md and LAUNCH.md matches this model",
+    rows.append(("Every fee, refund-cost and base-case figure in PLAN.md, LAUNCH.md and "
+                 "launch-readiness.md matches this model",
                  "FAIL" if mismatched else "PASS",
                  "; ".join(mismatched[:3]) if mismatched else
-                 f"within ±${TOLERANCE:.2f} of run/economics.py"))
+                 f"fees within ±${TOLERANCE:.2f} of run/economics.py; base case "
+                 + ", ".join(base_case_figures())))
     return rows
 
 

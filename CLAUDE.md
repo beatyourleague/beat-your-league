@@ -1022,8 +1022,8 @@ asking for a reply. Quotes from those replies may be used only under `content/te
 shared ledger remains the public record; it is just never presented as someone's own.
 
 **Roster updates, confirmed by email (Sep 29 2026) — the safe replacement for the pulled token
-link.** Every report's footer carries `SITE/join/?update=1` (`run/updates.public_update_url`,
-rendered only when SITE_URL, UPDATE_SECRET and FORM_ENDPOINT all exist; otherwise the reply
+link.** Every report's footer carries `SITE/join/?update=1` — with the subscription's
+`&s=&n=&t=` since Oct 17 (FUNNEL F1, below) — (`run/updates.public_update_url`, rendered only when SITE_URL, UPDATE_SECRET and FORM_ENDPOINT all exist; otherwise the reply
 route). It GRANTS NOTHING, so the forward line beside it is safe. The page posts
 `{kind:"update_request", email, ref}`; the intake (`validate_requests`) mails a confirmation ONLY
 to the address on the subscription — a stranger's address gets nothing, so the page can't reveal
@@ -1189,7 +1189,9 @@ code-side item was built, merged and pinned. Rules it left:
   empty if/then gives the true reason by name.
 - **The practice squad is not confirmed to play** (method §15 C9; live week, report layer only):
   the seat stays, the odds go. No buyer surface says "confirmed to play" — the explainer and
-  every selling page say what the gate checks ("both players are healthy and playing").
+  every selling page say what the gate checks ("both players are playing, off the injury
+  report and have enough games on record (not on team defenses)" — COPY:F7 decided "healthy
+  and playing" overclaimed: defenses never get odds and pairs short of their record get none).
 - **The closest call is the closest call WITH odds**, labelled so; a narrower decision without
   odds is named. A toss-up (printed 52% or less, or under 0.5 points) reads "either is fine"
   and leaves the game plan. Rows carry facts, never new numbers: season per-game and last 3,
@@ -1215,7 +1217,8 @@ code-side item was built, merged and pinned. Rules it left:
   that matches no pass is told so once by email; a re-claim is a roster change, never a second
   seat; the payer's report counts claimed seats (count only); `meta["plan"]` is
   season|monthly|pass|league_pass and drives the season-end and forward lines; seats re-claim
-  each season with their new roster; a seat's first email arrives the day it's claimed.
+  each season with their new roster; a seat's first email arrives the day its claim is
+  confirmed (OPS-R1, below).
 - **Channel tags reach the purchase** (`_via-<tag>` on the ref, `byl_via` on the Customer,
   `make stats` counts paid signups by channel); a closed checkout keeps the roster with the
   waitlist row and the launch email restores it (`join/?ref=`).
@@ -1232,6 +1235,53 @@ code-side item was built, merged and pinned. Rules it left:
   details, refunds and disputes, free-tier capacity, GST/HST) that SKIP or OWNER without
   credentials. Checkout open while the join page has no FORM_ENDPOINT is a FAIL: the Worker
   comes first. tests/conftest.py guards data/processed/ledger like data/registry.
+- **Recheck engine (Oct 17 2026):** one cover ranking for Tuesday and Saturday
+  (`engine.final_check.rank_covers`); a plan names whoever kicks off first; Saturday names why
+  nobody covers (already a fallback / game was Thursday / questionable too), never a blanket
+  out-or-on-bye; the positional prior is the rosterable field only (`Season.prior_pool`) so a
+  published % is the same for everyone in a store (240-roster battery: in-field identical, 13
+  off-field rosters moved to the roster-independent value; proving w4-5 111/111 identical);
+  confidence rounded once to 3 dp before any surface reads it; week 1 orders defenses by last
+  season's record; team name = roster lead by last season (`meta.team_lead`); late-news and
+  Saturday questionable-cover checks use each player's own game day.
+- **A League Pass seat is confirmed by its own inbox (OPS-R1).** A claim through the seat link
+  is a request: the claimed address is mailed a 24-hex code (`run.updates.seat_code`) to
+  `join/confirm.html?c=…&k=seat`, and becomes a seat only when it comes back within 7 days; a
+  re-claim with a new roster is a roster change under the same confirmation. Confirmed seats
+  live in `data/registry/seat-log.jsonl`, so a Worker row expiring never moves a seat
+  (OPS-R6); claims from before the season start are retired (LP2-D3). RULE E2: a seat is
+  entitled through its pass SUBSCRIPTION (`pass_id`), never the payer's address, so an email
+  change keeps seats and a refunded pass ends them (OPS-R4/R5). Seat links bind the pass
+  (LP2-D4); a pass carries as many seats as its league has teams, in confirmation order
+  (OPS-R7) — stated in terms §1, so `TERMS_VERSION` moved to 2026-10-17 with it;
+  `UPDATE_SECRET_PREVIOUS` keeps old seat links matching after a rotation, and seat links
+  matching no pass exit 1 (OPS-R10). One address, one roster, one report: a second purchase of
+  the same roster folds into one row (two passes never), and its welcome says the other may
+  still bill — nothing is cancelled or refunded (LP2-D1). The live sample records once per
+  week; a later build keeps the page, and a `--force` rebuild prints only recorded odds on
+  games not yet started and says when it was built (OPS-R3/R11). The confirm page says
+  "Received", never "Confirmed", for a seat as for a roster (COPY:F2): a code may have expired
+  or the pass may be full, and only the intake knows.
+- **An update link carries the settings it will replace (FUNNEL F1).** Every report links
+  `SITE/join/?update=1&s=<scoring>&n=<size>&t=<lineup code>` (`run.updates.public_update_url`
+  with the subscription's roster, one writer shared with the seat link,
+  `run.updates.settings_params`): an update REPLACES the scoring, size and lineup on file, and
+  the bare link opened on the page's defaults. With all three the page shows them and needs no
+  confirmation box. The confirmation email prints the settings the change applies, a moved one
+  as old → new, and that the button works for `EXPIRY_DAYS`. A roster dated outside the
+  report's season prints its year ("as of Aug 20, 2025"). The inbox preview takes the closest
+  call's own label ("Closest call with odds" when the card names a narrower decision) and says
+  "either is fine" for a toss-up, never "start X over Y, 51%" (COPY:F4).
+- **The launch check counts the record instead of assuming it (G24/G25).** "This week's sample
+  prints only recorded odds" FAILs when `site/week.json` shows odds not `recorded`, or a build
+  after the week's first kickoff that is not marked `after_kickoff`; "The public record holds
+  this season's calls" counts this season's `typed-*` calls and WARNs at zero once Week 2's
+  report Tuesday has passed (it did, all through Week 6 of 2026). Every non-report email — each
+  welcome, the League Pass bought over a season pass, the three seat notes, the launch
+  announcement with and without a saved roster, the roster confirmation at its longest — is
+  built for the sender audit AND measured at 390px. `run/economics.py` counts selling at PLAN
+  §5's ~35 min a day (about 64 owner-hours, about $17 an hour, matching
+  `reports/launch-readiness.md`), and the fee gate fails when that report's base case drifts.
 
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.

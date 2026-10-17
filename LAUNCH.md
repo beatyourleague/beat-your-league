@@ -206,6 +206,9 @@ nothing: every row is checked before it reaches the subscriber list.
    ```bash
    openssl rand -hex 32
    ```
+   Set it once and keep it. If you ever change it, put the OLD value in a GitHub secret
+   `UPDATE_SECRET_PREVIOUS` (comma-separate several) for the rest of the season: seat links
+   already shared were signed with it. Seats already confirmed don't depend on it.
 5. GitHub secrets: `FORM_ENDPOINT` = the Worker URL, `FORM_API_KEY` = step 3's value,
    `UPDATE_SECRET` = step 4's value. (`SITE_URL` from step 3 builds the seat links.)
 6. **Your own domain (5 min):** Worker → **Settings → Domains & Routes → Add → Custom
@@ -464,10 +467,11 @@ three leagues stops at one. *Recommend:* not before the first ten buyers; then a
 extra team, same renewal date" add-on on one checkout (one payment, several rosters). The FAQ
 already says each team is its own subscription, which stays true until then.
 
-**A seat cap per League Pass.** One $99 pass honours unlimited seats, so a payer's address
-leaked from a group chat is a free-report generator. *Recommend:* 16 seats, first claimed
-wins, stated on the League Pass page and in the terms; claims past 16 reported to the payer as
-a count, never names.
+**A seat cap per League Pass — built (Oct 17 2026).** One $99 pass honoured unlimited seats,
+so a payer's address leaked from a group chat was a free-report generator. Built: one seat
+per team in the payer's league (`run/intake.PassInfo.seat_cap`), the first confirmed first —
+a claim counts only once its own inbox confirms it — and a claim past the cap is told so by
+email. Stated on the League Pass page and in the terms (§1, dated 17 October 2026).
 
 **The League Pass refund window.** It closes when the payer's second report's week kicks off,
 but seats start the Tuesday after they claim — leaguemates may have seen one report or none

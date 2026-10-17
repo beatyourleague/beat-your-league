@@ -232,6 +232,35 @@ def test_no_report_ever_carries_a_roster_write_credential(
         "the forward line went with it; only the credential should have"
 
 
+def test_the_update_link_carries_the_subscriptions_own_settings(tmp_path,
+                                                                 monkeypatch) -> None:
+    """FUNNEL F1, the report half. The join page's update mode posts the
+    scoring, size and lineup on screen, and run/updates.apply_updates REPLACES
+    the subscription's with them. The report's link was a bare
+    ``join/?update=1``, so a half-PPR ten-team subscriber landed on Full PPR,
+    12 teams, standard lineup and had to notice and re-pick all three (or tick
+    that the defaults were theirs) — the page could only read settings a link
+    carried. Reproduced: run_subscriber put ``.../join/?update=1`` with no
+    s/n/t into every surface. The link now carries the subscription's own
+    settings, in the seat link's format, on all three surfaces."""
+    import dataclasses
+    template = Path("rival-report-template.html").read_text(encoding="utf-8")
+    monkeypatch.setenv("SITE_URL", "https://x.test")
+    monkeypatch.setenv("UPDATE_SECRET", "s3")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    subscriber = dataclasses.replace(_subscriber(origin="abc123def0"),
+                                     scoring="half_ppr", league_size=10)
+    result = tuesday.run_subscriber(subscriber, _week_data(tmp_path), template,
+                                    out_dir=tmp_path / "out",
+                                    processed_dir=tmp_path / "processed")
+    assert result.ok, result.detail
+    link = "https://x.test/join/?update=1&s=half_ppr&n=10&t=nokd"
+    assert link in result.message.text
+    for name, body in (("email html", result.message.html),
+                       ("archived html", result.html_path.read_text(encoding="utf-8"))):
+        assert link.replace("&", "&amp;") in body, f"{name} lost the settings"
+
+
 def _ledger_rows(processed: Path) -> list[dict]:
     return [json.loads(line) for path in sorted(processed.rglob("calls.jsonl"))
             for line in path.read_text(encoding="utf-8").splitlines()]

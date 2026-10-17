@@ -1008,7 +1008,21 @@ def preheader_for(report: Mapping[str, Any]) -> str:
     regret = report.get("regret") or {}
     if "gate" not in regret and regret.get("start_name") and \
             regret.get("over_name") and regret.get("confidence") is not None:
-        return (f"Closest call: start {regret['start_name']} over "
+        # The card's own label (COPY:F4): when it names a narrower decision
+        # without odds (``closer``), "Closest call" in the preview was false
+        # of the very card it previews.
+        label = "Closest call with odds" if regret.get("closer") else "Closest call"
+        # A toss-up reads "either is fine" on the card and the row; the
+        # preview said "start X over Y, 51%" — an instruction the report
+        # itself declines to give.
+        from engine.solo_report import TOSSUP_PERCENT, TOSSUP_SENTENCE
+        if (_pct(regret["confidence"]) <= TOSSUP_PERCENT
+                or TOSSUP_SENTENCE in str(regret.get("reason") or "")):
+            where = f" at {SLOT_DISPLAY.get(regret['slot'], regret['slot'])}" \
+                if regret.get("slot") else ""
+            return (f"{label}: {regret['start_name']} or {regret['over_name']}"
+                    f"{where}, either is fine. Your whole lineup is inside.")
+        return (f"{label}: start {regret['start_name']} over "
                 f"{regret['over_name']}, {_pct(regret['confidence'])}%. "
                 f"Your whole lineup is inside.")
     first = next((item.get("action") for item in report.get("checklist") or []

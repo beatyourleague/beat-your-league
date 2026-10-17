@@ -98,6 +98,34 @@ def test_a_stale_refund_cost_in_a_document_is_caught() -> None:
 
 def test_the_real_documents_quote_the_model() -> None:
     assert econ.docs_fee_mismatches() == []
+    assert econ.READINESS in econ.FEE_DOCS
+    assert econ.readiness_base_case_mismatches() == []
+
+
+def test_selling_time_is_plans_own_budget_and_the_audit_agrees(tmp_path, monkeypatch) -> None:
+    """G26, reproduced: the model counted selling at 20 minutes a day (the
+    replies alone), about 43 owner-hours and "about $26 an hour", while
+    PLAN §5 budgets ~30–40 minutes a day in season and the launch-readiness
+    audit put the same season at about 64 hours and $17 an hour — two
+    documents the owner reads giving two answers to "is this worth my
+    time?". The model takes PLAN's budget, and the launch check fails when
+    the audit's base case stops matching it."""
+    assert econ.SELLING_MIN_PER_DAY == 35
+    assert econ.owner_hours() == 64.0
+    assert econ.base_case_figures() == ("about $1,114", "about 64 hours", "about $17 an hour")
+    stale = tmp_path / "launch-readiness.md"
+    stale.write_text("about $1,114 after fixed costs; about 43 hours, so about $26 an hour",
+                     encoding="utf-8")
+    missing = econ.readiness_base_case_mismatches(stale)
+    assert len(missing) == 2 and "about 64 hours" in missing[0], missing
+    # And the launch check's gate goes red on it.
+    monkeypatch.setattr(econ, "READINESS", stale)
+    [row] = [r for r in econ.summary_lines() if "base-case" in r[0]]
+    assert row[1] == "FAIL" and "about 64 hours" in row[2], row
+    wrapped = tmp_path / "wrapped.md"
+    wrapped.write_text("about $1,114 after costs. Owner time: about\n64 hours, so about $17\n"
+                       "an hour.", encoding="utf-8")
+    assert econ.readiness_base_case_mismatches(wrapped) == []
 
 
 def test_the_usd_payout_saving_is_a_warning_until_decided(monkeypatch) -> None:
