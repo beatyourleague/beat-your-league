@@ -153,6 +153,15 @@ def test_a_thin_week_says_why_in_facts_the_build_computed() -> None:
     assert shown.index("THIS WEEK'S REPORT") < shown.index("Why this week is thin")
     assert "De&#x27;Von" in shown, "the line is escaped like every other value"
     assert live.with_thin_week(page, None) == page
+    # The chrome the page renders today (render/report.py): the banner is the
+    # first notice inside <main>. The anchor once matched only the old markup,
+    # so the line fell to the top of the report, outside every landmark (axe
+    # "region", found by the launch check's accessibility gate, Oct 16 2026).
+    page = ('<div class="report"><header>…</header><main id="main"><div class="notice">'
+            "<b>THIS WEEK'S REPORT</b> — Week 6</div><section>…</section></main></div>")
+    shown = live.with_thin_week(page, line)
+    main = shown.split('<main id="main">')[1]
+    assert main.index("THIS WEEK'S REPORT") < main.index("Why this week is thin")
 
 
 def test_the_share_card_names_the_week(tmp_path, monkeypatch, week) -> None:

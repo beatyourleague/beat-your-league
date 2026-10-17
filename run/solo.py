@@ -887,6 +887,9 @@ SETTING_GRADES = {
     ("league size", "12"): "B", ("league size", "14"): "B",
     ("lineup shape", "standard"): "B", ("lineup shape", "superflex"): "B",
     ("lineup shape", "no K or DEF"): "B",
+    # reports/lineup-shapes-backtest.md (Oct 16 2026), method frozen at a199a01.
+    ("lineup shape", "two FLEX"): "B", ("lineup shape", "two FLEX, no K or DEF"): "B",
+    ("lineup shape", "three WR"): "B", ("lineup shape", "three WR, no K or DEF"): "B",
     ("weeks", "4-16"): "B", ("weeks", "17-18"): "B",
 }
 
@@ -1020,6 +1023,32 @@ def shape_graded(slots: Sequence[str]) -> bool:
     return graded_slots(slots)
 
 
+# reports/lineup-shapes-method.md, decided by its one run (Oct 16 2026,
+# reports/lineup-shapes-backtest.md): two FLEX and three WR graded B in both
+# arms (with K and DEF, and with neither), on the model as it ships in weeks
+# 4-16 — context arm AV with the anchor and CONTEXT_B. So their odds print
+# when that model runs. When a week's context input can't be read, the report
+# falls back to the model before it (above), which those arms never measured;
+# the standard and superflex offenses were graded on that model too
+# (reports/setups-method.md, reports/anchor-method.md), the new ones were not.
+MODEL_FALLBACK_BASES = frozenset({"std", "sf"})
+
+
+def graded_configuration(spec: "RosterSpec", week: int, seeded: bool,
+                         contextual: bool) -> tuple[bool, str | None]:
+    """(may this report print odds, the reason it may not). The lineup must be
+    graded, and in weeks 4-16 the model it runs must be the one its arm
+    measured — removes only, never adds a number."""
+    from engine.solo_report import SHAPE_INPUT_GATE
+    from engine.subscriber import lineup_class
+    if not shape_graded(spec.slots):
+        return False, None
+    if (week in CONTEXT_WEEKS and not seeded and not contextual
+            and lineup_class(spec.slots) not in MODEL_FALLBACK_BASES):
+        return False, SHAPE_INPUT_GATE
+    return True, None
+
+
 def seeded_scope(spec: RosterSpec, league_size: int, week: int) -> bool:
     """May this report use the prior-season seed? Every clause is the frozen
     method's, and the model's own SEEDED_WEEKS restriction backstops the week
@@ -1076,6 +1105,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     contextual = (data.context is not None and not seeded
                   and data.week in CONTEXT_WEEKS)
     anchor = contextual or anchored(spec, league_size, data.week, seeded)
+    odds_graded, odds_gate = graded_configuration(spec, data.week, seeded,
+                                                  contextual)
     if seeded or anchor:
         from engine.nflverse_backtest import prior_self_observations
         model = ProjectionModel(season, data.players,
@@ -1129,7 +1160,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                live_teams=_live_teams(spec, data),
                                live_out=_live_out(spec, data),
                                unconfirmed=_unconfirmed(spec, data),
-                               shape_graded=shape_graded(spec.slots),
+                               shape_graded=odds_graded,
+                               shape_gate=odds_gate,
                                injury_report=({"week": data.week - 1,
                                                "listed": getattr(data, "listed", {})}
                                               if data.week > 1 else None))

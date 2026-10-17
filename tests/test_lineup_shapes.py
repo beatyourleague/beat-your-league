@@ -41,8 +41,10 @@ def test_the_graded_shapes_are_the_offenses_the_setups_run_measured() -> None:
     the two disagreed about "standard, no kicker"."""
     import engine.setups_backtest as setups
     from engine.nflverse_backtest import TEMPLATE_T1
-    assert GRADED_SHAPES == {code for code, shape in LINEUP_SHAPES.items()
-                             if shape.base in ("std", "sf")}
+    # Two FLEX and three WR joined after their arms graded B (method frozen at
+    # a199a01, reports/lineup-shapes-backtest.md): every offered shape now.
+    assert GRADED_SHAPES == set(LINEUP_SHAPES)
+    assert not graded_shape(TWO_QB) and not graded_shape(TWO_QB[:-2])
     # The three measured templates, letter for letter, are among them.
     measured = {"std": tuple(TEMPLATE_T1), "sf": setups.TEMPLATE_SF,
                 "nokd": setups.TEMPLATE_NKD}
@@ -79,6 +81,11 @@ def test_every_base_with_and_without_k_and_def_is_one_shape() -> None:
 # the withholding, on a report in hand
 # --------------------------------------------------------------------- #
 
+# Since the Oct 16 2026 run every lineup the page offers is graded, so the
+# withholding is exercised on one it doesn't: two quarterback slots.
+TWO_QB = ("QB", "QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF")
+
+
 def _report() -> dict:
     return {
         "meta": {"league_id": "typed-ppr-12-2026", "season": "2026", "week": 6,
@@ -106,7 +113,7 @@ def test_an_ungraded_shape_prints_no_number_and_says_why() -> None:
     from engine.ledger import extract_published_calls
     report = _report()
     assert extract_published_calls(copy.deepcopy(report)), "fixture must publish a call"
-    out = withhold_ungraded_odds(report, LINEUP_SHAPES["flex2"].slots)
+    out = withhold_ungraded_odds(report, TWO_QB)
     assert [row["confidence"] for row in out["lineup"]] == [None, None]
     assert out["lineup"][0]["confidence_gate"] == UNGRADED_SHAPE_GATE
     # Other reasons stay true; the projection and the seat never move.
@@ -116,7 +123,7 @@ def test_an_ungraded_shape_prints_no_number_and_says_why() -> None:
     assert out["regret"] == {"gate": f"no coin-flip call this week — {UNGRADED_SHAPE_GATE}"}
     assert "Week 4" not in out["checklist"][0]["action"]
     assert "once this lineup shape is graded" in out["checklist"][0]["action"]
-    assert out["meta"]["ungraded_shape"] == "Two FLEX"
+    assert out["meta"]["ungraded_shape"] == "this lineup"
     # So the public record gets nothing it would have to grade.
     assert extract_published_calls(out) == []
 
@@ -139,7 +146,7 @@ def test_the_game_plan_keeps_its_decision_and_loses_its_number() -> None:
         {"action": "Bench Amon-Ra St. Brown — he can't play this week"},
     ]
     before = copy.deepcopy(report["checklist"])
-    out = withhold_ungraded_odds(report, LINEUP_SHAPES["flex2"].slots)
+    out = withhold_ungraded_odds(report, TWO_QB)
     actions = [item["action"] for item in out["checklist"]]
     assert actions == ["Bench Saquon Barkley — Rome Odunze starts at FLEX",
                        "Bench Lamar Jackson — Josh Allen starts at SUPER_FLEX",
@@ -196,35 +203,40 @@ def _roster(data):
 
 
 def _build(data, code):
+    return _build_slots(data, LINEUP_SHAPES[code].slots)
+
+
+def _build_slots(data, slots):
     from run.solo import report_for
     projections: dict[str, float] = {}
-    spec = RosterSpec(_roster(data), LINEUP_SHAPES[code].slots, "ppr")
+    spec = RosterSpec(_roster(data), tuple(slots), "ppr")
     return report_for(spec, data, 12, projections_out=projections), projections
 
 
 def test_report_for_withholds_every_number_in_an_ungraded_shape(week6) -> None:
     """End to end through run/solo.report_for. The standard lineup publishes
     on this roster (the control: delete the withholding's graded check and
-    this half fails); the two-FLEX lineup carries every row, projection and
-    plan, and no number anywhere — not on a row, not as the closest call,
-    not on the ledger."""
+    this half fails); a lineup no arm graded (two QBs, with and without K and
+    DEF) carries every row, projection and plan, and no number anywhere —
+    not on a row, not as the closest call, not on the ledger."""
     from engine.ledger import extract_published_calls
     std, _ = _build(week6, "std")
     assert any(row["confidence"] is not None for row in std["lineup"]), \
         "the control lost its odds: this test no longer proves anything"
     import engine.subscriber as subscriber
-    for code in ("flex2", "wr3", "wr3-nod", "flex2-nokd"):
+    for slots in (TWO_QB, TWO_QB[:-2]):
+        code = " ".join(slots)
         # The rows this shape WOULD publish if it were graded: those, and only
         # those, must carry the shape as their reason. (Which rows those are
         # moves with the week's injury news; the rule doesn't.)
         real = subscriber.graded_slots
         subscriber.graded_slots = lambda slots: True
         try:
-            would, _ = _build(week6, code)
+            would, _ = _build_slots(week6, slots)
         finally:
             subscriber.graded_slots = real
-        report, projections = _build(week6, code)
-        assert len(report["lineup"]) == len(LINEUP_SHAPES[code].slots), code
+        report, projections = _build_slots(week6, slots)
+        assert len(report["lineup"]) == len(slots), code
         assert all(row["confidence"] is None for row in report["lineup"]), code
         for was, now in zip(would["lineup"], report["lineup"]):
             if was["confidence"] is not None:
@@ -234,7 +246,7 @@ def test_report_for_withholds_every_number_in_an_ungraded_shape(week6) -> None:
         assert any(row["projected"] is not None for row in report["lineup"]), code
         assert projections, code
         assert report["checklist"], code
-        assert [row["slot"] for row in report["lineup"]] == list(LINEUP_SHAPES[code].slots)
+        assert [row["slot"] for row in report["lineup"]] == list(slots)
         # Nowhere in what the renderers read — row, plan, closest call.
         assert not re.search(r"\d%", json.dumps(report)), code
 
@@ -264,13 +276,13 @@ def test_the_shape_arms_are_two_per_ungraded_offense() -> None:
     with a K and a DEF and the shape with neither — and nothing else, so the
     graded standard and superflex offenses are never re-run under a new name."""
     import engine.shapes_backtest as shapes
-    from engine.subscriber import graded_slots
+    assert shapes.GRADED_AT_FREEZE == {"std", "sf"}
     assert [arm.key for arm in shapes.SHAPE_ARMS] == ["flex2", "flex2-nokd",
                                                       "wr3", "wr3-nokd"]
     for arm in shapes.SHAPE_ARMS:
         shape = LINEUP_SHAPES[arm.key]
         assert arm.template == shape.slots and arm.base == shape.base
-        assert not graded_slots(arm.template)
+        assert shape.base not in shapes.GRADED_AT_FREEZE
         assert shape.kicker == shape.defense
 
 
@@ -375,3 +387,28 @@ def test_a_built_season_records_into_its_offenses_store(week6) -> None:
                                      week6.season, week6.week, league_size=12)
     assert seasons["std"].league_id == seasons["std-nok"].league_id
     assert seasons["std"].league_id != seasons["sf"].league_id
+
+
+def test_a_new_offense_prints_only_on_the_model_its_arms_measured() -> None:
+    """reports/lineup-shapes-method.md §8: two FLEX and three WR were graded on
+    the model as it ships in weeks 4-16 (context arm AV, anchor, CONTEXT_B).
+    A week whose context input can't be read falls back to the model before
+    it, which those arms never measured — that week their odds are held, with
+    the true reason (not "not graded"). Standard and superflex were graded on
+    the fallback model too, so they are untouched; weeks 17-18 never run the
+    context model for any lineup, so nothing changes there either."""
+    from engine.solo_report import SHAPE_INPUT_GATE
+    from render.report import row_label, short_gate
+    from run.solo import graded_configuration
+    ids = tuple(f"00-{n:07d}" for n in range(1, 16))
+    flex2 = RosterSpec(ids, LINEUP_SHAPES["flex2"].slots, "ppr")
+    std = RosterSpec(ids, LINEUP_SHAPES["std-nok"].slots, "ppr")
+    two_qb = RosterSpec(ids, TWO_QB, "ppr")
+    assert graded_configuration(flex2, 6, False, contextual=True) == (True, None)
+    assert graded_configuration(flex2, 6, False, contextual=False) == (False, SHAPE_INPUT_GATE)
+    assert graded_configuration(flex2, 17, False, contextual=False) == (True, None)
+    assert graded_configuration(std, 6, False, contextual=False) == (True, None)
+    assert graded_configuration(two_qb, 6, False, contextual=True) == (False, None)
+    slot = {"slot": "FLEX", "confidence_gate": SHAPE_INPUT_GATE, "status": "active"}
+    assert row_label(slot) == "projection only"
+    assert "graded" not in short_gate(SHAPE_INPUT_GATE, "FLEX")

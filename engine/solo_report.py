@@ -145,6 +145,7 @@ def build_solo_report(
     live_out: Mapping[str, str] | None = None,
     unconfirmed: Mapping[str, str] | None = None,
     shape_graded: bool = True,
+    shape_gate: str | None = None,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data.
 
@@ -214,7 +215,7 @@ def build_solo_report(
     unconfirmed = dict(unconfirmed or {})
     picks = hold_unconfirmed(picks, unconfirmed, players)
     if not shape_graded:
-        picks = hold_ungraded_shape(picks)
+        picks = hold_ungraded_shape(picks, shape_gate or SHAPE_GATE)
     my_range = _team_range(picks)
 
     # Every rostered player accounted for. Week 1 has no projections, so the
@@ -550,16 +551,21 @@ def hold_unconfirmed(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
 # ungraded shape is one nothing has checked. Projection only until an arm
 # grades it — the shape, not the player, is the reason.
 SHAPE_GATE = "odds once this lineup shape is graded"
+# A graded shape whose week fell back to a model its arm never measured
+# (run.solo.MODEL_FALLBACK_BASES): the shape IS graded, so "not graded yet"
+# would be false — the reason is the missing input.
+SHAPE_INPUT_GATE = "held: an input this lineup's odds need is missing this week"
 
 
-def hold_ungraded_shape(picks: Sequence[SlotPick]) -> list[SlotPick]:
+def hold_ungraded_shape(picks: Sequence[SlotPick],
+                        gate: str = SHAPE_GATE) -> list[SlotPick]:
     """Every pick keeps its seat and projection and loses its odds. Removes
     only — like ``hold_unconfirmed`` — so it needs no arm of its own."""
     for pick in picks:
         if pick.confidence is None:
             continue
         pick.confidence = None
-        pick.confidence_gate = SHAPE_GATE
+        pick.confidence_gate = gate
         # The seeded disclosure travels with a number, and the number is gone.
         pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
     return list(picks)

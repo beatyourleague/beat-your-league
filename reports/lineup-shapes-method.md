@@ -120,4 +120,12 @@ It has no option to run a subset of the arms.
 
 ## 8. CORRECTIONS — appended, never edited into the text above
 
-*(none)*
+**Oct 16 2026, after the run (no arm, setting or decision changed).** The runner derived its
+arms from the offenses graded *at run time*. Once the run's decision was recorded in code
+(both offenses graded B, so both added to `GRADED_BASES`), that derivation would find nothing
+left to grade and `python -m engine.shapes_backtest` could no longer reproduce the run. The
+derivation now reads the graded set as it stood at the freeze (`GRADED_AT_FREEZE` = standard and
+superflex), which yields exactly the four arms that ran. Also recorded: when a week's context
+input can't be read, the product falls back to the model before it, which these arms never
+measured; in that week the two new offenses print no odds (`run.solo.MODEL_FALLBACK_BASES`) —
+a rule that only withholds.

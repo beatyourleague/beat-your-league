@@ -455,7 +455,7 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
-<script src="roster.js?v=652b5d6132"></script>
+<script src="roster.js?v=13d8f098e2"></script>
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
@@ -1143,11 +1143,11 @@ $("form-email").addEventListener("submit", (event) => {
     return;
   }
   if (WANTS_PASS) {
-    showSeatLink();
     // The pass thank-you page prefills its share line with the address that
     // paid (thanks.html PAID_EMAIL_KEY, panel review LP-I9): this tab only,
     // read once and deleted there, never a cookie and never sent anywhere.
     try { sessionStorage.setItem("byl_paid_email", email); } catch (e) { /* private mode */ }
+    showSeatLink();
   }
   window.location.assign(
     link + (link.indexOf("?") === -1 ? "?" : "&") +

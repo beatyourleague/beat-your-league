@@ -678,7 +678,8 @@ const SHAPE_BASES = {
 // Graded by OFFENSE, the twin of engine.subscriber.graded_slots: a kicker or
 // defense slot changes no other slot's call, so every K/DEF variant of a
 // graded offense (standard, superflex) is graded too.
-const GRADED_BASES = ["std", "sf"];
+// Two FLEX and three WR graded B (reports/lineup-shapes-backtest.md, Oct 16 2026).
+const GRADED_BASES = ["std", "sf", "flex2", "wr3"];
 
 function shapeCode(base, kicker, defense) {
   if (!(base in SHAPE_BASES)) throw new Error("unknown lineup base " + base);

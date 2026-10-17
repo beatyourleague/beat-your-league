@@ -194,7 +194,10 @@ def thin_week_line(report: Mapping[str, Any],
             f"carry odds.")
 
 
-_BANNER = re.compile(r'(<div class="regret-note"[^>]*>THIS WEEK.{1,8}S REPORT.*?</div>)',
+# The banner is the first notice inside <main> (render/report.py; it was a
+# .regret-note before the panel-review chrome, which left the thin-week line
+# anchored to nothing and outside every landmark).
+_BANNER = re.compile(r'(<div class="(?:notice|regret-note)"[^>]*>(?:<b>)?THIS WEEK.{1,8}S REPORT.*?</div>)',
                      re.S)
 
 
@@ -203,10 +206,11 @@ def with_thin_week(page: str, line: str | None) -> str:
     (or at the top of the report if the banner moved)."""
     if not line:
         return page
-    note = ('<div class="regret-note" style="margin:0;border-left:none;">'
-            f'{esc(line)}</div>')
+    note = f'<div class="notice">{esc(line)}</div>'
     if _BANNER.search(page):
         return _BANNER.sub(lambda m: m.group(1) + note, page, count=1)
+    if '<main id="main">' in page:
+        return page.replace('<main id="main">', '<main id="main">' + note, 1)
     return page.replace('<div class="report">', '<div class="report">' + note, 1)
 
 

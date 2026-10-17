@@ -177,7 +177,8 @@ def head_to_head(data: WeekData, a: Player, b: Player, scoring: str,
     field = rosterable_field(data.directory, data.prior, spec.rule, TEMPLATE,
                              league_size=size)
     season = build_season(spec, data.weekly, data.directory, data.season,
-                          data.week, league_size=size, field=field)
+                          data.week, league_size=size, field=field,
+                          store_slots=TEMPLATE)
     seeded = seeded_scope(shape, size, data.week)
     contextual = (data.context is not None and not seeded
                   and data.week in CONTEXT_WEEKS)

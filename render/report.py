@@ -483,6 +483,8 @@ _GATE_PHRASES = (
     # Method §15 C9: the practice squad plays only if elevated.
     ("not confirmed to play", "a player in that pair is on the practice squad"),
     ("held: the lineup changed", "the lineup changed around a player who can't play this week"),
+    # A graded lineup whose week lacked an input its arm's model needs.
+    ("held: an input", "odds are held this week: something they need didn't come in"),
     ("nobody on your bench", "no bench player at that position"),
     ("not enough games", "not enough games played yet"),
     ("we don't put odds on defenses", "defenses get a projection only"),
@@ -527,13 +529,12 @@ def row_label(slot: Mapping[str, Any]) -> str:
     # there (launch audit R7). Reports built before the field existed, and the
     # league product, keep the old wording.
     see = " · see if/then" if slot.get("if_then", True) else ""
+    # C8: a shape-level reason is never about this row's players — "waiting
+    # on" a bench player whose news decides nothing would be a false reason.
     if gate.startswith(("we don't put odds on defenses",
-                        "odds once this lineup shape is graded")):
+                        "odds once this lineup shape is graded",
+                        "held: an input")):
         return "projection only"
-    if gate.startswith("odds once this lineup shape is graded"):
-        # C8: the reason is the shape, never this row's players — "waiting on"
-        # a bench player whose news decides nothing would be a false reason.
-        return "projection only · odds once this lineup shape is graded"
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
         # a starter with five games and a usage line counting four of them —
@@ -594,6 +595,8 @@ def short_gate(gate: str | None, slot: str) -> str:
         return f"{NO_CALL} · defenses not graded yet"
     if gate.startswith("odds once this lineup shape is graded"):
         return f"{NO_CALL} · lineup shape not graded yet"
+    if gate.startswith("held: an input"):
+        return f"{NO_CALL} · held this week"
     if gate.startswith("no eligible player"):
         return NO_CALL
     return f"{NO_CALL} · status unconfirmed"

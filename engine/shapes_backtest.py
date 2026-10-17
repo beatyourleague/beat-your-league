@@ -39,7 +39,7 @@ from engine.nflverse_backtest import (GRADE_MEANING, INJURY_DIR, LEAGUE_SIZE,
                                       calls_for_season, evaluate)
 from engine.recalibration import GRADE_SEASONS, apply
 from engine.scoring import preset
-from engine.subscriber import LINEUP_SHAPES, graded_slots
+from engine.subscriber import LINEUP_SHAPES
 
 OUT_PATH = REPO_ROOT / "reports" / "lineup-shapes-backtest.md"
 METHOD_PATH = "reports/lineup-shapes-method.md"
@@ -57,12 +57,20 @@ class ShapeArm:
     base: str                   # the offense this arm grades (method §3 decides per base)
 
 
+# The offenses graded when the method was frozen (a199a01). Method §8: after
+# the run recorded two FLEX and three WR as graded, deriving the arms from the
+# CURRENT graded set would leave none, and the run could not be reproduced —
+# so the derivation reads the set as it stood at the freeze. No arm, setting
+# or decision changed.
+GRADED_AT_FREEZE = frozenset({"std", "sf"})
+
+
 def _arms() -> tuple[ShapeArm, ...]:
-    """Method §1: for every base whose offense is ungraded, the shape with a K
-    and a DEF, then the shape with neither, in the table's order."""
+    """Method §1: for every base whose offense was ungraded at the freeze, the
+    shape with a K and a DEF, then the shape with neither, in table order."""
     arms = []
     for shape in LINEUP_SHAPES.values():
-        if graded_slots(shape.slots):
+        if shape.base in GRADED_AT_FREEZE:
             continue
         if shape.kicker == shape.defense:          # both, or neither
             arms.append(ShapeArm(shape.code, shape.label, shape.slots, shape.base))

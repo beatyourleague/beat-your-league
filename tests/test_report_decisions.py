@@ -445,7 +445,7 @@ def test_an_ungraded_lineup_shape_prints_projections_and_no_odds() -> None:
     # changes no other slot's call; a second of either is a different shape.
     assert shape_graded(TEMPLATE_NKD + ("DEF",)) and shape_graded(TEMPLATE_NKD + ("K",))
     assert not shape_graded(TEMPLATE_T1 + ("K",))
-    assert not shape_graded(TEMPLATE_T1 + ("WR",))
+    assert not shape_graded(TEMPLATE_T1 + ("QB",))
     assert not shape_graded(("QB", "RB", "WR", "WR", "WR", "TE", "FLEX", "K", "DEF"))
     roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
               WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),

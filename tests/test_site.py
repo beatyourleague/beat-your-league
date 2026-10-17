@@ -1900,7 +1900,7 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     backend. The seat form endpoint must stay reserved for League Pass seats —
     an individual signup posted there would bypass the payment architecture."""
     handler = JOIN.split('$("form-email").addEventListener')[1]
-    closed = handler.split("if (!link) {")[1].split("if (WANTS_PASS) showSeatLink")[0]
+    closed = handler.split("if (!link) {")[1].split("showSeatLink();")[0]
     assert "NOTIFY_LIST_ENDPOINT" in closed
     assert "FORM_ENDPOINT" not in closed
     assert "league_id" not in closed, "launch-notify carries an email and a roster ref only"
@@ -2337,7 +2337,10 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
     sample_rows = _html.unescape(flat(SAMPLE_REPORT))
     for name, pct in (("Amon-Ra St. Brown", "80%"), ("Saquon Barkley", "74%"),
                       ("Ja'Marr Chase", "73%")):
-        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", sample_rows), \
+        # A row now carries the player's game, season average and last three
+        # before the call column (panel review F7, F8, SS-I9), so the window
+        # spans a whole row — never into the next player's.
+        assert re.search(rf"{re.escape(name)}.{{0,420}}?{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"
         assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))
 

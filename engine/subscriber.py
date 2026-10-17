@@ -137,7 +137,11 @@ SHAPE_BASES: dict[str, tuple[tuple[str, ...], str]] = {
 # reports/lineup-shapes-method.md. At most one K and one DEF: a second kicker
 # is a slot nothing measured.
 _STANDALONE = ("K", "DEF")
-GRADED_BASES = frozenset({"std", "sf"})
+# Two FLEX and three WR: reports/lineup-shapes-method.md, decided by its one run
+# (Oct 16 2026, reports/lineup-shapes-backtest.md) — both arms of each graded B,
+# with K and DEF and with neither, on the model as it ships in weeks 4-16
+# (run.solo.MODEL_FALLBACK_BASES covers the week that model can't run).
+GRADED_BASES = frozenset({"std", "sf", "flex2", "wr3"})
 
 # The reason a row carries no odds in an ungraded shape, in the buyer's words.
 UNGRADED_SHAPE_GATE = "odds once this lineup shape is graded"
@@ -357,6 +361,7 @@ def build_season(
     through_week: int,
     league_size: int = 12,
     field: Iterable[str] | None = None,
+    store_slots: Iterable[str] | None = None,
 ) -> Season:
     """Assemble the Season the engine consumes.
 
@@ -418,7 +423,12 @@ def build_season(
         # either way, so this is not a wrong ANSWER like the scoring collision
         # was — it is a probability recorded in the wrong bucket, which distorts
         # the exact table the ledger exists to produce.
-        league_id=ledger_store_id(spec.scoring, league_size, spec.slots, season),
+        # ``store_slots``: the lineup whose offense names the store when the
+        # spec's own slots are not a lineup (run/ask builds a one-slot season
+        # priced on the standard lineup's field, so its calls are standard's).
+        league_id=ledger_store_id(spec.scoring, league_size,
+                                  spec.slots if store_slots is None else store_slots,
+                                  season),
         season=str(season),
         name="Your league",
         status="in_season",
