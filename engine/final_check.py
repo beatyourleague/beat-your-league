@@ -277,8 +277,15 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
     def also_questionable(pid: str) -> str:
         if state(pid).practice_squad:
             return f" {elevation_note(name(pid))}."
-        return (f" He's questionable too, so check on him Sunday morning."
-                if state(pid).designation == QUESTIONABLE else "")
+        if state(pid).designation != QUESTIONABLE:
+            return ""
+        # On his own clock (panel review RQ2-07's rule, both days): a
+        # Monday-night cover is decided at Monday's inactives, not Sunday
+        # morning.
+        kick = state(pid).kickoff
+        when = (f"by his inactives (about {_et(kick - INACTIVES_LEAD)})"
+                if kick is not None else "before his game")
+        return f" He's questionable too, so check on him {when}."
 
     def hold(placed: tuple[str, int | None], what: str) -> None:
         """Name everyone a game-day plan moves, once: two plans must never
@@ -307,10 +314,14 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
                     continue
                 if taken and pid in held_by:
                     fact = f"{name(pid)} is already {held_by[pid]}"
+                elif state(pid).ruled_out or not state(pid).playing:
+                    # Out or on bye whenever his game is: "Zach Charbonnet
+                    # played Thursday" was said of a player listed out.
+                    rest = True
+                    continue
                 elif state(pid).locked:
                     fact = _played(name(pid), state(pid).kickoff)
                 else:
-                    rest = rest or not state(pid).available
                     continue
                 if fact not in named:
                     named.append(fact)
@@ -504,14 +515,15 @@ def _decide_first(starter: str, slot: str, placed: tuple[str, int | None],
 
 
 def _played(who: str, kicked_off: datetime | None) -> str:
-    """"Bo Nix played Thursday" — a cover whose game has already kicked off
-    is neither out nor on bye (panel review BE2-D4)."""
+    """"Bo Nix's game was Thursday" — a cover whose game has already kicked
+    off is neither out nor on bye (panel review BE2-D4). The game, not "he
+    played": whether he took the field is not something this check knows."""
     if kicked_off is None:
         return f"{who}'s game has already kicked off"
     from zoneinfo import ZoneInfo
     local = (kicked_off.astimezone(ZoneInfo(NFL_TIME)) if kicked_off.tzinfo
              else kicked_off)
-    return f"{who} played {local.strftime('%A')}"
+    return f"{who}'s game was {local.strftime('%A')}"
 
 
 def clauses(parts: Sequence[str]) -> str:

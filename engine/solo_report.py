@@ -408,6 +408,9 @@ def build_solo_report(
                                          availability=availability,
                                          early_calls=early_calls,
                                          extra=(early_items + watch_items
+                                                + practice_squad_items(
+                                                    picks, unconfirmed, players,
+                                                    game_of)
                                                 + superflex_items(
                                                     picks, players, prior_form,
                                                     last_season_ranks,
@@ -1687,7 +1690,8 @@ def _named_reason(pick: SlotPick, players: PlayerIndex,
     if gate.startswith(SHAPE_INPUT_GATE):
         return "an input these odds need is missing this week"
     if gate.startswith("held:"):
-        return "odds are held this week"
+        # Any other hold is about the lineup, never one player's status.
+        return "this lineup's odds are on hold this week"
     if gate.startswith("we don't put odds on defenses"):
         return "we don't put odds on defenses"
     if gate.startswith(SHAPE_GATE):
@@ -1872,12 +1876,15 @@ def superflex_items(picks: Sequence[SlotPick], players: PlayerIndex,
                 continue                  # his "if he's cleared" line is the plan
             day = _game_day(mine)
             when = day.strftime("%A") if day else "first"
+            # Not "no quarterback": there is one, whose status is open (COPY
+            # F10). The choice, with no number on either side.
             items.append({
-                "action": (f"Your {pick.slot} has no quarterback yet — {name} "
-                           f"({position}) starts there"),
+                "action": (f"{name} ({position}) starts at {pick.slot} — "
+                           f"{qb['name']}'s status isn't out yet"),
                 "detail": (f"{qb['name']}: {qb.get('out_text') or 'status open'}. "
-                           f"{name} plays {when}, before that news is in, so "
-                           f"decide before then."),
+                           f"{name} plays {when}, before that news is in. Decide "
+                           f"before then: {name} there, or {qb['name']} before "
+                           f"his status is known."),
                 "deadline": _deadline(mine),
                 "urgency": "deadline",
             })
@@ -1949,6 +1956,32 @@ def _week_sunday(schedule: Mapping[str, Mapping[str, Any]]) -> date | None:
     sundays = [day for day in (_game_day(g) for g in schedule.values())
                if day is not None and day.weekday() == 6]
     return min(sundays) if sundays else None
+
+
+def practice_squad_items(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
+                         players: PlayerIndex,
+                         game_of: Callable[[str], Mapping[str, Any] | None]
+                         ) -> list[dict[str, str]]:
+    """A STARTER on the practice squad, said in the game plan (recheck ENG-3,
+    method §15 C9). With Sam LaPorta on bye, Zach Ertz started at TE and only
+    the row's flag said he plays only if elevated — and scores 0 if not. A
+    fact and a check, no number; a bench player's elevation rides on the
+    plan that names him (``elevation_note``)."""
+    items: list[dict[str, str]] = []
+    for pick in picks:
+        pid = pick.player_id
+        if not pid or pid not in unconfirmed:
+            continue
+        name = players.name(pid)
+        items.append({
+            "action": f"Check {name} has been elevated",
+            "detail": (f"{name} starts at {pick.slot} from the practice squad: he "
+                       f"plays only if his team elevates him, by the afternoon "
+                       f"before his game, and scores 0 if it doesn't."),
+            "deadline": _deadline(game_of(pid)),
+            "urgency": "deadline",
+        })
+    return items
 
 
 def _deadline(game: Mapping[str, Any] | None) -> str:

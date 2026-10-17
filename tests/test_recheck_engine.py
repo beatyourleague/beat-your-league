@@ -160,7 +160,7 @@ def test_a_cover_named_for_another_starter_is_not_called_out_or_on_bye() -> None
                       "on your roster is out or on bye, so keep him in."), detail
 
 
-def test_a_cover_whose_game_has_kicked_off_is_said_to_have_played() -> None:
+def test_a_cover_whose_game_has_kicked_off_is_named_with_his_game_day() -> None:
     """Reproduction (BE2-D4, the buyer's ESPN roster): "Every other QB option
     on your roster is out or on bye, so keep him in" — the only other QB, Bo
     Nix, had played Thursday night. The out branch already said "already
@@ -182,9 +182,32 @@ def test_a_cover_whose_game_has_kicked_off_is_said_to_have_played() -> None:
     changes = final_check(plan, now)
     assert any(c.kind == SWAP for c in changes)
     detail = _detail(changes, WATCH, "Jalen Hurts")
-    assert detail == ("Jalen Hurts is listed questionable (knee). Bo Nix played "
-                      "Thursday, so keep him in."), detail
+    assert detail == ("Jalen Hurts is listed questionable (knee). Bo Nix's game "
+                      "was Thursday, so keep him in."), detail
     assert "out or on bye" not in detail
+    # A player OUT whose game was Thursday is out, not "his game was Thursday"
+    # (re-run of R08 wr3-nokd on the real Friday report: "Zach Charbonnet
+    # played Thursday" of a back listed out with a knee).
+    now["nix"] = Now("out", "listed out (knee)", locked=True, kickoff=thursday)
+    detail = _detail(final_check(plan, now), WATCH, "Jalen Hurts")
+    assert detail == ("Jalen Hurts is listed questionable (knee). Every other QB "
+                      "option on your roster is out or on bye, so keep him in."), detail
+
+
+def test_a_questionable_cover_is_checked_on_his_own_clock() -> None:
+    """Saturday's swap said "He's questionable too, so check on him Sunday
+    morning" whoever the cover was — of a Monday-night receiver, whose news
+    comes at Monday's inactives (the RQ2-07 rule, Saturday's half)."""
+    plan = _two_wr_plan()
+    sunday = datetime(2026, 10, 18, 17, 0, tzinfo=UTC)
+    monday = datetime(2026, 10, 20, 0, 15, tzinfo=UTC)      # Mon 8:15 PM ET
+    now = {"jeanty": Now("out", "listed out (ankle)", kickoff=sunday),
+           "mclaurin": Now(kickoff=sunday),
+           "jeudy": Now("questionable", "listed questionable (hip)", kickoff=monday),
+           "hurt": Now("out", "listed out (knee)", kickoff=sunday)}
+    [swap] = [c for c in final_check(plan, now) if c.kind == SWAP]
+    assert swap.detail.endswith("He's questionable too, so check on him by his "
+                                "inactives (about Mon 6:45 PM ET)."), swap.detail
 
 
 def test_with_nobody_left_at_all_the_check_says_so_without_inventing_a_reason() -> None:
@@ -239,6 +262,35 @@ def test_saturday_ranks_the_practice_squad_last_and_says_to_check_him() -> None:
 # --------------------------------------------------------------------- #
 # ENG-4 — one ranking for both days
 # --------------------------------------------------------------------- #
+
+def test_a_practice_squad_starter_is_in_the_game_plan_not_only_on_his_row() -> None:
+    """Reproduction (H1 without George Kittle, 2026 week 6): Sam LaPorta on
+    bye, Zach Ertz — on the Eagles' practice squad — started at TE, and only
+    the row's flag said he plays only if elevated. The game plan carried no
+    line, so a manager typing the lineup in had nothing to act on."""
+    from engine.solo_report import practice_squad_items
+    players = player_index(PlayerDirectory([Player("e", "Zach Ertz", "TE", "PHI"),
+                                            Player("k", "Kai Kicker", "K", "PHI")]))
+    picks = [SlotPick("TE", 5, "e", None, None, None, "not confirmed to play", None,
+                      None, []),
+             SlotPick("K", 7, "k", None, None, None, None, None, None, [])]
+    games = {"e": _game("NYG", SUN, "13:00"), "k": _game("NYG", SUN, "13:00")}
+    [item] = practice_squad_items(picks, {"e": "PS; Vet"}, players, games.get)
+    assert item["action"] == "Check Zach Ertz has been elevated"
+    assert item["detail"] == ("Zach Ertz starts at TE from the practice squad: he "
+                              "plays only if his team elevates him, by the afternoon "
+                              "before his game, and scores 0 if it doesn't.")
+    assert item["deadline"] == "before Sunday's kickoff"
+    assert "%" not in item["detail"]
+    assert practice_squad_items(picks, {}, players, games.get) == []
+    # Through the real builder: the line reaches the report's game plan.
+    roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
+              WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Zach Ertz", "TE", "PHI"),
+              WR2: ("Will Bench", "WR", "KC")}
+    report = _report(roster, unconfirmed={TE1: "PS; Vet"})
+    assert any(i["action"] == "Check Zach Ertz has been elevated"
+               for i in report["checklist"]), [i["action"] for i in report["checklist"]]
+
 
 def test_neither_day_slides_a_questionable_starter_across() -> None:
     """Reproduction (H3 nokd/ppr/12): Tuesday said "If Zay Flowers is ruled
@@ -319,6 +371,9 @@ def test_two_game_day_plans_never_lean_on_one_bench_player() -> None:
 
 
 def test_rank_covers_is_one_order() -> None:
+    """The one ranking both days use (``rank_covers``), pinned key by key:
+    elevation-dependent last, then projection (none after any), then healthy
+    before questionable, then a straight swap before a slide, then the ids."""
     slots = [("WR", "a"), ("FLEX", "m")]
     order = rank_covers(0, slots, ["x", "y", "z", "q", "s"],
                         eligible_for=lambda pid, slot: True,
@@ -330,6 +385,10 @@ def test_rank_covers_is_one_order() -> None:
     direct = [c for c in order if c[1] is None]
     assert [c[0] for c in direct] == ["x", "y", "q", "z", "s"]
     assert order.index(("x", None)) < order.index(("x", 1)), "a straight swap first"
+    # ...but a healthy player before a questionable one, swap or slide: at
+    # equal projections, a slide bringing in a healthy x beats a straight
+    # swap for a questionable q. A plan built on a second doubt comes last.
+    assert order.index(("x", 1)) < order.index(("q", None)), order
 
 
 # --------------------------------------------------------------------- #
@@ -559,6 +618,41 @@ def test_week_one_defense_record_comes_from_last_seasons_box_scores() -> None:
     assert len(record) == 32 and all(len(games) == 17 for games in record.values())
 
 
+def test_week_one_report_for_orders_defenses_by_their_record(tmp_path) -> None:
+    """End to end through run.solo.report_for: the defense with the better
+    record last season starts and its row prints that record — DEF-SF over
+    DEF-KC here, the opposite of the id order the placement fell back to."""
+    import csv
+
+    import run.solo as solo
+    from test_solo_run import (OFFLINE, SEASON, SLOTS, _cache, _pid, _spec,
+                               _write)
+    cache = _cache(tmp_path)
+    last = str(int(SEASON) - 1)
+    games = list(csv.DictReader((cache / "games.csv").open(encoding="utf-8")))
+    columns = list(games[0])
+    for week in (1, 2):
+        games += [{"season": last, "game_type": "REG", "week": week,
+                   "gameday": f"{last}-09-{week + 6:02d}", "away_team": away,
+                   "home_team": home, "away_score": 20, "home_score": 20}
+                  for away, home in (("KC", "SF"), ("DET", "CIN"), ("DEN", "BAL"))]
+    _write(cache / "games.csv", games, columns)
+    _write(cache / f"stats_team_week_{last}.csv",
+           [{"team": team, "season": last, "week": week, "season_type": "REG",
+             "def_sacks": 6 if team == "SF" else 1, "def_interceptions": 0}
+            for week in (1, 2) for team in ("KC", "SF", "DET", "CIN", "DEN", "BAL")],
+           ["team", "season", "week", "season_type", "def_sacks", "def_interceptions"])
+    spec = RosterSpec(player_ids=_spec().player_ids + (_pid(60), "DEF-KC", "DEF-SF"),
+                      slots=SLOTS + ("K", "DEF"), scoring="ppr")
+    report = solo.report_for(spec, solo.load_week_data(cache, SEASON, 1,
+                                                        session=OFFLINE),
+                             cache_dir=cache)
+    [defense] = [s for s in report["lineup"] if s["slot"] == "DEF"]
+    assert defense["player_id"] == "DEF-SF", defense["player_id"]
+    assert "last season:" in (defense.get("usage") or ""), defense
+    assert defense["projected"] is None and defense["confidence"] is None
+
+
 # --------------------------------------------------------------------- #
 # RQ2-04 / F10 — the superflex line, only when no quarterback can fill it
 # --------------------------------------------------------------------- #
@@ -600,12 +694,13 @@ def test_a_bench_quarterback_with_his_status_open_is_named() -> None:
     games = {"w": _game("DEN", THU, "20:15"), "q": _game("CLE", SUN)}
     [item] = superflex_items([pick], players, form, ranks, 12, bench=bench,
                              game_of=games.get, sunday=date.fromisoformat(SUN))
-    assert item["action"] == ("Your SUPER_FLEX has no quarterback yet — Rashid Shaheed "
-                              "(WR) starts there")
+    assert item["action"] == ("Rashid Shaheed (WR) starts at SUPER_FLEX — Lamar "
+                              "Jackson's status isn't out yet")
+    assert "no quarterback" not in item["action"]
     assert item["detail"] == (
         "Lamar Jackson: Ruled out for Week 5 (ankle) — Week 6 status not announced "
-        "yet. Rashid Shaheed plays Thursday, before that news is in, so decide "
-        "before then.")
+        "yet. Rashid Shaheed plays Thursday, before that news is in. Decide before "
+        "then: Rashid Shaheed there, or Lamar Jackson before his status is known.")
     assert "waiver" not in item["detail"]
     # In time for his news, his own "if he's cleared" line is the plan.
     games["w"] = _game("DEN", SUN, "16:25")
