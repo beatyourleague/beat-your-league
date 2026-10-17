@@ -139,8 +139,10 @@ def subscriber_meta(subscriber: RosterSubscriber,
       leaguemate at the seat already paid for, never the $39 checkout."""
     meta: dict = {"plan": subscriber.report_plan}
     if subscriber.is_pass_payer:
+        # Counted per PASS (``pass_key``), never per payer address: one buyer
+        # with two leagues' passes was told both leagues' seats twice (LP2-D4).
         meta["seats_claimed"] = {
-            "claimed": 1 + int((seat_counts or {}).get(subscriber.email.lower(), 0)),
+            "claimed": 1 + int((seat_counts or {}).get(subscriber.pass_key or "", 0)),
             "size": int(subscriber.league_size)}
     if subscriber.roster_as_of:
         meta["roster_as_of"] = subscriber.roster_as_of
@@ -153,17 +155,21 @@ def league_seat_link(subscriber: RosterSubscriber,
                      payers: Mapping[str, RosterSubscriber]) -> str | None:
     """The seat link of the pass that covers ``subscriber`` (their own, for a
     payer), with the PAYER's scoring, size and lineup when the payer's row is
-    at hand. None outside a pass league, or without the site and the secret."""
+    at hand. None outside a pass league, or without the site and the secret.
+
+    ``payers`` is keyed by ``RosterSubscriber.pass_key``, and the token binds
+    the pass as well as the payer, so a buyer of two leagues' passes hands
+    each league its own link (LP2-D4)."""
     from run.updates import seat_url
     if subscriber.is_pass_payer:
         payer_email, setup = subscriber.email, subscriber
     elif subscriber.is_league_seat and subscriber.covered_by:
         payer_email = subscriber.covered_by
-        setup = payers.get(payer_email.lower(), subscriber)
+        setup = payers.get(subscriber.pass_key or "", subscriber)
     else:
         return None
     return seat_url(os.environ.get("SITE_URL", ""), os.environ.get("UPDATE_SECRET", ""),
-                    payer_email, setup)
+                    payer_email, setup, pass_id=subscriber.pass_id or "")
 
 
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
@@ -513,9 +519,9 @@ def main(argv: list[str] | None = None) -> int:
     template_html = render_report.TEMPLATE_PATH.read_text(encoding="utf-8")
     # The seats each pass is carrying THIS week (entitled ones, which is every
     # seat whose payer is still paying), for the payer's own report.
-    seat_counts = {payer: len(seats)
-                   for payer, seats in league_pass_seats(subscribers).items()}
-    payers = {s.email.lower(): s for s in subscribers if s.is_pass_payer}
+    seat_counts = {key: len(seats)
+                   for key, seats in league_pass_seats(subscribers).items()}
+    payers = {s.pass_key: s for s in subscribers if s.is_pass_payer and s.pass_key}
     results = [run_subscriber(s, data, template_html, out_dir=args.out,
                               processed_dir=args.processed_dir, record=sending,
                               plans_dir=args.plans_dir or PLANS_DIR,
@@ -540,8 +546,11 @@ def main(argv: list[str] | None = None) -> int:
     # League Pass coverage. There is no league id to count against any more, so
     # this reports what the pass is actually carrying rather than seats-claimed
     # out of a league size we cannot see.
-    for payer, seats in sorted(league_pass_seats(subscribers).items()):
-        print(f"League Pass · {_mask(payer)}: {len(seats)} seat(s) claimed")
+    for key, seats in sorted(league_pass_seats(subscribers).items()):
+        # A pass is named by its subscription id, which carries no address;
+        # an older row keyed by the payer's address is masked like any other.
+        label = key if key.startswith("sub_") else _mask(key)
+        print(f"League Pass · {label}: {len(seats)} seat(s) claimed")
 
     delivered, skipped, send_failures = [], [], []
     if ok and not args.no_send:

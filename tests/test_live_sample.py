@@ -195,3 +195,172 @@ def test_the_cron_runs_the_build_that_records() -> None:
         < weekly.index("-m run.drops")
     persist = weekly.split("name: Persist the record", 1)[1].split("- name:", 1)[0]
     assert "data/processed/ledger" in persist
+
+
+# --------------------------------------------------------------------- #
+# OPS-R3 — a week is recorded once, by its first build before kickoff
+# --------------------------------------------------------------------- #
+
+import re  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from render.report import _pct  # noqa: E402
+
+NOW = datetime(2026, 10, 17, 0, 3, tzinfo=timezone.utc)
+
+
+def _odds(page: str) -> list[int]:
+    """The percentages the lineup's call column prints."""
+    return [int(n) for n in re.findall(r"<b>(\d+)%</b>", page)]
+
+
+def test_a_week_is_recorded_once_by_its_first_build_before_kickoff(
+        tmp_path, monkeypatch, week) -> None:
+    """Reproduced (OPS-R3): the Tuesday cron builds the sample twice (12:17
+    and the 16:17 retry) and GitHub's backups run late; with one market line
+    moved in between, the second build recorded 2 NEW calls for the same 2
+    slots (4 calls, Shakir-vs-Shaheed graded twice) and printed odds that
+    were not the recorded ones. site/week.json now carries `recorded`, a
+    later build before kickoff leaves the published page alone, and a forced
+    one prints only what the record holds — and records nothing."""
+    code, out, processed = _run(tmp_path, monkeypatch, kicked_off=False)
+    first = _ledger(processed)
+    published = out.read_text(encoding="utf-8")
+    assert code == 0 and first
+    assert json.loads(out.with_name("week.json").read_text())["recorded"] is True
+
+    def moved(*_a, **_k):
+        # The retry's inputs moved: every printed probability shifts a point.
+        report = week()
+        for slot in report["lineup"]:
+            if slot.get("confidence") is not None:
+                slot["confidence"] = round(slot["confidence"] + 0.01, 3)
+        if report["regret"].get("confidence") is not None:
+            report["regret"]["confidence"] = round(report["regret"]["confidence"] + 0.01, 3)
+        return report
+    monkeypatch.setattr(live, "build", moved)
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    assert code == 0 and _ledger(processed) == first, "the retry recorded again"
+    assert out.read_text(encoding="utf-8") == published, "the published page moved"
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False, extra=("--force",))
+    assert code == 0 and _ledger(processed) == first
+    assert _odds(out.read_text(encoding="utf-8")) == [], \
+        "a forced rebuild printed odds that are not the recorded ones"
+    assert json.loads(out.with_name("week.json").read_text())["recorded"] is True
+
+
+# --------------------------------------------------------------------- #
+# OPS-R11 / FUNNEL:F3 / COPY:F1 / G24 / R1 / SS2-D1 / BE2-D3 — after kickoff
+# --------------------------------------------------------------------- #
+
+def _rebuild_after_kickoff(tmp_path, monkeypatch, week, teams, starts):
+    """--force after the week's first kickoff, at NOW, with the players'
+    teams and the week's kickoffs under the test's control."""
+    def build(*_a, context=None, **_k):
+        report = week()
+        if context is not None:
+            context.update(teams=dict(teams), missing=[])
+        return report
+    monkeypatch.setattr(live, "build", build)
+    monkeypatch.setattr(live, "_kickoffs", lambda season, wk: dict(starts))
+    return _run(tmp_path, monkeypatch, kicked_off=True,
+                extra=("--force", "--now", NOW.isoformat()))
+
+
+def test_a_forced_rebuild_after_kickoff_prints_only_recorded_odds_on_games_still_to_play(
+        tmp_path, monkeypatch, week) -> None:
+    """Reproduced (COPY:F1, FUNNEL:F3, G24, R1, SS2-D1, BE2-D3, OPS-R11): the
+    live sample was rebuilt with --force a day after Week 6 kicked off. It
+    printed 64% and 63% that were on no record — one pair's Thursday half
+    already final — under "Set this lineup — before this week's first
+    kickoff", with "Rashid Shaheed (7.6) plays Thursday" in the future tense
+    and nothing on the page saying the week had begun. A forced rebuild after
+    kickoff now prints a % only when it is on the record AND both players'
+    games are still to come, says when it was rebuilt and that the week had
+    begun, gives its steps "for the games still to play", drops an if/then
+    about a game underway, and records nothing."""
+    report = week()
+    _run(tmp_path, monkeypatch, kicked_off=False)              # Tuesday's record
+    processed = tmp_path / "processed"
+    recorded = _ledger(processed)
+    called = [s for s in report["lineup"] if s.get("confidence") is not None]
+    started = called[0]["player_id"]                           # his game is underway
+    teams = {pid: "LAT" for pid in {str(s.get("player_id")) for s in report["lineup"]}
+             | {str(s.get("alternative_id")) for s in report["lineup"]}}
+    teams[started] = "THU"
+    teams[str(report["pivots"][0]["about"])] = "THU"           # the if/then's game too
+    starts = {"THU": NOW - timedelta(days=1), "LAT": NOW + timedelta(days=1)}
+    code, out, _ = _rebuild_after_kickoff(tmp_path, monkeypatch, week, teams, starts)
+    page = out.read_text(encoding="utf-8")
+    assert code == 0 and _ledger(processed) == recorded, "a rebuild after kickoff recorded"
+    expected = [_pct(s["confidence"]) for s in called if s["player_id"] != started]
+    assert sorted(_odds(page)) == sorted(expected), \
+        "a % printed beside a game already underway, or a recorded one was lost"
+    assert "before this week&#x27;s first kickoff" not in page
+    assert "before this week's first kickoff" not in page
+    assert live.STILL_TO_PLAY in page
+    # The notice under the banner: when, that the week had begun, what shows.
+    notice = page.split("THIS WEEK", 1)[1].split("</div>", 2)[1]
+    assert "after this week&#x27;s first kickoff" in notice
+    assert "on the record before kickoff" in notice and "slots" in notice
+    assert "If/Then" in page and live.AFTER_KICKOFF_PIVOTS.split(":")[0] in page
+    clock = json.loads(out.with_name("week.json").read_text())
+    assert clock["after_kickoff"] is True and clock["odds"] == len(expected)
+
+
+def test_a_forced_rebuild_of_a_week_never_recorded_prints_no_odds(
+        tmp_path, monkeypatch, week, capsys) -> None:
+    """The Week 6 case exactly: nothing was ever recorded, so a rebuild after
+    kickoff may print nothing — and the refusal without --force says what the
+    record holds instead of asserting "its recorded odds stand"."""
+    code, out, processed = _run(tmp_path, monkeypatch, kicked_off=True)
+    assert code == 0 and "The record holds 0 of this week's odds" in capsys.readouterr().out
+    report = week()
+    teams = {str(s.get(k)): "LAT" for s in report["lineup"]
+             for k in ("player_id", "alternative_id") if s.get(k)}
+    code, out, processed = _rebuild_after_kickoff(
+        tmp_path, monkeypatch, week, teams, {"LAT": NOW + timedelta(days=1)})
+    page = out.read_text(encoding="utf-8")
+    assert code == 0 and _odds(page) == [] and not _ledger(processed)
+    assert live.AFTER_KICKOFF_CLOSEST in page.replace("&#x27;", "'")
+
+
+def test_the_after_kickoff_page_withholds_but_never_adds_or_moves() -> None:
+    """after_kickoff() is pure withholding: a % on a pair whose players are
+    not BOTH still to come goes (an unknown team counts as not still to come
+    — fail closed), a played game reads in the past tense, and nothing it
+    keeps changes value."""
+    report = {
+        "meta": {"thin_week_note": "x"},
+        "lineup": [
+            {"slot": "WR", "player_id": "a", "alternative_id": "b", "confidence": 0.64},
+            {"slot": "FLEX", "player_id": "c", "alternative_id": "d", "confidence": 0.63},
+            {"slot": "TE", "player_id": "e", "alternative_id": "f", "confidence": 0.79}],
+        "regret": {"slot": "FLEX", "start_id": "c", "over_id": "d", "confidence": 0.63},
+        "checklist": [{"action": "Set this lineup", "detail": "",
+                       "deadline": "before this week's first kickoff"}],
+        "pivots": [{"about": "d", "condition": "D is out",
+                    "action": "Start X. Rashid Shaheed (7.6) plays Thursday, before "
+                              "D's status is known."},
+                   {"about": "a", "condition": "A is out",
+                    "action": "Rashid Shaheed (7.6) plays Thursday."}]}
+    upcoming, played = live.kickoff_split(
+        {"a": "LAT", "b": "LAT", "c": "LAT", "d": "THU", "e": "LAT", "f": "UNK",
+         "s": "THU"},
+        {"LAT": NOW + timedelta(hours=5), "THU": NOW - timedelta(hours=30)}, NOW)
+    assert upcoming == {"a", "b", "c", "e"} and played == {"d", "s"}, \
+        "a player whose game cannot be told was counted as still to come"
+    out = live.after_kickoff(report, upcoming, played, {"s": "Rashid Shaheed"})
+    assert [s["confidence"] for s in out["lineup"]] == [0.64, None, None]
+    assert out["regret"] == {"gate": live.AFTER_KICKOFF_CLOSEST}
+    assert out["checklist"][0]["deadline"] == live.STILL_TO_PLAY
+    [plan] = out["pivots"]
+    assert plan["about"] == "a" and plan["action"] == "Rashid Shaheed (7.6) played Thursday."
+    assert live._past_tense("Rashid Shaheed (7.6) plays Thursday, before C's status is known.",
+                            ["Rashid Shaheed"]) == \
+        "Rashid Shaheed (7.6) played Thursday, before C's status was known."
+    assert out["meta"]["rebuilt_after_kickoff"] and out["meta"]["thin_week_note"] is None
+    assert live.share_text({"meta": {"week": 6, "season": "2026",
+                                     "rebuilt_after_kickoff": True},
+                            "lineup": out["lineup"]})[1].endswith(
+        "Rebuilt after this week's first kickoff.")

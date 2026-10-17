@@ -225,6 +225,32 @@ def test_the_daily_sweep_persists_the_send_log() -> None:
     assert "git push" in str(persist[0]["run"])
 
 
+def test_every_run_that_can_mail_a_weeks_report_commits_the_ledger() -> None:
+    """Reproduced (OPS-R2): the hourly daily intake mails a new buyer — or a
+    newly confirmed seat — this week's report between Tuesday and kickoff,
+    and records its calls in data/processed/ledger once delivered. daily.yml's
+    persist step staged only sent.jsonl, so the send key that stops the
+    report ever being rebuilt was committed while the published calls died
+    with the runner: odds mailed to a subscriber and never on the public
+    record. Any workflow that runs a step able to deliver a week's report
+    (run.tuesday, or run.intake WITHOUT --no-mail) commits the ledger in the
+    same step that commits the send log."""
+    import re
+    for name in sorted(p.name for p in WORKFLOWS.glob("*.yml")):
+        commands = _commands(name)
+        mails = ("-m run.tuesday" in commands
+                 or re.search(r"-m run\.intake(?![^\n]*--no-mail)", commands))
+        if not mails:
+            continue
+        persists = [str(s.get("run", "")) for s in _steps(name)
+                    if "sent.jsonl" in str(s.get("run", ""))
+                    and "git add" in str(s.get("run", ""))]
+        assert persists, f"{name} mails a week's report and never commits the send log"
+        for run in persists:
+            assert re.search(r"git add[^\n]*data/processed/ledger", run), \
+                f"{name} commits the send log without the ledger it recorded"
+
+
 def test_the_daily_sweep_carries_the_welcome_env() -> None:
     """Without EMAIL_PROVIDER the sweep reports welcomes as pending forever —
     a legally-owed acknowledgment that silently never sends."""

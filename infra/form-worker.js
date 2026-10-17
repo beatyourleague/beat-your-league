@@ -5,10 +5,11 @@
  * League Pass SEAT claims, self-serve roster UPDATES, and the launch WAITLIST.
  * All three post from the site and are read back by their own runners —
  * run/intake.py validates seats and updates before anything reaches the
- * registry (a seat is honoured only if its payer bought a pass, an update only
- * if it carries the subscriber's token), and run/waitlist.py sends the single
- * promised launch email. This Worker therefore holds nothing secret and
- * decides nothing: it is a mailbox.
+ * registry (a seat claim is honoured only if it names a pass that was bought
+ * and is still active, AND the claimed address confirms it from its own inbox;
+ * an update only once its subscriber confirms it), and run/waitlist.py sends
+ * the single promised launch email. This Worker therefore holds nothing secret
+ * and decides nothing: it is a mailbox.
  *
  * Why a Worker and not a form vendor: free-tier form products cap at ~50
  * submissions a month or offer no machine-readable read-back, and this is the
@@ -33,7 +34,9 @@
  *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
  *                                the operator's emailed change, run/updates.py)
  *   POST JSON  {kind:"update_request", email, ref}   (confirm-by-email, step 1)
- *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code)
+ *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
+ *                                for a roster request OR a seat claim; the
+ *                                intake knows which by recomputing both)
  *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
  *   POST JSON  {kind:"waitlist", email, ref?}         (ref: the roster checked
  *                                while checkout was closed, run/waitlist.py)
@@ -47,11 +50,12 @@
  * Rows EXPIRE about 400 days after they arrive (ROW_TTL_SECONDS). The privacy
  * page says form entries delete themselves within about 13 months of
  * arriving, and this TTL is the only thing that makes that true — before it,
- * nothing here ever deleted anything; every row
- * lived in KV forever. 400 days is the longest any row is needed: a
- * seat claim is re-read every week of the season it was made for (the roster
- * it names is that season's), a waitlist address waits at most one offseason
- * for its launch email, and everything else is acted on within days — a
+ * nothing here ever deleted anything; every row lived in KV forever. 400
+ * days is the longest any row is needed: a waitlist address waits at most one
+ * offseason for its launch email, and everything else is acted on within days
+ * — a seat claim is needed only until its address confirms it (7 days at most;
+ * a confirmed seat is copied into the intake's own seat log, so no seat
+ * depends on a row here, OPS-R6), a
  * confirmed roster update is copied into the intake's own log, a confirmation
  * code dies after 7 days, and a trial request is mailed within 14 days of
  * arriving or never (run/trials.py TRIAL_MAX_AGE, which also refuses one from
@@ -138,7 +142,9 @@ function sanitizeKind(body) {
     // link's `pass_token` — a digest the intake recomputes over the addresses
     // that really bought a pass, so the buyer's address never has to be typed
     // or shared — or, from the generic link, the buyer's address typed as
-    // `covered_by`. One of the two is required; both may ride along.
+    // `covered_by`. One of the two is required; both may ride along. A claim
+    // is only a request: the intake mails the claimed address a code, and
+    // the seat exists once {kind:"confirm", code} comes back (OPS-R1).
     const passToken = String(body.pass_token || "").trim().toLowerCase();
     const payer = String(body.covered_by || "").trim().toLowerCase();
     const named = {};

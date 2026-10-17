@@ -123,6 +123,9 @@ jobs:
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+          # A rotated UPDATE_SECRET's old value, comma-separated: seat links
+          # already sent are still matched while it is set (OPS-R10).
+          UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
         run: |
           set +e
           .venv/bin/python -m run.intake
@@ -258,9 +261,6 @@ jobs:
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
-      # sent.jsonl is the only record of who was welcomed. Losing it means
-      # double-welcoming everyone; merge=union (.gitattributes) keeps the
-      # push race with the other crons a concatenation, not a conflict.
       - name: Upload the day's reply kit
         if: always()
         uses: actions/upload-artifact@v4
@@ -268,21 +268,33 @@ jobs:
           name: reply-kit
           path: content/
           if-no-files-found: warn
-      - name: Persist the send log
+      # sent.jsonl is the only record of who was welcomed. Losing it means
+      # double-welcoming everyone; merge=union (.gitattributes) keeps the
+      # push race with the other crons a concatenation, not a conflict.
+      #
+      # The ledger rides the same commit (OPS-R2). Between Tuesday's send and
+      # kickoff this sweep mails a new buyer — or a newly confirmed seat —
+      # that week's report, and run.intake records its calls once delivered
+      # (record_delivered). Staging only sent.jsonl committed the key that
+      # stops the report being rebuilt and let its calls die with the runner:
+      # published odds that never reached the public record.
+      - name: Persist the send log and the record
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A data/processed/ledger
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
-          git commit -m "Daily sweep: welcome send log"
+          git commit -m "Daily sweep: send log and ledger"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push
       - name: Fail the run if a paid signup could not be served
         if: always() && steps.intake.outputs.code == '1'
         run: |
-          echo "run.intake exited 1 — a paid signup is blocked, or Stripe could"
-          echo "not be read. See the sweep step's log."
+          echo "run.intake exited 1 — a paid signup is blocked, Stripe could not"
+          echo "be read, or League Pass seat links match no pass (a rotated"
+          echo "UPDATE_SECRET). See the sweep step's log."
           exit 1
       # Exit 2 is "STRIPE_API_KEY unset", the expected pre-launch state.
       # A monthly subscription left with no stop date WILL be charged through

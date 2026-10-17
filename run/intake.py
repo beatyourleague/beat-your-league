@@ -37,10 +37,19 @@ run/updates.py), and moves the roster under the subscription's first slug.
 **League Pass seats** come from the form Worker and pay nothing, so they are
 validated harder than anything else here: a seat names its pass by the
 per-pass seat link's token or the payer's typed address, and is honoured
-only when that address really bought a pass (``sweep_seats``). One seat per
-(address, pass) — a re-claim is a roster change. A claim that matches no
-pass is told so, once (LP-D1). A new seat gets its first email by the same
-rules as a purchase (LP-I4).
+only when that pass was really bought and its subscription is active now
+(``sweep_seats``, RULE E2). A claim is a request: the claimed address must
+confirm it by email before it becomes a seat, and a re-claim — a roster
+change — is confirmed the same way (OPS-R1). Confirmed seats live in the
+intake's own seat log, so their identity outlives the Worker's rows (OPS-R6).
+One seat per (address, pass), at most as many as the payer's league has
+teams (OPS-R7), claimed again each season (LP2-D3). A claim that matches no
+pass is told so, once (LP-D1). A new seat gets its first email the day it is
+confirmed, by the same rules as a purchase (LP-I4).
+
+**One roster, one report** (LP2-D1): an address holding two subscriptions
+for the same roster gets one row; the newer purchase's welcome says the other
+keeps billing until they cancel it. Nothing here ever cancels or refunds.
 """
 
 from __future__ import annotations
@@ -52,7 +61,7 @@ import os
 import re
 import sys
 import urllib.parse
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -142,15 +151,29 @@ class RosterSignup:
     label: str = "Your Team"
     source: str = "stripe"
     via: str | None = None
-    # A League Pass SEAT, never logged (seats are rebuilt from the form Worker
-    # every run): who pays for it, and the slug it was first claimed under,
+    # A League Pass SEAT, never in this log (seats live in the seat log,
+    # SEAT_LOG_NAME): who pays for it, and the slug it was first claimed under,
     # which a re-claim with a new roster does not move (LP-D4).
     covered_by: str | None = None
     origin: str | None = None
+    # The Stripe subscription a purchase started. On a League Pass it IS the
+    # pass: seats are entitled through it (run/subscriptions RULE E2) and its
+    # seat link is bound to it (LP2-D4).
+    subscription_id: str | None = None
+    # A seat only: the pass that covers it, and that pass's Stripe customer.
+    pass_id: str | None = None
+    pass_customer: str | None = None
 
     @property
     def key(self) -> tuple[str, str]:
         return (self.email.lower(), self.ref)
+
+    @property
+    def pass_of(self) -> str | None:
+        """The League Pass this signup bought (a payer) or sits on (a seat)."""
+        if self.plan == "seat":
+            return self.pass_id
+        return self.subscription_id if self.plan == LEAGUE_PASS else None
 
     @property
     def slug(self) -> str:
@@ -212,6 +235,85 @@ def project(log: Iterable[RosterSignup]) -> list[RosterSignup]:
 
 def _stamp(signup: RosterSignup) -> int:
     return int(signup.seen_at) if str(signup.seen_at).isdigit() else 0
+
+
+# --------------------------------------------------------------------- #
+# one roster, one report (LP2-D1)
+# --------------------------------------------------------------------- #
+#
+# A commissioner who already had the $39 season pass and then bought the $99
+# League Pass with the same roster held two subscriptions, and every Tuesday
+# got two identical reports with the same subject under two keys — and a
+# self-serve roster change was refused outright, because two equal rosters
+# tie in run/updates._target_for. The key is (email, ref) and the plan prefix
+# makes the refs differ, so nothing collapsed them. Now one address with one
+# roster (players, lineup, scoring and size: the CONTENT, never the ref
+# string) gets one report. Nothing is cancelled or refunded here, ever: the
+# other subscription bills until its owner cancels it (if they have not
+# already — the log keeps cancelled purchases too), the welcome of the newer
+# purchase says so plainly, and the operator log flags it.
+
+# Which purchase a merged row is built from: the pass carries seats and the
+# billing the season-end line must describe; then the yearly pass; then monthly.
+_KEEP_ORDER = {LEAGUE_PASS: 0, SEASON: 1, MONTHLY: 2}
+
+
+def _content(signup: RosterSignup) -> tuple | None:
+    try:
+        roster = signup.roster()
+    except RefError:
+        return None
+    return (signup.email.lower(), tuple(roster.player_ids), tuple(roster.slots),
+            roster.scoring, roster.league_size)
+
+
+@dataclass
+class Merged:
+    """``merge_same_roster``'s answer. ``signups`` are the rows to write;
+    ``duplicates`` maps a purchase's key to the plan of the OTHER subscription
+    on its roster, for the newest purchase of each group only (its welcome is
+    the one still to be sent); ``groups`` are the merged groups, for the log."""
+
+    signups: list[RosterSignup]
+    duplicates: dict[tuple[str, str], str] = field(default_factory=dict)
+    groups: list[list[RosterSignup]] = field(default_factory=list)
+
+
+def merge_same_roster(signups: Iterable[RosterSignup]) -> Merged:
+    """One row per (address, roster content). The kept row is the purchase
+    _KEEP_ORDER prefers, carrying the OLDEST purchase's slug and time: its
+    send keys, stored plans and receipts are the history this person already
+    has, so nothing restarts and the week's report is not mailed twice.
+
+    Two League Passes are never one row, even for one roster: each is its own
+    league's seat link and seat count (LP2-D4), and merging them would hand
+    one league's seats the other's link. Only a season or monthly purchase
+    folds into a pass (the oldest one). Pure."""
+    groups: dict[tuple, list[RosterSignup]] = {}
+    order: list[tuple] = []
+    for signup in signups:
+        key = _content(signup) or ("ref", signup.key)
+        if key not in groups:
+            order.append(key)
+        groups.setdefault(key, []).append(signup)
+    out = Merged(signups=[])
+    for key in order:
+        held = sorted(groups[key], key=_stamp)
+        passes = [s for s in held if s.plan == LEAGUE_PASS]
+        if len(passes) > 1:
+            out.signups.extend(passes[1:])
+            held = [s for s in held if s.plan != LEAGUE_PASS or s is passes[0]]
+        if len(held) == 1:
+            out.signups.append(held[0])
+            continue
+        oldest, newest = held[0], held[-1]
+        keep = min(held, key=lambda s: (_KEEP_ORDER.get(s.plan, 3), -_stamp(s)))
+        out.signups.append(replace(keep, origin=oldest.slug, seen_at=oldest.seen_at))
+        others = [s for s in held if s is not newest]
+        out.duplicates[newest.key] = min(
+            (s.plan for s in others), key=lambda p: _KEEP_ORDER.get(p, 3))
+        out.groups.append(held)
+    return out
 
 
 # --------------------------------------------------------------------- #
@@ -301,14 +403,23 @@ def sweep(api_key: str, since: int | None = None,
 
         customer = _customer_id(session)
         created = session.get("created")
+        subscription = _subscription_id(session)
+        if plan == LEAGUE_PASS and not subscription:
+            # Seats are entitled through the pass SUBSCRIPTION (RULE E2), so a
+            # pass that started none can never carry a seat. Said, because
+            # nobody would otherwise know why eleven claims go nowhere.
+            problems.append(
+                f"League Pass session {session.get('id')} started no subscription, "
+                f"so no seat can be tied to it — check the pass payment link "
+                f"bills yearly")
         signups.append(RosterSignup(
             email=email, ref=ref,
             # A pass PAYER is an ordinary subscriber of ours who also covers
             # other people; what makes their league's seats work is seats naming
-            # their address, not anything stored on this row.
+            # their pass, not anything else stored on this row.
             plan=plan or "season",
             seen_at=str(created) if isinstance(created, int) else "",
-            stripe_customer_id=customer, via=via))
+            stripe_customer_id=customer, via=via, subscription_id=subscription))
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
@@ -319,6 +430,15 @@ def sweep(api_key: str, since: int | None = None,
                 # signup is already in hand.
                 problems.append(f"could not stamp customer {customer}: {exc}")
     return signups, newest, problems
+
+
+def _subscription_id(session: dict) -> str | None:
+    """The subscription a Checkout Session started (an id, or the object when
+    expanded), or None for a one-off payment."""
+    raw = session.get("subscription")
+    if isinstance(raw, dict):
+        raw = raw.get("id")
+    return raw if isinstance(raw, str) and raw.startswith("sub_") else None
 
 
 def _consent(session: dict) -> dict[str, str]:
@@ -438,6 +558,16 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
 
 
 _SEAT_TOKEN = re.compile(r"^[0-9a-f]{20}$")
+# The intake's own record of every CONFIRMED seat claim, append-only beside
+# the signup log (OPS-R6). A seat's identity — the slug its send keys, plans
+# and receipts live under, and the moment it was first claimed, which keys its
+# welcome — used to be re-derived every run from the form Worker's rows, which
+# expire ~400 days after they arrive: when last season's first claim expired
+# mid-season the same seat got a new slug, a second "Your seat is in" and a
+# second copy of the week's report. Nothing here expires.
+SEAT_LOG_NAME = "seat-log.jsonl"
+_EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+_CUSTOMER = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
 
 
 def _received(row: Mapping) -> datetime | None:
@@ -448,6 +578,133 @@ def _received(row: Mapping) -> datetime | None:
     except ValueError:
         return None
     return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+@dataclass(frozen=True)
+class PassInfo:
+    """One League Pass a seat can name this run."""
+
+    payer: str                  # the address the pass was bought with
+    pass_id: str                # its Stripe subscription (RULE E2)
+    league_size: int            # the payer's league, which caps its seats
+    customer: str | None = None
+    # Active and not refunded in full RIGHT NOW. A seat on a pass that is not
+    # is neither confirmed, welcomed nor served (OPS-R4, LP2-D2).
+    entitled: bool = True
+
+    @property
+    def seat_cap(self) -> int:
+        """As many seats as the payer's league has teams (OPS-R7): one for
+        every other team, and one to spare for a co-manager (the League Pass
+        page says each co-manager claims their own seat). The pass covers
+        "every member of one league"; a seat link forwarded outside it used
+        to mean unlimited free reports on one $99 purchase."""
+        return max(0, int(self.league_size))
+
+
+def pass_infos(signups: Iterable[RosterSignup],
+               entitled: Iterable[str]) -> list[PassInfo]:
+    """The League Passes in the signup log, each entitled only while its own
+    subscription is in ``entitled`` (the PaidList's ``subscription_ids``).
+
+    Built from what the LINK took (a signup's plan is the payment link's,
+    never the ref's) and from the subscription's live state — never from the
+    log alone, which still names a pass refunded last week (OPS-R4). A pass
+    that started no subscription carries no seat (``sweep`` says so)."""
+    live = set(entitled)
+    out: list[PassInfo] = []
+    seen: set[str] = set()
+    for signup in signups:
+        if signup.plan != LEAGUE_PASS or not signup.subscription_id:
+            continue
+        if signup.subscription_id in seen:
+            continue
+        seen.add(signup.subscription_id)
+        try:
+            size = signup.roster().league_size
+        except RefError:
+            continue
+        out.append(PassInfo(payer=signup.email.lower(), pass_id=signup.subscription_id,
+                            league_size=size, customer=signup.stripe_customer_id,
+                            entitled=signup.subscription_id in live))
+    return out
+
+
+@dataclass
+class SeatEntry:
+    """One CONFIRMED seat claim: a line of the seat log."""
+
+    email: str
+    pass_id: str
+    payer: str
+    ref: str
+    claimed_at: str             # the Worker's stamp on the claim, verbatim
+    confirmed_at: str           # when this intake first saw it confirmed
+    customer: str | None = None
+
+    @property
+    def key(self) -> tuple[str, str, str, str]:
+        """A claim's identity, independent of any signing secret."""
+        return (self.email.lower(), self.pass_id, self.ref, self.claimed_at)
+
+    @property
+    def at(self) -> datetime | None:
+        return _received({"received_at": self.claimed_at})
+
+
+def _seated_at(entry: SeatEntry) -> datetime:
+    """When this confirmed claim was first seen confirmed — the moment its
+    seat existed, which is what a full pass's order is by (OPS-R7). The
+    claim's own stamp stands in for an entry written without one."""
+    try:
+        at = datetime.fromisoformat(entry.confirmed_at)
+    except ValueError:
+        return entry.at or _EPOCH
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+def load_seat_log(path: Path) -> list[SeatEntry]:
+    if not Path(path).is_file():
+        return []
+    out: list[SeatEntry] = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        try:
+            raw = json.loads(line)
+        except json.JSONDecodeError:
+            continue                    # a torn line is not a reason to lose the rest
+        if isinstance(raw, dict) and all(raw.get(k) for k in
+                                         ("email", "pass_id", "payer", "ref", "claimed_at")):
+            fields = {f: raw[f] for f in SeatEntry.__dataclass_fields__ if f in raw}
+            fields.setdefault("confirmed_at", "")
+            out.append(SeatEntry(**fields))
+    return out
+
+
+def append_seat_log(entries: Iterable[SeatEntry], path: Path) -> int:
+    """Append the confirmed claims not already logged. Idempotent by claim."""
+    known = {e.key for e in load_seat_log(path)}
+    fresh = [e for e in entries if e.key not in known]
+    if not fresh:
+        return 0
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with Path(path).open("a", encoding="utf-8") as handle:
+        for entry in fresh:
+            handle.write(json.dumps(asdict(entry), separators=(",", ":")) + "\n")
+    return len(fresh)
+
+
+@dataclass(frozen=True)
+class PendingSeat:
+    """A matched claim waiting for the claimed address to confirm it."""
+
+    email: str
+    pass_id: str
+    ref: str
+    code: str
+    ts: str
+    # A re-claim by somebody who already holds a seat on this pass: a ROSTER
+    # change, which the email says, not a new seat.
+    change: bool = False
 
 
 @dataclass
@@ -461,48 +718,53 @@ class SeatSweep:
     unmatched: list[dict] = field(default_factory=list)
     first_claimed: dict[tuple[str, str], datetime] = field(default_factory=dict)
     last_claimed: dict[tuple[str, str], datetime] = field(default_factory=dict)
-    # Seats whose roster a later claim replaced. Counted in the summary rather
-    # than reported per seat: the claims live in the Worker for ~400 days, so
-    # a per-seat line would repeat every hourly run as if it were news.
+    # Seats whose roster a later confirmed claim replaced. Counted in the
+    # summary rather than reported per seat: the claims live in the Worker for
+    # ~400 days, so a per-seat line would repeat every hourly run as if news.
     reclaimed: int = 0
+    # Claims waiting on their address's confirmation (each mailed a code), and
+    # the claims confirmed for the first time in this run (to log).
+    awaiting: list[PendingSeat] = field(default_factory=list)
+    confirmed: list[SeatEntry] = field(default_factory=list)
+    # Claims a full pass cannot take, and confirmed seats past the cap — each
+    # told once that the league's seats are taken (OPS-R7).
+    full: list[dict] = field(default_factory=list)
+    overflow: int = 0
+    # Claims and logged seats from before this season — a seat is claimed
+    # again each season with that season's roster (LP2-D3).
+    retired: int = 0
+    # Confirmed seats whose pass is not active right now (refunded, lapsed).
+    lapsed: int = 0
+    # Seat-link claims are arriving and not one matches a pass: a rotated or
+    # missing signing secret, not a run of typos (OPS-R10). Exits non-zero.
+    links_dead: bool = False
 
 
-def sweep_seats(rows: Iterable[dict], pass_payers: set[str],
-                known_ids: set[str] | None, secret: str = "") -> SeatSweep:
-    """Validate seat claims into registry rows.
+@dataclass(frozen=True)
+class _Claim:
+    email: str
+    pass_: PassInfo
+    ref: str
+    ts: str
+    at: datetime
+    row: Mapping
 
-    ``pass_payers`` is the set of addresses that ACTUALLY BOUGHT a League Pass,
-    built from sessions whose own `payment_link` was the pass link — never from
-    what a seat claims. The seat form is public by necessity, so without that
-    check it is a free-report generator for anyone who finds the URL.
 
-    A claim names its pass one of two ways. The per-pass seat link (contract
-    C4) carries ``pass_token``, recomputed here over those payers with
-    ``secret`` and never trusted from the row. The older route has the
-    leaguemate type the payer's address as ``covered_by``. Entitlement then
-    flows through `covered_by`, which is what ``PaidList.entitles`` reads.
-
-    ONE SEAT PER (address, pass) — LP-D4. The group-chat link is reusable, so a
-    leaguemate who claims again after a trade used to get a SECOND seat and two
-    weekly reports, old roster and new, with nothing said to anyone. A re-claim
-    is now a roster change: the newest claim by the Worker's own stamp wins,
-    and the seat keeps the slug it was FIRST claimed under (``origin``), so its
-    send keys, its stored plans and its update link never move.
-
-    ``known_ids`` is None when the directory could not be loaded at all. That
-    must mean "not checked", never "nothing is known" — an empty set would
-    reject every seat with a confident, wrong reason on the one day a data
-    release is unavailable.
-    """
-    out = SeatSweep()
-    by_token = ({seat_token(payer, secret): payer for payer in pass_payers}
-                if secret else {})
-    groups: dict[tuple[str, str], list[tuple[dict, Any]]] = {}
-    # Oldest first by the Worker's stamp; a stable sort keeps the Worker's own
-    # arrival order (its keys are timestamp-prefixed) for rows that tie.
-    ordered = sorted(rows, key=lambda r: _received(r) or datetime.min.replace(
-        tzinfo=timezone.utc))
-    for row in ordered:
+def _match_claims(rows: Iterable[Mapping], passes: list[PassInfo], keys: list[str],
+                  known_ids: set[str] | None, season_from: datetime | None,
+                  out: SeatSweep) -> tuple[list[_Claim], set[str], list[Mapping], int]:
+    """Each well-formed claim of this season -> the pass it names, or an
+    unmatched row. -> (claims, addresses that matched, seat-link rows, how
+    many seat-link rows matched). Problems are written onto ``out``."""
+    by_token = {seat_token(p.payer, key, p.pass_id): p for p in passes for key in keys}
+    by_payer: dict[str, list[PassInfo]] = {}
+    for p in passes:
+        by_payer.setdefault(p.payer, []).append(p)
+    claims: list[_Claim] = []
+    matched: set[str] = set()
+    token_rows: list[Mapping] = []
+    token_hits = 0
+    for row in sorted(rows, key=lambda r: _received(r) or _EPOCH):
         email = str(row.get("email") or "").strip().lower()
         typed = str(row.get("covered_by") or "").strip().lower()
         token = str(row.get("pass_token") or "").strip().lower()
@@ -515,25 +777,40 @@ def sweep_seats(rows: Iterable[dict], pass_payers: set[str],
         if not _EMAIL_RE.match(email) or not named:
             out.problems.append("a seat claim arrived with unusable addresses")
             continue
+        at = _received(row)
+        if season_from is not None and at is not None and at < season_from:
+            out.retired += 1
+            continue
         try:
             roster = decode_roster(ref)
         except RefError as exc:
             out.problems.append(f"seat claim from {_no_email(email)} carries an "
                                 f"unreadable roster ({exc})")
             continue
-        payer = (by_token.get(token) if _SEAT_TOKEN.match(token)
-                 else typed if typed in pass_payers else None)
-        if payer is None:
+        if _SEAT_TOKEN.match(token):
+            token_rows.append(row)
+            found = by_token.get(token)
+            token_hits += found is not None
+        else:
+            options = by_payer.get(typed, [])
+            found = options[0] if len(options) == 1 else None
+            if len(options) > 1:
+                out.problems.append(
+                    f"seat claim from {_no_email(email)} names a payer with "
+                    f"{len(options)} League Passes — only a league's own seat "
+                    f"link can say which")
+        if found is None:
             out.problems.append(
                 f"seat claim from {_no_email(email)} "
                 + ("carries a seat link that matches no League Pass"
                    if _SEAT_TOKEN.match(token) else
                    "names a payer with no League Pass")
                 + " — not honoured")
-            out.unmatched.append(row)
+            out.unmatched.append(dict(row))
             continue
-        if email == payer:
-            # The commissioner already has their own paid row; a seat for
+        matched.add(email)
+        if email == found.payer:
+            # The pass buyer already has their own paid row; a seat for
             # themselves would be a second report for one purchase.
             out.problems.append(
                 f"seat claim from {_no_email(email)} names ITSELF as the payer "
@@ -546,35 +823,263 @@ def sweep_seats(rows: Iterable[dict], pass_payers: set[str],
                 f"seat claim from {_no_email(email)} names {len(missing)} "
                 f"player id(s) the directory does not have")
             continue
-        groups.setdefault((email, payer), []).append((row, roster))
+        if at is None:
+            # A code binds the Worker's stamp; a row without one cannot be
+            # confirmed (the Worker always stamps — this is not its row).
+            out.problems.append(f"seat claim from {_no_email(email)} carries no "
+                                f"Worker stamp — not honoured")
+            continue
+        claims.append(_Claim(email, found, ref, str(row.get("received_at")), at, row))
+    return claims, matched, token_rows, token_hits
 
-    for (email, payer), claims in groups.items():
-        first, (latest, roster) = claims[0][0], claims[-1]
-        origin = slug_of(str(first.get("ref")).strip())
-        ref = str(latest.get("ref")).strip()
-        if len({str(row.get("ref")).strip() for row, _ in claims}) > 1:
-            out.reclaimed += 1
-        claimed = _received(latest)
-        out.rows.append({
-            "email": email, "ref": ref,
-            "player_ids": list(roster.player_ids), "slots": list(roster.slots),
-            "scoring": roster.scoring, "league_size": roster.league_size,
-            "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": payer,
-            "origin": origin,
-            **({"roster_as_of": claimed.date().isoformat()} if claimed else {}),
-        })
-        for stamp, into in ((_received(first), out.first_claimed),
-                            (claimed, out.last_claimed)):
-            if stamp is not None:
-                into[(email, origin)] = stamp
+
+def _seat_row(email: str, owner: PassInfo, held: list[SeatEntry], roster) -> dict:
+    """The registry row of one seat: the newest confirmed roster, under the
+    slug the seat was first confirmed with."""
+    latest = held[-1]
+    return {
+        "email": email, "ref": latest.ref,
+        "player_ids": list(roster.player_ids), "slots": list(roster.slots),
+        "scoring": roster.scoring, "league_size": roster.league_size,
+        "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": owner.payer,
+        "origin": slug_of(held[0].ref), "pass_id": owner.pass_id,
+        **({"pass_customer": owner.customer}
+           if owner.customer and _CUSTOMER.match(owner.customer) else {}),
+        **({"roster_as_of": latest.at.date().isoformat()} if latest.at else {}),
+    }
+
+
+def _returned_codes(confirm: Iterable[str | Mapping]) -> dict[str, datetime | None]:
+    """Confirm-page codes -> when the Worker received each (None for a bare
+    code). A code confirms a claim only when it came back within EXPIRY_DAYS
+    of the claim — judged by the button press's own stamp, never by the hour
+    an intake happens to run."""
+    out: dict[str, datetime | None] = {}
+    for item in confirm:
+        code = str(item.get("code") if isinstance(item, Mapping) else item).strip().lower()
+        at = _received(item) if isinstance(item, Mapping) else None
+        if code and (code not in out or (at and (out[code] is None or at < out[code]))):
+            out[code] = at
     return out
 
 
-def seats_to_rows(rows: Iterable[dict], pass_payers: set[str],
-                  known_ids: set[str] | None,
-                  secret: str = "") -> tuple[list[dict], list[str]]:
+def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
+                known_ids: set[str] | None, secrets: str | Iterable[str] = (), *,
+                confirm_codes: Iterable[str | Mapping] = (),
+                log: Iterable[SeatEntry] = (), now: datetime | None = None,
+                season_from: datetime | None = None) -> SeatSweep:
+    """Seat claims and the seat log -> registry rows, confirmations to send,
+    and claims newly confirmed. Pure: everything it reads is an argument.
+
+    ``passes`` are the League Passes actually bought (``pass_infos``), built
+    from sessions whose own `payment_link` was the pass link — never from what
+    a seat claims. The seat form is public by necessity, so without that check
+    it is a free-report generator for anyone who finds the URL.
+
+    A claim names its pass one of two ways. The per-pass seat link (contract
+    C4) carries ``pass_token``, recomputed here under every signing secret
+    (``run.updates.signing_secrets``) and never trusted from the row. The older
+    route has the leaguemate type the payer's address as ``covered_by``, which
+    names a pass only when that address bought exactly one.
+
+    **A claim is a REQUEST, never a seat (OPS-R1).** The seat link rides on
+    every pass report, written to be forwarded, so it proves nothing about who
+    is claiming: honoured on sight, it let anyone enrol a stranger's address
+    for weekly mail or replace a seat holder's roster with nobody told. Each
+    matched claim is mailed a code at the claimed address (``awaiting``); it
+    becomes a seat only when that code comes back through the confirm page's
+    button (``confirm_codes``), and then it is logged (``confirmed``, for
+    SEAT_LOG_NAME) and never needs the Worker row or the secret again. A code
+    lives EXPIRY_DAYS and is single-use: a claim at or before the newest
+    confirmed one for the same seat is dead.
+
+    ONE SEAT PER (address, pass) — LP-D4. A re-claim is a roster change, under
+    the same confirmation: the newest confirmed claim's roster stands, under
+    the slug the seat was FIRST confirmed with (``origin``), so its send keys,
+    stored plans and update link never move. A claim for the roster already
+    held changes nothing and is not mailed.
+
+    A pass carries at most ``PassInfo.seat_cap`` seats, in the order they were
+    confirmed (OPS-R7) — a served seat is never displaced by an older claim
+    confirmed later; the rest are told the league's seats are taken. Claims
+    and logged seats from before ``season_from`` are retired: each season's
+    seat is claimed with that season's roster (LP2-D3).
+
+    ``known_ids`` is None when the directory could not be loaded at all. That
+    must mean "not checked", never "nothing is known" — an empty set would
+    reject every seat with a confident, wrong reason on the one day a data
+    release is unavailable.
+    """
+    from run.updates import CONFIRMS_PER_DAY, EXPIRY_DAYS, same_roster, seat_code
+    keys = [secrets] if isinstance(secrets, str) else list(secrets)
+    keys = [key for key in keys if key]
+    now = now or datetime.now(timezone.utc)
+    returned = _returned_codes(confirm_codes)
+    expiry = timedelta(days=EXPIRY_DAYS)
+    out = SeatSweep()
+    passes = list(passes)
+    by_id = {p.pass_id: p for p in passes}
+    claims, matched, token_rows, token_hits = _match_claims(
+        rows, passes, keys, known_ids, season_from, out)
+
+    # The log, this season's part of it, plus whatever came back confirmed now.
+    entries: list[SeatEntry] = []
+    for entry in log:
+        if season_from is not None and (entry.at or _EPOCH) < season_from:
+            out.retired += 1
+            continue
+        entries.append(entry)
+    logged = {entry.key for entry in entries}
+    newest: dict[tuple[str, str], datetime] = {}
+    for entry in entries:
+        seat = (entry.email.lower(), entry.pass_id)
+        if entry.at is not None and entry.at > newest.get(seat, _EPOCH):
+            newest[seat] = entry.at
+
+    def live(claim: _Claim, by: datetime) -> bool:
+        """Not logged, not expired by ``by``, and newer than the claim that
+        stands."""
+        seat = (claim.email, claim.pass_.pass_id)
+        return ((claim.email, claim.pass_.pass_id, claim.ref, claim.ts) not in logged
+                and by - claim.at <= expiry
+                and claim.at > newest.get(seat, _EPOCH))
+
+    for claim in claims:                          # oldest first
+        codes = {seat_code(claim.email, claim.pass_.pass_id, claim.ref, claim.ts, key)
+                 for key in keys}
+        pressed = [returned[code] or now for code in codes if code in returned]
+        if not pressed or not claim.pass_.entitled or not live(claim, min(pressed)):
+            continue
+        entry = SeatEntry(email=claim.email, pass_id=claim.pass_.pass_id,
+                          payer=claim.pass_.payer, ref=claim.ref,
+                          claimed_at=claim.ts,
+                          confirmed_at=now.isoformat(timespec="seconds"),
+                          customer=claim.pass_.customer)
+        entries.append(entry)
+        out.confirmed.append(entry)
+        logged.add(entry.key)
+        newest[(claim.email, claim.pass_.pass_id)] = claim.at
+
+    # One seat per (address, pass), from the log alone.
+    seats: dict[tuple[str, str], list[SeatEntry]] = {}
+    for entry in sorted(entries, key=lambda e: e.at or _EPOCH):
+        seats.setdefault((entry.email.lower(), entry.pass_id), []).append(entry)
+    by_pass: dict[str, list[tuple[datetime, datetime, str, list[SeatEntry]]]] = {}
+    for (email, pass_id), held in seats.items():
+        owner = by_id.get(pass_id)
+        if owner is None or not owner.entitled:
+            out.lapsed += 1
+            continue
+        # Confirmed first, then (for seats confirmed in one run) claimed first.
+        by_pass.setdefault(pass_id, []).append(
+            (min(_seated_at(entry) for entry in held), held[0].at or _EPOCH, email, held))
+
+    taken: dict[str, int] = {}
+    for pass_id, group in by_pass.items():
+        owner = by_id[pass_id]
+        # The cap counts every confirmed seat in the order it was CONFIRMED,
+        # before anything this run might fail to build: a seat already being
+        # served is never displaced by an older claim confirmed later, and a
+        # seat skipped for one run (a directory hiccup) never lets one past
+        # the cap in for that run — with a welcome — only to drop it again.
+        group.sort(key=lambda item: item[:3])
+        for index, (_seated, _claimed, email, held) in enumerate(group):
+            if index >= owner.seat_cap:
+                out.overflow += 1
+                out.full.append({"email": email, "received_at": held[0].claimed_at,
+                                 "ref": held[0].ref, "pass_id": pass_id})
+                continue
+            try:
+                roster = decode_roster(held[-1].ref)
+            except RefError as exc:
+                out.problems.append(f"a logged seat for {_no_email(email)} stopped "
+                                    f"decoding ({exc}) — not served")
+                continue
+            if known_ids and any(pid not in known_ids for pid in roster.player_ids):
+                out.problems.append(f"the seat of {_no_email(email)} names a player "
+                                    f"the directory no longer has — not served this run")
+                continue
+            row = _seat_row(email, owner, held, roster)
+            out.rows.append(row)
+            if len({entry.ref for entry in held}) > 1:
+                out.reclaimed += 1
+            for stamp, into in ((held[0].at, out.first_claimed),
+                                (held[-1].at, out.last_claimed)):
+                if stamp is not None:
+                    into[(email, row["origin"])] = stamp
+        taken[pass_id] = min(len(group), owner.seat_cap)
+        if len(group) > owner.seat_cap:
+            out.problems.append(
+                f"League Pass {pass_id} is full: {len(group) - owner.seat_cap} "
+                f"confirmed seat(s) past its {owner.seat_cap} seats (one per team "
+                f"in a {owner.league_size}-team league) are not served — the first "
+                f"seats confirmed are kept")
+
+    # Every live claim that would change something is mailed its code.
+    pending: list[PendingSeat] = []
+    unsigned = 0
+    for claim in claims:
+        if not live(claim, now):
+            continue
+        owner = claim.pass_
+        if not owner.entitled:
+            out.problems.append(f"seat claim from {_no_email(claim.email)} names a "
+                                f"League Pass that is not active — nothing sent")
+            continue
+        held = seats.get((claim.email, owner.pass_id))
+        if held and same_roster(held[-1].ref, claim.ref):
+            continue                              # the roster they already have
+        if not held and taken.get(owner.pass_id, 0) >= owner.seat_cap:
+            out.full.append(dict(claim.row))
+            continue
+        if not keys:
+            unsigned += 1
+            continue
+        pending.append(PendingSeat(
+            claim.email, owner.pass_id, claim.ref,
+            seat_code(claim.email, owner.pass_id, claim.ref, claim.ts, keys[0]),
+            claim.ts, change=bool(held)))
+    if unsigned:
+        out.problems.append(f"{unsigned} seat claim(s) cannot be confirmed: "
+                            f"UPDATE_SECRET is not set")
+    # At most CONFIRMS_PER_DAY codes reach one address a day (by the Worker's
+    # date): the form is public, so a stranger can annoy an inbox a little and
+    # never flood it.
+    per_day: dict[tuple[str, str], int] = {}
+    for request in sorted(pending, key=lambda r: r.ts):
+        bucket = (request.email, request.ts[:10])
+        per_day[bucket] = per_day.get(bucket, 0) + 1
+        if per_day[bucket] <= CONFIRMS_PER_DAY:
+            out.awaiting.append(request)
+
+    # OPS-R9: an address whose claim DID match a pass is never also told its
+    # other claim matched nothing — a typo'd first try and a matched second
+    # one were sent "Your seat is in" and "isn't set up yet" in the same run.
+    out.unmatched = [row for row in out.unmatched
+                     if str(row.get("email") or "").strip().lower() not in matched]
+    # OPS-R10: seat-link claims arriving and NOT ONE matching is a signing
+    # secret that was rotated or unset, not a run of typos. Loud, and nobody
+    # is told "no pass" for a link that was good when it was sent.
+    recent = [row for row in token_rows
+              if (at := _received(row)) is not None and now - at <= UNMATCHED_MAX_AGE]
+    if recent and not token_hits and (passes or not keys):
+        out.links_dead = True
+        out.problems.append(
+            f"SEAT LINKS MATCH NO PASS: {len(recent)} claim(s) through a seat link "
+            f"in the last {UNMATCHED_MAX_AGE.days} days and not one matches a "
+            f"League Pass. If UPDATE_SECRET was rotated, set the old value in "
+            f"UPDATE_SECRET_PREVIOUS; if it is unset, set it. Nobody is told "
+            f"their claim failed until this is fixed.")
+        out.unmatched = [row for row in out.unmatched
+                         if not _SEAT_TOKEN.match(str(row.get("pass_token") or "").lower())]
+    return out
+
+
+def seats_to_rows(rows: Iterable[dict], passes: Iterable[PassInfo],
+                  known_ids: set[str] | None, secret: str | Iterable[str] = "",
+                  **kwargs) -> tuple[list[dict], list[str]]:
     """``sweep_seats`` as (registry rows, problems)."""
-    swept = sweep_seats(rows, pass_payers, known_ids, secret)
+    swept = sweep_seats(rows, passes, known_ids, secret, **kwargs)
     return swept.rows, swept.problems
 
 
@@ -583,8 +1088,10 @@ def seat_signups_from(rows: Iterable[Mapping],
                       ) -> list[RosterSignup]:
     """The seats a registry is about to hold, as signups for the mail a
     purchase gets (welcome, first report). Their "purchase" moment is the
-    FIRST claim (the Worker's stamp), which keys both the welcome and the
-    served-since check, so neither repeats when the roster moves (LP-D4)."""
+    FIRST confirmed claim (the Worker's stamp on it), which keys both the
+    welcome and the served-since check, so neither repeats when the roster
+    moves (LP-D4) — and, read from the seat log, never moves when a Worker
+    row expires (OPS-R6)."""
     out: list[RosterSignup] = []
     for row in rows:
         if row.get("plan") != LEAGUE_PASS:
@@ -597,18 +1104,20 @@ def seat_signups_from(rows: Iterable[Mapping],
             seen_at=str(int(claimed.timestamp())) if claimed else "",
             league_size=int(row.get("league_size") or 12), source="seat",
             covered_by=str(row.get("covered_by") or "").lower() or None,
-            origin=origin))
+            origin=origin, pass_id=row.get("pass_id") or None,
+            pass_customer=row.get("pass_customer") or None))
     return out
 
 
 def seat_counts(rows: Iterable[Mapping]) -> dict[str, int]:
-    """payer address -> the seats their pass carries in this registry
-    (contract C2: a count, never who)."""
+    """pass -> the seats it carries in this registry (contract C2: a count,
+    never who), keyed like ``RosterSubscriber.pass_key``: the pass
+    subscription, or the payer's address on a row that names none."""
     counts: dict[str, int] = {}
     for row in rows:
         if row.get("plan") == LEAGUE_PASS and row.get("covered_by"):
-            payer = str(row["covered_by"]).lower()
-            counts[payer] = counts.get(payer, 0) + 1
+            key = str(row.get("pass_id") or str(row["covered_by"]).lower())
+            counts[key] = counts.get(key, 0) + 1
     return counts
 
 
@@ -683,19 +1192,103 @@ def _send_unmatched_notes(unmatched: list[Mapping], now: datetime) -> None:
                                 subject=subject, html=html, text=text,
                                 key=unmatched_key(row),
                                 unsubscribe=seat_stop_href()))
+    _send_notes("Unmatched seat claims", messages)
+
+
+def _send_notes(what: str, messages: list) -> None:
+    """Send a batch of seat notes through the idempotent delivery layer, or
+    say they are pending when no provider is configured."""
+    if not messages:
+        return
     provider = build_provider(None)
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
-        print(f"Unmatched seat claims: {len(messages)} note(s) pending — "
+        print(f"{what}: {len(messages)} note(s) pending — "
               f"EMAIL_PROVIDER is not set, so none were sent.")
         return
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
-    print(f"Unmatched seat claims via {provider.name}: {len(delivered)} note(s) "
+    print(f"{what} via {provider.name}: {len(delivered)} note(s) "
           f"sent, {len(failures)} failed")
     for result in failures:
         print(f"    SEAT NOTE FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
+
+
+# A pass whose league's seats are all taken (OPS-R7) tells the claimer so,
+# once per claim and at most UNMATCHED_PER_DAY a day per address — the form is
+# public, so the same caps as the unmatched note apply. No grace period:
+# fullness is a fact about seats already confirmed, not a payment in flight.
+def full_key(row: Mapping) -> str:
+    """Send-log key: one note per refused claim, ever, with no address in it."""
+    email = str(row.get("email") or "").strip().lower()
+    claim = "|".join(str(row.get(k) or "") for k in
+                     ("received_at", "ref", "covered_by", "pass_token", "pass_id"))
+    return (f"seat-full-{hashlib.sha256(email.encode()).hexdigest()[:8]}-"
+            f"{hashlib.sha256(claim.encode()).hexdigest()[:10]}")
+
+
+def full_due(full: Iterable[Mapping], now: datetime) -> list[Mapping]:
+    """The full-pass notes to send: within UNMATCHED_MAX_AGE of the claim, at
+    most UNMATCHED_PER_DAY per address per Worker date. Pure."""
+    per_day: dict[tuple[str, str], int] = {}
+    out: list[Mapping] = []
+    for row in sorted(full, key=lambda r: _received(r) or _EPOCH):
+        at = _received(row)
+        if at is None or now - at > UNMATCHED_MAX_AGE:
+            continue
+        bucket = (str(row.get("email") or "").strip().lower(), at.date().isoformat())
+        per_day[bucket] = per_day.get(bucket, 0) + 1
+        if per_day[bucket] <= UNMATCHED_PER_DAY:
+            out.append(row)
+    return out
+
+
+def _send_full_notes(full: list[Mapping], now: datetime) -> None:
+    from render.report import seat_stop_href
+    from render.seat_claim import full_email
+    from run.delivery import Message
+    messages = []
+    for row in full_due(full, now):
+        subject, html, text = full_email(os.environ.get("SITE_URL", ""))
+        messages.append(Message(to=str(row.get("email")).strip().lower(),
+                                subject=subject, html=html, text=text,
+                                key=full_key(row), unsubscribe=seat_stop_href()))
+    _send_notes("Full League Pass claims", messages)
+
+
+def seat_confirmation_key(request: PendingSeat) -> str:
+    """Send-log key: ONE confirmation per claim, ever, and no address in it."""
+    who = hashlib.sha256(request.email.encode("utf-8")).hexdigest()[:8]
+    return (f"seat-confirm-{who}-"
+            f"{hashlib.sha256(request.code.encode('utf-8')).hexdigest()[:10]}")
+
+
+def _send_seat_confirmations(awaiting: list[PendingSeat], data) -> None:
+    """One confirmation per claim, ever, to the CLAIMED address only — the
+    one inbox that can turn the claim into a seat (OPS-R1)."""
+    if not awaiting:
+        return
+    from render.report import seat_stop_href
+    from render.seat_claim import confirm_email
+    from run.delivery import Message
+    from run.updates import seat_confirm_url
+    site = os.environ.get("SITE_URL", "")
+    if not site:
+        print(f"Seat confirmations: {len(awaiting)} pending — SITE_URL is not "
+              f"set, so none were sent.")
+        return
+    names = getattr(data, "players", None) if data is not None else None
+    messages = []
+    for request in awaiting:
+        ids = decode_roster(request.ref).player_ids
+        listed = [names.name(pid) for pid in ids] if names is not None else []
+        subject, html, text = confirm_email(seat_confirm_url(site, request.code),
+                                            listed, change=request.change)
+        messages.append(Message(to=request.email, subject=subject, html=html,
+                                text=text, key=seat_confirmation_key(request),
+                                unsubscribe=seat_stop_href()))
+    _send_notes("Seat confirmations", messages)
 
 
 def registry_plan(purchase: str) -> tuple[str, str | None]:
@@ -748,6 +1341,14 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
             **({"roster_as_of": day} if day else {}),
             **({"stripe_customer_id": signup.stripe_customer_id}
                if signup.stripe_customer_id else {}),
+            # A row merged from several purchases of one roster keeps the
+            # oldest one's slug (merge_same_roster), which its ref no longer
+            # digests to.
+            **({"origin": signup.origin} if signup.origin else {}),
+            # A pass payer's row names its pass, so Tuesday counts its seats
+            # and signs its seat link per pass (LP2-D4).
+            **({"pass_id": signup.pass_of}
+               if billing == PASS_BILLING and signup.pass_of else {}),
         })
     return rows
 
@@ -765,27 +1366,35 @@ def pass_seat_link(signup: RosterSignup) -> str | None:
     """The one link a League Pass payer shares (contract C4), or None when
     the site or the signing secret is missing — then the welcome keeps the
     generic link and the "tell them your email" instruction."""
-    if signup.plan != LEAGUE_PASS:
+    if signup.plan != LEAGUE_PASS or not signup.subscription_id:
+        # A pass with no subscription can carry no seat (RULE E2): a link
+        # printed for it would match nothing, so the welcome keeps the generic
+        # route rather than a dead one.
         return None
     return seat_url(os.environ.get("SITE_URL", ""),
                     os.environ.get("UPDATE_SECRET", ""), signup.email,
-                    signup.roster())
+                    signup.roster(), pass_id=signup.subscription_id)
 
 
-def _welcome(signup: RosterSignup, season: str):
+def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None):
     """One signup's acknowledgment. A pass payer's carries their seat link
-    when there is one; the keyword is passed only then, so every other plan
-    calls exactly what it always called."""
+    when there is one; a purchase of a roster the address already holds
+    another subscription for says so (``duplicate``, LP2-D1). Each keyword is
+    passed only when it applies, so every other purchase calls exactly what
+    it always called."""
     extra = {}
     link = pass_seat_link(signup)
     if link:
         extra["seat_link"] = link
+    if duplicate:
+        extra["duplicate"] = duplicate
     return welcome_message(signup.email, signup.plan, signup.slug, season,
                            purchased_at=str(signup.seen_at or ""), **extra)
 
 
 def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
-                   season: str) -> None:
+                   season: str,
+                   duplicates: Mapping[tuple[str, str], str] | None = None) -> None:
     """One acknowledgment per subscription, idempotent forever.
 
     Built from the SIGNUPS rather than the registry rows, because the registry
@@ -797,8 +1406,13 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
     that claim, so a re-claim with a new roster (LP-D4) is never a second
     welcome, and a season roll — seat rows are rebuilt from the Worker every
     run — never re-welcomes anybody.
+
+    Every PURCHASE is welcomed, including one merged into another's report
+    (merge_same_roster): the acknowledgment is owed per subscription, and the
+    newer one is where the person learns they hold two (``duplicates``).
     """
-    messages = [_welcome(s, season) for s in [*servable, *seats]]
+    messages = [_welcome(s, season, (duplicates or {}).get(s.key))
+                for s in [*servable, *seats]]
     if not messages:
         return
 
@@ -927,7 +1541,9 @@ def subscriber_for(signup: RosterSignup):
         scoring=roster.scoring, league_size=roster.league_size,
         plan=plan, billing=billing,
         covered_by=signup.covered_by if plan == LEAGUE_PASS else None,
-        origin=signup.slug, roster_as_of=_purchase_day(signup.seen_at))
+        origin=signup.slug, roster_as_of=_purchase_day(signup.seen_at),
+        pass_id=signup.pass_of if (plan == LEAGUE_PASS or billing == PASS_BILLING) else None,
+        pass_customer=signup.pass_customer if plan == LEAGUE_PASS else None)
 
 
 def _first_file(signup, data, season: str, processed_dir, record: bool = True,
@@ -998,10 +1614,11 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     file, weekly report) reads as a mailing list rather than a product.
 
     A League Pass SEAT is served by the same rules (LP-I4): a leaguemate who
-    claims from the group chat on a Wednesday gets that week's report the same
-    day, not next Tuesday, when the chat has moved on. Its "purchase" is the
-    first claim, which is what the served-since check reads; its report and
-    roster report carry the seat's stop route, never a billing page.
+    claims from the group chat on a Wednesday and presses the confirmation
+    button gets that week's report the run it is confirmed, not next Tuesday,
+    when the chat has moved on. Its "purchase" is its first confirmed claim,
+    which is what the served-since check reads; its report and roster report
+    carry the seat's stop route, never a billing page.
     """
     from engine.preseason import build_preseason_report, bye_by_team
     from render.preseason import preseason_message
@@ -1010,9 +1627,14 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
 
     processed_dir = processed_dir or PROCESSED_DIR
     # The pass payers in hand, so a seat's report and a payer's carry their
-    # league's own seat link with the payer's setup (contract C4).
-    payers = {s.email.lower(): subscriber_for(s) for s in servable
-              if s.plan == LEAGUE_PASS}
+    # league's own seat link with the payer's setup (contract C4) — keyed by
+    # pass, as run/tuesday.py keys them (LP2-D4).
+    payers = {}
+    for signup in servable:
+        if signup.plan == LEAGUE_PASS:
+            payer = subscriber_for(signup)
+            if payer.pass_key:
+                payers[payer.pass_key] = payer
     # Only purchases that have not been served yet. Everyone else is the
     # Tuesday run's, which checks entitlement and reads the current roster.
     entries = _sent_entries()
@@ -1116,6 +1738,40 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
               file=sys.stderr)
 
 
+def _live_passes(signups: Iterable[RosterSignup], api_key: str) -> list[PassInfo]:
+    """The League Passes in the log, marked entitled from Stripe's live answer
+    (RULE E2). Asked only when there are passes to ask about; raises
+    SubscriptionError when Stripe cannot say."""
+    passes = [s for s in signups if s.plan == LEAGUE_PASS and s.subscription_id]
+    if not passes:
+        return []
+    from run.subscriptions import load_paid_from_stripe
+    paid = load_paid_from_stripe(api_key)
+    return pass_infos(passes, paid.subscription_ids or ())
+
+
+def _season_from(cache: Path, season: str) -> datetime | None:
+    """The first moment a seat claim belongs to ``season``: the day after the
+    previous season's last regular-season game (UTC). A claim made in August
+    is this season's; one made last October is last season's, which ended
+    with its Week 18 report ("claim your seat again next season", LP2-D3).
+    None when the schedule cannot say — then no claim is retired, and the
+    run says so rather than guessing."""
+    if not str(season).isdigit():
+        return None
+    try:
+        from run.solo import season_ends
+        end = season_ends(cache, live=False).get(str(int(season) - 1))
+    except Exception:  # noqa: BLE001 — a missing schedule retires nothing
+        end = None
+    if not end:
+        print(f"Seats: the {int(season) - 1} season's end could not be read, so "
+              f"no claim was retired as last season's this run.", file=sys.stderr)
+        return None
+    day = datetime.fromisoformat(end).replace(tzinfo=timezone.utc)
+    return day + timedelta(days=1)
+
+
 # --------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------- #
@@ -1196,6 +1852,11 @@ def main(argv: list[str] | None = None) -> int:
                         f"— rows were written unchecked")
 
     servable = [s for s in projected if s.key not in blocked]
+    # One address, one roster, one report (LP2-D1): an upgrade to the League
+    # Pass, or a second purchase of the same roster, is written as ONE row.
+    # Every purchase is still welcomed (`servable`); the registry and the
+    # first report read the merged list.
+    merged = merge_same_roster(servable)
 
     # League Pass SEATS. The only signups with no payment behind them, and the
     # only external dependency in this pipeline — so a vendor outage costs
@@ -1208,10 +1869,9 @@ def main(argv: list[str] | None = None) -> int:
     request_rows: list[dict] = []
     confirm_rows: list[dict] = []
     secret = os.environ.get("UPDATE_SECRET", "")
+    seat_log_path = registry_dir / SEAT_LOG_NAME
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
     if seat_endpoint:
-        # Built from what the LINK took, never from what a seat claims.
-        pass_payers = {s.email.lower() for s in servable if s.plan == LEAGUE_PASS}
         try:
             form_rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
         except IntakeError as exc:
@@ -1222,24 +1882,48 @@ def main(argv: list[str] | None = None) -> int:
                   "Pass seat. Fix the backend, or unset FORM_ENDPOINT to run "
                   "without seats deliberately.", file=sys.stderr)
             return 1
-        # One backend, two kinds of row: a seat claim (the default, for rows
-        # written before updates existed) and a roster update.
+        # One backend, several kinds of row: a seat claim (the default, for
+        # rows written before updates existed), roster updates and requests,
+        # and the confirm page's codes — which confirm seat claims and roster
+        # requests alike, each code meaning something to exactly one of them.
         claims = [r for r in form_rows if str(r.get("kind") or "seat") == "seat"]
         update_rows = [r for r in form_rows if str(r.get("kind") or "") == "update"]
         request_rows = [r for r in form_rows
                         if str(r.get("kind") or "") == "update_request"]
         confirm_rows = [r for r in form_rows if str(r.get("kind") or "") == "confirm"]
-        seats = sweep_seats(claims, pass_payers, known or None, secret)
+        seat_log = load_seat_log(seat_log_path)
+        try:
+            passes = _live_passes(servable, api_key) if (claims or seat_log) else []
+        except SubscriptionError as exc:
+            # Which passes are active is the whole seat question (RULE E2).
+            # Unanswerable, the run refuses rather than serving seats on a
+            # refunded pass — or dropping every seat on a paid one.
+            print(f"could not read which League Passes are active: {exc}",
+                  file=sys.stderr)
+            print("  Refusing to write a registry that would serve or drop "
+                  "League Pass seats on a guess.", file=sys.stderr)
+            return 1
+        from run.updates import signing_secrets
+        seats = sweep_seats(
+            claims, passes, known or None,
+            signing_secrets(secret, os.environ.get("UPDATE_SECRET_PREVIOUS", "")),
+            confirm_codes=confirm_rows,
+            log=seat_log, now=datetime.now(timezone.utc),
+            season_from=_season_from(args.cache, known_season))
         seat_rows = seats.rows
         problems.extend(seats.problems)
+        if not args.dry_run:
+            append_seat_log(seats.confirmed, seat_log_path)
         # Counted, so a run where claims are going nowhere is visible in the
-        # log; each claimer is told by email (_send_unmatched_notes).
-        print(f"Seats: {len(seat_rows)} honoured of {len(claims)} claim(s); "
-              f"{seats.reclaimed} re-claimed with a new roster (one seat each, "
-              f"the newest roster stands); {len(seats.unmatched)} matched no "
-              f"League Pass")
+        # log; each claimer is told by email.
+        print(f"Seats: {len(seat_rows)} served; {len(seats.confirmed)} newly "
+              f"confirmed; {len(seats.awaiting)} claim(s) mailed a confirmation; "
+              f"{seats.reclaimed} with a confirmed new roster (one seat each, "
+              f"the newest stands); {len(seats.unmatched)} matched no League "
+              f"Pass; {seats.overflow} past a full pass; {seats.lapsed} on a pass "
+              f"not active now; {seats.retired} from an earlier season")
 
-    candidate = to_rows(servable) + seat_rows
+    candidate = to_rows(merged.signups) + seat_rows
 
     # Self-serve roster UPDATES (run/updates.py). Validated against the rows
     # about to be written — a subscriber can only change a roster they hold —
@@ -1325,14 +2009,26 @@ def main(argv: list[str] | None = None) -> int:
     # builds a new ref and only a new payment carries it here. Say so rather
     # than silently picking one.
     by_customer: dict[str, list[RosterSignup]] = {}
-    for signup in servable:
+    for signup in merged.signups:
         if signup.stripe_customer_id:
             by_customer.setdefault(signup.stripe_customer_id, []).append(signup)
     for customer, held in sorted(by_customer.items()):
         if len(held) > 1:
             print(f"  NOTE: customer {customer} has {len(held)} rosters and will "
-                  f"get {len(held)} reports. If that is a roster CHANGE rather "
-                  f"than a second team, remove the old row by hand.")
+                  f"get {len(held)} reports. If one is a roster CHANGE rather "
+                  f"than a second team, the older subscription keeps its report "
+                  f"until it is cancelled in Stripe.")
+    # LP2-D1: the same roster bought twice by one address is ONE report; the
+    # other subscription still bills. Flagged here, and the newer purchase's
+    # welcome tells the subscriber they can cancel it — nothing is cancelled
+    # or refunded on anybody's behalf.
+    for group in merged.groups:
+        # group[0] is the oldest purchase, whose slug the one row keeps.
+        print(f"  NOTE: one address holds {len(group)} subscriptions for one roster "
+              f"({', '.join(s.plan for s in group)}) — one report a week, under "
+              f"{group[0].slug}. The others keep billing until the subscriber "
+              f"cancels them; their welcome says how. Nothing was cancelled or "
+              f"refunded.")
 
     if wiped:
         print(f"REFUSING TO WRITE: all {len(servable)} servable signup(s) were "
@@ -1341,10 +2037,14 @@ def main(argv: list[str] | None = None) -> int:
               f"is untouched.", file=sys.stderr)
         return 1
 
+    # A seat link that matches no pass at all is a signing secret gone wrong
+    # (OPS-R10): every seat claim is going nowhere, and that must not be a
+    # green cron.
+    failing = bool(blocked or unattributed or seats.links_dead)
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
-        return 1 if (blocked or unattributed) else 0
+        return 1 if failing else 0
 
     write_registry(rows, registry_path)
 
@@ -1371,11 +2071,16 @@ def main(argv: list[str] | None = None) -> int:
         # collision and any update — so nobody is welcomed or sent a first
         # report for a seat that was not written.
         seat_signups = seat_signups_from(rows, seats.first_claimed)
-        _send_welcomes(servable, seat_signups, known_season)
+        _send_welcomes(servable, seat_signups, known_season, merged.duplicates)
         _send_confirmations(awaiting, data)
-        _send_unmatched_notes(seats.unmatched, datetime.now(timezone.utc))
+        now = datetime.now(timezone.utc)
+        _send_seat_confirmations(seats.awaiting, data)
+        _send_unmatched_notes(seats.unmatched, now)
+        _send_full_notes(seats.full, now)
         from run.saturday import FIRST_PLANS_NAME
-        _send_first_files([*servable, *seat_signups], data, known_season,
+        # The merged list: one first report per roster, never one per purchase
+        # of it (LP2-D1).
+        _send_first_files([*merged.signups, *seat_signups], data, known_season,
                           first_plans=registry_dir / FIRST_PLANS_NAME,
                           seat_counts=seat_counts(rows))
     if isinstance(newest, int):
@@ -1394,8 +2099,11 @@ def main(argv: list[str] | None = None) -> int:
     if unattributed:
         print(f"{len(unattributed)} PAID payment(s) could not be attributed — "
               f"exiting non-zero so this is not a green cron.", file=sys.stderr)
+    if seats.links_dead:
+        print("League Pass seat links match no pass — exiting non-zero so this "
+              "is not a green cron.", file=sys.stderr)
     print(line)
-    return 1 if (blocked or unattributed) else 0
+    return 1 if failing else 0
 
 
 if __name__ == "__main__":

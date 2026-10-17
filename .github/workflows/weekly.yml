@@ -178,6 +178,8 @@ jobs:
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
+          # A rotated UPDATE_SECRET's old value (OPS-R10; run/updates.py).
+          UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
         run: |
           set +e
           .venv/bin/python -m run.intake --no-mail
@@ -215,11 +217,15 @@ jobs:
         run: .venv/bin/python -m run.tuesday
       # The live sample (render/live_sample.py): this week's report for the
       # published sample roster, so the site shows the product running now,
-      # not a 2024 replay. Built before the week's first kickoff, it RECORDS
-      # the odds it prints on the public ledger (principle 2: a % in public is
-      # a published call), committed below with the rest of the ledger; after
-      # kickoff it changes nothing. A data outage keeps the last page; a ledger
-      # it cannot write fails the run rather than publishing odds off the record.
+      # not a 2024 replay. Its FIRST build before the week's first kickoff
+      # RECORDS the odds it prints on the public ledger (principle 2: a % in
+      # public is a published call), committed below with the rest of the
+      # ledger. Every later run of the week — the 16:17 retry, a late GitHub
+      # backup — keeps that page (site/week.json says the week is recorded),
+      # because games.csv and players.csv revalidate in between and a rebuild
+      # could record a second set of calls (OPS-R3); after kickoff it changes
+      # nothing. A data outage keeps the last page; a ledger it cannot write
+      # fails the run rather than publishing odds off the record.
       - name: Publish this week's sample report
         if: always()
         run: .venv/bin/python -m render.live_sample
@@ -292,8 +298,9 @@ jobs:
       - name: Fail the run if a paid signup could not be served
         if: always() && steps.intake.outputs.code == '1'
         run: |
-          echo "run.intake exited 1 — a paid signup was blocked, or Stripe could"
-          echo "not be read. Reports were still built and sent for everyone"
+          echo "run.intake exited 1 — a paid signup was blocked, Stripe could not"
+          echo "be read, or League Pass seat links match no pass (a rotated"
+          echo "UPDATE_SECRET). Reports were still built and sent for everyone"
           echo "already in the registry. See the intake step's log."
           exit 1
       # A silent failure costs a paying subscriber their Tuesday and nobody
