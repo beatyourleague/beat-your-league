@@ -222,9 +222,10 @@ def _terms_date() -> str:
 
 
 # What happens next, row by row — the thanks page's three rows (site/
-# thanks.html), so the page and the email describe one sequence. A matched
-# seat gets its first email the day it is claimed, by the same rules as a
-# purchase (run/intake.py, LP-I4), so a seat has a "today" too.
+# thanks.html), so the page and the email describe one sequence. A seat gets
+# its first email the day its claim is CONFIRMED from its own inbox — the run
+# that sends this welcome — by the same rules as a purchase (run/intake.py,
+# LP-I4, OPS-R1), so a seat has a "today" too.
 NEXT_TODAY = ("Your first report. This week's lineup if the week's games "
               "haven't started, otherwise your roster report: the byes that "
               "leave you short and last season under your scoring.")

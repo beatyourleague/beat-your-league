@@ -1614,10 +1614,11 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     file, weekly report) reads as a mailing list rather than a product.
 
     A League Pass SEAT is served by the same rules (LP-I4): a leaguemate who
-    claims from the group chat on a Wednesday gets that week's report the same
-    day, not next Tuesday, when the chat has moved on. Its "purchase" is the
-    first claim, which is what the served-since check reads; its report and
-    roster report carry the seat's stop route, never a billing page.
+    claims from the group chat on a Wednesday and presses the confirmation
+    button gets that week's report the run it is confirmed, not next Tuesday,
+    when the chat has moved on. Its "purchase" is its first confirmed claim,
+    which is what the served-since check reads; its report and roster report
+    carry the seat's stop route, never a billing page.
     """
     from engine.preseason import build_preseason_report, bye_by_team
     from render.preseason import preseason_message
