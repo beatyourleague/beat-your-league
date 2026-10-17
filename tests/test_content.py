@@ -249,6 +249,15 @@ def test_ledger_page_escapes_and_handles_both_states() -> None:
     assert "rules are up before the first game" in empty.lower()
     assert "hit or miss" in empty.lower()
     assert "nothing to show" not in empty.lower()
+    # COPY:F13: "the first ones are made in week 4 … this page fills from
+    # October" was wrong about the early-season arm (seeded calls in Weeks 2-3
+    # for the measured setup, run/solo.seeded_scope) and still said "from
+    # October" in mid-October. The page states the rule, never a date.
+    assert "made in week 4" not in empty and "fills from October" not in empty
+    assert ("the first calls are made in Week 2 for those lineups and Week 4 for "
+            "everyone else") in empty
+    assert ("Weeks 2 and 3, for full-PPR, 12-team standard lineups that start a kicker "
+            "and a defense") in empty
     call = _settled_call()
     page = render_ledger(public_entries([call]), ledger_summary([call]))
     assert "<script>" not in page

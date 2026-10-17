@@ -289,9 +289,14 @@ CANCEL_PERIOD = ("Reports continue to the end of the period you've already "
 # The real flow (launch audit L4): Stripe's billing page emails a sign-in LINK,
 # and the whole thing takes about a minute — "fifteen seconds" and "a sign-in
 # code" were misstatements of how the reader gets out.
+# Names only what the block links (COPY:F14): "the exact steps are on our
+# terms page" rode every paid footer while the only link was the billing
+# page, and on the public samples nothing was linked at all. The steps are
+# given right here; the link after the body (cancel_html) is the one place
+# named, and on a sample it is the terms page's steps.
 CANCEL_BODY = ("Cancel it yourself from your own billing page — enter your email, "
                "open the link Stripe sends, press Cancel. About a minute, and no "
-               "further charges; the exact steps are on our terms page. "
+               "further charges. "
                "Unsubscribing from emails alone does not stop a subscription, "
                "so cancel there if you want the charges to end. " + CANCEL_PERIOD)
 # The plain-text half's own wording of the same block (it shouts the NOT,
@@ -346,13 +351,20 @@ def unsubscribe_target(seat: bool = False) -> str | None:
     return cancel_destination()[0] or None
 
 
-def cancel_html(seat: bool = False, link_style: str = "") -> str:
+def cancel_html(seat: bool = False, link_style: str = "", sample: bool = False) -> str:
     """The footer's way out, as an HTML fragment — one block, every surface.
     No mailto anchor for a seat: every href in an email is https
-    (tests/test_email_safety.py), and "reply" needs no link."""
+    (tests/test_email_safety.py), and "reply" needs no link.
+
+    ``sample``: a published sample page, which sits beside terms.html on the
+    site and is built with no billing portal or site address configured. It
+    printed the whole block with no link at all (COPY:F14); it links the
+    steps, relative, so the page it names is one a reader can open."""
     if seat:
         return f'<b>{esc(CANCEL_HEAD)}</b> {esc(SEAT_STOP_BODY)}'
     href, label = cancel_destination()
+    if not href and sample:
+        href, label = SAMPLE_CANCEL_HREF, CANCEL_STEPS_LABEL
     style = f' style="{link_style}"' if link_style else ""
     return (f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}'
             + (f' <a href="{esc(href)}"{style}>{esc(label)}</a>.' if href else ""))
@@ -391,8 +403,13 @@ def cancel_destination() -> tuple[str, str]:
         return portal, "your billing page"
     site = os.environ.get("SITE_URL", "").rstrip("/")
     if site:
-        return f"{site}/terms.html#cancel", "the exact steps, on our terms page"
+        return f"{site}/terms.html#cancel", CANCEL_STEPS_LABEL
     return "", ""
+
+
+CANCEL_STEPS_LABEL = "the exact steps, on our terms page"
+# A published sample sits at the site root beside terms.html.
+SAMPLE_CANCEL_HREF = "terms.html#cancel"
 
 
 AS_SET_HEAD = "Your lineup, exactly as set."
@@ -1954,9 +1971,14 @@ SEASON_END_BILLING = {
                "and we email you before it does. Your league's seats come back "
                "with it: each manager claims theirs again next season, with "
                "their new roster.",
-    SEAT_PLAN: "Reports for this seat end here; if your league's pass is "
-               "renewed, claim your seat again next season with your new "
-               "roster.",
+    # The payer's sentence, from the seat's side (COPY:F6). "Reports for this
+    # seat end here" was a promise nothing kept: a claim lives as a form row
+    # for 400 days and the intake honours it while the payer holds a pass, so
+    # a renewed pass carried this season's roster into next season's reports.
+    # Both lines now say the same thing — the seat follows the pass, and the
+    # claim with a new roster is made again — which is true either way.
+    SEAT_PLAN: "Your seat follows your league's pass: if it renews, claim your "
+               "seat again next season with your new roster.",
 }
 
 
@@ -2088,7 +2110,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         # unsubscribe-vs-cancel distinction stays: stopping emails while
         # billing continues is how you earn a chargeback and deserve it. A
         # seat has nothing to cancel, so it gets its stop route instead.
-        f'{cancel_html(is_seat(meta))}'
+        f'{cancel_html(is_seat(meta), sample=bool(meta.get("anonymized_demo")))}'
         '</footer>'
     )
 

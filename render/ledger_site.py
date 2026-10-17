@@ -101,8 +101,16 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
             '<p>Here is what gets recorded, written down before anyone has played. Every call '
             'we send a subscriber is stamped before kickoff and graded against the real box '
             'score once the games are final, hit or miss, and nothing is edited afterwards. '
-            'Calls need three games of record behind both players, so the first ones are made '
-            'in week 4 and graded the Monday after — this page fills from October.</p>'
+            # The early-season arm ships seeded calls in Weeks 2-3 for one
+            # setup (run/solo.seeded_scope), so "the first ones are made in
+            # week 4" was wrong on the page that states the rules, and "fills
+            # from October" went on saying it into mid-October (COPY:F13).
+            # Rules only: no date this page cannot keep.
+            'Calls need a record behind both players: three games this season, or — in '
+            'Weeks 2 and 3, for full-PPR, 12-team standard lineups that start a kicker and '
+            'a defense — last season counted in. So the first calls are made in Week 2 for '
+            'those lineups and Week 4 for everyone else, each graded once its games are '
+            'final.</p>'
             '<span class="stampbox">RULES FROZEN &middot; NOTHING EDITED AFTER THE FACT</span></div>'
         )
 

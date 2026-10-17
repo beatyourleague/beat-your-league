@@ -151,7 +151,7 @@
    "name": "Can a manager join late?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if the week's games haven't started, otherwise their roster report — then every Tuesday."
+    "text": "Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if it's Week 2 or later and the week's games haven't started, otherwise their roster report — then every Tuesday."
    }
   },
   {
@@ -278,7 +278,7 @@
       the general seat page asks each manager for the email the pass was bought with, which
       is how a seat is matched to your pass.</li>
       <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their
-      first report lands the day they claim their seat — that week's lineup if the week's
+      first report lands the day they claim their seat — that week's lineup if it's Week 2 or later and the week's
       games haven't started, otherwise their roster report — then every Tuesday.</li>
     </ol>
     <!-- The group-chat line (launch audit F4). Until the pass can be bought it
@@ -320,7 +320,7 @@
   <div class="faq">
     <details>
       <summary>Can a manager join late?</summary>
-      <div class="a">Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if the week's games haven't started, otherwise their roster report — then every Tuesday.</div>
+      <div class="a">Yes, any time the pass is active, with your league's link. Their first report lands the day they claim their seat — that week's lineup if it's Week 2 or later and the week's games haven't started, otherwise their roster report — then every Tuesday.</div>
     </details>
     <details>
       <summary>What if a manager leaves or is replaced?</summary>
@@ -383,7 +383,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }

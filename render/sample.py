@@ -83,6 +83,17 @@ def build(week: int = WEEK) -> dict:
     return report
 
 
+def page(report: dict) -> str:
+    """The published page: the report as a subscriber's archive renders it,
+    plus the ?via= carry the live sample already has (render.live_sample).
+    The landing's "See a real report" is the most natural path to buying, and
+    a channel tag stopped at the sample — its "Get this for your team" links
+    had no carry, so the purchase was counted nowhere (FUNNEL F5, BE2-D1).
+    One script, from the live sample, so the copies cannot drift."""
+    from render.live_sample import with_via_carry
+    return with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")))
+
+
 def main(argv: list[str] | None = None) -> int:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
@@ -95,8 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     except SoloError as exc:
         print(f"could not build the sample: {exc}", file=sys.stderr)
         return 1
-    html = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
-    out.write_text(html, encoding="utf-8")
+    out.write_text(page(report), encoding="utf-8")
 
     published = [s for s in report["lineup"] if s.get("confidence") is not None]
     print("=" * 62)

@@ -327,7 +327,9 @@ don't: the Tuesday run refuses a week already underway.
 
 **Rebuilding the live sample by hand:** `make live-sample` before the week's first kickoff
 records its odds on the public record — commit the ledger file with the page.
-`make live-sample ARGS=--no-record` previews.
+`make live-sample ARGS=--no-record` previews. After the first kickoff it refuses: leave the
+page as it stands until Tuesday. A forced rebuild (`--force`) records nothing, so don't publish
+one — Week 6's page was rebuilt that way on Oct 16 and printed odds that are on no record.
 
 **A roster change sent by email** (until the Worker is live, or a subscriber who'd rather
 reply): put the names they sent in a file, one per line, then
@@ -394,6 +396,16 @@ From the published NFL schedule the product reads. A flexed game can move a row.
 under 25 subscribers on Oct 11 means stop building product — were met by default, not by a
 verdict from buyers. The proposal for what replaces it is the first decision below.
 
+**By Jan 5, 2027 (the last weekly report): the monthly January stub.** As built,
+`run/billing.py` stops monthly billing on Jan 13 — eight days after the last weekly report
+(RULE B3, late never early). A monthly buyer whose billing day falls Jan 6–12 is charged a
+part-month after their last report; on Jan 11–12 that is one or two days ($0.48–$0.97) after
+the last game, which the card's "billing stops when the season does" and the Stripe button's
+"we never charge through the offseason" do not disclose. This is recorded as a decision, not
+a default: either adopt section 10's "January part-month charges" recommendation before Jan 5,
+or keep the buffer and add one line to terms §3 and the monthly card naming it. Nothing is
+charged under it before Jan 6.
+
 ## 10. Decisions waiting on you
 
 Each has a recommendation. None is decided until you say so.
@@ -425,12 +437,15 @@ Pages → Create → Pages → connect the repo, no build command, output `site`
 month); add `beatyourleague.com` as its custom domain; then I retire `pages.yml` and you
 switch GitHub Pages off and the repo to private.
 
-**January part-month charges.** Monthly billing stops Jan 13, eight days after the last
-weekly report so a failed Tuesday can retry. A monthly buyer whose billing day is Jan 6–12
-pays a part-month ($0.48–$3.38) after their last report, while the card says billing stops
-when the season does. *Recommend:* never start a period that contains no weekly report —
-cancel those subscriptions at the end of the period already paid (the Saturday check rides
-it). A small change in `run/billing.py`; then the card is true as written.
+**January part-month charges** (dated in section 9: decide by Jan 5). Monthly billing stops
+Jan 13, eight days after the last weekly report so a failed Tuesday can retry. A monthly
+buyer whose billing day is Jan 6–12 pays a part-month ($0.48–$3.38) after their last report.
+Jan 6–10 is billed for the month the season ends in, which terms §3 states; Jan 11–12 pays
+one or two days ($0.48–$0.97) that fall after the last game, which the card ("billing stops
+when the season does") and the Stripe button text ("we never charge through the offseason")
+do not disclose. *Recommend:* never start a period that contains no weekly report — cancel
+those subscriptions at the end of the period already paid (the Saturday check rides it). A
+small change in `run/billing.py`; then the card is true as written.
 
 **A list you own.** Every lead today gets one email, ever, so nobody from 2026 can be reached
 in August 2027. *Recommend:* one unticked box — "Email me when the 2027 season opens" — on the
@@ -500,9 +515,12 @@ them; marketing the record is a decision, not a default.
 *Recommend:* a 30% first-year share paid by hand, counted from their `?via=` tag in
 `make stats`, offered only once someone asks.
 
-**Keep your own subscription.** The live sample has recorded its odds every week since Oct 15,
-so the public record grows without a subscriber. *Recommend:* keep your step-4 subscription
-anyway — it adds a real roster's calls to the record, graded every Monday.
+**Keep your own subscription.** The public record holds **no rows yet**: the live sample's
+recording landed after Week 6's last pre-kickoff build, and the Oct 16 rebuild was forced
+after kickoff, which records nothing. The Week 7 Tuesday build (Oct 20) is the first that can
+record its odds; after it runs, check that `data/processed/ledger/typed-ppr-12-2026` was
+committed. *Recommend:* keep your step-4 subscription anyway — it adds a real roster's calls
+to the record, graded every Monday.
 
 **A sender postal address.** US (CAN-SPAM) and Canadian (CASL) law both want one in
 commercial email; every email now prints it, and the launch announcement refuses to send

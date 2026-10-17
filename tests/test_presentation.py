@@ -98,6 +98,21 @@ def test_the_last_report_states_each_plans_own_promise(plan, says, never) -> Non
     assert never not in lines, lines
 
 
+def test_the_seat_and_the_payer_say_the_same_thing_about_next_season() -> None:
+    """COPY:F6, reproduced: sweep_seats honours a claim (a 400-day form row)
+    with no season check while the payer holds a pass, so "Reports for this
+    seat end here" was a promise nothing kept — a renewed pass carried this
+    season's roster into next season's reports. The seat's last line is now
+    the payer's from the other side: the seat follows the pass, and each
+    manager claims it again with a new roster. Never "ends here"."""
+    seat = rr.SEASON_END_BILLING[rr.SEAT_PLAN]
+    payer = rr.SEASON_END_BILLING[rr.PASS_PLAN]
+    assert "end here" not in seat and "ends here" not in seat
+    assert "follows your league's pass" in seat
+    assert "claim your seat again next season with your new roster" in seat
+    assert "claims theirs again next season, with their new roster" in payer
+
+
 def test_a_seat_is_never_told_its_reports_simply_start_again() -> None:
     """Reproduction (LP-D5): a seat's last report promised "Reports start
     again with Week 1 next September if your league's pass is renewed" — but
@@ -371,6 +386,35 @@ def test_report_meta_type_is_at_least_12px_on_a_phone() -> None:
     phone = css.split("@media (max-width:520px){", 1)[1].split("\n  }", 1)[0]
     for size in re.findall(r"\.tsub,\.tflag,\.tgame{font-size:([\d.]+)px;}", phone):
         assert float(size) >= 12, phone
+
+
+def test_the_call_column_holds_its_longest_word_on_a_phone() -> None:
+    """Panel R4, reproduced by a geometry probe on both published samples:
+    td.tcall holding "questionable · see if/then" measured scrollWidth 74
+    against clientWidth 65/68/71 at 360/375/390, and the report's border was
+    drawn through "questionab|le". The same probe found the "Proj" head 4px
+    past its 12% column and "FLEX" 1px past its 9% one at 360. At 420px and
+    under the four-column lineup now takes its widths from this rule —
+    measured after on the regenerated sample: no cell of either table
+    overflows at 360, 375, 390, 414 or 1280 (call cell 86/91/95/102px), and
+    desktop widths are unchanged. The <col> widths ride inline, which is why
+    the phone rule must be !important; the five-column Tape is untouched."""
+    css = rr.extract_design(TEMPLATE)[0]
+    phone = css.split("@media (max-width:420px){", 1)[1].split("\n  }", 1)[0]
+    widths = dict(re.findall(r"\.tape col:nth-child\((\d)\):(?:nth-last-child\(\d\)|last-child)"
+                             r"\{width:(\d+)% !important;\}", phone))
+    assert widths == {"1": "10", "2": "48", "3": "14", "4": "28"}, widths
+    assert sum(int(w) for w in widths.values()) == 100
+    # Each selector names its column by position from BOTH ends, so it can
+    # only ever match a four-column group.
+    for n, last in (("1", "nth-last-child(4)"), ("2", "nth-last-child(3)"),
+                    ("3", "nth-last-child(2)"), ("4", "last-child")):
+        assert f".tape col:nth-child({n}):{last}{{" in phone, n
+    assert ".tcall{overflow-wrap:anywhere;}" in phone
+    four = re.findall(r'width:(\d+)%', rr.LINEUP_COLS)
+    assert len(four) == 4 and rr.TAPE_COLS.count("<col>") == 5
+    # The call column on a 360px phone (a 314px table): room for its 74px word.
+    assert 314 * int(widths["4"]) / 100 - 10 >= 74
 
 
 def test_a_generated_page_declares_its_colour_scheme_and_bar_colour() -> None:
