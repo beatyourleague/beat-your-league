@@ -1052,7 +1052,7 @@ def test_the_privacy_policy_names_the_channel_tag_and_the_stop_list() -> None:
             "the Worker stores a channel tag the policy does not itemise"
     if (SITE.parent / "run" / "suppress.py").exists():
         assert re.search(r"stop emailing you", section1) and \
-            re.search(r"one-way digest", section1), "the stop list is held data"
+            re.search(r"keyed one-way code", section1), "the stop list is held data"
 
 
 def test_the_terms_describe_one_cancel_flow() -> None:
@@ -1145,8 +1145,9 @@ def test_every_report_carries_a_way_out() -> None:
 def test_monthly_billing_never_outlives_the_product() -> None:
     """Monthly stops at season end, and run/billing.py is what makes it true."""
     legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
-    assert re.search(r"billing runs only while the season runs", legal, re.I)
-    assert re.search(r"do not charge monthly through the offseason", legal, re.I)
+    assert re.search(r"Month to month billing ends with the season", legal, re.I)
+    assert re.search(r"stops on its own after the season's last weekly report", legal, re.I)
+    assert re.search(r"nothing is charged after it", legal, re.I)
     assert re.search(r"billing stops when the season does", prose(LANDING), re.I)
 
 
@@ -1239,8 +1240,8 @@ def test_the_contract_describes_the_product_actually_sold() -> None:
         assert not re.search(stale, legal, re.I), \
             f"terms.html still describes the Sleeper product: {stale!r}"
     # ...and it describes what is actually collected and depended on.
-    assert re.search(r"the roster you entered", legal, re.I)
-    assert re.search(r"scoring settings", legal, re.I)
+    assert re.search(r"the roster and scoring settings you give us", legal, re.I)
+    assert re.search(r"complete list of what we hold", legal, re.I)
     assert re.search(r"never connect to your league", legal, re.I)
     assert re.search(r"public NFL data", legal, re.I)
     # The pitch says the founding rate is locked for every renewal; the
@@ -3098,7 +3099,7 @@ def test_the_pay_button_disclosure_quotes_the_price_the_page_charges() -> None:
     stamp = _dt.date.fromisoformat(TERMS_VERSION)
     assert f"Last updated {stamp.day} {stamp:%B %Y}" in terms, \
         "terms.html's Last updated date must equal TERMS_VERSION, the version consent is recorded against"
-    assert "offseason" in MESSAGES["monthly"], (
+    assert "after the season's last weekly report" in MESSAGES["monthly"], (
         "the monthly disclosure omits the season-end stop, which is the one "
         "promise a monthly buyer most needs at the moment of paying")
     for plan, text in MESSAGES.items():
@@ -4707,9 +4708,9 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
     from render.welcome import TERMS_VERSION
     assert PassInfo(payer="p@x.test", pass_id="sub_1", league_size=12).seat_cap == 12
     terms = prose(TERMS)
-    assert ("A League Pass covers every member of one league who enters their roster "
-            "individually, up to as many seats as the league has teams, in the order they "
-            "are confirmed by email;") in terms
+    assert ("A League Pass is for one league of up to 14 teams. Besides the buyer's own "
+            "report, it carries as many seats as the league size chosen at checkout "
+            "(8, 10, 12 or 14), filled in the order members confirm them by email") in terms
     assert TERMS_VERSION >= "2026-10-17", "a change to the terms must move their version"
     lp = prose(LEAGUE_PASS)
     assert ("As many as your league has teams — one for every other manager, plus one to "

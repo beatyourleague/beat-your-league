@@ -41,7 +41,7 @@ PASS_PRICE = "$99"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
-TERMS_VERSION = "2026-10-17"
+TERMS_VERSION = "2026-10-18"
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "

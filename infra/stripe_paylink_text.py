@@ -56,9 +56,10 @@ MESSAGES = {
         f"{SEASON_PRICE} USD until you cancel. We email you before any renewal, "
         f"and {CANCEL} — the link is in every report we send."),
     "monthly": (
-        f"Bills {MONTHLY_PRICE} USD monthly until you cancel. Billing stops "
-        f"automatically when the season ends — we never charge through the "
-        f"offseason. {CANCEL[0].upper()}{CANCEL[1:]}."),
+        f"Bills {MONTHLY_PRICE} USD monthly until you cancel. Billing stops on "
+        f"its own after the season's last weekly report: your last charge is "
+        f"the month that report falls in, and nothing is charged after it. "
+        f"{CANCEL[0].upper()}{CANCEL[1:]}."),
     "league_pass": (
         f"Renews automatically once a year, on the date you buy, at {PASS_PRICE} "
         f"USD until you cancel. We email you before any renewal, and {CANCEL}."),
@@ -75,8 +76,9 @@ TOS_MESSAGES = {
                f"renews automatically once a year at {SEASON_PRICE} USD until I "
                f"cancel, and I am 18 or older."),
     "monthly": (f"I agree to the [Terms]({TERMS_URL}), including that this plan "
-                f"bills {MONTHLY_PRICE} USD every month until I cancel or the "
-                f"season ends, and I am 18 or older."),
+                f"bills {MONTHLY_PRICE} USD every month until I cancel or it stops "
+                f"on its own after the season's last weekly report, and I am 18 or "
+                f"older."),
     "league_pass": (f"I agree to the [Terms]({TERMS_URL}), including that this "
                     f"League Pass renews automatically once a year at "
                     f"{PASS_PRICE} USD until I cancel, and I am 18 or older."),
