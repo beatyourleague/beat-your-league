@@ -748,15 +748,18 @@ def _rising(rows) -> str:
 def _receipts(receipts: Mapping[str, Any]) -> str:
     record = receipts.get("record")
     if not record:
-        inner = (f'{esc(receipts.get("note", ""))}<br>'
-                 f'<span style="{SMALL}text-transform:uppercase;'
-                 f'letter-spacing:1px;">Results · from next week</span>')
+        # D12: the stamp only where this report has odds and a next report.
+        stamp = receipts.get("stamp", "Results · from next week")
+        inner = (f'{esc(receipts.get("note", ""))}'
+                 + (f'<br><span style="{SMALL}text-transform:uppercase;'
+                    f'letter-spacing:1px;">{esc(stamp)}</span>' if stamp else ""))
     elif receipts.get("last_week_calls") is not None:
-        from engine.own_record import HIT, call_line
+        from engine.own_record import HIT, MISS, call_line
+        mark = {HIT: (TURF, "✓"), MISS: (BRICK, "✗")}
         rows = "".join(
             f'<div style="{SMALL}color:{NAVY};padding:3px 0;">'
-            f'<b style="color:{TURF if c["outcome"] == HIT else BRICK};">'
-            f'{"✓" if c["outcome"] == HIT else "✗"}</b> {esc(call_line(c))}</div>'
+            f'<b style="color:{mark.get(c["outcome"], (NAVY, "–"))[0]};">'
+            f'{mark.get(c["outcome"], (NAVY, "–"))[1]}</b> {esc(call_line(c))}</div>'
             for c in receipts["last_week_calls"])
         ask = (f'<div style="{BASE}margin-top:10px;">{esc(receipts["ask"])}</div>'
                if receipts.get("ask") else "")

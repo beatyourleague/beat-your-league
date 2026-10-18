@@ -392,17 +392,22 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
         rather than a guess about missing data.
         """
         data = load(call.season)
-        final = data["final"].get(call.week)
-        if not final:
+        scheduled = data["final"].get(call.week)
+        if not scheduled:
             return False                      # week not in the schedule: unknown
-        played = set(final)
+        played = {team for team, done in scheduled.items() if done}
         if not played or not (played <= data["observed"].get(call.week, set())):
             return False                      # the box scores have not landed
         for player_id in (call.pick_id, call.over_id):
             team = team_of(call, player_id, data)
-            # A player with no row is a player who did not play, now that the
-            # week's box scores are known to be complete.
-            if team is not None and team not in final:
+            if team is None:
+                # No row: he did not play — but only once EVERY game that week
+                # is final (LANDING-96). Before Monday night, "no row" is also
+                # a player whose game has not been played yet, and grading him
+                # 0.0 then settled real calls wrong, permanently (RULE L4).
+                if not all(scheduled.values()):
+                    return False
+            elif team not in played:
                 return False
         return True
 
@@ -437,7 +442,7 @@ def grade_ledger_nflverse(path: Path, cache_dir: Path) -> tuple[int, int]:
 
 
 def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
-    """week -> the teams whose REG game that week has a final score.
+    """week -> {team: whether its REG game that week has a final score}.
 
     A game with either score missing has not been played (or not been posted),
     and RULE L1 is conservative on every unknown.
@@ -466,10 +471,11 @@ def _final_teams(cache_dir: Path, season: str) -> dict[int, dict[str, bool]]:
             home, away = (row.get("home_team") or ""), (row.get("away_team") or "")
             done = bool((row.get("home_score") or "").strip()
                         and (row.get("away_score") or "").strip())
-            if done:
-                for team in (home, away):
-                    if team:
-                        weeks.setdefault(week, {})[team] = True
+            # Every scheduled team, final or not: a call on a player with no
+            # stat row may settle only once the WHOLE week is final.
+            for team in (home, away):
+                if team:
+                    weeks.setdefault(week, {})[team] = done
     return weeks
 
 

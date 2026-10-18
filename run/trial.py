@@ -37,7 +37,8 @@ from pathlib import Path
 from engine.subscriber import LINEUP_SHAPES, RosterSpec
 from render.email import render_email, subject_for, text_summary
 from run.delivery import DRY_PROVIDER, DeliveryError, Message, build_provider, send_all
-from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
+from run.solo import (CACHE_DIR, SoloError, load_week_data, report_for,
+                       week_has_kicked_off)
 
 # The same lineup shapes the signup page offers, so a trial mirrors what the
 # person would actually buy — READ from the one table (contract C8), never
@@ -145,6 +146,14 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         data = load_week_data(args.cache, args.season, args.week)
+        # EMAILS-7: the report says "before this week's first kickoff", so a
+        # DERIVED week that has kicked off is refused, as run.tuesday does.
+        if args.week is None and week_has_kicked_off(args.cache, data.season,
+                                                     data.week):
+            raise TrialError(
+                f"week {data.week} is underway — a report now would be about "
+                f"games already played. Pass --week {data.week + 1} once next "
+                f"week's data is in.")
         ids = resolve_roster(text, data.directory)
         slots = TEMPLATES[args.template]
         if len(ids) < len(slots):

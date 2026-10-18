@@ -513,6 +513,9 @@ _GATE_PHRASES = (
     # Method §15 C9: the practice squad plays only if elevated.
     ("not confirmed to play", "a player in that pair is on the practice squad"),
     ("held: the lineup changed", "the lineup changed around a player who can't play this week"),
+    # D11: a later flex swap started the player the odds were figured against.
+    ("held: the bench changed",
+     "a flex swap changed who your best bench player there is"),
     # A graded lineup whose week lacked an input its arm's model needs.
     ("held: an input", "odds are held this week: something they need didn't come in"),
     ("nobody on your bench", "no bench player at that position"),
@@ -589,7 +592,7 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # squad)" — the row names who.
         who = gate[len("not confirmed to play"):].strip(" ()").split(":")[0]
         return f"{who} on practice squad" if who else "practice squad"
-    if gate.startswith("held: the lineup changed"):
+    if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):
         return f"no bench {slot.get('slot', '')}".strip()
@@ -1796,8 +1799,11 @@ def section_waiver_market(market: Mapping[str, Any] | None) -> str:
 def section_receipts(receipts: Mapping[str, Any]) -> str:
     record = receipts.get("record")
     if not record:
+        # D12: the stamp promises next week only where this report has odds
+        # and a next report exists; the league product's dict carries none.
+        stamp = receipts.get("stamp", "Results · from next week")
         inner = (f'{esc(receipts.get("note", ""))}'
-                 f'<br><span class="stamp">Results · from next week</span>')
+                 + (f'<br><span class="stamp">{esc(stamp)}</span>' if stamp else ""))
     elif receipts.get("last_week_calls") is not None:
         from engine.own_record import call_line
         rows = "".join(f'<li>{esc(call_line(c))}</li>'
@@ -1894,16 +1900,18 @@ def _site() -> str:
 
 def league_seat_link(meta: Mapping[str, Any]) -> tuple[str, bool] | None:
     """(where a leaguemate claims the seat their league's pass already paid
-    for, whether that link names the pass).
+    for, True) — while the pass still has a seat to give.
 
-    The per-pass link (``meta["seat_link"]``, set by the run when it can sign
-    one) needs nothing typed; the generic seat page needs the payer's address,
-    and the line says so. None without a site to link to."""
+    Only the per-pass link (``meta["seat_link"]``, set by the run when it can
+    sign one). D10: the generic ``?pass=1`` page it used to fall back to
+    rendered exactly when UPDATE_SECRET was unset — the one state in which no
+    seat claim can be confirmed — so it offered a free seat nobody could
+    have. And a full pass (``meta["seats_full"]``) has no seat to offer."""
     link = meta.get("seat_link")
-    if isinstance(link, str) and link.startswith("https://"):
+    if (isinstance(link, str) and link.startswith("https://")
+            and not meta.get("seats_full")):
         return link, True
-    site = _site()
-    return (f"{site}/join/?pass=1", False) if site else None
+    return None
 
 
 # The generic seat page matches a seat to its pass by the payer's address, so
@@ -1918,13 +1926,12 @@ def _forward_text(meta: Mapping[str, Any]) -> str:
     escape it; the text half prints it as is). Empty when there is nowhere to
     send anyone."""
     site = _site()
-    if in_pass_league(meta):
+    seat = league_seat_link(meta) if in_pass_league(meta) else None
+    if seat:
         # A seat's or a payer's report, forwarded to the league: the reader's
         # seat is already paid for. It used to send them to the $39 checkout
-        # (panel review LP-D2).
-        seat = league_seat_link(meta)
-        if not seat:
-            return ""
+        # (panel review LP-D2). Only while the pass has a seat left (D10);
+        # a full pass falls back to the plain line, which is true of anyone.
         link, named = seat
         return ("Got this from a leaguemate? Your league's pass already covers "
                 f"your seat — claim it, free, with your own roster: {link}"
@@ -1968,9 +1975,14 @@ def _forward_line(meta: Mapping[str, Any] | None = None) -> str:
 
 def seats_text(meta: Mapping[str, Any]) -> str:
     """The League Pass payer's one count line (``meta["seats_claimed"]``, set
-    by the run): how many of the league's seats are claimed, and where the
-    rest claim theirs. Counts only — never a name or an address. Empty for
-    anybody but a payer, or when the count is unreadable."""
+    by the run): how many of the pass's seats are claimed, and where the rest
+    claim theirs. Counts only — never a name or an address. Empty for
+    anybody but a payer, or when the count is unreadable.
+
+    D10: the count is SEATS ONLY (the payer's own team is not one) against the
+    pass's seat cap, the way the cap is enforced — it used to add the payer and
+    compare with the league size, so one seat still open read "12 of 12" with
+    the link gone, and the designed full state read as an error."""
     seats = meta.get("seats_claimed")
     if meta.get("plan") != PASS_PLAN or not isinstance(seats, Mapping):
         return ""
@@ -1980,11 +1992,10 @@ def seats_text(meta: Mapping[str, Any]) -> str:
             or claimed < 0 or size < 1):
         return ""
     count = f"League Pass: {claimed} of {size} seats claimed."
-    if claimed > size:
-        count = (f"League Pass: {claimed} seats claimed — more than your "
-                 f"league's {size} teams.")
+    if claimed >= size:
+        return "League Pass: Every seat is claimed."
     seat = league_seat_link(meta)
-    if claimed >= size or not seat:
+    if not seat:
         return count
     link, named = seat
     return (f"{count} Your leaguemates claim theirs, free, with their own "

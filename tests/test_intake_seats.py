@@ -57,6 +57,8 @@ def test_a_claim_that_matches_no_pass_is_told_once_and_counted(
     about anybody (a stranger's claim is not their business)."""
     sends = _capture_sends(monkeypatch, tmp_path)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS)
+    # D10: a League Pass on file without UPDATE_SECRET exits non-zero.
+    monkeypatch.setenv("UPDATE_SECRET", "test-secret-do-not-ship")
     stripe["sessions"] = [_pass_session()]
     _seats(monkeypatch, _seat(covered_by="comish@example.com", received_at=_at(8)))
     assert _run(tmp_path) == 0
@@ -148,7 +150,7 @@ def test_a_reclaim_is_a_roster_change_not_a_second_seat(
     assert len(seats) == 1, "a re-claim became a second seat"
     assert "1 with a confirmed new roster" in capsys.readouterr().out
     [seat] = seats
-    assert seat.ref == NEWER_SEAT_REF and seat.slug == slug_of(SEAT_REF)
+    assert seat.ref == NEWER_SEAT_REF and seat.slug == _origin(first)
     assert seat.roster_as_of == (NOW - timedelta(hours=2)).date().isoformat()
     welcomes = [m for m in sends if m.key.startswith("welcome-") and m.to == seat.email]
     assert len(welcomes) == 1, [m.key for m in welcomes]
@@ -231,7 +233,7 @@ def test_a_report_carries_the_plan_the_seat_count_and_the_roster_day(tmp_path) -
             assert result.ok, result.detail
     payer_meta, seat_meta, monthly_meta = (r["meta"] for r in seen)
     assert payer_meta["plan"] == "pass"
-    assert payer_meta["seats_claimed"] == {"claimed": 3, "size": 10}
+    assert payer_meta["seats_claimed"] == {"claimed": 2, "size": 10}
     assert payer_meta["seat_link"] == seat_meta["seat_link"] == LINK
     assert "seat_link" not in monthly_meta
     assert payer_meta["roster_as_of"] == "2026-09-02"
@@ -427,7 +429,7 @@ def test_the_intake_mails_a_new_seat_its_first_report_in_the_same_run(
     assert list((tmp_path / "processed").rglob("calls.jsonl")), \
         "the delivered reports recorded nothing"
     plans = {r["meta"]["plan"]: r["meta"] for r in seen}
-    assert plans["pass"]["seats_claimed"] == {"claimed": 2, "size": 12}
+    assert plans["pass"]["seats_claimed"] == {"claimed": 1, "size": 12}
     assert "seats_claimed" not in plans["league_pass"]
 
 
@@ -462,6 +464,13 @@ from dataclasses import replace  # noqa: E402
 from run.updates import seat_code  # noqa: E402
 
 PASSES = [intake.PassInfo("commish@example.com", PASS_SUB, 12, "cus_commish01")]
+
+
+def _origin(first: dict, pass_id: str = PASS_SUB) -> str:
+    """A seat's slug: its FIRST confirmed claim (EMAILS-146)."""
+    return intake.seat_origin(intake.SeatEntry(
+        email=first["email"], pass_id=pass_id, payer="", ref=first["ref"],
+        claimed_at=first["received_at"], confirmed_at=""))
 
 
 def _claim(email="m@example.com", ref=SEAT_REF, hours=2.0, **over) -> dict:
@@ -511,7 +520,7 @@ def test_a_seat_claim_is_a_request_until_the_claimed_address_confirms_it(
     _seats(monkeypatch, claim, pressed)
     assert _run(tmp_path) == 0
     [seat] = _seat_rows(tmp_path)
-    assert seat.ref == SEAT_REF and seat.slug == slug_of(SEAT_REF)
+    assert seat.ref == SEAT_REF and seat.slug == _origin(claim)
     assert len([m for m in sends if m.key.startswith("welcome-")
                 and m.to == "member@example.com"]) == 1
 
@@ -551,7 +560,7 @@ def test_a_seat_code_is_bound_to_its_claim_expires_and_is_single_use() -> None:
     newer = intake.sweep_seats([a, b], PASSES, None, SECRET,
                                confirm_codes=[_code(b)], log=log)
     assert [r["ref"] for r in newer.rows] == [NEWER_SEAT_REF]
-    assert newer.rows[0]["origin"] == slug_of(SEAT_REF), "the seat's slug moved"
+    assert newer.rows[0]["origin"] == _origin(a), "the seat's slug moved"
     replay = intake.sweep_seats([a, b], PASSES, None, SECRET,
                                 confirm_codes=[_code(a), _code(b)],
                                 log=[*log, *newer.confirmed])
@@ -560,7 +569,7 @@ def test_a_seat_code_is_bound_to_its_claim_expires_and_is_single_use() -> None:
     stale = intake.sweep_seats([a, b], PASSES, None, SECRET,
                                confirm_codes=[_code(a)], log=newer.confirmed)
     assert not stale.confirmed, "a stale code was honoured after a newer claim"
-    assert stale.rows[0]["origin"] == slug_of(NEWER_SEAT_REF)
+    assert stale.rows[0]["origin"] == _origin(b)
     old = _claim(hours=24 * 8)
     late = intake.sweep_seats([old], PASSES, None, SECRET,
                               confirm_codes=[{"code": _code(old), "received_at": _at(0)}])
@@ -702,7 +711,7 @@ def test_a_seats_identity_survives_its_worker_rows_expiring(
     assert _run(tmp_path) == 0
     [after] = _seat_rows(tmp_path)
     assert (after.slug, after.ref) == (before.slug, before.ref) == \
-        (slug_of(SEAT_REF), NEWER_SEAT_REF)
+        (_origin(first), NEWER_SEAT_REF)
     welcomes = [m for m in sends if m.key.startswith("welcome-") and m.to == after.email]
     assert len(welcomes) == 1
     assert len(intake.load_seat_log(tmp_path / intake.SEAT_LOG_NAME)) == 2
@@ -919,7 +928,7 @@ def test_two_passes_bought_with_one_address_are_two_leagues(monkeypatch) -> None
                              scoring="ppr", billing="pass", pass_id=second,
                              league_size=10)
     meta = tuesday.subscriber_meta(payer, {PASS_SUB: 4, second: 1})
-    assert meta["seats_claimed"] == {"claimed": 2, "size": 10}
+    assert meta["seats_claimed"] == {"claimed": 1, "size": 10}
     monkeypatch.setenv("SITE_URL", "https://x.test")
     monkeypatch.setenv("UPDATE_SECRET", SECRET)
     assert f"pass={two}" in tuesday.league_seat_link(payer, {second: payer})
@@ -942,6 +951,8 @@ def test_one_roster_bought_twice_by_one_address_is_one_report_and_the_welcome_sa
     behalf."""
     sends = _capture_sends(monkeypatch, tmp_path)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS)
+    # D10: a League Pass on file without UPDATE_SECRET exits non-zero.
+    monkeypatch.setenv("UPDATE_SECRET", "test-secret-do-not-ship")
     stripe["sessions"] = [
         _session(REF, sid="cs_own", email="commish@example.com",
                  customer="cus_commish01", created=900),

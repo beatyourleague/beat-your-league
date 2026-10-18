@@ -1599,12 +1599,22 @@ def _late_news_line(watch: list[tuple[str, SlotPick, bool, str]],
     if planned is None:
         detail = ANSWER_EITHER_WAY
     else:
-        answered = [name for name, _, _, pid in watch if pid in planned]
+        # ``planned`` may map a player to the practice-squad cover his plan
+        # needs elevated (EMAILS-8): that plan answers "ruled out" only if
+        # the elevation comes, so it is never "the answer either way".
+        needs = (planned if isinstance(planned, Mapping) else {})
+        answered = [name for name, _, _, pid in watch
+                    if pid in planned and not needs.get(pid)]
+        elevated = [(name, needs[pid]) for name, _, _, pid in watch
+                    if pid in planned and needs.get(pid)]
         missing = [(unplanned or {}).get(pid) for _, _, _, pid in watch
                    if pid not in planned]
-        parts = ([ANSWER_EITHER_WAY] if answered and not missing else
-                 [f"Your if/then below has the answer for {_join_words(answered)}."]
+        parts = ([ANSWER_EITHER_WAY] if answered and not missing and not elevated
+                 else [f"Your if/then below has the answer for {_join_words(answered)}."]
                  if answered else [])
+        parts += [f"Your if/then below has a plan for {name}, and it needs {cover} "
+                  f"elevated from the practice squad — that's announced the "
+                  f"afternoon before the game." for name, cover in elevated]
         parts += [line for line in missing if line]
         detail = " ".join(parts)
     label, deadline = "Sunday morning", "gameday morning"

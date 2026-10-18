@@ -155,9 +155,15 @@ def test_a_pass_leagues_forward_line_points_at_the_seat_never_the_checkout(
             assert "example.com/join." not in doc and "own roster — https" not in doc
             assert "email address the pass was bought with" not in doc, \
                 "the signed link needs no address"
-        for name, doc in _surfaces(generic).items():
-            assert "https://example.com/join/?pass=1" in doc, (plan, name)
-            assert "email address the pass was bought with" in doc, (plan, name)
+        # D10: with no signed link (UPDATE_SECRET unset — the one state in
+        # which no seat claim can be confirmed) no seat is offered; the plain
+        # line stands. A full pass offers none either.
+        full = _subscriber(plan=plan, seat_link=SEAT_LINK)
+        full["meta"]["seats_full"] = True
+        for name, doc in [*_surfaces(generic).items(), *_surfaces(full).items()]:
+            assert "join/?pass=1" not in doc, (plan, name)
+            assert "covers your seat" not in doc, (plan, name)
+            assert "email address the pass was bought with" not in doc, (plan, name)
     # Everybody else keeps the standing line.
     for name, doc in _surfaces(_subscriber(plan="season")).items():
         assert "Every manager gets their own report" in doc, name
@@ -172,7 +178,7 @@ def test_a_seat_link_that_is_not_https_is_ignored(monkeypatch) -> None:
     report = _subscriber(plan="league_pass", seat_link="javascript:alert(1)")
     for doc in _surfaces(report).values():
         assert "javascript:" not in doc
-        assert "https://example.com/join/?pass=1" in doc
+        assert "join/?pass=1" not in doc and "covers your seat" not in doc
 
 
 def test_a_payers_report_counts_the_seats_and_never_names_one(monkeypatch) -> None:
@@ -187,9 +193,15 @@ def test_a_payers_report_counts_the_seats_and_never_names_one(monkeypatch) -> No
         assert SEAT_LINK in doc, name
         assert doc.count("@") == doc.count("hello@beatyourleague.com"), \
             f"an address reached the {name}"
-    full = _subscriber(plan="pass", seats_claimed={"claimed": 12, "size": 12})
-    assert "12 of 12 seats claimed." in text_summary(full)
+    # D10: seats only, against the cap; full reads as full, never an error.
+    full = _subscriber(plan="pass", seat_link=SEAT_LINK,
+                       seats_claimed={"claimed": 12, "size": 12})
+    assert "Every seat is claimed." in text_summary(full)
     assert "claim theirs" not in text_summary(full), "nobody is left to send it to"
+    open_one = _subscriber(plan="pass", seat_link=SEAT_LINK,
+                           seats_claimed={"claimed": 11, "size": 12})
+    assert "11 of 12 seats claimed" in text_summary(open_one)
+    assert SEAT_LINK in text_summary(open_one), "the link went with a seat still open"
     # Only the payer; nothing for a seat, a season buyer, or a broken count.
     for meta in ({"plan": "league_pass"}, {"plan": "season"},
                  {"plan": "pass", "seats_claimed": {"claimed": "4", "size": 12}},

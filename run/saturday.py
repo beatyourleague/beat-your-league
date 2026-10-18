@@ -54,7 +54,8 @@ from render.report import unsubscribe_target
 from run.delivery import (DRY_OUTBOX, DRY_PROVIDER, DeliveryError, Message,
                           build_provider, send_all)
 from run.rosters import RosterRegistryError, load_rosters
-from run.solo import CACHE_DIR, current_season, current_week, season_over
+from run.solo import (CACHE_DIR, current_season, current_week, season_over,
+                       week_one_due)
 from run.subscriptions import DEFAULT_EXPORT
 from run.watchdog import NOT_CONFIGURED_NOTE, SATURDAY, mark_run, not_configured
 
@@ -99,9 +100,15 @@ def plan_path(plans_dir: Path, season: str, week: int, slug: str) -> Path:
     return Path(plans_dir) / str(season) / f"w{int(week):02d}-{slug}.json"
 
 
+def plan_setup(subscriber) -> dict[str, Any]:
+    """The settings a plan was built under: scoring, lineup and league size."""
+    return {"scoring": subscriber.scoring, "slots": list(subscriber.slots),
+            "league_size": int(subscriber.league_size)}
+
+
 def build_plan(report: Mapping[str, Any], projections: Mapping[str, float],
                prior_form: Mapping[str, float], statuses: Mapping[str, str],
-               slug: str) -> dict[str, Any]:
+               slug: str, setup: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The lineup exactly as sent, and what Tuesday knew about every player.
 
     Built from the REPORT, not recomputed, so Saturday compares against what
@@ -128,6 +135,8 @@ def build_plan(report: Mapping[str, Any], projections: Mapping[str, float],
         "season": str(meta["season"]),
         "week": int(meta["week"]),
         "slug": slug,
+        # D13: a settings change after Tuesday is seen on Saturday too.
+        **({"setup": dict(setup)} if setup is not None else {}),
         "slots": [{"slot": row["slot"], "player_id": row.get("player_id")}
                   for row in report.get("lineup") or []],
         "players": players,
@@ -381,7 +390,27 @@ def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster
             or load_plan(first_plans_dir(args.registry), season, week, subscriber.slug))
     if plan is None:
         return "missing", None
-    if set(subscriber.player_ids) != set(plan["players"]):
+    if plan.get("setup") is not None and plan["setup"] != plan_setup(subscriber):
+        # D13 (JOIN-105): the subscriber changed scoring, lineup or league
+        # size since Tuesday. The old plan was seated and projected under the
+        # old settings, so it is rebuilt under the new ones from this week's
+        # data, every player re-projected — or this subscriber is skipped,
+        # loudly. Never checked against settings they replaced.
+        try:
+            from run.solo import _prior_form, report_for
+            data = data_for_changes()
+            projections: dict[str, float] = {}
+            spec = subscriber.spec()
+            rebuilt = report_for(spec, data, league_size=subscriber.league_size,
+                                 projections_out=projections)
+            plan = build_plan(
+                rebuilt, projections, _prior_form(data.prior, spec.rule),
+                {pid: data.availability.classify(pid).status.value
+                 for pid in spec.player_ids},
+                subscriber.slug, setup=plan_setup(subscriber))
+        except Exception as exc:  # noqa: BLE001 — one roster, not the run
+            return "unreadable", f"{subscriber.slug} (settings changed: {exc})"
+    elif set(subscriber.player_ids) != set(plan["players"]):
         # The roster changed since Tuesday. Checking the old plan would tell
         # somebody to start a player they dropped, so either the change is
         # folded in or this subscriber is skipped, loudly.
@@ -494,6 +523,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No final check: the {season} season is over.")
         return 0
     week = int(args.week or current_week(args.cache, season, today=at.date()))
+    if not args.week and not week_one_due(args.cache, season, week, now=at):
+        # D8: no Tuesday report went out for a Week 1 that isn't due yet.
+        print(f"No final check: {season} Week 1 isn't due yet.")
+        return 0
     try:
         starts = kickoffs(args.cache, season, week)
         listed, filed = designations(args.cache, season, week)

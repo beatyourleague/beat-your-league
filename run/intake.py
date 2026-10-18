@@ -64,7 +64,7 @@ import urllib.parse
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           parse_link_plans, post as _stripe_post,
@@ -258,13 +258,19 @@ def _stamp(signup: RosterSignup) -> int:
 _KEEP_ORDER = {LEAGUE_PASS: 0, SEASON: 1, MONTHLY: 2}
 
 
-def _content(signup: RosterSignup) -> tuple | None:
+def _content(signup: RosterSignup,
+             current: Mapping[tuple[str, str], str] | None = None) -> tuple | None:
+    """(address, roster content) — the roster AS IT NOW STANDS (a confirmed
+    update moves it, keyed (address, slug)), as a SET of players under its
+    settings (INFO-86: a reordered paste, or a pass bought with the roster a
+    season row was updated to, is the same roster)."""
+    from run.updates import roster_content
+    ref = (current or {}).get((signup.email.lower(), signup.slug), signup.ref)
     try:
-        roster = signup.roster()
+        roster = decode_roster(ref)
     except RefError:
         return None
-    return (signup.email.lower(), tuple(roster.player_ids), tuple(roster.slots),
-            roster.scoring, roster.league_size)
+    return (signup.email.lower(), *roster_content(roster))
 
 
 @dataclass
@@ -279,7 +285,9 @@ class Merged:
     groups: list[list[RosterSignup]] = field(default_factory=list)
 
 
-def merge_same_roster(signups: Iterable[RosterSignup]) -> Merged:
+def merge_same_roster(signups: Iterable[RosterSignup],
+                      current: Mapping[tuple[str, str], str] | None = None,
+                      live: "set[str] | frozenset[str] | None" = None) -> Merged:
     """One row per (address, roster content). The kept row is the purchase
     _KEEP_ORDER prefers, carrying the OLDEST purchase's slug and time: its
     send keys, stored plans and receipts are the history this person already
@@ -288,11 +296,19 @@ def merge_same_roster(signups: Iterable[RosterSignup]) -> Merged:
     Two League Passes are never one row, even for one roster: each is its own
     league's seat link and seat count (LP2-D4), and merging them would hand
     one league's seats the other's link. Only a season or monthly purchase
-    folds into a pass (the oldest one). Pure."""
+    folds into a pass (the oldest one).
+
+    ``current`` maps (address, slug) to the ref a confirmed update moved that
+    subscription to. ``live`` is the set of Stripe subscriptions active now
+    (None: not known): a purchase whose subscription is not in it is never
+    merged (EMAILS-109) — a refunded pass told its live season pass that it
+    was the spare. Pure."""
     groups: dict[tuple, list[RosterSignup]] = {}
     order: list[tuple] = []
     for signup in signups:
-        key = _content(signup) or ("ref", signup.key)
+        dead = (live is not None and signup.subscription_id is not None
+                and signup.subscription_id not in live)
+        key = (None if dead else _content(signup, current)) or ("ref", signup.key)
         if key not in groups:
             order.append(key)
         groups.setdefault(key, []).append(signup)
@@ -735,6 +751,9 @@ class SeatSweep:
     retired: int = 0
     # Confirmed seats whose pass is not active right now (refunded, lapsed).
     lapsed: int = 0
+    # Seats released because their holder is on the stop list (D10): the seat
+    # frees up for another manager, and the holder is mailed nothing.
+    released: int = 0
     # Seat-link claims are arriving and not one matches a pass: a rotated or
     # missing signing secret, not a run of typos (OPS-R10). Exits non-zero.
     links_dead: bool = False
@@ -833,6 +852,16 @@ def _match_claims(rows: Iterable[Mapping], passes: list[PassInfo], keys: list[st
     return claims, matched, token_rows, token_hits
 
 
+def seat_origin(first: SeatEntry) -> str:
+    """A seat's slug: its FIRST confirmed claim — pass, roster and the Worker's
+    own stamp on that claim — never the roster alone (EMAILS-146). Two
+    co-managers claiming one pass with the same roster (the League Pass page
+    tells them to) shared a slug, so the second one's first report and every
+    Tuesday report were skipped as already sent. No address goes into it."""
+    basis = f"seat|{first.pass_id}|{first.ref}|{first.claimed_at}"
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()[:10]
+
+
 def _seat_row(email: str, owner: PassInfo, held: list[SeatEntry], roster) -> dict:
     """The registry row of one seat: the newest confirmed roster, under the
     slug the seat was first confirmed with."""
@@ -842,7 +871,7 @@ def _seat_row(email: str, owner: PassInfo, held: list[SeatEntry], roster) -> dic
         "player_ids": list(roster.player_ids), "slots": list(roster.slots),
         "scoring": roster.scoring, "league_size": roster.league_size,
         "label": "Your Team", "plan": LEAGUE_PASS, "covered_by": owner.payer,
-        "origin": slug_of(held[0].ref), "pass_id": owner.pass_id,
+        "origin": seat_origin(held[0]), "pass_id": owner.pass_id,
         **({"pass_customer": owner.customer}
            if owner.customer and _CUSTOMER.match(owner.customer) else {}),
         **({"roster_as_of": latest.at.date().isoformat()} if latest.at else {}),
@@ -867,7 +896,8 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                 known_ids: set[str] | None, secrets: str | Iterable[str] = (), *,
                 confirm_codes: Iterable[str | Mapping] = (),
                 log: Iterable[SeatEntry] = (), now: datetime | None = None,
-                season_from: datetime | None = None) -> SeatSweep:
+                season_from: datetime | None = None,
+                stopped: "Callable[[str], bool] | None" = None) -> SeatSweep:
     """Seat claims and the seat log -> registry rows, confirmations to send,
     and claims newly confirmed. Pure: everything it reads is an argument.
 
@@ -903,7 +933,10 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     confirmed (OPS-R7) — a served seat is never displaced by an older claim
     confirmed later; the rest are told the league's seats are taken. Claims
     and logged seats from before ``season_from`` are retired: each season's
-    seat is claimed with that season's roster (LP2-D3).
+    seat is claimed with that season's roster (LP2-D3). A seat whose holder is
+    on the stop list (``stopped``) is released and frees its place (D10):
+    otherwise a manager who left and replied "stop" held a seat forever, and
+    the pass's buyer had no way to free it.
 
     ``known_ids`` is None when the directory could not be loaded at all. That
     must mean "not checked", never "nothing is known" — an empty set would
@@ -928,6 +961,9 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
         if season_from is not None and (entry.at or _EPOCH) < season_from:
             out.retired += 1
             continue
+        if stopped is not None and stopped(entry.email):
+            out.released += 1
+            continue
         entries.append(entry)
     logged = {entry.key for entry in entries}
     newest: dict[tuple[str, str], datetime] = {}
@@ -949,6 +985,8 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                  for key in keys}
         pressed = [returned[code] or now for code in codes if code in returned]
         if not pressed or not claim.pass_.entitled or not live(claim, min(pressed)):
+            continue
+        if stopped is not None and stopped(claim.email):
             continue
         entry = SeatEntry(email=claim.email, pass_id=claim.pass_.pass_id,
                           payer=claim.pass_.payer, ref=claim.ref,
@@ -1017,14 +1055,20 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
 
     # Every live claim that would change something is mailed its code.
     pending: list[PendingSeat] = []
+    inactive: list[dict] = []
     unsigned = 0
     for claim in claims:
         if not live(claim, now):
             continue
+        if stopped is not None and stopped(claim.email):
+            continue
         owner = claim.pass_
         if not owner.entitled:
+            # JOIN-103: told by email, like a claim that matched no pass —
+            # the join page promises it. A note, never a seat.
             out.problems.append(f"seat claim from {_no_email(claim.email)} names a "
-                                f"League Pass that is not active — nothing sent")
+                                f"League Pass that is not active — told so")
+            inactive.append({**dict(claim.row), "inactive": True})
             continue
         held = seats.get((claim.email, owner.pass_id))
         if held and same_roster(held[-1].ref, claim.ref):
@@ -1057,6 +1101,13 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     # one were sent "Your seat is in" and "isn't set up yet" in the same run.
     out.unmatched = [row for row in out.unmatched
                      if str(row.get("email") or "").strip().lower() not in matched]
+    # A claim on a pass that is not active matched, so it survives the filter
+    # above on purpose; an address that ALSO holds a live seat is not told.
+    out.unmatched += [row for row in inactive
+                      if not any(email == str(row.get("email") or "").strip().lower()
+                                 and by_id.get(pass_id) is not None
+                                 and by_id[pass_id].entitled
+                                 for (email, pass_id) in seats)]
     # OPS-R10: seat-link claims arriving and NOT ONE matching is a signing
     # secret that was rotated or unset, not a run of typos. Loud, and nobody
     # is told "no pass" for a link that was good when it was sent.
@@ -1073,6 +1124,20 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
         out.unmatched = [row for row in out.unmatched
                          if not _SEAT_TOKEN.match(str(row.get("pass_token") or "").lower())]
     return out
+
+
+def _stop_list(problems: list[str]) -> "Callable[[str], bool] | None":
+    """Whether an address is on the stop list, for releasing seats (D10). An
+    unreadable list releases nothing — keeping a seat is the recoverable
+    direction, and delivery refuses to mail without the list anyway."""
+    from run.suppress import is_suppressed, load_suppressed
+    try:
+        held = load_suppressed()
+    except Exception as exc:  # noqa: BLE001
+        problems.append(f"the stop list could not be read, so no seat was "
+                        f"released this run ({exc})")
+        return None
+    return lambda email: is_suppressed(email, held)
 
 
 def seats_to_rows(rows: Iterable[dict], passes: Iterable[PassInfo],
@@ -1183,11 +1248,12 @@ def _send_unmatched_notes(unmatched: list[Mapping], now: datetime) -> None:
     if not due:
         return
     from render.report import seat_stop_href
-    from render.seat_claim import unmatched_email
+    from render.seat_claim import inactive_email, unmatched_email
     from run.delivery import Message
     messages = []
     for row in due:
-        subject, html, text = unmatched_email(os.environ.get("SITE_URL", ""))
+        subject, html, text = (inactive_email if row.get("inactive")
+                               else unmatched_email)(os.environ.get("SITE_URL", ""))
         messages.append(Message(to=str(row.get("email")).strip().lower(),
                                 subject=subject, html=html, text=text,
                                 key=unmatched_key(row),
@@ -1602,7 +1668,8 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 
     if getattr(data, "week", 1) > 1 and not week_has_kicked_off(
             CACHE_DIR, season, data.week):
-        from run.tuesday import league_seat_link, report_key, run_subscriber
+        from run.tuesday import (league_seat_link, pass_seat_cap, report_key,
+                                 run_subscriber)
         if report_key(data.season, data.week, signup.slug) in (sent or set()):
             return None
         # The same plan/billing mapping the registry row gets, so the first
@@ -1618,7 +1685,8 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
                                 out_dir=out_dir or SUBSCRIBER_REPORTS,
                                 processed_dir=processed_dir, record=record,
                                 seat_counts=seat_counts,
-                                seat_link=league_seat_link(subscriber, payers or {}))
+                                seat_link=league_seat_link(subscriber, payers or {}),
+                                seat_cap=pass_seat_cap(subscriber, payers or {}))
         if result.ok and result.message is not None:
             return result
         # Fall through to the roster file rather than sending nothing.
@@ -1763,6 +1831,37 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
               file=sys.stderr)
 
 
+def _updated_refs(registry_dir: Path) -> dict[tuple[str, str], str]:
+    """(address, slug) -> the ref a logged roster update moved it to."""
+    from run.updates import latest_per_target, load_update_log
+    try:
+        latest = latest_per_target(load_update_log(registry_dir / UPDATE_LOG_NAME))
+    except Exception:  # noqa: BLE001 — merging on the signup ref is the old rule
+        return {}
+    return {target: update.ref for target, update in latest.items()
+            if target[1] and update.ref}
+
+
+def _live_subscriptions(signups: list[RosterSignup], api_key: str,
+                        current: Mapping[tuple[str, str], str],
+                        problems: list[str]) -> "set[str] | None":
+    """The subscriptions active right now — asked of Stripe only when two
+    purchases share one roster (the only case the answer changes anything).
+    None when it cannot be told: the merge then follows the log, as before."""
+    contents = [c for s in signups if (c := _content(s, current)) is not None]
+    if len(contents) == len(set(contents)) or not api_key:
+        return None
+    from run.subscriptions import SubscriptionError, load_paid_from_stripe
+    try:
+        ids = load_paid_from_stripe(api_key).subscription_ids
+    except SubscriptionError as exc:
+        problems.append(f"could not tell which subscriptions are live, so one "
+                        f"address's purchases of one roster were merged as "
+                        f"logged ({exc})")
+        return None
+    return set(ids) if ids is not None else None
+
+
 def _live_passes(signups: Iterable[RosterSignup], api_key: str) -> list[PassInfo]:
     """The League Passes in the log, marked entitled from Stripe's live answer
     (RULE E2). Asked only when there are passes to ask about; raises
@@ -1884,7 +1983,10 @@ def main(argv: list[str] | None = None) -> int:
     # Pass, or a second purchase of the same roster, is written as ONE row.
     # Every purchase is still welcomed (`servable`); the registry and the
     # first report read the merged list.
-    merged = merge_same_roster(servable)
+    current_refs = _updated_refs(registry_dir)
+    merged = merge_same_roster(servable, current=current_refs,
+                               live=_live_subscriptions(servable, api_key,
+                                                        current_refs, problems))
 
     # League Pass SEATS. The only signups with no payment behind them, and the
     # only external dependency in this pipeline — so a vendor outage costs
@@ -1932,12 +2034,14 @@ def main(argv: list[str] | None = None) -> int:
                   "League Pass seats on a guess.", file=sys.stderr)
             return 1
         from run.updates import signing_secrets
+        stop_list = _stop_list(problems)
         seats = sweep_seats(
             claims, passes, known or None,
             signing_secrets(secret, os.environ.get("UPDATE_SECRET_PREVIOUS", "")),
             confirm_codes=confirm_rows,
             log=seat_log, now=datetime.now(timezone.utc),
-            season_from=_season_from(args.cache, known_season))
+            season_from=_season_from(args.cache, known_season),
+            stopped=stop_list)
         seat_rows = seats.rows
         problems.extend(seats.problems)
         if not args.dry_run:
@@ -1949,7 +2053,8 @@ def main(argv: list[str] | None = None) -> int:
               f"{seats.reclaimed} with a confirmed new roster (one seat each, "
               f"the newest stands); {len(seats.unmatched)} matched no League "
               f"Pass; {seats.overflow} past a full pass; {seats.lapsed} on a pass "
-              f"not active now; {seats.retired} from an earlier season")
+              f"not active now; {seats.retired} from an earlier season; "
+              f"{seats.released} released (holder on the stop list)")
 
     candidate = to_rows(merged.signups) + seat_rows
 
@@ -1974,7 +2079,7 @@ def main(argv: list[str] | None = None) -> int:
                                since=seats.last_claimed)
     pending, request_problems = validate_requests(
         request_rows, current, known or None, secret,
-        applied=applied_request_ts(base_log))
+        applied=applied_request_ts(base_log), confirm_rows=confirm_rows)
     problems.extend(request_problems)
     confirmed = confirmed_updates(pending, confirm_rows, secret)
     validated = [*validated, *confirmed]
@@ -2068,7 +2173,15 @@ def main(argv: list[str] | None = None) -> int:
     # A seat link that matches no pass at all is a signing secret gone wrong
     # (OPS-R10): every seat claim is going nowhere, and that must not be a
     # green cron.
-    failing = bool(blocked or unattributed or seats.links_dead)
+    # D10: a League Pass on file with no UPDATE_SECRET has no seat link to
+    # give, so none of its seats can be claimed — a paid tier quietly empty.
+    unsigned_pass = bool(not os.environ.get("UPDATE_SECRET", "")
+                         and any(row.get("billing") == "pass" for row in rows))
+    if unsigned_pass:
+        print("A LEAGUE PASS IS ON FILE AND UPDATE_SECRET IS NOT SET: no seat link "
+              "can be built, so no leaguemate can claim a seat. Set it (LAUNCH.md "
+              "step 5).", file=sys.stderr)
+    failing = bool(blocked or unattributed or seats.links_dead or unsigned_pass)
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
