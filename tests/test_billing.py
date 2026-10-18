@@ -1,4 +1,4 @@
-"""The offseason billing stop (run/billing.py).
+"""The end-of-season monthly stop (run/billing.py, D1).
 
 Every test here names the failure it prevents, because each one was found by
 reproducing that failure against a design that looked right.
@@ -6,16 +6,18 @@ reproducing that failure against a design that looked right.
 
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
 from run import billing
-from run.billing import (REPORTABLE, RETRY_DAYS, ROSTER_METADATA_KEY,
-                         STOP_METADATA_KEY, WRITABLE, YEARLY, _interval,
-                         _is_ours, apply_stop, last_send, needs_stop, stop_for)
+from run.billing import (REPORTABLE, ROSTER_METADATA_KEY, STOP_METADATA_KEY,
+                         WRITABLE, YEARLY, _is_ours, apply_stop, final_send,
+                         last_send, needs_stop)
 from run.solo import season_ends
+from run.watchdog import tuesday_due_at
 
 # The same directory run/billing.py reads. These MUST name one path: when the
 # guard checked data/raw/nflverse/games.csv while the argument passed data/raw,
@@ -27,224 +29,55 @@ needs_schedule = pytest.mark.skipif(
     reason="no cached nflverse schedule (data/ is gitignored); "
            "run `python -m ingest.pull` to populate it")
 
+# The instant the 2026 season's last weekly report is due (Tue Jan 5 2027).
+FINAL = datetime(2027, 1, 5, 12, 17, tzinfo=timezone.utc)
+AFTER = int(FINAL.timestamp()) + 6 * 86400       # a period ending after it
+BEFORE = int(FINAL.timestamp()) - 3600            # a period ending before it
 
-def sub(**over):
+
+def sub(period_end: int = AFTER, interval: str = "month", **over):
     """A monthly subscription of ours, in the shape Stripe returns."""
     row = {
         "id": "sub_1", "status": "active", "cancel_at": None,
         "cancel_at_period_end": False,
         "customer": {"id": "cus_1", "metadata": {ROSTER_METADATA_KEY: "r3-pc-x"}},
-        "items": {"data": [{"price": {"recurring": {"interval": "month"}},
-                            "current_period_end": 2000000000}]},
+        "items": {"data": [{"price": {"recurring": {"interval": interval}},
+                            "current_period_end": period_end}]},
     }
     row.update(over)
     return row
 
 
 def yearly(**over):
-    return sub(items={"data": [{"price": {"recurring": {"interval": YEARLY}},
-                                "current_period_end": 2000000000}]}, **over)
-
-
-AT = datetime(2027, 1, 13, tzinfo=timezone.utc)
+    return sub(interval=YEARLY, **over)
 
 
 # --------------------------------------------------------------------- #
-# RULE B2 — the plan comes from the price
+# D1 / RULE B3 — the final paid period, and not one day before it
 # --------------------------------------------------------------------- #
 
-def test_a_yearly_subscription_is_never_given_a_stop_date() -> None:
-    """The $39 season pass and the $99 League Pass renew yearly by design.
-
-    Cancelling one would end a subscription the buyer expects to continue and
-    cannot be undone. The interval comes off the subscription's own price, never
-    off our `plan` field: a ref's prefix is a claim, and STRIPE_PAYMENT_LINKS
-    exists precisely because claims are not facts.
-    """
-    due, _notes = needs_stop([yearly(id="sub_season")], AT)
-    assert due == []
+def test_a_period_that_ends_before_the_last_report_is_left_alone() -> None:
+    """The promise that broke (LEGAL-33/34/38): a stop written months ahead
+    made Stripe's billing page show the plan as already cancelled, with a
+    Reactivate button and NO Cancel button, so a monthly subscriber could not
+    stop November and December themselves. A period that renews into the
+    month the last report falls in carries nothing, and keeps its Cancel."""
+    due, notes = needs_stop([sub(period_end=BEFORE)], FINAL)
+    assert due == [] and notes == [], "stamped before its final paid period"
 
 
-def test_the_interval_is_read_from_the_price_not_from_our_own_plan_field() -> None:
-    """Mutation guard: a subscription whose METADATA claims monthly but whose
-    price is yearly must still be left alone. Reading the claim would cancel a
-    season pass on the strength of a string we wrote ourselves."""
-    row = yearly(id="sub_liar")
-    row["customer"]["metadata"]["byl_plan"] = "monthly"
-    row["metadata"] = {"byl_plan": "monthly"}
-    due, _ = needs_stop([row], AT)
-    assert due == [], "a yearly PRICE was cancelled because metadata said monthly"
+def test_the_final_paid_period_is_ended_at_its_own_end() -> None:
+    """A period ending after the last report is due is the final one: the next
+    renewal would start a month with no weekly report in it."""
+    due, _ = needs_stop([sub(period_end=AFTER)], FINAL)
+    assert [s["id"] for s in due] == ["sub_1"]
 
 
-def test_a_subscription_with_no_readable_interval_is_reported_not_guessed() -> None:
-    row = sub(id="sub_odd", items={"data": [{"price": {}}]})
-    due, notes = needs_stop([row], AT)
-    assert due == []
-    assert any("billing interval" in n for n in notes)
-
-
-# --------------------------------------------------------------------- #
-# RULE B4 — ours only
-# --------------------------------------------------------------------- #
-
-def test_a_subscription_that_is_not_ours_is_untouched() -> None:
-    """The sweep walks every subscription on the Stripe account, not every
-    subscriber of this product. Without the roster stamp it would attach a
-    season-end cancel date to anything else ever sold from the same account."""
-    stranger = sub(id="sub_other", customer={"id": "cus_x", "metadata": {}})
-    assert not _is_ours(stranger)
-    assert needs_stop([stranger], AT)[0] == []
-
-
-def test_an_unexpanded_customer_is_not_treated_as_ours() -> None:
-    """Fails closed. If the expand ever stops working the customer comes back as
-    an id STRING, and reading that as "no metadata, so not ours" is right —
-    reading it as ours would cancel strangers' subscriptions."""
-    assert not _is_ours(sub(customer="cus_1"))
-
-
-# --------------------------------------------------------------------- #
-# idempotence and prior state
-# --------------------------------------------------------------------- #
-
-def test_setting_the_same_stop_twice_writes_nothing_the_second_time() -> None:
-    """The intake cron runs hourly. A sweep that rewrote the same date every
-    hour would be 24 pointless money-mutating calls a day."""
-    already = sub(cancel_at=int(AT.timestamp()))
-    assert needs_stop([already], AT)[0] == []
-
-
-def test_a_subscriber_who_cancelled_is_never_un_cancelled() -> None:
-    """The worst possible bug in this module: `cancel_at` and
-    `cancel_at_period_end` are alternative ways of saying the same thing, and
-    writing `cancel_at` onto a subscription the CUSTOMER cancelled would clear
-    their cancellation and charge somebody who had left."""
-    assert needs_stop([sub(cancel_at_period_end=True)], AT)[0] == []
-
-
-def test_a_hand_set_stop_date_outranks_the_computed_one() -> None:
-    other = int((AT - timedelta(days=30)).timestamp())
-    due, notes = needs_stop([sub(cancel_at=other)], AT)
-    assert due == []
-    assert any("already stops at" in n for n in notes)
-
-
-def test_a_stop_date_we_set_ourselves_is_corrected_when_the_calendar_moves() -> None:
-    """The stamp was written and never read.
-
-    `needs_stop` branched on `cancel_at` alone, so a date THIS MODULE had
-    written was reported as "somebody set this by hand" and left frozen —
-    telling ours from theirs is the only reason the stamp exists. Harmless
-    while the calendar never moves; the day a schedule shifts or RETRY_DAYS
-    changes, every subscription keeps a stop date computed against a schedule
-    that no longer applies, and the run says so every day forever.
-    """
-    old = int((AT - timedelta(days=1)).timestamp())
-    ours = sub(cancel_at=old, metadata={STOP_METADATA_KEY: str(old)})
-    due, notes = needs_stop([ours], AT)
-    assert len(due) == 1, "our own stale stop date was never corrected"
-    assert notes == []
-
-    # ...but a date we did NOT set is still left alone, stamp or no stamp.
-    theirs = sub(cancel_at=old, metadata={STOP_METADATA_KEY: str(old - 999)})
-    due, notes = needs_stop([theirs], AT)
-    assert due == [] and any("we did not set it" in n for n in notes)
-
-
-def test_a_paused_subscription_is_not_silent_in_the_offseason_gap(
-        monkeypatch, capsys) -> None:
-    """The one state where nothing else would ever mention it.
-
-    The `at is None` branch returns before `needs_stop` is called, so the
-    REPORTABLE notes cannot fire there — and the census filtered to WRITABLE,
-    so a paused monthly subscription of ours passed through in total silence at
-    exit 0. Stripe resumes billing a paused subscription without asking us, so
-    that is a customer billing through the offseason with nothing to stop them
-    and no sentence anywhere.
-    """
-    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (None, "2026"))
-    monkeypatch.setattr(billing, "load_subscriptions",
-                        lambda key: [sub(status="paused")])
-    assert billing.main(["--send"]) == 1
-    assert "NO STOP DATE" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
-def test_a_dead_subscription_is_skipped(status: str) -> None:
-    """Stripe accepts only metadata on a canceled subscription, so writing
-    cancel_at would be a guaranteed error every run."""
-    assert needs_stop([sub(status=status)], AT)[0] == []
-
-
-@pytest.mark.parametrize("status", REPORTABLE)
-def test_a_paused_or_unpaid_subscription_is_said_out_loud(status: str) -> None:
-    """Not writable, but not harmless either: a paused subscription resumes
-    billing on its own, so one left with no stop date is a charge nobody is
-    expecting. Silence here is how it would be discovered by the customer."""
-    due, notes = needs_stop([sub(status=status)], AT)
-    assert due == []
-    assert any(status in n for n in notes), f"{status} passed through in silence"
-
-
-@pytest.mark.parametrize("status", REPORTABLE)
-def test_a_yearly_subscription_in_dunning_is_not_an_alarm(status: str) -> None:
-    """RULE B2 outranks status, and the filter order used to have it backwards.
-
-    Reproduced: one $39 season pass in Stripe's `unpaid` dunning end-state and
-    zero monthly subscriptions produced a note, and `main` returns 1 on any
-    note, so daily.yml fired "::error::A monthly subscription is billing with
-    no end-of-season stop date" and filed a bug issue — EVERY DAY, about a
-    subscription RULE B2 forbids ever giving a stop date to. There is no action
-    a human could take, which makes it a permanent false alarm on the only
-    alarm guarding an irreversible money promise.
-
-    The old test parametrized REPORTABLE over the monthly fixture only, so the
-    ordering was pinned by nothing.
-    """
-    due, notes = needs_stop([yearly(status=status)], AT)
-    assert due == []
-    assert notes == [], (
-        f"a yearly subscription in {status} raised {notes} — the daily cron "
-        f"goes red forever over a plan that must renew")
-
-
-def test_a_reportable_note_does_not_call_an_unpaid_subscription_paused() -> None:
-    _due, notes = needs_stop([sub(status="unpaid")], AT)
-    assert notes and "paused" not in notes[0], (
-        "the note describes every REPORTABLE status as paused")
-
-
-@pytest.mark.parametrize("status", WRITABLE)
-def test_every_live_status_gets_a_stop_date(status: str) -> None:
-    assert len(needs_stop([sub(status=status)], AT)[0]) == 1
-
-
-def test_the_alarm_ignores_subscriptions_that_already_have_a_stop_date(
-        monkeypatch, capsys) -> None:
-    """The two days between a season's last game and its stop date firing.
-
-    On 2027-01-11 and 01-12 no season satisfies `ends >= today`, so `stop_for`
-    answers None — while every monthly subscriber already carries a perfectly
-    good 2027-01-13 stop date set months earlier. The census counted them as
-    "billing with nothing to stop them", so the cron went red and filed a bug
-    issue about a date we set ourselves.
-    """
-    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (None, "2026"))
-    monkeypatch.setattr(billing, "load_subscriptions",
-                        lambda key: [sub(cancel_at=int(AT.timestamp()))])
-    assert billing.main(["--send"]) == 0, capsys.readouterr().err
-    # ...but one with NO stop date still fails the run.
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
-    assert billing.main(["--send"]) == 1
-
-
-# --------------------------------------------------------------------- #
-# the write
-# --------------------------------------------------------------------- #
-
-def test_the_write_sends_cancel_at_and_stamps_where_it_came_from(monkeypatch) -> None:
+def test_the_write_is_period_end_never_a_date_and_never_a_proration(monkeypatch) -> None:
+    """`cancel_at` a few days after the season prorated a stub for days after
+    the last game (LEGAL-31, EMAILS-94); `cancel_at_period_end` charges
+    nothing more and refunds nothing, which is what "your last charge is the
+    month the last report falls in" means."""
     seen: dict = {}
 
     def fake(url, key, form, what="", needs=""):
@@ -252,151 +85,264 @@ def test_the_write_sends_cancel_at_and_stamps_where_it_came_from(monkeypatch) ->
         return {}
 
     monkeypatch.setattr(billing, "_stripe_post", fake)
-    apply_stop("sk_test", sub(), AT)
-    assert seen["form"]["cancel_at"] == str(int(AT.timestamp()))
-    assert seen["form"][f"metadata[{STOP_METADATA_KEY}]"] == str(int(AT.timestamp()))
+    apply_stop("sk_test", sub())
+    assert seen["form"] == {"cancel_at_period_end": "true",
+                            f"metadata[{STOP_METADATA_KEY}]": str(AFTER)}
     assert "sub_1" in seen["url"]
     assert "Subscriptions" in seen["needs"], (
         "a 403 here would tell the operator to grant Customers access — the "
         "wrong permission, while the promise stays broken")
 
 
-def test_proration_is_disabled_only_when_the_stop_lands_inside_this_period(
-        monkeypatch) -> None:
-    """Stripe documents that prorations CANNOT be disabled when the cancel date
-    is outside the current period. Sending the parameter there is an untested
-    guess on the one field that decides whether the call succeeds at all."""
-    forms: list[dict] = []
-    monkeypatch.setattr(billing, "_stripe_post",
-                        lambda url, key, form, what="", needs="": forms.append(form))
-
-    inside = sub(items={"data": [{"price": {"recurring": {"interval": "month"}},
-                                  "current_period_end": int(AT.timestamp()) + 60}]})
-    outside = sub(items={"data": [{"price": {"recurring": {"interval": "month"}},
-                                   "current_period_end": int(AT.timestamp()) - 60}]})
-    apply_stop("sk", inside, AT)
-    apply_stop("sk", outside, AT)
-    assert forms[0].get("proration_behavior") == "none"
-    assert "proration_behavior" not in forms[1]
+@needs_schedule
+@pytest.mark.parametrize("bought", [date(2026, 9, 1), date(2026, 10, 18),
+                                    date(2026, 11, 30), date(2026, 12, 29),
+                                    date(2027, 1, 6)])
+def test_every_billing_day_pays_through_the_last_report_and_never_after(
+        bought: date) -> None:
+    """The whole promise, simulated against the real 2026 calendar for every
+    billing day a month has: the daily run is applied at each renewal, and
+    then (a) the last charge starts a period the last report falls in, and
+    (b) no charge ever starts after the last report is due. The old design
+    failed (b) for billing days Jan 11-12 and its stamp failed the Cancel
+    button for all of them."""
+    final, season = final_send(CACHE, bought, live=False)
+    assert season == "2026" and final == FINAL
+    for day in range(1, 29):
+        start = datetime(bought.year, bought.month, day, 9, tzinfo=timezone.utc)
+        charges = [start]
+        while True:
+            month = charges[-1].month % 12 + 1
+            year = charges[-1].year + (charges[-1].month == 12)
+            end = charges[-1].replace(year=year, month=month,
+                                      day=min(day, calendar.monthrange(year, month)[1]))
+            due, _ = needs_stop([sub(period_end=int(end.timestamp()))], final)
+            if due:
+                break                            # stamped: it ends at `end`
+            charges.append(end)                  # it renews
+            assert len(charges) < 8, "never stopped"
+        renewals = charges[1:]
+        assert all(c <= final for c in renewals), (
+            f"billing day {day}: a renewal on {renewals[-1]:%b %d} started a "
+            f"period with no weekly report in it")
+        assert end > final, f"billing day {day}: cut off before the last report"
 
 
 # --------------------------------------------------------------------- #
-# RULE B1 — never guess a season, never act on a past date
+# RULE B2 — the plan comes from the price
+# --------------------------------------------------------------------- #
+
+def test_a_yearly_subscription_is_never_given_a_stop() -> None:
+    """The $39 season pass and the $99 League Pass renew yearly by design."""
+    due, _notes = needs_stop([yearly(id="sub_season")], FINAL)
+    assert due == []
+
+
+def test_the_interval_is_read_from_the_price_not_from_our_own_plan_field() -> None:
+    row = yearly(id="sub_liar")
+    row["customer"]["metadata"]["byl_plan"] = "monthly"
+    row["metadata"] = {"byl_plan": "monthly"}
+    due, _ = needs_stop([row], FINAL)
+    assert due == [], "a yearly PRICE was stopped because metadata said monthly"
+
+
+def test_a_subscription_with_no_readable_interval_is_reported_not_guessed() -> None:
+    row = sub(id="sub_odd", items={"data": [{"price": {}}]})
+    due, notes = needs_stop([row], FINAL)
+    assert due == [] and any("billing interval" in n for n in notes)
+
+
+def test_a_subscription_with_no_readable_period_end_is_reported_not_guessed() -> None:
+    row = sub(items={"data": [{"price": {"recurring": {"interval": "month"}}}]})
+    due, notes = needs_stop([row], FINAL)
+    assert due == [] and any("period end" in n for n in notes)
+
+
+# --------------------------------------------------------------------- #
+# RULE B4 — ours only; RULE B5 — a cancel already there is done
+# --------------------------------------------------------------------- #
+
+def test_a_subscription_that_is_not_ours_is_untouched() -> None:
+    stranger = sub(id="sub_other", customer={"id": "cus_x", "metadata": {}})
+    assert not _is_ours(stranger)
+    assert needs_stop([stranger], FINAL)[0] == []
+
+
+def test_an_unexpanded_customer_is_not_treated_as_ours() -> None:
+    assert not _is_ours(sub(customer="cus_1"))
+
+
+@pytest.mark.parametrize("ending", [{"cancel_at_period_end": True},
+                                    {"cancel_at": AFTER - 86400}])
+def test_a_cancellation_already_on_the_subscription_is_never_touched(ending) -> None:
+    """Stripe's portal stores a customer's cancel as `cancel_at`; the Dashboard
+    may set either. Each already ends the billing — writing over one could
+    move a date the customer chose, and an hourly re-write is pointless."""
+    due, notes = needs_stop([sub(**ending)], FINAL)
+    assert due == [] and notes == []
+
+
+# --------------------------------------------------------------------- #
+# statuses
+# --------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("status", ["canceled", "incomplete_expired"])
+def test_a_dead_subscription_is_skipped(status: str) -> None:
+    assert needs_stop([sub(status=status)], FINAL)[0] == []
+
+
+@pytest.mark.parametrize("status", REPORTABLE)
+def test_a_paused_or_unpaid_subscription_is_said_out_loud(status: str) -> None:
+    due, notes = needs_stop([sub(status=status)], FINAL)
+    assert due == [] and any(status in n for n in notes)
+
+
+@pytest.mark.parametrize("status", REPORTABLE)
+def test_a_yearly_subscription_in_dunning_is_not_an_alarm(status: str) -> None:
+    """RULE B2 outranks status: a $39 pass in `unpaid` once turned the daily
+    cron red every day about a plan that must renew."""
+    due, notes = needs_stop([yearly(status=status)], FINAL)
+    assert due == [] and notes == []
+
+
+def test_a_reportable_note_does_not_call_an_unpaid_subscription_paused() -> None:
+    _due, notes = needs_stop([sub(status="unpaid")], FINAL)
+    assert notes and "paused" not in notes[0]
+
+
+@pytest.mark.parametrize("status", WRITABLE)
+def test_every_live_status_in_its_final_period_is_stopped(status: str) -> None:
+    assert len(needs_stop([sub(status=status)], FINAL)[0]) == 1
+
+
+# --------------------------------------------------------------------- #
+# the run
+# --------------------------------------------------------------------- #
+
+def test_a_paused_subscription_is_not_silent_in_the_offseason_gap(
+        monkeypatch, capsys) -> None:
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "final_send", lambda *a, **k: (None, None))
+    monkeypatch.setattr(billing, "load_subscriptions",
+                        lambda key: [sub(status="paused")])
+    assert billing.main(["--send"]) == 1
+    assert "NO SEASON TO SERVE" in capsys.readouterr().err
+
+
+def test_the_gap_alarm_ignores_subscriptions_already_ending(monkeypatch, capsys) -> None:
+    """After the season every monthly subscription carries its period-end stop
+    (or the customer's own cancel): none of them is "billing with nothing to
+    stop it", and a red cron about them is a false alarm."""
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "final_send", lambda *a, **k: (None, None))
+    monkeypatch.setattr(billing, "load_subscriptions",
+                        lambda key: [sub(cancel_at_period_end=True)])
+    assert billing.main(["--send"]) == 0, capsys.readouterr().err
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    assert billing.main(["--send"]) == 1
+
+
+def test_dry_run_is_the_default(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
+    written: list = []
+    monkeypatch.setattr(billing, "apply_stop", lambda *a, **k: written.append(a))
+    assert billing.main([]) == 0
+    assert written == [], "a run with no --send wrote to Stripe"
+    assert "would set" in capsys.readouterr().out
+
+
+def test_send_writes_only_final_periods(monkeypatch) -> None:
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "load_subscriptions",
+                        lambda key: [sub(id="sub_last"), sub(id="sub_more", period_end=BEFORE)])
+    monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
+    written: list = []
+    monkeypatch.setattr(billing, "apply_stop", lambda key, s: written.append(s["id"]))
+    assert billing.main(["--send"]) == 0
+    assert written == ["sub_last"]
+
+
+def test_a_failed_write_exits_non_zero(monkeypatch, capsys) -> None:
+    from run.subscriptions import SubscriptionError
+
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
+
+    def boom(*a, **k):
+        raise SubscriptionError("HTTP 403")
+
+    monkeypatch.setattr(billing, "apply_stop", boom)
+    assert billing.main(["--send"]) == 1
+    assert "could not be stopped" in capsys.readouterr().err
+
+
+def test_no_stripe_key_is_expected_not_an_error(monkeypatch) -> None:
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    assert billing.main([]) == billing.NOT_CONFIGURED
+
+
+# --------------------------------------------------------------------- #
+# RULE B1 — never guess a season; the calendar the stop is read from
 # --------------------------------------------------------------------- #
 
 @needs_schedule
-def test_the_stop_clears_the_final_send_and_a_whole_retry_tuesday() -> None:
-    """RULE B3, checked against every season in the archive rather than against
-    an assumption. A fired cancel_at cannot be undone, so being one day early
-    costs a subscriber a report they paid for, permanently.
-
-    This is the test that catches a fixed "+3 days because the finale is a
-    Sunday" rule: 4 of the 28 cached seasons end on a Monday, and 2010's final
-    send lands two days AFTER its last game because a week-16 makeup held
-    current_week back.
-
-    The first version of this test asserted `send + RETRY_DAYS > send + 7`,
-    which is the claim 8 > 7 and never reads the schedule at all. It ran the
-    calendar and then checked arithmetic. Now every assertion is against
-    `current_week`, which is what `last_send` claims to be derived from.
-    """
+def test_the_last_send_is_the_first_tuesday_that_mails_the_last_week() -> None:
+    """Checked against every season in the archive: 4 of 28 end on a Monday,
+    and 2010's final send lands two days AFTER its last game."""
     from run.solo import current_week
 
     ends = season_ends(CACHE, live=False)
-    assert len(ends) > 20, "the archive should cover many seasons"
+    assert len(ends) > 20
     for season in sorted(ends):
         final = date.fromisoformat(ends[season])
         last_week = current_week(CACHE, season, final, session=None)
         send = last_send(CACHE, season, live=False)
-        assert send is not None, f"{season}: no send date"
-        assert send.weekday() == 1, f"{season}: {send} is not a Tuesday"
-        # The final week really is mailed on that day...
-        assert current_week(CACHE, season, send, session=None) >= last_week, (
-            f"{season}: week {last_week} is not the one mailed on {send}, so a "
-            f"stop derived from it cuts the subscriber off before their last "
-            f"report — and a fired cancel_at cannot be undone")
-        # ...and not a week earlier, or the stop is a week later than it needs
-        # to be and somebody is billed into the offseason.
+        assert send is not None and send.weekday() == 1, f"{season}: {send}"
+        assert current_week(CACHE, season, send, session=None) >= last_week
         assert current_week(CACHE, season, send - timedelta(days=7),
-                            session=None) < last_week, (
-            f"{season}: week {last_week} was already mailed by "
-            f"{send - timedelta(days=7)}; {send} is not the FIRST such Tuesday")
-        # The stop clears a whole retry Tuesday PAST the real final send.
-        stop = send + timedelta(days=RETRY_DAYS)
-        assert (stop - final).days >= 1, f"{season}: stop {stop} precedes {final}"
-        assert stop >= send + timedelta(days=8), f"{season}: no retry margin"
+                            session=None) < last_week
 
 
 @needs_schedule
-def test_the_offseason_gap_refuses_instead_of_cancelling_everybody() -> None:
-    """The defect that made an earlier design dangerous.
+def test_the_cutoff_is_the_tuesday_runs_due_minute() -> None:
+    at, season = final_send(CACHE, date(2026, 10, 18), live=False)
+    assert at == tuesday_due_at(last_send(CACHE, season, live=False))
 
-    `current_season` answers the season that just ENDED once the next schedule
-    is unpublished, so a stop date derived from it is in the PAST for roughly
-    four months a year — and an earlier design's response to a past date was to
-    cancel the subscription immediately. With checkout deliberately open in
-    draft season, that would have deleted a just-paid monthly subscription
-    within the hour, every hour.
-    """
+
+@needs_schedule
+def test_the_offseason_gap_refuses_instead_of_acting() -> None:
     ends = season_ends(CACHE, live=False)
     latest = date.fromisoformat(ends[sorted(ends)[-1]])
     for days in (2, 40, 100, 160):
-        at, _season = stop_for(CACHE, latest + timedelta(days=days), live=False)
-        assert at is None, (
-            f"{days} days past the last cached game, a stop date was still "
-            f"produced ({at}) — every monthly subscription would be acted on")
+        assert final_send(CACHE, latest + timedelta(days=days), live=False) == (None, None)
 
 
 @needs_schedule
-def test_a_stop_date_is_always_in_the_future_when_one_is_given() -> None:
-    ends = season_ends(CACHE, live=False)
-    for season in sorted(ends):
-        end = date.fromisoformat(ends[season])
-        at, _ = stop_for(CACHE, end - timedelta(days=30), live=False)
-        if at is None:
-            continue
-        assert at > datetime.now(timezone.utc) or at.date() > end - timedelta(days=30)
-
-
-@needs_schedule
-def test_the_stop_belongs_to_a_season_still_to_be_played() -> None:
-    """Not `current_season`, which is right for "which season is this report
-    about" and wrong for scheduling anything in the future."""
+def test_the_cutoff_belongs_to_a_season_still_to_be_played() -> None:
     ends = season_ends(CACHE, live=False)
     for season in sorted(ends)[-3:]:
         start = date.fromisoformat(ends[season]) - timedelta(days=120)
-        at, chosen = stop_for(CACHE, start, live=False)
-        if at is None:
-            continue
-        assert ends[chosen] >= start.isoformat(), (
-            f"chose {chosen}, whose season had already finished on {start}")
+        at, chosen = final_send(CACHE, start, live=False)
+        if at is not None:
+            assert ends[chosen] >= start.isoformat()
 
 
 def test_a_broken_schedule_fails_closed_rather_than_raising(monkeypatch) -> None:
-    """`_schedule` reaches ingest.nflverse, whose NflverseError is NOT a
-    subclass of SoloError. An exception escaping here would kill the run before
-    a single report was built or mailed — one data hiccup taking down everybody
-    else's Tuesday, which is the blast radius this repo keeps refusing."""
     from ingest.nflverse import NflverseError
 
     def boom(*a, **k):
         raise NflverseError("cold cache")
 
     monkeypatch.setattr(billing, "season_ends", boom)
-    assert stop_for(Path("/nonexistent"), date(2026, 10, 1)) == (None, None)
+    assert final_send(Path("/nonexistent"), date(2026, 10, 1)) == (None, None)
 
 
 def test_no_delete_call_exists_anywhere_in_the_module() -> None:
-    """RULE B1, pinned as text because it is a rule about what must NEVER be
-    written. An unattended hourly sweep must not be able to end a subscription
-    immediately: DELETE /v1/subscriptions/{id} takes effect at once, cannot be
-    undone, and issues no refund.
-
-    Matched against the AST, not the text: the first version of this test read
-    the word "delete" inside RULE B1's own docstring — which is prose SAYING
-    never to delete — as evidence of a delete. A guard that cannot tell code
-    from the comment forbidding it is not a guard.
-    """
+    """RULE B1, matched against the AST (a docstring SAYING never to delete is
+    not a delete): DELETE /v1/subscriptions/{id} takes effect at once."""
     import ast
 
     tree = ast.parse(Path(billing.__file__).read_text(encoding="utf-8"))
@@ -408,73 +354,30 @@ def test_no_delete_call_exists_anywhere_in_the_module() -> None:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if node.value in docstrings:
                 continue
-            assert "delete" not in node.value.lower(), (
-                f"a DELETE reaches the wire: {node.value!r}")
+            assert "delete" not in node.value.lower()
         if isinstance(node, ast.Attribute):
-            assert "delete" not in node.attr.lower(), f"calls .{node.attr}"
+            assert "delete" not in node.attr.lower()
         if isinstance(node, ast.Name):
-            assert "delete" not in node.id.lower(), f"references {node.id}"
+            assert "delete" not in node.id.lower()
 
 
-# --------------------------------------------------------------------- #
-# the promise this exists to keep
-# --------------------------------------------------------------------- #
+def test_no_cancel_at_date_is_ever_written() -> None:
+    """The months-ahead `cancel_at` is what took the Cancel button away. The
+    only cancel field this module may send is `cancel_at_period_end`."""
+    import ast
+
+    tree = ast.parse(Path(billing.__file__).read_text(encoding="utf-8"))
+    sent = {node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and node.value.startswith("cancel_at")}
+    assert sent <= {"cancel_at_period_end", "cancel_at"}
+    source = Path(billing.__file__).read_text(encoding="utf-8")
+    assert 'form = {"cancel_at_period_end": "true"}' in source
+    assert '"cancel_at": ' not in source
+
 
 def test_the_renewal_notice_skips_a_subscription_that_is_ending() -> None:
-    """render/renewal.py's first rule: a subscription set to cancel is never
-    told it will renew. run/renewals.py checked only `cancel_at_period_end`,
-    which was harmless only while nothing set `cancel_at` — run/billing.py now
-    does, so this became live the day it shipped."""
+    """A subscription set to cancel is never told it will renew — Stripe's
+    portal records a customer's cancel as `cancel_at`."""
     source = (Path(billing.__file__).parent / "renewals.py").read_text(encoding="utf-8")
-    assert 'subscription.get("cancel_at")' in source, (
-        "renewals.py reads only cancel_at_period_end again — a subscription "
-        "ending via cancel_at would be told it is about to be charged $39")
-
-
-def test_dry_run_is_the_default(monkeypatch, capsys) -> None:
-    """This is the first money-mutating call in the repo. A misconfigured cron
-    must not cancel real subscriptions by accident — the same rule run/tuesday.py
-    and run/batch.py were taught the hard way."""
-    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
-    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (AT, "2026"))
-    written: list = []
-    monkeypatch.setattr(billing, "apply_stop",
-                        lambda *a, **k: written.append(a))
-    assert billing.main([]) == 0
-    assert written == [], "a run with no --send wrote to Stripe"
-    assert "would set" in capsys.readouterr().out
-
-
-def test_send_writes_and_a_failure_exits_non_zero(monkeypatch, capsys) -> None:
-    """A subscription left with no stop date is a customer who WILL be charged
-    through the offseason. That must fail the run, not print into a green cron —
-    daily.yml files its issue only on failure."""
-    from run.subscriptions import SubscriptionError
-
-    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
-    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (AT, "2026"))
-
-    def boom(*a, **k):
-        raise SubscriptionError("HTTP 403")
-
-    monkeypatch.setattr(billing, "apply_stop", boom)
-    assert billing.main(["--send"]) == 1
-    assert "still billing with no stop date" in capsys.readouterr().err
-
-
-def test_monthly_subscriptions_with_no_computable_stop_fail_the_run(
-        monkeypatch, capsys) -> None:
-    """The offseason gap. Refusing is right; refusing SILENTLY is not — those
-    subscriptions really are billing with nothing to stop them."""
-    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
-    monkeypatch.setattr(billing, "stop_for", lambda *a, **k: (None, "2026"))
-    assert billing.main(["--send"]) == 1
-    assert "NO STOP DATE" in capsys.readouterr().err
-
-
-def test_no_stripe_key_is_expected_not_an_error(monkeypatch) -> None:
-    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
-    assert billing.main([]) == billing.NOT_CONFIGURED
+    assert 'subscription.get("cancel_at")' in source

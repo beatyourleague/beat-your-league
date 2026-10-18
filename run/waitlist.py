@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import os
 import re
 import sys
@@ -51,6 +50,7 @@ from pathlib import Path
 from render.report import BRAND_LINE
 from run.delivery import (DRY_PROVIDER, DeliveryError, Message, build_provider,
                           send_all)
+from run.digest import DigestError, address as keyed_address
 from run.intake import IntakeError, fetch_seats
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -218,7 +218,10 @@ def messages(addresses: list[str], signup_url: str,
         out.append(Message(
             to=address, subject=SUBJECT,
             html=_html(body, url, saved=bool(ref), sender=sender), text=body,
-            key=f"{CAMPAIGN}-{hashlib.sha256(address.encode()).hexdigest()[:10]}",
+            # A keyed code, never the address (run/digest.py): the send log
+            # is public, and a plain hash would let anyone holding an
+            # address test whether it joined the list.
+            key=f"{CAMPAIGN}-{keyed_address(address)}",
             # Gmail and Apple Mail show an Unsubscribe button for this.
             unsubscribe=f"mailto:{CONTACT}?subject=unsubscribe"))
     return out
@@ -369,7 +372,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        results = send_all(messages(addresses, args.url, refs), provider=provider)
+        built = messages(addresses, args.url, refs)
+    except DigestError as exc:
+        # Even a preview needs the key: the send-log key it checks is keyed.
+        print(str(exc), file=sys.stderr)
+        return 1
+    try:
+        results = send_all(built, provider=provider)
     except DeliveryError as exc:
         print(f"Delivery failed: {exc}", file=sys.stderr)
         return 1
@@ -399,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
 # What `--send` needs in the environment (OPS-13). EMAIL_FROM is on the list
 # because run/delivery.py falls back to a placeholder sender at
 # example.invalid, which no provider will deliver and no reader would trust.
-SEND_ENV = ("EMAIL_PROVIDER", "EMAIL_FROM", "SENDER_POSTAL_ADDRESS")
+SEND_ENV = ("EMAIL_PROVIDER", "EMAIL_FROM", "SENDER_POSTAL_ADDRESS", "LOG_SECRET")
 PROVIDER_KEYS = {"resend": "RESEND_API_KEY", "postmark": "POSTMARK_TOKEN"}
 
 

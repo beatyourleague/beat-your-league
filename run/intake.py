@@ -66,6 +66,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
+from run.digest import address as keyed_address, keyed
 from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
                           parse_link_plans, post as _stripe_post,
                           session_email as _session_email, sweep_sessions)
@@ -163,10 +164,20 @@ class RosterSignup:
     # A seat only: the pass that covers it, and that pass's Stripe customer.
     pass_id: str | None = None
     pass_customer: str | None = None
+    # Only on a row merge_same_roster folded together: every subscription
+    # behind it, so the row is served while ANY of them is paid for (D2).
+    group_subscriptions: tuple[str, ...] = ()
 
     @property
     def key(self) -> tuple[str, str]:
         return (self.email.lower(), self.ref)
+
+    @property
+    def own_subscriptions(self) -> list[str]:
+        """The subscription(s) a paid row is entitled through (D2)."""
+        if self.group_subscriptions:
+            return list(self.group_subscriptions)
+        return [self.subscription_id] if self.subscription_id else []
 
     @property
     def pass_of(self) -> str | None:
@@ -324,7 +335,10 @@ def merge_same_roster(signups: Iterable[RosterSignup],
             continue
         oldest, newest = held[0], held[-1]
         keep = min(held, key=lambda s: (_KEEP_ORDER.get(s.plan, 3), -_stamp(s)))
-        out.signups.append(replace(keep, origin=oldest.slug, seen_at=oldest.seen_at))
+        out.signups.append(replace(
+            keep, origin=oldest.slug, seen_at=oldest.seen_at,
+            group_subscriptions=tuple(dict.fromkeys(
+                s.subscription_id for s in held if s.subscription_id))))
         others = [s for s in held if s is not newest]
         out.duplicates[newest.key] = min(
             (s.plan for s in others), key=lambda p: _KEEP_ORDER.get(p, 3))
@@ -368,9 +382,17 @@ def sweep(api_key: str, since: int | None = None,
     problems: list[str] = []
     promoted: set[str] = set()
     sessions, newest = sweep_sessions(api_key, since, link_plans or {})
+    # D5: a customer whose data was deleted on request (run/privacy.py) is
+    # never re-read from an old payment — a full sweep or a lost watermark
+    # would otherwise restore everything the deletion removed. A NEW purchase
+    # makes a new customer and is served normally.
+    from run.privacy import load_forgotten
+    forgotten = load_forgotten()
 
     for session in sessions:
         if not is_paid(session):
+            continue
+        if forgotten and _customer_id(session) in forgotten:
             continue
         ref = session.get("client_reference_id")
         if not ref:
@@ -407,15 +429,25 @@ def sweep(api_key: str, since: int | None = None,
         # money, and with no map configured nothing grants a pass at all.
         paid_link = session.get("payment_link")
         plan = (link_plans or {}).get(paid_link) if isinstance(paid_link, str) else None
+        if plan is None:
+            # D17. This used to read `plan or "season"`, so a $14.99 monthly
+            # paid through a link missing from the map (an old link, a new
+            # one nobody added) was welcomed with $39 yearly renewal terms and
+            # never had its monthly billing stopped. The plan is unknown, so
+            # nothing is assumed: a human looks the payment up.
+            problems.append(
+                f"PAID-UNATTRIBUTED session {session.get('id')} paid through a "
+                + ("payment link that is not in STRIPE_PAYMENT_LINKS"
+                   if link_plans else "payment link, but STRIPE_PAYMENT_LINKS is "
+                                      "not set")
+                + " — its plan is unknown, so nothing was assumed and nobody was "
+                  "welcomed; add the link to the map or resolve it by hand")
+            continue
         claimed = decode_roster(ref).plan
         if claimed == LEAGUE_PASS and plan != LEAGUE_PASS:
             problems.append(
-                f"session {session.get('id')} claims a League Pass but "
-                + ("no plan map is configured (set STRIPE_PAYMENT_LINKS), so it "
-                   "was recorded as an ordinary subscription"
-                   if not link_plans else
-                   f"it paid the {plan or 'unknown'} link — recorded as an "
-                   f"ordinary subscription"))
+                f"session {session.get('id')} claims a League Pass but it paid "
+                f"the {plan} link — recorded as an ordinary subscription")
 
         customer = _customer_id(session)
         created = session.get("created")
@@ -433,13 +465,13 @@ def sweep(api_key: str, since: int | None = None,
             # A pass PAYER is an ordinary subscriber of ours who also covers
             # other people; what makes their league's seats work is seats naming
             # their pass, not anything else stored on this row.
-            plan=plan or "season",
+            plan=plan,
             seen_at=str(created) if isinstance(created, int) else "",
             stripe_customer_id=customer, via=via, subscription_id=subscription))
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
-                _promote(api_key, customer, ref, plan or "season",
+                _promote(api_key, customer, ref, plan,
                          consent=_consent(session), via=via)
             except SubscriptionError as exc:
                 # Promotion is a durability optimisation, not the signup — the
@@ -457,6 +489,24 @@ def _subscription_id(session: dict) -> str | None:
     return raw if isinstance(raw, str) and raw.startswith("sub_") else None
 
 
+# Every terms version a buyer could have ticked the box against, oldest first:
+# the "Last updated" date terms.html carried, which is also TERMS_VERSION
+# (render/welcome.py) while it is the newest. When the terms move, APPEND the
+# new date here — tests/test_promises_billing.py fails while TERMS_VERSION is
+# missing — and never edit an old one: a recorded consent names one of these.
+TERMS_HISTORY = ("2026-10-15", "2026-10-17", "2026-10-18")
+
+
+def terms_version_at(created: int) -> str | None:
+    """The terms version in force when a session was created: the newest
+    entry dated on or before that day in US Eastern time (the "Last updated"
+    date is the business's own calendar day). None before the first one."""
+    from zoneinfo import ZoneInfo
+    day = datetime.fromtimestamp(created, tz=ZoneInfo("America/New_York")).date()
+    in_force = [v for v in TERMS_HISTORY if v <= day.isoformat()]
+    return max(in_force) if in_force else None
+
+
 def _consent(session: dict) -> dict[str, str]:
     """The renewal-consent record for one purchase (California's auto-renewal
     law asks for affirmative consent and proof of it, kept three years).
@@ -465,14 +515,25 @@ def _consent(session: dict) -> dict[str, str]:
     whose checkbox text names the yearly renewal and its amount); Stripe marks
     the session consent.terms_of_service = "accepted". Copied onto the
     Customer with the time and the terms version, because a Checkout Session
-    has no documented retention and a Customer lives as long as they do."""
-    from render.welcome import TERMS_VERSION
+    has no documented retention and a Customer lives as long as they do.
+
+    LEGAL-100/144: the version is the one IN FORCE WHEN THE SESSION WAS
+    CREATED (``terms_version_at``), never the constant at sweep time — every
+    hourly sweep re-reads three days of sessions, so a terms change rewrote
+    recent buyers' records to a version that did not exist when they ticked
+    the box. And a record already on the Customer is never rewritten: the
+    session list is expanded with the customer, so its metadata is in hand."""
     accepted = ((session.get("consent") or {}).get("terms_of_service") == "accepted")
     created = session.get("created")
     if not accepted:
         return {}
+    customer = session.get("customer")
+    held = customer.get("metadata") if isinstance(customer, dict) else None
+    if isinstance(held, dict) and held.get("byl_terms_accepted"):
+        return {}
+    version = terms_version_at(created) if isinstance(created, int) else None
     return {"byl_terms_accepted": "yes",
-            "byl_terms_version": TERMS_VERSION,
+            **({"byl_terms_version": version} if version else {}),
             "byl_terms_accepted_at": str(created) if isinstance(created, int) else ""}
 
 
@@ -1217,8 +1278,9 @@ def unmatched_key(row: Mapping) -> str:
     email = str(row.get("email") or "").strip().lower()
     claim = "|".join(str(row.get(k) or "") for k in
                      ("received_at", "ref", "covered_by", "pass_token"))
-    return (f"seat-unmatched-{hashlib.sha256(email.encode()).hexdigest()[:8]}-"
-            f"{hashlib.sha256(claim.encode()).hexdigest()[:10]}")
+    # Keyed (run/digest.py): the log is public and the claim names the
+    # payer's address too, so a plain hash could be matched to both.
+    return f"seat-unmatched-{keyed_address(email, 8)}-{keyed(claim, 10)}"
 
 
 def unmatched_due(unmatched: Iterable[Mapping], now: datetime) -> list[Mapping]:
@@ -1290,8 +1352,7 @@ def full_key(row: Mapping) -> str:
     email = str(row.get("email") or "").strip().lower()
     claim = "|".join(str(row.get(k) or "") for k in
                      ("received_at", "ref", "covered_by", "pass_token", "pass_id"))
-    return (f"seat-full-{hashlib.sha256(email.encode()).hexdigest()[:8]}-"
-            f"{hashlib.sha256(claim.encode()).hexdigest()[:10]}")
+    return f"seat-full-{keyed_address(email, 8)}-{keyed(claim, 10)}"
 
 
 def full_due(full: Iterable[Mapping], now: datetime) -> list[Mapping]:
@@ -1325,7 +1386,7 @@ def _send_full_notes(full: list[Mapping], now: datetime) -> None:
 
 def seat_confirmation_key(request: PendingSeat) -> str:
     """Send-log key: ONE confirmation per claim, ever, and no address in it."""
-    who = hashlib.sha256(request.email.encode("utf-8")).hexdigest()[:8]
+    who = keyed_address(request.email, 8)
     return (f"seat-confirm-{who}-"
             f"{hashlib.sha256(request.code.encode('utf-8')).hexdigest()[:10]}")
 
@@ -1415,6 +1476,11 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
             # and signs its seat link per pass (LP2-D4).
             **({"pass_id": signup.pass_of}
                if billing == PASS_BILLING and signup.pass_of else {}),
+            # D2: the row's own subscription(s). Entitlement follows these, so
+            # a cancelled team stops at the end of ITS period even while the
+            # same address pays for another (run/subscriptions.entitles).
+            **({"subscription_ids": signup.own_subscriptions}
+               if plan != LEAGUE_PASS and signup.own_subscriptions else {}),
         })
     return rows
 
@@ -2204,9 +2270,19 @@ def main(argv: list[str] | None = None) -> int:
     # same buyer two welcomes and two first reports (reproduced, launch review
     # OPS-6). Everything here is keyed and retried, so the daily run's next
     # half-hour sends whatever this run leaves.
+    from run.digest import available as log_secret_set
     if args.no_mail:
         print("Mail: none from this run (--no-mail). Welcomes, roster-update "
               "confirmations and first reports go out from the daily run.")
+    elif not log_secret_set():
+        # D4: every address-derived send-log key is keyed under LOG_SECRET,
+        # and a real send refuses without it (run/delivery.send_all). The
+        # registry above is still written; the mail waits for the secret, and
+        # with a provider configured that is a failure somebody must see.
+        print("Mail: none sent — LOG_SECRET is not set, so no send-log key can "
+              "be made (LAUNCH.md step 3). The registry was still written.",
+              file=sys.stderr)
+        failing = failing or bool(os.environ.get("EMAIL_PROVIDER", "").strip())
     else:
         # Seats as the registry now holds them — after the payment-beats-seat
         # collision and any update — so nobody is welcomed or sent a first

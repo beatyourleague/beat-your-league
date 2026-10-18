@@ -110,6 +110,13 @@ class RosterSubscriber:
     # A seat's payer as Stripe knows them, resolved when the seat was
     # confirmed — kept so a later run never has to re-derive it (OPS-R10).
     pass_customer: str | None = None
+    # The Stripe subscription(s) behind a PAID row (D2): one normally, several
+    # when purchases of one roster were folded into one row. Reports follow
+    # THESE — a cancelled one stops its own reports at the end of its period
+    # even while the same address pays for another team (run/subscriptions).
+    # Empty on a seat (it lives on its pass, RULE E2) and on rows written
+    # before the field, which fall back to the customer or the address.
+    subscription_ids: tuple[str, ...] = ()
 
     @property
     def is_league_seat(self) -> bool:
@@ -239,11 +246,13 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
         raise RosterRegistryError(
             f"{where}: roster_as_of must be YYYY-MM-DD, got {as_of_raw!r}")
     pass_id, pass_customer = _pass_fields(raw, plan, billing, where)
+    subscription_ids = _subscription_ids(raw.get("subscription_ids"), plan, where)
     subscriber = RosterSubscriber(
         email=email, ref=ref, player_ids=players, slots=slots, scoring=scoring,
         league_size=size, label=label, plan=plan, covered_by=covered_by,
         stripe_customer_id=stripe_customer_id, origin=origin, billing=billing,
-        roster_as_of=roster_as_of, pass_id=pass_id, pass_customer=pass_customer)
+        roster_as_of=roster_as_of, pass_id=pass_id, pass_customer=pass_customer,
+        subscription_ids=subscription_ids)
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that
@@ -276,6 +285,23 @@ def _pass_fields(raw: dict, plan: str, billing: str | None,
             raise RosterRegistryError(
                 f"{where}: pass_customer belongs on a League Pass seat only")
     return pass_id, customer
+
+
+def _subscription_ids(raw: object, plan: str, where: str) -> tuple[str, ...]:
+    """A paid row's own subscriptions, each shaped like a Stripe id."""
+    if raw in (None, "", []):
+        return ()
+    if not isinstance(raw, list) or not raw:
+        raise RosterRegistryError(f"{where}: subscription_ids must be a list of 'sub_...'")
+    if plan == LEAGUE_PASS:
+        raise RosterRegistryError(
+            f"{where}: a {LEAGUE_PASS} seat lives on its pass, not on subscription_ids")
+    ids = tuple(str(s).strip() for s in raw)
+    bad = [s for s in ids if not _SUBSCRIPTION_RE.match(s)]
+    if bad:
+        raise RosterRegistryError(
+            f"{where}: subscription_ids must look like 'sub_...', got {bad[0]!r}")
+    return ids
 
 
 def _billing(raw: object, plan: str, where: str) -> str | None:
@@ -340,6 +366,8 @@ def to_json(subscribers: list[RosterSubscriber]) -> list[dict]:
         for name in ("origin", "billing", "roster_as_of", "pass_id", "pass_customer"):
             if getattr(sub, name):
                 row[name] = getattr(sub, name)
+        if sub.subscription_ids:
+            row["subscription_ids"] = list(sub.subscription_ids)
         rows.append(row)
     return rows
 

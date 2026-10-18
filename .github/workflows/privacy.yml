@@ -1,0 +1,120 @@
+# One person's data: show, export or delete it (run/privacy.py, D5).
+#
+# The privacy policy promises access, correction, deletion and portability
+# within 30 days. The registry lives only in this repo's Actions cache, which
+# cannot be edited by hand, so the request is run here: restore the caches,
+# act, save fresh caches, and delete the older cache entries that still hold
+# the person's rows.
+#
+# The input is a KEYED CODE, never an address — this repo is public and the
+# dispatch inputs show in the log. Make it on your own machine:
+#     LOG_SECRET=... .venv/bin/python -m run.privacy code their@address
+# The results go to the hello@ inbox only; the log carries counts.
+#
+# Shares the daily intake's concurrency group, so it never runs beside the
+# hourly sweep that also saves the registry. Avoid Tuesday 12:00-17:00 UTC
+# (the weekly send saves it too); `show` afterwards confirms nothing is left.
+name: privacy-request
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "show (counts) · export (everything, to hello@) · delete"
+        type: choice
+        options: [show, export, delete]
+        default: show
+      code:
+        description: "The person's 12-hex keyed code (python -m run.privacy code <email>, locally) — never an address"
+        type: string
+        required: true
+
+concurrency:
+  group: daily-intake
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # commit the stop list and the forgotten-customer list
+  actions: write    # delete the older cache entries that still hold the rows
+
+jobs:
+  privacy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      - name: Restore subscriber registry
+        uses: actions/cache/restore@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+          restore-keys: registry-
+      - name: Restore stored plans
+        uses: actions/cache/restore@v4
+        with:
+          path: data/plans
+          key: plans-${{ github.run_id }}
+          restore-keys: plans-
+      - name: Act on the request
+        id: privacy
+        env:
+          ACTION: ${{ github.event.inputs.action }}
+          CODE: ${{ github.event.inputs.code }}
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
+          FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
+          FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
+        run: .venv/bin/python -m run.privacy "$ACTION" "$CODE" --send
+      - name: Save subscriber registry
+        if: success() && github.event.inputs.action == 'delete'
+        uses: actions/cache/save@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+      - name: Save stored plans
+        if: success() && github.event.inputs.action == 'delete'
+        uses: actions/cache/save@v4
+        with:
+          path: data/plans
+          key: plans-${{ github.run_id }}
+      # The fresh caches above are now the newest, so every restore picks them.
+      # The older entries still hold the deleted rows until GitHub evicts them
+      # (7 days unused); delete them now rather than wait.
+      - name: Delete the older caches that still hold the rows
+        if: success() && github.event.inputs.action == 'delete'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for prefix in registry- plans-; do
+            gh cache list --key "$prefix" --limit 100 --json key --jq '.[].key' |
+              grep -v -x "${prefix}${{ github.run_id }}" |
+              while read -r key; do gh cache delete "$key"; done
+          done
+      - name: Commit the stop list and the forgotten-customer list
+        if: success() && github.event.inputs.action == 'delete'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f data/processed/suppressed.txt ] && git add data/processed/suppressed.txt || true
+          [ -f data/processed/forgotten.txt ] && git add -f data/processed/forgotten.txt || true
+          git diff --cached --quiet && echo "nothing to commit" && exit 0
+          git commit -m "Privacy request: deletion applied"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push

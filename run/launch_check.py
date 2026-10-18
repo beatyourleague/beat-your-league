@@ -85,8 +85,11 @@ PERSONAL_DOMAINS = r"@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|aol
 # crons are what send, render/sender.py reads only the environment, and every
 # mail-sending step maps it (tests/test_workflows.py) — so a value set only in
 # the owner's shell reaches no email at all.
+# EMAIL_REPLY_TO is optional since D7: an unset one means hello@ (run/delivery).
+# LOG_SECRET keys every address-derived code in the public send log and stop
+# list (run/digest.py); without it every real send refuses.
 REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", "EMAIL_FROM",
-                    "EMAIL_REPLY_TO", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
+                    "LOG_SECRET", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
                     "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
                     "SENDER_POSTAL_ADDRESS")
 # What each feature stops doing without which secret, so a missing name says
@@ -97,7 +100,7 @@ REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", 
 # to the generic seat page and the claim needs the payer's address typed in.
 FEATURE_SECRETS = {
     "Taking money and knowing who paid": ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS"),
-    "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "EMAIL_REPLY_TO", "RESEND_API_KEY",
+    "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "LOG_SECRET", "RESEND_API_KEY",
                           "SENDER_POSTAL_ADDRESS"),
     "A cancel link that opens the billing page": ("BILLING_PORTAL_URL", "SITE_URL"),
     "Self-serve roster updates": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET", "SITE_URL"),
@@ -462,6 +465,12 @@ def check_funnel_config() -> list[Gate]:
                        len(set(endpoints.values())) <= 1,
                        "; ".join(f"{k}={v}" for k, v in endpoints.items()),
                        next(iter(endpoints.values()), "none set yet")))
+    gates.append(_gate("Funnel", "The confirm page posts where the join page does",
+                       not form or confirm.get("FORM_ENDPOINT", "") == form,
+                       "join/index.html has FORM_ENDPOINT set and join/confirm.html "
+                       f"has {confirm.get('FORM_ENDPOINT', '') or 'none'} — every "
+                       "emailed confirm button would post nowhere and no roster "
+                       "change or seat could ever be confirmed"))
     gates.append(_gate("Funnel", "The form Worker sits on our own domain",
                        not any("workers.dev" in v for v in endpoints.values()),
                        "a *.workers.dev address is easily blocked and looks unofficial — "
@@ -473,6 +482,12 @@ def check_funnel_config() -> list[Gate]:
                        not (seats_open and not form),
                        "league-pass.html has SEATS_OPEN on while FORM_ENDPOINT is empty "
                        "(seats would refuse)"))
+    gates.append(_gate("Funnel", "The League Pass opens the day seats can be claimed",
+                       not (open_ and form and links["STRIPE_LINK_PASS"] and not seats_open),
+                       "checkout is open, the Worker is set and the pass link exists, "
+                       "but league-pass.html still says SEATS_OPEN=false — the page "
+                       "tells commissioners the pass \"opens the day your league can "
+                       "claim its seats\", which is today: set SEATS_OPEN = true"))
     contact = landing.get("CONTACT_EMAIL", "")
     gates.append(_gate("Funnel", "A project inbox (not a personal one) is the contact route",
                        contact.endswith("@" + DOMAIN), f"CONTACT_EMAIL={contact or 'empty'}",
@@ -1452,9 +1467,23 @@ def check_secrets() -> list[Gate]:
                      "can't read them from this machine (gh not signed in) — confirm these "
                      "names exist in Settings → Secrets → Actions: " + ", ".join(REQUIRED_SECRETS))]
     missing = [n for n in REQUIRED_SECRETS if n not in names]
-    return [_gate("Owner", "GitHub Actions secrets are set", not missing,
-                  "missing: " + ", ".join(missing) + " — " + features_off(missing),
-                  f"all {len(REQUIRED_SECRETS)} present", fail="OWNER")]
+    gates = [_gate("Owner", "GitHub Actions secrets are set", not missing,
+                   "missing: " + ", ".join(missing) + " — " + features_off(missing),
+                   f"all {len(REQUIRED_SECRETS)} present", fail="OWNER")]
+    return gates + log_secret_gate(names)
+
+
+def log_secret_gate(names: set[str] | None) -> list[Gate]:
+    """D4: once checkout is open, no LOG_SECRET is a FAIL, not owner setup —
+    every real send refuses without it (welcomes, reports, renewal notices),
+    so a buyer would pay and receive nothing."""
+    landing = js_constants((SITE / "index.html").read_text(encoding="utf-8"))
+    if landing.get("CHECKOUT_OPEN") != "true" or names is None:
+        return []
+    return [_gate("Owner", "LOG_SECRET is set while checkout is open",
+                  "LOG_SECRET" in names,
+                  "checkout is open and LOG_SECRET is missing: every send refuses "
+                  "(run/digest.py) — set it before taking money (LAUNCH.md step 3)")]
 
 
 def features_off(missing: Iterable[str]) -> str:
@@ -1835,9 +1864,15 @@ def check_cron_timing() -> list[Gate]:
     found = audit_cron_runs(runs, datetime.now(timezone.utc))
     if not found["ok"] and not found["late"]:
         return [Gate("Owner", name, "SKIP", "no scheduled run on record yet")]
+    # A WARN while nothing is sold; a FAIL once checkout is open, because the
+    # thanks page and the welcome promise the first report "usually within the
+    # hour" and the Tuesday report on Tuesday morning (JOIN-161/169).
+    landing = js_constants((SITE / "index.html").read_text(encoding="utf-8"))
+    selling = landing.get("CHECKOUT_OPEN") == "true"
     return [_gate("Owner", name, not found["late"], "late: " + "; ".join(found["late"][:4])
                   + " — set the Worker's Cron Trigger (LAUNCH.md step 5.8)",
-                  "; ".join(found["ok"][:4] + found["daily"]), fail="WARN")]
+                  "; ".join(found["ok"][:4] + found["daily"]),
+                  fail="FAIL" if selling else "WARN")]
 
 
 # What GitHub calls the setting that makes an outside pull request wait for
@@ -1927,6 +1962,50 @@ def check_stripe_account() -> list[Gate]:
     problems = audit_stripe_account(body)
     return [_gate("Owner", name, not problems, "; ".join(problems), "support email on the "
                   "domain, no phone, no address", fail="OWNER")]
+
+
+def audit_portal(config: dict) -> list[str]:
+    """What the buyer-facing promises need from Stripe's customer portal:
+    cancel allowed, at the END of the period ("reports continue to the end of
+    the period you've already paid for"), and no "why are you leaving?"
+    question ("we do not ask why", JOIN-177)."""
+    features = config.get("features") or {}
+    cancel = features.get("subscription_cancel") or {}
+    problems = []
+    if not cancel.get("enabled"):
+        problems.append("customers cannot cancel from the billing page")
+    if cancel.get("mode") != "at_period_end":
+        problems.append(f"cancellation mode is {cancel.get('mode') or 'unset'}, "
+                        f"not 'at the end of the billing period'")
+    if (cancel.get("cancellation_reason") or {}).get("enabled"):
+        problems.append("the cancel page asks why (Cancellation reason is on) — "
+                        "the thanks page promises we do not ask")
+    if (cancel.get("proration_behavior") or "none") != "none":
+        problems.append("cancelling prorates — a cancel must never raise a credit "
+                        "or a charge")
+    return problems
+
+
+def check_billing_portal() -> list[Gate]:
+    """The billing page's own settings, read from Stripe (needs a key that can
+    read Billing → Customer portal)."""
+    name = "Stripe's billing page cancels at period end and asks no reason"
+    key = os.environ.get("STRIPE_API_KEY", "")
+    if not key:
+        return [Gate("Owner", name, "OWNER", "STRIPE_API_KEY is not in this shell — check "
+                     "Settings → Billing → Customer portal by hand (LAUNCH.md step 1.4)")]
+    status, body = _get_json(f"{STRIPE}/billing_portal/configurations?is_default=true&limit=1",
+                             key)
+    data = (body or {}).get("data") if isinstance(body, dict) else None
+    if status != 200 or not data:
+        return [Gate("Owner", name, "SKIP", f"Stripe answered HTTP {status} — this key "
+                     "can't read the portal settings; check them by hand (LAUNCH.md step 1.4)")]
+    problems = audit_portal(data[0])
+    landing = js_constants((SITE / "index.html").read_text(encoding="utf-8"))
+    selling = landing.get("CHECKOUT_OPEN") == "true"
+    return [_gate("Owner", name, not problems, "; ".join(problems),
+                  "cancel at period end, no reason asked",
+                  fail="FAIL" if selling else "OWNER")]
 
 
 REFUND_WARN = 0.10
@@ -2085,6 +2164,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         steps += [("email DNS", check_dns), ("live site", check_live),
                   ("Resend domain", check_resend_domain), ("Stripe public details",
                                                            check_stripe_account),
+                  ("Stripe billing page", check_billing_portal),
                   ("refunds and disputes", check_refund_rates), ("email volume and tax",
                                                                  check_volume),
                   ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval)]

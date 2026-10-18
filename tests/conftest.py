@@ -20,9 +20,15 @@ people stop reading.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+# run/digest.py: every address-derived code in the send log and the stop list
+# is keyed under LOG_SECRET and refuses without it. Tests get a fixed stand-in
+# (a test that needs it unset deletes it with monkeypatch).
+os.environ.setdefault("LOG_SECRET", "test-log-secret")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_DIR = REPO_ROOT / "data" / "registry"

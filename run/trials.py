@@ -64,7 +64,6 @@ hour", nothing can ever keep it, so the run exits 1 and the cron files an issue.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import re
 import sys
@@ -98,8 +97,11 @@ def canonical_email(email: str) -> str:
 
 
 def trial_key(season: str, email: str) -> str:
-    digest = hashlib.sha256(canonical_email(email).encode("utf-8")).hexdigest()[:12]
-    return f"trial-{season}-{digest}"
+    """One free report per mailbox per season. The code is keyed under
+    LOG_SECRET (run/digest.py): the send log is public, and a plain hash of
+    the address would let anybody who knows it see it asked for one."""
+    from run.digest import address
+    return f"trial-{season}-{address(email)}"
 
 
 def week_underway_from(cache_dir: Path, season: str, week: int) -> datetime | None:
@@ -212,6 +214,14 @@ def main(argv: list[str] | None = None) -> int:
     if not endpoint:
         print("Free reports: FORM_ENDPOINT is not set — nothing to read.")
         return 0
+    from run.digest import DigestError, secret as log_secret
+    try:
+        log_secret()
+    except DigestError as exc:
+        # Refuse: without the key no request can be matched to the send log,
+        # so "one per mailbox per season" could not be kept.
+        print(f"Free reports: {exc}", file=sys.stderr)
+        return 1
     from run.intake import IntakeError, fetch_seats
     try:
         rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"))
