@@ -196,7 +196,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
       text-decoration:none;font-family:var(--display);font-weight:800;font-size:17px;
       letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up my team</a>
   </div>
-  <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not picks. No betting
+  <footer><b style="color:var(--navy)">Beat Your League</b> — analysis, not betting picks. No betting
   content, no staking advice. Page generated {esc(stamp)} · league identities of subscribers
   are never shown here.</footer>
 </div>

@@ -136,7 +136,7 @@ TAIL = """</main>
       text-decoration:none;font-family:var(--display);font-weight:800;font-size:17px;
       letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;">Set up your team</a>
   </div>
-  <footer><b>Beat Your League</b> — analysis, not picks. Every number here is reproducible
+  <footer><b>Beat Your League</b> — analysis, not betting picks. Every number here is reproducible
   from public NFL data; the live record is on the public ledger.
   NFL data: nflverse (nflverse-data), CC-BY-4.0.@@SIBLING@@</footer>
 </div>

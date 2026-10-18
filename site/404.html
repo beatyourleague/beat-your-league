@@ -114,11 +114,29 @@
     </div>
     <p style="margin-top:22px">Something that should be here? Write to <b>hello@beatyourleague.com</b>.</p>
   </main>
-  <footer><b>Beat Your League</b> — analysis, not picks. Not affiliated with the NFL.</footer>
+  <footer><b>Beat Your League</b> — analysis, not betting picks. Not affiliated with the NFL.</footer>
 </div>
 <script>
 "use strict";
-// The landing hero's rule for linking this week's live report (PC-01).
+// The season clock (week.json): no phase means a week was built; a last week
+// whose report day has passed is over. Today in Eastern time, lands_on's clock.
+function easternToday() {
+  const part = {};
+  new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric",
+    month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+    .forEach((p) => { part[p.type] = p.value; });
+  return part.year + "-" + part.month + "-" + part.day;
+}
+function weekPhase(w) {
+  const landed = /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "") ? w.lands_on : "";
+  const past = Boolean(landed) && easternToday() > landed;
+  let phase = w.phase || "season";
+  if (Number.isInteger(w.week) && Number.isInteger(w.last_week)
+      && w.week >= w.last_week && past) phase = "over";
+  return { phase: phase, current: Boolean(landed) && !past };
+}
+// The landing hero's rule for linking this week's live report (PC-01), and
+// only while the clock is current (INFO-39).
 (function () {
   try {
     if (!window.fetch) return;
@@ -126,7 +144,10 @@
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
-        if (!(w && Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call)) return;
+        if (!w) return;
+        const clock = weekPhase(w);
+        if (!(clock.phase === "season" && clock.current)) return;
+        if (!(Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call)) return;
         document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
         document.querySelectorAll("[data-pinned-week]").forEach((el) => { el.hidden = true; });
       })
