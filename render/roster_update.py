@@ -27,6 +27,16 @@ SUBJECT = "Confirm your roster change"
 IGNORE = ("Didn't ask for this? Ignore this email — nothing changes unless "
           "you confirm.")
 LIMIT = f"The button works for {EXPIRY_DAYS} days after the change was asked for."
+# The page is public, so the reader may never have asked (EMAILS-151).
+PREHEADER = ("A roster change was requested for your reports. Nothing changes "
+             "unless you confirm it.")
+# A press is applied by the next hourly intake, and a newer confirmed change
+# replaces an older one (EMAILS-152).
+LEDE = ("Someone asked to change the roster your reports are built from. If that "
+        f"was you, confirm it within {EXPIRY_DAYS} days. It takes effect usually "
+        "within the hour, and every report built after that uses it. If you "
+        "asked more than once, the newest change you confirm is the one that "
+        "counts.")
 
 # The join page's words for the same settings (site/join/index.html
 # SCORING_WORDS / shapeWords), so the email names them as the page did.
@@ -87,7 +97,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         f'{EMAIL_META}<title>{esc(SUBJECT)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html("Confirm the roster change you asked for. Nothing changes unless you do.")}'
+        f'{preheader_html(PREHEADER)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:18px 8px;"><table role="presentation" width="560" '
@@ -100,9 +110,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
         f'text-transform:uppercase;color:{CARD};padding-top:6px;">'
         f'Confirm your roster change</div></td></tr>'
         f'<tr><td style="padding:22px 26px;">'
-        f'<p style="{BASE}margin:0 0 14px 0;">Someone asked to change the roster your '
-        f'reports are built from. If that was you, confirm it and your next report '
-        f'uses it.</p>{roster_html}{setup_html}'
+        f'<p style="{BASE}margin:0 0 14px 0;">{esc(LEDE)}</p>{roster_html}{setup_html}'
         f'<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>'
         f'<td style="background:{FLAG};border-radius:4px;">'
         f'<a href="{esc(url)}" style="display:inline-block;padding:12px 22px;'
@@ -113,8 +121,7 @@ def confirm_email(url: str, names: Sequence[str], settings: Any = None,
         f'</td></tr></table></td></tr></table></body></html>\n')
     text = "\n".join([
         SUBJECT.upper(), "",
-        "Someone asked to change the roster your reports are built from. If that "
-        "was you, confirm it and your next report uses it.", "",
+        LEDE, "",
         *([f"New roster: {listed}", ""] if listed else []),
         *([f"Settings: {setup}", ""] if setup else []),
         f"Review and confirm: {url}", "", LIMIT, "", IGNORE, ""])

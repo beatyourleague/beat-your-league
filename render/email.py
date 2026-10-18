@@ -115,18 +115,45 @@ TRIAL_BUTTON = "Get next Tuesday's report"
 TRIAL_VIA = "trial"
 
 
-def trial_join_url() -> str | None:
+# The season's last week (EMAILS-69): there is no next Tuesday's report, and
+# checkout closes once that week kicks off (D9), so the ask is next season's.
+TRIAL_LAST_ASK_HEAD = "Want this next season?"
+TRIAL_LAST_ASK = ("Your lineup decided like this one, every Tuesday from Week 1, "
+                  "plus a final check on Saturday when injury news changes it.")
+TRIAL_LAST_BUTTON = "Tell me when it opens"
+
+
+def _is_final_week(meta: Mapping[str, Any] | None) -> bool:
+    meta = meta or {}
+    last = meta.get("last_week")
+    return isinstance(last, int) and meta.get("week") == last
+
+
+def trial_join_url(meta: Mapping[str, Any] | None = None) -> str | None:
     """Where the free report's button goes, or None with no site to send
-    anyone to — a button with nowhere to go is worse than none."""
+    anyone to — a button with nowhere to go is worse than none. In the
+    season's last week it is the landing's waitlist, never the join page."""
     site = os.environ.get("SITE_URL", "").rstrip("/")
-    return f"{site}/join/?via={TRIAL_VIA}" if site.startswith("https://") else None
+    if not site.startswith("https://"):
+        return None
+    if _is_final_week(meta):
+        return f"{site}/?via={TRIAL_VIA}#watch-form"
+    return f"{site}/join/?via={TRIAL_VIA}"
 
 
-def _trial_cta() -> str:
+def _trial_words(meta: Mapping[str, Any] | None) -> tuple[str, str, str]:
+    """(head, ask, button) — the season's last week asks about next season."""
+    if _is_final_week(meta):
+        return TRIAL_LAST_ASK_HEAD, TRIAL_LAST_ASK, TRIAL_LAST_BUTTON
+    return TRIAL_ASK_HEAD, TRIAL_ASK, TRIAL_BUTTON
+
+
+def _trial_cta(meta: Mapping[str, Any] | None = None) -> str:
     """The free report's call to action: one line and a bulletproof button
     (a padded table cell, the one button every mail client draws, Outlook
     included), with the only-email promise beneath it."""
-    url = trial_join_url()
+    url = trial_join_url(meta)
+    head, ask, label = _trial_words(meta)
     button = ""
     if url:
         button = (
@@ -136,7 +163,7 @@ def _trial_cta() -> str:
             f'<a href="{esc(url)}" style="display:inline-block;padding:13px 24px;'
             f'font-family:{DISPLAY};font-size:16px;font-weight:bold;'
             f'letter-spacing:1.5px;text-transform:uppercase;color:{NAVY};'
-            f'text-decoration:none;">{esc(TRIAL_BUTTON)}</a></td></tr></table>')
+            f'text-decoration:none;">{esc(label)}</a></td></tr></table>')
     return (
         f'<tr><td style="padding:26px 28px 0 28px;">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
@@ -144,20 +171,21 @@ def _trial_cta() -> str:
         f'<td style="padding:22px 20px 22px 20px;text-align:center;">'
         f'<div style="font-family:{DISPLAY};font-size:20px;font-weight:bold;'
         f'letter-spacing:1px;text-transform:uppercase;color:{CARD};">'
-        f'{esc(TRIAL_ASK_HEAD)}</div>'
+        f'{esc(head)}</div>'
         f'<div style="font-family:{FONT};font-size:14px;line-height:1.5;'
-        f'color:#C9D4E2;padding-top:6px;">{esc(TRIAL_ASK)}</div>'
+        f'color:#C9D4E2;padding-top:6px;">{esc(ask)}</div>'
         f'{button}'
         f'<div style="font-family:{FONT};font-size:12px;line-height:1.5;'
         f'color:#B9C2D0;padding-top:14px;">{esc(TRIAL_ONLY)}</div>'
         f'</td></tr></table></td></tr>')
 
 
-def _trial_cta_lines() -> list[str]:
+def _trial_cta_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
     """The plain-text twin: the URL spelled out, since text has no button."""
-    url = trial_join_url()
-    return (["", TRIAL_ASK_HEAD.upper(), TRIAL_ASK]
-            + ([f"{TRIAL_BUTTON}: {url}"] if url else [])
+    url = trial_join_url(meta)
+    head, ask, label = _trial_words(meta)
+    return (["", head.upper(), ask]
+            + ([f"{label}: {url}"] if url else [])
             + [TRIAL_ONLY])
 
 
@@ -954,7 +982,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
         # before the paid footer's sender line, so it never printed one.
         # The ask comes BEFORE the fine print (panel review I2): it used to
         # be the last line, after the data source and the no-betting line.
-        lines += [*_trial_cta_lines(),
+        lines += [*_trial_cta_lines(meta),
                   "", "Projections are analysis, not guarantees — no betting "
                       "picks, no staking advice. Your decisions are yours.",
                   source_line(meta),
@@ -1378,7 +1406,7 @@ def render_email(report: Mapping[str, Any]) -> str:
     preheader = preheader_for(report)
     sections = "".join(_compose(report) + [
         # The free report's ask sits ABOVE the footer, never in it.
-        _trial_cta() if meta.get("trial") else "",
+        _trial_cta(meta) if meta.get("trial") else "",
         # breathing room between the last section and the footer band
         '<tr><td style="padding:12px;"></td></tr>',
         _footer(meta),

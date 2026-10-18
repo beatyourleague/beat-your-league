@@ -30,7 +30,8 @@ from datetime import datetime, timezone
 from render.email import (BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE, NAVY,
                           PAPER, SLATE, SMALL)
 from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, SEAT_STOP_BODY,
-                           cancel_destination, esc, preheader_html, seat_stop_href)
+                           TWO_PURCHASES, cancel_destination, esc, preheader_html,
+                           reply_update_works, seat_stop_href)
 from render.sender import CONTACT, sender_line
 from run.delivery import Message
 
@@ -50,6 +51,9 @@ UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — 
 
 # One route, defined in render/report.py so every surface agrees.
 _cancel_destination = cancel_destination
+# With no site address configured the email still names the page, so the
+# route is one a reader can type (EMAILS-102).
+TERMS_STEPS = "beatyourleague.com/terms.html#cancel"
 
 
 # The refund window is PURCHASE-relative, never a calendar week: "through
@@ -57,11 +61,16 @@ _cancel_destination = cancel_destination
 # selling page kept promising one. The terms page defines a weekly file; this
 # is the retainable copy of the same promise, so it states when it closes —
 # at kickoff, before the second file's lineup can be played and then returned.
-REFUND_TERMS = ("Refunds are no-questions until your second weekly report's "
-                "week kicks off — one per person, and a re-subscription after "
+# Terms §5's two later closes ride along (EMAILS-95/96): a Week-17 buyer gets
+# at most one weekly report, and a window that only closed at the second one's
+# kickoff never closed at all in the copy they keep.
+_REFUND_WINDOW = ("Refunds are no-questions until your second weekly report's "
+                  "week kicks off. If the season ends first, the window closes "
+                  "a week after your last report; if your second report reaches "
+                  "you late, a week after it arrives.")
+REFUND_TERMS = (_REFUND_WINDOW + " One per person, and a re-subscription after "
                 "a refund is final.")
-REFUND_TERMS_LEAGUE = ("Refunds are no-questions until your second weekly "
-                       "report's week kicks off — one per league.")
+REFUND_TERMS_LEAGUE = _REFUND_WINDOW + " One per league."
 
 # The plan words this module takes. The welcome has its own vocabulary, older
 # than the registry's: "league_pass" here is the PAYER (on a registry row it
@@ -88,8 +97,9 @@ def _plan_terms(plan: str) -> tuple[str, list[str]]:
         return (
             f"the monthly plan — {MONTHLY_PRICE} USD a month",
             [f"It bills {MONTHLY_PRICE} USD each month until you cancel, and "
-             "billing stops on its own when the season ends — we don't charge "
-             "through the offseason, because we aren't sending you anything.",
+             "billing stops on its own after the season's last weekly report: "
+             "your last charge is for the month that report falls in, and "
+             "nothing is charged after it.",
              REFUND_TERMS],
         )
     if plan in PAYER_PLANS:
@@ -154,19 +164,41 @@ def duplicate_line(plan: str, duplicate: str | None) -> str | None:
         return None
     other = _PLAN_NAME.get(duplicate, "subscription")
     mine = _PLAN_NAME.get(plan, "subscription")
-    if plan not in PAYER_PLANS and duplicate in PAYER_PLANS:
+    if this_is_the_spare(plan, duplicate):
         # The pass already covers the buyer's own team: THIS purchase is the
-        # spare, and it is certainly active — it was just bought.
+        # spare, and it is certainly active — it was just bought. It is also
+        # the NEWEST, so the billing page (which opens only the newest
+        # purchase at an address, D3) is where it cancels.
+        bills = (f"bills each month until you cancel it or the season's last "
+                 f"weekly report goes out" if plan == "monthly" else
+                 "bills on its own until you cancel it")
         return (f"Your League Pass already covers this same roster, so you get one "
-                f"report a week, not two. This {mine} bills on its own until you "
-                f"cancel it, which you can do yourself on your billing page.")
+                f"report a week, not two. This {mine} {bills}, which you can do "
+                f"yourself on your billing page.")
     earlier = f"an earlier {other}" if duplicate == plan else f"the {other}"
     covered = (" Your League Pass covers your own team too, so you get one report "
                "a week, not two." if plan in PAYER_PLANS else
                " You get one report a week for it, not two.")
+    bills = ("it bills each month until you cancel it or the season's last "
+             "weekly report goes out" if duplicate == "monthly" else
+             "it keeps billing until you cancel it")
+    # The OLDER purchase sits on an older Stripe customer, which the billing
+    # page — opened by email, newest customer only — can't show (D3).
     return (f"This address also bought {earlier} for this same roster.{covered} "
-            f"If that one is still active, it keeps billing until you cancel it, "
-            f"which you can do yourself on your billing page.")
+            f"If that one is still active, {bills}. Your billing page shows only "
+            f"your newest purchase, so to cancel the older one, reply to this "
+            f"email and we'll do it for you.")
+
+
+def this_is_the_spare(plan: str, duplicate: str | None) -> bool:
+    """A season or monthly purchase whose roster a League Pass already covers:
+    the new purchase is the one to cancel, and it is on the billing page."""
+    return plan not in PAYER_PLANS and duplicate in PAYER_PLANS
+
+
+SEAT_LINK_PENDING = ("Every manager in your league gets their own report at no "
+                     "charge to them. Your league's seat link isn't ready yet — "
+                     "it goes on your weekly reports as soon as it is.")
 
 
 def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
@@ -183,18 +215,11 @@ def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
         return ("Every manager in your league gets their own report at no charge "
                 "to them. This link is your league's own, so they need only "
                 "their roster:", seat_link, SHARE_MESSAGE.format(link=seat_link))
-    site = _site()
-    if site:
-        link = f"{site}/join/?pass=1"
-        return ("Every manager who claims a seat gets their own report at no "
-                "charge to them. Send them this link — each enters their own "
-                "roster — and tell them the email you paid with (this one), "
-                "which is how their seat is matched to your pass:", link,
-                SHARE_MESSAGE.format(link=link)
-                + " — when it asks for my email, it's the one I paid with.")
-    return ("Every manager who claims a seat gets their own report at no "
-            "charge to them; share your league's signup link whenever you're "
-            "ready.", "", "")
+    # No signed link means no seat can be confirmed yet (the codes come from
+    # the same secret), so the generic "?pass=1 plus my email" route printed
+    # here never worked in the only state that printed it (EMAILS-106/107).
+    # The intake goes red until it is fixed; this says only what is true.
+    return (SEAT_LINK_PENDING, "", "")
 
 
 def _purchase_date(purchased_at: str) -> str | None:
@@ -236,18 +261,39 @@ NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
               "your scoring.")
 # "The odds on the close calls", never "every": a slot gets odds only when both
 # players are confirmed to play, and a bye-heavy week can have few (PE-11).
+# "About ninety seconds to read" was the game plan, not the report (a Week-6
+# report is ~1,200 words), and Weeks 1-3 print no odds outside the measured
+# setup (run/solo.seeded_scope) — EMAILS-90.
 NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
-                "your scoring, with the odds on the close calls. About ninety "
-                "seconds to read.")
+                "your scoring, with odds on the close calls from Week 4 (Week 2 "
+                "for a 12-team PPR standard lineup). The game plan at the top "
+                "takes about a minute.")
 NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")
 
 
-def _next_rows(seat: bool, carries_on: bool = False) -> list[tuple[str, str]]:
+# Between the season's last game and next season's schedule the intake has no
+# week to build (run.solo.SeasonOver), so nothing goes out "today": the first
+# email is the roster report, once the schedule exists (EMAILS-80/81/89).
+NEXT_SCHEDULE_WHEN = "When next season's schedule is out"
+NEXT_SCHEDULE = ("Your first report: your roster report — the byes that leave "
+                 "you short and last season under your scoring.")
+SEASON_OVER_SUBJECT = ("You're in — your first report comes when next season's "
+                       "schedule is out")
+SEAT_SEASON_OVER_SUBJECT = ("Your seat is in — your first report comes when next "
+                            "season's schedule is out")
+
+
+def _next_rows(seat: bool, carries_on: bool = False,
+               season_over: bool = False) -> list[tuple[str, str]]:
     """``carries_on``: a second purchase of a roster this address already
     gets reports for (LP2-D1). Its reports simply continue, so "Today: your
-    first report" would promise something the intake does not send."""
-    today = [] if carries_on else [("Today", NEXT_TODAY)]
+    first report" would promise something the intake does not send.
+    ``season_over``: the offseason, when the first report waits for the
+    next schedule."""
+    today = ([] if carries_on else
+             [(NEXT_SCHEDULE_WHEN, NEXT_SCHEDULE)] if season_over else
+             [("Today", NEXT_TODAY)])
     return [*today, ("Every Tuesday", NEXT_TUESDAY),
             ("Saturday, if needed", NEXT_SATURDAY)]
 
@@ -285,12 +331,15 @@ def _block(title: str, inner: str) -> str:
 
 def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "", seat_link: str | None = None,
-                    duplicate: str | None = None) -> Message:
+                    duplicate: str | None = None,
+                    season_over: bool = False) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
     league seat link (C4), or None to fall back to the generic seat page.
     ``duplicate`` is the plan of another subscription this address already
-    holds for the same roster (``duplicate_line``)."""
+    holds for the same roster (``duplicate_line``). ``season_over``: sent in
+    the offseason (run.solo.SeasonOver), when no first report goes out until
+    next season's schedule exists."""
     bought, terms = _plan_terms(plan)
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
@@ -306,19 +355,20 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         cancel_line = (
             "Cancel any time, yourself, in about a minute — "
             + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>.'
-               if href else "the steps are on our site's terms page.")
+               if href else f"the steps are at {esc(TERMS_STEPS)}.")
         )
         cancel_text = ("Cancel any time, yourself, in about a minute — "
                        + (f"{label}: {href}" if href else
-                          "the steps are on our site's terms page."))
-        stop_html = f"{cancel_line} {esc(UNSUB_LINE)} {esc(CANCEL_PERIOD)}"
-        stop_text = f"{cancel_text} {UNSUB_LINE} {CANCEL_PERIOD}"
+                          f"the steps are at {TERMS_STEPS}."))
+        stop_html = (f"{cancel_line} {esc(UNSUB_LINE)} {esc(CANCEL_PERIOD)} "
+                     f"{esc(TWO_PURCHASES)}")
+        stop_text = f"{cancel_text} {UNSUB_LINE} {CANCEL_PERIOD} {TWO_PURCHASES}"
 
     when = None if seat else _purchase_date(purchased_at)
     opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
     roster_line = ("Trades and pickups happen — reply to any report with your "
                    "updated roster and your report follows it from the next "
-                   "Tuesday.")
+                   "Tuesday." if reply_update_works() else "")
     share = _share(plan, seat_link)
     site = _site()
     terms_url = f"{site}/terms.html" if site.startswith("https://") else ""
@@ -341,7 +391,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'vertical-align:top;width:30%;border-top:1px solid {LINE};">'
         f'{esc(when_)}</td><td style="{BASE}padding:9px 0;'
         f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
-        for when_, what in _next_rows(seat, carries_on=bool(twice)))
+        for when_, what in _next_rows(seat, carries_on=bool(twice),
+                                      season_over=season_over))
     blocks = []
     twice_text = None
     if twice:
@@ -349,6 +400,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         # route is its own sentence — a bare lowercase link label trailing
         # "your billing page." read as a fragment.
         href, label = _cancel_destination()
+        if not this_is_the_spare(plan, duplicate):
+            href = ""  # the older purchase cancels by reply (D3), not there
         link_html = (f' Where to cancel: <a href="{esc(href)}" style="color:{NAVY};">'
                      f'{esc(label)}</a>.' if href else "")
         twice_text = twice + (f" Where to cancel: {label}: {href}" if href else "")
@@ -389,9 +442,10 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     blocks.append(_block("The terms, in writing", terms_html))
     blocks.append(_block(CANCEL_HEAD, f'{para}{stop_html}</p>'))
     footer = (
-        f'<tr><td style="padding:18px 26px 0 26px;"><p style="{BASE}font-size:13px;'
-        f'color:{SLATE};margin:0;">{esc(roster_line)}</p></td></tr>'
-        f'<tr><td style="padding:12px;"></td></tr>'
+        (f'<tr><td style="padding:18px 26px 0 26px;"><p style="{BASE}font-size:13px;'
+         f'color:{SLATE};margin:0;">{esc(roster_line)}</p></td></tr>'
+         if roster_line else "")
+        + f'<tr><td style="padding:12px;"></td></tr>'
         f'<tr><td style="background:{PAPER};padding:18px 26px 24px 26px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — questions? '
         f'Write to {esc(CONTACT)}.'
@@ -424,11 +478,12 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
             text_lines += [link, "", "Or paste this into your league chat:", paste]
     text_lines += ["", "WHAT HAPPENS NEXT",
                    *[f"{when_}: {what}" for when_, what
-                     in _next_rows(seat, carries_on=bool(twice))],
+                     in _next_rows(seat, carries_on=bool(twice),
+                                   season_over=season_over)],
                    "", "THE TERMS, IN WRITING", *terms,
                    f"{terms_ref}: " + (terms_url or "on our site's terms page."),
                    "", CANCEL_HEAD.upper(), stop_text,
-                   "", roster_line,
+                   *(["", roster_line] if roster_line else []),
                    "", f"Beat Your League — questions? Write to {CONTACT}.",
                    *([sender] if sender else [])]
     text = "\n".join(text_lines) + "\n"
@@ -436,8 +491,10 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     # A first report goes out the day they pay or claim (run/intake.py; a
     # seat since LP-I4), so both subjects say it is on its way — except a
     # second purchase of a roster already served, whose reports carry on.
-    subject = ("Your seat is in — your first report is on its way" if seat else
+    subject = ((SEAT_SEASON_OVER_SUBJECT if season_over else
+                "Your seat is in — your first report is on its way") if seat else
                TWICE_SUBJECT if twice else
+               SEASON_OVER_SUBJECT if season_over else
                "You're in — your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,
     # so the key moved with it and `servable` — the projection of an

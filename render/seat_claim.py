@@ -46,11 +46,15 @@ IGNORE = "Didn't ask for this? Ignore this email — nothing happens."
 
 CONFIRM_SUBJECT = "Confirm your League Pass seat"
 CONFIRM_LEDE = ("Someone asked for a seat on your league's League Pass with this "
-                "address. If that was you, confirm it: your seat is set up within "
-                "the hour, and your reports are built from this roster.")
+                "address. If that was you, confirm it: your seat is set up, "
+                "usually within the hour, and your reports are built from this "
+                "roster.")
 CHANGE_SUBJECT = "Confirm the roster change on your League Pass seat"
 CHANGE_LEDE = ("Someone asked to change the roster on your League Pass seat. If "
-               "that was you, confirm it and your next report uses it.")
+               "that was you, confirm it within 7 days. It takes effect usually "
+               "within the hour, and every report built after that uses it. If "
+               "you asked more than once, the newest change you confirm is the "
+               "one that counts.")
 CONFIRM_LIMIT = "The button works for 7 days after the claim was made."
 CONFIRM_IGNORE = ("Didn't ask for this? Ignore this email — nothing is set up or "
                   "changed unless you confirm.")
@@ -59,8 +63,9 @@ FULL_SUBJECT = "That League Pass has no seats left"
 FULL_LEDE = ("You asked for a seat on a League Pass with this address. That pass "
              "covers as many seats as its league has teams, and they are all "
              "taken, so no seat was set up and no reports are coming.")
-FULL_CHECK = ("If one of those seats should be yours, ask whoever bought your "
-              "league's pass.")
+FULL_CHECK = (f"If one of those seats should be yours, ask whoever bought your "
+              f"league's pass to write to {CONTACT} — we can free a seat that's "
+              f"no longer used.")
 
 
 def _shell(subject: str, preheader: str, body_html: str) -> str:

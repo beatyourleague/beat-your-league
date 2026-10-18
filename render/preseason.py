@@ -69,13 +69,19 @@ WEEKLY_PROMISE = ("From your first Tuesday you get the weekly report: your lineu
                   "public afterwards.")
 
 BYE_HEAD = "Where the schedule leaves you short"
-BYE_NONE = ("No week leaves a starting slot empty — every bye on your roster is "
-            "covered by somebody else who can fill in.")
+# Pre-season the check is positional (today's reserve list says nothing about
+# a week months away), so the sentence says what was checked (EMAILS-127).
+BYE_NONE = ("No week leaves a starting slot empty — every bye is covered by "
+            "somebody else on your roster who plays that position.")
 # Sent after the season has started, the report covers only the weeks still
 # ahead (launch audit C7), and says so — including when every bye is behind.
 BYE_NONE_AHEAD = ("No week from here on leaves a starting slot empty — every "
                   "bye still ahead on your roster is covered by somebody else "
                   "who can fill in.")
+# The same, when the run could not read today's reserve list.
+BYE_NONE_AHEAD_POSITION = ("No week from here on leaves a starting slot empty — "
+                           "every bye still ahead is covered by somebody else on "
+                           "your roster who plays that position.")
 BYE_ALL_BEHIND = ("Every bye week on your roster is behind you, so the schedule "
                   "leaves no week short from here on.")
 
@@ -90,12 +96,30 @@ def bye_none(meta: Mapping[str, Any]) -> str:
     """What the bye section says when no week ahead leaves a slot empty."""
     if _byes_behind(meta):
         return BYE_ALL_BEHIND
-    return BYE_NONE_AHEAD if meta.get("season_started") else BYE_NONE
+    if not meta.get("season_started"):
+        return BYE_NONE
+    return BYE_NONE_AHEAD if meta.get("roster_status") else BYE_NONE_AHEAD_POSITION
 
 
 BYE_BASIS = ("Straight off the published NFL schedule, so these are fixed. A "
-             "week is only listed when nothing on your roster can fill the "
+             "week is only listed when nobody else on your roster can fill the "
              "slot — a bye somebody else covers isn't your problem.")
+# In-season, today's reserve list counts (EMAILS-119/126/128): the weekly
+# report shows those players OUT, so this one may not count them as cover.
+BYE_STATUS = ("Anyone on injured reserve, suspended or released today doesn't "
+              "count as cover.")
+
+
+def bye_basis(meta: Mapping[str, Any]) -> str:
+    """BYE_BASIS, plus the reserve-list rule when it was applied."""
+    return BYE_BASIS + (" " + BYE_STATUS if meta.get("roster_status") else "")
+
+
+def out_note(entry: Mapping[str, Any]) -> str:
+    """'out today: Name (on injured reserve)' for the players a bye or a
+    thin spot would have leaned on, or ""."""
+    out = entry.get("out") or []
+    return f"out today: {', '.join(out)}" if out else ""
 
 THIN_HEAD = "One deep"
 THIN_BASIS = ("Positions where everyone who can play the slot is already "
@@ -103,9 +127,10 @@ THIN_BASIS = ("Positions where everyone who can play the slot is already "
               "matchup and there's nobody behind him.")
 
 FORM_HEAD = "Last season, under your rules"
+# "Your league's own settings" was one of three presets (EMAILS-131).
 FORM_BASIS = ("Where each of your players finished last season at his position, "
-              "and what he averaged — both scored under your league's own "
-              "settings, so the rank is yours rather than a generic one. Per "
+              "and what he averaged — both scored under the scoring you picked, "
+              "so the rank fits your league rather than a generic list. Per "
               "game he actually played, not per week, so time missed isn't "
               "punished twice. Anyone under eight games has no rank: too few "
               "to be a fact. This is a record of what happened, not a forecast "
@@ -212,14 +237,16 @@ def section_byes(report: Mapping[str, Any]) -> str:
         for hit in collisions:
             slots = ", ".join(hit["slots"])
             who = ", ".join(hit["players"])
+            note = out_note(hit)
             items.append(
                 f'<tr class="trow"><td class="tslot">W{esc(hit["week"])}</td>'
                 f'<td class="tside you"><span class="tname">'
                 f'No one to start at {esc(slots)}</span>'
-                f'<span class="tsub">on bye: {esc(who)}</span></td></tr>')
+                f'<span class="tsub">on bye: {esc(who)}'
+                + (f' · {esc(note)}' if note else "") + '</span></td></tr>')
         body = (f'<table class="tape"><colgroup><col style="width:14%">'
                 f'<col style="width:86%"></colgroup>{"".join(items)}</table>')
-    body += f'<div class="withheld">{esc(BYE_BASIS)}</div>'
+    body += f'<div class="withheld">{esc(bye_basis(report["meta"]))}</div>'
     return _pre_section(BYE_HEAD, body)
 
 
@@ -235,7 +262,8 @@ def section_thin(report: Mapping[str, Any]) -> str:
             f'{esc(", ".join(spot["players"]) or "nobody")}</span>'
             f'<span class="tsub">'
             f'{esc(spot["have"])} on the roster, {esc(spot["start"])} starting'
-            f'</span></td></tr>')
+            + (f' · {esc(out_note(spot))}' if out_note(spot) else "")
+            + '</span></td></tr>')
     body = (f'<table class="tape"><colgroup><col style="width:14%">'
             f'<col style="width:86%"></colgroup>{"".join(rows)}</table>'
             f'<div class="withheld">{esc(THIN_BASIS)}</div>')
@@ -350,13 +378,16 @@ def text_summary(report: Mapping[str, Any]) -> str:
             lines.append(f'  Week {hit["week"]}: no one to start at '
                          f'{", ".join(hit["slots"])}')
             lines.append(f'    on bye: {", ".join(hit["players"])}')
-    lines += ["", f"  {BYE_BASIS}"]
+            if out_note(hit):
+                lines.append(f"    {out_note(hit)}")
+    lines += ["", f"  {bye_basis(meta)}"]
 
     if report["thin"]:
         lines += ["", THIN_HEAD.upper()]
         for spot in report["thin"]:
             lines.append(f'  {spot["slot"]:<5} {", ".join(spot["players"]) or "nobody"} '
-                         f'({spot["have"]} on the roster, {spot["start"]} starting)')
+                         f'({spot["have"]} on the roster, {spot["start"]} starting)'
+                         + (f' · {out_note(spot)}' if out_note(spot) else ""))
         lines += ["", f"  {THIN_BASIS}"]
 
     lines += ["", FORM_HEAD.upper()]
@@ -467,7 +498,8 @@ def email_html(report: Mapping[str, Any]) -> str:
             f'<td style="{cell}"><b>No one to start at '
             f'{esc(", ".join(hit["slots"]))}</b><br>'
             f'<span style="{SMALL}">on bye: {esc(", ".join(hit["players"]))}'
-            f'</span></td></tr>'
+            + (f' · {esc(out_note(hit))}' if out_note(hit) else "")
+            + '</span></td></tr>'
             for hit in report["collisions"])
     else:
         bye_rows = (f'<tr><td style="{cell}">{esc(bye_none(meta))}</td></tr>')
@@ -476,7 +508,9 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'<tr><td style="{slot_cell}">{esc(spot["slot"])}</td>'
         f'<td style="{cell}"><b>{esc(", ".join(spot["players"]) or "nobody")}</b>'
         f'<br><span style="{SMALL}">{esc(spot["have"])} on the roster, '
-        f'{esc(spot["start"])} starting</span></td></tr>'
+        f'{esc(spot["start"])} starting'
+        + (f' · {esc(out_note(spot))}' if out_note(spot) else "")
+        + '</span></td></tr>'
         for spot in report["thin"])
 
     form_rows = ""
@@ -532,7 +566,7 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'<tr><td style="{BASE}padding:20px 26px 0 26px;">'
         f'{esc(opener(meta))}'
         f'</td></tr>'
-        + block(BYE_HEAD, bye_rows, BYE_BASIS)
+        + block(BYE_HEAD, bye_rows, bye_basis(meta))
         + (block(THIN_HEAD, thin_rows, THIN_BASIS) if thin_rows else "")
         + block(FORM_HEAD, form_rows, FORM_BASIS)
         + f'<tr><td style="background:{PAPER};padding:20px 26px 26px 26px;">'

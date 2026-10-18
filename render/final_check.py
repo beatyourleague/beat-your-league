@@ -41,6 +41,14 @@ def _eastern(at: datetime) -> str:
     return local.strftime("%a %b %-d, %-I:%M %p ET")
 
 
+def checked_line(at: datetime) -> str:
+    """The run's own clock, said as what it is (EMAILS-77): nflverse's
+    injury file carries no timestamp of its own, so "injury news as of <now>"
+    dated the data with the hour we happened to read it."""
+    return (f"Checked {_eastern(at)} against the latest published injury "
+            f"report")
+
+
 def _lower_first(text: str) -> str:
     return text[:1].lower() + text[1:]
 
@@ -49,18 +57,20 @@ def _lower_first(text: str) -> str:
 def subject_for_check(week: int, changes: list[Change]) -> str:
     moves = [c for c in changes if c.kind in (SWAP, BACK)]
     holes = [c for c in changes if c.kind == NO_FILL]
+    # Every hole is counted: the subscriber reads only the subject in an
+    # inbox, and "a hole" over two empty slots hid one (EMAILS-73/74).
+    hole_words = "a hole" if len(holes) == 1 else f"{len(holes)} holes"
     if moves and holes:
-        # A swap must not hide an unfilled slot: the subscriber reads only the
-        # subject in an inbox.
+        # A swap must not hide an unfilled slot either.
         return (f"Week {week}: {len(moves)} change{'s' if len(moves) > 1 else ''} "
-                f"and a hole in your lineup before kickoff")
+                f"and {hole_words} in your lineup before kickoff")
     if len(moves) == 1:
         return (f"Week {week}: one change before kickoff — "
                 f"{_lower_first(moves[0].action)}")
     if moves:
         return f"Week {week}: {len(moves)} changes before kickoff"
-    if any(c.kind == NO_FILL for c in changes):
-        return f"Week {week}: a hole in your lineup before kickoff"
+    if holes:
+        return f"Week {week}: {hole_words} in your lineup before kickoff"
     return f"Week {week}: a starter is questionable — here's your plan"
 
 
@@ -107,7 +117,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
         f'color:{FLAG};padding:0 0 8px 0;">{esc(PREHEADER)}</div>'
         f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
-        f'Injury news as of {esc(_eastern(at))}</div></td></tr>')
+        f'{esc(checked_line(at))}</div></td></tr>')
     sections = []
     for key, items in _groups(changes):
         if key == "act":
@@ -149,7 +159,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
 def text_for_check(plan: Mapping[str, Any], changes: list[Change],
                    at: datetime, seat: bool = False) -> str:
     lines = [f"BEAT YOUR LEAGUE — WEEK {plan['week']} FINAL CHECK",
-             PREHEADER, f"Injury news as of {_eastern(at)}", ""]
+             PREHEADER, checked_line(at), ""]
     for key, items in _groups(changes):
         lines.append(HEADS[key].upper())
         for item in items:

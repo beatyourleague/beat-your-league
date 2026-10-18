@@ -55,7 +55,7 @@ def test_the_monthly_welcome_never_claims_an_annual_renewal() -> None:
         assert f"{MONTHLY_PRICE} USD" in doc
         assert SEASON_PRICE + " USD" not in doc
         assert not re.search(r"renews once a year", doc, re.I)
-        assert re.search(r"billing stops on its own when the season ends", doc, re.I)
+        assert re.search(r"billing stops on its own after the season(?:'|&#x27;)s last weekly report", doc, re.I)
 
 
 def test_the_pass_payer_is_welcomed_at_the_price_they_paid() -> None:
@@ -67,7 +67,7 @@ def test_the_pass_payer_is_welcomed_at_the_price_they_paid() -> None:
         assert f"{PASS_PRICE} USD" in doc
         assert SEASON_PRICE + " USD" not in doc
         assert re.search(r"one per league", doc, re.I)
-        assert re.search(r"claims a seat", doc, re.I)
+        assert re.search(r"own report at no charge", doc, re.I)
 
 
 def test_the_pass_welcome_hands_over_the_seat_link(monkeypatch) -> None:
@@ -77,12 +77,13 @@ def test_the_pass_welcome_hands_over_the_seat_link(monkeypatch) -> None:
     is the commissioner's only reliable copy. With no SITE_URL there is no
     link to give, and the email must say something true instead of printing a
     dead href."""
+    # Without a signed link no seat can be confirmed (EMAILS-106/107), so the
+    # generic "?pass=1 plus the payer's address" route is never offered.
     monkeypatch.setenv("SITE_URL", "https://example.com/")
     msg = _msg("league_pass")
     for doc in (msg.html, msg.text):
-        assert "https://example.com/join/?pass=1" in doc
-        assert re.search(r"email you paid with", doc, re.I), \
-            "members must be told the payer address that matches their seat"
+        assert "/join/?pass=1" not in doc
+        assert re.search(r"seat link isn.{1,6}t ready yet", doc, re.I)
     monkeypatch.delenv("SITE_URL", raising=False)
     bare = _msg("league_pass")
     assert "/join/?pass=1" not in bare.text
@@ -335,7 +336,7 @@ def test_a_seat_link_that_is_not_https_is_never_an_href(monkeypatch) -> None:
     """Every href in an email is https (tests/test_email_safety.py); a seat link
     that is not one is still given, as text, never as a link."""
     monkeypatch.setenv("SITE_URL", "http://localhost:8000")
-    msg = _msg("league_pass")
-    assert "http://localhost:8000/join/?pass=1" in msg.text
-    assert "http://localhost:8000/join/?pass=1" in msg.html
-    assert 'href="http://localhost:8000/join' not in msg.html
+    link = "http://localhost:8000/join/?pass=abc&s=ppr&n=12&t=std"
+    msg = welcome_message("c@example.com", "league_pass", "abc123def0", "2026",
+                          seat_link=link)
+    assert link not in msg.text and 'href="http://localhost:8000/join' not in msg.html

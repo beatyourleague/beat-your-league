@@ -34,11 +34,11 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
-from render.report import CANCEL_HEAD, EMAIL_META, esc, preheader_html
+from render.report import CANCEL_HEAD, EMAIL_META, TWO_PURCHASES, esc, preheader_html
 from render.sender import CONTACT, sender_line
-from render.welcome import PAYER_PLANS, UNSUB_LINE, _cancel_destination
+from render.welcome import PAYER_PLANS, TERMS_STEPS, UNSUB_LINE, _cancel_destination
 from run.delivery import Message
 
 _BODY = ("font-family:Arial,Helvetica,sans-serif;font-size:15px;"
@@ -51,6 +51,17 @@ _HEAD = ("font-family:'Arial Narrow',Arial,sans-serif;font-weight:bold;"
 # the law describes, and one sent a week out is late.
 LEAD_MIN_DAYS = 15
 LEAD_MAX_DAYS = 45
+
+
+def renewal_day(period_end: int) -> date:
+    """The renewal's date on the buyer's clock — America/New_York, the clock
+    the welcome dates the purchase in. Stripe charges at the anniversary
+    INSTANT, so a 9:30 PM ET purchase renews on the evening of the same ET
+    date; the UTC date named the day after the charge, and "cancel before
+    that date" then came too late (EMAILS-112-117)."""
+    from zoneinfo import ZoneInfo
+    stamp = datetime.fromtimestamp(int(period_end), timezone.utc)
+    return stamp.astimezone(ZoneInfo("America/New_York")).date()
 
 
 @dataclass(frozen=True)
@@ -104,14 +115,15 @@ def renewal_message(renewal: Renewal) -> Message:
     cancel_line = (
         "If you'd rather not renew, cancel it yourself in about a minute — "
         + (f'<a href="{esc(href)}" style="color:#B3402F">{esc(label)}</a>. '
-           if href else "the steps are on our site's terms page. ")
-        + "Cancel before that date and you are not charged."
+           if href else f"the steps are at {esc(TERMS_STEPS)}. ")
+        + "Cancel before that date and you are not charged. "
+        + esc(TWO_PURCHASES)
     )
     cancel_text = (
         "If you'd rather not renew, cancel it yourself in about a minute — "
         + (f"{label}: {href}. " if href else
-           "the steps are on our site's terms page. ")
-        + "Cancel before that date and you are not charged.")
+           f"the steps are at {TERMS_STEPS}. ")
+        + "Cancel before that date and you are not charged. " + TWO_PURCHASES)
 
     # The product, how often it renews and a contact: what Cal. B&P §17602
     # names besides the date and amount, and what the first version left out

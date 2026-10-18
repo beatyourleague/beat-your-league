@@ -1376,7 +1376,8 @@ def pass_seat_link(signup: RosterSignup) -> str | None:
                     signup.roster(), pass_id=signup.subscription_id)
 
 
-def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None):
+def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
+             season_over: bool = False):
     """One signup's acknowledgment. A pass payer's carries their seat link
     when there is one; a purchase of a roster the address already holds
     another subscription for says so (``duplicate``, LP2-D1). Each keyword is
@@ -1388,13 +1389,18 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None):
         extra["seat_link"] = link
     if duplicate:
         extra["duplicate"] = duplicate
+    if season_over:
+        # The offseason: no first report until next season's schedule exists
+        # (EMAILS-80/81/89), so the welcome must not say it is on its way.
+        extra["season_over"] = True
     return welcome_message(signup.email, signup.plan, signup.slug, season,
                            purchased_at=str(signup.seen_at or ""), **extra)
 
 
 def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
                    season: str,
-                   duplicates: Mapping[tuple[str, str], str] | None = None) -> None:
+                   duplicates: Mapping[tuple[str, str], str] | None = None,
+                   season_over: bool = False) -> None:
     """One acknowledgment per subscription, idempotent forever.
 
     Built from the SIGNUPS rather than the registry rows, because the registry
@@ -1411,7 +1417,7 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
     (merge_same_roster): the acknowledgment is owed per subscription, and the
     newer one is where the person learns they hold two (``duplicates``).
     """
-    messages = [_welcome(s, season, (duplicates or {}).get(s.key))
+    messages = [_welcome(s, season, (duplicates or {}).get(s.key), season_over)
                 for s in [*servable, *seats]]
     if not messages:
         return
@@ -1859,12 +1865,15 @@ def main(argv: list[str] | None = None) -> int:
     # Bound before the try: the except below is not fatal, so `data` has to
     # exist either way for the senders that read it.
     data = None
+    season_over = False
     try:
         data = load_week_data(args.cache)
         known = {player.player_id for player in data.directory.players}
         known_season = str(getattr(data, "season", known_season))
         blocked = unservable(projected, known)
     except SoloError as exc:
+        from run.solo import SeasonOver
+        season_over = isinstance(exc, SeasonOver)
         # Not fatal: refusing to write a registry because a data release is
         # briefly unavailable would strand every paid signup for a week.
         problems.append(f"could not check rosters against the directory ({exc}) "
@@ -2090,7 +2099,8 @@ def main(argv: list[str] | None = None) -> int:
         # collision and any update — so nobody is welcomed or sent a first
         # report for a seat that was not written.
         seat_signups = seat_signups_from(rows, seats.first_claimed)
-        _send_welcomes(servable, seat_signups, known_season, merged.duplicates)
+        _send_welcomes(servable, seat_signups, known_season, merged.duplicates,
+                       season_over=season_over)
         _send_confirmations(awaiting, data, on_file=current)
         now = datetime.now(timezone.utc)
         _send_seat_confirmations(seats.awaiting, data)

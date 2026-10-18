@@ -515,7 +515,7 @@ def test_the_cancel_block_names_only_what_it_links(monkeypatch) -> None:
     assert "href" not in cancel_html(seat=True, sample=True)
 
 
-def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
+def test_a_forwardable_report_never_carries_a_roster_write_credential(monkeypatch) -> None:
     """render/report.py's footer renders _forward_line() and update_line()
     ADJACENT (report.py:1050-1051, mirrored in email.py). The first invites
     forwarding — "Got this from a leaguemate?" is the product's stated organic
@@ -573,7 +573,12 @@ def test_a_forwardable_report_never_carries_a_roster_write_credential() -> None:
     # Until the flow can work, the reply route the FAQ promises — never a
     # dead link.
     assert public_update_url("https://example.com", "", "https://w.test") is None
+    # The reply route only where an emailed roster can be applied (EMAILS-45).
+    monkeypatch.setenv("UPDATE_SECRET", "s3cret")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     assert "Reply to this email" in update_line({"solo": True, "update_url": None})
+    monkeypatch.delenv("UPDATE_SECRET")
+    assert "Reply to this email" not in update_line({"solo": True, "update_url": None})
 
 
 def test_the_plain_text_half_says_what_the_html_says() -> None:

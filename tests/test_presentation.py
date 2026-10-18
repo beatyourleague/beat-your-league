@@ -206,10 +206,13 @@ def test_a_payers_report_counts_the_seats_and_never_names_one(monkeypatch) -> No
 # C3 — the roster's date, beside the route that changes it
 # --------------------------------------------------------------------- #
 
-def test_the_report_says_which_roster_it_used() -> None:
+def test_the_report_says_which_roster_it_used(monkeypatch) -> None:
     """Contract C3: a subscriber whose trade has not reached us could not tell
     this report predates it. The date the roster in use was set prints beside
     "Roster changed?", on every surface, for a subscriber's report only."""
+    # The reply route renders only where an emailed roster can be applied.
+    monkeypatch.setenv("UPDATE_SECRET", "s3cret")
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     report = _subscriber(plan="season", roster_as_of="2026-10-03")
     for name, doc in _surfaces(report).items():
         assert re.search(r"Roster changed\?\s*This report used your roster as "
