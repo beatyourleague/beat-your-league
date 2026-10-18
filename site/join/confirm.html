@@ -95,8 +95,8 @@
          for that subscription (COPY:F2). A seat claim's code lives 7 days
          from the claim too (run/intake.py sweep_seats), so a seat button
          says the same. -->
-    <p id="intro">You asked to change the roster your reports are built from. Press the button within
-    7 days of asking and your next report uses the new one.</p>
+    <p id="intro">You asked to change the roster and settings your reports are built from. Press
+    the button within 7 days of asking and your next report uses them.</p>
   </header>
   <main>
     <div class="confirm">
@@ -107,7 +107,7 @@
     button.</p>
     <p style="margin-top:22px"><a href="../index.html" style="display:inline-block;padding:4px 0;">← Back to the site</a></p>
   </main>
-  <footer><b>Beat Your League</b> — analysis, not picks.</footer>
+  <footer><b>Beat Your League</b> — analysis, not betting picks.</footer>
 </div>
 <script>
 // The form backend (infra/form-worker.js). Same constant as join/, and empty
@@ -133,14 +133,14 @@ if (SEAT) {
   document.getElementById("head").textContent = "Confirm your League Pass seat";
   document.getElementById("intro").textContent = "You asked for a seat on your " +
     "league's League Pass, or to change the roster on the seat you hold. Press the " +
-    "button within 7 days of asking and it's set up within the hour.";
+    "button within 7 days of asking and it's usually set up within the hour.";
   go.textContent = "Yes, set up my seat";
 }
 if (!VALID) {
   go.disabled = true;
   say(SEAT ? "This link isn't complete. Open the button in the email again."
-           : "This link isn't complete. Open the button in the email again — or reply to " +
-             "any report with your roster and we'll update it.", "bad");
+           : "This link isn't complete. Open the button in the email again, or ask " +
+             "again from the roster link in any report.", "bad");
 }
 // Nothing happens on load, deliberately: mail scanners open every link in an
 // inbox, and a page that confirmed on load would let a scanner confirm a
@@ -149,8 +149,7 @@ go.addEventListener("click", () => {
   if (!VALID) return;
   if (!FORM_ENDPOINT) {
     say(SEAT ? "Seats aren't open just yet — nothing was set up."
-             : "Roster updates aren't open just yet. Reply to any report with your roster " +
-               "and your report follows it from the next Tuesday.", "bad");
+             : "Roster updates aren't open just yet — nothing was changed.", "bad");
     return;
   }
   go.disabled = true;
@@ -169,13 +168,14 @@ go.addEventListener("click", () => {
     // its league has teams (OPS-R7), so a seat is not "Confirmed" here
     // either: the intake decides, and says so by email when it can't.
     say(SEAT
-      ? "Received. If you asked in the last 7 days, your seat is set up within the " +
-        "hour and your first report follows the same day — unless your league's " +
+      ? "Received. If you asked in the last 7 days, your seat is usually set up within " +
+        "the hour and your first report follows the same day — unless your league's " +
         "seats are all taken, when we email you to say so. If this was a roster " +
         "change, your next report uses it."
       : "Received. If you asked for this change in the last 7 days and haven't " +
-        "confirmed a newer one since, it's applied within the hour, and your next " +
-        "report — and Saturday's final check — use your new roster. An older " +
+        "confirmed a newer one since, it's usually applied within the hour, and your " +
+        "next report uses your new roster and settings — and Saturday's final check " +
+        "too, if you pressed it by Friday night (ET). An older " +
         "button changes nothing: ask again from the link in any report.", "ok");
   }).catch(() => {
     go.disabled = false;

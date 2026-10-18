@@ -48,7 +48,7 @@ from run.refs import RefError, decode_roster
 
 UPDATE_LOG_NAME = "roster-updates.jsonl"
 TOKEN_LENGTH = 20
-_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # run/rosters.py's rule (D14)
 
 
 def update_token(email: str, secret: str) -> str:

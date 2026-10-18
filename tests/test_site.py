@@ -894,9 +894,9 @@ def test_the_post_purchase_page_sets_an_honest_delivery_expectation() -> None:
 
     workflow = (SITE.parent / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     assert re.search(r'cron: "\d{1,2} \* \* \* \*"', workflow), (
-        "the intake no longer runs hourly, so \"up to an hour\" on the "
+        "the intake no longer runs hourly, so \"usually within the hour\" on the "
         "post-purchase page may now be a promise we cannot keep")
-    assert re.search(r"up to an hour", visible, re.I), \
+    assert re.search(r"usually lands\s+within the hour", visible, re.I), \
         "the page does not say how long the first file takes"
 
     for required, why in (
@@ -2075,8 +2075,10 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     The static header stays the season default — the rewrites are JS, so we
     pin their presence and their key phrases."""
     assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
-    assert "Seat already paid — League Pass" in JOIN
-    assert "covers " in JOIN and "every manager in your league" in prose(JOIN)
+    assert "League Pass seat — nothing to pay" in JOIN
+    assert "already paid" not in prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1]
+                                       .split("} else if (WANTS_MONTHLY)")[0])
+    assert "every manager in your league" in prose(JOIN) and "claims their seat" in prose(JOIN)
     assert f"${MONTHLY_PRICE} / month" in JOIN
     # The pass buyer is told, on the way to Stripe, where the seat link will
     # come from: the welcome email, which carries a link naming THIS pass
@@ -2677,8 +2679,10 @@ def test_update_mode_never_reaches_a_payment_and_posts_the_contract() -> None:
     # A malformed pair is an ordinary visit, never an update.
     assert re.search(r'TOKEN_UPDATE = /\^\[0-9a-f\]\{10\}\$/\.test\(UPDATE_SLUG\)', JOIN)
     assert re.search(r'/\^\[0-9a-f\]\{20\}\$/\.test\(UPDATE_TOKEN\)', JOIN)
-    # With no backend it says the roster is NOT saved and names the fallback.
-    assert "isn't saved" in post and "reply to any report" in post
+    # With no backend it says nothing was saved — and promises no reply route,
+    # which needs the same backend (JOIN-122).
+    closed = post.split("if (!FORM_ENDPOINT) {")[1].split("}")[0]
+    assert "Nothing was sent or saved" in closed and "reply to any report" not in closed
     # A subscriber changing their roster is shown no billing terms.
     mode = JOIN.rsplit("if (UPDATE_MODE) {", 1)[1].split("} else if (SEAT_MODE)")[0]
     for hidden in ("terms-line", "renew-note", "pay-note", "first-note"):
@@ -3845,8 +3849,9 @@ def test_the_lineup_choices_name_the_platform_defaults_and_say_what_an_ungraded_
     is, plus a kicker and a defense answer — and a shape no arm has graded says,
     before anyone pays, that its report carries everything but the odds."""
     step = JOIN.split('<section id="step-league">')[1].split("</section>")[0]
-    for value, words in (("std", "ESPN's default"), ("flex2", "Sleeper's default"),
-                         ("wr3", "Yahoo's default"), ("sf", "Superflex")):
+    # Yahoo's default is the standard shape (help.yahoo.com SLN6489, JOIN-36).
+    for value, words in (("std", "ESPN's and Yahoo's default"), ("flex2", "Sleeper's default"),
+                         ("wr3", "Three WR"), ("sf", "Superflex")):
         assert re.search(rf'value="{value}"[^<]*>[^<]*(?:<span[^>]*>[^<]*)?{re.escape(words)}',
                          step), value
     assert 'name="kicker" value="no"' in step and 'name="defense" value="no"' in step
@@ -4114,14 +4119,14 @@ def test_the_update_and_confirm_pages_promise_only_what_happens() -> None:
     for promise in ("If this is the address your reports go to",
                     "differ from the ones on file", "usually within the hour",
                     f"within {EXPIRY_DAYS} days", "Nothing changes until it's pressed",
-                    "at most three of these a day"):
+                    "up to three requests a day"):
         assert promise in note, promise
     assert CONFIRMS_PER_DAY == 3
     confirm = prose(CONFIRM)
     assert "Confirmed. It's applied" not in confirm
     assert f"Press the button within {EXPIRY_DAYS} days of asking" in confirm
     assert (f"If you asked for this change in the last {EXPIRY_DAYS} days and haven't "
-            "confirmed a newer one since, it's applied within the hour") in confirm
+            "confirmed a newer one since, it's usually applied within the hour") in confirm
     assert "An older button changes nothing" in confirm
 
 
@@ -4173,11 +4178,11 @@ def test_a_seat_confirmation_says_seat_on_the_confirm_page() -> None:
     assert seat["before"]["button"] == "Yes, set up my seat"
     assert seat["before"]["intro"] == (
         "You asked for a seat on your league's League Pass, or to change the roster on "
-        "the seat you hold. Press the button within 7 days of asking and it's set up "
-        "within the hour.")
+        "the seat you hold. Press the button within 7 days of asking and it's usually "
+        "set up within the hour.")
     assert seat["posted"] == [{"kind": "confirm", "code": good}]
     assert seat["after"].startswith("Received. If you asked in the last 7 days, your seat "
-                                    "is set up within the hour and your first report "
+                                    "is usually set up within the hour and your first report "
                                     "follows the same day"), seat["after"]
     assert "seats are all taken" in seat["after"] and "Confirmed" not in seat["after"]
     closed = _run_confirm_page(f"?c={good}&k=seat", "")

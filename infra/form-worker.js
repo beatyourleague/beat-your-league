@@ -33,7 +33,8 @@
  *   POST JSON  {kind:"seat",     email, ref, pass_token | covered_by}
  *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
  *                                the operator's emailed change, run/updates.py)
- *   POST JSON  {kind:"update_request", email, ref}   (confirm-by-email, step 1)
+ *   POST JSON  {kind:"update_request", email, ref, replaces?}  (confirm-by-
+ *                                email, step 1; replaces = the link's &o= slug)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
  *                                for a roster request OR a seat claim; the
  *                                intake knows which by recomputing both)
@@ -96,7 +97,10 @@
  * the Worker's Cron Events; the next tick and the GitHub backup both still run.
  */
 
-const EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+// The same set the join page and run/rosters.py accept (anything@anything.tld,
+// apostrophes and non-ASCII included): a stricter Worker answered 400 to an
+// address the page had passed and a subscription could hold (JOIN-129).
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const REF = /^[A-Za-z0-9_-]{1,200}$/;
 const SLUG = /^[0-9a-f]{10}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
@@ -135,7 +139,11 @@ function sanitizeKind(body) {
   if (kind === "update_request") {
     // Grants nothing by itself: the intake mails a confirmation to the
     // address on the subscription, and only that inbox can finish it.
-    return { kind, email, ref };
+    // `replaces` is the origin slug the report's update link carried (&o=):
+    // it picks which of the address's teams, never authorises one. A
+    // malformed slug is dropped, never refused — the intake can still choose.
+    const replaces = String(body.replaces || "").trim();
+    return SLUG.test(replaces) ? { kind, email, ref, replaces } : { kind, email, ref };
   }
   if (kind === "seat") {
     // A seat names its pass one of two ways (contract C4): the per-pass seat
