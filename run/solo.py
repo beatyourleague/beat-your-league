@@ -37,7 +37,7 @@ import argparse
 import csv
 import sys
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -184,6 +184,63 @@ def week_has_kicked_off(cache_dir: Path, season: str, week: int,
     if precise and first_kick is not None and first_kick.astimezone(eastern).date() == first:
         return now >= first_kick
     return today >= first
+
+
+# A derived Week 1 is built no earlier than this before its first kickoff: the
+# Tuesday of kickoff week (Thursday opener) and the Tuesday before it, never
+# the first Tuesday after the schedule is published in May, months before
+# anybody drafts (promise audit EMAILS-62).
+WEEK_ONE_LEAD = timedelta(days=9)
+
+
+def week_first_kickoff(cache_dir: Path, season: str, week: int) -> "datetime | None":
+    """The earliest TIMED kickoff of a REG week, in UTC, or None when the
+    schedule can't be read or carries no time for that week."""
+    from zoneinfo import ZoneInfo
+
+    eastern = ZoneInfo("America/New_York")
+    try:
+        path = fetch("schedules", "games.csv", cache_dir, live=True)
+    except NflverseError:
+        return None
+    first: "datetime | None" = None
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("season") or "") != str(season):
+                continue
+            if (row.get("game_type") or "REG").upper() != "REG":
+                continue
+            try:
+                if int(row.get("week") or 0) != int(week):
+                    continue
+                kick = datetime.strptime(
+                    f"{(row.get('gameday') or '').strip()} {(row.get('gametime') or '').strip()}",
+                    "%Y-%m-%d %H:%M").replace(tzinfo=eastern).astimezone(timezone.utc)
+            except ValueError:
+                continue
+            if first is None or kick < first:
+                first = kick
+    return first
+
+
+def week_one_due(cache_dir: Path, season: str, week: int,
+                 now: "datetime | None" = None) -> bool:
+    """May a DERIVED ``week`` be built and mailed now? Every week but 1 is.
+
+    ``current_season`` moves to the next season the moment its schedule is in
+    games.csv (about May), and ``current_week`` then answers 1, so without
+    this the Tuesday run mailed continuing subscribers a "Week 1" report in
+    May, built from last season's roster, and skipped the real one in
+    September as already sent. Week 1 is due from ``WEEK_ONE_LEAD`` before its
+    first kickoff. Unknown kickoff reads as NOT due: a Week-1 report a few
+    days late is recoverable, one mailed in May is not."""
+    if int(week) != 1:
+        return True
+    kickoff = week_first_kickoff(cache_dir, season, 1)
+    if kickoff is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    return now >= kickoff - WEEK_ONE_LEAD
 
 
 def assert_week_is_complete(cache_dir: Path, season: str, week: int,
