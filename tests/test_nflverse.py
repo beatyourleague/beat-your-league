@@ -90,7 +90,7 @@ def test_attribution_is_shipped_not_optional() -> None:
     assert "nflverse" in ATTRIBUTION
     assert "CC-BY-4.0" in ATTRIBUTION
     # "indicate if changes were made" is the other half of the BY term.
-    assert "scored to your league's settings" in ATTRIBUTION
+    assert "Aggregated and scored by us under the scoring you chose" in ATTRIBUTION
 
 
 # --------------------------------------------------------------------- #

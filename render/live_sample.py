@@ -57,14 +57,15 @@ import argparse
 import copy
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 from engine.subscriber import RosterSpec
-from render.report import TEMPLATE_PATH, esc, render
+from render.report import (JOIN_PROMISE, SAMPLE_CTA_CLOSED, TEMPLATE_PATH, esc,
+                           render, sample_cta)
 from render.sample import SLOTS
-from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
+from run.solo import CACHE_DIR, SeasonOver, SoloError, load_week_data, report_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
@@ -186,8 +187,10 @@ def absences(data, roster: tuple[str, ...]) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for pid in roster:
         team = (statuses.get(pid) or {}).get("team")
-        why = ("on bye" if team and team in byes
-               else str((getattr(data, "roster_out", None) or {}).get(pid) or ""))
+        # The reserve list first (INFO-102): Achane on injured reserve with
+        # Miami on bye read "on bye" here while the checklist said IR.
+        why = (str((getattr(data, "roster_out", None) or {}).get(pid) or "")
+               or ("on bye" if team and team in byes else ""))
         if why:
             out.append((data.players.name(pid), why))
     return out
@@ -253,7 +256,7 @@ def share_text(report: Mapping[str, Any]) -> tuple[str, str]:
     odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
     title = f"Beat Your League — this week's report, Week {meta['week']} of {meta['season']}"
     when = ("Rebuilt after this week's first kickoff." if meta.get("rebuilt_after_kickoff")
-            else "Rebuilt every Tuesday.")
+            else "Rebuilt every Tuesday of the season.")
     desc = (f"Week {meta['week']} of the {meta['season']} NFL season, for a sample "
             f"roster: the lineup we'd set, with odds on {odds} of its "
             f"{len(lineup)} slots. {when}")
@@ -270,17 +273,18 @@ def share_text(report: Mapping[str, Any]) -> tuple[str, str]:
 STILL_TO_PLAY = "for the games still to play"
 # Said by the closest-call section when no call with odds survives the
 # rebuild (render.report's one-line no-call form).
-AFTER_KICKOFF_CLOSEST = ("No closest call with odds on this rebuild: it was "
-                         "built after this week's first kickoff, and it shows "
-                         "odds only where they were on the record before "
-                         "kickoff and neither game has started.")
+# Says why THIS week's closest call is missing, not that no odds survive:
+# another row may still print a recorded % (INFO-105).
+AFTER_KICKOFF_CLOSEST = ("This week's closest call isn't shown on this rebuild: "
+                         "its game has started, or its odds weren't on the "
+                         "record before kickoff.")
 AFTER_KICKOFF_PIVOTS = ("No if/then on this rebuild: it was built after this "
                         "week's first kickoff, and the games it turned on have "
                         "started.")
 # The same, for a forced rebuild BEFORE kickoff of a week already recorded:
 # its closest call printed a % the record does not hold (OPS-R3).
-REBUILT_CLOSEST = ("No closest call with odds on this rebuild: it shows only the "
-                   "odds recorded by this week's first build.")
+REBUILT_CLOSEST = ("This week's closest call isn't shown on this rebuild: its "
+                   "odds weren't the ones this week's first build recorded.")
 
 
 def hold_closest(report: dict, sentence: str) -> dict:
@@ -371,7 +375,25 @@ def after_kickoff(report: dict, upcoming: set[str], played_ids: set[str],
                 and "if/then" in str(item.get("detail") or ""))]
     report["meta"]["rebuilt_after_kickoff"] = True
     report["meta"]["thin_week_note"] = None
-    return report
+    return _reworded(report, NOT_ANNOUNCED, NOT_READ)
+
+
+# A row built from last week's designation says this week's status is "not
+# announced yet" — true on a Tuesday, false on a rebuild after kickoff, which
+# still reads Tuesday's information while the week's own reports are out
+# (INFO-117). Reworded, never re-derived: the rebuild adds no new fact.
+NOT_ANNOUNCED = "status not announced yet"
+NOT_READ = "status not read on this rebuild"
+
+
+def _reworded(value: Any, old: str, new: str) -> Any:
+    if isinstance(value, str):
+        return value.replace(old, new)
+    if isinstance(value, list):
+        return [_reworded(item, old, new) for item in value]
+    if isinstance(value, dict):
+        return {key: _reworded(item, old, new) for key, item in value.items()}
+    return value
 
 
 def _eastern(at: datetime) -> str:
@@ -395,6 +417,17 @@ def after_kickoff_line(report: Mapping[str, Any], built: datetime,
             f"and neither player's game has started — {odds} of its "
             f"{len(lineup)} slots — and its lineup steps are for the games still "
             f"to play.")
+
+
+def rebuilt_line(report: Mapping[str, Any], built: datetime) -> str:
+    """The notice under the banner of a forced rebuild BEFORE kickoff of a
+    week already recorded (INFO-107): a row whose % was not the recorded one
+    shows none, and this says why, once."""
+    lineup = report.get("lineup") or []
+    odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
+    return (f"Rebuilt {_eastern(built)}, after this week's first build recorded "
+            f"its odds. It shows odds only where they match that record — "
+            f"{odds} of its {len(lineup)} slots.")
 
 
 def read_week_json(path: Path) -> dict:
@@ -421,16 +454,7 @@ def with_week_meta(page: str, report: Mapping[str, Any]) -> str:
     naming this week. Replaced in place; a tag that is missing is added
     before </head> rather than silently left generic."""
     title, desc = share_text(report)
-    for attr, name, value in (("property", "og:title", title),
-                              ("property", "og:description", desc),
-                              ("name", "description", desc)):
-        tag = f'<meta {attr}="{name}" content="{esc(value)}">'
-        pattern = re.compile(rf'<meta {attr}="{re.escape(name)}" content="[^"]*">')
-        if pattern.search(page):
-            page = pattern.sub(lambda _m: tag, page, count=1)
-        else:
-            page = page.replace("</head>", tag + "\n</head>", 1)
-    return page
+    return _with_share(page, title, desc)
 
 
 # --------------------------------------------------------------------- #
@@ -496,7 +520,7 @@ def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
 
 def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
-                    after_kickoff: bool = False) -> None:
+                    after_kickoff: bool = False, phase: str = "season") -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -512,7 +536,10 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     ``recorded``: this week's odds are on the record (by this build or an
     earlier one of the same week), so no later build may record again
     (OPS-R3). ``after_kickoff``: this page was rebuilt after the week began.
-    Each is written only when true, so an ordinary week's clock is unchanged."""
+    Each is written only when true, so an ordinary week's clock is unchanged.
+
+    ``phase`` is "season" here: a week was built. The two offseason clocks are
+    written by ``write_clock`` (D9)."""
     import json
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
@@ -528,7 +555,178 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         "first_kickoff": first_kickoff,
         **({"recorded": True} if recorded else {}),
         **({"after_kickoff": True} if after_kickoff else {}),
+        "phase": phase,
     }, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
+# --------------------------------------------------------------------- #
+# the offseason (D9): no week to build, and the page says so
+# --------------------------------------------------------------------- #
+
+# The Tuesday run's last send of the day (weekly.yml's 16:17 UTC retry); a
+# derived Week 1 that becomes due later that Tuesday goes out a week later.
+LAST_TUESDAY_SEND = time(16, 17)
+
+
+def write_clock(path: Path, clock: Mapping[str, Any]) -> None:
+    import json
+    path.write_text(json.dumps(dict(clock), separators=(",", ":")) + "\n",
+                    encoding="utf-8")
+
+
+def week_one_lands_on(first_kickoff: datetime) -> str:
+    """The Tuesday a derived Week 1 report first goes out: the first Tuesday
+    send at or after ``run.solo.week_one_due`` turns true (WEEK_ONE_LEAD
+    before the first kickoff), as its date (the send is mid-morning ET, so
+    the UTC and ET dates agree)."""
+    from run.solo import WEEK_ONE_LEAD
+    due = first_kickoff.astimezone(timezone.utc) - WEEK_ONE_LEAD
+    day = due.date()
+    while day.weekday() != 1 or datetime.combine(
+            day, LAST_TUESDAY_SEND, timezone.utc) < due:
+        day += timedelta(days=1)
+    return day.isoformat()
+
+
+def preseason_clock(cache_dir: Path, season: str, now: datetime) -> dict | None:
+    """week.json for the weeks between the schedule's release and Week 1's
+    first report, or None when ``season``'s derived week is buildable now.
+    Nothing is built in this phase: a Week 1 page months before its games
+    is the May report D8 retired."""
+    from run.solo import current_week, last_week, week_first_kickoff, week_one_due
+    if current_week(cache_dir, season, now.date()) != 1 or week_one_due(
+            cache_dir, season, 1, now):
+        return None
+    first = week_first_kickoff(cache_dir, season, 1)
+    if first is None:
+        return None
+    return {"season": str(season), "week": 1,
+            "last_week": last_week(cache_dir, season),
+            "lands_on": week_one_lands_on(first),
+            "built_at": now.astimezone(timezone.utc).isoformat(timespec="seconds"),
+            "odds": 0, "closest_call": False,
+            "first_kickoff": first.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "phase": "preseason"}
+
+
+def over_clock(prior: Mapping[str, Any], cache_dir: Path, today: date) -> dict:
+    """week.json once the season is over: the last week's clock kept (season,
+    week, last_week, lands_on), with nothing on the page to show."""
+    keep = ("season", "week", "last_week", "lands_on", "built_at", "first_kickoff")
+    if prior.get("season") and prior.get("week") and prior.get("phase") != "preseason":
+        clock = {key: prior.get(key) for key in keep}
+    else:
+        from run.solo import current_season, last_week
+        season = current_season(cache_dir, today)
+        week = last_week(cache_dir, season)
+        clock = {"season": season, "week": week, "last_week": week,
+                 "lands_on": next_report_day(cache_dir, season, week) if week else None,
+                 "built_at": None, "first_kickoff": None}
+    return {**clock, "odds": 0, "closest_call": False, "phase": "over"}
+
+
+_LIVE_BANNER = re.compile(
+    r'<div class="notice"><b>THIS WEEK(?:\x27|&#x27;)S REPORT</b>(.*?)</div>', re.S)
+_REBUILT_LINE = re.compile(
+    r'<div class="notice">Rebuilt [^<]*after this week(?:\x27|&#x27;)s first '
+    r'(?:kickoff|build)[^<]*</div>')
+
+
+def last_report_text(season: str, week: str | int) -> tuple[str, str, str]:
+    """(banner, og:title, description) for the kept page once its season is
+    over (INFO-96, INFO-112): it is that season's last report, not this
+    week's, and it is not rebuilt until the next season begins."""
+    banner = (f"<b>THE {season} SEASON'S LAST REPORT</b> — Week {week}, for a "
+              f"sample roster. This page is rebuilt every Tuesday of the season, "
+              f"from Week 1 of the next one.")
+    title = f"Beat Your League — the {season} season's last report"
+    desc = (f"Week {week} of the {season} NFL season, the last of that season, "
+            f"for a sample roster: the lineup we'd set. This page is rebuilt "
+            f"every Tuesday of the season, from Week 1 of the next one.")
+    return banner, title, desc
+
+
+_LAST_BANNER = re.compile(
+    r"<b>THE (\d{4}) SEASON(?:\x27|&#x27;)S LAST REPORT</b> — Week (\d+),")
+_CTA = re.compile(
+    r'<a class="btn" href="(?:join/index\.html|index\.html#watch-form)">[^<]*</a>')
+_CARD = re.compile(r'(<div class="ctacard"><p>)(.*?)(</p>)', re.S)
+# The kept page's closing card once the season is over: checkout is closed
+# (D9), so it promises no "first report the day you join".
+NEXT_SEASON = "Reports start again with next season's Week 1."
+
+
+def restamp_last(page: str, *, season_over: bool = True) -> str:
+    """The kept page, restamped as its season's last report: banner, closing
+    card, its asks and share text. ``season_over``: checkout is closed (D9
+    "over"), so the asks go to the email capture and the card promises no
+    first report; otherwise (preseason) they follow the landing's flag.
+    Idempotent for either mode; a page with neither banner is left alone."""
+    match = _LIVE_BANNER.search(page)
+    found = match and re.search(r"Week (\d+) of the (\d{4}) season", match.group(1))
+    if found:
+        week, season = found.groups()
+    else:
+        last = _LAST_BANNER.search(page)
+        if not last:
+            return page
+        season, week = last.groups()
+    banner, title, desc = last_report_text(season, week)
+    if match:
+        page = _LIVE_BANNER.sub(lambda _m: f'<div class="notice">{banner}</div>',
+                                page, count=1)
+    page = _REBUILT_LINE.sub("", page)
+    cta = (f'<a class="btn" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
+           if season_over else sample_cta())
+    page = _CTA.sub(lambda _m: cta, page)
+    card = (f"This is the {season} season&#x27;s last report, for a sample roster. "
+            + esc(NEXT_SEASON if season_over else JOIN_PROMISE))
+    page = _CARD.sub(lambda m: m.group(1) + card + m.group(3), page, count=1)
+    return _with_share(page, title, desc)
+
+
+def _with_share(page: str, title: str, desc: str) -> str:
+    for attr, name, value in (("property", "og:title", title),
+                              ("property", "og:description", desc),
+                              ("name", "description", desc)):
+        tag = f'<meta {attr}="{name}" content="{esc(value)}">'
+        pattern = re.compile(rf'<meta {attr}="{re.escape(name)}" content="[^"]*">')
+        if pattern.search(page):
+            page = pattern.sub(lambda _m: tag, page, count=1)
+        else:
+            page = page.replace("</head>", tag + "\n</head>", 1)
+    return page
+
+
+def keep_last_page(out: Path, *, season_over: bool = True) -> None:
+    """Restamp the published page in place, if there is one."""
+    try:
+        page = out.read_text(encoding="utf-8")
+    except OSError:
+        return
+    stamped = restamp_last(page, season_over=season_over)
+    if stamped != page:
+        out.write_text(stamped, encoding="utf-8")
+
+
+def _preseason(out: Path, week_json: Path, season: str | None,
+               now: datetime) -> bool:
+    """Write the preseason clock and restamp the kept page, when ``season``'s
+    derived week is a Week 1 not yet due. False otherwise (or unreadable)."""
+    try:
+        from run.solo import current_season
+        clock = preseason_clock(CACHE_DIR, season or current_season(
+            CACHE_DIR, now.date()), now)
+    except Exception:  # noqa: BLE001 — no clock means the build decides
+        return False
+    if not clock:
+        return False
+    keep_last_page(out, season_over=False)
+    write_clock(week_json, clock)
+    print(f"this week's sample was not rebuilt: {clock['season']} Week 1 is not "
+          f"due until {clock['lands_on']}; the last report stays up, marked as "
+          f"its season's last.")
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -548,17 +746,33 @@ def main(argv: list[str] | None = None) -> int:
     now = (datetime.fromisoformat(args.now.replace("Z", "+00:00")) if args.now
            else datetime.now(timezone.utc))
     context: dict = {}
+    week_json = args.out.with_name("week.json")
     try:
         report = build(season=args.season, week=args.week, context=context)
+    except SeasonOver as exc:
+        # D9 over: the season's last page stays, and says what it is.
+        keep_last_page(args.out)
+        write_clock(week_json, over_clock(read_week_json(week_json), CACHE_DIR,
+                                          now.date()))
+        print(f"this week's sample was not rebuilt ({exc}); the last page stays "
+              f"up, marked as its season's last report.")
+        return 0
     except (SoloError, Exception) as exc:  # noqa: BLE001 — keep the last page
+        if not args.week and _preseason(args.out, week_json, args.season, now):
+            return 0
         print(f"this week's sample was not rebuilt ({exc}); the previous page "
               f"stays up.")
+        return 0
+    # D9 preseason: a DERIVED Week 1 before run.solo.week_one_due is the May
+    # report D8 retired, so it is never published; only the clock moves. Asked
+    # only of a Week 1, so an ordinary week costs no extra schedule read.
+    if (not args.week and int(report["meta"]["week"]) == 1
+            and _preseason(args.out, week_json, str(report["meta"]["season"]), now)):
         return 0
     meta = report["meta"]
     from run.solo import week_has_kicked_off
     kicked_off = week_has_kicked_off(CACHE_DIR, str(meta["season"]), int(meta["week"]),
                                      now=now)
-    week_json = args.out.with_name("week.json")
     already = recorded_this_week(read_week_json(week_json), meta)
     if kicked_off and not args.force:
         # Not a failure: the cron simply has nothing to do. Said from the
@@ -617,15 +831,16 @@ def main(argv: list[str] | None = None) -> int:
     page = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
     page = with_thin_week(with_week_meta(page, report),
                           report["meta"].get("thin_week_note"))
-    if kicked_off:
+    if kicked_off or already:
         # Stamped with the moment the report says it was built (the banner's
         # own clock), so the page states one build time, not two.
         try:
             built = datetime.fromisoformat(str(report["meta"].get("generated_at")))
         except ValueError:
             built = now
-        page = with_thin_week(page, after_kickoff_line(
-            report, built if built.tzinfo else built.replace(tzinfo=timezone.utc), first))
+        built = built if built.tzinfo else built.replace(tzinfo=timezone.utc)
+        page = with_thin_week(page, after_kickoff_line(report, built, first)
+                              if kicked_off else rebuilt_line(report, built))
     args.out.write_text(with_via_carry(page), encoding="utf-8")
     try:
         lands_on = next_report_day(CACHE_DIR, report["meta"]["season"],

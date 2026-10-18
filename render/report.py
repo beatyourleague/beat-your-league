@@ -255,7 +255,7 @@ MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
 # announcement, so a stale promise here is a false claim on every surface at
 # once.
 BRAND_LINE = ("the weekly scouting report for your fantasy roster, "
-              "every Tuesday.")
+              "every Tuesday of the season.")
 NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
                    "picks, no staking advice. Fantasy decisions are yours to make.")
 SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
@@ -634,6 +634,13 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
     were looking at.
     """
     availability = meta.get("availability_as_of")
+    rebuilt = re.match(r"the week (\d+) injury report", str(availability or ""))
+    if meta.get("rebuilt_after_kickoff") and rebuilt:
+        # Rebuilt after kickoff from Tuesday's information: "the last complete
+        # one before this report goes out" was false of it (INFO-117).
+        return (f"Injury and inactive data as of the week {rebuilt.group(1)} "
+                f"injury report, the one this week's Tuesday report was built on; "
+                f"this rebuild doesn't read later injury news.")
     if availability:
         try:
             stamp = datetime.fromisoformat(str(availability))
@@ -742,15 +749,33 @@ def _site_bar() -> str:
         '<a class="home" href="index.html">← Home</a></nav></div>')
 
 
-# The samples' one ask, at the top and at the end. It points at the join page
-# in every state: open, that page sells; closed, it says so before anyone
-# pastes a roster and keeps the roster for launch day. So the button is never a
-# dead end, and it never names a price (the hero rule).
+# The samples' one ask, at the top and at the end. It follows the landing's
+# CHECKOUT_OPEN, read from site/index.html when the page is rendered (promise
+# audit INFO-4, D15): open, "Get this for your team" goes to the join page;
+# closed, the button says what it does and goes to the landing's email capture,
+# like every closed CTA there. It never names a price (the hero rule).
 SAMPLE_CTA = "Get this for your team"
+SAMPLE_CTA_CLOSED = "Tell me when it opens"
+LANDING_PAGE = REPO_ROOT / "site" / "index.html"
+_CHECKOUT_FLAG = re.compile(r"^const CHECKOUT_OPEN = (true|false);", re.M)
+
+
+def checkout_open(landing: Path | None = None) -> bool:
+    """The landing page's CHECKOUT_OPEN. Unreadable or absent reads as closed:
+    a closed ask on an open checkout costs a click, an open one on a closed
+    checkout is a dead end."""
+    try:
+        text = Path(landing or LANDING_PAGE).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    match = _CHECKOUT_FLAG.search(text)
+    return bool(match and match.group(1) == "true")
 
 
 def sample_cta() -> str:
-    return f'<a class="btn" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
+    if checkout_open():
+        return f'<a class="btn" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
+    return f'<a class="btn" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
 
 
 def header(meta: Mapping[str, Any], team: str | None = None) -> str:
@@ -779,22 +804,49 @@ def header(meta: Mapping[str, Any], team: str | None = None) -> str:
     if meta.get("live_demo"):
         # The live sample (render/live_sample.py): this week's report for the
         # published sample roster, rebuilt every Tuesday by the weekly cron.
-        banner = (
-            '<div class="notice">'
-            f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
-            f'{esc(meta["season"])} season, built {esc(_built_on(meta))} for a '
-            f'sample roster, exactly the way yours is built. Rebuilt every '
-            f'Tuesday.</div>')
+        # A rebuild after the week's first kickoff is NOT the way a
+        # subscriber's report is built (it withholds, and it still reads
+        # Tuesday's injury report), so it says what it is (INFO-100, INFO-117).
+        if meta.get("rebuilt_after_kickoff"):
+            banner = (
+                '<div class="notice">'
+                f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
+                f'{esc(meta["season"])} season for a sample roster, rebuilt '
+                f'{esc(_built_on(meta))} from this week\'s Tuesday information '
+                f'(the week {esc(int(meta["week"]) - 1)} injury report); later '
+                f'injury news is not in it.</div>')
+        else:
+            banner = (
+                '<div class="notice">'
+                f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
+                f'{esc(meta["season"])} season, built {esc(_built_on(meta))} for a '
+                f'sample roster, exactly the way yours is built. Rebuilt every '
+                f'Tuesday of the season.</div>')
     elif meta.get("historical_demo") and meta.get("solo"):
         # The solo sample is built from the nflverse record, where past-season
         # injury reports ARE available — so confidences print, and the old
         # "numbers are left off" sentence would be false of the page it sits on.
-        banner = (
-            '<div class="notice">'
-            f'<b>SAMPLE REPORT</b> — a real week from the {esc(meta["season"])} NFL '
-            f'season, built exactly the way yours will be: one roster, scored its '
-            f'league\'s way, from that week\'s box scores and injury reports.</div>'
-        )
+        # One banner per sample (INFO-99): Week 1 has no box score and no
+        # injury report behind it, and a mid-season week is built from what
+        # was out BEFORE its games, never from its own box scores.
+        scoring = str(meta.get("scoring") or "")
+        scored = (f"scored {scoring[:1].lower()}{scoring[1:]}" if scoring
+                  else "one scoring setting")
+        if meta.get("first_week_demo"):
+            banner = (
+                '<div class="notice">'
+                f'<b>SAMPLE REPORT</b> — Week 1 of the {esc(meta["season"])} NFL '
+                f'season, built the way yours will be: one roster, {esc(scored)}. '
+                f'Before Week 1 no game has been played and no injury report '
+                f'exists, so the slots are ordered by last season\'s scoring and '
+                f'no odds print.</div>')
+        else:
+            banner = (
+                '<div class="notice">'
+                f'<b>SAMPLE REPORT</b> — a real week from the {esc(meta["season"])} NFL '
+                f'season, built the way yours will be: one roster, {esc(scored)}, '
+                f'from the box scores and injury report out before that week\'s '
+                f'games.</div>')
     elif meta.get("historical_demo"):
         banner = (
             '<div class="notice">'
@@ -1756,6 +1808,16 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
     return _section("The Receipts", 9, f'<div class="ledger">{inner}</div>')
 
 
+# What a sample promises a buyer (INFO-113): three scoring settings, not every
+# league's rules, and the day-one report is this week's only from Week 2 and
+# before the week's games start (run/intake._first_file).
+JOIN_PROMISE = ("Yours is built from your own roster, under the scoring you pick "
+                "(full PPR, half PPR or standard). Your first report lands the day "
+                "you join: this week's lineup, or your roster report if it's before "
+                "Week 2 or the week's games are underway. Then a new one every "
+                "Tuesday of the season.")
+
+
 def demo_band(meta: Mapping[str, Any]) -> str:
     """The public sample's closing ask. DEMO SURFACES ONLY.
 
@@ -1772,8 +1834,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
     if meta.get("solo") and meta.get("live_demo"):
         return (
             '<div class="ctacard"><p>This is this week\'s report for a sample '
-            'roster. Yours is built from your own roster, scored your league\'s '
-            'way, and your first report lands the day you join.</p>'
+            f'roster. {esc(JOIN_PROMISE)}</p>'
             f'{sample_cta()}</div>')
     if meta.get("solo"):
         season = esc(str(meta.get("season", "a past")))
@@ -1790,8 +1851,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         )
         return (
             f'<div class="ctacard"><p>This report is from the {season} season. '
-            f'{companion}Yours is built from your own roster, scored your '
-            f'league\'s way, and your first report lands the day you join.</p>'
+            f'{companion}{esc(JOIN_PROMISE)}</p>'
             f'{sample_cta()}</div>'
         )
     return (
@@ -2263,8 +2323,13 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     # share tags on them would just invite pasting a paid report around.
     social = ""
     if meta.get("anonymized_demo"):
-        desc = (("A complete weekly report built from a real NFL season — every "
-                 "number from actual box scores, nothing invented.")
+        # Said of THIS sample (INFO-99): a mid-season week is built from what
+        # was out before its games; Week 1 has only last season behind it.
+        desc = (("Week 1 of a real NFL season, built the way yours will be: "
+                 "slots ordered by last season's box scores, nothing invented.")
+                if meta.get("solo") and meta.get("first_week_demo") else
+                ("A complete weekly report for a real NFL week, built from the box "
+                 "scores and injury report out before its games — nothing invented.")
                 if meta.get("solo") else
                 ("A complete Rival Report built from a real league's season — "
                  "every number from actual box scores, nothing invented."))

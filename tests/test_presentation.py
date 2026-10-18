@@ -491,9 +491,9 @@ def test_the_samples_carry_the_sites_routes_and_one_ask_top_and_bottom(monkeypat
         assert 'href="how-it-works.html"' in top and 'href="index.html#pricing"' in top
         assert '<a class="home" href="index.html">← Home</a>' in top
         masthead = page.split("</header>")[0]
-        assert f'<a class="btn" href="join/index.html">{rr.SAMPLE_CTA}</a>' in masthead
+        assert rr.sample_cta() in masthead
         end = page.split("</main>")[0].rsplit("<section", 1)[1]
-        assert 'class="ctacard"' in end and 'href="join/index.html"' in end
+        assert 'class="ctacard"' in end and rr.sample_cta() in end
         assert "regret-note" not in page.split("</head>")[1], \
             "the sample still wears the alert tint"
         assert re.search(r"\$\d", top) is None, "no price in the header (hero rule)"

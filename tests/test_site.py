@@ -698,7 +698,7 @@ def test_published_backtest_exists_and_keeps_its_failures() -> None:
 
 def test_ledger_page_promises_misses_are_published() -> None:
     assert re.search(r"hit or miss|wins and misses|Voids are shown", LEDGER, re.I)
-    assert re.search(r"analysis, not picks", LEDGER, re.I)
+    assert re.search(r"analysis, not betting picks", LEDGER, re.I)
 
 
 def test_no_selling_page_links_the_grading_pages() -> None:
@@ -3287,7 +3287,7 @@ def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) ->
     assert _json.loads(out.read_text()) == {
         "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-20",
         "built_at": "2026-10-13T12:05:00+00:00", "odds": 0, "closest_call": False,
-        "first_kickoff": None}
+        "first_kickoff": None, "phase": "season"}
     # The join page's "today" needs the week's first kickoff (panel review
     # PC-02): the build writes it when the schedule has it.
     write_week_json({"meta": {"season": "2026", "week": 6, "last_week": 18}}, out,
@@ -4512,8 +4512,12 @@ def test_how_it_works_asks_for_the_one_action_it_leads_to() -> None:
     before deciding. Its first CTA is setting up a team."""
     cta = HOW.split('<div class="cta">')[1].split("</div>")[0]
     first = re.search(r'<a([^>]*)href="([^"]+)"', cta)
-    assert first.group(2) == "join/index.html" and "ghost" not in first.group(1)
-    assert '<p class="headcta"><a class="btn" href="join/index.html">' in HOW
+    # Closed checkout is the static state (D15): the ask is the landing's
+    # email capture until CHECKOUT_OPEN turns it into setting up a team.
+    assert first.group(2) in ("join/index.html", "index.html#watch-form") \
+        and "ghost" not in first.group(1)
+    assert re.search(r'<p class="headcta"><a class="btn" href="(?:join/index\.html|'
+                     r'index\.html#watch-form)"', HOW)
 
 
 def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() -> None:
@@ -4716,7 +4720,7 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
             "spare for a co-manager. Seats go to the managers who confirm theirs first") in lp
     assert "and each gets the report, while your league's seats last." in lp
     assert ("Your League Pass covers your own team, so you still get one report a week, not "
-            "two. Your other subscription doesn't stop on its own") in lp
+            "two. Buying it doesn't cancel or refund your other subscription") in lp
     for page in (lp, prose(THANKS)):
         assert "the day they confirm their seat (we email them a button)" in page
         assert "the day they claim their seat" not in page

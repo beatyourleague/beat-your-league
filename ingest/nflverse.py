@@ -51,7 +51,8 @@ RELEASE = ("https://github.com/nflverse/nflverse-data/releases/download/"
 
 # RULE N1. Rendered on every report and every public page.
 ATTRIBUTION = ("NFL data: nflverse (nflverse-data), CC-BY-4.0. "
-               "Aggregated and scored to your league's settings by us.")
+               "Aggregated and scored by us under the scoring you chose "
+               "(full PPR, half PPR or standard).")
 
 # A completed season never changes, so it is cached forever. The live season is
 # revalidated on the same 6h window the rest of the ingest layer uses — nflverse
