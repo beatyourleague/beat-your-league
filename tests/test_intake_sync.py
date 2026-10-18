@@ -73,7 +73,10 @@ def stripe(monkeypatch):
     monkeypatch.setattr(intake, "_stripe_post",
                         lambda url, key, form: state["posts"].append((url, form)) or {})
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.delenv("STRIPE_PAYMENT_LINKS", raising=False)
+    # D17: a payment is attributed only through a mapped link, so the fake
+    # account has the map a launched one has.
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS",
+                       f"s:{SEASON_LINK},m:{MONTHLY_LINK},p:{PASS_LINK}")
     return state
 
 
@@ -186,13 +189,16 @@ def test_the_plan_comes_from_the_link_that_took_the_money(tmp_path, stripe,
     assert len(load_rosters(tmp_path / intake.REGISTRY_NAME)) == 1
 
 
-def test_with_no_map_configured_nothing_grants_a_pass(tmp_path, stripe,
-                                                      directory, capsys) -> None:
+def test_with_no_map_configured_nothing_grants_a_pass(tmp_path, stripe, directory,
+                                                      capsys, monkeypatch) -> None:
     """Fail closed. An unconfigured map is an operator problem, and the run says
     which case it was rather than quietly honouring the claim."""
+    monkeypatch.delenv("STRIPE_PAYMENT_LINKS", raising=False)
     stripe["sessions"] = [_session(PASS_REF)]
     _run(tmp_path)
-    assert "no plan map is configured" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "PAID-UNATTRIBUTED" in err and "STRIPE_PAYMENT_LINKS is not set" in err
+    assert _registry(tmp_path) == [], "an unmapped payment was recorded as a plan"
 
 
 def test_a_registry_row_is_never_written_as_a_seat(tmp_path, stripe, directory,

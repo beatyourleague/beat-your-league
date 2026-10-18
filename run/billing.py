@@ -15,36 +15,36 @@ call was a read plus one customer-metadata write. So in February a monthly
 subscriber would have been charged for a product that sends nothing,
 which is precisely the forgot-to-cancel pattern PLAN §4 bans outright.
 
-`cancel_at` is the primitive. It takes an instant and it never refunds.
-`cancel_at_period_end` is the wrong shape — it stops at whatever billing
-boundary happens to come next, which is an arbitrary month.
+**What the subscriber is charged (D1, Oct 18 2026).** Monthly bills on the
+anniversary of the purchase, and billing stops on its own AFTER THE SEASON'S
+LAST WEEKLY REPORT: the last charge is the month that report falls in. No
+charge ever starts a period with no weekly report in it, there is no part-month
+stub, and nothing is charged after the season. Mechanically: a monthly
+subscription is stamped ``cancel_at_period_end`` only once its CURRENT period
+ends after the season's last weekly send — that is its final paid period — and
+until then it carries nothing, so the billing page keeps its normal Cancel
+button.
 
-**What the subscriber is actually charged, stated precisely, because an earlier
-version of this docstring rounded it off in our favour.** Two cases:
+That replaced a ``cancel_at`` written months ahead (the last send plus a retry
+week), which was wrong twice over, both reproduced in the promises audit:
 
-- The stop is MORE than a period away (the ordinary case — bought in September,
-  season ends in January). Stripe leaves the cycle alone until the subscription
-  renews into the period containing the stop, then shortens that period and
-  prorates the invoice down. The last charge really is for the days served.
-- The stop lands INSIDE a period already paid for (bought late in the season,
-  or a stop date that moves). `apply_stop` sends `proration_behavior=none`
-  there, so no credit is raised and the subscriber has paid a full month for a
-  period cut short. That is not a rounding error we should describe as
-  proration: it is the honest cost of the rule, and site/terms.html says so in
-  the buyer's own words rather than leaving them to discover it.
+- Stripe's billing page treats a subscription carrying a ``cancel_at`` as
+  already cancelled — "Cancels on <date>", a Reactivate button and NO Cancel
+  button — so from the day after purchase a monthly subscriber could not stop
+  the November and December charges themselves (LEGAL-33/34/38).
+- The date sat three days after the last game, so a billing day of Jan 11-12
+  renewed into a prorated stub for days after the season (LEGAL-31, EMAILS-94).
 
-The one case worth naming: somebody who subscribes monthly in the last days of
-a season pays a full month for the one or two files left in it. The remedy is
-not to prorate — it is not to sell them a month that is nearly over.
-
-Four rules, each bought with a reproduced failure in review:
+Rules, each bought with a reproduced failure in review:
 
 RULE B1 — NEVER DELETE, NEVER GUESS A SEASON. `run/solo.py:current_season`
 answers the season that just ENDED once the next schedule is unpublished (its
 own docstring concedes the fallback), which is right for "which season is this
-report about" and catastrophic here: for the ~4 months of that gap every stop
-date computes into the past. An earlier design cancelled those immediately.
-`stop_for` refuses instead — a missing stop date is reported, never acted on.
+report about" and catastrophic here. `final_send` answers only a season whose
+last game has not been played, and when there is none — or the schedule cannot
+be read — the run REPORTS any monthly subscription still billing and acts on
+none of them. A missing date is a problem to raise, never a licence to end
+somebody's subscription.
 
 RULE B2 — THE PLAN COMES FROM THE PRICE. The interval on the subscription's own
 price decides, never our `plan` field and never a ref: `$39/year` and `$99/year`
@@ -52,17 +52,23 @@ must renew, and a bug that reads a claim rather than the price would cancel
 them. Same reasoning as STRIPE_PAYMENT_LINKS being authoritative over a ref
 prefix. `run/renewals.py` already reads intervals this way.
 
-RULE B3 — LATE, NEVER EARLY. A fired `cancel_at` cannot be undone; the customer
-needs a new subscription and a new payment. Cutting somebody off a day early
-loses a report they paid for and is unrecoverable, while being a week late costs
-a prorated stub. So the stop is derived from the SEND CALENDAR — the last
-Tuesday that actually mails week 18, plus a full retry Tuesday — rather than
-from "the last game is a Sunday", which is true of 24 of 28 cached seasons and
-not a rule.
+RULE B3 — THE FINAL PERIOD, AND NOT ONE DAY BEFORE IT. The stop is written only
+when the subscription's current period ends after the last weekly send is DUE
+(the Tuesday run's scheduled minute, `run.watchdog.tuesday_due_at`, of the
+first Tuesday `current_week` answers the last week — derived from the send
+calendar, not from "the finale is a Sunday", which is true of 24 of 28 cached
+seasons and is not a rule). A period that ends before that instant renews into
+the period the last report falls in, which is the month the subscriber is
+owed; one that ends after it would renew into a month with no report. Written
+any earlier, the stop takes the Cancel button away (above).
 
 RULE B4 — OUR SUBSCRIPTIONS ONLY. Scoped to customers carrying `byl_roster_ref`.
 A sweep over every non-yearly subscription in the account would attach a
-season-end cancel date to anything else ever sold from it.
+season-end stop to anything else ever sold from it.
+
+RULE B5 — A CANCEL ALREADY ON THE SUBSCRIPTION IS DONE. One the customer set in
+the portal (Stripe stores it as `cancel_at`), one a human set in the Dashboard,
+or one we set: each already ends the billing, and none is overwritten.
 
 Dry by default like every other sender here (`run/renewals.py --send`): this is
 the first money-mutating call in the repo, and a misconfigured cron must not
@@ -99,8 +105,8 @@ CACHE_DIR = REPO_ROOT / "data" / "raw" / "nflverse"
 # The customer metadata run/intake.py stamps on every roster purchase. RULE B4.
 ROSTER_METADATA_KEY = "byl_roster_ref"
 
-# Stamped alongside the cancel date so a later reader can tell OUR scheduled
-# stop from one a human set in the Dashboard.
+# Stamped alongside the stop so a later reader can tell OUR end-of-season stop
+# from a cancellation the customer made: the period end it stops at.
 STOP_METADATA_KEY = "byl_offseason_stop"
 
 # Yearly plans renew. Everything else is the monthly-shaped tier this stops.
@@ -115,11 +121,6 @@ WRITABLE = ("active", "trialing", "past_due")
 # subscription resumes billing on its own, so it needs saying out loud rather
 # than passing silently through a filter.
 REPORTABLE = ("paused", "unpaid")
-
-# RULE B3. One whole extra Tuesday past the last send, so both cron arms of the
-# final week and both arms of the following week's retry have run before the
-# subscription ends.
-RETRY_DAYS = 8
 
 NOT_CONFIGURED = 2
 
@@ -169,22 +170,25 @@ def last_send(cache_dir: Path, season: str, *,
     return None
 
 
-def stop_for(cache_dir: Path, today: date | None = None, *,
-             live: bool = False) -> tuple[datetime | None, str | None]:
-    """(the instant monthly billing must stop, the season it belongs to).
+def final_send(cache_dir: Path, today: date | None = None, *,
+               live: bool = False) -> tuple[datetime | None, str | None]:
+    """(the instant the season's LAST weekly report is due, that season).
 
     The season is the earliest one whose last game has NOT been played — a
     season still to be served. RULE B1: when there is no such season the answer
     is (None, None), which the caller reports and acts on in no way whatsoever.
-    Reaching for `current_season` here would answer the season that just ended
-    and put every stop date in the past.
+    Reaching for `current_season` here would answer the season that just ended.
+
+    The instant may already be past (the days between the last report and the
+    last game): every monthly subscription's current period then ends after
+    it, which is exactly right — none of them may renew again.
 
     Fails closed on every data problem. `_schedule` reaches `ingest.nflverse`,
     whose `NflverseError` is NOT a subclass of `SoloError` — verified — so an
     outage or a cold cache raises a class the caller's `except SoloError` would
-    not have caught, and a crash here would take the whole intake run down
-    before anybody's report was built or mailed.
+    not have caught.
     """
+    from run.watchdog import tuesday_due_at
     when = today or datetime.now(timezone.utc).date()
     try:
         ends = season_ends(cache_dir, live=live)
@@ -200,14 +204,11 @@ def stop_for(cache_dir: Path, today: date | None = None, *,
         return None, None
     if send is None:
         return None, None
-    at = datetime.combine(send + timedelta(days=RETRY_DAYS),
-                          datetime.min.time(), tzinfo=timezone.utc)
-    # Compared as INSTANTS, not dates: a caller-supplied `today` from another
-    # zone, or a run crossing midnight UTC, can otherwise pass a timestamp that
-    # is already in the past — the exact case this guard exists for.
-    if at <= datetime.now(timezone.utc):
-        return None, season
-    return at, season
+    return tuesday_due_at(send), season
+
+
+# run/economics.py models what a monthly buyer pays from this date.
+stop_for = final_send
 
 
 # --------------------------------------------------------------------- #
@@ -228,26 +229,6 @@ def _period_end(subscription: Mapping[str, Any]) -> int | None:
         if isinstance(value, int):
             return value
     return None
-
-
-def our_stamp(subscription: Mapping[str, Any]) -> int | None:
-    """The stop instant WE wrote on this subscription, if we wrote one.
-
-    This is the whole reason the stamp exists — telling our own computed date
-    from one a human set in the Dashboard, or one the customer set through the
-    portal. It was written and never read: `needs_stop` branched on `cancel_at`
-    alone, so a date this module had written itself was reported as "somebody
-    set this by hand" and left frozen. Harmless while the calendar never moves;
-    the moment a schedule shifts or RETRY_DAYS changes, every subscription
-    keeps the old date forever and the run says so every day.
-    """
-    metadata = subscription.get("metadata")
-    if not isinstance(metadata, dict):
-        return None
-    try:
-        return int(str(metadata.get(STOP_METADATA_KEY)))
-    except (TypeError, ValueError):
-        return None
 
 
 def _already_stopping(subscription: Mapping[str, Any]) -> bool:
@@ -297,16 +278,17 @@ def load_subscriptions(api_key: str) -> list[dict]:
 # deciding
 # --------------------------------------------------------------------- #
 
-def needs_stop(subscriptions: Iterable[Mapping[str, Any]], at: datetime,
+def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
                ) -> tuple[list[dict], list[str]]:
-    """(the subscriptions to stop, things worth saying out loud).
+    """(the subscriptions in their final paid period, things worth saying out
+    loud), against ``final`` — the instant the season's last report is due.
 
     Everything the filter drops is dropped for a stated reason, and the two
     live-but-untouched statuses are REPORTED rather than skipped in silence: a
-    paused subscription starts billing again by itself, so a stop date it never
+    paused subscription starts billing again by itself, so a stop it never
     received is a charge nobody is expecting.
     """
-    target = int(at.timestamp())
+    cutoff = int(final.timestamp())
     due: list[dict] = []
     notes: list[str] = []
     for subscription in subscriptions:
@@ -314,20 +296,19 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], at: datetime,
             continue
         interval = _interval(subscription)
         # RULE B2 FIRST, before status is ever considered. A yearly price may
-        # never receive a stop date, so no state it is ever in is this module's
+        # never receive a stop, so no state it is ever in is this module's
         # business — and checking status first meant a $39 pass sitting in
         # Stripe's `unpaid` dunning end-state produced a note, which fails the
         # run, which files a bug issue, EVERY DAY, about a subscription there is
-        # by definition nothing to do about. An alarm that fires daily for
-        # nothing is how the real one gets ignored.
+        # by definition nothing to do about.
         if interval == YEARLY:
             continue
         status = subscription.get("status")
         if status in REPORTABLE:
             notes.append(
                 f"subscription {subscription.get('id')} is {status} and was not "
-                f"given a stop date — Stripe resumes billing a {status} "
-                f"subscription without asking us, so this one needs a human")
+                f"given a stop — Stripe resumes billing a {status} subscription "
+                f"without asking us, so this one needs a human")
             continue
         if status not in WRITABLE:
             continue
@@ -335,49 +316,38 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], at: datetime,
             notes.append(f"subscription {subscription.get('id')} has no readable "
                          f"billing interval — left alone rather than guessed at")
             continue
-        if subscription.get("cancel_at_period_end"):
-            continue                             # already ending; leave it
-        existing = subscription.get("cancel_at")
-        if isinstance(existing, int):
-            if existing == target:
-                continue                         # idempotent: nothing to do
-            if our_stamp(subscription) == existing:
-                # OUR date, and the calendar has moved under it. Correcting it
-                # is the point of the stamp; leaving it would keep a stop date
-                # computed against a schedule that no longer applies.
-                due.append(dict(subscription))
-            else:
-                notes.append(
-                    f"subscription {subscription.get('id')} already stops at "
-                    f"{datetime.fromtimestamp(existing, timezone.utc):%Y-%m-%d}, "
-                    f"not {at:%Y-%m-%d}, and we did not set it — left as it "
-                    f"stands, since a date somebody chose outranks a computed "
-                    f"one")
+        if _already_stopping(subscription):
+            continue                             # RULE B5: already ending
+        period_end = _period_end(subscription)
+        if period_end is None:
+            notes.append(f"subscription {subscription.get('id')} has no readable "
+                         f"period end — left alone rather than guessed at")
             continue
-        due.append(dict(subscription))
+        # RULE B3. Ends before the last report is due: the next renewal starts
+        # the period that report falls in, which is owed. Ends after it: this
+        # is the final paid period, and the next renewal would have no report.
+        if period_end > cutoff:
+            due.append(dict(subscription))
     return due, notes
 
 
-def apply_stop(api_key: str, subscription: Mapping[str, Any], at: datetime,
-               ) -> None:
-    """One `cancel_at` write.
+def apply_stop(api_key: str, subscription: Mapping[str, Any]) -> None:
+    """One write: end the subscription when the period already paid for ends.
 
-    `proration_behavior=none` is sent ONLY when the stop lands inside the period
-    already running, which is the one case where Stripe would otherwise raise a
-    credit. Outside it Stripe documents that prorations cannot be disabled, and
-    sending the parameter anyway would be an untested guess on the one field
-    that decides whether the call succeeds at all.
+    `cancel_at_period_end` never refunds, never prorates and never charges:
+    the subscriber keeps every report in the period they paid for, and there
+    is no further charge. Written only in the final period (RULE B3), it is
+    the state Stripe's billing page shows as "Cancels on <date>" — true then,
+    because nothing more will be billed.
     """
-    target = int(at.timestamp())
-    form = {"cancel_at": str(target),
-            f"metadata[{STOP_METADATA_KEY}]": str(target)}
+    form = {"cancel_at_period_end": "true"}
     period_end = _period_end(subscription)
-    if isinstance(period_end, int) and target <= period_end:
-        form["proration_behavior"] = "none"
+    if isinstance(period_end, int):
+        form[f"metadata[{STOP_METADATA_KEY}]"] = str(period_end)
     _stripe_post(
         f"{SUBSCRIPTIONS_API}/{urllib.parse.quote(str(subscription.get('id')))}",
         api_key, form,
-        what="scheduling the end-of-season stop on a subscription",
+        what="ending a monthly subscription after its final paid period",
         needs="WRITE access to Subscriptions")
 
 
@@ -389,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=CACHE_DIR)
     parser.add_argument("--send", action="store_true",
-                        help="actually write the stop dates to Stripe")
+                        help="actually end final-period subscriptions in Stripe")
     parser.add_argument("--today", type=date.fromisoformat, default=None,
                         help="pretend it is this date (testing)")
     args = parser.parse_args(argv)
@@ -403,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
               "expected until checkout opens.", file=sys.stderr)
         return NOT_CONFIGURED
 
-    at, season = stop_for(Path(args.cache), args.today)
+    at, season = final_send(Path(args.cache), args.today, live=args.today is None)
 
     line = "=" * 62
     print(f"\n{line}\nOFFSEASON BILLING STOP"
@@ -425,10 +395,9 @@ def main(argv: list[str] | None = None) -> int:
                if _interval(s) not in (None, YEARLY)
                and s.get("status") in WRITABLE + REPORTABLE]
     # The alarm population, and it must agree with `needs_stop` — a subscription
-    # already carrying a stop date is not "billing with nothing to stop it".
-    # Without this the last days of every season go red about a date we set
-    # ourselves: the 2026 finale is 2027-01-10 and the stop is 2027-01-13, so on
-    # the 11th and 12th no season satisfies `ends >= today` and `at` is None.
+    # already ending is not "billing with nothing to stop it". In-season every
+    # monthly subscription is stamped in its final period, so once the season
+    # is over this population is empty unless something went wrong.
     unstopped = [s for s in monthly if not _already_stopping(s)]
 
     if at is None:
@@ -436,23 +405,24 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly, "
               f"{len(monthly) - len(unstopped)} already stopping")
         if unstopped:
-            print(f"NO STOP DATE: {len(unstopped)} monthly subscription(s) are "
-                  f"billing with nothing scheduled to stop them, and no season "
+            print(f"NO SEASON TO SERVE: {len(unstopped)} monthly subscription(s) are "
+                  f"billing with nothing set to stop them, and no season "
                   f"still to be played could be read from the schedule"
                   + (f" (the most recent is {season})." if season else ".")
                   + " Nothing was cancelled; this needs a human.",
                   file=sys.stderr)
             print(line)
             return 1
-        print("Nothing billing without a stop date, and no season still to be "
+        print("Nothing billing without a stop, and no season still to be "
               "played — nothing to do.")
         print(line)
         return 0
 
     due, notes = needs_stop(subscriptions, at)
-    print(f"Season {season}: monthly billing stops {at:%Y-%m-%d %H:%M} UTC")
+    print(f"Season {season}: the last weekly report is due {at:%Y-%m-%d %H:%M} "
+          f"UTC; a monthly period ending after it is the final one")
     print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly, "
-          f"{len(due)} needing a stop date")
+          f"{len(due)} in their final paid period")
 
     failures: list[str] = []
     for subscription in due:
@@ -461,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  [would set] {label}")
             continue
         try:
-            apply_stop(api_key, subscription, at)
+            apply_stop(api_key, subscription)
             print(f"  [set] {label}")
         except SubscriptionError as exc:
             failures.append(f"{label}: {exc}")
@@ -472,12 +442,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  FAILED {failure}", file=sys.stderr)
 
     if not args.send and due:
-        print(f"(dry run — nothing written. Pass --send to schedule {len(due)} "
-              f"stop date(s).)")
+        print(f"(dry run — nothing written. Pass --send to end {len(due)} "
+              f"subscription(s) at the end of their final paid period.)")
     if failures:
-        print(f"{len(failures)} subscription(s) are still billing with no stop "
-              f"date. Every one of them will be charged through the offseason "
-              f"against a promise on five surfaces.", file=sys.stderr)
+        print(f"{len(failures)} subscription(s) in their final period could "
+              f"not be stopped. Each renews into a month with no report unless "
+              f"a later run succeeds before its period ends.", file=sys.stderr)
     print(line)
     return 1 if (failures or notes) else 0
 

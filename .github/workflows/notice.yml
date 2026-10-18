@@ -1,0 +1,87 @@
+# The terms / privacy change notice (run/notice.py, D6).
+#
+# Both pages promise that a change which materially affects a subscriber is
+# emailed to them BEFORE it takes effect. Run this once per change, after the
+# new page is published and before its effective date: it mails every
+# subscriber and seat entitled today, one notice per mailbox, keyed in the send
+# log so a re-run sends nothing twice. Untick `send` for a dry run.
+name: change-notice
+
+on:
+  workflow_dispatch:
+    inputs:
+      page:
+        description: "Which page changed"
+        type: choice
+        options: [terms, privacy]
+      effective:
+        description: "The date the change takes effect, YYYY-MM-DD (must be after today)"
+        type: string
+        required: true
+      summary:
+        description: "What changes, in one or two plain sentences (sent as written)"
+        type: string
+        required: true
+      send:
+        description: "Actually send (unticked = dry run)"
+        type: boolean
+        default: false
+
+# The send log is shared with the daily sweep; one writer at a time.
+concurrency:
+  group: daily-intake
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # persist sent.jsonl, so a re-run never mails twice
+
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+      - name: Restore subscriber registry
+        uses: actions/cache/restore@v4
+        with:
+          path: data/registry
+          key: registry-${{ github.run_id }}
+          restore-keys: registry-
+      - name: Send the notice
+        env:
+          PAGE: ${{ github.event.inputs.page }}
+          EFFECTIVE: ${{ github.event.inputs.effective }}
+          SUMMARY: ${{ github.event.inputs.summary }}
+          SEND: ${{ github.event.inputs.send }}
+          STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
+          EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+          BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
+          SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
+        run: |
+          .venv/bin/python -m run.notice --page "$PAGE" --effective "$EFFECTIVE" \
+            --summary "$SUMMARY" $([ "$SEND" = "true" ] && echo --send)
+      - name: Persist the send log
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Change notice: send log"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push

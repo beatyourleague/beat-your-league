@@ -71,9 +71,16 @@ still open one. Make three new links and switch the old ones off.
    | Collect tax automatically | Off | Not registered for tax anywhere yet |
    | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
    | Include a free trial | Off | The refund window is the trial |
-   | Limit the number of payments | Off | `run/billing.py` ends monthly billing at season's end |
+   | Limit the number of payments | Off | `run/billing.py` ends each monthly subscription after its final paid period |
    | Promotion codes | Off | The founding rate is the discount |
    | After payment | Redirect to `https://beatyourleague.com/thanks.html` — **League Pass link only:** `https://beatyourleague.com/thanks.html?plan=pass` | |
+
+   Two account settings the links follow:
+   - **Settings → Payment methods → Link: Off.** With it on, the checkout shows "Link's
+     Terms" beside ours and offers to save the card with a third party.
+   - **Settings → Payments → Adaptive Pricing (local currency): Off.** Every price, renewal
+     amount and refund on our pages is in USD; a buyer shown euros or pounds would be charged
+     an amount no disclosure names, and renew at whatever the rate is next year.
 
 3. Copy each new link's URL and its `plink_` id. **Send me the three URLs** (not secret).
 4. **Settings → Business → Public details:** Terms of service URL
@@ -83,7 +90,9 @@ still open one. Make three new links and switch the old ones off.
    these print on receipts, so they decide whether you stay anonymous.
 
    **Settings → Billing → Customer portal:** **Cancel subscriptions** allowed, **Cancellation
-   mode: At end of billing period**.
+   mode: At end of billing period**, proration **none**, **Cancellation reason: Off** (the
+   thanks page promises we don't ask why), and no retention coupon. `make launch-check` reads
+   these back once `STRIPE_API_KEY` can read the portal settings.
 
    **Settings → Business → Branding:** icon `site/brand/icon.png`, logo
    `site/brand/logo.png`, brand color `#101E33`, accent `#B3402F` (not the gold: unreadable
@@ -137,7 +146,8 @@ secret**, once per row, names exactly as written:
 | `STRIPE_PAYMENT_LINKS` | `s:<new season plink id>,m:<new monthly plink id>,p:<new pass plink id>` |
 | `EMAIL_PROVIDER` | `resend` |
 | `EMAIL_FROM` | `Beat Your League <reports@beatyourleague.com>` |
-| `EMAIL_REPLY_TO` | `hello@beatyourleague.com` |
+| `EMAIL_REPLY_TO` | `hello@beatyourleague.com` (optional: unset means hello@ anyway) |
+| `LOG_SECRET` | a long random value: `openssl rand -hex 32`. **Never change it** — it keys every code in the public send log and stop list, and a new one makes the stop list stop nothing. Keep a copy in your password manager; the stop list and privacy requests need it in your shell too |
 | `RESEND_API_KEY` | from step 2 |
 | `SITE_URL` | `https://beatyourleague.com` |
 | `BILLING_PORTAL_URL` | `https://billing.stripe.com/p/login/cNi4gB3Nx3zkcXt1IKaMU00` |
@@ -150,11 +160,12 @@ holds subscribers' emails and rosters.
 
 `github-actions-crons` needs exactly: Checkout Sessions **Read**, Customers **Write**,
 Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
-stops monthly billing at season's end.
+ends each monthly subscription when its final paid period ends (the month the season's last
+weekly report falls in).
 
 Keys go only into these boxes — never into chat, a note or a file.
 
-**Tell me when all nine are in.** With step 5's Worker live too, I put the new links on the
+**Tell me when all ten are in.** With step 5's Worker live too, I put the new links on the
 join page and switch the pricing buttons on; it's live on the next push.
 
 ## 4. The proving run (~1 hour)
@@ -174,6 +185,13 @@ Nobody else's money moves until you've watched your own go all the way through.
      line, or "View entire message". Tell me what you see.
 4. **Tell me both arrived.** I turn on `CHECKOUT_CAN_COMPLETE` (step 6).
 5. **Next Tuesday:** the new week's report by about 8:30am ET, weekly-report green in Actions.
+6. **The monthly billing page, in test mode (15 min).** Your purchase is a season pass, which
+   never shows the monthly path. In Stripe **test** mode: buy the monthly link with a test
+   card (4242 4242 4242 4242), then open the test billing page. It must show **Cancel plan**
+   — not "Cancels on…" and Reactivate. Then, with the test key in your shell,
+   `.venv/bin/python -m run.billing --today 2026-12-20` (dry): it lists the subscription as
+   in its final paid period only when that period ends after Jan 5, 2027 12:17 UTC. Press
+   Cancel on the test page and confirm "no further charges".
 
 Then decide about your subscription (section 10). A refund doesn't return Stripe's fee: about
 $2.72 on a $39 pass from a Canadian account, or about $1.94 with a USD payout account.
@@ -246,6 +264,7 @@ nothing: every row is checked before it reaches the subscriber list.
      export EMAIL_PROVIDER=resend EMAIL_FROM='Beat Your League <reports@beatyourleague.com>'
      export SITE_URL=https://beatyourleague.com FORM_ENDPOINT=https://forms.beatyourleague.com
      export SENDER_POSTAL_ADDRESS='<the mailbox address>'
+     read -s LOG_SECRET && export LOG_SECRET
      ```
    - Preview both lists, then send both:
      ```bash
@@ -254,7 +273,9 @@ nothing: every row is checked before it reaches the subscriber list.
      ```
      Anyone on both lists gets one email.
    - **Commit and push `data/processed/sent.jsonl`.** The crons read the committed copy; it
-     is what stops a second send. Then delete `signups.csv`.
+     is what stops a second send. Then delete `signups.csv`, **and delete the "Tell me when it
+     opens" emails in Gmail** (and empty Gmail's Bin): the privacy policy says waitlist
+     sign-ups expire, and before the Worker those sign-ups were emails that never would.
 
 ## 7. Selling
 
@@ -346,11 +367,35 @@ names and posts nothing. The next hourly intake applies it.
 seat's unsubscribe button arrives with the subject "stop"):
 - If they **pay**, reply with the billing-page link — stopping a payer's emails while
   billing continues is the one wrong answer.
-- Otherwise run this, then commit and push within 10 business days:
+- Otherwise run this (with `LOG_SECRET` in your shell — the list holds keyed codes), then
+  commit and push within 10 business days:
   ```bash
   .venv/bin/python -m run.suppress their@example.com
   ```
   Someone who signs up again: `.venv/bin/python -m run.suppress --remove their@example.com`.
+
+**Two subscriptions on one address, and they can't see the older one.** Stripe's billing
+page opens only the NEWEST customer for an email, so someone with two teams, or a season pass
+then a League Pass, can't reach the first one there. When they reply: Customers → search the
+email → the older subscription → **Cancel subscription → At period end**, and tell them it's
+done. Same day; never ask them to do it themselves.
+
+**A privacy request** (to hello@: what do you have, correct it, export it, delete it). Answer
+within 30 days:
+1. `make privacy-code EMAIL=their@example.com` on your Mac (needs `LOG_SECRET`). It prints a
+   12-character code. Never put the address itself into GitHub.
+2. Actions → **privacy-request** → Run workflow → action **show**, **export** or **delete**,
+   and the code. The result lands in hello@, never in the log. A **correction** to a roster is
+   `make roster-update`; to an email address, cancel and re-buy, or ask me.
+3. For **delete**: the email lists what's left by hand — the Stripe customer (cancel any live
+   subscription first, then delete the customer), form rows the Worker couldn't delete, and the
+   hello@ threads. Run **show** the next day: every count should be 0. Reply to them saying
+   what was done.
+
+**Changing the terms or the privacy policy.** Publish the new page with a new date (and the
+new `TERMS_VERSION` / `TERMS_HISTORY` entry, which I add), then before the date it takes
+effect: Actions → **change-notice** → page, effective date, a one-or-two-sentence summary of
+what changes; run it once unticked (dry), then ticked. Everyone entitled today gets one email.
 
 **How's demand?** Pull, then `make stats`: counts only (waitlist, free-report requests,
 roster updates, seat claims, sends by week, paid signups by `?via=` tag), never an address.
@@ -371,8 +416,9 @@ next. After the last game every weekly job exits quietly until the next schedule
    kicked off, they have a week from that send — ask me and I'll check the send log.
 2. **Their first refund?** Search their email under **Customers**. One per person (one per
    league for a League Pass).
-3. **Issue it:** their subscription → **Cancel subscription → Immediately**, then refund the
-   last payment in full. The reports stop by themselves.
+3. **Issue it:** their subscription → **Cancel subscription → Immediately**, then refund
+   **every paid invoice on that subscription** in full (a monthly buyer can have paid twice
+   inside the window). The reports stop by themselves.
 
 | Week | First kickoff (ET) |
 |---|---|
@@ -399,15 +445,12 @@ From the published NFL schedule the product reads. A flexed game can move a row.
 under 25 subscribers on Oct 11 means stop building product — were met by default, not by a
 verdict from buyers. The proposal for what replaces it is the first decision below.
 
-**By Jan 5, 2027 (the last weekly report): the monthly January stub.** As built,
-`run/billing.py` stops monthly billing on Jan 13 — eight days after the last weekly report
-(RULE B3, late never early). A monthly buyer whose billing day falls Jan 6–12 is charged a
-part-month after their last report; on Jan 11–12 that is one or two days ($0.48–$0.97) after
-the last game, which the card's "billing stops when the season does" and the Stripe button's
-"we never charge through the offseason" do not disclose. This is recorded as a decision, not
-a default: either adopt section 10's "January part-month charges" recommendation before Jan 5,
-or keep the buffer and add one line to terms §3 and the monthly card naming it. Nothing is
-charged under it before Jan 6.
+**The monthly January stub — built away (Oct 18, 2026).** The recommendation recorded here is
+now how `run/billing.py` works: a monthly subscription is ended at the close of its final paid
+period — the one the season's last weekly report (Tue Jan 5, 2027) falls in — so no charge
+starts a period with no report in it and there is no part-month after the season. Until its
+final period a monthly plan carries nothing, so its billing page keeps the normal Cancel
+button. Nothing to decide.
 
 ## 10. Decisions waiting on you
 
@@ -439,16 +482,6 @@ Pages → Create → Pages → connect the repo, no build command, output `site`
 `site/*` (so the crons' hourly commits don't rebuild it — the free plan allows 500 builds a
 month); add `beatyourleague.com` as its custom domain; then I retire `pages.yml` and you
 switch GitHub Pages off and the repo to private.
-
-**January part-month charges** (dated in section 9: decide by Jan 5). Monthly billing stops
-Jan 13, eight days after the last weekly report so a failed Tuesday can retry. A monthly
-buyer whose billing day is Jan 6–12 pays a part-month ($0.48–$3.38) after their last report.
-Jan 6–10 is billed for the month the season ends in, which terms §3 states; Jan 11–12 pays
-one or two days ($0.48–$0.97) that fall after the last game, which the card ("billing stops
-when the season does") and the Stripe button text ("we never charge through the offseason")
-do not disclose. *Recommend:* never start a period that contains no weekly report — cancel
-those subscriptions at the end of the period already paid (the Saturday check rides it). A
-small change in `run/billing.py`; then the card is true as written.
 
 **A list you own.** Every lead today gets one email, ever, so nobody from 2026 can be reached
 in August 2027. *Recommend:* one unticked box — "Email me when the 2027 season opens" — on the

@@ -31,6 +31,7 @@ import argparse
 import os
 import sys
 import urllib.parse
+from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -152,6 +153,14 @@ def _first_item(subscription: dict) -> dict | None:
     return None
 
 
+def notice_key(renewal: Renewal) -> str:
+    """One notice per subscriber per renewal DATE, keyed on a code that cannot
+    be matched back to the address without LOG_SECRET (run/digest.py). The
+    "renewal-" prefix is what the stop list never blocks (run/suppress.py)."""
+    from run.digest import address
+    return f"renewal-{renewal.renews_on.isoformat()}-{address(renewal.email, 10)}"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--send", action="store_true",
@@ -184,11 +193,21 @@ def main(argv: list[str] | None = None) -> int:
         print(line)
         return 1 if problems else 0
 
-    messages = [renewal_message(renewal) for renewal in renewals]
+    from run.digest import DigestError
+    try:
+        messages = [replace(renewal_message(renewal), key=notice_key(renewal))
+                    for renewal in renewals]
+    except DigestError as exc:
+        # The send log is public; without LOG_SECRET there is no key that
+        # keeps the address out of it, so nothing is sent (exit 1: this
+        # notice is legally owed, and its absence must be seen).
+        print(f"  ! {exc}", file=sys.stderr)
+        print(line)
+        return 1
     if not args.send:
-        for renewal in renewals:
+        for renewal, message in zip(renewals, messages):
             print(f"  [dry] renews {renewal.renews_on.isoformat()} · "
-                  f"{renewal.amount} · {renewal.slug}")
+                  f"{renewal.amount} · {message.key}")
         print("(dry run — nothing sent, nothing logged. Pass --send.)")
         print(line)
         return 0

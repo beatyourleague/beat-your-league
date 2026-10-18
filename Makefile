@@ -204,13 +204,33 @@ og:
 brand:
 	$(PY) -m render.brand
 
-# Schedule the end-of-season stop on every monthly subscription. Preview first:
-# this is the only money-mutating call in the repo.
+# End monthly subscriptions in their final paid period (the one the season's
+# last weekly report falls in), so none renews into a month with no report.
+# Preview first: this is the only money-mutating call in the repo.
 billing-preview:
 	$(PY) -m run.billing
 
 billing:
 	$(PY) -m run.billing --send
+
+# One person's data (run/privacy.py). Make the keyed code HERE, never in CI:
+#   make privacy-code EMAIL=their@address      (needs LOG_SECRET in the shell)
+# then run the privacy-request workflow with that code, or locally:
+#   make privacy ACTION=show|export|delete CODE=<12 hex>   (mails hello@)
+.PHONY: privacy-code privacy notice-preview notice
+privacy-code:
+	$(PY) -m run.privacy code "$(EMAIL)"
+
+privacy:
+	$(PY) -m run.privacy $(ACTION) $(CODE) --send
+
+# The terms/privacy change notice, before the change takes effect:
+#   make notice-preview PAGE=terms EFFECTIVE=2026-11-01 SUMMARY="..."
+notice-preview:
+	$(PY) -m run.notice --page $(PAGE) --effective $(EFFECTIVE) --summary "$(SUMMARY)"
+
+notice:
+	$(PY) -m run.notice --page $(PAGE) --effective $(EFFECTIVE) --summary "$(SUMMARY)" --send
 
 # One pre-season file, for eyeballing it before a send. Takes a roster of
 # player ids; the real ones come from a subscriber's own ref at intake.

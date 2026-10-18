@@ -81,6 +81,9 @@ jobs:
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
+          # Keys every address-derived send-log code and the stop-list check
+          # (run/digest.py). Never rotated: rotating it orphans every code.
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

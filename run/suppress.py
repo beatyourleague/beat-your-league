@@ -20,10 +20,13 @@ operator is in this loop only where no money is.
 
 Rules:
 
-- **Digests, never addresses.** The file is committed to a public repo, so it
-  holds the same digest the free report's send-log key uses
-  (``run.trials.trial_key``): sha256 of the canonical address, 12 hex. One
-  mailbox is one entry however it is spelled — ``+tags`` and Gmail dots fold
+- **Keyed codes, never addresses.** The file is committed to a public repo,
+  so it holds the same code the free report's send-log key uses
+  (``run.trials.trial_key``): a keyed one-way code of the canonical address
+  (``run.digest`` — HMAC under ``LOG_SECRET``, 12 hex), which cannot be matched
+  back to an address without that key. A plain hash could: anybody who knew
+  an address could hash it and see it was here. One mailbox is one entry
+  however it is spelled — ``+tags`` and Gmail dots fold
   away first (``run.trials.canonical_email``), so "F.an+x@gmail.com" asking to
   stop also stops "fan@gmail.com".
 - **Checked before every send** (``run.delivery.send_all``), on every runner at
@@ -46,12 +49,11 @@ Rules:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import re
 import sys
 from pathlib import Path
 
-from run.trials import canonical_email
+from run.digest import DigestError, address as _keyed_address
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SUPPRESS_FILE = REPO_ROOT / "data" / "processed" / "suppressed.txt"
@@ -65,20 +67,27 @@ LEGALLY_OWED = ("renewal-",)
 _DIGEST = re.compile(r"^[0-9a-f]{12}$")
 HEADER = (
     "# The stop list: addresses that asked us to stop emailing them.\n"
-    "# One digest per line (sha256 of the canonical address, 12 hex) - never an\n"
-    "# address; this file is public. Add with `python -m run.suppress <email>`,\n"
+    "# One keyed code per line (HMAC of the canonical address under LOG_SECRET,\n"
+    "# 12 hex) - never an address; this file is public. Add with\n"
+    "# `python -m run.suppress <email>` (LOG_SECRET in your shell),\n"
     "# then commit it. Checked by run/delivery.send_all before every send.\n"
 )
 
 
 class SuppressionError(RuntimeError):
-    """The stop list exists and cannot be read. Carries no address."""
+    """The stop list exists and cannot be read, or LOG_SECRET is missing so
+    no address can be checked against it. Carries no address."""
 
 
 def address_digest(email: str) -> str:
-    """The digest the free report's send-log key carries (run.trials.trial_key),
-    so the two can never disagree about which mailbox an address is."""
-    return hashlib.sha256(canonical_email(email).encode("utf-8")).hexdigest()[:12]
+    """The keyed code the free report's send-log key carries
+    (run.trials.trial_key), so the two can never disagree about which mailbox
+    an address is. Raises SuppressionError without LOG_SECRET: a stop list
+    nobody can check is a stop list that stops nothing."""
+    try:
+        return _keyed_address(email)
+    except DigestError as exc:
+        raise SuppressionError(str(exc)) from None
 
 
 def load_suppressed(path: Path | None = None) -> frozenset[str]:

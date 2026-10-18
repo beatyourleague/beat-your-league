@@ -79,7 +79,8 @@ class PaidList:
     def entitles(self, subscriber) -> bool:
         """Is this subscriber entitled to this week's report?
 
-        Three routes, most durable first:
+        A paid row that names its own subscription(s) answers to those alone
+        (D2, below). Otherwise three routes, most durable first:
           1. their Stripe customer is paying (survives an email change);
           2. their league is covered by somebody's League Pass;
           3. the email on file is paying — the fallback for hand-added entries
@@ -87,6 +88,17 @@ class PaidList:
 
         A roster product League Pass SEAT answers to RULE E2 instead, below.
         """
+        own = tuple(getattr(subscriber, "subscription_ids", ()) or ())
+        if self.subscription_ids is not None and own:
+            # D2 — A PAID ROW LIVES ON ITS OWN SUBSCRIPTION(S). Route 1 asked
+            # "is this CUSTOMER paying", and route 3 "is this ADDRESS paying",
+            # so somebody with two teams who cancelled one kept getting the
+            # cancelled team's reports for as long as the other plan lasted
+            # (reproduced, LEGAL-41) — "then they stop on their own" was false.
+            # The row now names the subscription(s) that bought it (run/intake
+            # stamps them); it is entitled while one of THOSE is, and the
+            # customer/address routes below serve only rows that name none.
+            return any(sub in self.subscription_ids for sub in own)
         customer = getattr(subscriber, "stripe_customer_id", None)
         if customer and customer in self.customer_ids:
             return True

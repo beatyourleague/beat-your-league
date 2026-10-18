@@ -46,7 +46,18 @@ SENT_LOG = REPO_ROOT / "data" / "processed" / "sent.jsonl"
 DRY_OUTBOX = REPO_ROOT / "reports" / "outbox"
 
 DEFAULT_FROM = os.environ.get("EMAIL_FROM", "Beat Your League <reports@example.invalid>")
-DEFAULT_REPLY_TO = os.environ.get("EMAIL_REPLY_TO") or None
+# Every email carries a Reply-To. The emails promise "reply stop" and "reply
+# to any report", and the From address (reports@) is not an inbox anybody
+# reads — only hello@ forwards (LAUNCH.md). So a reply must land there even
+# when EMAIL_REPLY_TO was never set; it is read at send time, not import time.
+CONTACT_INBOX = "hello@beatyourleague.com"
+
+
+def reply_to_address() -> str:
+    return os.environ.get("EMAIL_REPLY_TO", "").strip() or CONTACT_INBOX
+
+
+DEFAULT_REPLY_TO = None
 
 
 class DeliveryError(RuntimeError):
@@ -350,25 +361,34 @@ def send_all(messages: list[Message], provider: Provider | None = None,
              suppress_file: Path | None = None) -> list[SendResult]:
     """Send each message once, and never to an address that asked us to stop.
     Never raises: failures come back as results."""
+    from run.digest import DigestError, secret as log_secret
     from run.suppress import (SuppressionError, is_suppressed, load_suppressed,
                               owed_anyway)
     provider = provider or build_provider()
+    reply_to = reply_to or reply_to_address()
     sent_log = sent_log or SENT_LOG
     # The stop list (run/suppress.py) is checked HERE, once, for every runner:
     # "you're off within 10 business days" is promised to League Pass seats
     # and the waitlist, and a check living in each runner is one runner short
     # the first time somebody adds a sender. Unreadable fails CLOSED — a late
     # Tuesday is recoverable; mailing somebody who asked us to stop is not.
+    #
+    # Checking an address against the list needs its keyed code, and so does
+    # every address-derived send-log key: without LOG_SECRET a real send
+    # REFUSES (run/digest.py). A dry run with an empty list checks nothing,
+    # so a local preview still works before the secret exists.
     try:
         stopped = load_suppressed(suppress_file)
-    except SuppressionError as exc:
+        if stopped or provider.name != DRY_PROVIDER:
+            log_secret()
+    except (SuppressionError, DigestError) as exc:
         return [SendResult(m, ok=False, detail=f"not sent: {exc}") for m in messages]
     already = set() if resend_anyway else load_sent(sent_log)
     results: list[SendResult] = []
     for message in messages:
         # Before the resend override and the send log: --resend re-mails a
         # week, it never re-mails somebody who said stop.
-        if is_suppressed(message.to, stopped) and not owed_anyway(message.key):
+        if stopped and is_suppressed(message.to, stopped) and not owed_anyway(message.key):
             results.append(SendResult(message, ok=True, detail=SUPPRESSED,
                                       skipped=True, suppressed=True))
             continue

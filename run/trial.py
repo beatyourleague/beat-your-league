@@ -30,7 +30,6 @@ report:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from pathlib import Path
 
@@ -86,8 +85,12 @@ def resolve_roster(text: str, directory) -> list[str]:
 def trial_key(email: str, ids: list[str], season: str, week: int) -> str:
     """One trial per roster+address per week. The digest keeps the address out
     of the committed send log, same rule as every other key."""
-    raw = email.strip().lower() + "|" + "|".join(sorted(ids))
-    return f"trial-{season}-w{week:02d}-{hashlib.sha256(raw.encode()).hexdigest()[:10]}"
+    from run.digest import keyed
+    from run.trials import canonical_email
+    raw = canonical_email(email) + "|" + "|".join(sorted(ids))
+    # Keyed under LOG_SECRET (run/digest.py): a plain hash of a public send
+    # log's line could be matched to an address by anybody who knew it.
+    return f"trial-{season}-w{week:02d}-{keyed(raw, 10)}"
 
 
 def trial_message(report: dict, email: str, ids: list[str], season: str,
@@ -158,7 +161,12 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    plain, message = trial_message(report, args.email, ids, data.season, data.week)
+    from run.digest import DigestError
+    try:
+        plain, message = trial_message(report, args.email, ids, data.season, data.week)
+    except DigestError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     try:
         provider = build_provider(None)

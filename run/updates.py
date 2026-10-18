@@ -704,7 +704,8 @@ def confirmed_updates(pending: Iterable[PendingRequest],
 
 def confirmation_key(request: PendingRequest) -> str:
     """Send-log key: ONE confirmation per request, ever, and no address in it."""
-    who = hashlib.sha256(request.email.encode("utf-8")).hexdigest()[:8]
+    from run.digest import address
+    who = address(request.email, 8)          # keyed (run/digest.py): the log is public
     return f"confirm-{who}-{hashlib.sha256(request.code.encode('utf-8')).hexdigest()[:10]}"
 
 
