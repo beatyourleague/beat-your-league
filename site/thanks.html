@@ -115,7 +115,8 @@
   </header>
   <main>
 
-    <div class="note"><b>Your first report is on its way — allow up to an hour.</b> It is built
+    <div class="note" id="first-note"><b>Your first report is on its way — it usually lands
+    within the hour.</b> It is built
     from the roster you just entered, so it is not a template we had sitting around. If it
     has not arrived after that, check your spam folder; marking it &quot;not spam&quot; once
     keeps every future report in your inbox.</div>
@@ -137,52 +138,61 @@
       page each manager enters it as the email the pass was bought with. It stays on this
       page.</label>
       <input type="email" id="pass-email" autocomplete="email" placeholder="you@example.com">
-      <p id="pass-chat">I got us the League Pass from Beat Your League: everyone gets their
-      own lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours
-      up here: https://beatyourleague.com/join/?pass=1 — where it asks for the email the pass
+      <p id="pass-chat">I got us the League Pass from Beat Your League: everyone who claims a
+      seat gets their own lineup report every Tuesday, built from their own roster. Nothing to
+      pay. Claim yours once, here: https://beatyourleague.com/join/?pass=1 — where it asks for the email the pass
       was bought with, enter <b id="pass-chat-email">[the email I paid with]</b>.</p>
       <button type="button" class="sharebtn" id="pass-copy">Send this to the group chat</button>
       <p class="small msg" id="pass-msg" role="status"></p>
       <p class="small">If your welcome email carries your league's own seat link, send that one
-      instead — it needs no address at all. Either way, each manager pastes their own roster,
-      and their first report lands the day they confirm their seat (we email them a button).</p>
+      instead — it needs no address at all. Bought a pass for more than one league? Send each
+      league its own seat link from that pass's welcome email — the general link can't tell
+      your leagues apart. Either way, each manager pastes their own roster, and their first
+      report lands the day they confirm their seat (we email them a button).</p>
     </div>
 
     <ol class="steps">
-      <li><b>Today</b>Your first report, built from the roster you just entered.</li>
+      <li id="step-today"><b>Today</b>Your first report, built from the roster you just entered.</li>
       <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
-      <li><b>Saturday, if needed</b>A short final check when injury news changes your lineup.</li>
+      <li><b>Saturday, if needed</b>A short final check when injury news changes your lineup,
+      or a starting spot still has nobody to fill it.</li>
     </ol>
 
     <h2>1. What arrives, and when</h2>
     <ul>
-      <li><b>Today:</b> your first report. Before the season starts that is your roster report —
+      <li id="what-today"><b>Today:</b> your first report. Before the season starts that is your roster report —
       every bye week on your team, last season&#x27;s numbers under your scoring with each
       player&#x27;s rank at his position, and the weeks your lineup cannot be filled. From
-      Week 2 on, join before that week&#x27;s first game and you get the current week&#x27;s
-      report instead; join after it, or in Week 1, and the roster report comes today, the
-      week&#x27;s report on Tuesday.</li>
+      Week 2 on, join at least an hour before that week&#x27;s first game and you get the
+      current week&#x27;s report instead; join later, or in Week 1, and the roster report
+      comes today, the week&#x27;s report on Tuesday.</li>
       <li><b>Every Tuesday morning after that:</b> the week&#x27;s report — the lineup we would
       set for your exact roster under your scoring, every close call decided, the odds
       wherever both players are playing, off the injury report and have enough games
       on record (not on team defenses), and a plain reason wherever there
       aren&#x27;t any.</li>
       <li><b>Saturday, only when it matters:</b> if Friday&#x27;s injury report changes
-      your lineup, a short final check tells you the swap. No news, no email.</li>
-      <li><b>A separate email in a moment:</b> a short receipt from us with your renewal
-      terms and the cancel link, to keep.</li>
+      your lineup, a short final check tells you the swap — and if a starting spot still
+      has nobody to fill it, it says so. Nothing to change, no email.</li>
+      <li><b>A separate email, usually within the hour:</b> a short receipt from us with
+      your renewal terms and the cancel link, to keep.</li>
     </ul>
 
     <h2>2. If your roster changes</h2>
-    <p>Rosters churn — that is the point of the waiver run. Reply to any report with your
-    updated roster and the next one follows it.</p>
+    <p>Rosters churn — that is the point of the waiver run. Use the roster link at the bottom
+    of any weekly report, or reply to one with your updated roster. We email you a button to
+    confirm; press it and your next report uses the new roster — and Saturday&#x27;s final
+    check too, if you press it by Friday night (ET).</p>
 
     <h2>3. Changed your mind</h2>
-    <p>Full refund, no questions, any time until your second weekly report's week kicks off —
+    <p>Full refund, no questions, any time until your second weekly report's week kicks off
+    (or a week after your last report, if the season ends first) —
     <span id="refund-limit">one per person</span> (<a href="terms.html#refunds">the exact terms</a>). And you can
     cancel yourself in about a minute from your billing page, whose link is at the
-    bottom of every report we send; <a href="terms.html#cancel">the steps are here</a>. We do
-    not ask why, and there is no retention call.</p>
+    bottom of every report we send; <a href="terms.html#cancel">the steps are here</a>. Stripe&#x27;s
+    page may offer an optional reason, which you can skip, and nobody contacts you to change
+    your mind. Two subscriptions on one address? The billing page shows only the newest —
+    reply to any report and we cancel the other one for you.</p>
 
     <h2>4. Anything else</h2>
     <p>Email <b>hello@beatyourleague.com</b> — refunds, deletion, or anything that looks
@@ -235,6 +245,38 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
     shareLine(line.textContent.replace(/\s+/g, " ").trim(), line, msg);
   });
 }
+// D9: site/week.json's phase. "Today" holds only while there is a report to
+// send — once the season is over (phase "over", or past the last week's
+// report day, ET) nothing goes out until next season, and the page says so
+// rather than promising a report today. A week.json that can't be read leaves
+// the page as it is.
+(function () {
+  try {
+    if (!window.fetch) return;
+    fetch("week.json", { cache: "no-cache",
+      signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!w || typeof w !== "object") return;
+        let over = w.phase === "over";
+        if (!over && (w.phase === undefined || w.phase === "season") &&
+            Number.isInteger(w.week) && Number.isInteger(w.last_week) &&
+            w.week >= w.last_week && /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) {
+          const [y, m, d] = w.lands_on.split("-").map(Number);
+          over = Date.now() >= Date.UTC(y, m - 1, d + 1, 5);   // past lands_on, ET
+        }
+        if (!over) return;
+        const note = document.getElementById("first-note");
+        const b = document.createElement("b");
+        b.textContent = "The season's over, so no report goes out until next season.";
+        note.replaceChildren(b, document.createTextNode(" Questions, or a refund: " +
+          "hello@beatyourleague.com."));
+        document.getElementById("step-today").hidden = true;
+        document.getElementById("what-today").hidden = true;
+      })
+      .catch(() => {});
+  } catch (e) { /* the page stays as it is */ }
+})();
 // One tap to the group chat: the phone's own share sheet where the browser
 // has one (the chat is an app on that phone), a clipboard copy otherwise, and
 // failing both the line is selected for a copy by hand. A cancelled share
@@ -256,7 +298,7 @@ function shareLine(text, line, status) {
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
 </script>
-  <footer><b>Beat Your League</b> — analysis, not picks. This page is written in plain language
+  <footer><b>Beat Your League</b> — analysis, not betting picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under
   consumer law where you live.</footer>
 </div>

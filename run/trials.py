@@ -83,7 +83,7 @@ TRIAL_MAX_AGE = timedelta(days=14)
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
 # then the watchdog says so separately.
 TUESDAY_RELEASE_HOUR = 20
-_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$")
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # run/rosters.py's rule (D14)
 
 
 def canonical_email(email: str) -> str:
