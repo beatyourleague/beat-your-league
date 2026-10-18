@@ -450,6 +450,8 @@ def test_a_seat_with_an_unusable_address_cannot_take_the_registry_down(
     """The loader fails the WHOLE file on one bad row, so a stranger POSTing
     "not an email" would stop every subscriber's Tuesday."""
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    # D10: a League Pass on file without UPDATE_SECRET exits non-zero.
+    monkeypatch.setenv("UPDATE_SECRET", "test-secret-do-not-ship")
     stripe["sessions"] = [_pass_session()]
     _seats(monkeypatch, _seat(email="not an email"), _seat())
     assert _run(tmp_path) == 0
@@ -478,6 +480,8 @@ def test_with_no_seat_backend_the_tier_simply_does_not_deliver_seats(
     empty must mean no seats rather than unpaid ones."""
     monkeypatch.delenv("FORM_ENDPOINT", raising=False)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    # D10: a League Pass on file without UPDATE_SECRET exits non-zero.
+    monkeypatch.setenv("UPDATE_SECRET", "test-secret-do-not-ship")
     stripe["sessions"] = [_pass_session()]
     assert _run(tmp_path) == 0
     assert all(r.get("plan") != "league_pass" for r in _registry(tmp_path))
@@ -1020,12 +1024,14 @@ def test_a_code_is_single_use_and_an_older_email_cannot_reapply_an_old_roster(
     assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == third
 
 
-def test_reverting_to_an_earlier_roster_works_and_asking_to_keep_what_you_have_cancels(
+def test_reverting_to_an_earlier_roster_works_and_a_keep_request_withdraws_nothing(
         tmp_path, stripe, directory, monkeypatch) -> None:
     """Reproduced by review: requests were judged against the roster BEFORE
     updates applied, so 'go back to A' after A -> B was dropped as 'nothing
-    would change' and the roster silently stayed B; and re-requesting the
-    current roster could not withdraw an unconfirmed request for another."""
+    would change' and the roster silently stayed B. A request for the roster
+    already on file is a no-op that withdraws NOTHING (EMAILS-152): the page is
+    public and every forwardable report prints the roster, so a stranger's
+    "keep" request silently killed the subscriber's own pending change."""
     sends = _confirm_env(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
     b_ts = _ts(500)
@@ -1042,15 +1048,16 @@ def test_reverting_to_an_earlier_roster_works_and_asking_to_keep_what_you_have_c
     assert _run(tmp_path) == 0
     assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == REF, \
         "A -> B -> A silently stayed B"
-    # An unconfirmed request for C, then 'keep what I have' (the current roster):
-    # the C email is withdrawn, so pressing its button changes nothing.
+    # A request for C, then anyone's 'keep what I have' (the current roster):
+    # C's button still works, because only the inbox decides.
     c = encode_roster("season", "standard", list(SLOTS), PLAYERS)
     c_ts, keep_ts = _ts(60), _ts(30)
     _updates(monkeypatch, _request(b_ts), _confirm(_code(ts=b_ts)), _request(a_ts, ref=REF),
              _confirm(_code(REF, a_ts)), _request(c_ts, ref=c), _request(keep_ts, ref=REF),
              _confirm(_code(c, c_ts)))
     assert _run(tmp_path) == 0
-    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == REF
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].ref == c, \
+        "a same-as-current request withdrew a confirmed change"
 
 
 def test_a_code_expires_and_is_bound_to_the_moment_of_its_request(

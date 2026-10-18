@@ -52,13 +52,13 @@ from typing import Any, Callable, Mapping, Sequence
 from engine.availability import Status, WeekAvailability
 from engine.final_check import (INACTIVES_LEAD, clauses, elevation_note,
                                 first_to_kick_off, rank_covers)
-from engine.history import FLEX_ELIGIBILITY, PlayerIndex, Season
+from engine.history import EMPTY_SLOT_IDS, FLEX_ELIGIBILITY, PlayerIndex, Season
 from engine.projection import (MIN_GAMES_FOR_CALL, ProjectionModel, printed_percent,
                                stored_confidence)
 from engine.roster import DEFENSE
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec,
                                _team_week)
-from engine.ledger import GRADED, ledger_path, load_ledger
+
 from engine.week_report import (SWAP_WORTH_POINTS, TEAM_RANGE_GATE, SlotPick,
                                 WeekReportError, _join_words, _ruled_out_last_week,
                                 _team_range, checklist, late_news, team_range_gate,
@@ -68,51 +68,19 @@ from engine.week_report import (SWAP_WORTH_POINTS, TEAM_RANGE_GATE, SlotPick,
 
 # The record section 06 reports on.
 #
-# It used to call engine.week_report.receipts(), which reconstructs calls from
-# the SEASON'S OWN history for one roster id and decides which were publishable
-# by reading availability snapshots out of ``raw_dir``. Both halves are wrong
-# here: the solo product has no season history for a roster somebody typed in
-# last week, and the snapshot subtree lives under data/raw/availability, which
-# only the retired ingest.pull ever wrote — so raw_dir (the nflverse cache) can
-# never contain it. has_snapshot was therefore False for every week of every
-# season, no call ever qualified, and section 06 read "Ledger opens this week"
-# in week 1 and in week 17 alike, forever. Found by running the Tuesday path
-# for real (Aug 24 2026); no test caught it because nothing ran it.
-#
-# The real published record is the LEDGER — written at send time by
-# run/tuesday.py, settled by run/monday.py, and published by
-# render/ledger_site.py. That is what principle 2 means by "grade everything
-# publicly", so that is what this section reports. It reads the store this
-# report belongs to (typed-{scoring}-{size}-{season}), which is the cohort
-# whose calls were decided under the subscriber's own scoring rule.
-#
-# GRADED only: a pending call is a claim about a game that has not finished.
-def solo_receipts(league_id: str, processed_dir: Path | None) -> dict[str, Any]:
-    """Section 06 — what the public record says so far."""
-    empty = {"record": None,
-             "note": "Your results start here: once this week's games are "
-                     "final, every call shows up with how it played out."}
-    if processed_dir is None:
-        return empty
-    try:
-        calls = load_ledger(ledger_path(Path(processed_dir), league_id))
-    except Exception:
-        # A record we cannot read is not a record we may describe. The report
-        # still ships; principle 3 forbids inventing the alternative.
-        return empty
-    graded = [c for c in calls if c.status == GRADED and c.outcome in ("hit", "miss")]
-    if not graded:
-        return empty
-    hits = sum(1 for c in graded if c.outcome == "hit")
-    weeks = sorted({c.week for c in graded})
-    note = (f"{hits} of {len(graded)} calls have come in right so far, "
-            f"weeks {weeks[0]}-{weeks[-1]}, each one written down before kickoff.")
-    if len(weeks) == 1:
-        note = (f"{hits} of {len(graded)} calls have come in right so far, "
-                f"from week {weeks[0]}, each one written down before kickoff.")
-    return {"record": {"graded": len(graded), "hits": hits,
-                       "first_week": weeks[0], "last_week": weeks[-1]},
-            "note": note}
+# It used to call engine.week_report.receipts(), which reconstructed calls from
+# the season's own history (never available for a typed roster), and then the
+# shared preset LEDGER — every subscriber's calls counted as if they were the
+# reader's. D12: the section is built from a report's OWN calls, which only a
+# subscriber's stored plans hold (run/tuesday.py → engine/own_record.py, the
+# only path that mails a subscriber). Anything built here has no subscriber
+# record — the samples, the free report — so it says what a subscriber's
+# section shows and promises nothing about this report's calls.
+def solo_receipts(league_id: str | None = None,
+                  processed_dir: Path | None = None) -> dict[str, Any]:
+    """Section 06 for a report with no subscriber record behind it."""
+    from engine.own_record import empty_section
+    return empty_section(None)
 
 # What the report says where an opponent used to be. Stated once, plainly, in
 # the buyer's register — not a gate note, because nothing is being withheld.
@@ -216,6 +184,10 @@ def build_solo_report(
     # The practice squad keeps its seats and loses its odds (method §15 C9).
     unconfirmed = dict(unconfirmed or {})
     picks = hold_unconfirmed(picks, unconfirmed, players)
+    # D11: a later FLEX/SUPER_FLEX swap can seat the very player an earlier
+    # row's odds were figured against. Those odds are withheld, never redone.
+    picks = hold_stale_alternatives(picks, team_week.players, model, week,
+                                    availability, players)
     if not shape_graded:
         picks = hold_ungraded_shape(picks, shape_gate or SHAPE_GATE)
     # One number per call (recheck ENG-6/RQ2-03): rounded ONCE, to what the
@@ -302,6 +274,10 @@ def build_solo_report(
     # row names each starter's best cover, as Saturday's swap does when that
     # is the only news.
     taken: dict[str, str] = {}
+    # A starter whose game-day cover is on the practice squad (EMAILS-8): his
+    # if/then has an answer only if that player is elevated, so the late-news
+    # line may not say "the answer either way".
+    elevation: dict[str, str] = {}
     # When each player's news must be acted on (RQ2-07), for the late-news line.
     decide_at: dict[str, datetime] = {}
     for name, pick, is_starter, pid in news:
@@ -322,6 +298,8 @@ def build_solo_report(
         if gameday is not None:
             for moved in gameday.moving:
                 taken.setdefault(moved, name)
+            if gameday.practice_squad:
+                elevation[pid] = players.name(gameday.incoming)
         if rows:
             starter_rows += rows
             if late is not None:          # a fallback even for a game-day call
@@ -348,7 +326,9 @@ def build_solo_report(
              + pivots(picks, [], players, availability,
                       news=[n for n in news if not n[2]], limit=None)
              + watch_plans)
-    planned = {plan["about"] for plan in plans if plan.get("about")}
+    # player -> the practice-squad cover his plan needs elevated, or None.
+    planned = {plan["about"]: elevation.get(plan["about"])
+               for plan in plans if plan.get("about")}
     # Who must be decided before Sunday: every starter who might play, and
     # every bench player whose news could still move a seat (late_news names
     # only those, F4). A starter on bye or a reserve list is not one (R6): "kick
@@ -438,7 +418,7 @@ def build_solo_report(
         "bench": bench,
         "regret": closest_call(picks, players, model, week, availability,
                                injury_report, bench),
-        "pivots_note": pivots_note(plans, unplanned, availability),
+        "pivots_note": pivots_note(plans, unplanned, availability, picks, players),
         # An empty rival list is correct rather than a placeholder: pivots reads
         # only MY picks' questionable statuses and their alternatives, and the
         # rival half was never used for anything the subscriber acts on.
@@ -604,12 +584,98 @@ def hold_unconfirmed(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
             pick.flags = [dict(f) for f in pick.flags] + [{
                 "kind": "unconfirmed",
                 "text": f"{unconfirmed[pick.player_id]} — not confirmed to play"}]
-        if pick.confidence is not None:
+        if pick.confidence is not None or (
+                pick.confidence_gate or "").startswith("not enough games"):
+            # EMAILS-21: a pair already short of games still names the
+            # practice squad — three games would not bring odds while he is
+            # on it, so "odds once he has 3 games" was a false promise.
             pick.confidence = None
             pick.confidence_gate = (f"{UNCONFIRMED_GATE} ({players.name(who)}: "
                                     f"{unconfirmed[who]})")
             pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
     return list(picks)
+
+
+# Why a slot prints no odds when the bench player its odds were figured
+# against ends up STARTING (a later FLEX or SUPER_FLEX swap seated him), or a
+# player that swap moved to the bench now outranks him there (D11). The odds
+# were a call against somebody who is no longer the best bench option at that
+# spot, so they are withheld — never recomputed. The bracket names who starts.
+STALE_ALTERNATIVE_GATE = "held: the bench changed around this slot"
+
+
+def hold_stale_alternatives(picks: Sequence[SlotPick], roster: Sequence[str],
+                            model: ProjectionModel, week: int,
+                            availability: WeekAvailability,
+                            players: PlayerIndex) -> list[SlotPick]:
+    """Withhold odds on a row whose comparison is not the best bench player
+    at that spot in the FINAL lineup (EMAILS-3/4/13/19/20).
+
+    ``optimal_lineup`` fixes each row's alternative as it goes, in restrictive
+    order, so a RULE 3 swap at a later flex slot can seat that same player:
+    "Deebo Samuel 78% … +5.0 over J. Michael Sturdivant on your bench" while
+    Sturdivant started at FLEX. The best bench player is re-read in the same
+    order the lineup uses (projection, not out, eligible, not starting); when
+    the row's comparison is starting or ranks below him, the odds go and the
+    row is repointed at that player so "on your bench" stays true. Removes
+    only: no number is added or moved."""
+    starters = {p.player_id for p in picks if p.player_id}
+    statuses: dict[str, Any] = {}
+    projections: dict[str, Any] = {}
+
+    def best_bench(slot: str) -> str | None:
+        best = None
+        for pid in roster:
+            if pid in starters or pid in EMPTY_SLOT_IDS:
+                continue
+            info = players.get(pid)
+            if info is None or not info.eligible_for(slot):
+                continue
+            if pid not in statuses:
+                statuses[pid] = availability.classify(pid)
+                projections[pid] = model.project(pid, week)
+            if statuses[pid].status is Status.OUT or projections[pid] is None:
+                continue
+            if best is None or projections[pid].mean > projections[best].mean:
+                best = pid
+        return best
+
+    for pick in picks:
+        starting = next((pid for pid in (pick.alternative_id,
+                                         pick.doubtful_alternative_id)
+                         if pid and pid in starters), None)
+        if pick.confidence is None and starting is None:
+            continue
+        compare = pick.doubtful_alternative_projection or pick.alternative_projection
+        top = best_bench(pick.slot)
+        outranked = (pick.confidence is not None and top is not None
+                     and compare is not None and projections[top].mean > compare.mean)
+        if starting is None and not outranked:
+            continue
+        where = next((p.slot for p in picks if starting and p.player_id == starting), None)
+        structural = pick.confidence is None and (pick.confidence_gate or "").startswith(
+            _STRUCTURAL_GATES)
+        pick.doubtful_alternative_id = None
+        pick.doubtful_alternative_projection = None
+        pick.alternative_id = top
+        pick.alternative_projection = projections[top] if top else None
+        if structural:
+            # "Projection only" stays the reason; only the name moves, so
+            # "on your bench" names somebody who is on the bench.
+            continue
+        pick.confidence = None
+        pick.confidence_gate = (
+            f"{STALE_ALTERNATIVE_GATE} ({players.name(starting)} starts at {where})"
+            if starting else
+            f"{STALE_ALTERNATIVE_GATE} ({players.name(top)} moved to the bench)")
+        pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
+    return list(picks)
+
+
+# Gates about the slot or the lineup, never about the bench player named on
+# the row: a moved bench option leaves them true.
+_STRUCTURAL_GATES = ("we don't put odds on defenses", "odds once this lineup shape",
+                     "held: an input", "no eligible player", "nobody on your bench")
 
 
 # Why a slot prints no odds when the subscriber's lineup shape has no graded
@@ -1059,7 +1125,8 @@ def no_stand_in_line(name: str, slot: str, early: Sequence[str],
 
 
 def pivots_note(plans: Sequence[Mapping[str, Any]], unplanned: Mapping[str, str],
-                availability: WeekAvailability) -> str | None:
+                availability: WeekAvailability, picks: Sequence[SlotPick] = (),
+                players: PlayerIndex | None = None) -> str | None:
     """What the if/then says when it has no rows — the TRUE reason (launch
     review SS-D3/G20, Oct 2026). It used to print "no starter we can check is
     listed questionable" whenever the list was empty, beside a lineup row
@@ -1072,6 +1139,18 @@ def pivots_note(plans: Sequence[Mapping[str, Any]], unplanned: Mapping[str, str]
     if not availability.has_snapshot:
         return ("No pivots this week — there's no injury report yet to plan "
                 "around.")
+    # EMAILS-33: a starter ruled OUT last week, whose only cover was ruled out
+    # too, gets no if/then row (a plan on two unknowns) — and "no bench
+    # player's news would change your lineup" was false: the cover's news
+    # would. The game plan names him; the note says so instead.
+    ruled = [p for p in picks if p.player_id and _ruled_out_last_week(p)]
+    if ruled and players is not None:
+        names = _join_words([players.name(p.player_id) for p in ruled])
+        one = len(ruled) == 1
+        pronoun = "he's" if one else "they're"
+        return (f"No pivots this week — none of your starters was questionable "
+                f"last week. {names} {'was' if one else 'were'} out on it: the "
+                f"game plan says what to do if {pronoun} out again.")
     return ("No pivots this week — none of your starters was questionable last "
             "week, and no bench player's news would change your lineup.")
 

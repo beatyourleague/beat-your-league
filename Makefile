@@ -5,7 +5,7 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
-        og brand billing billing-preview roster-update waitlist-preview waitlist-send live-sample
+        og brand billing billing-preview roster-update seat-release waitlist-preview waitlist-send live-sample
 
 week:
 	$(PY) -m run.week
@@ -94,6 +94,15 @@ stats:
 #   make roster-update EMAIL=fan@example.com ROSTER=names.txt
 roster-update:
 	$(PY) -m run.updates --email "$(EMAIL)" --roster "$(ROSTER)" $(ARGS)
+
+# Free a League Pass seat whose holder has left the league (D10): the address
+# goes on the stop list, and the next hourly intake releases that seat, so the
+# pass has room for the manager who replaced them. Commit and push
+# data/processed/suppressed.txt — the crons read the committed copy. Prints no
+# address. To give the seat back: python -m run.suppress --remove EMAIL.
+#   make seat-release EMAIL=left@example.com
+seat-release:
+	$(PY) -m run.suppress "$(EMAIL)"
 
 # The launch announcement, the one email the waitlist was promised. Preview
 # first. The send needs EMAIL_PROVIDER + its key (RESEND_API_KEY or

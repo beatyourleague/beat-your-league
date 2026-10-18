@@ -67,8 +67,9 @@ from run.rosters import (DEFAULT_ROSTERS, RosterRegistryError, RosterSubscriber,
                          league_pass_seats, load_rosters)
 from run.solo import (CACHE_DIR, SeasonOver, SoloError, WeekData, _prior_form,
                        current_season, current_week, load_week_data, report_for,
-                       season_over, week_has_kicked_off)
-from run.saturday import PLANS_DIR, build_plan, first_plans_dir, write_plan
+                       season_over, week_has_kicked_off, week_one_due)
+from run.saturday import (PLANS_DIR, build_plan, first_plans_dir, plan_setup,
+                          write_plan)
 from run.updates import public_update_url
 from run.subscriptions import DEFAULT_EXPORT, SubscriptionError, resolve_paid_list
 from run.watchdog import NOT_CONFIGURED_NOTE, TUESDAY, mark_run, not_configured
@@ -121,34 +122,50 @@ class RunResult:
 
 def subscriber_meta(subscriber: RosterSubscriber,
                     seat_counts: Mapping[str, int] | None = None,
-                    seat_link: str | None = None) -> dict:
+                    seat_link: str | None = None,
+                    seat_cap: int | None = None) -> dict:
     """What a report says about the SUBSCRIPTION rather than the week:
 
     - ``plan`` (contract C1): season | monthly | pass | league_pass — from the
       registry row's billing, so a League Pass payer and a monthly buyer are
       no longer told at the season's end that a season pass renews yearly.
-    - ``seats_claimed`` (C2), on a pass PAYER's report only: the league's
-      teams the pass is serving — the payer's own and every leaguemate's seat
-      it carries — out of the payer's own league size, so "N of 12 seats" is
-      out of every team in it. A count, never who, and never a stranger's
-      unmatched claim.
+    - ``seats_claimed`` (C2), on a pass PAYER's report only: the SEATS the
+      pass carries (the payer's own team is not one) out of its seat cap
+      (``seat_cap``, ``PassInfo.seat_cap`` — D10). A count, never who, and
+      never a stranger's unmatched claim. ``seats_full`` on the payer's and
+      every seat's report once no seat is left, so no report offers one.
     - ``roster_as_of`` (C3): the day the roster in use was set, so a
       subscriber can see which roster the report read.
     - ``seat_link`` (C4), in a pass league only (payer or seat): the league's
       own seat link, so a report forwarded to the group chat points a
       leaguemate at the seat already paid for, never the $39 checkout."""
     meta: dict = {"plan": subscriber.report_plan}
+    # Counted per PASS (``pass_key``), never per payer address: one buyer with
+    # two leagues' passes was told both leagues' seats twice (LP2-D4).
+    seats = int((seat_counts or {}).get(subscriber.pass_key or "", 0))
+    cap = (int(seat_cap) if seat_cap is not None
+           else int(subscriber.league_size) if subscriber.is_pass_payer else None)
     if subscriber.is_pass_payer:
-        # Counted per PASS (``pass_key``), never per payer address: one buyer
-        # with two leagues' passes was told both leagues' seats twice (LP2-D4).
-        meta["seats_claimed"] = {
-            "claimed": 1 + int((seat_counts or {}).get(subscriber.pass_key or "", 0)),
-            "size": int(subscriber.league_size)}
+        meta["seats_claimed"] = {"claimed": seats, "size": cap}
+    if (cap is not None and seats >= cap
+            and (subscriber.is_pass_payer or subscriber.is_league_seat)):
+        meta["seats_full"] = True
     if subscriber.roster_as_of:
         meta["roster_as_of"] = subscriber.roster_as_of
     if seat_link and (subscriber.is_pass_payer or subscriber.is_league_seat):
         meta["seat_link"] = seat_link
     return meta
+
+
+def pass_seat_cap(subscriber: RosterSubscriber,
+                  payers: Mapping[str, RosterSubscriber]) -> int | None:
+    """The seat cap of the pass that covers ``subscriber`` — as many seats as
+    the PAYER's league has teams (``run.intake.PassInfo.seat_cap``). None
+    outside a pass league, or for a seat whose payer's row is not at hand."""
+    payer = (subscriber if subscriber.is_pass_payer
+             else payers.get(subscriber.pass_key or "")
+             if subscriber.is_league_seat else None)
+    return max(0, int(payer.league_size)) if payer is not None else None
 
 
 def league_seat_link(subscriber: RosterSubscriber,
@@ -179,7 +196,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    plans_dir: Path | None = None,
                    first_plans: Path | None = None,
                    seat_counts: Mapping[str, int] | None = None,
-                   seat_link: str | None = None) -> RunResult:
+                   seat_link: str | None = None,
+                   seat_cap: int | None = None) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
 
     Writes nothing to the public ledger. ``record`` says whether this report's
@@ -206,7 +224,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # The plan decides the season-end billing sentence the last report
         # carries (render/report.season_end_lines); with it ride the pass
         # payer's seat count and the day the roster was set.
-        report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link))
+        report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link,
+                                              seat_cap))
         # The link carries this subscription's own scoring, size and lineup
         # (FUNNEL F1): an update replaces the settings on file with the ones
         # the page posts, and a bare link opened on the page's defaults.
@@ -218,10 +237,16 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # plans stored yet it is the honest empty state.
         from engine.own_record import own_record
         from run.saturday import load_plans
+        # D12: what the section may promise turns on THIS report's calls and
+        # whether another report follows it.
         report["receipts"] = own_record(
             load_plans(plans_dir, data.season, subscriber.slug, also=first_plans)
             if plans_dir is not None else [],
-            data.weekly, subscriber.spec().rule, data.week)
+            data.weekly, subscriber.spec().rule, data.week,
+            calls_now=sum(1 for row in report["lineup"]
+                          if row.get("confidence") is not None),
+            last_report=bool(report["meta"].get("last_week"))
+            and data.week >= int(report["meta"]["last_week"]))
     except SoloError as exc:
         return RunResult(subscriber, ok=False, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 — batch contract: one subscriber's
@@ -291,7 +316,7 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
             report, projections, _prior_form(data.prior, spec.rule),
             {pid: data.availability.classify(pid).status.value
              for pid in spec.player_ids},
-            subscriber.slug)
+            subscriber.slug, setup=plan_setup(subscriber))
     except Exception as exc:  # noqa: BLE001 — the report is built; Saturday can do without
         plan = None
         # Said out loud: a subscriber with no plan never hears about Friday's
@@ -425,6 +450,18 @@ def _mark_nobody_to_mail(args) -> None:
     _mark_finished(season, week, "nobody to mail")
 
 
+def _week_one_due(args) -> bool:
+    """Is the derived week anything but a Week 1 that is not due yet? An
+    unreadable calendar answers True: ``load_week_data`` then reports its own
+    error, which is the alarm that belongs to it."""
+    try:
+        season = str(args.season or current_season(args.cache))
+        week = current_week(args.cache, season)
+    except Exception:  # noqa: BLE001
+        return True
+    return week_one_due(args.cache, season, week)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--week", type=int, help="default: the current NFL week")
@@ -472,6 +509,15 @@ def main(argv: list[str] | None = None) -> int:
                                    args.no_paid_check)
     if subscribers is None:
         return 1
+
+    # D8: a DERIVED Week 1 is not built before it is due. current_week
+    # answers 1 from the day next season's schedule lands (about May), and a
+    # "Week 1" report then would be built from last season's roster and keyed
+    # so the real one in September is skipped as already sent.
+    if args.week is None and not _week_one_due(args):
+        print("No reports this week: Week 1 isn't due yet — its reports go out "
+              "on the Tuesday before the season's first game.")
+        return 0
 
     # One load for the whole run. Everything in it is per-week rather than
     # per-subscriber, which is the cost NFR made structural.
@@ -530,7 +576,8 @@ def main(argv: list[str] | None = None) -> int:
                               plans_dir=args.plans_dir or PLANS_DIR,
                               first_plans=first_plans_dir(args.registry),
                               seat_counts=seat_counts,
-                              seat_link=league_seat_link(s, payers))
+                              seat_link=league_seat_link(s, payers),
+                              seat_cap=pass_seat_cap(s, payers))
                for s in subscribers if s.key not in done]
 
     line = "=" * 62
@@ -640,8 +687,17 @@ def main(argv: list[str] | None = None) -> int:
                        f"{len(skipped) + len(already)}, send failed "
                        f"{len(send_failures)}, not built {len(failed)}")
     print("LLM tokens this run: 0 (deterministic layer only)")
+    # D10: every pass report went out without a seat link (none can be signed
+    # without the secret), so no leaguemate can claim a paid seat. The reports
+    # are sent first; the run then goes red rather than green.
+    unsigned_pass = (not os.environ.get("UPDATE_SECRET", "")
+                     and any(s.is_pass_payer for s in subscribers))
+    if unsigned_pass:
+        print("A LEAGUE PASS IS ON FILE AND UPDATE_SECRET IS NOT SET: its reports "
+              "carry no seat link, so no leaguemate can claim a seat.",
+              file=sys.stderr)
     print(line)
-    return 0 if not (failed or send_failures) else 1
+    return 0 if not (failed or send_failures or unsigned_pass) else 1
 
 
 if __name__ == "__main__":

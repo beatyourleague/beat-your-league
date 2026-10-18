@@ -568,6 +568,14 @@ def same_roster(ref_a: str, ref_b: str) -> bool:
             == (b.player_ids, b.slots, b.scoring, b.league_size))
 
 
+def roster_content(roster) -> tuple:
+    """What makes two rosters the same roster: the SET of players (INFO-86 —
+    league apps list a roster in lineup order, which moves week to week, so a
+    reordered paste is not a change) under the same lineup, scoring and size."""
+    return (tuple(sorted(roster.player_ids)), tuple(roster.slots),
+            roster.scoring, int(roster.league_size))
+
+
 def _parse_ts(ts: str) -> datetime | None:
     try:
         return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
@@ -578,8 +586,11 @@ def _parse_ts(ts: str) -> datetime | None:
 def _target_for(email: str, roster, registry_rows: Iterable[Mapping]) -> str | None:
     """Which of this address's subscriptions a request changes, or None when
     that cannot be told. One subscription: that one. Several: the one in the
-    same league setup whose roster overlaps the new one most — and a tie is
-    refused, because changing the wrong team is worse than changing none."""
+    same league setup whose roster overlaps the new one most — or, when no
+    team shares the request's setup (a scoring or lineup CHANGE, JOIN-104,
+    which used to match nothing and be dropped unsaid), the one across all
+    of them that overlaps most. A tie is refused, because changing the wrong
+    team is worse than changing none."""
     held = [row for row in registry_rows
             if str(row.get("email", "")).lower() == email]
     if not held:
@@ -587,7 +598,7 @@ def _target_for(email: str, roster, registry_rows: Iterable[Mapping]) -> str | N
     if len(held) > 1:
         same = [row for row in held
                 if list(row.get("slots") or []) == list(roster.slots)
-                and row.get("scoring") == roster.scoring]
+                and row.get("scoring") == roster.scoring] or held
         new = set(roster.player_ids)
         ranked = sorted(same, key=lambda r: -len(new & set(r.get("player_ids") or [])))
         if not ranked or (len(ranked) > 1 and
@@ -613,6 +624,7 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                       known_ids: set[str] | None, secret: str,
                       now: datetime | None = None,
                       applied: Mapping[tuple[str, str], str] | None = None,
+                      confirm_rows: Iterable[Mapping] = (),
                       ) -> tuple[list[PendingRequest], list[str]]:
     """Public-form requests -> requests worth a confirmation email.
 
@@ -620,9 +632,25 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
     applied): "nothing would change" is judged against that. Nothing here
     changes a roster. A request naming an address that holds no subscription is
     dropped in silence: the page is public, and answering it would let anybody
-    learn who subscribes."""
+    learn who subscribes.
+
+    EXPIRY_DAYS is judged at the button press (``confirm_rows``, each with the
+    Worker's own ``received_at``), never at the hour an intake happens to run
+    (EMAILS-154, JOIN-145): a press inside the window, read by the next hourly
+    run just past it, was lost with nothing said. A row's ``replaces`` (the
+    update link's ``&o=``, ``origin_tag``) names the subscription, and counts
+    only when this address holds it (JOIN-104). A request for the roster already on file is
+    a no-op and withdraws nothing (EMAILS-152): the page is public and the
+    roster is printed in every forwardable report."""
     problems: list[str] = []
     rows = list(rows)
+    pressed: dict[str, datetime] = {}
+    for confirm in confirm_rows:
+        code = str(confirm.get("code") or "").strip().lower()
+        at = _parse_ts(str(confirm.get("received_at") or ""))
+        if code and at is not None:
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+            pressed[code] = min(at, pressed.get(code, at))
     if not secret:
         if rows:
             problems.append(f"{len(rows)} roster update request(s) arrived but "
@@ -632,7 +660,6 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
     applied = dict(applied or {})
     now = now or datetime.now(timezone.utc)
     live: list[PendingRequest] = []
-    cancelled: dict[tuple[str, str], str] = {}
     for row in sorted(rows, key=lambda r: str(r.get("received_at") or "")):
         email = str(row.get("email") or "").strip().lower()
         ref = str(row.get("ref") or "").strip()
@@ -642,13 +669,16 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
             continue                       # no Worker stamp: not a request we can identify
         if when.tzinfo is None:
             when = when.replace(tzinfo=timezone.utc)
-        if now - when > timedelta(days=EXPIRY_DAYS):
-            continue
         try:
             roster = decode_roster(ref)
         except RefError:
             continue
-        replaces = _target_for(email, roster, registry_rows)
+        named = str(row.get("replaces") or "").strip().lower()
+        held = [str(r.get("origin") or slug_of(str(r.get("ref", ""))))
+                for r in registry_rows if str(r.get("email", "")).lower() == email]
+        replaces = next((origin for origin in held if named and hmac.compare_digest(
+            origin_tag(origin, secret), named.encode("ascii", "replace").decode())),
+            None) or _target_for(email, roster, registry_rows)
         if replaces is None:
             if any(str(r.get("email", "")).lower() == email for r in registry_rows):
                 problems.append(f"a roster update request for {_mask(email)} matches "
@@ -662,17 +692,16 @@ def validate_requests(rows: Iterable[Mapping], registry_rows: Iterable[Mapping],
                         if str(r.get("email", "")).lower() == email
                         and str(r.get("origin") or slug_of(str(r.get("ref", "")))) == replaces),
                        None)
-        target = (email, replaces)
         if current is not None and same_roster(str(current.get("ref", "")), ref):
-            # "Keep what I have": nothing to change, and every earlier pending
-            # request for this subscription is withdrawn.
-            cancelled[target] = max(cancelled.get(target, ""), ts)
+            continue                       # nothing would change
+        code = confirm_code(email, replaces, ref, secret, ts)
+        if now - when > timedelta(days=EXPIRY_DAYS) and not (
+                code in pressed
+                and pressed[code] - when <= timedelta(days=EXPIRY_DAYS)):
             continue
-        live.append(PendingRequest(email, replaces, ref,
-                                   confirm_code(email, replaces, ref, secret, ts), ts))
+        live.append(PendingRequest(email, replaces, ref, code, ts))
     pending = [r for r in live
-               if r.ts > applied.get((r.email, r.replaces), "")
-               and r.ts > cancelled.get((r.email, r.replaces), "")]
+               if r.ts > applied.get((r.email, r.replaces), "")]
     # The daily cap, by the Worker's own date, oldest first — deterministic.
     per_day: dict[tuple[str, str], int] = {}
     capped: list[PendingRequest] = []
@@ -733,7 +762,26 @@ def public_update_url(site_url: str, secret: str, endpoint: str,
     if not site or not secret or not endpoint:
         return None
     params = ["update=1"] + (settings_params(roster) if roster is not None else [])
+    # JOIN-104: ``&o=`` names the subscription this link updates, so an
+    # address holding several teams changes the one whose report it came
+    # from. An HMAC of the slug, never the slug itself (the slug is in the
+    # committed send log, so a forwarded report would let a leaguemate follow
+    # the sender's deliveries) and never an address; it grants nothing — the
+    # change is still confirmed from the inbox on file.
+    origin = getattr(roster, "slug", None) if roster is not None else None
+    if isinstance(origin, str) and origin:
+        params.append(f"o={origin_tag(origin, secret)}")
     return f"{site}/join/?" + "&".join(params)
+
+
+ORIGIN_TAG_LENGTH = 12
+
+
+def origin_tag(origin: str, secret: str) -> str:
+    """The update link's ``o=``: which subscription, opaque to anyone without
+    UPDATE_SECRET (the page posts it back as ``replaces``)."""
+    return hmac.new(secret.encode("utf-8"), f"origin|{origin}".encode("utf-8"),
+                    hashlib.sha256).hexdigest()[:ORIGIN_TAG_LENGTH]
 
 
 # --------------------------------------------------------------------- #

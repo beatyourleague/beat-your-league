@@ -604,17 +604,21 @@ def test_the_receipts_grade_only_the_calls_in_this_subscribers_reports() -> None
               7: {"a": row(0), "b": row(9)}}
     got = own_record(plans, weekly, rule, before_week=7)
     assert got["record"] == {"graded": 3, "hits": 2, "first_week": 5, "last_week": 6}
-    assert got["note"] == ("Your calls so far: 2 of 3 came in (weeks 5–6). "
-                           "Week 6: 1 of 1.")
-    [line] = got["last_week_calls"]
+    # D12: the void is LISTED as no result and counted apart, never dropped.
+    assert got["note"] == ("Your calls so far: 2 of 3 came in, plus 1 with no "
+                           "result (weeks 5–6). Week 6: 1 of 1, plus 1 with no "
+                           "result.")
+    line, void = got["last_week_calls"]
     assert call_line(line) == "E over F at TE · 58% — 5.0 to 1.0, came in"
+    assert call_line(void) == "G over H at WR · 66% — 0.0 to 0.0, no result"
     assert got["ask"]
     # A losing week never asks for a quote.
     lost = own_record(plans[:1], {5: {"a": row(1), "b": row(9),
                                       "c": row(1), "d": row(9)}}, rule, 6)
     assert lost["ask"] is None and "0 of 2" in lost["note"]
     assert "missed" in call_line(lost["last_week_calls"][0])
-    assert own_record([], weekly, rule, 7) == {"record": None, "note": EMPTY_NOTE}
+    assert own_record([], weekly, rule, 7) == {"record": None, "note": EMPTY_NOTE,
+                                               "stamp": "Results · from next week"}
 
 
 def test_a_weeks_report_mailed_at_purchase_gets_its_own_plan(tmp_path, monkeypatch) -> None:

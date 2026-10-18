@@ -55,6 +55,16 @@ CONFIRM_LIMIT = "The button works for 7 days after the claim was made."
 CONFIRM_IGNORE = ("Didn't ask for this? Ignore this email — nothing is set up or "
                   "changed unless you confirm.")
 
+# A claim that matched a League Pass that is not active right now (refunded,
+# lapsed, or its payment failed) — D10, JOIN-103: the join page promises an
+# email when a claim can't be matched to a League Pass, and this one was only
+# a log line.
+INACTIVE_LEDE = ("You asked for a seat on a League Pass with this address. That "
+                 "League Pass isn't active right now, so no seat was set up and "
+                 "no reports are coming.")
+INACTIVE_CHECK = ("Ask whoever bought your league's pass to check it. Once it's "
+                  "active again, claim your seat with the same link.")
+
 FULL_SUBJECT = "That League Pass has no seats left"
 FULL_LEDE = ("You asked for a seat on a League Pass with this address. That pass "
              "covers as many seats as its league has teams, and they are all "
@@ -121,6 +131,19 @@ def unmatched_email(site_url: str = "") -> tuple[str, str, str]:
                   _para(LEDE) + _para(CHECK) + more_html
                   + f'<p style="{SMALL}margin:18px 0 0 0;">{esc(IGNORE)}</p>')
     text = "\n".join([SUBJECT.upper(), "", LEDE, "", CHECK, "",
+                      *([f"How seats work: {page}", ""] if page else []),
+                      IGNORE, "", *_footer_lines(), ""])
+    return SUBJECT, html, text
+
+
+def inactive_email(site_url: str = "") -> tuple[str, str, str]:
+    """(subject, html, text) for a claim on a pass that is not active."""
+    more_html, page = _page_link(site_url)
+    html = _shell(SUBJECT,
+                  "That League Pass isn't active right now, so no seat was set up.",
+                  _para(INACTIVE_LEDE) + _para(INACTIVE_CHECK) + more_html
+                  + f'<p style="{SMALL}margin:18px 0 0 0;">{esc(IGNORE)}</p>')
+    text = "\n".join([SUBJECT.upper(), "", INACTIVE_LEDE, "", INACTIVE_CHECK, "",
                       *([f"How seats work: {page}", ""] if page else []),
                       IGNORE, "", *_footer_lines(), ""])
     return SUBJECT, html, text
