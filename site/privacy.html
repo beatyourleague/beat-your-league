@@ -243,7 +243,9 @@
     item we cannot always delete on request: it is part of the payment record Stripe keeps
     for us — the amount, the date, the plan, any tax charged and that address — which tax
     law requires to be kept for a set number of years. We delete everything else and tell
-    you in writing that this payment record is what remains.</p>
+    you in writing that this payment record is what remains. So that an old payment is
+    never read back in and your data restored, we keep one keyed code of your Stripe
+    customer number, which can't be matched back to you without our private key.</p>
 
     <h2>8. Seeing or deleting what we hold</h2>
     <p>Email <b>hello@beatyourleague.com</b> and within 30 days we will tell you exactly

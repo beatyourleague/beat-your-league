@@ -28,26 +28,24 @@ def test_the_fee_figures_the_documents_quote() -> None:
     assert 3 * econ.MONTHLY > econ.SEASON
 
 
-def test_a_monthly_buyer_pays_the_first_month_in_full_then_a_prorated_last() -> None:
-    """The charge model follows run/billing.py: the first month is charged in
-    full at signup whatever the stop; after that Stripe bills on the
-    anniversary and prorates the period containing the stop by time.
-    Reproduction (G06): an Oct 20 buyer pays 14.99 + 14.99 + a Dec 20 period
-    cut at Jan 13 (24 of 31 days, $11.61) — $41.59, more than the $39 pass."""
-    stop = date(2027, 1, 13)
+def test_a_monthly_buyer_is_never_charged_after_the_last_report() -> None:
+    """The charge model follows run/billing.py (promise audit D1): the first
+    month at signup, then one charge per anniversary on or before the last
+    weekly report; nothing after it and no part-month. An Oct 20 buyer pays
+    Oct 20, Nov 20 and Dec 20 ($44.97) when the last report is Jan 5."""
+    stop = date(2027, 1, 5)
     full, stub = econ.monthly_charges(date(2026, 10, 20), stop)
-    assert (full, stub) == (2, 11.61)
-    assert round(full * econ.MONTHLY + stub, 2) == 41.59
-    assert econ.monthly_charges(date(2026, 10, 13), stop) == (3, 0.0)
-    # Joined inside the last period: one full month, never a credit back.
+    assert (full, stub) == (3, 0.0)
+    assert econ.monthly_charges(date(2026, 10, 5), stop) == (4, 0.0)   # Jan 5 renews
+    assert econ.monthly_charges(date(2026, 10, 6), stop) == (3, 0.0)   # Jan 6 does not
     assert econ.monthly_charges(date(2026, 12, 29), stop) == (1, 0.0)
 
 
 def test_the_join_week_table_counts_charges_and_reports() -> None:
     tuesdays = {7: date(2026, 10, 20), 17: date(2026, 12, 29), 18: date(2027, 1, 5)}
-    rows = econ.monthly_by_join_week((tuesdays, date(2027, 1, 13)))
+    rows = econ.monthly_by_join_week((tuesdays, date(2027, 1, 5)))
     assert [(r["week"], r["charges"], r["paid"], r["reports"]) for r in rows] == [
-        (7, 3, 41.59, 12), (17, 1, 14.99, 2), (18, 1, 14.99, 1)]
+        (7, 3, 44.97, 12), (17, 1, 14.99, 2), (18, 1, 14.99, 1)]
 
 
 def test_lifetime_value_is_net_of_fees_refunds_and_disputes() -> None:
@@ -58,11 +56,11 @@ def test_lifetime_value_is_net_of_fees_refunds_and_disputes() -> None:
 
 def test_the_customer_view_says_it_is_assumptions(monkeypatch) -> None:
     lines = "\n".join(econ.customer_lines(calendar=({7: date(2026, 10, 20)},
-                                                    date(2027, 1, 13))))
+                                                    date(2027, 1, 5))))
     assert "assumptions, not forecasts" in lines
     assert "never on a selling page" in lines
 
-    assert "Week  7: 3 charges, $ 41.59 incl. a $11.61 part-month" in lines
+    assert "Week  7: 3 charges, $ 44.97" in lines and "part-month" not in lines
     assert "an hour" in lines and "unpaid" in lines
     monkeypatch.setattr(econ, "season_calendar", lambda *a, **k: None)
     assert "can't say" in "\n".join(econ.customer_lines())

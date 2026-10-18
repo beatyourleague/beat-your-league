@@ -735,3 +735,33 @@ def test_a_marker_is_a_key_no_message_has_and_is_written_once(tmp_path, monkeypa
     from run.stats import send_summary
     assert send_summary([json.loads(lines[0])], "2026") == {
         "weekly": {}, "finals": {}, "other": {}}
+
+
+def test_the_worker_lists_row_keys_and_deletes_one_row_only_with_the_key(tmp_path) -> None:
+    """D5 (promise audit): a deletion request must reach the form rows too, so
+    the read carries each row's storage key and an authorised DELETE removes
+    exactly that row; without the read key nothing is removed."""
+    got = _node(tmp_path, """
+      const store = new Map();
+      const ROWS = {
+        put: async (k, v, o) => store.set(k, o.metadata),
+        list: async () => ({ keys: [...store].map(([name, metadata]) => ({ name, metadata })),
+                             list_complete: true }),
+        delete: async (k) => store.delete(k),
+      };
+      const env = { ROWS, FORM_API_KEY: "k" };
+      const post = (row) => worker.fetch(new Request("https://w/", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(row) }), env);
+      await post({ kind: "waitlist", email: "a@example.com" });
+      await post({ kind: "waitlist", email: "b@example.com" });
+      const read = async () => (await worker.fetch(new Request("https://w/",
+        { headers: { Authorization: "Bearer k" } }), env)).json();
+      const rows = await read();
+      const key = rows.find((r) => r.email === "a@example.com")._key;
+      const denied = (await worker.fetch(new Request("https://w/?key=" + encodeURIComponent(key),
+        { method: "DELETE" }), env)).status;
+      const ok = (await worker.fetch(new Request("https://w/?key=" + encodeURIComponent(key),
+        { method: "DELETE", headers: { Authorization: "Bearer k" } }), env)).status;
+      return { denied, ok, left: (await read()).map((r) => r.email) };
+    """)["result"]
+    assert got == {"denied": 401, "ok": 200, "left": ["b@example.com"]}

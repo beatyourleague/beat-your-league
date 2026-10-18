@@ -1268,9 +1268,9 @@ $("form-email").addEventListener("submit", (event) => {
 
   // D9: once no weekly report is left this season, no plan takes money.
   const link = seasonOver() ? "" : WANTS_PASS ? PASS_LINK
-             : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+             : monthlyChosen ? monthlyLink() : STRIPE_LINK_SEASON;
   const otherLink = seasonOver() || WANTS_PASS ? ""
-             : monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY;
+             : monthlyChosen ? STRIPE_LINK_SEASON : monthlyLink();
   if (!link) {
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
@@ -1486,6 +1486,12 @@ function showSeatLink() {
 // that is true either way.
 const FIRST_CHIP = {};                    // marks the chip that names it
 let FIRST = null;                          // null | {when, tuesday}
+// Monthly is paused before the season (week.json phase "preseason"): each
+// month bills in advance, so a May buyer would pay for months with no weekly
+// report in them — the thing the monthly terms say never happens (billing
+// agent note, promise audit D1/D9). It opens when Week 1's report is due.
+var MONTHLY_PAUSED = false;
+function monthlyLink() { return MONTHLY_PAUSED ? "" : STRIPE_LINK_MONTHLY; }
 function firstReportTiming(w, now) {
   if (!w || !Number.isInteger(w.week) || typeof w.first_kickoff !== "string") return null;
   const kickoff = new Date(w.first_kickoff);
@@ -1563,7 +1569,7 @@ function seasonOver() { return Boolean(FIRST && FIRST.when === "over"); }
 function canStartToday() {
   if (FIRST && FIRST.when === "over") return false;
   if (SEAT_MODE) return Boolean(FORM_ENDPOINT);
-  return Boolean(WANTS_PASS ? PASS_LINK : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON);
+  return Boolean(WANTS_PASS ? PASS_LINK : monthlyChosen ? monthlyLink() : STRIPE_LINK_SEASON);
 }
 function closedChipText() {
   if (FIRST && FIRST.when === "over") return "Back next season";
@@ -1730,7 +1736,10 @@ function noteClosedFor(link, other) {
   if (seasonOver()) { link = ""; other = ""; }
   const note = $("closed-note");
   const action = link ? "open" : closedAction(other);
-  if (action === "switch") {
+  if (action === "switch" && MONTHLY_PAUSED && monthlyChosen) {
+    note.textContent = "Monthly starts with the season: it opens the week Week 1's " +
+      "report is due. The season pass is open now: switch to it in step 3 to buy today.";
+  } else if (action === "switch") {
     note.textContent = (monthlyChosen ? "Monthly" : "The season pass") + " isn't " +
       "open just yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
       " is: switch to it in step 3 to buy today.";
@@ -1770,7 +1779,7 @@ function monthlyPlan() {
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
   drawFirst();
-  noteClosedFor(STRIPE_LINK_MONTHLY, STRIPE_LINK_SEASON);
+  noteClosedFor(monthlyLink(), STRIPE_LINK_SEASON);
 }
 
 function seasonPlan() {
@@ -1780,7 +1789,7 @@ function seasonPlan() {
   $("submit").textContent = SEASON_SUBMIT;
   fillRenewalDates();
   drawFirst();
-  noteClosedFor(STRIPE_LINK_SEASON, STRIPE_LINK_MONTHLY);
+  noteClosedFor(STRIPE_LINK_SEASON, monthlyLink());
 }
 
 // The free report's pitch, chip and (when it can't be served) closed note,
@@ -1930,9 +1939,9 @@ function passTermsText() {
 // monthly).
 if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
   noteClosedFor(WANTS_PASS ? PASS_LINK
-                : monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON,
+                : monthlyChosen ? monthlyLink() : STRIPE_LINK_SEASON,
                 WANTS_PASS ? ""
-                : monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY);
+                : monthlyChosen ? STRIPE_LINK_SEASON : monthlyLink());
 }
 
 // Season ⇄ monthly, on the page. Never offered to a seat holder, an update,
@@ -1953,8 +1962,8 @@ function applyPlan() {
 function switchesPlan() {
   if (SEAT_MODE || UPDATE_MODE || TRY_MODE || WANTS_PASS) return false;
   if (seasonOver()) return false;
-  const link = monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
-  const other = monthlyChosen ? STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY;
+  const link = monthlyChosen ? monthlyLink() : STRIPE_LINK_SEASON;
+  const other = monthlyChosen ? STRIPE_LINK_SEASON : monthlyLink();
   return !link && closedAction(other) === "switch";
 }
 // The closed plan's "Switch to …" button, pressed: the plan on screen becomes
@@ -2053,6 +2062,11 @@ drawFirst();
         if (TRY_MODE) { TRIAL = trialTiming(w, now); drawTrial(); return; }
         FIRST = seasonClosed(w, now) ? { when: "over" } : firstReportTiming(w, now);
         drawFirst();
+        if (w && w.phase === "preseason" && STRIPE_LINK_MONTHLY && !SEAT_MODE && !WANTS_PASS) {
+          MONTHLY_PAUSED = true;
+          drawFirst();
+          noteClosedFor(monthlyChosen ? "" : STRIPE_LINK_SEASON, monthlyChosen ? STRIPE_LINK_SEASON : "");
+        }
         if (!seasonOver()) return;
         if (SEAT_MODE) {
           const note = $("closed-note");

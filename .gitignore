@@ -21,6 +21,7 @@ data/processed/*
 # Only the owner writes it (python -m run.suppress), and every cron reads the
 # committed copy, so losing it would mail people who said stop.
 !data/processed/suppressed.txt
+!data/processed/forgotten.txt
 # flock artifacts are transient, never part of the record
 data/processed/ledger/**/*.lock
 .env

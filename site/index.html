@@ -1102,13 +1102,19 @@ if (watchForm) {
           body: JSON.stringify({ kind: "waitlist", email: email, via: VIA }),
           signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
         });
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) {
+          const err = new Error(String(res.status));
+          // The form refused the address itself: retrying can't help (D14).
+          err.refused = res.status >= 400 && res.status < 500;
+          throw err;
+        }
         note.textContent = "You're on the list. One email when signups open, nothing else.";
       } catch (err) {
         // A failed request is a failed request — falling through to the
         // "isn't wired up" message below would explain it with a falsehood.
-        note.textContent = "That didn't send — check your connection and try " +
-          "again. Nothing was recorded.";
+        note.textContent = err && err.refused
+          ? "We couldn't accept that address — check it for typos. Nothing was recorded."
+          : "That didn't send — check your connection and try again. Nothing was recorded.";
       }
       return;
     }

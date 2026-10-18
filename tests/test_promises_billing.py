@@ -201,7 +201,7 @@ def test_an_unmapped_payment_link_is_unattributed_never_a_season_pass(monkeypatc
 def test_a_forgotten_customer_is_never_re_read(monkeypatch, tmp_path) -> None:
     import run.privacy as privacy
     path = tmp_path / "forgotten.txt"
-    path.write_text("cus_aaaa1111\n")
+    path.write_text(privacy.forgotten_code("cus_aaaa1111") + "\n")
     monkeypatch.setattr(privacy, "FORGOTTEN_FILE", path)
     signups, _, problems = _sweep(monkeypatch, [_session()])
     assert signups == [] and problems == []
@@ -270,7 +270,8 @@ def test_delete_removes_one_person_and_nobody_else(tmp_path, monkeypatch) -> Non
     assert all(v == 0 for k, v in left.counts().items()), left.counts()
     assert "other@example.com" in (reg / intake.SIGNUP_LOG_NAME).read_text()
     assert len(load_suppressed(stop)) == 1
-    assert privacy.load_forgotten(tmp_path / "forgotten.txt") == {"cus_aaaa1111"}
+    assert privacy.load_forgotten(tmp_path / "forgotten.txt") == {privacy.forgotten_code("cus_aaaa1111")}
+    assert "cus_aaaa1111" not in (tmp_path / "forgotten.txt").read_text()
     assert (tmp_path / "plans" / "2026" / "w06-ffffffffff.json").exists()
 
 

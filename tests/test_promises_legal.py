@@ -18,7 +18,7 @@ SITE = ROOT / "site"
 # consent and notices are tied to that date. APPEND a (date, digest) pair when
 # the words change; never edit an old one. The last pair must match the page.
 PRIVACY_VERSIONS = [
-    ("2026-10-18", "b3c127bf14309423"),
+    ("2026-10-18", "25bc5d53a2db85c1"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "5546ca3791fadbd9"),

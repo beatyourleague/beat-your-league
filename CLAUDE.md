@@ -1283,6 +1283,54 @@ code-side item was built, merged and pinned. Rules it left:
   §5's ~35 min a day (about 64 owner-hours, about $17 an hour, matching
   `reports/launch-readiness.md`), and the fee gate fails when that report's base case drifts.
 
+**The promise audit (Oct 17–18 2026) — every sentence a buyer could hold us to, checked
+against the product.** About 1,000 claims extracted from the site, checkout text and every
+email; each checked against the code and a real run, then re-attacked by a skeptic: 202
+confirmed mismatches, all fixed (by the product or by the words). Rules it left:
+- **Monthly billing ends in its final paid period** (`run/billing.py`): nothing is stamped
+  months ahead (a `cancel_at` makes Stripe's portal show "Canceled" with no Cancel button);
+  once a subscription's current period ends after the season's last scheduled weekly send
+  (`final_send`) it gets `cancel_at_period_end`. No charge starts a period with no report in
+  it and there is no part-month. Monthly is paused on the join page while week.json says
+  `preseason`. `run/economics.py` models it.
+- **Entitlement follows the row's own subscription** (`subscription_ids` on every paid
+  row); email/customer matching only for rows without one. Stripe's portal opened by email
+  shows only the newest customer, so a second subscription on one address is cancelled for
+  the buyer on request — the one stated exception to "never contact us to cancel".
+- **No address-derived code is committed unkeyed**: send-log keys, the stop list and the
+  forgotten list are HMACs under `LOG_SECRET` (`run/digest.py`, never rotated; sends that
+  need one refuse without it). `run/privacy.py` shows/exports/deletes one person (workflow
+  dispatch takes a keyed digest, results go to the hello@ inbox; Worker rows carry `_key` and
+  accept an authorised DELETE). `run/notice.py` mails a terms/privacy change notice. Reply-To
+  falls back to hello@. A paid session from an unmapped payment link is PAID-UNATTRIBUTED.
+  Consent records the terms version in force at the session's `created` (`TERMS_HISTORY` in
+  run/intake.py — append every `TERMS_VERSION` bump) and is never overwritten. Legal pages
+  pin a digest of their visible text to their "Last updated" date (tests/test_promises_legal.py:
+  append a pair when the words change).
+- **The season's edges**: a derived Week 1 is built only from `run.solo.week_one_due` (9 days
+  before its first kickoff) — the Tuesday run once mailed "Week 1" in May. site/week.json
+  carries `phase` (`season` | `over` | `preseason`); every reader treats a missing phase as
+  season and a week past its last `lands_on` as over. Checkout, seats and the free report
+  close in `over` and from the last week's first kickoff; "this week's report" links show only
+  while fresh.
+- **Odds whose bench alternative ended up starting are withheld** (a later FLEX/SFLEX swap
+  seated him); never recomputed. The closest-call bar is drawn from 50% like the lineup bars.
+- **Results come from the report's own calls**: no odds → "nothing to grade"; voids and ties
+  are listed as no result; the last report makes no "next week" promise; samples say what a
+  subscriber's section shows.
+- **Seats**: the payer's report counts seats only (payer excluded) against `seat_cap`; a
+  holder on the stop list frees the seat (`make seat-release` too); a claim on an inactive
+  pass is told so; a seat slug is unique per address and pass; intake/Tuesday go red when a
+  League Pass exists without UPDATE_SECRET.
+- **Roster updates**: the link carries `&o=<origin>` (posted as `replaces`); expiry is judged
+  at the button press; Saturday rebuilds or skips loudly when settings changed; the stated
+  cutoff is "Friday night (ET)". One email rule on page, Worker and Python (apostrophes in);
+  a 4xx says the address was refused, only a network error says "check your connection".
+- **Words**: "every slot decided, every close call explained" (a game-day "decide before
+  then" case exists); sizes "8, 10, 12 or 14 teams"; League Pass "up to 14 teams"; Standard
+  is "ESPN's and Yahoo's default" (Yahoo's own help page), Three WR has no platform claim;
+  "analysis, not betting picks"; hourly things are "usually within the hour".
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

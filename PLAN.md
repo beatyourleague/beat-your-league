@@ -189,7 +189,7 @@ inclusion in a roundup or an AI answer is one sentence a stranger can copy.
 pitch email, README, directory submission). Identical phrasing across independent domains is the
 co-occurrence signal that forms an entity; varying it destroys the only mechanism available:
 
-> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.
+> Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.
 
 *(Rewritten Sep 29 2026, owner direction: the sentence sells what the file does for the buyer; the published grading stays public but is no longer part of the pitch.)*
 
@@ -361,7 +361,7 @@ stop — **$62.46**. And checkout deliberately opens in draft season, so an Aug 
 billed from August: **$68.45**, because the final part-month is inside a period already paid
 for and `proration_behavior=none` raises no credit there. So the pass saves 37–43%, not 35%.
 Nothing about the pricing decision changes — the gap moved in the pass's favour — but the
-figure was quoted on the strength of arithmetic nobody had run against the calendar. Charm pricing on monthly and round numbers
+figure was quoted on the strength of arithmetic nobody had run against the calendar. *(Oct 18 2026: superseded — a monthly subscription now ends at the close of the period that contains the season's last report, so there is no part-month and nothing after the season; `make economics` prints the current figures.)* Charm pricing on monthly and round numbers
 on the season tiers is deliberate, not drift — it is each price wearing its own category's
 clothes, and it matches the verified monthly field on the compare page (FootClan $11.99,
 Scoutcast $5.99, FantasyPros $3.99–$22.99).

@@ -59,11 +59,13 @@ PLANS_DIR = REPO_ROOT / "data" / "plans"
 FORGOTTEN_FILE = REPO_ROOT / "data" / "processed" / "forgotten.txt"
 ACTIONS = ("show", "export", "delete")
 _CODE = re.compile(r"^[0-9a-f]{12}$")
-_CUSTOMER = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
+_CUSTOMER_ID = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
+_FORGOTTEN_CODE = re.compile(r"^[0-9a-f]{16}$")
 FORGOTTEN_HEADER = (
     "# Stripe customers whose data was deleted on request (run/privacy.py).\n"
     "# The intake's sweep skips their old payments so a re-read cannot restore\n"
-    "# them. Customer ids only - never an address. One per line.\n")
+    "# them. Keyed codes of customer ids (run/digest.py, LOG_SECRET) - never an\n"
+    "# id or an address, since this file is in a public repository.\n")
 
 
 class PrivacyError(RuntimeError):
@@ -96,7 +98,7 @@ class Found:
     def customers(self) -> set[str]:
         ids = {str(r.get(k) or "") for r in (*self.signups, *self.registry)
                for k in ("stripe_customer_id",)}
-        return {i for i in ids if _CUSTOMER.match(i)}
+        return {i for i in ids if _CUSTOMER_ID.match(i)}
 
 
 # --------------------------------------------------------------------- #
@@ -217,19 +219,32 @@ def forget(code: str, found: Found, registry_dir: Path,
         path = forgotten_file or FORGOTTEN_FILE
         known = load_forgotten(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(FORGOTTEN_HEADER + "".join(f"{c}\n" for c in sorted(known | customers)),
+        codes = {forgotten_code(c) for c in customers}
+        path.write_text(FORGOTTEN_HEADER + "".join(f"{c}\n" for c in sorted(known | codes)),
                         encoding="utf-8")
     done["customers recorded as forgotten"] = len(customers)
     return done
 
 
+def forgotten_code(customer_id: str) -> str:
+    """The keyed code a forgotten customer is recorded under: the file is
+    committed to a public repository, and a raw Stripe id there would tie a
+    deletion request to a customer for anyone reading it."""
+    from run.digest import keyed
+    return keyed(customer_id, 16)
+
+
+def is_forgotten(customer_id: str | None, codes: set[str]) -> bool:
+    return bool(customer_id and codes) and forgotten_code(customer_id) in codes
+
+
 def load_forgotten(path: Path | None = None) -> set[str]:
-    """Customer ids whose old payments the intake must never re-read."""
+    """Keyed codes of customers whose old payments the intake must never re-read."""
     path = path or FORGOTTEN_FILE
     if not path.is_file():
         return set()
     return {line.strip() for line in path.read_text(encoding="utf-8").splitlines()
-            if _CUSTOMER.match(line.strip())}
+            if _FORGOTTEN_CODE.match(line.strip())}
 
 
 def delete_worker_rows(rows: list[dict], endpoint: str, api_key: str) -> tuple[int, int]:

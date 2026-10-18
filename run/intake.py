@@ -386,13 +386,13 @@ def sweep(api_key: str, since: int | None = None,
     # never re-read from an old payment — a full sweep or a lost watermark
     # would otherwise restore everything the deletion removed. A NEW purchase
     # makes a new customer and is served normally.
-    from run.privacy import load_forgotten
+    from run.privacy import is_forgotten, load_forgotten
     forgotten = load_forgotten()
 
     for session in sessions:
         if not is_paid(session):
             continue
-        if forgotten and _customer_id(session) in forgotten:
+        if is_forgotten(_customer_id(session), forgotten):
             continue
         ref = session.get("client_reference_id")
         if not ref:
@@ -1842,7 +1842,10 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
                 season_started=getattr(data, "week", 1) > 1, byes=byes,
                 # The week this run already derived, so the roster report's
                 # "weeks ahead" and this run agree on what "now" is.
-                from_week=getattr(data, "week", None))
+                from_week=getattr(data, "week", None),
+                # Today's reserve list / suspensions / releases: a cover who
+                # can't play is no cover (EMAILS-119/126-130).
+                roster_out=getattr(data, "roster_out", None))
             # A seat's roster report must carry the seat's stop route, not the
             # billing page a seat has no account on (render.preseason's
             # `seat`); only a seat passes the keyword.

@@ -602,7 +602,7 @@ def _regret(regret: Mapping[str, Any]) -> str:
         f'color:{NAVY};">Start {esc(regret["start_name"])} '
         f'<span style="color:{SLATE};font-weight:normal;">over</span> '
         f'{esc(regret["over_name"])}</div>'
-        f'<div style="padding:12px 0 4px 0;">{_bar(confidence, "100%", 10)}</div>'
+        f'<div style="padding:12px 0 4px 0;">{_bar((confidence - 50) * 2, "100%", 10)}</div>'
         f'<div style="font-family:{DISPLAY};font-size:26px;font-weight:bold;'
         f'font-style:italic;color:{NAVY};padding:2px 0 6px 0;">{confidence}%</div>'
         f'<p style="{SMALL}margin:0 0 6px 0;">{drivers}</p>'

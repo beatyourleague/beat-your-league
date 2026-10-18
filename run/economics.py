@@ -114,27 +114,23 @@ def _add_month(day: date) -> date:
 
 
 def monthly_charges(joined: date, stop: date) -> tuple[int, float]:
-    """(full monthly charges, the prorated last charge) for a monthly buyer
-    who joins on ``joined`` while billing stops at ``stop`` (run/billing.py's
-    cancel_at). The first month is charged in full at signup, whatever the
-    stop (run/billing.py: a stop inside a period already paid raises no
-    credit). After that Stripe bills in advance on the anniversary and, in the
-    period containing the stop, shortens it and prorates by time — so that
-    last charge is the share of the period before the stop."""
+    """(monthly charges, 0.0) for a monthly buyer who joins on ``joined`` when
+    the season's last weekly report is due on ``stop``. The first month is
+    charged at signup; Stripe then bills in advance on each anniversary, and
+    run/billing.py ends the subscription at the close of the period that
+    contains the last report (cancel_at_period_end), so an anniversary renews
+    only while it falls on or before ``stop``. No part-month exists any more;
+    the second element is kept so callers' shape doesn't move."""
     full, start = 1, _add_month(joined)
-    while start < stop:
-        end = _add_month(start)
-        if end <= stop:
-            full += 1
-            start = end
-            continue
-        return full, round(MONTHLY * (stop - start).days / (end - start).days, 2)
+    while start <= stop:
+        full += 1
+        start = _add_month(start)
     return full, 0.0
 
 
 def season_calendar(cache_dir: Path | None = None, today: date | None = None
                     ) -> tuple[dict[int, date], date] | None:
-    """({week: the Tuesday its report goes out}, the monthly stop date) for
+    """({week: the Tuesday its report goes out}, the last report's date) for
     the season being served, from the schedule the product itself reads.
     None when the cache cannot say (the offseason, a cold cache)."""
     try:
@@ -163,7 +159,7 @@ def monthly_by_join_week(calendar: tuple[dict[int, date], date]) -> list[dict]:
     rows = []
     for week in sorted(tuesdays):
         joined = tuesdays[week]
-        if joined >= stop:
+        if joined > stop:
             continue
         full, stub = monthly_charges(joined, stop)
         rows.append({"week": week, "joined": joined, "charges": full + (1 if stub else 0),
@@ -196,13 +192,12 @@ def customer_lines(calendar=None) -> list[str]:
     if cal is None:
         lines.append("  Monthly by join week: the schedule can't say (offseason or cold cache).")
     else:
-        lines.append(f"  Monthly, by the week they join (billing stops {cal[1]:%b %-d}; "
+        lines.append(f"  Monthly, by the week they join (the last report is {cal[1]:%b %-d}; "
                      f"joins on the report Tuesday):")
         for row in monthly_by_join_week(cal):
-            stub = f" incl. a ${row['stub']:.2f} part-month" if row["stub"] else ""
             plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
             lines.append(f"    Week {row['week']:>2}: {plural(row['charges'], 'charge')}, "
-                         f"${row['paid']:6.2f}{stub} · "
+                         f"${row['paid']:6.2f} · "
                          f"{plural(row['reports'], 'weekly report')}")
         lines.append(f"    (the season pass is ${SEASON:.0f} whichever week they join)")
     lines.append("")

@@ -440,6 +440,12 @@ def check_funnel_config() -> list[Gate]:
     gates.append(_gate("Funnel", "The free-report button only shows when requests can be received",
                        not (trial and not form),
                        "TRIAL_OPEN is on but FORM_ENDPOINT is empty: the button posts nowhere"))
+    # EMAILS-69: every free report ends "Get next Tuesday's report" → join/,
+    # which must then be able to sell it.
+    gates.append(_gate("Funnel", "The free report's sign-up button lands on an open checkout",
+                       not (trial and not open_),
+                       "TRIAL_OPEN is on while CHECKOUT_OPEN is off: each free report's "
+                       "'Get next Tuesday's report' button would land on a closed page"))
     waitlist = landing.get("WAITLIST_ENDPOINT", "")
     if not waitlist and not can:
         gates.append(Gate("Funnel", "Waitlist sign-ups are collected automatically", "OWNER",

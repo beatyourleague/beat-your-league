@@ -1465,7 +1465,9 @@ def section_regret(regret: Mapping[str, Any]) -> str:
     body = (
         f'<div class="call"><div class="verdict">Start {esc(regret["start_name"])} '
         f'<span class="over">over</span> {esc(regret["over_name"])}</div>'
-        f'<div class="conf"><div class="bar"><i style="width:{confidence}%"></i></div>'
+        # Drawn from 50%, like the lineup bars, so "the bar starts at 50%"
+        # is true of every bar in the report (promise audit LANDING-35).
+        f'<div class="conf"><div class="bar"><i style="width:{_bar_from_even(regret["confidence"])}%"></i></div>'
         f'<div class="num">{confidence}%</div></div>'
         f'<div class="drivers">{drivers}</div>'
         f'<p class="why">{esc(regret["definition"])}</p>{extra}</div>'

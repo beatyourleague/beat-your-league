@@ -1955,7 +1955,11 @@ def test_every_proof_page_ends_with_an_ask() -> None:
     in the funnel; each used to end at a footer with no way to buy."""
     backtest = (SITE / "backtest.html").read_text(encoding="utf-8")
     sample = SAMPLE_REPORT
-    assert "join/index.html" in sample, "sample report is a dead end"
+    # D15 (promise audit): the sample's ask follows the landing's checkout
+    # state — the join page while it can sell, the waitlist while it can't.
+    from render.report import checkout_open
+    ask = "join/index.html" if checkout_open() else 'href="index.html#watch-form"'
+    assert ask in sample, "sample report is a dead end"
     assert "join/index.html" in backtest, "backtest page is a dead end"
     assert "../join/index.html" in LEDGER, "ledger page is a dead end"
 
@@ -2729,8 +2733,10 @@ def test_the_two_samples_point_at_each_other() -> None:
     """Each page shows what the other one does not: rebuilding one without the
     other is how the pair drifts into contradicting itself."""
     assert 'href="sample-report.html"' in FIRST_WEEK_SAMPLE
-    assert "join/index.html" in FIRST_WEEK_SAMPLE, "first-week sample is a dead end"
-    assert "join/index.html" in SAMPLE_REPORT, "the sample is a dead end"
+    from render.report import checkout_open
+    ask = "join/index.html" if checkout_open() else 'href="index.html#watch-form"'
+    assert ask in FIRST_WEEK_SAMPLE, "first-week sample is a dead end"
+    assert ask in SAMPLE_REPORT, "the sample is a dead end"
     # The mid-season sample no longer points at the week-1 file (Sep 29 2026):
     # a buyer joining now gets a full file, and the landing FAQ links the
     # week-1 sample for anyone who asks. Before the NEXT pre-season, restore
@@ -2833,7 +2839,7 @@ def test_the_buyer_can_switch_plans_without_losing_their_roster() -> None:
     assert "!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS" in switch
     assert "location" not in switch, "switching plans must not reload the page"
     handler = JOIN.split('$("form-email").addEventListener')[1].split("\n});")[0]
-    assert "monthlyChosen ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON" in handler
+    assert "monthlyChosen ? monthlyLink() : STRIPE_LINK_SEASON" in handler
     assert "WANTS_MONTHLY" not in handler, "the handler reads the URL, not the choice"
     # Both prices on the switch are the prices the plans charge.
     assert f"Season pass · ${SEASON_PRICE}" in JOIN
@@ -3677,7 +3683,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     # The first paint knows the other plan too (it used to pass none).
     first = code.split("if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {\n  noteClosedFor(")[1] \
                 .split(");")[0]
-    assert "STRIPE_LINK_SEASON : STRIPE_LINK_MONTHLY" in first
+    assert "STRIPE_LINK_SEASON : monthlyLink()" in first
     # F6: a kept email is a done message, once, and the note says "below".
     listed = handler.split('closedAction(otherLink) === "list"')[1].split(".catch(")[0]
     assert "if (state.listed) return;" in listed
@@ -4000,7 +4006,7 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     assert re.search(r"\ndrawShapeNote\(\);\nfillRenewalDates\(\);\ndrawFirst\(\);\n", JOIN)
     src = "\n".join(_js_function(JOIN, f) for f in
                     ("canStartToday", "closedChipText", "firstChipText", "renewalDate",
-                     "renewsOn"))
+                     "renewsOn", "monthlyLink")) + "\nvar MONTHLY_PAUSED = false;"
     cases = [  # seat, pass, monthly, season link, monthly link, pass link, form
         [False, False, False, "", "", "", ""],
         [False, False, True, "x", "", "", ""],

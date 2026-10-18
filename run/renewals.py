@@ -35,7 +35,7 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from render.renewal import LEAD_MAX_DAYS, Renewal, due, renewal_message
+from render.renewal import renewal_day, LEAD_MAX_DAYS, Renewal, due, renewal_message
 from run.checkout import _stripe_get
 from run.delivery import DRY_PROVIDER, DeliveryError, build_provider, send_all
 from run.subscriptions import SubscriptionError
@@ -102,8 +102,8 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                     problems.append("a yearly subscription has no readable "
                                     "renewal date — no notice sent")
                     continue
-                renews_on = datetime.fromtimestamp(
-                    period_end, timezone.utc).date()
+                # The buyer's clock (ET), never the UTC date (EMAILS-112-117).
+                renews_on = renewal_day(period_end)
                 customer = subscription.get("customer")
                 email = ""
                 customer_id = None

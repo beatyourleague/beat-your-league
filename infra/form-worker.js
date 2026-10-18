@@ -41,7 +41,10 @@
  *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
  *   POST JSON  {kind:"waitlist", email, ref?}         (ref: the roster checked
  *                                while checkout was closed, run/waitlist.py)
- *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows
+ *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows,
+ *                                each carrying its storage key as `_key`
+ *   DELETE ?key=<_key> + Authorization: Bearer <FORM_API_KEY>  →  removes one
+ *                                row (a deletion request, run/privacy.py)
  * Every kind may also carry an optional `via` (^[a-z0-9-]{1,24}$, e.g. "x" or
  * "reply-kit"): where the visitor came from, read off the page's own URL, so
  * the owner can see which channel brings people without a cookie or a
@@ -295,11 +298,24 @@ export default {
       do {
         const page = await env.ROWS.list({ cursor });
         for (const entry of page.keys) {
-          if (entry.metadata) rows.push(entry.metadata);
+          if (entry.metadata) rows.push({ ...entry.metadata, _key: entry.name });
         }
         cursor = page.list_complete ? undefined : page.cursor;
       } while (cursor);
       return json(rows);
+    }
+
+    // One row, on a deletion request: same key as the read, never from a
+    // browser (no CORS for it), so a stranger can't erase anybody's rows.
+    if (request.method === "DELETE") {
+      const auth = request.headers.get("Authorization") || "";
+      if (!env.FORM_API_KEY || auth !== `Bearer ${env.FORM_API_KEY}`) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      const key = new URL(request.url).searchParams.get("key") || "";
+      if (!key || key.length > 512) return json({ error: "bad key" }, 400);
+      await env.ROWS.delete(key);
+      return json({ deleted: true });
     }
 
     return json({ error: "method" }, 405);

@@ -38,7 +38,9 @@ def _epoch(when: date) -> int:
     Aug 1 while actually encoding Aug 5 — the tests still passed, because the
     wrong date also fell inside the window, which is a test proving nothing
     about the boundary it names."""
-    return calendar.timegm(when.timetuple())
+    # Noon UTC: the renewal date is read on the buyer's clock (America/New_York,
+    # EMAILS-112), and midnight UTC is the previous evening there.
+    return calendar.timegm(when.timetuple()) + 12 * 3600
 
 
 def _subscription(**over) -> dict:
