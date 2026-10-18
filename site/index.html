@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — your lineup, decided every Tuesday</title>
 <link rel="canonical" href="https://beatyourleague.com/">
-<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
+<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — your lineup, decided every Tuesday">
-<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
+<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -614,7 +614,7 @@
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
     <p class="sub">Built from your roster, scored for PPR, half-PPR or standard: every
-    close call decided, with the odds wherever both players are playing, off the
+    slot decided, every close call explained, and the odds wherever both players are playing, off the
     injury report and have enough games on record (not on team defenses). In
     your inbox every Tuesday, plus a Saturday check when injury news changes your
     lineup.</p>
@@ -628,7 +628,7 @@
     <p class="watchnote" id="watch-note" role="status"></p>
     <ul class="creds" aria-label="What you get">
       <li>ESPN, Yahoo, Sleeper, CBS — paste your roster, no login</li>
-      <li>Decided calls, with odds and the reason</li>
+      <li>Your lineup decided, every call explained</li>
       <li>Set your lineup in 90 seconds</li>
     </ul>
     <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b> One email when signups
@@ -667,7 +667,7 @@
             <div class="frow"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span>
               <span class="fnc">questionable · see if/then</span></div>
           </div>
-          <div class="fcap">Each % is the chance he outscores your best bench player.
+          <div class="fcap">Each % is the chance he outscores your best bench player at that spot.
           Longer bar, surer call.</div>
         </div><!--/card-->
         <div class="peek" aria-hidden="true"><div class="filehead">The week's closest call</div>
@@ -694,14 +694,14 @@
     <div class="big">12:55<small>Sunday</small></div>
     <p><b>He was on your bench. He went for 30. You lost by four.</b> Every manager has
     that week — lost on one close call, made in a hurry five minutes before kickoff. The
-    report makes that call on Tuesday, for your roster, with the odds. Sunday, you
+    report makes that call on Tuesday, for your roster, and tells you why. Sunday, you
     watch football.</p>
   </div>
 </section>
 
 <section>
   <h2>What lands in your inbox</h2>
-  <p class="lede">Every slot decided, for your roster under your scoring. Here's the
+  <p class="lede">Every slot decided, for your roster, scored full PPR, half-PPR or standard. Here's the
   rest of that same real report.</p>
   <div class="rows">
     <div class="leaf first">
@@ -720,7 +720,7 @@
           <!-- The 50% tick is explained in a legend line, not labelled on the
                bar: on a phone "TOSS-UP" sat right above "70%" and read as one
                phrase (launch review BE-I11). -->
-          <div class="fliplegend">The bar starts at 50%, a toss-up.</div>
+          <div class="fliplegend">The mark in the middle is 50%, a toss-up.</div>
         </div>
       </div><!--/card-->
     </div>
@@ -757,8 +757,9 @@
       </div><!--/card-->
     </div>
     <div class="note"><b>Late news, planned for</b><p>Got a questionable starter? The
-      report already names who goes in if he sits, and Saturday's final check tells
-      you if he does.</p></div>
+      report names who goes in if he sits, or says plainly when nobody on your bench
+      can. If Friday's injury report rules him out, Saturday's final check tells you the
+      swap.</p></div>
   </div>
   <!-- This week's live report is linked only in a week it shows at least three
        odds and a closest call — the hero's own rule, read from the file the
@@ -800,7 +801,7 @@
       <h3 class="cmphead"><span>Your report</span></h3>
       <dl>
         <dt>When</dt><dd>Every Tuesday, in your inbox. Nothing to remember.</dd>
-        <dt>Close calls</dt><dd>Every one decided, with the odds wherever both players are
+        <dt>Close calls</dt><dd>Every one explained and your lineup decided, with the odds wherever both players are
         playing, off the injury report and have enough games on record (not on team
         defenses).</dd>
         <dt>Late news</dt><dd>An if/then on Tuesday, then a Saturday check of Friday's injury
@@ -817,35 +818,37 @@
   <h2>Your week, handled</h2>
   <ol class="timeline">
     <li><b>Tuesday<small>Your report</small></b><p>Your report lands. A short checklist up top — the calls worth
-      making, and the one player whose news to watch. Tick the boxes, done in ninety
+      making, and whose news to watch and when. Tick the boxes, done in ninety
       seconds.</p></li>
     <li><b>Saturday<small>Only if news</small></b><p>Friday's injury report changed your lineup? A short final
       check tells you the swap. No news, no email.</p></li>
-    <li><b>Sunday<small>Kickoff</small></b><p>Your lineup's already set. If news breaks late, the report told
-      you the if/then in advance.</p></li>
-    <li><b>Monday<small>The receipt</small></b><p>Win or lose, you have the receipt: the call, the odds and the
-      reason, dated Tuesday. Your next report lists last week's calls and how each one
-      finished.</p></li>
+    <li><b>Sunday<small>Kickoff</small></b><p>Your lineup's already set. A starter already in doubt had his
+      if/then on Tuesday; one ruled out on Friday's report got a Saturday note.</p></li>
+    <li><b>Monday<small>The receipt</small></b><p>Win or lose, you have the receipt: the call and the reason,
+      dated Tuesday. Your next report lists every call that carried odds and how each
+      one finished.</p></li>
   </ol>
 </section>
 
 <section id="pricing">
   <h2 class="slant">Try a month, or take the season.</h2>
-  <p class="lede">Joining mid-season? Your first report lands the day you sign up, then a
-  new one every Tuesday.</p>
+  <p class="lede">Joining mid-season? Join before that week's first game and its report usually
+  lands within the hour; join after it and your roster report does. Then a new
+  report every Tuesday.</p>
   <div class="plans">
     <div class="plan">
       <div class="head"><div class="tag">Monthly</div></div>
       <div class="price">$14.99 <small>/ month</small></div>
       <ul>
-        <li>Your first report the day you sign up, then every Tuesday</li>
+        <li>A report usually within the hour of joining, then your weekly report every
+        Tuesday</li>
         <li>A final check on Saturday when injury news changes your lineup</li>
         <li>Try it risk-free. Full refund, no questions, until your second
         weekly report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, online — no one to ask</li>
-        <li>Billing stops when the season does — we don't charge through
-        the offseason</li>
+        <li>Cancel any time yourself, online</li>
+        <li>Billing stops on its own after the season's last weekly report — your
+        last charge is the month that report falls in</li>
       </ul>
       <div class="soon" id="monthly-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
     </div>
@@ -853,13 +856,13 @@
       <div class="head"><div class="tag">Season pass · 2026</div><span class="stamp50">Founding rate</span></div>
       <div class="price">$39 <small>/ season</small></div>
       <ul>
-        <li>Your first report the day you sign up, then every Tuesday through your
-        title game</li>
+        <li>A report usually within the hour of joining, then your weekly report every
+        Tuesday through your title game</li>
         <li>A final check on Saturday when injury news changes your lineup</li>
         <li>Try it risk-free. Full refund, no questions, until your second
         weekly report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, online — no one to ask</li>
+        <li>Cancel any time yourself, online</li>
         <li>Founding rate locked in: renews once a year at $39 unless you cancel,
         never more. We email you first, and you cancel online yourself
         (<a href="terms.html#cancel">how</a>)</li>
@@ -879,8 +882,8 @@
     <div>
     <div class="kicker">Run the league?</div>
     <h2>One payment covers every manager.</h2>
-    <p>Every manager gets their own report, built from their own roster, and nobody's
-    team is shared. Twelve managers set their lineups on Tuesday, and the group chat
+    <p>For a league of up to 14 teams. Every manager gets their own report, built from
+    their own roster, and nobody's team is shared. Twelve managers set their lineups on Tuesday, and the group chat
     finds out Sunday who was right. Any manager can buy it; you don't have to be the
     commissioner.</p>
     <p><a class="btn ghost" href="league-pass.html">See the League Pass</a></p>
@@ -898,10 +901,11 @@
   <div class="whycard">
     <div class="kicker">Why this exists</div>
     <p class="whyquote">Nobody should set a lineup at <em>12:55 on Sunday.</em> Yours gets
-    decided on <em>Tuesday</em> — for your team, under your scoring.</p>
-    <p class="whybody">So we built the report we wanted: every close call on your roster
-    decided on Tuesday, with the odds and the reason, and the plan for late news. One email, a
-    few minutes of your week, and Sunday back to being fun. We're independent and small,
+    decided on <em>Tuesday</em> — for your team, under your league's scoring type.</p>
+    <p class="whybody">So we built the report we wanted: every slot on your roster
+    decided on Tuesday, every close call explained, and the plan for late news. One email on
+    Tuesday (plus a Saturday note, only when injury news changes your lineup), a few
+    minutes of your week, and Sunday back to being fun. We're independent and small,
     paid only by subscribers: no ads and no selling your data.</p>
   </div>
 </section>
@@ -916,27 +920,27 @@
     <div class="faq">
       <details>
         <summary>Does it work with my league?</summary>
-        <div class="a">Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams. Lineups: standard (ESPN's default), two FLEX (Sleeper's default), three WR with a W/R/T FLEX (Yahoo's default) or superflex, each with or without a kicker and a team defense. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version.</div>
+        <div class="a">Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8, 10, 12 or 14 teams (in between? pick the closest). Lineups: standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR with a W/R/T FLEX, or superflex, each with or without a kicker and a team defense. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version.</div>
       </details>
       <details>
         <summary>I'm in more than one league. What do I need?</summary>
-        <div class="a">Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager with one payment.</div>
+        <div class="a">Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several; Stripe's billing page shows only the newest, so to cancel an older one, reply to any report and we'll cancel it for you. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager in a league of up to 14 teams with one payment.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
-        <div class="a">Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap.</div>
+        <div class="a">Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Join before a week's first game (from Week 2) and that week's report usually lands within the hour; otherwise your roster report does, and your first weekly report comes the next Tuesday one goes out. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap.</div>
       </details>
       <details>
         <summary>When do the numbers start?</summary>
-        <div class="a">Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR, 12-team standard lineups that start a kicker and a defense get them from Week 2, and every other setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report looks like</a>).</div>
+        <div class="a">Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and your roster report usually lands within the hour, then the next week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR, 12-team standard lineups that start a kicker and a defense get them from Week 2, and every other setup from Week 4 (<a href="sample-first-week.html">here's what a Week 1 report looks like</a>).</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday.</div>
+        <div class="a">Trades and pickups happen — update your roster from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check, and every report after it uses it.</div>
       </details>
       <details>
         <summary>Can I check how it decides?</summary>
-        <div class="a">Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the <a href="how-it-works.html">How it works</a> page.</div>
+        <div class="a">Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How each part is worked out is on the <a href="how-it-works.html">How it works</a> page.</div>
       </details>
       <details>
         <summary>Who's behind this?</summary>
@@ -960,11 +964,11 @@
 </main>
 
 <footer>
-  <b style="color:var(--dusk2)">Beat Your League</b> — the weekly scouting report for
-  your fantasy roster, every Tuesday.<br>
+  <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks. A weekly
+  start/sit report for your fantasy roster, every Tuesday.<br>
   Sample visuals above are real output from the 2024 NFL season, labeled where shown.
-  NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored to your league's
-  settings by us. Projections are analysis, not guarantees. Must be 18+ to subscribe.
+  NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored by us under the
+  scoring you pick. Projections are analysis, not guarantees. Must be 18+ to subscribe.
   Not affiliated with the NFL.<br>
   <a href="how-it-works.html">How it works</a> ·
   <a href="sample-report.html">See a real report</a> ·
@@ -989,23 +993,23 @@
     {
       "@type": "Product",
       "name": "Beat Your League",
-      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every close call decided, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.",
+      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "39", "priceCurrency": "USD",
-         "description": "Season pass — every weekly report through your title game, the first on the day you join. No-questions refund until your second weekly report's week kicks off."},
+         "description": "Season pass — a report usually within the hour of joining, then every weekly report through your title game. No-questions refund until your second weekly report's week kicks off."},
         {"@type": "Offer", "price": "14.99", "priceCurrency": "USD",
-         "description": "Monthly — same report, cancel any time, billing stops when the season does."}
+         "description": "Monthly — same report, cancel any time, billing stops on its own after the season's last weekly report."}
       ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8 to 14 teams. Lineups: standard (ESPN's default), two FLEX (Sleeper's default), three WR with a W/R/T FLEX (Yahoo's default) or superflex, each with or without a kicker and a team defense. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version."}},
-        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several. Running a whole league? The League Pass covers every manager with one payment."}},
-        {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Your first one comes the day you sign up. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
-        {"@type": "Question", "name": "When do the numbers start?", "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and you get your roster report the same day, then the week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR, 12-team standard lineups that start a kicker and a defense get them from Week 2, and every other setup from Week 4."}},
-        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — reply to any report with your updated roster and it follows from the next Tuesday."}},
-        {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Every report also lists last week's calls and how each one finished. How each part is worked out is on the How it works page."}},
+        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8, 10, 12 or 14 teams (in between? pick the closest). Lineups: standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR with a W/R/T FLEX, or superflex, each with or without a kicker and a team defense. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version."}},
+        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several; Stripe's billing page shows only the newest, so to cancel an older one, reply to any report and we'll cancel it for you. Running a whole league? The League Pass covers every manager in a league of up to 14 teams with one payment."}},
+        {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Join before a week's first game (from Week 2) and that week's report usually lands within the hour; otherwise your roster report does, and your first weekly report comes the next Tuesday one goes out. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
+        {"@type": "Question", "name": "When do the numbers start?", "acceptedAnswer": {"@type": "Answer", "text": "Join in Week 4 or later and your first weekly report carries the odds. (Join after that week's first game and your roster report usually lands within the hour, then the next week's report on Tuesday.) Early in a season they start sooner or later depending on your setup: Week 1 sets your lineup in last season's order with no odds, full-PPR, 12-team standard lineups that start a kicker and a defense get them from Week 2, and every other setup from Week 4."}},
+        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — update your roster from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check, and every report after it uses it."}},
+        {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How each part is worked out is on the How it works page."}},
         {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Beat Your League is independent and small: one fantasy player built it, after too many lineups set at 12:55 on Sunday. It's paid for only by subscribers — no ads, and your data is never sold. Questions go to hello@beatyourleague.com."}}
       ]
     }
@@ -1135,7 +1139,15 @@ if (watchForm) {
 // buyer's roster and scoring to the payment (it puts them in the checkout URL
 // as Stripe's client_reference_id). A CTA that jumps a buyer to checkout
 // directly takes their money and leaves us with no idea whose team to report on.
+// The closed state as the static page draws it, kept so a season that ends
+// can put it back (closeForSeason, below): the flip replaces these nodes.
+let closedState = null;
 if (CHECKOUT_OPEN) {
+  closedState = ["#nav-cta", "#sticky-cta", "#closer-cta", "#season-cta", "#monthly-cta",
+    "#closer-head", "#closer-note", "#finance-note", ".heroline"]
+    .map((sel) => [sel, document.querySelector(sel)])
+    .filter(([, el]) => el)
+    .map(([sel, el]) => [sel, el.cloneNode(true)]);
   const heroOpen = document.getElementById("hero-open");
   if (heroOpen) heroOpen.hidden = false;
   const nav = document.getElementById("nav-cta");
@@ -1149,6 +1161,7 @@ if (CHECKOUT_OPEN) {
     link.className = "btn gold";
     link.style.marginTop = "16px";
     link.href = "join/index.html";
+    link.id = "season-cta";
     link.textContent = "Get the season pass — $39";
     season.replaceWith(link);
   }
@@ -1159,6 +1172,7 @@ if (CHECKOUT_OPEN) {
     link.style.borderColor = "var(--navy)";
     link.style.color = "var(--navy)";
     link.href = "join/index.html?plan=monthly";
+    link.id = "monthly-cta";
     link.textContent = "Subscribe monthly";
     monthly.replaceWith(link);
   }
@@ -1216,8 +1230,12 @@ if (CHECKOUT_OPEN) {
       lead.id = "season-clock";
       lead.textContent = "Checkout is open.";
       heroline.appendChild(lead);
-      heroline.appendChild(document.createTextNode(
-        " Set up your team and your first report lands today."));
+      // The season clock below makes this exact once week.json says which
+      // week it is; this is what shows when that file can't be read.
+      const rest = document.createElement("span");
+      rest.id = "open-line";
+      rest.textContent = " Set up your team and your first report lands today.";
+      heroline.appendChild(rest);
     }
     // Same sentence, same reason, at the bottom of the page. The heading also
     // carries a hardcoded date that is simply false from Sep 9 onward.
@@ -1243,6 +1261,36 @@ if (CHECKOUT_OPEN) {
       }
     }
   }
+}
+
+// Checkout closes with the season: from the last week's first kickoff no
+// weekly report is left to sell, and join/ says so too. Puts the closed state
+// back (the capture, its caption, "Tell me when it opens") and says why.
+function closeForSeason(line) {
+  if (closedState) {
+    for (const [sel, clone] of closedState) {
+      const live = document.querySelector(sel);
+      if (!live) continue;
+      if (VIA) {
+        clone.querySelectorAll("a[href]").forEach((a) => {
+          a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+        });
+      }
+      live.replaceWith(clone);
+    }
+    ["watch-form", "watch-note"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = false;
+    });
+    const hero = document.querySelector(".hero");
+    if (hero) hero.classList.remove("can-buy");
+  }
+  ["hero-open", "try-cta"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
+  const clock = document.getElementById("season-clock");
+  if (clock) clock.textContent = line;
 }
 
 // AFTER every href this script writes: the open state's CTAs are rewritten or
@@ -1351,11 +1399,13 @@ if (!reduced) {
 // The season clock. week.json is written by the same Tuesday build as
 // this-week.html: the week its report covers, the season's last week, and
 // lands_on, the Tuesday the NEXT report goes out (from the NFL schedule, never
-// typed). The line shows only in the eight days before that Tuesday, so a
-// missed build goes quiet the day after, and a preseason file built for Week 1
-// in May never claims a report "lands Tuesday" months early. Anything wrong
-// with the file leaves the static sentence alone; nothing here can throw past
-// the try, so it can never take the rest of this script down with it.
+// typed), plus its phase — "season", "over" (the season's reports are done) or
+// "preseason" (next season's schedule is out, Week 1's report not yet due;
+// week is 1 and lands_on is the day Week 1's report lands). No phase reads as
+// "season". The line shows only in the eight days before that Tuesday, so a
+// missed build goes quiet the day after. Anything wrong with the file leaves
+// the static sentences alone; nothing here can throw past the try, so it can
+// never take the rest of this script down with it.
 (function () {
   try {
     const clock = document.getElementById("season-clock");
@@ -1364,16 +1414,59 @@ if (!reduced) {
       signal: window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
+        if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return;
+        const phase = w.phase || "season";
+        // lands_on is an Eastern date, so "past it" is judged on Eastern time.
+        const et = {};
+        new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric",
+          month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+          .forEach((x) => { et[x.type] = x.value; });
+        const etToday = et.year + "-" + et.month + "-" + et.day;
+        const landsOk = /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "");
+        const fresh = landsOk && etToday <= w.lands_on;
+        const kicked = !!w.first_kickoff && Date.now() >= Date.parse(w.first_kickoff);
+        const last = w.week >= w.last_week;
+        // Over: said so, or the last week's report day has been and gone.
+        // Closed from the last week's first kickoff: nothing left to sell.
+        if (phase === "over" || (phase === "season" && last && ((landsOk && !fresh) || kicked))) {
+          closeForSeason("The " + w.season + " season's last report has gone out.");
+          return;
+        }
         // EVERY link to this week's live report waits for the same rule — at
-        // least three odds and a closest call — or it stays on the pinned
-        // sample. The hero obeyed it while the proof cards' footer linked the
-        // page whatever week it was (launch review PC-01).
-        if (w && Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call) {
+        // least three odds and a closest call, in a week still current — or it
+        // stays on the pinned sample. A failed build or the offseason leaves an
+        // old week.json behind, and it must not be called "this week's".
+        if (phase === "season" && fresh && Number.isInteger(w.odds) &&
+            w.odds >= 3 && w.closest_call) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
         }
-        if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return;
-        const left = w.last_week - w.week;
-        if (left < 1 || !/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) return;
+        if (phase !== "season" && phase !== "preseason") return;
+        const landsDay = landsOk ? new Date(w.lands_on + "T12:00:00Z").toLocaleDateString(
+          "en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : "";
+        // What lands the day somebody pays (run/intake.py): that week's report
+        // before its first game from Week 2 on, otherwise the roster report.
+        const openLine = document.getElementById("open-line");
+        if (openLine && fresh) {
+          const coming = phase === "preseason" ? 1 : w.week + 1;
+          const day = phase === "preseason" ? "on " + landsDay
+            : etToday === w.lands_on ? "today" : "on Tuesday";
+          openLine.textContent = phase === "season" && w.week > 1 && !kicked
+            ? " Set up your team and Week " + w.week + "'s report lands today."
+            : " Set up your team: your roster report lands today, and Week " + coming +
+              "'s report " + day + ".";
+          if (phase === "preseason") {
+            const head = document.getElementById("closer-head");
+            if (head) head.textContent = "Your roster report lands today.";
+            const note = document.getElementById("closer-note");
+            if (note) {
+              note.textContent = "Set up takes about two minutes. Week 1's report lands " +
+                landsDay + ", then a new one every Tuesday morning.";
+            }
+          }
+        }
+        const next = phase === "preseason" ? w.week : w.week + 1;
+        const left = w.last_week - next + 1;
+        if (left < 1 || !landsOk) return;
         const lands = new Date(w.lands_on + "T23:59:59");     // the visitor's own day
         const now = new Date();
         const ahead = lands - now;
@@ -1387,7 +1480,7 @@ if (!reduced) {
         target.replaceChildren();
         const strong = document.createElement("span");
         strong.className = "clock";
-        strong.textContent = "Week " + (w.week + 1) + "'s report lands " + when;
+        strong.textContent = "Week " + next + "'s report lands " + when;
         target.appendChild(strong);
         // A calendar fact, not a count of anybody's reports: plenty of leagues
         // finish in Week 17, so "N reports left" would overstate it for them.

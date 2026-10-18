@@ -1148,7 +1148,7 @@ def test_monthly_billing_never_outlives_the_product() -> None:
     assert re.search(r"Month to month billing ends with the season", legal, re.I)
     assert re.search(r"stops on its own after the season's last weekly report", legal, re.I)
     assert re.search(r"nothing is charged after it", legal, re.I)
-    assert re.search(r"billing stops when the season does", prose(LANDING), re.I)
+    assert re.search(r"billing stops on its own after the season.s last weekly report", prose(LANDING), re.I)
 
 
 def test_the_contract_does_not_promise_a_renewal_date_stripe_will_not_honour() -> None:
@@ -4417,7 +4417,7 @@ def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at
     figure, and the card says what the call IS (PC-03): the closest call that
     carries odds on that roster, not a coin flip."""
     assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
-    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
+    assert '<div class="fliplegend">The mark in the middle is 50%, a toss-up.</div>' in LANDING
     assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
     note = prose(LANDING).split("The close one, called")[1][:300]
     assert "The week's closest call with odds on this roster, decided:" in note
