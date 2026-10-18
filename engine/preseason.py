@@ -33,8 +33,9 @@ wolf in August is not read in October.
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 
 from engine.history import FLEX_ELIGIBILITY
 from engine.roster import DEFENSE, PlayerDirectory
@@ -189,6 +190,15 @@ def positional_ranks(form: Mapping[str, Mapping[str, float]],
     return out
 
 
+def _out_names(roster: Sequence[Mapping[str, Any]], slots: Sequence[str],
+               exclude: Collection[str] = ()) -> list[str]:
+    """'Name (reason)' for each player who could play one of ``slots`` but is
+    on a reserve list, suspended or released today."""
+    return sorted(f'{r["name"]} ({r["out_today"]})' for r in roster
+                  if r.get("out_today") and r["player_id"] not in exclude
+                  and any(_eligible(slot, r["position"]) for slot in slots))
+
+
 def build_preseason_report(
     spec,
     directory: PlayerDirectory,
@@ -199,6 +209,7 @@ def build_preseason_report(
     season_started: bool = False,
     byes: Mapping[str, int] | None = None,
     from_week: int | None = None,
+    roster_out: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """One subscriber's pre-season report: byes, thin spots and last year's
     record.
@@ -214,11 +225,22 @@ def build_preseason_report(
     an opener promising "the weeks ahead", and the subject line counted it
     (launch audit C7, Oct 2026). A week already played is not a problem to
     plan around; it is a week somebody lost.
+
+    ``roster_out`` is TODAY's reserve-list / suspension / release status
+    (engine.availability.ROSTER_OUT, as run/solo puts it on
+    ``WeekData.roster_out`` for the live week). Once the season has started a
+    player on it is not cover: the weekly report already shows him OUT, and
+    this report counted him as the backup who fills a bye — so a week the
+    roster cannot fill went unlisted (EMAILS-119/126-130). He is named, with
+    the reason, wherever he would have counted. Never applied pre-season:
+    today's list says nothing about a week months away (principle 3).
     """
     by_id = {p.player_id: p for p in directory.players}
     byes = dict(byes) if byes is not None else bye_by_team(cache_dir, season)
     if from_week is None and season_started:
         from_week = _current_week(cache_dir, season)
+    out_today = ({str(k): str(v) for k, v in roster_out.items()}
+                 if season_started and roster_out is not None else {})
     form = prior_season_form(prior, spec.rule)
     ranks = positional_ranks(form, directory)
     slots = list(spec.slots)
@@ -240,6 +262,8 @@ def build_preseason_report(
             "name": player.name,
             "position": player.position,
             "team": player.team,
+            # Reserve list / suspended / released today, or None (in-season).
+            "out_today": out_today.get(player_id),
             "bye": byes.get(player.team) if player.team else None,
             # RULE P1: absent, never zero.
             "record": dict(record) if record else None,
@@ -257,20 +281,36 @@ def build_preseason_report(
     collisions: list[dict[str, Any]] = []
     weeks_ahead = [week for week in SEASON_WEEKS
                    if from_week is None or week >= from_week]
+    can_play = [r for r in roster
+                if r["position"] != "UNK" and not r.get("out_today")]
+    # A slot that today's reserve list empties in EVERY week is not a bye
+    # problem: it shows under the thin spots, with the reason, so a week is
+    # never blamed on the wrong player. With nobody out this is empty and the
+    # check is exactly what it always was.
+    on_roster = {r["player_id"]: r["position"] for r in roster
+                 if r["position"] != "UNK"}
+    always_empty = (Counter(unfillable_slots(
+        slots, {r["player_id"]: r["position"] for r in can_play}))
+        - Counter(unfillable_slots(slots, on_roster)))
     for week in weeks_ahead:
         out_this_week = {r["player_id"] for r in roster if r["bye"] == week}
         if not out_this_week:
             continue
-        available = {r["player_id"]: r["position"] for r in roster
-                     if r["player_id"] not in out_this_week
-                     and r["position"] != "UNK"}
-        empty = unfillable_slots(slots, available)
+        available = {r["player_id"]: r["position"] for r in can_play
+                     if r["player_id"] not in out_this_week}
+        empty, skip = [], Counter(always_empty)
+        for slot in unfillable_slots(slots, available):
+            if skip[slot]:
+                skip[slot] -= 1
+            else:
+                empty.append(slot)
         if empty:
             collisions.append({
                 "week": week,
                 "slots": empty,
                 "players": sorted(r["name"] for r in roster
                                   if r["player_id"] in out_this_week),
+                "out": _out_names(roster, empty, exclude=out_this_week),
             })
 
     # Thin spots: a starting slot whose only eligible bodies are already
@@ -279,10 +319,12 @@ def build_preseason_report(
     thin: list[dict[str, Any]] = []
     for slot in sorted(set(slots)):
         needed = slots.count(slot)
-        able = [r for r in roster if _eligible(slot, r["position"])]
+        able = [r for r in roster if _eligible(slot, r["position"])
+                and not r.get("out_today")]
         if len(able) <= needed:
             thin.append({"slot": slot, "have": len(able), "start": needed,
-                         "players": sorted(r["name"] for r in able)})
+                         "players": sorted(r["name"] for r in able),
+                         "out": _out_names(roster, [slot])})
 
     ranked = sorted(
         (r for r in roster if r["record"]),
@@ -308,6 +350,9 @@ def build_preseason_report(
             # the roster is still ahead of it — so a report sent after the
             # last bye says that, rather than "every bye is covered".
             "from_week": from_week,
+            # Whether today's reserve list was applied (in-season, and the
+            # caller passed it) — the render says it only when it was.
+            "roster_status": bool(season_started and roster_out is not None),
             "byes_ahead": any(r["bye"] is not None
                               and (from_week is None or r["bye"] >= from_week)
                               for r in roster),

@@ -294,18 +294,27 @@ CANCEL_PERIOD = ("Reports continue to the end of the period you've already "
 # page, and on the public samples nothing was linked at all. The steps are
 # given right here; the link after the body (cancel_html) is the one place
 # named, and on a sample it is the terms page's steps.
+# D3 (owner decision, Oct 18 2026): Stripe's billing page, opened by email,
+# shows only the NEWEST customer at that address, so the older of two
+# subscriptions on one address can't be reached there. That one case is the
+# only time a subscriber needs us to stop a charge, and every cancel route says
+# so — terms §3 carves out exactly this.
+TWO_PURCHASES = ("Bought twice with one email? Your billing page shows only the "
+                 "newest purchase, so reply to any of our emails and we'll "
+                 "cancel the older one for you.")
 CANCEL_BODY = ("Cancel it yourself from your own billing page — enter your email, "
                "open the link Stripe sends, press Cancel. About a minute, and no "
                "further charges. "
                "Unsubscribing from emails alone does not stop a subscription, "
-               "so cancel there if you want the charges to end. " + CANCEL_PERIOD)
+               "so cancel there if you want the charges to end. " + CANCEL_PERIOD
+               + " " + TWO_PURCHASES)
 # The plain-text half's own wording of the same block (it shouts the NOT,
 # because a text client has no bold to carry it).
 CANCEL_TEXT = ("DONE WITH THIS? Cancel it yourself from your own billing page — "
                "enter your email, open the link Stripe sends, press Cancel. About "
                "a minute, and no further charges. Note that unsubscribing from "
                "emails alone does NOT stop a subscription; cancel there if you "
-               "want the charges to end. " + CANCEL_PERIOD)
+               "want the charges to end. " + CANCEL_PERIOD + " " + TWO_PURCHASES)
 # A League Pass SEAT pays nothing and has no Stripe subscription, yet every
 # surface sent it to a billing page where its address finds no customer — the
 # welcome, every weekly footer, the Saturday check and the List-Unsubscribe
@@ -444,10 +453,14 @@ def no_call_explainer(listed: str) -> str:
 # §5 of the early-season method (Grade B): the seed moves every number in the
 # lineup — seating, projections, edges — not only the calls that carry a
 # row-level flag, so the section says so once, in the buyer's words.
+# "Three weeks in, the numbers stand on this season alone" was false: in
+# weeks 4-16 the anchor (reports/anchor-method.md) still counts a player's own
+# last season, at half the early-season weight, with no row flag (EMAILS-27).
 SEEDED_SECTION_LINE = ("This early in the season, last season is counted into "
                        "every number here; each call that leans on it says so "
-                       "on its row. Three weeks in, the numbers stand on this "
-                       "season alone.")
+                       "on its row. From Week 4 it counts for less and isn't "
+                       "flagged row by row; from Week 17 this season stands "
+                       "alone.")
 
 
 # A gate is STRUCTURAL when it would print identically every week for this
@@ -1962,8 +1975,12 @@ SEASON_END_HEAD = "The season's end"
 # season's roster — so a seat is never told its reports simply start again
 # (panel review LP-D3, LP-D5).
 SEASON_END_BILLING = {
-    "monthly": "Your monthly plan stops billing on its own at season's end, "
-               "so there's nothing to cancel.",
+    # D1: the monthly plan's final paid month is the one the season's last
+    # weekly report falls in — this report's — and nothing bills after it.
+    "monthly": "Your monthly plan stops billing on its own: this report falls "
+               "in your last paid month, so there's nothing to cancel.",
+    # D8: a derived Week 1 is never built before run.solo.week_one_due (9 days
+    # before its first kickoff), so Week 1 arrives in kickoff week, September.
     "season": "Your season pass renews once a year, on the day you bought it, "
               "and we email you before it does. Reports start again with "
               "Week 1 next September.",
@@ -1980,6 +1997,12 @@ SEASON_END_BILLING = {
     SEAT_PLAN: "Your seat follows your league's pass: if it renews, claim your "
                "seat again next season with your new roster.",
 }
+
+
+# Week 1 next season is built from the roster on file — last season's, until
+# it is changed. Said only where this report carries a route that works.
+NEW_ROSTER = ("After your draft, send us your new roster from the update link "
+              "in this email.")
 
 
 def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
@@ -1999,9 +2022,13 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
             or not isinstance(week, int) or not isinstance(last, int):
         return []
     if week == last - 1:
+        # A free report's reader gets no Tuesday report (EMAILS-58).
+        follow = (f"subscribers get a report for it too, the season's last."
+                  if meta.get("trial") else
+                  f"next Tuesday's report covers it, and it's the season's last.")
         return [f"Week {week} is championship week under ESPN's, Yahoo's and "
                 f"Sleeper's default settings. If your league plays Week {last}, "
-                f"next Tuesday's report covers it, and it's the season's last."]
+                + follow]
     if week != last:
         return []
     lines = [f"Week {last} is when NFL teams with nothing left to play for rest "
@@ -2010,20 +2037,36 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
              f"kickoff."]
     billing = SEASON_END_BILLING.get(meta.get("plan"))
     if billing:
+        # Renewing plans start again next season from the roster on file
+        # (EMAILS-62): the update link is how a new one reaches us.
+        if meta.get("plan") in ("season", PASS_PLAN) and meta.get("update_url"):
+            billing += " " + NEW_ROSTER
         lines.append("This is the season's last report. Thanks for playing it "
                      "with us. " + billing)
     return lines
 
 
 UPDATE_HEAD = "Roster changed?"
-UPDATE_BODY = ("Update it here by Saturday morning — your final check and your next "
-               "report use it. We'll email you a button to confirm:")
+# The Saturday check runs at 16:17 UTC with no intake of its own, and a change
+# takes two hourly intakes (the code out, the press in), so "by Saturday
+# morning" missed for anyone after about 10:47 AM ET (EMAILS-43/44).
+UPDATE_BODY = ("Update it here by Friday night (ET) — your final check and your "
+               "next report use it. We'll email you a button to confirm:")
 UPDATE_REPLY = ("Reply to this email with your updated roster and your next report "
                 "follows it.")
 # The season's last report has no next report to follow a change, so the reply
 # route goes and the link keeps only what is still true of it.
-UPDATE_BODY_LAST = ("Update it here by Saturday morning — your final check uses "
+UPDATE_BODY_LAST = ("Update it here by Friday night (ET) — your final check uses "
                     "it. We'll email you a button to confirm:")
+
+
+def reply_update_works() -> bool:
+    """Can a roster emailed to us be applied? Only through ``make
+    roster-update``, which needs the form backend and the signing secret
+    (run/updates.main) — without them "reply and your next report follows
+    it" was a promise nobody could keep (EMAILS-45), so it is not made."""
+    return bool(os.environ.get("UPDATE_SECRET", "").strip()
+                and os.environ.get("FORM_ENDPOINT", "").strip())
 
 
 def _last_report(meta: Mapping[str, Any]) -> bool:
@@ -2069,7 +2112,7 @@ def update_line(meta: Mapping[str, Any]) -> str:
     as_of = roster_as_of(meta)
     dated = f" {esc(as_of)}" if as_of else ""
     if not url:
-        if _last_report(meta):
+        if _last_report(meta) or not reply_update_works():
             return f"{esc(as_of)}<br>" if as_of else ""
         return f'<b>{esc(UPDATE_HEAD)}</b>{dated} {esc(UPDATE_REPLY)}<br>'
     body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
@@ -2085,7 +2128,7 @@ def update_lines(meta: Mapping[str, Any]) -> list[str]:
     url = meta.get("update_url")
     as_of = roster_as_of(meta)
     dated = f" {as_of}" if as_of else ""
-    if not url and _last_report(meta):
+    if not url and (_last_report(meta) or not reply_update_works()):
         return ["", as_of] if as_of else []
     body = UPDATE_BODY_LAST if _last_report(meta) else UPDATE_BODY
     return ["", f"{UPDATE_HEAD.upper()}{dated} "

@@ -159,7 +159,7 @@ def test_without_a_portal_the_notice_still_names_a_route(monkeypatch) -> None:
     monkeypatch.delenv("BILLING_PORTAL_URL", raising=False)
     monkeypatch.delenv("SITE_URL", raising=False)
     message = renewal_message(_renewal())
-    assert "terms page" in message.text
+    assert "terms.html#cancel" in message.text
     assert "href" not in message.html.split("about a minute")[1].split(".")[0]
 
 
