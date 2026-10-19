@@ -98,7 +98,7 @@ def test_a_broken_link_and_a_bad_anchor_fail(site) -> None:
 
 def test_a_price_that_disagrees_with_the_welcome_email_fails(site) -> None:
     page = site / "league-pass.html"
-    page.write_text(page.read_text().replace('class="amt">$99', 'class="amt">$89'))
+    page.write_text(page.read_text().replace('class="amt">$69', 'class="amt">$89'))
     assert lc.check_prices()[0].status == "FAIL"
 
 
@@ -395,10 +395,10 @@ def test_a_report_update_link_must_post_the_settings_it_carried() -> None:
 
 
 def test_the_plan_switch_must_rewrite_the_button_and_the_terms() -> None:
-    season = {"button": "Continue to checkout — $39", "terms": "renews once a year at $39"}
+    season = {"button": "Continue to checkout — $29", "terms": "$29, one payment"}
     monthly = {"button": "Continue to checkout — $14.99/mo", "terms": "Monthly is $14.99"}
     assert lc.audit_plan_switch({"before": season, "after": monthly, "back": season}) == []
-    stale = {"button": "Continue to checkout — $14.99/mo", "terms": "renews once a year at $39"}
+    stale = {"button": "Continue to checkout — $14.99/mo", "terms": "$29, one payment"}
     assert lc.audit_plan_switch({"before": season, "after": stale, "back": season})
     assert lc.audit_plan_switch({"before": season, "after": monthly, "back": monthly})
     assert lc.audit_plan_switch(None)

@@ -46,7 +46,9 @@ _CUSTOMER_RE = re.compile(r"^cus_[A-Za-z0-9]{4,}$")
 # it from the session the pass link charged): it outlives a billing-email
 # change, it ends exactly when the pass does, and two passes bought with one
 # address are two of them (OPS-R4/R5, LP2-D2/D4).
-_SUBSCRIPTION_RE = re.compile(r"^sub_[A-Za-z0-9]{4,}$")
+# The purchase that pays for a row: a subscription (sub_) or, for a one-time
+# pass (the 2026 rest-of-season passes, Oct 18 2026), its payment (pi_).
+_SUBSCRIPTION_RE = re.compile(r"^(?:sub|pi)_[A-Za-z0-9]{4,}$")
 
 PLANS = (SEASON, MONTHLY, LEAGUE_PASS)
 
@@ -121,6 +123,15 @@ class RosterSubscriber:
     @property
     def is_league_seat(self) -> bool:
         return self.plan == LEAGUE_PASS
+
+    @property
+    def one_time(self) -> bool:
+        """Bought with one payment that never renews (a ``pi_`` purchase) —
+        for a seat, its league's pass was. Such a reader has no subscription
+        to cancel: the way out is a stop request, and the season's last report
+        says nothing renews."""
+        ids = tuple(self.subscription_ids) or ((self.pass_id,) if self.pass_id else ())
+        return bool(ids) and all(str(i).startswith("pi_") for i in ids)
 
     @property
     def is_pass_payer(self) -> bool:
@@ -300,7 +311,7 @@ def _subscription_ids(raw: object, plan: str, where: str) -> tuple[str, ...]:
     bad = [s for s in ids if not _SUBSCRIPTION_RE.match(s)]
     if bad:
         raise RosterRegistryError(
-            f"{where}: subscription_ids must look like 'sub_...', got {bad[0]!r}")
+            f"{where}: subscription_ids must look like 'sub_...' or 'pi_...', got {bad[0]!r}")
     return ids
 
 

@@ -27,7 +27,7 @@ import re
 from typing import Any, Mapping
 
 from render.sender import sender_line
-from render.report import cancel_html, cancel_lines, is_seat
+from render.report import cancel_html, cancel_lines, is_seat, stop_route
 # The row and section bodies (launch review, Oct 2026), one implementation each.
 from render.report import (NO_PIVOTS, SLOT_DISPLAY, call_bits, form_phrase,
                            no_call_line, projection_note, row_marked)
@@ -1009,7 +1009,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
               "",
               # A seat's way out is a stop request, a subscriber's is the
               # billing page (render/report.cancel_lines; launch audit C4).
-              *cancel_lines(is_seat(meta)),
+              *cancel_lines(stop_route(meta)),
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
@@ -1114,7 +1114,7 @@ def _footer(meta: Mapping[str, Any]) -> str:
         f'{esc(NO_BETTING_LINE)}<br>'
         f'{esc(source_line(meta))}<br>'
         f'{sender_html()}'
-        f'{cancel_html(is_seat(meta), f"color:{NAVY};")}'
+        f'{cancel_html(stop_route(meta), f"color:{NAVY};")}'
         '</p></td></tr>'
     )
 

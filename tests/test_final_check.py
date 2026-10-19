@@ -233,7 +233,7 @@ def test_both_senders_point_a_seats_unsubscribe_header_at_a_stop_request() -> No
     import run.tuesday as tuesday
     for module in (tuesday, saturday):
         source = inspect.getsource(module)
-        assert "unsubscribe=unsubscribe_target(subscriber.is_league_seat)" in source
+        assert "unsubscribe=unsubscribe_target(subscriber.is_league_seat or subscriber.one_time)" in source
         assert "cancel_destination()[0]" not in source
     from render.report import unsubscribe_target
     assert unsubscribe_target(True).startswith("mailto:") and \

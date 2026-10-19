@@ -29,16 +29,19 @@ from datetime import datetime, timezone
 
 from render.email import (BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE, NAVY,
                           PAPER, SLATE, SMALL)
-from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, SEAT_STOP_BODY,
+from render.report import (CANCEL_HEAD, CANCEL_PERIOD, EMAIL_META, ONCE_STOP_BODY, SEAT_STOP_BODY,
                            TWO_PURCHASES, cancel_destination, esc, preheader_html,
                            reply_update_works, seat_stop_href)
 from render.sender import CONTACT, sender_line
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
-SEASON_PRICE = "$39"
+# 2026 prices (owner decision, Oct 18 2026): one-time passes. The Playoff
+# Pass ($19, from Week 13) is the season plan bought through its own link.
+SEASON_PRICE = "$29"
+PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
-PASS_PRICE = "$99"
+PASS_PRICE = "$69"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
@@ -91,8 +94,29 @@ SEATS_END = ("Your league's seats last as long as your pass does: if you cancel 
              "it or take a refund, every seat's reports stop too.")
 
 
-def _plan_terms(plan: str) -> tuple[str, list[str]]:
+# The 2026 rest-of-season passes (owner decision, Oct 18 2026) are ONE
+# payment, no renewal: the disclosures are that nothing renews and the refund
+# window, and the way out is a stop request (render.report.ONCE_STOP_BODY).
+ONCE_LINE = ("It's one payment: nothing renews, and nothing more is ever "
+             "charged for it.")
+ONCE_TWICE = ("This address already bought a pass for this same roster, so you "
+              "get one report a week, not two. Both were one payment and nothing "
+              "more is charged; to be refunded for one, reply while its refund "
+              "window is open.")
+SEATS_END_ONCE = ("Your league's seats last through this season with your pass; "
+                  "if you take a refund, every seat's reports stop too.")
+
+
+def _plan_terms(plan: str, one_time: bool = False) -> tuple[str, list[str]]:
     """(what you bought, the disclosures that purchase legally requires)."""
+    if one_time and plan in PAYER_PLANS:
+        return ("the League Pass for the rest of this season — one payment for "
+                "your whole league",
+                [ONCE_LINE, REFUND_TERMS_LEAGUE, SEATS_END_ONCE])
+    if one_time and plan not in ("monthly", "seat"):
+        return ("the Rest-of-Season Pass — every weekly report from now through "
+                "this season's last, for one payment",
+                [ONCE_LINE, REFUND_TERMS])
     if plan == "monthly":
         return (
             f"the monthly plan — {MONTHLY_PRICE} USD a month",
@@ -333,7 +357,7 @@ def _block(title: str, inner: str) -> str:
 def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "", seat_link: str | None = None,
                     duplicate: str | None = None,
-                    season_over: bool = False) -> Message:
+                    season_over: bool = False, one_time: bool = False) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
     league seat link (C4), or None to fall back to the generic seat page.
@@ -341,7 +365,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     holds for the same roster (``duplicate_line``). ``season_over``: sent in
     the offseason (run.solo.SeasonOver), when no first report goes out until
     next season's schedule exists."""
-    bought, terms = _plan_terms(plan)
+    bought, terms = _plan_terms(plan, one_time)
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
     # for it: the portal finds no customer at that address, which left a seat
@@ -351,6 +375,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     verb = "claimed" if seat else "bought"
     if seat:
         stop_html, stop_text = esc(SEAT_STOP_BODY), SEAT_STOP_BODY
+    elif one_time:
+        # Nothing to cancel: the pass ends with the season (ONCE_STOP_BODY).
+        stop_html, stop_text = esc(ONCE_STOP_BODY), ONCE_STOP_BODY
     else:
         href, label = _cancel_destination()
         cancel_line = (
@@ -383,6 +410,11 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                  + ("how to stop it." if seat else "your terms in writing."))
 
     twice = None if seat else duplicate_line(plan, duplicate)
+    if twice and one_time:
+        # Both purchases were single payments: nothing keeps billing, so the
+        # subscription wording (and its cancel link) would describe a charge
+        # that never comes.
+        twice = ONCE_TWICE
 
     # ---------------------------------------------------------------- html
     para = f'<p style="{BASE}font-size:15px;margin:0 0 10px 0;">'
@@ -401,7 +433,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         # route is its own sentence — a bare lowercase link label trailing
         # "your billing page." read as a fragment.
         href, label = _cancel_destination()
-        if not this_is_the_spare(plan, duplicate):
+        if one_time or not this_is_the_spare(plan, duplicate):
             href = ""  # the older purchase cancels by reply (D3), not there
         link_html = (f' Where to cancel: <a href="{esc(href)}" style="color:{NAVY};">'
                      f'{esc(label)}</a>.' if href else "")

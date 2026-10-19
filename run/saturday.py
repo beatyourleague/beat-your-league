@@ -241,6 +241,15 @@ def _fetch(asset: str, name: str, cache_dir: Path, *, fresh: bool = False) -> Pa
         raise SaturdayError(f"could not load {name}: {exc}") from exc
 
 
+def _way_out(subscriber) -> "bool | str":
+    """render.report.cancel_html's route: a seat, a one-time pass, or a
+    subscription's billing page."""
+    from render.report import ONCE
+    if subscriber.is_league_seat:
+        return True
+    return ONCE if subscriber.one_time else False
+
+
 def kickoffs(cache_dir: Path, season: str, week: int) -> dict[str, datetime]:
     """team -> kickoff (UTC) for this week's REG games. A team missing is on bye."""
     from zoneinfo import ZoneInfo
@@ -435,11 +444,11 @@ def _check_one(subscriber, args, season, week, at, starts, listed, filed, roster
     return "send", Message(
         to=subscriber.email,
         subject=subject_for_check(week, changes),
-        html=render_final_check(plan, changes, at, seat=subscriber.is_league_seat),
-        text=text_for_check(plan, changes, at, seat=subscriber.is_league_seat),
+        html=render_final_check(plan, changes, at, seat=_way_out(subscriber)),
+        text=text_for_check(plan, changes, at, seat=_way_out(subscriber)),
         # Its own key, distinct from Tuesday's, and once per week.
         key=f"{season}-w{week:02d}-final-{subscriber.slug}",
-        unsubscribe=unsubscribe_target(subscriber.is_league_seat))
+        unsubscribe=unsubscribe_target(subscriber.is_league_seat or subscriber.one_time))
 
 
 def _could_mail(args) -> bool:

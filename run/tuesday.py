@@ -140,6 +140,9 @@ def subscriber_meta(subscriber: RosterSubscriber,
       own seat link, so a report forwarded to the group chat points a
       leaguemate at the seat already paid for, never the $39 checkout."""
     meta: dict = {"plan": subscriber.report_plan}
+    if subscriber.one_time:
+        # A one-time pass (or a seat on one): nothing renews, nothing to cancel.
+        meta["one_time"] = True
     # Counted per PASS (``pass_key``), never per payer address: one buyer with
     # two leagues' passes was told both leagues' seats twice (LP2-D4).
     seats = int((seat_counts or {}).get(subscriber.pass_key or "", 0))
@@ -283,7 +286,7 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # actually stops.
         # A League Pass seat has no money to stop, so its way out is a stop
         # request (render.report.unsubscribe_target).
-        unsubscribe=unsubscribe_target(subscriber.is_league_seat),
+        unsubscribe=unsubscribe_target(subscriber.is_league_seat or subscriber.one_time),
     )
 
     # Every published probability lands on the ledger (principle 2) at the
@@ -599,7 +602,7 @@ def main(argv: list[str] | None = None) -> int:
     for key, seats in sorted(league_pass_seats(subscribers).items()):
         # A pass is named by its subscription id, which carries no address;
         # an older row keyed by the payer's address is masked like any other.
-        label = key if key.startswith("sub_") else _mask(key)
+        label = key if key.startswith(("sub_", "pi_")) else _mask(key)
         print(f"League Pass · {label}: {len(seats)} seat(s) claimed")
 
     delivered, skipped, send_failures = [], [], []

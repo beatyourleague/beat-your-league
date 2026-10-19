@@ -214,6 +214,101 @@ def fully_refunded(subscription: Mapping[str, Any]) -> bool:
     return False
 
 
+SESSIONS_API = "https://api.stripe.com/v1/checkout/sessions"
+# How far back a one-time pass is looked for: longer than any season a pass
+# could be bought in (September to January), short enough to stay one query.
+ONE_TIME_LOOKBACK_DAYS = 250
+# A one-time pass is entitled through its season's last game plus this, so a
+# retried final Tuesday (RULE B3's reason) still reaches it.
+ONE_TIME_GRACE_DAYS = 14
+
+
+def _charge_refunded(charge: Any) -> bool:
+    """RULE E1 for a one-time payment: refunded in full (flag or arithmetic)."""
+    if not isinstance(charge, dict):
+        return False
+    if charge.get("refunded") is True:
+        return True
+    amount, returned = charge.get("amount"), charge.get("amount_refunded")
+    return isinstance(amount, int) and isinstance(returned, int) and 0 < amount <= returned
+
+
+def one_time_entitled_until(created: int, season_ends: Mapping[str, str]) -> "date | None":
+    """The last day a one-time pass bought at ``created`` (epoch seconds) is
+    entitled: its season's last game plus ONE_TIME_GRACE_DAYS. The season is
+    the earliest one whose last game is on or after the purchase — the season
+    the pass was sold for. None when the schedule can't say."""
+    from datetime import date as _date, datetime as _dt, timedelta, timezone as _tz
+    bought = _dt.fromtimestamp(int(created), _tz.utc).date().isoformat()
+    ends = sorted(end for end in season_ends.values() if end >= bought)
+    if not ends:
+        return None
+    return _date.fromisoformat(ends[0]) + timedelta(days=ONE_TIME_GRACE_DAYS)
+
+
+def _one_time_purchases(key: str, now: "datetime | None" = None,
+                        season_ends: Mapping[str, str] | None = None
+                        ) -> tuple[set[str], set[str], list[str]]:
+    """(entitled PaymentIntent ids, their emails, refunded ids) for one-time
+    passes (Payment Links in payment mode — the 2026 rest-of-season passes).
+
+    A subscription answers "am I paid up" itself; a one-time payment never
+    does, so entitlement is read off the paid Checkout Session: paid, not
+    refunded in full (RULE E1), and its season not yet over. The season comes
+    from the schedule the product reads (run.solo.season_ends); if it can't
+    be read, a purchase inside the lookback counts — the Tuesday run builds
+    nothing outside a season anyway (SeasonOver, week_one_due)."""
+    from datetime import datetime as _dt, timezone as _tz
+    now = now or _dt.now(_tz.utc)
+    if season_ends is None:
+        try:
+            from run.solo import CACHE_DIR, season_ends as _season_ends
+            season_ends = _season_ends(CACHE_DIR, live=False)
+        except Exception:  # noqa: BLE001 — unknown season: the lookback decides
+            season_ends = {}
+    since = int(now.timestamp()) - ONE_TIME_LOOKBACK_DAYS * 86400
+    params = [("status", "complete"), ("limit", "100"), ("created[gte]", str(since)),
+              ("expand[]", "data.payment_intent.latest_charge")]
+    ids: set[str] = set()
+    emails: set[str] = set()
+    refunded: list[str] = []
+    url = f"{SESSIONS_API}?{urllib.parse.urlencode(params)}"
+    while True:
+        page = _stripe_get(url, key)
+        data = page.get("data")
+        data = data if isinstance(data, list) else []
+        for session in data:
+            if not isinstance(session, dict) or session.get("mode") != "payment":
+                continue
+            if session.get("payment_status") != "paid":
+                continue
+            intent = session.get("payment_intent")
+            if not isinstance(intent, dict):
+                continue
+            pi = intent.get("id")
+            if not (isinstance(pi, str) and pi.startswith("pi_")):
+                continue
+            if _charge_refunded(intent.get("latest_charge")):
+                refunded.append(pi)
+                continue
+            created = session.get("created")
+            if not isinstance(created, int):
+                continue
+            until = one_time_entitled_until(created, season_ends) if season_ends else None
+            if until is not None and now.date() > until:
+                continue
+            ids.add(pi)
+            email = ((session.get("customer_details") or {}).get("email") or "").strip().lower()
+            if email:
+                emails.add(email)
+        last_id = data[-1].get("id") if data and isinstance(data[-1], dict) else None
+        if not page.get("has_more") or not last_id:
+            break
+        url = (f"{SESSIONS_API}?{urllib.parse.urlencode(params)}"
+               f"&starting_after={urllib.parse.quote(str(last_id))}")
+    return ids, emails, refunded
+
+
 def load_paid_from_stripe(api_key: str | None = None,
                           statuses: Iterable[str] = _ENTITLED_STATUSES) -> PaidList:
     """Every email currently entitled to a report, straight from Stripe.
@@ -283,6 +378,12 @@ def load_paid_from_stripe(api_key: str | None = None,
                 break
             url = (f"{STRIPE_API}?{urllib.parse.urlencode(params)}"
                    f"&starting_after={urllib.parse.quote(str(last_id))}")
+    # One-time passes: their PaymentIntent ids join the entitled set, so a row
+    # or seat naming one is served exactly like a subscription (RULE E2).
+    once_ids, once_emails, once_refunded = _one_time_purchases(key)
+    subscription_ids |= once_ids
+    emails |= once_emails
+    refunded.extend(once_refunded)
     return PaidList(emails=frozenset(emails), source="stripe",
                     status_column=",".join(statuses),
                     customer_ids=frozenset(customer_ids),

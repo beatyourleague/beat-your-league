@@ -34,7 +34,7 @@ def test_the_season_end_puts_the_closed_state_back() -> None:
                  "el.hidden = false", 'classList.remove("can-buy")', "carryVia("):
         assert must in fn, must
     # The flip keeps what it replaces, under the ids the revert looks up.
-    assert 'link.id = "season-cta"' in LANDING and 'link.id = "monthly-cta"' in LANDING
+    assert 'link.id = "season-cta"' in LANDING
     assert "closedState = [" in LANDING.split("if (CHECKOUT_CAN_COMPLETE)")[0]
 
 
@@ -53,8 +53,9 @@ def test_monthly_billing_words_match_the_billing_rule() -> None:
     """LANDING-60, D1: no part-month after the season, and no offseason claim a
     pre-season monthly purchase would break."""
     assert "we don't charge through the offseason" not in TEXT
-    assert ("your last charge is the month that report falls in" in TEXT)
-    assert "billing stops on its own after the season's last weekly report" in LANDING
+    # 2026 (Oct 18): monthly isn't sold, so the landing states no monthly
+    # terms at all; the pass it sells is one payment.
+    assert "/ month" not in LANDING and "One payment" in LANDING
 
 
 def test_lineups_sizes_and_tagline() -> None:
@@ -76,7 +77,8 @@ def test_receipts_odds_and_bar_words_describe_the_report() -> None:
                  "scored to your league's settings", "the one player whose news"):
         assert gone not in TEXT, gone
     assert LANDING.count("calls with odds from the one before it") == 2
-    assert LANDING.count("Stripe's billing page shows only the newest") == 2
+    # One-time passes have nothing to cancel, so the D3 carve-out is gone.
+    assert LANDING.count("Stripe's billing page shows only the newest") == 0
     assert LANDING.count("by Friday night (ET)") == 2
 
 

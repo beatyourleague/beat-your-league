@@ -354,8 +354,8 @@ def test_stripe_pagination_collects_every_page(monkeypatch: pytest.MonkeyPatch) 
     seen = {"n": 0}
 
     def fake_get(url, key):
-        if "status=trialing" in url:
-            return _stripe_page([])
+        if "status=trialing" in url or "checkout/sessions" in url:
+            return _stripe_page([])          # no one-time passes in this fixture
         page = pages[seen["n"]]
         seen["n"] += 1
         return page

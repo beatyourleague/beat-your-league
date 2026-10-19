@@ -389,6 +389,7 @@
     padding:24px;box-shadow:0 24px 60px -24px rgba(0,0,0,.8);position:relative;
     display:flex;flex-direction:column;}
   .plans{align-items:stretch;isolation:isolate;}
+  .plans.one{grid-template-columns:minmax(0,520px);justify-content:center;}
   .plan:not(.founder){z-index:1;}
   .plan.founder{border:2px solid var(--flag);padding:30px 26px;
     box-shadow:0 30px 70px -24px rgba(0,0,0,.85),0 0 48px -8px rgba(242,194,48,.45);}
@@ -836,37 +837,28 @@
   <p class="lede">Joining mid-season is what it's built for. Join before a week's first game and
   that week's report usually lands within the hour; join after it and your roster report
   does. Then a new report every Tuesday, playoffs included.</p>
-  <div class="plans">
-    <div class="plan">
-      <div class="head"><div class="tag">Monthly</div></div>
-      <div class="price">$14.99 <small>/ month</small></div>
+  <!-- 2026 sells ONE-TIME passes (owner decision, Oct 18 2026): no
+       subscription, nothing renews. One decision at checkout (PLAN §4): the
+       League Pass is reached by its own link below, never a pricing card. From
+       Week 13 the season clock swaps this card to the $19 Playoff Pass, once
+       PLAYOFF_PASS_READY says its payment link is on the join page. -->
+  <div class="plans one">
+    <div class="plan founder" id="pass-card">
+      <div class="head"><div class="tag" id="pass-tag">Rest-of-Season Pass · 2026</div><span class="stamp50">One payment</span></div>
+      <div class="price" id="pass-price">$29 <small>/ rest of season</small></div>
       <ul>
-        <li>A report usually within the hour of joining, then your weekly report every
-        Tuesday</li>
+        <li id="pass-span">Every weekly report from now through your title game, the first
+        usually within the hour of joining</li>
+        <li>The byes ahead flagged, playoff weeks included, while there's time to cover
+        them</li>
         <li>A final check on Saturday when injury news changes your lineup</li>
+        <li>One payment. No subscription, nothing renews, nothing to cancel
+        (<a href="terms.html#cancel">how it ends</a>)</li>
         <li>Try it risk-free. Full refund, no questions, until your second
         weekly report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, online</li>
-        <li>Billing stops on its own after the season's last weekly report — your
-        last charge is the month that report falls in</li>
-      </ul>
-      <div class="soon" id="monthly-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
-    </div>
-    <div class="plan founder">
-      <div class="head"><div class="tag">Season pass · 2026</div><span class="stamp50">Founding rate</span></div>
-      <div class="price">$39 <small>/ season</small></div>
-      <ul>
-        <li>Every weekly report from now through your title game, the first usually
-        within the hour of joining</li>
-        <li>A final check on Saturday when injury news changes your lineup</li>
-        <li>Try it risk-free. Full refund, no questions, until your second
-        weekly report's week kicks off. One per person
-        (<a href="terms.html#refunds">details</a>).</li>
-        <li>Cancel any time yourself, online</li>
-        <li>Founding rate locked in: renews once a year at $39 unless you cancel,
-        never more. We email you first, and you cancel online yourself
-        (<a href="terms.html#cancel">how</a>)</li>
+        <li>Founding rate: when the 2027 season opens, your full season pass is $39,
+        never more</li>
       </ul>
       <div class="soon" id="season-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
     </div>
@@ -929,7 +921,7 @@
       </details>
       <details>
         <summary>I'm in more than one league. What do I need?</summary>
-        <div class="a">Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several; Stripe's billing page shows only the newest, so to cancel an older one, reply to any report and we'll cancel it for you. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager in a league of up to 14 teams with one payment.</div>
+        <div class="a">Each team gets its own report and its own pass: start with one league and add another the same way, and one email address can hold several. Each pass is one payment, so nothing renews. Running a whole league? The <a href="league-pass.html">League Pass</a> covers every manager in a league of up to 14 teams with one payment.</div>
       </details>
       <details>
         <summary>When does it arrive?</summary>
@@ -996,10 +988,8 @@
       "name": "Beat Your League",
       "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.",
       "offers": [
-        {"@type": "Offer", "price": "39", "priceCurrency": "USD",
-         "description": "Season pass — a report usually within the hour of joining, then every weekly report through your title game. No-questions refund until your second weekly report's week kicks off."},
-        {"@type": "Offer", "price": "14.99", "priceCurrency": "USD",
-         "description": "Monthly — same report, cancel any time, billing stops on its own after the season's last weekly report."}
+        {"@type": "Offer", "price": "29", "priceCurrency": "USD",
+         "description": "Rest-of-Season Pass — one payment, no subscription: every weekly report from now through your title game, the first usually within the hour of joining. No-questions refund until your second weekly report's week kicks off."}
       ]
     },
     {
@@ -1007,7 +997,7 @@
       "mainEntity": [
         {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Mid-season is when it's at its strongest. Every projection now draws on this season's own games, the odds print wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and every report checks the weeks still ahead, playoff weeks included, for a bye that leaves a starting spot nobody on your roster can fill, while there's still time to cover it. Join before a week's first game and that week's report usually lands within the hour, with a full refund until your second weekly report's week kicks off. Early in a season the odds start later: Week 1 sets your lineup in last season's order with no odds, full-PPR, 12-team standard lineups that start a kicker and a defense get them from Week 2, and every other setup from Week 4."}},
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, on ESPN, Yahoo, Sleeper, CBS or any other app: paste your roster once (or pick names from a list), with no league login and no password. It's scored for full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8, 10, 12 or 14 teams (in between? pick the closest). Lineups: standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR with a W/R/T FLEX, or superflex, each with or without a kicker and a team defense. Extras like 6-point passing touchdowns or a TE premium get the nearest standard version."}},
-        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own subscription: start with one league and add another the same way. One email address can hold several; Stripe's billing page shows only the newest, so to cancel an older one, reply to any report and we'll cancel it for you. Running a whole league? The League Pass covers every manager in a league of up to 14 teams with one payment."}},
+        {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "Each team gets its own report and its own pass: start with one league and add another the same way, and one email address can hold several. Each pass is one payment, so nothing renews. Running a whole league? The League Pass covers every manager in a league of up to 14 teams with one payment."}},
         {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, every week of the season, after Monday night's game and days before your lineup locks. Join before a week's first game (from Week 2) and that week's report usually lands within the hour; otherwise your roster report does, and your first weekly report comes the next Tuesday one goes out. And if Friday's injury report changes your lineup, a short final check lands Saturday with the swap."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Trades and pickups happen — update your roster from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check, and every report after it uses it."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games, so you can look up the box scores yourself. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How each part is worked out is on the How it works page."}},
@@ -1060,6 +1050,30 @@ const CHECKOUT_CAN_COMPLETE = false;
 // then the button would lead to "free reports aren't open", so it stays hidden
 // — the static page is the closed state, as with checkout.
 const TRIAL_OPEN = false;
+// The $19 Playoff Pass (owner decision, Oct 18 2026): from PLAYOFF_FROM_WEEK
+// the first card sells it instead of the $29 pass — automatically, from
+// site/week.json — but only once its payment link is on the join page.
+// PLAYOFF_PASS_READY must equal Boolean(join's STRIPE_LINK_PLAYOFF) (launch
+// check), so this page never shows a price the join page can't charge.
+const PLAYOFF_PASS_READY = false;
+const PLAYOFF_FROM_WEEK = 13;
+var PASS_LABEL = "Get the Rest-of-Season Pass — $29";
+function showPlayoffPass(week) {
+  PASS_LABEL = "Get the Playoff Pass — $19";
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set("pass-tag", "Playoff Pass · 2026");
+  const price = document.getElementById("pass-price");
+  if (price) {
+    price.replaceChildren(document.createTextNode("$19 "));
+    const small = document.createElement("small");
+    small.textContent = "/ rest of season";
+    price.appendChild(small);
+  }
+  set("pass-span", "Every weekly report from Week " + week + " through your title game, " +
+      "the first usually within the hour of joining");
+  const cta = document.getElementById("season-cta");
+  if (cta && cta.tagName === "A") cta.textContent = PASS_LABEL;
+}
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");
   if (tryCta) tryCta.hidden = false;
@@ -1150,7 +1164,7 @@ if (watchForm) {
 // can put it back (closeForSeason, below): the flip replaces these nodes.
 let closedState = null;
 if (CHECKOUT_OPEN) {
-  closedState = ["#nav-cta", "#sticky-cta", "#closer-cta", "#season-cta", "#monthly-cta",
+  closedState = ["#nav-cta", "#sticky-cta", "#closer-cta", "#season-cta",
     "#closer-head", "#closer-note", "#finance-note", ".heroline"]
     .map((sel) => [sel, document.querySelector(sel)])
     .filter(([, el]) => el)
@@ -1169,19 +1183,8 @@ if (CHECKOUT_OPEN) {
     link.style.marginTop = "16px";
     link.href = "join/index.html";
     link.id = "season-cta";
-    link.textContent = "Get the season pass — $39";
+    link.textContent = PASS_LABEL;
     season.replaceWith(link);
-  }
-  const monthly = document.getElementById("monthly-cta");
-  if (monthly) {
-    const link = document.createElement("a");
-    link.className = "btn ghost";
-    link.style.borderColor = "var(--navy)";
-    link.style.color = "var(--navy)";
-    link.href = "join/index.html?plan=monthly";
-    link.id = "monthly-cta";
-    link.textContent = "Subscribe monthly";
-    monthly.replaceWith(link);
   }
   const sticky = document.getElementById("sticky-cta");
   if (sticky) {
@@ -1259,8 +1262,8 @@ if (CHECKOUT_OPEN) {
       // email", which this rewrite retires.
       const passLink = finance.querySelector('a[href="league-pass.html"]');
       finance.textContent = "Payment runs on Stripe's own page — your roster " +
-        "and scoring ride into checkout with you, and the founding rate is " +
-        "locked in for every renewal. Running the league? ";
+        "and scoring ride into checkout with you. One payment, nothing renews. " +
+        "Running the league? ";
       if (passLink) {
         passLink.textContent = "One payment can cover every team";
         finance.appendChild(passLink);
@@ -1446,6 +1449,14 @@ if (!reduced) {
         if (phase === "season" && fresh && Number.isInteger(w.odds) &&
             w.odds >= 3 && w.closest_call) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
+        }
+        // The Playoff Pass: once a buyer's first weekly report would be Week
+        // PLAYOFF_FROM_WEEK or later (that week's before its first kickoff, the
+        // next one after), in a week still current. The join page's rule.
+        const firstWeek = kicked ? w.week + 1 : w.week;
+        if (PLAYOFF_PASS_READY && phase === "season" && fresh &&
+            firstWeek >= PLAYOFF_FROM_WEEK) {
+          showPlayoffPass(firstWeek);
         }
         if (phase !== "season" && phase !== "preseason") return;
         const landsDay = landsOk ? new Date(w.lands_on + "T12:00:00Z").toLocaleDateString(

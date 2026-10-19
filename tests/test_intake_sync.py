@@ -563,7 +563,8 @@ def test_a_pass_payer_is_welcomed_with_pass_terms_not_season_terms(
     stripe["sessions"] = [_pass_session()]
     _run(tmp_path)
     assert len(sent) == 1
-    assert "$99 USD" in sent[0].text
+    from render.welcome import PASS_PRICE
+    assert f"{PASS_PRICE} USD" in sent[0].text
     assert "$39 USD" not in sent[0].text
 
 

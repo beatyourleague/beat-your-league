@@ -191,7 +191,7 @@
    "name": "I already have my own season pass or monthly plan. Can I switch to the League Pass?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Yes: buy the League Pass with the same email and the same roster. Your League Pass covers your own team, so you still get one report a week, not two. Buying it doesn't cancel or refund your other subscription: a season pass renews each year, and a monthly plan bills until the season's last weekly report. Your billing page opens your newest purchase, so to cancel the older one, reply to any report (or write to hello@beatyourleague.com) and we'll cancel it for you."
+    "text": "Yes: buy the League Pass with the same email and the same roster. Your League Pass covers your own team, so you still get one report a week, not two. Both are one payment, so nothing keeps billing; if you'd rather not have paid twice, reply to any report while your Rest-of-Season Pass's refund window is open and we'll refund it."
    }
   },
   {
@@ -204,10 +204,10 @@
   },
   {
    "@type": "Question",
-   "name": "What happens to the seats if I cancel or take a refund?",
+   "name": "What happens to the seats if I take a refund?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Your league's seats last as long as your pass does: if you cancel it or take a refund, every seat's reports stop too."
+    "text": "Your league's seats last through the season with your pass: it's one payment with nothing to cancel, and if you take a refund, every seat's reports stop too."
    }
   }
  ]
@@ -238,15 +238,15 @@
     <div class="box"><h3>Nobody's team gets shared</h3>
       <p>Each report goes only to the manager it's about. We never share one manager's
       report with another, and we never publish your league's names anywhere.</p></div>
-    <div class="box"><h3>About $8 a manager, out of dues</h3>
-      <p>Twelve individual passes would cost $468, and ten would cost $390. The League Pass
-      is $99 for every manager who signs up — about $8.25 each in a 12-team league ($9.90 in
-      a 10-team one), easy to take from this year's pot.</p></div>
+    <div class="box"><h3>Under $6 a manager, out of dues</h3>
+      <p>Twelve Rest-of-Season Passes would cost $348, and ten would cost $290. The League
+      Pass is $69 for every manager who signs up — $5.75 each in a 12-team league ($6.90 in a
+      10-team one), easy to take from this year's pot for the playoff push.</p></div>
   </div>
 
   <div class="price">
-    <div class="tag">League Pass · one season</div>
-    <div class="amt">$99 <small>for the whole league</small></div>
+    <div class="tag">League Pass · rest of season</div>
+    <div class="amt">$69 <small>for the whole league</small></div>
     <p style="font-size:13px;color:var(--slate);margin:6px 0 0;">All prices in US dollars.</p>
     <ul>
       <li>A separate weekly report for every manager who claims their seat</li>
@@ -254,8 +254,8 @@
       <li>The same full report every subscriber gets — nothing held back</li>
       <li>No-questions refund until your second weekly report's week kicks off — one per
       league</li>
-      <li>Renews once a year at $99 unless you cancel. We email you first, and you can
-      cancel yourself any time.</li>
+      <li>The byes ahead flagged in every report, playoff weeks included</li>
+      <li>One payment. Nothing renews, nothing to cancel.</li>
     </ul>
     <div class="soon" id="league-cta">Checkout opens soon<small><a href="index.html#watch-form">Leave
       your email</a> for the one message when it does</small></div>
@@ -274,7 +274,7 @@
     <h3>Ask the league first</h3>
     <div class="chatline">
       <p id="ask-text">Should we put the League Pass from Beat Your League on this year's
-      dues? $99 covers the whole league, and everyone gets their own lineup report every
+      dues? $69 covers the whole league for the rest of the season, and everyone gets their own lineup report every
       Tuesday, built from their own roster: https://beatyourleague.com/league-pass.html</p>
     </div>
     <button type="button" class="sharebtn" id="ask-share">Send this to the group chat</button>
@@ -356,15 +356,15 @@
     </details>
     <details>
       <summary>I already have my own season pass or monthly plan. Can I switch to the League Pass?</summary>
-      <div class="a">Yes: buy the League Pass with the same email and the same roster. Your League Pass covers your own team, so you still get one report a week, not two. Buying it doesn't cancel or refund your other subscription: a season pass renews each year, and a monthly plan bills until the season's last weekly report. Your billing page opens your newest purchase, so to cancel the older one, reply to any report (or write to hello@beatyourleague.com) and we'll cancel it for you.</div>
+      <div class="a">Yes: buy the League Pass with the same email and the same roster. Your League Pass covers your own team, so you still get one report a week, not two. Both are one payment, so nothing keeps billing; if you'd rather not have paid twice, reply to any report while your Rest-of-Season Pass's refund window is open and we'll refund it.</div>
     </details>
     <details>
       <summary>What are my leaguemates' emails used for?</summary>
       <div class="a">Only to send each manager their own report, the email confirming their seat, and — if they ask — the confirmation of a roster change. Nobody sees another manager's report or address: your own report shows how many seats are claimed, as a count, never who.</div>
     </details>
     <details>
-      <summary>What happens to the seats if I cancel or take a refund?</summary>
-      <div class="a">Your league's seats last as long as your pass does: if you cancel it or take a refund, every seat's reports stop too.</div>
+      <summary>What happens to the seats if I take a refund?</summary>
+      <div class="a">Your league's seats last through the season with your pass: it's one payment with nothing to cancel, and if you take a refund, every seat's reports stop too.</div>
     </details>
   </div>
 
@@ -416,7 +416,7 @@ if (CHECKOUT_OPEN && SEATS_OPEN) {
   const link = document.createElement("a");
   link.className = "btn";
   link.href = "join/index.html?plan=pass";
-  link.textContent = "Buy the League Pass — $99";
+  link.textContent = "Buy the League Pass — $69";
   slot.replaceWith(link);
   // Only now is the line true to send, so only now can it be copied.
   document.getElementById("chat-example").hidden = true;

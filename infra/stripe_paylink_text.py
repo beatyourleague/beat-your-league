@@ -50,19 +50,22 @@ CANCEL = ("you can cancel any time from your billing page")
 # The renewal sentence must say what terms.html §3 says: once a year, on the
 # anniversary of the purchase. It said "each season", which no code enforces
 # and the terms contradict (launch audit, Oct 2026).
+# 2026 sells ONE-TIME passes (owner decision, Oct 18 2026): the season and
+# League Pass links are in payment mode, and the $19 Playoff Pass link maps to
+# the season plan too — so these words carry no price (Stripe shows the amount
+# beside them) and promise only what is true of all three: one payment.
+ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews and nothing more is "
+            "ever charged. It covers every weekly report from today through the "
+            "season's last.")
 MESSAGES = {
-    "season": (
-        f"Renews automatically once a year, on the date you buy, at "
-        f"{SEASON_PRICE} USD until you cancel. We email you before any renewal, "
-        f"and {CANCEL} — the link is in every report we send."),
+    "season": ONE_TIME,
     "monthly": (
         f"Bills {MONTHLY_PRICE} USD monthly until you cancel. Billing stops on "
         f"its own after the season's last weekly report: your last charge is "
         f"the month that report falls in, and nothing is charged after it. "
         f"{CANCEL[0].upper()}{CANCEL[1:]}."),
-    "league_pass": (
-        f"Renews automatically once a year, on the date you buy, at {PASS_PRICE} "
-        f"USD until you cancel. We email you before any renewal, and {CANCEL}."),
+    "league_pass": (ONE_TIME[:-1] + ", for every manager in your league who "
+                    "claims a seat."),
 }
 
 # The box the buyer ticks. California's auto-renewal law wants affirmative
@@ -73,21 +76,24 @@ MESSAGES = {
 TERMS_URL = "https://beatyourleague.com/terms.html"
 TOS_MESSAGES = {
     "season": (f"I agree to the [Terms]({TERMS_URL}), including that this pass "
-               f"renews automatically once a year at {SEASON_PRICE} USD until I "
-               f"cancel, and I am 18 or older."),
+               f"is one payment that does not renew, and I am 18 or older."),
     "monthly": (f"I agree to the [Terms]({TERMS_URL}), including that this plan "
                 f"bills {MONTHLY_PRICE} USD every month until I cancel or it stops "
                 f"on its own after the season's last weekly report, and I am 18 or "
                 f"older."),
     "league_pass": (f"I agree to the [Terms]({TERMS_URL}), including that this "
-                    f"League Pass renews automatically once a year at "
-                    f"{PASS_PRICE} USD until I cancel, and I am 18 or older."),
+                    f"League Pass is one payment that does not renew, and I am 18 "
+                    f"or older."),
 }
 
 
 def fields(plan: str) -> dict[str, str]:
     """Everything this script writes onto one payment link."""
-    return {"custom_text[submit][message]": MESSAGES[plan],
+    one_time = plan in ("season", "league_pass")
+    return {**({"customer_creation": "always"} if one_time else {}),
+            # A one-time payment makes no Customer unless told to, and the
+            # intake keeps the consent record and roster on the Customer.
+            "custom_text[submit][message]": MESSAGES[plan],
             "consent_collection[terms_of_service]": "required",
             "custom_text[terms_of_service_acceptance][message]": TOS_MESSAGES[plan]}
 

@@ -1347,6 +1347,32 @@ schedule, no projection, no %, nothing recorded; never on a replayed week (the p
 are unchanged). "Performance" means decisions, never results: no "win more", "make the
 playoffs" or outcome claims. A rest-of-season price is an owner decision, not built.
 
+**2026 pricing: one-time passes (owner decision, Oct 18 2026).** For the mid-season launch the
+site sells a **$29 Rest-of-Season Pass**, a **$19 Playoff Pass** (automatic once a buyer's first
+weekly report would be Week 13+: the landing's `PLAYOFF_PASS_READY` must equal "join's
+`STRIPE_LINK_PLAYOFF` is set", a launch gate) and a **$69 League Pass for the rest of the
+season** — all Payment Links in **payment mode**: one payment, no subscription, nothing renews.
+Monthly is not sold in 2026 (`MONTHLY_OFFERED = false` on join; the landing shows one pricing
+card, the League Pass stays on its own page per PLAN §4). Founding rate: 2026 buyers get the
+2027 full season pass at $39, never more (terms §3). How the code carries it:
+- **A one-time purchase is named by its PaymentIntent** (`pi_…`) everywhere a subscription id
+  (`sub_…`) is: `run.intake._subscription_id`, `subscription_ids` / `pass_id` on rows
+  (`run.rosters._SUBSCRIPTION_RE` takes both), so RULE E1/E2 (refunds, seats) apply unchanged.
+  `RosterSubscriber.one_time` is true when every id is a `pi_`.
+- **Entitlement:** `run.subscriptions._one_time_purchases` reads paid payment-mode Checkout
+  Sessions (expanding `payment_intent.latest_charge`): entitled unless refunded in full, and
+  only through the season it was bought for (`one_time_entitled_until`: that season's last game
+  + 14 days), so a 2026 pass never reaches 2027. The crons' key needs Payment Intents and
+  Charges Read (LAUNCH).
+- **Words:** a one-time reader's way out is a stop request (`render.report.ONCE_STOP_BODY`,
+  `stop_route`, List-Unsubscribe → mailto stop), the last report says nothing renews
+  (`ONCE_END`), the welcome says one payment (`one_time=True`), Stripe's Pay-button text carries
+  no price (`infra/stripe_paylink_text.ONE_TIME`, `customer_creation=always`). Published samples
+  show the one-time footer while `SELLING_ONE_TIME`.
+- `run/economics.py` keeps the $39/$14.99/$99 subscription prices (the docs' fee figures) and
+  models `ONE_TIME` beside them (no Stripe Billing fee). The subscription machinery (billing,
+  renewals, portal) stays for 2027.
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

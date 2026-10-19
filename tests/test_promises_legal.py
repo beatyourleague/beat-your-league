@@ -21,7 +21,7 @@ PRIVACY_VERSIONS = [
     ("2026-10-18", "25bc5d53a2db85c1"),
 ]
 TERMS_VERSIONS = [
-    ("2026-10-18", "5546ca3791fadbd9"),
+    ("2026-10-18", "0d5cce06d12dd87c"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")

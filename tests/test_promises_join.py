@@ -181,7 +181,7 @@ def test_the_join_words_describe_the_product_after_the_decisions() -> None:
     assert "by Friday night (ET)" in prose(CONFIRM) and "by Friday night (ET)" in prose(THANKS)
     thanks = prose(THANKS)
     assert "usually lands within the hour" in thanks and "allow up to an hour" not in thanks
-    assert "We do not ask why" not in thanks and "shows only the newest" in thanks
+    assert "We do not ask why" not in thanks and "nothing to cancel" in thanks
     assert "Bought a pass for more than one league?" in thanks
     assert "everyone who claims a seat gets their own lineup report" in thanks
     assert 'fetch("week.json"' in THANKS

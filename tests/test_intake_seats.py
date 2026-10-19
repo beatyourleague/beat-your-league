@@ -964,7 +964,8 @@ def test_one_roster_bought_twice_by_one_address_is_one_report_and_the_welcome_sa
     assert "one address holds 2 subscriptions for one roster" in capsys.readouterr().out
     welcomes = {m.key: m for m in sends if m.key.startswith("welcome-")}
     assert len(welcomes) == 2, "a purchase went unacknowledged"
-    [upgrade] = [m for m in welcomes.values() if "$99" in m.text]
+    from render.welcome import PASS_PRICE
+    [upgrade] = [m for m in welcomes.values() if PASS_PRICE in m.text]
     assert "also bought the season pass for this same roster" in upgrade.text
     assert "If that one is still active, it keeps billing until you cancel it" \
         in upgrade.text

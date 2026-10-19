@@ -337,11 +337,35 @@ SEAT_STOP_BODY = ("Reply \"stop\" to any of our emails, or use your mail app's "
 # helpers below take a yes/no, never a plan word that means opposite things in
 # two places.
 SEAT_PLAN = "league_pass"
+# A ONE-TIME pass (the 2026 rest-of-season passes) has no subscription either:
+# nothing renews, so there is nothing to cancel, and "cancel from your billing
+# page" would send its buyer looking for a charge that will never come. Its way
+# out is the seat's: say stop.
+ONCE_STOP_BODY = ("Nothing renews and nothing more is charged: your pass covers "
+                  "this season and ends on its own. To stop the emails before "
+                  "then, reply \"stop\" to any of our emails, or use your mail "
+                  "app's unsubscribe — you're off within 10 business days.")
+ONCE = "once"
+# What the site sells this season (owner decision, Oct 18 2026): one-time
+# passes. Flip with the payment links when subscriptions return (2027).
+SELLING_ONE_TIME = True
 
 
 def is_seat(meta: Mapping[str, Any]) -> bool:
     """A weekly report addressed to a League Pass seat holder."""
     return meta.get("plan") == SEAT_PLAN
+
+
+def stop_route(meta: Mapping[str, Any]) -> "bool | str":
+    """Which way out a report's footer gives: True for a seat, ``ONCE`` for a
+    one-time pass's own buyer, False for a subscription (its billing page)."""
+    if is_seat(meta):
+        return True
+    # A published sample shows what a buyer gets today, and 2026 sells only
+    # one-time passes (SELLING_ONE_TIME): its footer is the one-time way out.
+    if meta.get("anonymized_demo") and SELLING_ONE_TIME:
+        return ONCE
+    return ONCE if meta.get("one_time") else False
 
 
 def seat_stop_href() -> str:
@@ -369,6 +393,8 @@ def cancel_html(seat: bool = False, link_style: str = "", sample: bool = False) 
     site and is built with no billing portal or site address configured. It
     printed the whole block with no link at all (COPY:F14); it links the
     steps, relative, so the page it names is one a reader can open."""
+    if seat == ONCE:
+        return f'<b>{esc(CANCEL_HEAD)}</b> {esc(ONCE_STOP_BODY)}'
     if seat:
         return f'<b>{esc(CANCEL_HEAD)}</b> {esc(SEAT_STOP_BODY)}'
     href, label = cancel_destination()
@@ -383,6 +409,8 @@ def cancel_lines(seat: bool = False) -> list[str]:
     """The plain-text twin. The route is spelled out as a URL because a text
     half cannot carry an anchor (found Aug 24 2026: the footer promised a
     cancel with no way to reach it, on either half)."""
+    if seat == ONCE:
+        return [f"{CANCEL_HEAD.upper()} {ONCE_STOP_BODY}"]
     if seat:
         return [f"{CANCEL_HEAD.upper()} {SEAT_STOP_BODY}"]
     href, label = cancel_destination()
@@ -2072,6 +2100,12 @@ SEASON_END_BILLING = {
 }
 
 
+ONCE_END = ("Your pass covered this season through this report: nothing renews "
+            "and nothing more is charged.")
+ONCE_SEAT_END = ("Your seat came with your league's pass for this season, and "
+                 "this is its last report.")
+
+
 # Week 1 next season is built from the roster on file — last season's, until
 # it is changed. Said only where this report carries a route that works.
 NEW_ROSTER = ("After your draft, send us your new roster from the update link "
@@ -2109,10 +2143,14 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
              f"report. Check each team's inactives, posted 90 minutes before "
              f"kickoff."]
     billing = SEASON_END_BILLING.get(meta.get("plan"))
+    if billing and meta.get("one_time"):
+        # A one-time pass ends here; there is no renewal to describe.
+        billing = (ONCE_SEAT_END if is_seat(meta) else ONCE_END)
     if billing:
         # Renewing plans start again next season from the roster on file
         # (EMAILS-62): the update link is how a new one reaches us.
-        if meta.get("plan") in ("season", PASS_PLAN) and meta.get("update_url"):
+        if (meta.get("plan") in ("season", PASS_PLAN) and meta.get("update_url")
+                and not meta.get("one_time")):
             billing += " " + NEW_ROSTER
         lines.append("This is the season's last report. Thanks for playing it "
                      "with us. " + billing)
@@ -2232,7 +2270,7 @@ def footer(meta: Mapping[str, Any]) -> str:
         # unsubscribe-vs-cancel distinction stays: stopping emails while
         # billing continues is how you earn a chargeback and deserve it. A
         # seat has nothing to cancel, so it gets its stop route instead.
-        f'{cancel_html(is_seat(meta), sample=bool(meta.get("anonymized_demo")))}'
+        f'{cancel_html(stop_route(meta), sample=bool(meta.get("anonymized_demo")))}'
         '</footer>'
     )
 

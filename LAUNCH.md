@@ -59,8 +59,11 @@ still open one. Make three new links and switch the old ones off.
 
 1. https://dashboard.stripe.com/payment-links in **live** mode. Open each of the three old
    links (made Aug 27) → **Deactivate**.
-2. **+ New** — one link per product ($39 season pass, $14.99 monthly, $99 League Pass), each
-   set like this:
+2. **+ New** — 2026 sells **one-time passes** (decision Oct 18 2026), so make three links,
+   each a **one-time price** (Product → Add price → **One-off**, not Recurring): the
+   **$29 Rest-of-Season Pass**, the **$69 League Pass (rest of season)**, and the **$19
+   Playoff Pass** (it switches on by itself once a buyer's first report would be Week 13,
+   when its link is on the join page). No monthly link this season. Each set like this:
 
    | Setting | Should be | Why |
    |---|---|---|
@@ -71,7 +74,8 @@ still open one. Make three new links and switch the old ones off.
    | Collect tax automatically | Off | Not registered for tax anywhere yet |
    | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
    | Include a free trial | Off | The refund window is the trial |
-   | Limit the number of payments | Off | `run/billing.py` ends each monthly subscription after its final paid period |
+   | Limit the number of payments | Off | |
+   | Create customers (one-off payments) | Always | The intake keeps the consent record and roster on the Customer; `infra/stripe_paylink_text.py` sets it too |
    | Promotion codes | Off | The founding rate is the discount |
    | After payment | Redirect to `https://beatyourleague.com/thanks.html` — **League Pass link only:** `https://beatyourleague.com/thanks.html?plan=pass` | |
 
@@ -97,10 +101,10 @@ still open one. Make three new links and switch the old ones off.
    **Settings → Business → Branding:** icon `site/brand/icon.png`, logo
    `site/brand/logo.png`, brand color `#101E33`, accent `#B3402F` (not the gold: unreadable
    on white).
-5. **Renewal terms above Stripe's Pay button** (API only). Replace the three `plink_…`
+5. **The one-payment text above Stripe's Pay button** (API only). Replace the three `plink_…`
    placeholders with the NEW ids, then paste the whole line in Terminal from the repo folder:
    ```bash
-   STRIPE_PAYMENT_LINKS='s:plink_NEW_SEASON,m:plink_NEW_MONTHLY,p:plink_NEW_PASS' .venv/bin/python infra/stripe_paylink_text.py
+   STRIPE_PAYMENT_LINKS='s:plink_NEW_29,s:plink_NEW_19,p:plink_NEW_69' .venv/bin/python infra/stripe_paylink_text.py
    ```
    At the prompt, paste the `setup-payment-link-text` key (it starts `rk_live_`; nothing
    shows as you paste — normal; never your Mac password).
@@ -143,7 +147,7 @@ secret**, once per row, names exactly as written:
 | Name | Value |
 |---|---|
 | `STRIPE_API_KEY` | the `github-actions-crons` key (Reveal live key) |
-| `STRIPE_PAYMENT_LINKS` | `s:<new season plink id>,m:<new monthly plink id>,p:<new pass plink id>` |
+| `STRIPE_PAYMENT_LINKS` | `s:<$29 plink id>,s:<$19 Playoff Pass plink id>,p:<$69 League Pass plink id>` (both passes for one person are the season plan `s`) |
 | `EMAIL_PROVIDER` | `resend` |
 | `EMAIL_FROM` | `Beat Your League <reports@beatyourleague.com>` |
 | `EMAIL_REPLY_TO` | `hello@beatyourleague.com` (optional: unset means hello@ anyway) |
@@ -158,8 +162,9 @@ from outside collaborators** → **Require approval for all outside collaborator
 is public; without this a stranger's pull request could read the automation's cache, which
 holds subscribers' emails and rosters.
 
-`github-actions-crons` needs exactly: Checkout Sessions **Read**, Customers **Write**,
-Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
+`github-actions-crons` needs exactly: Checkout Sessions **Read**, Payment Intents **Read**
+and Charges **Read** (a one-time pass is entitled while its payment isn't refunded),
+Customers **Write**, Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
 ends each monthly subscription when its final paid period ends (the month the season's last
 weekly report falls in).
 

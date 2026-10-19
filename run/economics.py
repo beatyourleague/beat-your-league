@@ -27,10 +27,16 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Prices (render/welcome.py is the source of truth; tested equal to the site).
+# Subscription prices — the renewing plans 2027 brings back, and the figures
+# PLAN.md, LAUNCH.md and launch-readiness.md quote (checked below).
 SEASON = 39.00
 MONTHLY = 14.99
 LEAGUE_PASS = 99.00
+# What 2026 sells (owner decision, Oct 18 2026): ONE-TIME passes, no renewal.
+# render/welcome.py's SEASON_PRICE / PLAYOFF_PRICE / PASS_PRICE are these
+# (tests/test_economics.py ties them).
+ONE_TIME = {"Rest-of-Season Pass": 29.00, "Playoff Pass": 19.00,
+            "League Pass (rest of season)": 69.00}
 
 # Stripe Canada, card in USD from a US cardholder, paid out in CAD (Stripe's
 # published Canadian pricing, checked by the audit Oct 2026): 2.9% + C$0.30,
@@ -77,8 +83,10 @@ WEEKS_LEFT = 12                       # weeks 7–18, opening Oct 20
 HOURLY_NOTE = "owner time is unpaid; this is what it earns, not what it costs"
 
 
-def stripe_fee(amount: float, usd_payout: bool = False) -> float:
-    pct = PCT - (0.02 if usd_payout else 0.0)
+def stripe_fee(amount: float, usd_payout: bool = False, one_time: bool = False) -> float:
+    """``one_time``: a payment-mode Payment Link carries no Stripe Billing fee
+    (the 0.7% in PCT is charged on subscriptions only)."""
+    pct = PCT - (0.02 if usd_payout else 0.0) - (0.007 if one_time else 0.0)
     return round(amount * pct + FIXED_USD, 2)
 
 
@@ -332,6 +340,11 @@ def summary_lines() -> list[tuple[str, str, str]]:
                  f"${net_per_sale(SEASON):.2f} of ${SEASON:.0f} (Stripe ${fee:.2f}, "
                  f"{fee / SEASON:.1%}; ${stripe_fee(SEASON, usd_payout=True):.2f} "
                  f"with a USD payout account)"))
+    once = " · ".join(
+        f"{name} ${price:.0f}: Stripe ${stripe_fee(price, one_time=True):.2f}, "
+        f"${price - stripe_fee(price, one_time=True):.2f} kept"
+        for name, price in ONE_TIME.items())
+    rows.append(("2026's one-time passes: what each sale keeps after Stripe", "PASS", once))
     rows.append(("Break-even on this season's fixed costs", "PASS",
                  f"{break_even_purchases()} season-pass purchases cover "
                  f"${sum(FIXED_SEASON_COSTS.values()):.0f}; Resend Pro "

@@ -151,8 +151,9 @@ def test_welcome_prices_match_the_pages_that_sold_them() -> None:
     The email's constants must equal the landing page's own numbers and the
     league-pass page's own number."""
     landing = (SITE / "index.html").read_text(encoding="utf-8")
-    assert f'class="price">{SEASON_PRICE} <small>/ season' in landing
-    assert f'class="price">{MONTHLY_PRICE} <small>/ month' in landing
+    assert f'id="pass-price">{SEASON_PRICE} <small>/ rest of season' in landing
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    assert f"Monthly · {MONTHLY_PRICE}" in join
     league = (SITE / "league-pass.html").read_text(encoding="utf-8")
     assert f'class="amt">{PASS_PRICE} <small>' in league
 

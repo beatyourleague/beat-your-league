@@ -457,9 +457,8 @@ def sweep(api_key: str, since: int | None = None,
             # pass that started none can never carry a seat. Said, because
             # nobody would otherwise know why eleven claims go nowhere.
             problems.append(
-                f"League Pass session {session.get('id')} started no subscription, "
-                f"so no seat can be tied to it — check the pass payment link "
-                f"bills yearly")
+                f"League Pass session {session.get('id')} names no subscription or "
+                f"payment, so no seat can be tied to it — look it up by hand")
         signups.append(RosterSignup(
             email=email, ref=ref,
             # A pass PAYER is an ordinary subscriber of ours who also covers
@@ -481,12 +480,22 @@ def sweep(api_key: str, since: int | None = None,
 
 
 def _subscription_id(session: dict) -> str | None:
-    """The subscription a Checkout Session started (an id, or the object when
-    expanded), or None for a one-off payment."""
+    """The purchase a Checkout Session paid for: the subscription it started
+    (an id, or the object when expanded), or — for a one-time pass, a link in
+    payment mode — its PaymentIntent. Either names the purchase a row and its
+    seats are entitled through (RULE E2, run/subscriptions.py)."""
     raw = session.get("subscription")
     if isinstance(raw, dict):
         raw = raw.get("id")
-    return raw if isinstance(raw, str) and raw.startswith("sub_") else None
+    if isinstance(raw, str) and raw.startswith("sub_"):
+        return raw
+    if session.get("mode") == "payment":
+        intent = session.get("payment_intent")
+        if isinstance(intent, dict):
+            intent = intent.get("id")
+        if isinstance(intent, str) and intent.startswith("pi_"):
+            return intent
+    return None
 
 
 # Every terms version a buyer could have ticked the box against, oldest first:
@@ -1525,6 +1534,8 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
         # The offseason: no first report until next season's schedule exists
         # (EMAILS-80/81/89), so the welcome must not say it is on its way.
         extra["season_over"] = True
+    if (signup.subscription_id or "").startswith("pi_"):
+        extra["one_time"] = True        # a one-time pass: nothing renews
     return welcome_message(signup.email, signup.plan, signup.slug, season,
                            purchased_at=str(signup.seen_at or ""), **extra)
 

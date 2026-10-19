@@ -146,3 +146,14 @@ def test_the_printout_runs(capsys) -> None:
                                           (date(2026, 12, 15), date(2027, 1, 15))])
 def test_a_billing_anchor_clamps_to_a_short_month(day, expected) -> None:
     assert econ._add_month(day) == expected
+
+
+def test_the_one_time_prices_are_the_ones_the_site_sells() -> None:
+    """2026 sells one-time passes (Oct 18 2026); the model's figures are the
+    welcome email's constants, which another test ties to the pages."""
+    from render.welcome import PASS_PRICE, PLAYOFF_PRICE, SEASON_PRICE
+    assert econ.ONE_TIME == {"Rest-of-Season Pass": float(SEASON_PRICE[1:]),
+                             "Playoff Pass": float(PLAYOFF_PRICE[1:]),
+                             "League Pass (rest of season)": float(PASS_PRICE[1:])}
+    # No Stripe Billing fee on a one-time payment.
+    assert econ.stripe_fee(29, one_time=True) < econ.stripe_fee(29)

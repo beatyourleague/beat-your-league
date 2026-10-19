@@ -379,17 +379,17 @@ def check_prices() -> list[Gate]:
     landing = (SITE / "index.html").read_text(encoding="utf-8")
     join = (SITE / "join/index.html").read_text(encoding="utf-8")
     lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
-    season = re.search(r'class="price">\$(\d+) <small>/ season', landing)
-    monthly = re.search(r'class="price">\$([\d.]+) <small>/ month', landing)
+    # 2026: one-time passes (owner decision, Oct 18 2026) — the pass card is
+    # "/ rest of season", the League Pass card "/ your whole league", and
+    # monthly is off the landing (its price still lives on the join page).
+    season = re.search(r'id="pass-price">\$(\d+) <small>/ rest of season', landing)
     lp_amt = re.search(r'class="amt">\$(\d+)', lp)
-    seen = {"landing season": season and "$" + season.group(1),
-            "landing monthly": monthly and "$" + monthly.group(1),
+    seen = {"landing pass": season and "$" + season.group(1),
             "league pass page": lp_amt and "$" + lp_amt.group(1)}
-    want = {"landing season": SEASON_PRICE, "landing monthly": MONTHLY_PRICE,
-            "league pass page": PASS_PRICE}
+    want = {"landing pass": SEASON_PRICE, "league pass page": PASS_PRICE}
     wrong = [f"{k} shows {seen[k]} but the welcome email says {want[k]}"
              for k in want if seen[k] != want[k]]
-    for label, price in ((f"Season pass · {SEASON_PRICE}", SEASON_PRICE),
+    for label, price in ((f"Rest-of-Season Pass · {SEASON_PRICE}", SEASON_PRICE),
                          (f"Monthly · {MONTHLY_PRICE}", MONTHLY_PRICE),
                          (f"Continue to checkout — {SEASON_PRICE}", SEASON_PRICE),
                          (f"— {MONTHLY_PRICE}/mo", MONTHLY_PRICE),
@@ -405,8 +405,12 @@ def check_funnel_config() -> list[Gate]:
     landing = js_constants((SITE / "index.html").read_text(encoding="utf-8"))
     join = js_constants((SITE / "join/index.html").read_text(encoding="utf-8"))
     lp = js_constants((SITE / "league-pass.html").read_text(encoding="utf-8"))
+    # 2026 (owner decision, Oct 18 2026): monthly isn't sold, so its empty
+    # link is not a missing one (MONTHLY_OFFERED on the join page).
+    monthly_offered = join.get("MONTHLY_OFFERED") != "false"
     links = {k: join.get(k, "") for k in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY",
-                                          "STRIPE_LINK_PASS")}
+                                          "STRIPE_LINK_PASS")
+             if monthly_offered or k != "STRIPE_LINK_MONTHLY"}
     empty = [k for k, v in links.items() if not v]
     open_ = landing.get("CHECKOUT_OPEN") == "true"
     can = landing.get("CHECKOUT_CAN_COMPLETE") == "true"
@@ -415,11 +419,11 @@ def check_funnel_config() -> list[Gate]:
     gates = []
     if empty:
         gates.append(Gate("Funnel", "Checkout can take money", "OWNER",
-                          f"{len(empty)} of 3 payment links empty — LAUNCH.md step 5 (the "
+                          f"{len(empty)} of {len(links)} payment links empty — LAUNCH.md step 5 (the "
                           f"Worker) and steps 1–3, then fresh links go into "
                           f"site/join/index.html"))
     else:
-        gates.append(Gate("Funnel", "Checkout can take money", "PASS", "all three payment links set"))
+        gates.append(Gate("Funnel", "Checkout can take money", "PASS", "every payment link on sale is set"))
     gates.append(_gate("Funnel", "The landing never sells a checkout that cannot complete",
                        not (open_ and links["STRIPE_LINK_SEASON"] == "")
                        and not (can and empty),
@@ -437,6 +441,12 @@ def check_funnel_config() -> list[Gate]:
                        landing.get("CHECKOUT_OPEN") == lp.get("CHECKOUT_OPEN"),
                        f"index CHECKOUT_OPEN={landing.get('CHECKOUT_OPEN')}, "
                        f"league-pass CHECKOUT_OPEN={lp.get('CHECKOUT_OPEN')}"))
+    # The $19 Playoff Pass swaps in on the landing only when the join page can
+    # charge it: the landing's flag must equal "the playoff link is set".
+    gates.append(_gate("Funnel", "The landing sells the Playoff Pass only when the join page can charge it",
+                       (landing.get("PLAYOFF_PASS_READY") == "true") == bool(join.get("STRIPE_LINK_PLAYOFF")),
+                       f"landing PLAYOFF_PASS_READY={landing.get('PLAYOFF_PASS_READY')} but the join "
+                       f"page's STRIPE_LINK_PLAYOFF is {'set' if join.get('STRIPE_LINK_PLAYOFF') else 'empty'}"))
     gates.append(_gate("Funnel", "The free-report button only shows when requests can be received",
                        not (trial and not form),
                        "TRIAL_OPEN is on but FORM_ENDPOINT is empty: the button posts nowhere"))
@@ -1268,11 +1278,18 @@ def audit_flow(mode: str, kind: str, plan: str | None, query: str, result: dict,
     return problems
 
 
-def audit_plan_switch(switched: dict | None) -> list[str]:
+def audit_plan_switch(switched: dict | None, monthly_offered: bool = True) -> list[str]:
     """Season ⇄ monthly on the page rewrites the button and the terms line
     above it, and switching back restores the season pass exactly — a buyer
-    must never read the season pass's renewal terms above a monthly button."""
+    must never read the season pass's renewal terms above a monthly button.
+    With monthly not offered (2026's one-time passes, join MONTHLY_OFFERED)
+    there is no switch: the season pass's own price must still be shown."""
     from render.welcome import MONTHLY_PRICE, SEASON_PRICE
+    if not monthly_offered:
+        before = (switched or {}).get("before") or {}
+        if SEASON_PRICE not in before.get("button", "") + before.get("terms", ""):
+            return [f"season: {SEASON_PRICE} is not on the button or terms line"]
+        return []
     if not switched or not switched.get("after"):
         return ["season: the page offers no switch to monthly"]
     before, after, back = switched["before"], switched["after"], switched["back"]
@@ -1302,10 +1319,15 @@ def check_join_flows() -> list[Gate]:
             return [Gate("Browser", "Every join mode hands off a well-formed purchase or row",
                          "FAIL", f"join page constants not found: {sorted(set(missing))}")]
         roster_text, roster_ids = flow_roster(Path(tmp) / "open" / "join" / "players.json")
+        # Monthly isn't sold in 2026 (join MONTHLY_OFFERED): ?plan=monthly is
+        # the season pass then, and the monthly flow is not one a buyer can take.
+        offered = js_constants((SITE / "join/index.html").read_text(encoding="utf-8")) \
+            .get("MONTHLY_OFFERED") != "false"
+        flows = [f for f in FLOWS if offered or f[0] != "monthly"]
         jobs = [{"kind": "flow", "mode": mode, "path": f"{copy}/join/index.html{query}",
                  "width": 390, "roster": roster_text, "email": FLOW_EMAIL, "payer": FLOW_PAYER,
                  "planSwitch": mode == "season", "tick": FLOW_TICKS.get(mode, [])}
-                for mode, copy, query, _k, _p in FLOWS]
+                for mode, copy, query, _k, _p in flows]
         with _serving(Path(tmp), port):
             results = run_browser(jobs, base)
     name = "Every join mode hands off a well-formed purchase or row"
@@ -1313,14 +1335,17 @@ def check_join_flows() -> list[Gate]:
         return [Gate("Browser", name, "SKIP", results)]
     by_mode = {r.get("mode"): r for r in results}
     problems: list[str] = []
-    for mode, _copy, query, kind, plan in FLOWS:
+    for mode, _copy, query, kind, plan in flows:
         result = by_mode.get(mode) or {"error": "no result"}
         problems += audit_flow(mode, kind, plan, query, result, roster_ids, base)
         if mode == "season" and not result.get("error"):
-            problems += audit_plan_switch(result.get("switched"))
+            problems += audit_plan_switch(
+                result.get("switched"),
+                js_constants((SITE / "join/index.html").read_text(encoding="utf-8"))
+                .get("MONTHLY_OFFERED") != "false")
     errors = [f"{r['mode']}: {r['errors'][0][:100]}" for r in results if r.get("errors")]
     return [_gate("Browser", name, not problems, "; ".join(problems[:5]),
-                  f"{len(FLOWS)} modes: {', '.join(m for m, *_ in FLOWS)}"),
+                  f"{len(flows)} modes: {', '.join(m for m, *_ in flows)}"),
             _gate("Browser", "No script errors while completing the join modes", not errors,
                   "; ".join(errors[:3]))]
 
@@ -1530,14 +1555,18 @@ def check_compliance() -> list[Gate]:
     from render.welcome import welcome_message
     gates = []
     join = visible_text((SITE / "join/index.html").read_text(encoding="utf-8"))
-    gates.append(_gate("Compliance", "Renewal amount, refund and cancel terms sit above the pay button",
-                       bool(re.search(r"renews once a year at \$39", join))
-                       and "cancel yourself" in join and "Refunds are no-questions" in join,
+    # 2026 sells one-time passes (owner decision, Oct 18 2026): the disclosure
+    # above the button is the price, that nothing renews, and the refund.
+    from render.welcome import SEASON_PRICE
+    gates.append(_gate("Compliance", "Price, no-renewal and refund terms sit above the pay button",
+                       f"{SEASON_PRICE}, one payment" in join
+                       and "nothing renews" in join and "Refunds are no-questions" in join,
                        "the join page's terms line lost a disclosure"))
-    msg = welcome_message("x@example.com", "season", "abcdef0123", "2026")
+    msg = welcome_message("x@example.com", "season", "abcdef0123", "2026", one_time=True)
     body = visible_text(msg.html)
-    gates.append(_gate("Compliance", "The welcome email states renewal, amount and how to cancel",
-                       "renews once a year" in body and "$39" in body and "Cancel" in body,
+    gates.append(_gate("Compliance", "The welcome email states that nothing renews, the refund, and how to stop",
+                       "nothing renews" in body and "Refunds are no-questions" in body
+                       and "stop" in body,
                        "the acknowledgment email lost a disclosure"))
     # The postal address (CAN-SPAM, CASL) is check_email_senders' question now:
     # it renders every email type and looks for the block in each, where this
@@ -1549,11 +1578,11 @@ def check_compliance() -> list[Gate]:
     from datetime import date
     stamp = date.fromisoformat(TERMS_VERSION)
     terms = (SITE / "terms.html").read_text(encoding="utf-8")
-    gates.append(_gate("Compliance", "Stripe's Pay-button text matches the terms (once a year)",
+    gates.append(_gate("Compliance", "Stripe's Pay-button text matches the terms (one payment)",
                        not any("each season" in m for m in MESSAGES.values())
-                       and all("once a year" in MESSAGES[p] for p in ("season", "league_pass")),
+                       and all("Nothing renews" in MESSAGES[p] for p in ("season", "league_pass")),
                        "infra/stripe_paylink_text.py says something the terms don't"))
-    gates.append(_gate("Compliance", "The checkout's terms box names the renewal, its amount and 18+",
+    gates.append(_gate("Compliance", "The checkout's terms box names what's bought and 18+",
                        all("18 or older" in t and "[Terms](" in t for t in TOS_MESSAGES.values()),
                        "a TOS_MESSAGES entry lost a required element"))
     gates.append(_gate("Compliance", "The terms carry the version consent is recorded against",
