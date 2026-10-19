@@ -928,11 +928,36 @@ def check_product_battery() -> list[Gate]:
     ]
 
 
+# The local simulations below build real send-log keys (run/digest.py), so
+# without the owner's LOG_SECRET in this shell they use a throwaway one.
+# Nothing they build is ever sent, and the "LOG_SECRET is set" gate reads the
+# GitHub secret names, never this environment.
+SIMULATION_LOG_SECRET = "launch-check-simulation-only"
+
+
+def _simulation_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.setdefault("LOG_SECRET", SIMULATION_LOG_SECRET)
+    return env
+
+
+@contextlib.contextmanager
+def _simulation_log_secret():
+    had = "LOG_SECRET" in os.environ
+    os.environ.setdefault("LOG_SECRET", SIMULATION_LOG_SECRET)
+    try:
+        yield
+    finally:
+        if not had:
+            os.environ.pop("LOG_SECRET", None)
+
+
 def check_proving() -> list[Gate]:
     """Two weeks of a real past season through every runner with fake mail."""
     with tempfile.TemporaryDirectory() as tmp:
         r = subprocess.run([sys.executable, "-m", "run.proving", str(Path(tmp) / "p"), "4-5"],
-                           cwd=REPO, capture_output=True, text=True, timeout=900)
+                           cwd=REPO, capture_output=True, text=True, timeout=900,
+                           env=_simulation_env())
     tail = (r.stdout.strip().splitlines() or [""])[-1]
     return [_gate("Product", "Tuesday → Saturday → Monday run end to end (2025 weeks 4–5)",
                   r.returncode == 0, f"exit {r.returncode}: {tail or r.stderr[-300:]}", tail)]
@@ -1053,6 +1078,7 @@ def check_browser() -> list[Gate]:
     ]
 
 
+@_simulation_log_secret()
 def check_email_widths() -> list[Gate]:
     """GATE-2: the emails this week's run would send, at a true 390px phone.
     A test pins the 2024 sample's email; the live week and the battery are
@@ -1717,6 +1743,7 @@ def audit_senders(samples: list[tuple[str, str, str | None]], line: str) -> dict
 PROBE_ADDRESS = "PO Box 0, Launch Check ON A1A 1A1"
 
 
+@_simulation_log_secret()
 def check_email_senders() -> list[Gate]:
     """GATE-9: every email type, rendered, carries who sent it (CAN-SPAM,
     CASL) and a way out. Unset SENDER_POSTAL_ADDRESS is the owner's step, so

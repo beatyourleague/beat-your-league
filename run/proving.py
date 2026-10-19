@@ -31,6 +31,11 @@ from engine.nflverse_backtest import (build_universe, allocate, TEMPLATE_T1, RAW
 from engine.scoring import preset
 from ingest.nflverse import season_rows, season_teams
 
+# Every send below goes to Fake, so the send-log keys (run/digest.py) may use a
+# throwaway LOG_SECRET when the owner's isn't in this shell.
+import os as _os
+_os.environ.setdefault("LOG_SECRET", "proving-simulation-only")
+
 SENT = []
 class Fake:
     name = "fake"
