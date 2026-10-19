@@ -291,9 +291,9 @@ def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> No
                                            scoring=scoring, label="x"), size, week=2)
     said = ("full-PPR, 12-team standard lineups that start a kicker and a defense get "
             "them from Week 2, and every other setup from Week 4")
-    faq = LANDING.split("<summary>When do the numbers start?</summary>")[1].split("</details>")[0]
+    faq = LANDING.split("<summary>Is it worth joining mid-season?</summary>")[1].split("</details>")[0]
     assert said in prose(faq)
-    assert said in LANDING.split('"name": "When do the numbers start?"')[1].split("}}")[0]
+    assert said in LANDING.split('"name": "Is it worth joining mid-season?"')[1].split("}}")[0]
     assert "full-PPR 12-team standard lineups get them from Week 2" not in LANDING_PROSE
 
 

@@ -266,8 +266,9 @@ NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
 # setup (run/solo.seeded_scope) — EMAILS-90.
 NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
                 "your scoring, with odds on the close calls from Week 4 (Week 2 "
-                "for a 12-team PPR standard lineup). The game plan at the top "
-                "takes about a minute.")
+                "for a 12-team PPR standard lineup), and any bye still ahead — "
+                "playoff weeks included — that leaves a spot nobody on your "
+                "roster can fill. The game plan at the top takes about a minute.")
 NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")
 

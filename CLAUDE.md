@@ -1331,6 +1331,22 @@ confirmed mismatches, all fixed (by the product or by the words). Rules it left:
   is "ESPN's and Yahoo's default" (Yahoo's own help page), Three WR has no platform claim;
   "analysis, not betting picks"; hourly things are "usually within the hour".
 
+**Mid-season positioning (owner decision, Oct 18 2026).** The product launches in Week 7 and
+is sold as a rest-of-season, playoff-push product: "every lineup from here to your title game".
+The landing title, kicker, hero, pricing heading and FAQ ("Is it worth joining mid-season?",
+which absorbed "When do the numbers start?" — the FAQ is capped at seven) and the join pitch
+say so; the season clock counts "N lineups to a Week 17 title game" (Week 17 = championship
+week under ESPN/Yahoo/Sleeper defaults, the same claim `season_end_lines` makes). The entity
+sentence is deliberately unchanged (identical phrasing is its whole mechanism). One feature
+backs it: **byes ahead** — every LIVE weekly report checks the weeks after this one through the
+season's last (`run.solo._byes_ahead` → `engine.preseason.bye_collisions`, the roster report's
+own check, today's reserve list counting as no cover) and adds one checklist item naming each
+week a bye leaves a starting slot nothing else can fill, the player(s) on bye who play it, and
+"a playoff week under ESPN's, Yahoo's and Sleeper's defaults" for Weeks 15–17. Facts off the
+schedule, no projection, no %, nothing recorded; never on a replayed week (the pinned samples
+are unchanged). "Performance" means decisions, never results: no "win more", "make the
+playoffs" or outcome claims. A rest-of-season price is an owner decision, not built.
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

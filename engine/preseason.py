@@ -199,6 +199,57 @@ def _out_names(roster: Sequence[Mapping[str, Any]], slots: Sequence[str],
                   and any(_eligible(slot, r["position"]) for slot in slots))
 
 
+def bye_collisions(roster: Sequence[Mapping[str, Any]], slots: Sequence[str],
+                   weeks: Sequence[int]) -> list[dict[str, Any]]:
+    """The weeks in ``weeks`` where a bye leaves a starting slot that nothing
+    else on the roster can fill (RULE P2), each naming the slots, who is on
+    bye and anyone out today who would otherwise have covered it.
+
+    ``roster`` rows carry player_id, name, position, bye and (in-season)
+    out_today. Shared by the roster report and the weekly report's "byes
+    ahead" item, so the two can never disagree about what "covered" means.
+    """
+    slots = list(slots)
+    collisions: list[dict[str, Any]] = []
+    can_play = [r for r in roster
+                if r["position"] != "UNK" and not r.get("out_today")]
+    # A slot that today's reserve list empties in EVERY week is not a bye
+    # problem: it shows under the thin spots, with the reason, so a week is
+    # never blamed on the wrong player. With nobody out this is empty and the
+    # check is exactly what it always was.
+    on_roster = {r["player_id"]: r["position"] for r in roster
+                 if r["position"] != "UNK"}
+    always_empty = (Counter(unfillable_slots(
+        slots, {r["player_id"]: r["position"] for r in can_play}))
+        - Counter(unfillable_slots(slots, on_roster)))
+    for week in weeks:
+        out_this_week = {r["player_id"] for r in roster if r.get("bye") == week}
+        if not out_this_week:
+            continue
+        available = {r["player_id"]: r["position"] for r in can_play
+                     if r["player_id"] not in out_this_week}
+        empty, skip = [], Counter(always_empty)
+        for slot in unfillable_slots(slots, available):
+            if skip[slot]:
+                skip[slot] -= 1
+            else:
+                empty.append(slot)
+        if empty:
+            collisions.append({
+                "week": week,
+                "slots": empty,
+                "players": sorted(r["name"] for r in roster
+                                  if r["player_id"] in out_this_week),
+                # Just the players on bye who play an emptied slot: a Week-9
+                # kicker warning names the kicker, not every idle running back.
+                "short": sorted(r["name"] for r in roster
+                                if r["player_id"] in out_this_week
+                                and any(_eligible(slot, r["position"]) for slot in empty)),
+                "out": _out_names(roster, empty, exclude=out_this_week),
+            })
+    return collisions
+
+
 def build_preseason_report(
     spec,
     directory: PlayerDirectory,
@@ -278,40 +329,9 @@ def build_preseason_report(
 
     # Bye collisions, week by week. Only weeks where a slot is genuinely left
     # empty (RULE P2), and each one names the slots so it is actionable.
-    collisions: list[dict[str, Any]] = []
     weeks_ahead = [week for week in SEASON_WEEKS
                    if from_week is None or week >= from_week]
-    can_play = [r for r in roster
-                if r["position"] != "UNK" and not r.get("out_today")]
-    # A slot that today's reserve list empties in EVERY week is not a bye
-    # problem: it shows under the thin spots, with the reason, so a week is
-    # never blamed on the wrong player. With nobody out this is empty and the
-    # check is exactly what it always was.
-    on_roster = {r["player_id"]: r["position"] for r in roster
-                 if r["position"] != "UNK"}
-    always_empty = (Counter(unfillable_slots(
-        slots, {r["player_id"]: r["position"] for r in can_play}))
-        - Counter(unfillable_slots(slots, on_roster)))
-    for week in weeks_ahead:
-        out_this_week = {r["player_id"] for r in roster if r["bye"] == week}
-        if not out_this_week:
-            continue
-        available = {r["player_id"]: r["position"] for r in can_play
-                     if r["player_id"] not in out_this_week}
-        empty, skip = [], Counter(always_empty)
-        for slot in unfillable_slots(slots, available):
-            if skip[slot]:
-                skip[slot] -= 1
-            else:
-                empty.append(slot)
-        if empty:
-            collisions.append({
-                "week": week,
-                "slots": empty,
-                "players": sorted(r["name"] for r in roster
-                                  if r["player_id"] in out_this_week),
-                "out": _out_names(roster, empty, exclude=out_this_week),
-            })
+    collisions = bye_collisions(roster, slots, weeks_ahead)
 
     # Thin spots: a starting slot whose only eligible bodies are already
     # starting. Reported whether or not a bye exposes it, because it is the

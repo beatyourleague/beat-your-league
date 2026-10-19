@@ -441,6 +441,10 @@ class WeekData:
     # already reads it for every player it can place on a team; the report
     # reads it for the rest (launch audit R1).
     roster_out: dict = field(default_factory=dict)
+    # The season's byes (team -> idle week), live week only: the weekly
+    # report's "byes ahead" item plans the rest of the season from it, and a
+    # replayed week has no rest of season to plan.
+    season_byes: dict = field(default_factory=dict)
     # Statuses the gate never reads (method §15 C9), live week only: gsis ->
     # why. ``not_active`` (not with his team, retired) comes off the lineup
     # like a released player; ``practice_squad`` keeps his seat and loses any
@@ -701,6 +705,36 @@ def _nflverse_usage(rows: Mapping[int, Mapping[str, Mapping[str, str]]],
     return out
 
 
+def _season_byes(cache_dir: Path, season: str) -> dict:
+    """team -> bye week for the season, read once per week's load; an
+    unreadable schedule plans nothing rather than guessing a week."""
+    from engine.preseason import bye_by_team
+    try:
+        return bye_by_team(cache_dir, season)
+    except Exception:  # noqa: BLE001 — a missing plan, never a wrong one
+        return {}
+
+
+def _byes_ahead(spec: RosterSpec, data: "WeekData") -> list[dict]:
+    """The weeks after this one, through the season's last, where a bye
+    leaves a starting slot empty — today's reserve list counts as unable to
+    cover, as it does in the lineup."""
+    if not data.is_live_week or not data.season_byes or not data.last_week:
+        return []
+    from engine.preseason import bye_collisions
+    by_id = {p.player_id: p for p in data.directory.players}
+    roster = []
+    for pid in spec.player_ids:
+        player = by_id.get(pid)
+        if player is None:
+            continue
+        roster.append({"player_id": pid, "name": player.name,
+                       "position": player.position,
+                       "bye": data.season_byes.get(player.team) if player.team else None,
+                       "out_today": data.roster_out.get(pid)})
+    return bye_collisions(roster, spec.slots, range(data.week + 1, data.last_week + 1))
+
+
 def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
                    week: int | None = None, *, live: bool = True,
                    session: requests.Session | None = None,
@@ -814,6 +848,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         listed=_listed_on_report(cache_dir, season, week - 1, live=live,
                                  session=session),
         is_live_week=is_live_week,
+        season_byes=_season_byes(cache_dir, season) if is_live_week else {},
         # Read off the rows already parsed above rather than re-reading the
         # whole season: the counted-usage columns are in SEASON_COLUMNS for
         # exactly this reason.
@@ -1249,6 +1284,13 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
         # a row-level flag, so the section says so once.
         report["meta"]["seeded"] = True
     report["meta"]["last_week"] = data.last_week
+    # The rest of the season (mid-season planning): byes still ahead that
+    # leave a slot empty, as one checklist item. Facts only, nothing graded.
+    ahead = _byes_ahead(spec, data)
+    if ahead:
+        from engine.solo_report import byes_ahead_items
+        report["byes_ahead"] = ahead
+        report["checklist"] = list(report.get("checklist") or []) + byes_ahead_items(ahead)
     # Contract C8: a lineup shape no arm has graded prints no odds — the
     # lineup, projections and plans stand, and every number is withheld with
     # its reason. Last, so it sees every number the report carries.
