@@ -45,7 +45,7 @@ def test_the_day_one_line_names_what_actually_lands() -> None:
                  "Your first one comes the day you sign up"):
         assert gone not in LANDING, gone
     assert TEXT.count("within the hour") >= 5
-    assert "your roster report does" in TEXT
+    assert "your first report usually lands within the hour" in TEXT
     assert "Set up your team: your roster report lands today, and Week " in SCRIPT
 
 

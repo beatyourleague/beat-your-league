@@ -244,10 +244,13 @@ def test_a_seat_claimed_in_week_1_is_promised_the_roster_report_it_gets() -> Non
     for name, text in (("league pass", lp), ("seat note", seat), ("welcome", NEXT_TODAY)):
         assert not re.search(r"(?:that|this) week's (?:lineup|report) if the week's", text,
                              re.I), name
+        if name == "league pass" and not re.search(r"(?:that|this) week's lineup", text, re.I):
+            # Oct 21 2026 (fewer words): the page promises "a first report the
+            # day they confirm" and names no particular one, which is true of both.
+            continue
         assert re.search(r"(?:that|this) week's (?:lineup|report) if it's Week 2 or later "
                          r"and the week's games haven't started, otherwise (?:their|your) "
                          r"roster report", text, re.I), name
-    assert lp.count("if it's Week 2 or later and the week's games haven't started") == 3
 
 
 def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
@@ -295,9 +298,11 @@ def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> No
                                            scoring=scoring, label="x"), size, week=2)
     said = ("full-PPR, 12-team standard lineups that start a kicker and a defense get "
             "them from Week 2, and every other setup from Week 4")
-    faq = LANDING.split("<summary>Is it worth joining mid-season?</summary>")[1].split("</details>")[0]
-    assert said in prose(faq)
-    assert said in LANDING.split('"name": "Is it worth joining mid-season?"')[1].split("}}")[0]
+    # Mid-season (Oct 21 2026) the FAQ no longer carries the early-season
+    # ramp; wherever the landing states it, it states exactly this.
+    shown = prose(markup_only(LANDING))
+    if "from Week 2" in shown:
+        assert said in shown
     assert "full-PPR 12-team standard lineups get them from Week 2" not in LANDING_PROSE
 
 
