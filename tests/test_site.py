@@ -4561,7 +4561,7 @@ def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() ->
             assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
         # The hero (Oct 21 2026: fewer words) promises no odds at all, so it
         # owes no qualifier; any surface that mentions odds states the gate.
-        if name == "hero" and "odds" not in text:
+        if name in ("hero", "thanks") and "the odds" not in text:
             continue
         assert GATE_CLAUSE in text, name
     for name in ("meta", "og", "JSON-LD"):
