@@ -86,4 +86,4 @@ def test_the_league_pass_names_its_size_limit() -> None:
     """D18: a pass carries as many seats as its league has teams, up to 14 —
     "covers every manager" with no limit was false for a 16-team league."""
     assert LANDING.count("in a league of up to 14 teams with one payment") == 2
-    assert "For a league of up to 14 teams." in TEXT
+    assert "Up to 14 teams." in TEXT

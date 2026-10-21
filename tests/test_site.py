@@ -3889,7 +3889,9 @@ def test_no_join_copy_promises_odds_on_every_close_call() -> None:
     """PE-11: bye-heavy weeks, gated players and ungraded lineups carry none,
     so the promise is the true one — odds wherever both players are confirmed."""
     assert not re.search(r"odds on (?:every|each) close call", JOIN_PROSE, re.I)
-    assert JOIN_PROSE.count(GATE_CLAUSE) >= 4
+    # Oct 21 2026 (fewer words): the default pitch and sidebar no longer
+    # promise odds at all; where the page still does, the gate is stated.
+    assert JOIN_PROSE.count(GATE_CLAUSE) >= 1
 
 
 def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
@@ -4467,28 +4469,20 @@ def test_the_closest_call_is_named_with_the_reports_own_label() -> None:
     assert "the report names it too" in how
 
 
-def test_the_comparison_is_the_tools_a_manager_already_has() -> None:
-    """GTM-5, SS-I6, I8: the page argued against "rankings", a straw man,
-    while the buyer's real alternatives are the optimizer in their league app
-    and a chatbot — and the rankings-vs-us grid (dashes against checks) read
-    as a stock SaaS section. Now three columns say what each tool does and
-    asks of you, facts only: no claim about anyone's results, and odds
-    promised only where both players are confirmed."""
+def test_the_landing_sells_without_a_comparison_essay() -> None:
+    """Owner direction, Oct 21 2026: too many words, focus on selling. The
+    optimizer-vs-chatbot grid (GTM-5) and the "Why this exists" essay were cut;
+    the page says what the buyer gets, shows the real report, prices it and
+    answers six questions. Kept from the old guard: no results claim and no
+    rankings straw man anywhere on the page."""
+    assert 'class="cmpsec"' not in LANDING and 'class="why"' not in LANDING
     page = prose(markup_only(LANDING))
-    assert "Why not just use rankings" not in page and 'class="versus"' not in LANDING
-    section = LANDING.split('<section class="cmpsec">')[1].split("</section>")[0]
-    heads = re.findall(r'<h3 class="cmphead"><span>([^<]+)</span></h3>', section)
-    assert heads == ["A lineup optimizer", "A chatbot", "Your report"]
-    for column in section.split('<div class="cmpcol')[1:]:
-        assert re.findall(r"<dt>([^<]+)</dt>", column) == ["When", "Close calls", "Late news"]
-    text = prose(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", section, flags=re.S)))
-    assert GATE_CLAUSE in text
-    for claim in (r"\bbetter\b", r"\bmore (?:often|wins|accurate)\b", r"\bwin(?:s|ning)?\b",
-                  r"\bwrong\b", r"\bbad\b", r"\bworse\b"):
-        assert not re.search(claim, text, re.I), f"the comparison makes a results claim: {claim}"
-    # The rankings argument is one line now, not a section, a card and an FAQ.
-    assert len(re.findall(r"\brankings\b", re.sub(r"<!--.*?-->", "", page), re.I)) == 1
-    assert "Already pay for a fantasy site?" in text
+    assert "Why not just use rankings" not in page
+    for claim in (r"\bmore (?:often|wins|accurate)\b", r"\bwin more\b", r"make the playoffs"):
+        assert not re.search(claim, page, re.I), f"a results claim: {claim}"
+    rendered = re.sub(r"<script.*?</script>|<style.*?</style>|<head>.*?</head>", "", LANDING, flags=re.S)
+    words = len(re.sub(r"<[^>]+>", " ", rendered).split())
+    assert words < 1300, f"the landing grew back to {words} words"
 
 
 def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
@@ -4565,6 +4559,10 @@ def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() ->
         for overclaim in (r"your league's way", r"odds on (?:each one|every close call)",
                           r"every close call decided and the odds"):
             assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
+        # The hero (Oct 21 2026: fewer words) promises no odds at all, so it
+        # owes no qualifier; any surface that mentions odds states the gate.
+        if name == "hero" and "odds" not in text:
+            continue
         assert GATE_CLAUSE in text, name
     for name in ("meta", "og", "JSON-LD"):
         assert "half-PPR or standard" in surfaces[name]

@@ -286,10 +286,8 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Every lineup from here to your title game, decided for your
-    roster: every Tuesday, the lineup we'd set, with the odds wherever both players are
-    playing, off the injury report and have enough games on record (not on team
-    defenses), and the byes ahead flagged while there's time to cover them.
-    <b>$29 for the rest of the season</b> — one payment, no subscription.</p>
+    roster and in your inbox every Tuesday. <b>$29 for the rest of the season</b> — one
+    payment, no subscription.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now: once you check your roster it stays in this
     page's address, so a bookmark brings it back. Leave your email on the
@@ -456,11 +454,8 @@ Baltimore Ravens
         until your second weekly report's week kicks off (or a week after your last
         report, if the season ends first) — one per person, and a
         re-subscription after a refund is final.
-        Changed your mind later?
-        <a href="../terms.html#cancel">Cancelling takes about a minute</a> in your
-        own account — you never have to ask us, unless one address holds two
-        subscriptions: the billing page shows only the newest, so reply to any report
-        and we cancel the other one for you.</li>
+        Nothing to cancel: your pass is one payment and
+        <a href="../terms.html#cancel">ends on its own</a> after the season's last report.</li>
       </ol>
     </div>
   </section>
@@ -479,22 +474,18 @@ Baltimore Ravens
   <h2>What lands in your inbox</h2>
   <ul>
     <li><span id="side-first"><b>A report the day you join</b>, then a new one every Tuesday morning</span></li>
-    <li><span>Every slot decided for <b>your roster</b>, in your scoring format: PPR, half or standard</span></li>
-    <li><span><b>The odds</b> wherever both players are playing, off the injury report and
-      have enough games on record (not on team defenses), so you know how sure to be</span></li>
-    <li><span>An <b>if/then plan</b> for late injury news, and a <b>Saturday final
-      check</b> when it changes your lineup</span></li>
-    <li><span><b>Byes ahead</b>, playoff weeks included: any week a bye leaves a spot
-      nobody on your roster can fill, flagged while there's time to cover it</span></li>
+    <li><span>Every slot decided for <b>your roster</b> and scoring</span></li>
+    <li><span>An <b>if/then plan</b> for injury news, and a <b>Saturday check</b> when it
+      changes your lineup</span></li>
+    <li><span><b>Byes ahead</b> flagged, playoff weeks included</span></li>
     <li><span>Your lineup set in <b>about ninety seconds</b></span></li>
   </ul>
-  <div class="proof"><b>Your team.</b>Not a list written for everybody — every call made for
-  your roster, in your league's scoring format (PPR, half or standard).
+  <div class="proof"><b>Your team.</b>Not a list written for everybody.
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
     <span>Full refund, no questions, until your second weekly report's week kicks off
       (or a week after your last, if the season ends first) — one per person</span>
-    <span>Cancel yourself online, any time</span>
+    <span>One payment — nothing renews, nothing to cancel</span>
     <span>No league login, no password — just your roster</span>
   </div>
 </aside>
@@ -1921,12 +1912,10 @@ if (TRY_MODE) {
   // price on the page has to be the one this purchase actually costs.
   // Each manager claims their own seat, once, from the link in the buyer's
   // welcome email — nothing reaches anyone who doesn't (JOIN-7).
-  $("header-pitch").textContent = "One League Pass gives every manager in your " +
-    "league — up to 14 teams — their own report every Tuesday: the lineup we'd " +
-    "set, with the odds wherever both players are playing, off the injury report " +
-    "and have enough games on record (not on team defenses). You get a link to " +
-    "send them; each manager claims their seat from it once, with their own " +
-    "roster. $69 for your whole league, rest of season — one payment, nothing renews.";
+  $("header-pitch").textContent = "Every manager in your league — up to 14 teams — " +
+    "gets their own report every Tuesday. You get a link to send them; each manager " +
+    "claims their seat from it once, with their own roster. $69 for your whole league, rest " +
+    "of season — one payment, nothing renews.";
   setChips(["$69 / league · rest of season", "A seat for every manager", FIRST_CHIP]);
   $("lbl-email").textContent = "Your email — your own report and the receipt go here";
   // The pass is $99, and the renewal disclosure must name the amount that
@@ -2093,10 +2082,8 @@ drawFirst();
           $("renew-note").textContent = terms;
           $("submit").textContent = "Continue to checkout — $19";
           $("header-pitch").textContent = "Every lineup from Week " + firstWeek +
-            " to your title game, decided for your roster: every Tuesday, the lineup " +
-            "we'd set, with the odds wherever both players are playing, off the injury " +
-            "report and have enough games on record (not on team defenses), and the " +
-            "byes ahead flagged. $19 for the Playoff Pass — one payment, no subscription.";
+            " to your title game, decided for your roster and in your inbox every " +
+            "Tuesday. $19 for the Playoff Pass — one payment, no subscription.";
           setChips(["$19 · Playoff Pass", "One payment, nothing renews", FIRST_CHIP]);
           drawFirst();
         }
