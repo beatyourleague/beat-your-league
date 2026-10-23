@@ -524,6 +524,45 @@
     animation:shine 1s ease-out forwards;pointer-events:none;}
   @keyframes shine{to{left:130%;}}
 
+  /* ------------------------------------------------ motion, world-class pass
+     (owner direction, Oct 23 2026). Transform and opacity only, so nothing
+     shifts layout (CLS) and the hero's text is never held back (LCP); every
+     element starts visible and the script only enhances; all of it stops for
+     prefers-reduced-motion (below). No figure ever counts up: a number on a
+     real-report card appears as the report printed it. */
+  .scrollbar{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;pointer-events:none;
+    transform-origin:0 50%;transform:scaleX(0);
+    background:linear-gradient(90deg,var(--flag-deep),var(--flag));
+    box-shadow:0 0 12px rgba(242,194,48,.55);}
+  .phonewrap::before{animation:breathe 7s ease-in-out infinite alternate;will-change:transform;}
+  @keyframes breathe{from{transform:translate(-50%,-50%) scale(.94);opacity:.8}
+    to{transform:translate(-50%,-50%) scale(1.06);opacity:1}}
+  .js .hero .phone{animation:float 6s ease-in-out 2.2s infinite alternate;}
+  @keyframes float{from{transform:translateY(0)}to{transform:translateY(-9px)}}
+  section > h2::after{content:"";display:block;width:56px;height:3px;margin-top:16px;
+    border-radius:2px;background:linear-gradient(90deg,var(--flag),var(--flag-deep));
+    transform-origin:0 50%;}
+  .closer > h2::after{margin-left:auto;margin-right:auto;transform-origin:50% 50%;}
+  .js h2.reveal::after{transform:scaleX(0);transition:transform .8s cubic-bezier(.2,.8,.2,1) .3s;}
+  .js h2.reveal.shown::after{transform:none;}
+  .js .stagger > *{opacity:0;transform:translateY(18px);
+    transition:opacity .6s ease var(--d,0s),transform .7s cubic-bezier(.2,.8,.2,1) var(--d,0s);}
+  .js .stagger.shown > *{opacity:1;transform:none;}
+  .js .cred.stagger svg *{stroke-dasharray:64;stroke-dashoffset:64;
+    transition:stroke-dashoffset 1.2s ease calc(var(--d,0s) + .25s);}
+  .js .cred.stagger.shown svg *{stroke-dashoffset:0;}
+  .js .method > article{transition:opacity .6s ease var(--d,0s),
+      transform .7s cubic-bezier(.2,.8,.2,1) var(--d,0s),
+      translate .3s ease,box-shadow .3s ease,border-color .3s ease;}
+  .method article:hover{translate:0 -5px;border-color:rgba(242,194,48,.6);
+    box-shadow:0 22px 44px -22px rgba(0,0,0,.9),0 0 34px -12px rgba(242,194,48,.4);}
+  .method article .n{display:inline-block;transition:translate .3s ease;}
+  .method article:hover .n{translate:4px 0;}
+  .plan.founder{transition:box-shadow .4s ease;}
+  .plan.founder:hover{box-shadow:0 34px 80px -24px rgba(0,0,0,.9),0 0 64px -6px rgba(242,194,48,.6);}
+  .timeline li{transition:background .3s ease;}
+  .timeline li:hover{background:rgba(246,244,238,.08);}
+
   /* ------------------------------------------------ closer + footer */
   .closer{text-align:center;padding:var(--gap-section) 0 20px;}
   .closer p{color:var(--dusk2);margin:8px auto 20px;max-width:46ch;}
@@ -543,6 +582,11 @@
     .fbar i,.ubar i,.flipbar .a,.stickybar{transition:none!important;}
     .notif{display:none!important;}
     .js .reveal{opacity:1!important;transform:none!important;transition:none!important;}
+    .phonewrap::before,.js .hero .phone{animation:none!important;}
+    .js .stagger > *{opacity:1!important;transform:none!important;transition:none!important;}
+    .js .cred.stagger svg *{stroke-dashoffset:0!important;transition:none!important;}
+    .js h2.reveal::after{transform:none!important;transition:none!important;}
+    .method article,.method article .n{transition:none!important;}
     .btn.gold.shine::after{display:none;}
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
     .faq summary::after{transition:none!important;}
@@ -613,6 +657,7 @@
 </style>
 </head>
 <body>
+<div class="scrollbar" aria-hidden="true"></div>
 <a class="skip" href="#main">Skip to content</a>
 <div class="wrap">
 
@@ -1353,7 +1398,7 @@ if (!reduced && "IntersectionObserver" in window) {
 if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
-    ".timeline, .cmp, .cmpnote, .whycard, .plans, .finance, .faqgrid, .leaguepass, .closer > *");
+    ".plans, .finance, .faqgrid > div:first-child, .leaguepass, .closer > *");
   const rise = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
@@ -1366,6 +1411,43 @@ if (!reduced && "IntersectionObserver" in window) {
     el.classList.add("reveal");
     rise.observe(el);
   });
+}
+
+// Groups arrive one item after another (credibility strip, the method cards,
+// the week, the FAQ). Same rule as above: only what starts below the fold is
+// held back, so nothing on screen ever disappears.
+if (!reduced && "IntersectionObserver" in window) {
+  const groups = document.querySelectorAll(".cred, .method, .timeline, .faq");
+  const stagger = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      e.target.classList.add("shown");
+      stagger.unobserve(e.target);
+    }
+  }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
+  groups.forEach((group) => {
+    if (group.getBoundingClientRect().top < window.innerHeight) return;
+    [...group.children].forEach((child, i) => child.style.setProperty("--d", (i * 0.09) + "s"));
+    group.classList.add("stagger");
+    stagger.observe(group);
+  });
+  // Failsafe, as for the cards: nothing may stay hidden if the observer misfires.
+  setTimeout(() => groups.forEach((g) => g.classList.add("shown")), 6000);
+}
+// A thin gold line across the top for how far down the page you are. One
+// transform per frame, never a layout property.
+const progress = document.querySelector(".scrollbar");
+if (progress) {
+  let ticking = false;
+  const draw = () => {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    progress.style.transform = "scaleX(" + (max > 0 ? Math.min(1, scrollY / max) : 0) + ")";
+    ticking = false;
+  };
+  window.addEventListener("scroll", () => {
+    if (!ticking) { ticking = true; requestAnimationFrame(draw); }
+  }, { passive: true });
+  draw();
 }
 
 // One pass of light across the hero's main button, once the phone has landed.
