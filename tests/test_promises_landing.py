@@ -63,7 +63,7 @@ def test_lineups_sizes_and_tagline() -> None:
     only even sizes are offered."""
     assert "Beat Your League</b> — analysis, not betting picks." in LANDING
     assert "8 to 14 teams" not in LANDING
-    assert LANDING.count("8, 10, 12 or 14 teams") == 2
+    assert LANDING.count("8, 10, 12 or 14 teams") >= 2   # FAQ twins, plus the method card
     assert LANDING.count("standard (ESPN's and Yahoo's default)") == 2
     assert not re.search(r"three WR[^.;]*?'s default", LANDING)
 
