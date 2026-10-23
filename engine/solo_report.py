@@ -2080,16 +2080,18 @@ _SLOT_WORDS = {"SUPER_FLEX": "SFLEX", "WRRB_FLEX": "W/R", "REC_FLEX": "W/T"}
 def byes_ahead_items(collisions: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     """The checklist item for the rest of the season: each week still ahead in
     which a bye leaves a starting slot nothing else on the roster can fill
-    (engine.preseason.bye_collisions — the roster report's own check). Facts
-    off the published schedule, no projection and no %, so it carries nothing
-    to grade. Quiet when every bye ahead is covered.
+    (engine.preseason.bye_collisions — the roster report's own check), and,
+    where there are any, players at that spot who play that week with their
+    points a game THIS SEASON (run.solo._bye_cover). Facts off the schedule and
+    the box scores: no projection and no %, so it carries nothing to grade.
+    Quiet when every bye ahead is covered.
 
     This is the mid-season planning a Tuesday report can do that a single
     week's lineup can't: the cover for a Week-14 bye is a pickup or a trade
     made now, while the waiver wire still has one."""
     if not collisions:
         return []
-    parts = []
+    parts, options = [], []
     for i, hit in enumerate(collisions):
         slots = _join_words([_SLOT_WORDS.get(slot, slot) for slot in hit["slots"]])
         spot = "spot" if len(hit["slots"]) == 1 else "spots"
@@ -2101,13 +2103,18 @@ def byes_ahead_items(collisions: Sequence[Mapping[str, Any]]) -> list[dict[str, 
                    if hit["week"] in DEFAULT_PLAYOFF_WEEKS else "")
         lead = "leaves your" if i == 0 else "your"
         parts.append(f"Week {hit['week']} {lead} {slots} {spot} empty ({why}{playoff})")
+        cover = hit.get("cover") or []
+        if cover:
+            options.append(f"Week {hit['week']} options who play that week, by points a game "
+                           f"this season: "
+                           + ", ".join(f"{c['name']} {c['per_game']:.1f}" for c in cover)
+                           + ".")
     first = collisions[0]["week"]
-    return [{
-        "action": ("Byes ahead: " + "; ".join(parts) + ". Nobody else on your roster "
-                   "can start there, so line up cover before then — a pickup or a trade."),
-        "deadline": f"before Week {first}",
-        "urgency": "deadline",
-    }]
+    action = ("Byes ahead: " + "; ".join(parts) + ". Nobody else on your roster can start "
+              "there, so line up cover before then — a pickup or a trade.")
+    if options:
+        action += " " + " ".join(options) + " Check who's free in your league."
+    return [{"action": action, "deadline": f"before Week {first}", "urgency": "deadline"}]
 
 
 def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,

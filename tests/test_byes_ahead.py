@@ -62,3 +62,33 @@ def test_a_replayed_week_plans_nothing():
     data = SimpleNamespace(is_live_week=False, season_byes={"KC": 10}, last_week=18, week=10)
     spec = SimpleNamespace(player_ids=(), slots=SLOTS)
     assert solo._byes_ahead(spec, data) == []
+
+
+def test_bye_cover_names_players_who_can_fill_it_by_this_seasons_record(monkeypatch):
+    """The cover list: eligible for the emptied slot, not rostered, not on bye
+    that week, not on a reserve list today, three games or more this season —
+    best points a game first. Facts only, and never a team defense."""
+    import engine.preseason as preseason
+    P = lambda pid, pos, team: SimpleNamespace(player_id=pid, name=pid, position=pos, team=team)
+    players = [P("00-k1", "K", "AAA"), P("00-k2", "K", "BBB"), P("00-k3", "K", "CCC"),
+               P("00-k4", "K", "DDD"), P("00-k5", "K", "EEE"), P("00-mine", "K", "FFF"),
+               P("00-wr", "WR", "GGG")]
+    form = {"00-k1": {"per_game": 9.0, "games": 6}, "00-k2": {"per_game": 12.0, "games": 6},
+            "00-k3": {"per_game": 15.0, "games": 6},     # his team is on bye in week 9
+            "00-k4": {"per_game": 14.0, "games": 2},     # too few games
+            "00-k5": {"per_game": 13.0, "games": 6},     # on injured reserve today
+            "00-mine": {"per_game": 20.0, "games": 6}, "00-wr": {"per_game": 30.0, "games": 6}}
+    monkeypatch.setattr(preseason, "prior_season_form", lambda weekly, rule: form)
+    data = SimpleNamespace(weekly={1: {}}, directory=SimpleNamespace(players=players),
+                           season_byes={"CCC": 9}, roster_out={"00-k5": "injured reserve"})
+    spec = SimpleNamespace(rule="ppr", player_ids=("00-mine",))
+    cover = solo._bye_cover({"week": 9, "slots": ["K"]}, spec, data, {"00-mine"})
+    assert cover == [{"name": "00-k2", "per_game": 12.0}, {"name": "00-k1", "per_game": 9.0}]
+    assert solo._bye_cover({"week": 9, "slots": ["DEF"]}, spec, data, {"00-mine"}) == []
+
+
+def test_the_item_prints_cover_as_a_record_not_a_forecast():
+    [item] = byes_ahead_items([{"week": 9, "slots": ["K"], "players": ["Bo"], "short": ["Bo"],
+                                "out": [], "cover": [{"name": "Al", "per_game": 14.0}]}])
+    assert "by points a game this season: Al 14.0." in item["action"]
+    assert "Check who's free in your league." in item["action"] and "%" not in item["action"]

@@ -390,6 +390,27 @@
     display:flex;flex-direction:column;}
   .plans{align-items:stretch;isolation:isolate;}
   .plans.one{grid-template-columns:minmax(0,520px);justify-content:center;}
+  /* Authority (owner direction, Oct 23 2026): what the report stands on, said
+     plainly — facts about the product, never a claim about results. */
+  .credsec{padding-top:0;}
+  .cred{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;
+    margin-top:48px;padding:22px 0;border-top:1px solid var(--gold-edge);
+    border-bottom:1px solid var(--gold-edge);}
+  .cred div{display:grid;grid-template-columns:28px 1fr;gap:4px 10px;align-items:start;}
+  .cred svg{width:24px;height:24px;color:var(--flag);grid-row:span 2;margin-top:2px;}
+  .cred b{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.04em;
+    text-transform:uppercase;color:#fff;}
+  .cred span{font-size:13.5px;line-height:1.45;color:var(--dusk);}
+  .method{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;}
+  .method article{background:var(--pitch);border:1px solid var(--gold-edge);border-radius:14px;
+    padding:24px 22px;}
+  .method .n{font-family:var(--display);font-weight:800;font-size:15px;color:var(--flag);
+    letter-spacing:.12em;}
+  .method h3{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
+    color:#fff;margin:6px 0 8px;letter-spacing:.02em;}
+  .method p{font-size:15px;line-height:1.55;color:var(--dusk2);}
+  @media (max-width:880px){.cred{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .method{grid-template-columns:1fr;}}
   .plan:not(.founder){z-index:1;}
   .plan.founder{border:2px solid var(--flag);padding:30px 26px;
     box-shadow:0 30px 70px -24px rgba(0,0,0,.85),0 0 48px -8px rgba(242,194,48,.45);}
@@ -614,8 +635,8 @@
     <h1>Know who <em><span>to start.</span></em></h1>
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
-    <p class="sub">Every lineup to your title game, decided for your roster. One email
-    every Tuesday.</p>
+    <p class="sub">Your lineup, decided by the numbers, for your exact roster. One email
+    every Tuesday, all the way to your title game.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here. The paid CTA unhides the day CHECKOUT_OPEN flips. -->
     <form class="watchform" id="watch-form" novalidate>
@@ -686,6 +707,15 @@
     style="color:var(--flag)">see this week's</a></span></p>
   </div>
 </header>
+
+<section class="credsec" aria-label="What every report stands on">
+  <div class="cred">
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><b>Your exact roster</b><span>Any app, your scoring, the lineup your league starts.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><b>Real NFL data</b><span>Every box score, injury report and schedule, each week.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><b>Odds only when earned</b><span>Measured on past NFL seasons before they reach your report.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><b>Secure checkout</b><span>On Stripe. One payment, no subscription.</span></div>
+  </div>
+</section>
 
 <section class="proof">
   <div class="proofline">
@@ -763,6 +793,20 @@
 </section>
 
 
+<section class="howcall">
+  <h2>How every call gets made.</h2>
+  <div class="method">
+    <article><div class="n">01</div><h3>Your roster, your rules</h3><p>Full PPR, half or
+      standard, 8, 10, 12 or 14 teams, the lineup your league starts. Nothing generic.</p></article>
+    <article><div class="n">02</div><h3>The numbers behind it</h3><p>This season's games, last
+      season blended in, byes and announced injuries, and how many points each game is
+      expected to produce.</p></article>
+    <article><div class="n">03</div><h3>Odds only when earned</h3><p>A percentage prints
+      wherever both players are playing, off the injury report and have enough games on
+      record (not on team defenses). Anywhere else, the report says why.</p></article>
+  </div>
+</section>
+
 <section>
   <h2>Your week, handled</h2>
   <ol class="timeline">
@@ -803,7 +847,7 @@
       <div class="soon" id="season-cta">Checkout opens soon<small><a href="#watch-form" data-to-capture>Leave your email</a> for the one message when it does</small></div>
     </div>
   </div>
-  <p class="finance" id="currency-note">All prices in US dollars.</p>
+  <p class="finance" id="currency-note">All prices in US dollars. Secure checkout on Stripe — we never see your card.</p>
   <p class="finance" id="finance-note">Checkout opens soon —
   <a href="#watch-form" data-to-capture>leave your email</a> for one message the morning it
   does. Running the league? <a href="league-pass.html">One payment can cover every team</a>.</p>
@@ -862,7 +906,7 @@
       </details>
       <details>
         <summary>Who's behind this?</summary>
-        <div class="a">Independent and small: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Paid for only by subscribers: no ads, and your data is never sold. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
+        <div class="a">Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Subscribers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
       </details>
     </div>
   </div>
@@ -926,7 +970,7 @@
         {"@type": "Question", "name": "When does it arrive?", "acceptedAnswer": {"@type": "Answer", "text": "Tuesday morning, after Monday night's game. If Friday's injury report changes your lineup, a short final check lands Saturday."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How it works has the detail."}},
-        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Independent and small: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Paid for only by subscribers: no ads, and your data is never sold. Questions go to hello@beatyourleague.com."}}
+        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Subscribers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to hello@beatyourleague.com."}}
       ]
     }
   ]

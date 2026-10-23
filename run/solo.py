@@ -732,7 +732,53 @@ def _byes_ahead(spec: RosterSpec, data: "WeekData") -> list[dict]:
                        "position": player.position,
                        "bye": data.season_byes.get(player.team) if player.team else None,
                        "out_today": data.roster_out.get(pid)})
-    return bye_collisions(roster, spec.slots, range(data.week + 1, data.last_week + 1))
+    hits = bye_collisions(roster, spec.slots, range(data.week + 1, data.last_week + 1))
+    for hit in hits:
+        hit["cover"] = _bye_cover(hit, spec, data, set(spec.player_ids))
+    return hits
+
+
+# How many players the byes-ahead item names as cover, and how many games a
+# player needs this season before his per-game figure is worth printing.
+BYE_COVER_NAMES = 3
+BYE_COVER_MIN_GAMES = 3
+
+
+def _bye_cover(hit: dict, spec: RosterSpec, data: "WeekData",
+               rostered: set[str]) -> list[dict]:
+    """Players who could fill the emptied slot that week: eligible for it, not
+    on this roster, not on bye that week, not on a reserve list today, with
+    BYE_COVER_MIN_GAMES games this season — ranked by this season's points a
+    game under the subscriber's own scoring. A RECORD, never a projection: the
+    item prints the figure as "a game this season", and whether he's free in
+    the reader's league is theirs to check (we can't see it). Team defenses are
+    skipped: a defense's season isn't scored the way a player's is here."""
+    from engine.preseason import _eligible, prior_season_form
+    slots = [slot for slot in hit.get("slots") or [] if slot != "DEF"]
+    if not slots or not data.weekly:
+        return []
+    cache = data.__dict__.setdefault("_season_form", {})
+    key = repr(spec.rule)
+    if key not in cache:
+        cache[key] = prior_season_form(data.weekly, spec.rule)
+    form = cache[key]
+    week = hit["week"]
+    picks = []
+    for player in data.directory.players:
+        pid = player.player_id
+        if pid in rostered or not player.team or not pid.startswith("00-"):
+            continue
+        if data.season_byes.get(player.team) == week or data.roster_out.get(pid):
+            continue
+        if not any(_eligible(slot, player.position) for slot in slots):
+            continue
+        record = form.get(pid)
+        if not record or record["games"] < BYE_COVER_MIN_GAMES:
+            continue
+        picks.append((-record["per_game"], player.name, pid, record["per_game"]))
+    picks.sort()
+    return [{"name": name, "per_game": per_game}
+            for _neg, name, _pid, per_game in picks[:BYE_COVER_NAMES]]
 
 
 def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
