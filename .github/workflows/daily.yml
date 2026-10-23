@@ -272,7 +272,7 @@ jobs:
           key: nflverse-${{ github.run_id }}
       - name: Upload the day's reply kit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: reply-kit
           path: content/
