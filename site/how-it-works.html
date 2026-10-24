@@ -121,9 +121,12 @@
   .frow small{display:block;font-size:11.5px;color:var(--slate);}
   .frow .proj{font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
   .frow .call{font-size:11.5px;font-weight:700;color:var(--slate);}
-  .frow .pct{font-family:var(--display);font-weight:800;font-size:17px;color:var(--turf);}
+  /* The report's own colours (rival-report-template.html .tcall): a navy
+     numeral over a gold bar from 50% — never green, which the report keeps
+     for "nothing to change". */
+  .frow .pct{font-family:var(--display);font-weight:800;font-size:17px;color:var(--navy);}
   .cbar{display:block;height:6px;background:#E6E2D6;margin-top:3px;}
-  .cbar i{display:block;height:100%;background:var(--turf);}
+  .cbar i{display:block;height:100%;background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
   .task{display:grid;grid-template-columns:18px 1fr;gap:10px;padding:10px 14px;
     border-top:1px solid #EDEAE1;font-size:13.5px;line-height:1.45;}
   .filehead + .task{border-top:0;}
@@ -131,6 +134,10 @@
   .task b{display:block;color:var(--navy);}
   .task small{display:block;font-size:11.5px;font-weight:700;color:var(--brick);
     text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+  /* The report's .dl.ok: a deadline already met by setting the lineup. */
+  .task small.ok{color:var(--turf);}
+  dl.terms dd ul{margin:4px 0 4px 20px;}
+  dl.terms dd li{margin:3px 0;}
   .total{display:flex;align-items:baseline;gap:14px;padding:12px 14px;}
   .total .big{font-family:var(--display);font-weight:800;font-size:40px;line-height:1;
     font-variant-numeric:tabular-nums;}
@@ -175,8 +182,7 @@
       lineup, a short final check tells you the swap. No news, no email.</li>
       <li><b>That's the whole inbox.</b> The day you join, your welcome and your first report.
       Then one email every Tuesday, a second only when Saturday's check changes your lineup,
-      a confirmation button when you change your roster, and on a yearly plan one reminder
-      before it renews. No promotions.</li>
+      and a confirmation button when you change your roster. No promotions.</li>
     </ul>
 
     <h2 id="read"><span class="n">02</span>Reading your report</h2>
@@ -185,7 +191,7 @@
     <div class="anno">
       <div class="filecard" data-real="2024-w10">
         <div class="filehead">Your game plan</div>
-        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Bench Sam LaPorta — Tony Pollard starts at FLEX</b>Sam LaPorta projects 9.5, Tony Pollard 10.3.<small>before this week's first kickoff</small></span></div>
+        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Bench Sam LaPorta — Tony Pollard starts at FLEX</b>Sam LaPorta projects 9.5, Tony Pollard 10.3.<small class="ok">before this week's first kickoff</small></span></div>
         <div class="task"><span class="box" aria-hidden="true"></span><span><b>Sunday morning: check Tony Pollard's status</b>Your if/then below already has the answer either way.<small>gameday morning</small></span></div>
       </div><!--/card-->
       <dl class="terms">
@@ -210,20 +216,30 @@
       points per game instead.</dd>
       <dt>The percentage on a row</dt>
       <dd>The chance your starter outscores your best bench player at that spot. 50% is a coin flip,
-      and the bar starts there. A 70% call is a strong lean, not a lock: it can still lose.</dd>
+      and the bar starts there. A 70% call is a clear favorite, not a certainty: it can still lose.</dd>
       <!-- Every check the odds gate makes, in plain words (COPY:F7): the
-           selling pages' short form is "playing, off the injury report and
-           enough games on record (not on team defenses)". -->
+           selling pages' short form is "only where both players are playing, off the injury report and
+           have enough games on record (never on team defenses)". -->
       <dt>Rows with no percentage</dt>
-      <dd>We only give odds when both players' teams play this week, neither was listed
-      questionable, doubtful or out on last week's injury report or sits on a reserve list
-      or the practice squad, and both have enough games on record: three this season, or —
-      in Weeks 2 and 3, for full-PPR, 12-team standard lineups that start a kicker and a
-      defense — last season counted in. Never on defenses, and never in Week 1. We also hold
-      them where your bench player there is getting more of the ball lately and his
-      projection still counts his earlier games as much. From Week 2
-      those rows still get a projection (in Week 1 each row shows last season's scoring
-      instead), and the report says why there's no number.</dd>
+      <dd>A row prints no odds for one of these reasons:
+      <ul>
+        <li><b>Not playing, or on the injury report.</b> We give odds only when both
+        players' teams play this week and neither was listed questionable, doubtful or out
+        on last week's injury report.</li>
+        <li><b>Reserve list or practice squad.</b> Neither player may sit on a reserve list
+        or the practice squad.</li>
+        <li><b>Too few games.</b> Both need enough games on record: three this season, or —
+        in Weeks 2 and 3, for full-PPR, 12-team standard lineups that start a kicker and a
+        defense — last season counted in, and never in Week 1.</li>
+        <li><b>A defense.</b> Never on defenses: they get a projection only.</li>
+        <li><b>No bench player there.</b> With nobody to compare against, there is no
+        chance to state.</li>
+        <li><b>A rising bench player.</b> We hold them where your bench player there is
+        getting more of the ball lately and his projection still counts his earlier games
+        as much.</li>
+      </ul>
+      From Week 2 those rows still get a projection (in Week 1 each row shows last season's
+      scoring instead), and the report says why there's no number.</dd>
       </dl>
     </div>
     <div class="anno">
@@ -275,7 +291,7 @@
     <h2><span class="n">03</span>Where the numbers come from</h2>
     <p>Your roster and your scoring settings, plus public NFL data from
     <b>nflverse</b>, an open project: box scores, the schedule and the league's injury reports.
-    In Weeks 4 to 16, when the week's game lines are in, a player's projection starts from his
+    In Weeks 4 to 16, once each game's expected scoring is known, a player's projection starts from his
     recent games, blends in last season, allows for byes and injuries the league has announced,
     and for how many points his game is expected to produce. Otherwise it leans mostly on this
     season's games, and in Week 1 your slots are ordered by last season's scoring. Then the
@@ -309,8 +325,8 @@
     <!-- One person built it — terms §15 says "an independent solo project" —
          so no sentence here counts builders in the plural (BE-D4). -->
     <p>Beat Your League is independent and small: one fantasy player built it, after too
-    many lineups set at 12:55 on Sunday. It's paid for only by subscribers: no ads and no
-    selling your data. Questions or something that looks wrong: <b>hello@beatyourleague.com</b>.</p>
+    many lineups set at 12:55 on Sunday. It's paid for only by the people who buy it: no ads
+    and no selling your data. Questions or something that looks wrong: <b>hello@beatyourleague.com</b>.</p>
 
     <h2><span class="n">07</span>The money, briefly</h2>
     <p>$29 for the rest of the season — one payment, no subscription ($19 for the Playoff

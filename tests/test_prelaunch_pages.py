@@ -392,8 +392,12 @@ def test_a_common_domain_typo_is_suggested_never_silently_changed() -> None:
     "gmial.com" — a paid pass and an empty inbox, found by nobody (no code
     reads bounces). The page suggests the fix; it never rewrites an address
     on its own. Run under node."""
-    fn = _js_function(JOIN, "suggestedEmail")
-    table = JOIN[JOIN.index("const DOMAIN_FIXES = {"):]
+    # The table and the function live in site/email-check.js, shared with the
+    # landing's waitlist (FUN-5); the join page loads it and declares neither.
+    shared = (SITE / "email-check.js").read_text(encoding="utf-8")
+    assert "const DOMAIN_FIXES" not in JOIN and "function suggestedEmail" not in JOIN
+    fn = _js_function(shared, "suggestedEmail")
+    table = shared[shared.index("const DOMAIN_FIXES = {"):]
     table = table[:table.index("};") + 2]
     got = _node(table + "\n" + fn + "\nconsole.log(JSON.stringify(["
                 "'pat@gmial.com','pat@Gmail.Co','pat@hotmial.com','pat@yahoo.con',"

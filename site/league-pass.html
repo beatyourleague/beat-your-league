@@ -81,7 +81,12 @@
      text it lands almost a full x-height away and reads as a smudge. */
   .price .amt small{font-family:var(--sans);font-size:15px;font-weight:700;color:var(--slate);
     font-style:normal;text-shadow:none;}
-  .price ul{margin:14px 0 0 18px;font-size:14.5px;line-height:1.75;color:var(--ink2);}
+  /* The landing card's green check circles, not the browser's discs (D6). */
+  .price ul{list-style:none;display:grid;gap:6px;margin:14px 0 0;font-size:14.5px;
+    line-height:1.6;color:var(--ink2);}
+  .price li{position:relative;padding-left:24px;}
+  .price li::before{content:"";position:absolute;left:0;top:.25em;width:15px;height:15px;
+    border-radius:50%;background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   /* Contract C2: one primary (.btn.gold). */
   .btn{display:inline-block;font-family:var(--display);font-weight:800;
     font-size:18px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
@@ -111,7 +116,9 @@
   .chatline button{flex:none;font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
     border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
-  .chatline .blank{color:var(--flag);font-weight:700;white-space:nowrap;}
+  /* Breaks at its own spaces: held on one line it pushed the page to 333px
+     at 320 (QA-09, FUN-10). */
+  .chatline .blank{color:var(--flag);font-weight:700;}
   .chatline b{overflow-wrap:anywhere;}
   .chatline-msg{margin:6px 0 0;font-size:13.5px;color:var(--flag);}
   .chatline-msg:empty{display:none;}

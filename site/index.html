@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — weekly fantasy football start/sit report, through your title game</title>
 <link rel="canonical" href="https://beatyourleague.com/">
-<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
+<meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds only where both players are playing, off the injury report and have enough games on record (never on team defenses), and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — weekly fantasy football start/sit report, through your title game">
 <meta property="og:description" content="Your lineup decided every Tuesday, for your exact roster from any app, no login. Close calls explained, late injury news planned for, byes flagged through your title game.">
 <meta name="twitter:description" content="Your lineup decided every Tuesday, for your exact roster from any app, no login. Close calls explained, late injury news planned for, byes flagged through your title game.">
@@ -106,6 +106,14 @@
     color:var(--paper);border-radius:2px;}
   .watchform input::placeholder{color:var(--dusk);}
   .watchnote{margin-top:10px;font-size:13.5px;color:var(--dusk);line-height:1.55;max-width:46ch;}
+  /* "Did you mean …?" (FUN-5): the fix is one tap, drawn as a link-weight
+     button so it never competes with the form's gold one. */
+  .watchnote .fixmail{font:inherit;font-weight:700;color:var(--flag);background:none;
+    border:0;border-bottom:1px solid currentColor;padding:2px 0;margin:0 2px;cursor:pointer;
+    min-height:24px;}
+  .watchnote .fixmail:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  /* The refund, under the hero's buy button in the open state (business #1). */
+  .riskline{margin-top:10px;font-size:13.5px;color:var(--dusk2);max-width:52ch;line-height:1.55;}
   /* One item per row: wrapped as a flex row they fell one, then two, under
      the form at 1440 (pre-launch review D7). */
   .creds{list-style:none;display:grid;gap:6px;margin-top:18px;
@@ -457,9 +465,24 @@
   /* Left, on the heading's edge: centred, the card made a third alignment
      axis between a left-set heading and left-set notes (review D6). */
   .plans.one{grid-template-columns:minmax(0,520px);justify-content:start;}
+  @media (min-width:881px){
+    .plans.one{grid-template-columns:minmax(0,1fr);}
+    .plans.one .plan.founder{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+      grid-template-rows:auto auto 1fr auto auto;column-gap:44px;align-items:start;}
+    .plans.one .plan.founder > *{grid-column:1;}
+    .plans.one .plan.founder > .head{grid-row:1;}
+    .plans.one .plan.founder > .price{grid-row:2;}
+    .plans.one .plan.founder > .btn{grid-row:4;}
+    .plans.one .plan.founder > .soonnote{grid-row:5;}
+    .plans.one .plan.founder > ul{grid-column:2;grid-row:1 / 6;margin:0;align-self:center;
+      padding-left:40px;border-left:1px solid var(--line);}
+  }
   /* Authority (owner direction, Oct 23 2026): what the report stands on, said
      plainly — facts about the product, never a claim about results. */
   .credsec{padding-top:0;}
+  /* Straight under the 12:55 scene, the strip shares its rule rather than
+     drawing a second one 48px below it. */
+  .proof + .credsec .cred{margin-top:0;border-top:0;}
   .cred{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;
     margin-top:48px;padding:22px 0;border-top:1px solid var(--gold-edge);
     border-bottom:1px solid var(--gold-edge);}
@@ -694,11 +717,11 @@
     .hero .creds{order:4;margin-top:14px;}
     .hero .watchform{order:5;margin-top:18px;} .hero .watchnote{order:6;}
     .hero .heroline{order:7;} .hero .livepill{order:7;justify-self:start;}
-    .hero.can-buy .cta-row{order:5;}
+    .hero.can-buy .cta-row{order:5;} .hero.can-buy .riskline{order:5;}
     .hero .phonewrap{order:8;margin:26px 0 8px;}
     .hero .phone{max-width:286px;}
     .hero .realtag{max-width:286px;}
-    .hero .cta-row{order:9;margin-top:14px;}
+    .hero .cta-row{order:9;margin-top:14px;} .hero .riskline{order:9;}
     /* A tablet keeps its nav and the CTA, in the short label: at 768px the
        nav used to show the logo alone (launch review I14). */
     nav .btn .long{display:none;}
@@ -830,7 +853,7 @@
               <span class="fnc">questionable · see if/then</span></div>
           </div>
           <div class="fcap">Each % is the chance he outscores your best bench player at that spot.
-          Longer bar, surer call.</div>
+          Some rows get no %; they're still decided, with the reason.</div>
         </div><!--/card-->
         <!-- The rest of the same 2024 Week 10 sample, in its own order: the
              closest call (bar from 50%, with its figure), the if/then, then
@@ -857,20 +880,22 @@
   </div>
 </header>
 
-<section class="credsec" aria-label="What every report stands on">
-  <div class="cred">
-    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/></svg><b>Your exact roster</b><span>Any app, your scoring, the lineup your league starts.</span></div>
-    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><b>Real NFL data</b><span>Every box score, injury report and schedule, each week.</span></div>
-    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><b>Odds only when earned</b><span>Measured on past NFL seasons before they reach your report.</span></div>
-    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><b>Secure checkout</b><span>On Stripe. One payment, no subscription.</span></div>
-  </div>
-</section>
-
+<!-- The page's sharpest scene, straight under the hero (copy review):
+     it sat after four feature tiles. -->
 <section class="proof">
   <div class="proofline">
     <div class="big">12:55<small>Sunday</small></div>
     <p><b>He was on your bench. He went for 30. You lost by four.</b> The report makes
     that call on Tuesday, so Sunday you just watch.</p>
+  </div>
+</section>
+
+<section class="credsec" aria-label="What every report stands on">
+  <div class="cred">
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/></svg><b>Your exact roster</b><span>Any app, your scoring, the lineup your league starts.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg><b>Real NFL data</b><span>Every box score, injury report and schedule, each week.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><b>Odds only when earned</b><span>Measured on past NFL seasons before they reach your report.</span></div>
+    <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><b>One payment, refundable</b><span>Nothing renews. No-questions refund until your second weekly report's week kicks off.</span></div>
   </div>
 </section>
 
@@ -950,8 +975,8 @@
       season blended in, byes and announced injuries, and how many points each game is
       expected to produce.</p></article>
     <article><div class="n">03</div><h3>When a % prints</h3><p>A percentage prints
-      wherever both players are playing, off the injury report and have enough games on
-      record (not on team defenses). Anywhere else, the report says why.</p></article>
+      only where both players are playing, off the injury report and have enough games on
+      record (never on team defenses). Anywhere else, the report says why.</p></article>
   </div>
 </section>
 
@@ -982,8 +1007,8 @@
       <div class="head"><div class="tag" id="pass-tag">Rest-of-Season Pass · 2026</div><span class="stamp50">One payment</span></div>
       <div class="price" id="pass-price">$29 <small>/ rest of season</small></div>
       <ul>
-        <li id="pass-span">Every weekly report from now through your title game — your first
-        report usually lands within the hour of joining</li>
+        <li id="pass-span">Your lineup decided every Tuesday from now through your title
+        game — your first report usually lands within the hour of joining</li>
         <li>The Saturday check and the byes ahead, playoffs included</li>
         <li>One payment. Nothing renews, nothing to cancel
         (<a href="terms.html#cancel">how it ends</a>)</li>
@@ -1005,8 +1030,8 @@
     <div>
     <div class="kicker">Run the league?</div>
     <h2>One payment covers every manager</h2>
-    <p>Up to 14 teams. Every manager gets their own report, built from their own
-    roster — and the group chat finds out Sunday who was right.</p>
+    <p>Up to 14 teams. Every manager gets their own report — and the group chat
+    finds out Sunday who was right.</p>
     <p><a class="btn ghost" href="league-pass.html">See the League Pass</a></p>
     </div>
     <figure class="chatmock">
@@ -1027,7 +1052,7 @@
     <div class="faq">
       <details>
         <summary>Is it worth joining mid-season?</summary>
-        <div class="a">Yes, it's built for it. Every report checks the byes still ahead, playoff weeks included, and projections draw on this season's games. Join before a week's first game and that week's report usually lands within the hour.</div>
+        <div class="a">Yes — it's built for the playoff push. Your first report usually lands within the hour, every report checks the byes still ahead (playoff weeks included), and Saturday's check catches Friday's injury news.</div>
       </details>
       <details>
         <summary>Does it work with my league?</summary>
@@ -1051,7 +1076,7 @@
       </details>
       <details>
         <summary>Who's behind this?</summary>
-        <div class="a">Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Subscribers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
+        <div class="a">Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Buyers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</div>
       </details>
     </div>
   </div>
@@ -1072,8 +1097,7 @@
 </main>
 
 <footer>
-  <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks. A weekly
-  start/sit report for your fantasy roster, every Tuesday.<br>
+  <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
   Sample visuals above are real output from the 2024 NFL season, labeled where shown.
   NFL data: nflverse (nflverse-data), CC-BY-4.0 — aggregated and scored by us under the
   scoring you pick. Projections are analysis, not guarantees. Must be 18+ to subscribe.
@@ -1101,7 +1125,7 @@
     {
       "@type": "Product",
       "name": "Beat Your League",
-      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.",
+      "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds only where both players are playing, off the injury report and have enough games on record (never on team defenses), and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "29", "priceCurrency": "USD",
          "description": "Rest-of-Season Pass — one payment, no subscription: every weekly report from now through your title game; your first report usually lands within the hour of joining. No-questions refund until your second weekly report's week kicks off."}
@@ -1110,18 +1134,20 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, it's built for it. Every report checks the byes still ahead, playoff weeks included, and projections draw on this season's games. Join before a week's first game and that week's report usually lands within the hour."}},
+        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — it's built for the playoff push. Your first report usually lands within the hour, every report checks the byes still ahead (playoff weeks included), and Saturday's check catches Friday's injury news."}},
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes: ESPN, Yahoo, Sleeper, CBS or any app. Paste your roster, no login. Full PPR, half-PPR or standard scoring (4-point passing touchdowns), 8, 10, 12 or 14 teams (in between? pick the closest), and every common lineup: standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex, with or without a kicker and a defense."}},
         {"@type": "Question", "name": "I'm in more than one league. What do I need?", "acceptedAnswer": {"@type": "Answer", "text": "One pass per team; one email can hold several. Running the whole league? The League Pass covers every manager in a league of up to 14 teams with one payment."}},
         {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings sort players for everyone. Your report sets your lineup from your roster, under your scoring, and each close call names the bench player and the points gap. Questionable starters get an if/then, byes are checked through the playoffs, and Saturday emails only if Friday's injury report affects your lineup."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How it works has the detail."}},
-        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Subscribers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to hello@beatyourleague.com."}}
+        {"@type": "Question", "name": "Who's behind this?", "acceptedAnswer": {"@type": "Answer", "text": "Independent: one fantasy player built it, after too many lineups set at 12:55 on Sunday. Buyers alone pay for it: no ads, no sponsors, and your data is never sold. Questions go to hello@beatyourleague.com."}}
       ]
     }
   ]
 }
 </script>
+<!-- DOMAIN_FIXES and suggestedEmail, the join page's own (FUN-5). -->
+<script src="/email-check.js?v=2e2f372017"></script>
 <script>
 "use strict";
 document.documentElement.classList.add("js");
@@ -1184,8 +1210,8 @@ function showPlayoffPass(week) {
     small.textContent = "/ rest of season";
     price.appendChild(small);
   }
-  set("pass-span", "Every weekly report from Week " + week + " through your title game — " +
-      "your first report usually lands within the hour of joining");
+  set("pass-span", "Your lineup decided every Tuesday from Week " + week + " through your " +
+      "title game — your first report usually lands within the hour of joining");
   // Only the BUY button takes the price: the closed state is a link too now
   // (a real button to the email capture), and must keep saying what it does.
   const cta = document.getElementById("season-cta");
@@ -1218,6 +1244,11 @@ const LEDGER_FREE_URL = "";
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 
 const watchForm = document.getElementById("watch-form");
+// The address the visitor already said to keep as typed (FUN-5).
+let watchKept = "";
+// What the one message is, as the success note says it: rewritten in the
+// window where checkout is live but the capture stays (FUN-7, below).
+let watchDoneTail = "One email when signups open, nothing else.";
 if (watchForm) {
   watchForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1225,6 +1256,28 @@ if (watchForm) {
     const email = document.getElementById("watch-email").value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       note.textContent = "That email doesn't look right.";
+      return;
+    }
+    // A likely typo in the domain is asked about once, before anything is sent
+    // (FUN-5): the launch email to "gmial.com" is a bounce on opening morning.
+    // The join page's own table (email-check.js), and the same rule: a
+    // question, never a silent change; pressing again keeps what was typed.
+    const fix = typeof suggestedEmail === "function" ? suggestedEmail(email) : "";
+    if (fix && watchKept !== email) {
+      watchKept = email;
+      note.replaceChildren(document.createTextNode("Did you mean " + fix + "? "));
+      const use = document.createElement("button");
+      use.type = "button";
+      use.className = "fixmail";
+      use.textContent = "Use " + fix;
+      use.addEventListener("click", () => {
+        document.getElementById("watch-email").value = fix;
+        watchKept = fix;
+        watchForm.requestSubmit ? watchForm.requestSubmit() : watchForm.dispatchEvent(
+          new Event("submit", { cancelable: true }));
+      });
+      note.appendChild(use);
+      note.appendChild(document.createTextNode(" Or press the button again to keep what you typed."));
       return;
     }
     if (WAITLIST_ENDPOINT) {
@@ -1240,7 +1293,7 @@ if (watchForm) {
           err.refused = res.status >= 400 && res.status < 500;
           throw err;
         }
-        note.textContent = "You're on the list. One email when signups open, nothing else.";
+        note.textContent = "You're on the list. " + watchDoneTail;
         if (window.bylCount) window.bylCount("waitlist", "closed");
       } catch (err) {
         // A failed request is a failed request — falling through to the
@@ -1289,6 +1342,19 @@ if (CHECKOUT_OPEN) {
     .map(([sel, el]) => [sel, el.cloneNode(true)]);
   const heroOpen = document.getElementById("hero-open");
   if (heroOpen) heroOpen.hidden = false;
+  // The strongest true answer to "what if it's no good?", where the decision
+  // is made rather only in the price card ~4,700px down on a phone (business
+  // review #1). No price, so the no-price-in-hero rule holds; closeForSeason
+  // hides it with the buttons it belongs to.
+  const heroRow = document.querySelector(".hero .cta-row");
+  if (heroRow) {
+    const risk = document.createElement("p");
+    risk.className = "riskline";
+    risk.id = "risk-line";
+    risk.textContent = "Full refund, no questions, until your second weekly report's " +
+      "week kicks off. One payment, nothing renews.";
+    heroRow.after(risk);
+  }
   const nav = document.getElementById("nav-cta");
   if (nav) {
     nav.href = "join/index.html";
@@ -1393,6 +1459,29 @@ if (CHECKOUT_OPEN) {
         finance.appendChild(document.createTextNode("."));
       }
     }
+  } else {
+    // FUN-7: the buy buttons are live (CHECKOUT_OPEN) while the capture stays
+    // up (CHECKOUT_CAN_COMPLETE waits on the proving run, LAUNCH.md step 4).
+    // Its captions said "one email when signups open" and "the morning
+    // checkout opens" beside a working "Set up my team" — the page telling a
+    // buyer checkout hadn't opened while they could pay. In this state the
+    // form is for whoever isn't ready yet, and says only that.
+    const heroline = document.querySelector(".heroline");
+    const clockEl = document.getElementById("season-clock");
+    if (heroline && clockEl) {
+      heroline.replaceChildren(clockEl, document.createTextNode(
+        " Not ready yet? Leave your email for one message from us, nothing else."));
+    }
+    const closerNote = document.getElementById("closer-note");
+    if (closerNote) {
+      closerNote.textContent = "Not ready yet? Leave your email at the top of the page " +
+        "for one message from us, nothing else.";
+    }
+    const watchButton = document.querySelector("#watch-form button");
+    if (watchButton) watchButton.textContent = "Email me once";
+    watchDoneTail = "One message from us, nothing else.";
+    const watchField = document.getElementById("watch-email");
+    if (watchField) watchField.setAttribute("aria-label", "Your email");
   }
 }
 
@@ -1417,8 +1506,15 @@ function closeForSeason(line) {
     });
     const hero = document.querySelector(".hero");
     if (hero) hero.classList.remove("can-buy");
+    // The form itself is never cloned (its listener would go), so the words
+    // the proving window gave it (FUN-7) are put back by hand.
+    const watchButton = document.querySelector("#watch-form button");
+    if (watchButton) watchButton.textContent = "Tell me when it opens";
+    const watchField = document.getElementById("watch-email");
+    if (watchField) watchField.setAttribute("aria-label", "Email me when signups open");
+    watchDoneTail = "One email when signups open, nothing else.";
   }
-  ["hero-open", "try-cta"].forEach((id) => {
+  ["hero-open", "try-cta", "risk-line"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
@@ -1644,15 +1740,36 @@ if (!reduced) {
         if (phase !== "season" && phase !== "preseason") return;
         const landsDay = landsOk ? new Date(w.lands_on + "T12:00:00Z").toLocaleDateString(
           "en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : "";
+        // The week a buyer's first WEEKLY report covers (run/intake.py): that
+        // week's, the day they pay, before its first game from Week 2 on —
+        // otherwise the next Tuesday's (business review #5). Closed, the clock
+        // states the product's own calendar: the next report to go out.
+        const sameDay = phase === "season" && w.week > 1 && !kicked;
+        const next = phase === "preseason" ? w.week
+          : CHECKOUT_OPEN && sameDay ? w.week : w.week + 1;
+        const left = w.last_week - next + 1;
+        const lands = new Date(w.lands_on + "T23:59:59");     // the visitor's own day
+        const now = new Date();
+        const ahead = lands - now;
+        let shows = ahead >= 0 && ahead <= 8 * 864e5;
+        if (left < 1 || !landsOk) shows = false;
+        const today = lands.toDateString() === now.toDateString();
+        // Lands today for somebody who sets up now: this week's report before
+        // its first game, or the report day itself.
+        const buyerToday = CHECKOUT_OPEN && phase === "season" && (sameDay || today);
         // What lands the day somebody pays (run/intake.py): that week's report
         // before its first game from Week 2 on, otherwise the roster report.
+        // Said once: the clock already names the week (funnel review), so the
+        // open line only adds what the clock can't.
         const openLine = document.getElementById("open-line");
         if (openLine && fresh) {
           const coming = phase === "preseason" ? 1 : w.week + 1;
           const day = phase === "preseason" ? "on " + landsDay
             : etToday === w.lands_on ? "today" : "on Tuesday";
-          openLine.textContent = phase === "season" && w.week > 1 && !kicked
-            ? " Set up your team and Week " + w.week + "'s report lands today."
+          openLine.textContent = buyerToday
+            ? (shows ? " Set up your team before the week's first game."
+                     : " Set up your team and Week " + next + "'s report lands today.")
+            : shows ? " Set up your team: your roster report lands today."
             : " Set up your team: your roster report lands today, and Week " + coming +
               "'s report " + day + ".";
           if (phase === "preseason") {
@@ -1665,17 +1782,21 @@ if (!reduced) {
             }
           }
         }
-        const next = phase === "preseason" ? w.week : w.week + 1;
-        const left = w.last_week - next + 1;
-        if (left < 1 || !landsOk) return;
-        const lands = new Date(w.lands_on + "T23:59:59");     // the visitor's own day
-        const now = new Date();
-        const ahead = lands - now;
-        if (!(ahead >= 0 && ahead <= 8 * 864e5)) return;
-        const today = lands.toDateString() === now.toDateString();
+        // The open state's buttons name what they get (copy review): "Get my
+        // Week 8 lineup", from the same week the clock counts. "Set up my
+        // team" stays wherever this file can't say which week that is.
+        if (CHECKOUT_OPEN && fresh && next <= w.last_week) {
+          ["hero-open", "closer-cta", "sticky-cta"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el && el.textContent === "Set up my team") {
+              el.textContent = "Get my Week " + next + " lineup";
+            }
+          });
+        }
+        if (!shows) return;
         // On a Tuesday after that day's report went out, the next one is a
         // week away: "lands Tuesday" would read as today.
-        const when = today ? "today." : now.getDay() === 2 ? "next Tuesday." : "Tuesday.";
+        const when = buyerToday || today ? "today." : now.getDay() === 2 ? "next Tuesday." : "Tuesday.";
         const target = document.getElementById("season-clock");
         if (!target) return;
         target.replaceChildren();

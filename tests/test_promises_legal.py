@@ -22,7 +22,10 @@ PRIVACY_VERSIONS = [
     # Seats only through the pass's own link (contract C3), the page counter
     # (ANALYTICS-04), the card's country and postal code (critique #7), the
     # free report's roster codes, the encrypted backups, and the site's nav (C2).
-    ("2026-10-24", "21135e51cc4a22a7"),
+    # Then, before it was ever published (final review): the front page's
+    # waitlist step counted (FUN-11), the retired session-storage convenience
+    # removed (COPY-5), and five public records named, not three (COPY-6).
+    ("2026-10-24", "3a9d5c355be2fc6b"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),

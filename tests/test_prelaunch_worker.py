@@ -504,6 +504,11 @@ def test_a_mistyped_buyer_domain_is_asked_about_once_before_checkout(tmp_path) -
     may be real). Never a silent rewrite. Checked in Chrome too: the typo's
     first press left nothing, a clean address handed off at once."""
     page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    # The table moved to one shared file, loaded by the join page and the
+    # landing's waitlist (FUN-5): the page itself must declare neither.
+    assert '<script src="/email-check.js?v=' in page
+    assert "const DOMAIN_FIXES" not in page and "function suggestedEmail" not in page
+    page = (ROOT / "site" / "email-check.js").read_text(encoding="utf-8")
     start = page.index("const DOMAIN_FIXES = {")
     end = page.index("\n}\n", page.index("function suggestedEmail(")) + 3
     (tmp_path / "s.mjs").write_text(page[start:end] + """
