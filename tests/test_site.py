@@ -988,13 +988,145 @@ def test_the_privacy_policy_does_not_claim_more_privacy_than_we_deliver() -> Non
     assert not still, (
         f"{len(still)} page(s) still load type from a font CDN while the privacy "
         f"policy says no page makes a third-party request: {', '.join(still)}")
-    for page in pages:
-        text = page.read_text(encoding="utf-8")
-        for tracker in ("googletagmanager", "google-analytics", "gtag(",
-                        "plausible.io", "fathom", "posthog"):
-            assert tracker not in text, (
-                f"{page.name} loads {tracker} while privacy.html says the site "
-                f"runs no analytics")
+
+
+# The hosts a page may load anything from (ANALYTICS-05). Everything else —
+# a font CDN, an analytics beacon, a widget — is a third party, which the
+# privacy page says no page ever contacts. forms.* is the form Worker, which
+# also runs the page counter (site/count.js, privacy section 3).
+OUR_HOSTS = {"beatyourleague.com", "forms.beatyourleague.com"}
+_LOAD_RELS = {"stylesheet", "preload", "modulepreload", "prefetch", "preconnect",
+              "dns-prefetch", "icon", "shortcut", "apple-touch-icon", "mask-icon",
+              "manifest"}
+_LOAD_ATTRS = {"script": ("src",), "img": ("src", "srcset"), "iframe": ("src",),
+               "frame": ("src",), "source": ("src", "srcset"), "video": ("src", "poster"),
+               "audio": ("src",), "track": ("src",), "embed": ("src",), "object": ("data",),
+               "input": ("src",), "form": ("action",)}
+_CSS_URL = re.compile(r"""url\(\s*(["']?)([^"')]+)\1\s*\)|@import\s+(["'])([^"']+)\3""")
+_JS_LOADS = (
+    re.compile(r"""\b(?:fetch|sendBeacon|importScripts|import|EventSource|WebSocket|Worker)"""
+               r"""\s*\(\s*(["'`])([^"'`]*)\1"""),
+    re.compile(r"""\b[A-Z_]*ENDPOINT\s*=\s*(["'])([^"']*)\1"""),
+    re.compile(r"""\.src\s*=\s*(["'])([^"']*)\1"""),
+)
+
+
+def _loaded_urls(text: str, kind: str) -> list[str]:
+    """Every URL a page (``kind`` html), stylesheet (css) or script (js) makes
+    the browser FETCH. Navigation is exempt — an <a href>, a canonical link,
+    an og:image a crawler reads, a JSON-LD context, an xmlns — because none of
+    them is a request made by loading the page."""
+    from html.parser import HTMLParser
+    found: list[str] = []
+
+    def css(chunk: str) -> None:
+        for m in _CSS_URL.finditer(chunk):
+            found.append(m.group(2) or m.group(4))
+
+    def js(chunk: str) -> None:
+        for pattern in _JS_LOADS:
+            found.extend(m.group(2) for m in pattern.finditer(chunk))
+
+    if kind == "css":
+        css(text)
+        return found
+    if kind == "js":
+        js(text)
+        return found
+
+    class _Loads(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.inside = ""
+            self.ld = False
+
+        def handle_starttag(self, tag, attrs):
+            a = {k: v or "" for k, v in attrs}
+            for name in _LOAD_ATTRS.get(tag, ()):
+                value = a.get(name)
+                if value and name == "srcset":
+                    found.extend(part.strip().split(" ")[0] for part in value.split(","))
+                elif value:
+                    found.append(value)
+            if tag == "link" and set(a.get("rel", "").lower().split()) & _LOAD_RELS:
+                found.append(a.get("href", ""))
+            if a.get("style"):
+                css(a["style"])
+            self.inside = tag if tag in ("script", "style") else ""
+            self.ld = tag == "script" and "ld+json" in a.get("type", "")
+
+        def handle_endtag(self, tag):
+            self.inside = ""
+
+        def handle_data(self, data):
+            if self.inside == "style":
+                css(data)
+            elif self.inside == "script" and not self.ld:
+                js(data)
+
+    _Loads().feed(text)
+    return [u for u in found if u]
+
+
+def _third_party(url: str) -> bool:
+    """True when fetching ``url`` from one of our pages contacts another host."""
+    from urllib.parse import urlsplit
+    url = url.strip()
+    if url.startswith("//"):
+        url = "https:" + url                        # protocol-relative
+    scheme = re.match(r"(?i)^([a-z][a-z0-9+.-]*):", url)
+    if not scheme:
+        return False                                # relative: our own host
+    if scheme.group(1).lower() in ("data", "blob", "about", "javascript"):
+        return False                                # nothing leaves the page
+    return (urlsplit(url).hostname or "") not in OUR_HOSTS
+
+
+def _site_files() -> list[tuple[Path, str]]:
+    kinds = {".html": "html", ".css": "css", ".js": "js"}
+    return [(p, kinds[p.suffix]) for p in sorted(SITE.rglob("*"))
+            if p.is_file() and p.suffix in kinds]
+
+
+def test_no_page_loads_anything_but_our_own_hosts() -> None:
+    """An ALLOWLIST of origins, not a list of tracker names (ANALYTICS-05).
+
+    Reproduction (Oct 23 2026): the old guard checked six names
+    (googletagmanager, google-analytics, gtag(, plausible.io, fathom,
+    posthog). Cloudflare Web Analytics' beacon
+    (static.cloudflareinsights.com/beacon.min.js) and Umami's script.js
+    injected before </body> on every page passed it — 24 privacy tests green —
+    while privacy.html said loading a page "makes no request to any third
+    party". Now every URL any page, stylesheet or script makes the browser
+    fetch must be relative or on our own two hosts; navigation links are exempt."""
+    offenders = []
+    for path, kind in _site_files():
+        for url in _loaded_urls(path.read_text(encoding="utf-8"), kind):
+            if _third_party(url):
+                offenders.append(f"{path.relative_to(SITE)} loads {url}")
+    assert not offenders, (
+        "privacy.html says no page makes a request to any third party, but: "
+        + "; ".join(offenders[:6]))
+
+
+def test_no_page_stores_anything_but_the_one_documented_key() -> None:
+    """No cookie, no localStorage, no IndexedDB anywhere on the site — the
+    privacy page's "nothing is stored on your device" (section 3) — and
+    sessionStorage only for the one convenience it describes: the League Pass
+    buyer's own address, kept in that tab for thanks.html's share line under
+    PAID_EMAIL_KEY ("byl_paid_email") and deleted there once read."""
+    allowed = {"join/index.html", "thanks.html"}
+    for path, _kind in _site_files():
+        text = path.read_text(encoding="utf-8")
+        name = str(path.relative_to(SITE))
+        assert not re.search(r"document\.cookie|localStorage|indexedDB|openDatabase", text), \
+            f"{name} stores something in the browser"
+        kept = re.sub(r'sessionStorage\.(?:setItem|getItem|removeItem)\(\s*'
+                      r'(?:PAID_EMAIL_KEY|["\']byl_paid_email["\'])', "", text)
+        if name in allowed:
+            assert "sessionStorage" not in kept, f"{name} uses session storage for something new"
+        else:
+            assert "sessionStorage" not in text, f"{name} uses session storage"
 
 
 def _privacy_body() -> str:
@@ -2989,8 +3121,14 @@ def test_the_policy_discloses_the_address_stripe_now_collects() -> None:
 
     assert re.search(r"billing address", page, re.I), \
         "the address is collected and the policy does not say so"
-    assert re.search(r"billing address you give Stripe at checkout", page, re.I), (
-        "the exhaustive 'whole list' note omits the address")
+    # Oct 23 2026 (critique #7): LAUNCH recommends the address toggle Off, so
+    # what checkout always takes is the card's country and postal code, and a
+    # full address only when the toggle is on — the note says both, true
+    # either way.
+    assert re.search(r"country and postal code Stripe takes with your card at checkout",
+                     page, re.I), "the exhaustive 'whole list' note omits the postal code"
+    assert re.search(r"full\s+billing address only if", page, re.I), (
+        "the exhaustive 'whole list' note omits the address checkout may ask for")
     assert not re.search(r"no postal address", page, re.I), (
         "section 2 still claims we never ask for a postal address")
     assert not re.search(r"scoring settings, and nothing else", lede, re.I), (

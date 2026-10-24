@@ -5,7 +5,8 @@
 // HTML cannot see. One job file, one Chrome, five kinds of job:
 //
 //   probe  script errors, failed requests, sideways scrolling, text smaller
-//          than a phone can read, tap targets too small to hit (the default)
+//          than a phone can read, tap targets too small to hit, every host a
+//          page contacts, and the cookies and storage it leaves (the default)
 //   axe    axe-core's accessibility rules, injected after load
 //   perf   a phone on Slow 4G with a 4x slower CPU — Largest Contentful Paint
 //          and Cumulative Layout Shift, one fresh tab per run
@@ -157,8 +158,17 @@ async function openTab(port, width, { onEvent } = {}) {
   const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" })).json();
   const s = session(target.webSocketDebuggerUrl);
   await s.ready;
-  const errors = [], failed = [];
+  const errors = [], failed = [], hosts = new Set();
   s.on((msg) => {
+    if (msg.method === "Network.requestWillBeSent") {
+      // Every host a page makes the browser contact (ANALYTICS-06): the
+      // privacy page says that is only ever our own.
+      try {
+        const u = new URL(msg.params.request.url);
+        if (u.protocol === "http:" || u.protocol === "https:" || u.protocol === "ws:"
+            || u.protocol === "wss:") hosts.add(u.host);
+      } catch (err) { /* not a URL a page fetched */ }
+    }
     if (msg.method === "Runtime.exceptionThrown") {
       const d = msg.params.exceptionDetails;
       errors.push((d.exception && d.exception.description) || d.text);
@@ -183,7 +193,24 @@ async function openTab(port, width, { onEvent } = {}) {
     s.close();
     await fetch(`http://127.0.0.1:${port}/json/close/${target.id}`).catch(() => {});
   };
-  return { s, errors, failed, close };
+  return { s, errors, failed, hosts, close };
+}
+
+// What a page left behind in the browser: every cookie the profile now holds
+// (any site's — a fresh profile starts with none) and the page's own storage.
+// The privacy page says nothing is stored on a visitor's device.
+async function leftBehind(s) {
+  let cookies = [];
+  try {
+    cookies = (await s.send("Storage.getCookies")).cookies || [];
+  } catch (err) {
+    cookies = (await s.send("Network.getAllCookies").catch(() => ({ cookies: [] }))).cookies || [];
+  }
+  const storage = await evaluate(s, `(() => {
+    const n = (k) => { try { return window[k].length; } catch (e) { return 0; } };
+    return [n("localStorage"), n("sessionStorage")];
+  })()`).catch(() => [0, 0]);
+  return { cookies: cookies.map((c) => `${c.name} (${c.domain})`), storage };
 }
 
 async function navigate(s, path, timeout = 15000) {
@@ -224,8 +251,9 @@ async function probeJob(port, job) {
     // layout viewport GROWS to fit content wider than the screen, so a 640px
     // table at 390 reports innerWidth 648 = scrollWidth 648 and "fits".
     probe.overflow = probe.scrollWidth > width + 1 || probe.innerWidth > width + 1;
+    const left = await leftBehind(tab.s);
     out.push({ kind: "probe", path: job.path, width, loadMs, errors: tab.errors,
-               failed: tab.failed, ...probe });
+               failed: tab.failed, hosts: [...tab.hosts], ...left, ...probe });
     await tab.close();
   }
   return out;

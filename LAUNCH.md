@@ -254,6 +254,62 @@ nothing: every row is checked before it reaches the subscriber list.
    worker also turns on deletion of form rows after about 400 days (the privacy policy
    promises it).
 
+## 5b. The page counter (~10 min, right after step 5)
+
+Without it you can see sign-ups and sales but not visits, where people come from, or where
+the signup page loses them. `site/count.js` (on every page) sends one anonymous line per page
+view and per signup step — which page or step, the `?via=` tag, the referring site, phone or
+desktop, checkout open or closed — to the form Worker's `/e`, which adds the country and
+writes it to **Cloudflare Analytics Engine** (free: 100,000 lines a day, kept three months).
+Not KV: KV's 1,000 writes a day belong to the forms, and running out makes seats and the
+waitlist refuse. No cookie, no IP address, no email, and nothing at all from a browser that
+sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly this.
+
+1. Cloudflare → **Workers & Pages → Analytics Engine** → enable it if asked (free).
+2. Form Worker → **Settings → Bindings → Add → Analytics Engine**: variable name **`COUNTS`**,
+   dataset **`byl_counts`** → **Deploy**. The dataset is created by the first line written.
+   If the dashboard doesn't offer that binding, tell me: the fallback is a small
+   `wrangler.toml`, and it has to declare the `ROWS` KV binding, the variables and the cron
+   too, or the deploy drops them.
+3. Paste the current `infra/form-worker.js` again → **Deploy** (it carries the `/e` route).
+4. Worker → **Settings → Observability**: turn **Workers Logs** off (or at least invocation
+   logs) if the dashboard offers it. Otherwise Cloudflare keeps each request's log for 3 days
+   — the "ordinary request logs" privacy §3 already mentions. The cron alarm reads Cron
+   Events, not logs, so nothing goes blind.
+5. **Keep these off on the zone**, and keep the `beatyourleague.com` and `www` records
+   **DNS only** (grey cloud):
+   - **Security → Bots → Bot Fight Mode.** On the Free plan nothing can be exempted from it,
+     and it may challenge the hourly intake's reads from GitHub's servers — a failed read
+     makes the intake refuse to write the subscriber list, so new buyers stall. It also sets a
+     `__cf_bm` cookie on `forms.` that privacy §3 says doesn't exist.
+   - **Web Analytics automatic setup, Zaraz, Email Address Obfuscation, Rocket Loader.** Each
+     injects a script into the pages, breaking privacy §3's "no request to any third party".
+   The launch check's live gate turns red if a cookie or an injected script ever appears.
+6. **My Profile → API Tokens → Create Token → Custom token**: permission **Account ·
+   Account Analytics · Read**, account resources: this account only, TTL one year (put the
+   date in your calendar). Copy the **Account ID** from the Workers & Pages overview.
+7. In the repo folder on your own machine, put both in `.env` (gitignored, never committed):
+   ```
+   CF_ACCOUNT_ID=<the 32-character account id>
+   CF_ANALYTICS_TOKEN=<the token>
+   ```
+   Not a GitHub secret: `make stats` never runs in CI (it refuses to), because on a public
+   repo the job log — the counts and the sales — is public.
+8. Turn on Do Not Track or Global Privacy Control in your own browsers, phone included
+   (Chrome: Settings → Privacy and security → Third-party cookies → Send a "Do Not Track"
+   request; Firefox: Settings → Privacy & Security → Tell websites not to sell or share my
+   data), so your own visits aren't counted.
+9. **Tell me "counter on".** I set `ENDPOINT` in `site/count.js` to
+   `https://forms.beatyourleague.com/e` and run the launch check ("The page counter answers
+   204 with no cookie").
+10. From the next day, `make stats` opens with a **TRAFFIC** block: landing views → buy-page
+    views → rosters checked → buy presses (checkout open or closed), the free-report steps,
+    and the week by channel, referrer, page, device and country.
+    `.venv/bin/python -m run.stats --html data/stats.html` writes the same view as a page to
+    open in a browser (only to a gitignored path). If two days pass with the counter on and
+    nothing recorded, the launch check warns: a Worker missing its `COUNTS` binding still
+    answers every line with a 204.
+
 ## 6. Opening morning
 
 1. **After step 4's two emails arrive,** I turn on `CHECKOUT_CAN_COMPLETE`: the "leave your
@@ -402,11 +458,15 @@ new `TERMS_VERSION` / `TERMS_HISTORY` entry, which I add), then before the date 
 effect: Actions → **change-notice** → page, effective date, a one-or-two-sentence summary of
 what changes; run it once unticked (dry), then ticked. Everyone entitled today gets one email.
 
-**How's demand?** Pull, then `make stats`: counts only (waitlist, free-report requests,
-roster updates, seat claims, sends by week, paid signups by `?via=` tag), never an address.
-It needs `FORM_ENDPOINT` and `FORM_API_KEY` for the form rows and, for payments, a separate
-restricted key in `STRIPE_API_KEY` with **Read** on Subscriptions, Checkout Sessions, Charges
-and Refunds (the cron key can't read refunds).
+**How's demand?** Pull, then `make stats`: counts and dollars only, never an address —
+traffic and the signup funnel (step 5b), waitlist, free-report requests, roster updates,
+seat claims and seats filled per League Pass, sends by week, passes sold this season by type
+with gross, refunded, net and the refund rate, free report → paid within 14 days, and paid
+signups by `?via=` tag. It needs `FORM_ENDPOINT` and `FORM_API_KEY` for the form rows, the
+step 5b pair in `.env` for traffic and, for payments, a separate restricted key in
+`STRIPE_API_KEY` with **Read** on Subscriptions, Checkout Sessions, Payment Intents, Charges
+and Refunds (the cron key can't read refunds). The Stripe Dashboard's phone app is the live
+view of money; `make stats` is the funnel around it. It never runs in CI.
 
 **The season's end.** Week 17's report says it's championship week on the big platforms'
 defaults and a Week 18 report follows; Week 18's says it's the last and what the plan does
@@ -539,10 +599,17 @@ call it prints. Every pinned landing figure moves in one deliberate commit.
 the 2027 renewal. *Recommend:* a "your season, graded" email in January, built from each
 subscriber's own record; a free post-draft roster check as the August lead magnet (IDEAS).
 
-**Counting visits.** No analytics, by promise, so visits → free report → paid can't be
-measured, only the end of the funnel. *Recommend:* once on Cloudflare, use its own traffic
-counts for the domain (no script on the page, no cookie) and reword privacy §3 to say exactly
-that; otherwise drop any target based on visits.
+**Counting visits.** Built: the site's own page counter (step 5b) — our domain only, no
+cookie, no ID, nothing under GPC or Do Not Track, and privacy §3 says so. Considered and
+turned down: Cloudflare Web Analytics (a script from cloudflareinsights.com on the pages
+where emails and rosters are typed, which EasyPrivacy blocks; no custom events, so no
+funnel), Plausible ($9/mo) and Fathom ($15/mo) — paid, third-party, and blocked the same
+way; Umami Cloud (third-party script, blocked); Counterscale (wrangler plus a public
+dashboard, page views only); and Cloudflare's own zone counts, which need the site proxied
+(today it isn't, and proxying is its own decision). Switching any of those on later is three
+changes in one commit: a PLAN §2 line if it costs money, privacy §3 rewritten to name it and
+drop "makes no request to any third party", and its host added to the site's origin
+allowlist test.
 
 **The look.** Navy and gold, slanted italic caps and stadium glows are the daily-fantasy and
 betting apps' style, which works against "not a betting product". *Recommend:* after opening,

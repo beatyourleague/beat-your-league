@@ -76,21 +76,25 @@
   <header>
     <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
     <h1>Privacy Policy</h1>
-    <p>Last updated 18 October 2026. The short version: we collect your email, your roster,
-    your league's settings and your billing address, plus the small records the box below
-    lists, and nothing else. No cookies, no analytics, no trackers, no
-    advertising. This policy is part of our <a href="terms.html">Terms of Service</a>.</p>
+    <p>Last updated 23 October 2026. The short version: we collect your email, your roster,
+    your league's settings and, through Stripe, the country and postal code that go with your
+    card, plus the small records the box below lists, and nothing else. No cookies, no
+    trackers, no advertising, and any visit we count is counted our own way, with no cookie,
+    address, IP address or ID attached (section 3). This policy is part of our
+    <a href="terms.html">Terms of Service</a>.</p>
   </header>
   <main>
 
     <div class="note"><b>The whole list.</b> Your email address; the roster you entered and
     each change you make to it; your league's settings — scoring type, league size and lineup
-    shape; and the billing address you give Stripe at checkout. If you buy: when you bought,
+    shape; and the country and postal code Stripe takes with your card at checkout (a full
+    billing address only if our checkout is set to ask for one). If you buy: when you bought,
     which plan, the Stripe reference numbers for your customer record and subscription, the
     record of your accepting our terms, and, for each weekly report, the lineup it set and the
     odds it printed. If you hold a League Pass seat: which pass it belongs to. Beside those:
     what you send through our forms, with the time it arrived; anything you email us; the name
-    of the channel if you came from a link we posted; a record of which emails we've sent
+    of the channel if you came from a link we posted; anonymous page counts, saying which page
+    was opened or which signup step was taken, never by whom (section 3); a record of which emails we've sent
     you, which never holds your address; and keyed one-way codes that can't be matched back
     to an address without our private key — one if you asked for a free report, and one on
     our stop list only if you ask us to stop emailing you. Section 1 says why we keep each,
@@ -115,11 +119,12 @@
       report can grade its own earlier calls for you.</li>
       <li><b>A record of which emails we've sent you</b> — which one and when, so nothing is
       sent twice. It never holds your address.</li>
-      <li><b>Your billing address</b>, entered on Stripe's checkout page along with your
-      card. Sales-tax and VAT rules turn on where a customer is, and the thresholds deciding
+      <li><b>The country and postal code that go with your card</b>, which Stripe's checkout
+      page asks for along with the card; a full billing address only if our checkout is set to
+      ask for one. Sales-tax and VAT rules turn on where a customer is, and the thresholds deciding
       where we must register are counted per country and per state — so we need to know
-      where our sales come from in order to comply. It also helps Stripe check the card is
-      yours. It is <b>not</b> used to target advertising at you, and it plays no part in
+      where our sales come from in order to comply. They also help Stripe check the card is
+      yours. They are <b>not</b> used to target advertising at you, and they play no part in
       your report: your report is built from your roster and public NFL data, and would be
       identical if you lived somewhere else.</li>
       <li><b>If you ask for a free report</b>: your email and the roster you entered, to
@@ -147,6 +152,13 @@
       entry — or, if you buy, on your Stripe customer record — so we can count which posts
       bring people. No cookie is involved, and it says nothing about anywhere else you
       go.</li>
+      <li><b>Page counts</b> (section 3): at most one short line when a page opens or a
+      signup step is taken — which page or step, the channel tag if the link had one, the name
+      of the site that linked here, whether the screen is phone- or desktop-sized, whether
+      checkout was open, and the country Cloudflare reports, with the time it arrived — so we
+      can see which posts bring
+      people and where the signup page loses them. No cookie, address, IP address or ID is in
+      the line, and we never match one to a form entry or a purchase.</li>
       <li><b>If you ask us to stop emailing you</b>: a keyed one-way code made from your address on our stop list, one that can't be
       matched back to it without our private key — never the
       address itself — so nothing is sent to it again, except the notice the law requires
@@ -162,17 +174,30 @@
       <li><b>Payment details.</b> Card numbers go to Stripe on Stripe's own page. We never
       see them, never transmit them and never store them.</li>
       <li><b>Anything beyond that list</b> — no phone number, no date of birth, and no
-      tracking of where you go or what you read. We ask for a billing address at checkout
-      and nothing more.</li>
+      tracking of you: the page counts in section 3 say which page was opened, never by whom.
+      Beyond your card, checkout asks for its country and postal code, and for a full billing
+      address only if it is set to.</li>
     </ul>
 
     <h2>3. Cookies, analytics and tracking</h2>
-    <p><b>This site sets no cookies, runs no analytics, and carries no advertising or
-    tracking scripts.</b> There is no consent banner because there is nothing to consent to,
-    and because we don't track you, a browser's Do Not Track signal changes nothing.
-    <b>Loading our pages makes no request to any third party</b>: even the type is served
-    from this site, so the only party that sees a visit is our host, with the ordinary
-    server logs any web host keeps. One convenience stays inside your own browser: when you
+    <p><b>This site sets no cookies and carries no advertising or tracking scripts.</b> We
+    do count visits, our own way, and this is the most it records: when a page opens, and when
+    someone checks a roster, presses a buy button, joins the waitlist or asks for a free report
+    on the signup page, one short line can go to our own counter at forms.beatyourleague.com —
+    which page or step it was, the channel tag if the link carried one (section 1), the name
+    of the site that linked here (for example "t.co"), whether the screen is phone- or
+    desktop-sized, and whether checkout was open at the time. Cloudflare, which runs the
+    counter for us, adds the country the visit came from and the time it arrived. That is the
+    whole line: no cookie, no
+    email or other address, no IP address, no browser or device ID, and nothing else from the
+    page's address, so a count does not identify you, and we never match one to a form
+    entry or a purchase. The
+    counts delete themselves after three months. <b>If your browser sends Global Privacy
+    Control or Do Not Track, the page sends nothing at all.</b> There is no consent banner
+    because nothing is stored on your device and no count carries an ID.
+    <b>Loading our pages makes no request to any third party</b>: the type is served from this
+    site and the counter lives on our own domain, so the only parties that see a visit are our
+    host (GitHub) and Cloudflare, each with the ordinary request logs any server keeps. One convenience stays inside your own browser: when you
     buy a League Pass, the thank-you page fills in your group-chat message with the email
     you just typed, if the signup page kept it in that browser tab's session storage. It
     is never sent anywhere from there, and the thank-you page deletes it as soon as it has
@@ -188,10 +213,11 @@
       came from a link we posted, and the record of your accepting these terms — that is
       how a payment becomes your report. We hold a reference to that record.</li>
       <li><b>Resend</b> delivers our emails. They handle your address and the message.</li>
-      <li><b>Cloudflare</b> runs our domain, routes mail sent to hello@, and stores what
+      <li><b>Cloudflare</b> runs our domain, routes mail sent to hello@, stores what
       you send through our forms (waitlist, free-report requests, seat claims, roster
-      changes), each entry with the time it arrived. Each of those entries deletes itself
-      within about 13 months of arriving.</li>
+      changes), each entry with the time it arrived, and runs our page counter (section 3).
+      Each of those entries deletes itself within about 13 months of arriving; the page counts
+      after three months.</li>
       <li><b>Google (Gmail)</b> is the inbox that mail to hello@ is forwarded to, and where
       we read and answer it. It holds what you email us and our replies. Until our forms are
       switched on, joining the waitlist sends us an email there instead; we delete those
@@ -207,10 +233,11 @@
     <p>Each has its own privacy policy. <b>We do not sell your data, rent it, or hand it to
     advertisers or data brokers</b> — not now and not later. If that ever changed we would
     have to tell you first, and you could leave.</p>
-    <p>Where your address actually lives, exactly. It is held by <b>Stripe</b>, alongside
-    your payment, and we read it in Stripe&#x27;s own dashboard. It is <b>not</b> copied into
+    <p>Where your postal code and any billing address actually live, exactly. They are held
+    by <b>Stripe</b>, alongside your payment, and we read them in Stripe&#x27;s own dashboard.
+    They are <b>not</b> copied into
     the system that builds and sends your reports — that system knows your email, your roster,
-    your settings and the records listed above, never your billing address, so an address cannot reach a report, the public record
+    your settings and the records listed above, never your postal code or billing address, so neither can reach a report, the public record
     of graded calls, or anything else we publish. Stripe also records the country your card
     was issued in, which it collects to check the card whether we ask for an address or
     not.</p>
@@ -231,7 +258,8 @@
 
     <h2>7. How long we keep it</h2>
     <p>Form submissions (waitlist, free-report requests, seat claims, roster changes)
-    delete themselves within about 13 months of arriving. Until our forms are switched on,
+    delete themselves within about 13 months of arriving, and page counts (section 3) after
+    three months. Until our forms are switched on,
     joining the waitlist sends us an email instead, and we delete those once the launch
     email has gone out. A confirmed seat or roster change becomes part of your subscription
     and is kept like the rest of it. Everything else — your email, roster and settings, your
@@ -239,9 +267,10 @@
     we keep while it is needed: while you
     are subscribed, and afterwards so a returning subscriber's setup still works and a
     refund or billing question can be answered. There is no fixed date for those: ask,
-    and we delete them and confirm it within 30 days. Your billing address is the one
-    item we cannot always delete on request: it is part of the payment record Stripe keeps
-    for us — the amount, the date, the plan, any tax charged and that address — which tax
+    and we delete them and confirm it within 30 days. Your postal code, and any billing
+    address, are the one item we cannot always delete on request: they are part of the payment
+    record Stripe keeps for us — the amount, the date, the plan, any tax charged and where you
+    are — which tax
     law requires to be kept for a set number of years. We delete everything else and tell
     you in writing that this payment record is what remains. So that an old payment is
     never read back in and your data restored, we keep one keyed code of your Stripe
@@ -278,5 +307,6 @@
   rather than legalese; it is not legal advice, and it does not limit any right you have under
   consumer law where you live.</footer>
 </div>
+<script src="/count.js" defer></script>
 </body>
 </html>

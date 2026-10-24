@@ -863,6 +863,7 @@ $("resolve").addEventListener("click", () => {
     return;
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
+  if (window.bylCount) window.bylCount("roster", PLAN_LINK ? "open" : "closed");
   state.stale = false;
   draw();
 });
@@ -1271,6 +1272,7 @@ $("form-email").addEventListener("submit", (event) => {
              : monthlyChosen ? monthlyLink() : seasonLink();
   const otherLink = seasonOver() || WANTS_PASS ? ""
              : monthlyChosen ? seasonLink() : monthlyLink();
+  if (window.bylCount) window.bylCount("checkout", link ? "open" : "closed");
   if (!link) {
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
@@ -1292,6 +1294,7 @@ $("form-email").addEventListener("submit", (event) => {
         // alert box and post another row on every press (launch audit F6).
         state.listed = true;
         state.listedRef = tagged;
+        if (window.bylCount) window.bylCount("waitlist", "closed");
         showOk("Checkout isn't open just yet — we kept your email and this roster. " +
           "The morning it opens you'll get one email, with a link that brings this " +
           "roster back ready to check out.");
@@ -1448,6 +1451,7 @@ function submitTrial(email, ref) {
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then((response) => {
     if (!response.ok) throw refusedBy(response);
+    if (window.bylCount) window.bylCount("trial");
     $("form-email").style.display = "none";
     // A request, not a send: one free report per person per season, never to a
     // subscriber's address — the intake decides, so the page claims no more.
@@ -2113,5 +2117,6 @@ drawFirst();
   } catch (e) { /* the sentence true either way stays */ }
 })();
 </script>
+<script src="/count.js" defer></script>
 </body>
 </html>

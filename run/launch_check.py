@@ -5,9 +5,11 @@ Usage:
     python -m run.launch_check --fast     # skip the test suite, browser and proving run
     python -m run.launch_check --offline  # skip DNS, the live site and the account APIs
 
-The account gates read GitHub (`gh`, signed in), Stripe (STRIPE_API_KEY) and
-Resend (RESEND_API_KEY) only when those are present in the shell, and only
-ever with GET; without them each says SKIP or OWNER rather than guessing. The
+The account gates read GitHub (`gh`, signed in), Stripe (STRIPE_API_KEY),
+Resend (RESEND_API_KEY) and the page counter (CF_ACCOUNT_ID and the read-only
+CF_ANALYTICS_TOKEN, in the shell or .env) only when those are present, and
+only ever read (one SQL query for the counter); without them each says SKIP
+or OWNER rather than guessing. The
 accessibility gate needs axe-core: set AXE_CORE_PATH to an axe.min.js, or
 `npm install --no-save axe-core@4.11.4` in the repo (LAUNCH.md, "Where things stand").
 
@@ -187,6 +189,15 @@ def parse(path: Path) -> _Refs:
     p = _Refs()
     p.feed(path.read_text(encoding="utf-8"))
     return p
+
+
+COUNTER_URL = f"https://forms.{DOMAIN}/e"
+
+
+def counter_endpoint() -> str:
+    """site/count.js's ENDPOINT; empty while the page counter is off."""
+    from run.stats import counter_endpoint as read
+    return read(SITE / "count.js")
 
 
 def js_constants(page: str) -> dict[str, str]:
@@ -487,10 +498,29 @@ def check_funnel_config() -> list[Gate]:
                        f"has {confirm.get('FORM_ENDPOINT', '') or 'none'} — every "
                        "emailed confirm button would post nowhere and no roster "
                        "change or seat could ever be confirmed"))
+    # The page counter (site/count.js, ANALYTICS-01..06) posts to the same
+    # Worker's /e. Blockers drop a beacon to another site (EasyPrivacy's
+    # `*$ping,third-party` matches *.workers.dev, not forms.<our domain>), and
+    # the privacy page names forms.<our domain> as the counter's address.
+    counter = counter_endpoint()
+    hosted = {**endpoints, **({"count.js ENDPOINT": counter} if counter else {})}
     gates.append(_gate("Funnel", "The form Worker sits on our own domain",
-                       not any("workers.dev" in v for v in endpoints.values()),
+                       not any("workers.dev" in v for v in hosted.values()),
                        "a *.workers.dev address is easily blocked and looks unofficial — "
                        f"use forms.{DOMAIN}", fail="WARN"))
+    gates.append(_gate("Funnel", "The page counter posts to the form Worker on our own domain",
+                       not counter or counter == COUNTER_URL,
+                       f"site/count.js ENDPOINT is {counter!r}: it must be {COUNTER_URL} — the "
+                       "address privacy.html section 3 names, on the Worker's /e route",
+                       counter or "off"))
+    if form and not counter:
+        gates.append(Gate("Funnel", "The page counter is on once the form Worker is", "OWNER",
+                          "FORM_ENDPOINT is set but site/count.js has no ENDPOINT, so nothing "
+                          "counts visits or signup steps — LAUNCH.md step 5b, then set it to "
+                          f"{COUNTER_URL}"))
+    else:
+        gates.append(Gate("Funnel", "The page counter is on once the form Worker is", "PASS",
+                          "on" if counter else "off until the form Worker is (LAUNCH.md step 5)"))
     seats_open = lp.get("SEATS_OPEN") == "true"
     gates.append(_gate("Funnel", "The League Pass is never sold before seats can be claimed",
                        # The page builds its Buy button only when CHECKOUT_OPEN and
@@ -1057,6 +1087,22 @@ def run_browser(jobs: list[dict], base: str, timeout: int = 1500) -> list[dict] 
     return fatal[0] if fatal else results
 
 
+def audit_privacy_probe(results: list[dict], served: str) -> tuple[list[str], list[str]]:
+    """(hosts a page contacted that are not ours, cookies or storage a page
+    left) across probe results. ``served`` is the local server's host:port,
+    which stands in for the live domain while the copy is checked."""
+    ours = {served, DOMAIN, f"forms.{DOMAIN}"}
+    hosts, kept = [], []
+    for x in results:
+        where = f"{x['path']} @{x.get('width')}"
+        hosts += [f"{where}: {h}" for h in x.get("hosts") or [] if h not in ours]
+        if x.get("cookies"):
+            kept.append(f"{where}: cookie {x['cookies'][0]}")
+        if any(x.get("storage") or []):
+            kept.append(f"{where}: storage {x['storage']}")
+    return list(dict.fromkeys(hosts)), list(dict.fromkeys(kept))
+
+
 def check_browser() -> list[Gate]:
     with _serving(SITE) as base:
         results = run_browser([{"path": p, "widths": list(w)} for p, w in BROWSER_PAGES], base)
@@ -1073,8 +1119,15 @@ def check_browser() -> list[Gate]:
     small = [f"{label(x)}: {x['smallText'][0]}" for x in results if x.get("smallTextCount")]
     taps = [f"{label(x)}: {x['smallTaps'][0]}" for x in results if x.get("smallTapCount")]
     slow = [f"{label(x)} {x['loadMs']} ms" for x in results if x.get("loadMs", 0) > 8000]
+    hosts, kept = audit_privacy_probe(results, urllib.parse.urlsplit(base).netloc)
     n = len(results)
     return [
+        _gate("Browser", "Pages load only from our own domains", not hosts,
+              "; ".join(hosts[:4]) + " — privacy.html says loading a page contacts no "
+              "third party"),
+        _gate("Browser", "No page sets a cookie or stores anything", not kept,
+              "; ".join(kept[:4]) + " — privacy.html says nothing is stored on a "
+              "visitor's device"),
         _gate("Browser", "No script errors on any page or mode", not errors,
               "; ".join(errors[:4]), f"{n} page loads"),
         _gate("Browser", "No failed requests", not failed, "; ".join(failed[:4])),
@@ -1476,20 +1529,72 @@ def check_dns() -> list[Gate]:
     ]
 
 
+# What a proxy in front of the site would add to a page or a response, any one
+# of which makes privacy.html's "no cookies … no request to any third party"
+# false without a byte of the repo changing (ANALYTICS-06/09): Web Analytics'
+# automatic setup, Rocket Loader and Email Obfuscation (/cdn-cgi/scripts),
+# Zaraz, the bot products' cookies and challenge scripts.
+EDGE_INJECTION = re.compile(r"cloudflareinsights|/cdn-cgi/(?:rum|scripts|zaraz|challenge-platform)"
+                            r"|zaraz|__cf_bm|cf_clearance", re.I)
+
+
+def audit_live_responses(responses: Iterable[tuple[str, Any]]) -> list[str]:
+    """What is wrong with the live pages as served: a Set-Cookie header, or
+    something injected into an HTML page that the repo never wrote."""
+    problems = []
+    for path, r in responses:
+        if r.headers.get("set-cookie"):
+            problems.append(f"/{path} sets a cookie ({r.headers['set-cookie'].split('=')[0]})")
+        if "html" in (r.headers.get("content-type") or "") and EDGE_INJECTION.search(r.text or ""):
+            problems.append(f"/{path} carries {EDGE_INJECTION.search(r.text).group(0)}")
+    return problems
+
+
+def audit_counter_response(r: Any) -> list[str]:
+    """The counter's preflight as a browser on our site would send it: 204,
+    our origin allowed, and no cookie (Bot Fight Mode would add __cf_bm)."""
+    problems = []
+    if r.status_code != 204:
+        problems.append(f"answered {r.status_code}, not 204")
+    if r.headers.get("set-cookie"):
+        problems.append(f"sets a cookie ({r.headers['set-cookie'].split('=')[0]})")
+    if r.headers.get("access-control-allow-origin") not in (LIVE, "*"):
+        problems.append("does not allow our origin (access-control-allow-origin "
+                        f"{r.headers.get('access-control-allow-origin')!r})")
+    return problems
+
+
 def check_live() -> list[Gate]:
     import requests
     gates = []
     bad = []
+    served: list[tuple[str, Any]] = []
     for path in ("", "join/", "how-it-works.html", "league-pass.html", "sample-report.html",
                  "this-week.html", "terms.html", "privacy.html", "sitemap.xml", "og.png"):
         try:
             r = requests.get(f"{LIVE}/{path}", timeout=20)
             if r.status_code != 200:
                 bad.append(f"/{path} {r.status_code}")
+            served.append((path, r))
         except requests.RequestException as exc:
             bad.append(f"/{path} {type(exc).__name__}")
     gates.append(_gate("Live", "Every key page on the live site answers 200", not bad,
                        "; ".join(bad[:5]), LIVE))
+    edge = audit_live_responses(served)
+    gates.append(_gate("Live", "The live site sets no cookie and nothing is injected at the edge",
+                       not edge, "; ".join(edge[:4]) + " — privacy.html says no cookies and no "
+                       "third-party request: switch it off in Cloudflare (LAUNCH.md step 5b)",
+                       f"{len(served)} responses"))
+    counter = counter_endpoint()
+    if counter:
+        try:
+            r = requests.options(counter, timeout=20, headers={
+                "Origin": LIVE, "Access-Control-Request-Method": "POST"})
+            trouble = audit_counter_response(r)
+        except requests.RequestException as exc:
+            trouble = [type(exc).__name__]
+        gates.append(_gate("Live", "The page counter answers 204 with no cookie", not trouble,
+                           f"{counter}: " + "; ".join(trouble), counter))
     try:
         counted = subprocess.run(["git", "rev-list", "--count", "@{u}..HEAD"], cwd=REPO,
                                  capture_output=True, text=True)
@@ -1971,6 +2076,71 @@ def _get_json(url: str, key: str) -> tuple[int, Any]:
         return r.status_code, None
 
 
+COUNTER_QUIET = timedelta(hours=48)
+
+
+def counter_on_since() -> datetime | None:
+    """When site/count.js's ENDPOINT line last changed in git — the counter's
+    switch-on, once it is on. None when git can't say."""
+    try:
+        r = subprocess.run(["git", "log", "-1", "--format=%cI", "-G", r"const ENDPOINT = ",
+                            "--", "site/count.js"], cwd=REPO, capture_output=True,
+                           text=True, timeout=20)
+        return datetime.fromisoformat(r.stdout.strip()) if r.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def counter_gate(total: int | None, on_since: datetime | None, now: datetime,
+                 why: str = "") -> Gate:
+    """A Worker missing its COUNTS binding still answers 204 (C1: a silent
+    no-op), so a counter that records nothing looks exactly like a quiet
+    week. Two days on with nothing at all is the alarm."""
+    name = "The page counter is recording"
+    if total is None:
+        return Gate("Owner", name, "SKIP", why)
+    if total > 0:
+        return Gate("Owner", name, "PASS", f"{total} lines in the last 2 days")
+    if on_since is not None and now - on_since < COUNTER_QUIET:
+        return Gate("Owner", name, "PASS", "switched on under 48 hours ago — nothing yet")
+    return Gate("Owner", name, "WARN", "nothing recorded in 2 days with site/count.js on — "
+                "check the form Worker's COUNTS binding (LAUNCH.md step 5b)")
+
+
+def check_counter_account() -> list[Gate]:
+    """Read-only: one SQL query with the Account Analytics Read token."""
+    import requests
+    from run.stats import CF_NAMES, COUNT_DATASET, ENV_FILE, read_env_file
+    name = "The page counter is recording"
+    if not counter_endpoint():
+        return [Gate("Owner", name, "OWNER", "the counter is off (site/count.js has no "
+                     "ENDPOINT) — LAUNCH.md step 5b")]
+    found = read_env_file(ENV_FILE)
+    account, token = (os.environ.get(n) or found.get(n, "") for n in CF_NAMES)
+    if not (account and token):
+        return [counter_gate(None, None, datetime.now(timezone.utc),
+                             "needs CF_ACCOUNT_ID and CF_ANALYTICS_TOKEN (shell or .env)")]
+    if not re.fullmatch(r"[0-9a-f]{32}", account):
+        return [counter_gate(None, None, datetime.now(timezone.utc),
+                             "CF_ACCOUNT_ID is not a 32-character account id")]
+    sql = (f"SELECT SUM(_sample_interval) AS n FROM {COUNT_DATASET} "
+           "WHERE timestamp > NOW() - INTERVAL '2' DAY FORMAT JSON")
+    try:
+        r = requests.post(f"https://api.cloudflare.com/client/v4/accounts/{account}/"
+                          "analytics_engine/sql", data=sql.encode("utf-8"), timeout=20,
+                          headers={"Authorization": f"Bearer {token}"})
+        rows = r.json().get("data") if r.status_code == 200 else None
+        total = int(float((rows[0] if rows else {}).get("n") or 0)) if isinstance(rows, list) \
+            else None
+    except (requests.RequestException, ValueError, AttributeError, TypeError):
+        total, r = None, None
+    if total is None:
+        status = getattr(r, "status_code", 0)
+        return [counter_gate(None, None, datetime.now(timezone.utc),
+                             f"couldn't read the counter (HTTP {status})")]
+    return [counter_gate(total, counter_on_since(), datetime.now(timezone.utc))]
+
+
 def check_resend_domain() -> list[Gate]:
     """GATE-13: Resend says the sending domain is verified. DNS records being
     present (check_dns) is not the same as Resend having checked them."""
@@ -2229,7 +2399,8 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
                   ("Stripe billing page", check_billing_portal),
                   ("refunds and disputes", check_refund_rates), ("email volume and tax",
                                                                  check_volume),
-                  ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval)]
+                  ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval),
+                  ("page counter", check_counter_account)]
     if not fast:
         steps += [("browser", check_browser), ("email width", check_email_widths),
                   ("join flows", check_join_flows), ("accessibility", check_accessibility),
