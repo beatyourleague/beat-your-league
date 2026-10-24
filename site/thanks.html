@@ -84,21 +84,6 @@
     font-size:14px;line-height:1.6;}
   .passnote p{margin:8px 0;font-size:14.5px;line-height:1.55;}
   .passnote p.small{font-size:13px;color:var(--slate);}
-  .passnote button{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.08em;
-    text-transform:uppercase;background:var(--flag);color:var(--navy);border:0;padding:10px 14px;
-    cursor:pointer;min-height:40px;}
-  /* The commissioner's one job after paying, as one big tap (LP-I6, LP-I9). */
-  .passnote .sharebtn{display:block;width:100%;max-width:420px;min-height:50px;margin-top:6px;
-    font-size:17px;letter-spacing:.1em;padding:12px 18px;
-    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,#D9A81B);}
-  .passnote .sharebtn:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
-  .passnote label{display:block;margin-top:8px;padding:3px 0;font-size:13.5px;line-height:1.5;
-    color:var(--slate);}
-  .passnote input{display:block;width:100%;max-width:420px;margin-top:4px;padding:10px 12px;
-    font:inherit;font-size:16px;border:1.5px solid var(--navy);background:var(--card);}
-  .passnote #pass-chat b{overflow-wrap:anywhere;}
-  .passnote p.msg{color:var(--brick);font-weight:700;}
-  .passnote p.msg:empty{display:none;}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
 </style>
@@ -122,33 +107,22 @@
     keeps every future report in your inbox.</div>
 
     <!-- A League Pass buyer lands here with ?plan=pass (the pass payment link's
-         success URL). The seat link used to flash for an instant before the
-         redirect to Stripe and then never be shown again (launch audit). -->
-    <!-- The line carries the payer's email, because the seat form refuses a
-         claim without it: a line pasted as it was left every manager at "We
-         need your commissioner's email" (launch audit F4). This page cannot
-         know the address, so Copy waits until it is typed in. -->
-    <!-- The share is one big tap — the phone's share sheet, or a copy — and
-         the address is filled in from the signup page when that page kept it
-         in this tab, so the buyer never retypes what they typed two minutes
-         ago (panel review LP-I6, LP-I9). -->
-    <div class="note passnote" id="pass-note" hidden><b>Your League Pass is live. Send your
-    league this:</b>
-      <label class="small" for="pass-email">The email you paid with — on this general seat
-      page each manager enters it as the email the pass was bought with. It stays on this
-      page.</label>
-      <input type="email" id="pass-email" autocomplete="email" placeholder="you@example.com">
-      <p id="pass-chat">I got us the League Pass from Beat Your League: everyone who claims a
-      seat gets their own lineup report every Tuesday, built from their own roster. Nothing to
-      pay. Claim yours once, here: https://beatyourleague.com/join/?pass=1 — where it asks for the email the pass
-      was bought with, enter <b id="pass-chat-email">[the email I paid with]</b>.</p>
-      <button type="button" class="sharebtn" id="pass-copy">Send this to the group chat</button>
-      <p class="small msg" id="pass-msg" role="status"></p>
-      <p class="small">If your welcome email carries your league's own seat link, send that one
-      instead — it needs no address at all. Bought a pass for more than one league? Send each
-      league its own seat link from that pass's welcome email — the general link can't tell
-      your leagues apart. Either way, each manager pastes their own roster, and their first
-      report lands the day they confirm their seat (we email them a button).</p>
+         success URL). A seat is claimed ONLY through the link made for this
+         pass after it is paid for (contract C3), and this page cannot know it,
+         so it says where the link is rather than offering a line to copy.
+         The copyable line that used to be here carried the generic seat page
+         and the buyer's email — the route that let anyone who knew a buyer's
+         address take the pass's seats (pre-launch review APPSEC-2). -->
+    <div class="note passnote" id="pass-note" hidden><b>Your League Pass is live. Your
+    league's seat link is on its way.</b>
+      <p>It's in your welcome email, usually within the hour, and on your weekly
+      reports. Send that link to your league's group chat: everyone who claims a seat gets
+      their own lineup report every Tuesday, built from their own roster. Each manager opens
+      the link and pastes their roster once, and their first report lands the day they
+      confirm their seat (we email them a button).</p>
+      <p class="small">That link is the only way to claim a seat, so nobody can take one by
+      typing your email. Bought a pass for more than one league? Each pass's welcome email
+      carries that league's own link.</p>
     </div>
 
     <ol class="steps">
@@ -201,46 +175,12 @@
 </main>
 <script>
 "use strict";
-// The session-storage key the join page writes a League Pass buyer's address
-// under, just before handing them to Stripe — one name on both pages.
-const PAID_EMAIL_KEY = "byl_paid_email";
 if (new URLSearchParams(location.search).get("plan") === "pass") {
-  const note = document.getElementById("pass-note");
-  note.hidden = false;
+  document.getElementById("pass-note").hidden = false;
   // The pass's own refund terms are one per LEAGUE (terms §5, the welcome, the
   // join page's pass mode); the season pass's "one per person" was left
   // standing on this branch (launch audit C12).
   document.getElementById("refund-limit").textContent = "one per league";
-  const copy = document.getElementById("pass-copy");
-  const input = document.getElementById("pass-email");
-  const echo = document.getElementById("pass-chat-email");
-  const line = document.getElementById("pass-chat");
-  const msg = document.getElementById("pass-msg");
-  const blank = echo.textContent;
-  const valid = () => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.value.trim());
-  // Written into the line as text, and nowhere else.
-  const echoIt = () => {
-    echo.textContent = valid() ? input.value.trim() : blank;
-    msg.textContent = "";
-  };
-  input.addEventListener("input", echoIt);
-  // The address the buyer typed on the signup page, if that page kept it in
-  // this tab's session storage (PAID_EMAIL_KEY, agreed with join/). Read once
-  // and removed: it is never sent anywhere from here, and an unreadable
-  // storage (private mode, blocked site data) just leaves the field empty.
-  try {
-    const kept = (sessionStorage.getItem(PAID_EMAIL_KEY) || "").trim();
-    sessionStorage.removeItem(PAID_EMAIL_KEY);
-    if (kept && !input.value) { input.value = kept; echoIt(); }
-  } catch (e) { /* the field stays empty for the buyer to fill */ }
-  copy.addEventListener("click", () => {
-    if (!valid()) {
-      msg.textContent = "Add the email you paid with first — each manager needs it to claim a seat.";
-      input.focus();
-      return;
-    }
-    shareLine(line.textContent.replace(/\s+/g, " ").trim(), line, msg);
-  });
 }
 // D9: site/week.json's phase. "Today" holds only while there is a report to
 // send — once the season is over (phase "over", or past the last week's
@@ -274,26 +214,6 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
       .catch(() => {});
   } catch (e) { /* the page stays as it is */ }
 })();
-// One tap to the group chat: the phone's own share sheet where the browser
-// has one (the chat is an app on that phone), a clipboard copy otherwise, and
-// failing both the line is selected for a copy by hand. A cancelled share
-// sheet is the visitor changing their mind, not an error. The same function,
-// character for character, is on thanks.html (tests/test_site.py).
-function shareLine(text, line, status) {
-  const byHand = () => {
-    window.getSelection().selectAllChildren(line);
-    status.textContent = "The message is selected — copy it and paste it in the group chat.";
-  };
-  const copyIt = () => {
-    if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
-    navigator.clipboard.writeText(text).then(
-      () => { status.textContent = "Copied — paste it in the group chat."; }, byHand);
-  };
-  if (!navigator.share) return copyIt();
-  navigator.share({ text: text }).then(
-    () => { status.textContent = ""; },
-    (err) => { if (!err || err.name !== "AbortError") copyIt(); });
-}
 </script>
   <footer><b>Beat Your League</b> — analysis, not betting picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under

@@ -814,14 +814,25 @@ def operator_row(email: str, player_ids: Iterable[str], secret: str) -> dict:
             "token": update_token(address, secret)}
 
 
-def post_row(endpoint: str, row: Mapping) -> None:
+def post_row(endpoint: str, row: Mapping, api_key: str | None = None) -> None:
     """POST one row to the form Worker; raises RuntimeError on any refusal, so
-    the operator is never told a change is on its way when it is not."""
+    the operator is never told a change is on its way when it is not.
+
+    Carries the Worker's read key (FORM_API_KEY): the Worker takes a POST only
+    from the site's own pages (its Origin) or from somebody holding that key
+    (pre-launch review APPSEC-3), and this one comes from the owner's shell."""
+    import os
     import urllib.error
     import urllib.request
+    key = api_key or os.environ.get("FORM_API_KEY", "")
+    if not key:
+        raise RuntimeError("FORM_API_KEY is not set in this shell — the form "
+                           "Worker takes a post from outside the site only with "
+                           "its read key (the same value as the GitHub secret)")
     request = urllib.request.Request(
         endpoint, data=json.dumps(dict(row)).encode("utf-8"), method="POST",
-        headers={"Content-Type": "application/json"})
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key}"})
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             status = response.status

@@ -393,15 +393,6 @@ Baltimore Ravens
       </div>
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-      <div id="pass-field" style="display:none">
-        <label class="optlabel" id="lbl-pass-email" for="pass-email">The email the
-        League Pass was bought with</label>
-        <input type="email" id="pass-email" autocomplete="off"
-               placeholder="buyer@example.com" aria-describedby="pass-email-note">
-        <div class="note" id="pass-email-note">Whoever bought your league's pass —
-        it doesn't have to be the commissioner. It's how your seat is matched to
-        their pass, so it has to be the address they paid with.</div>
-      </div>
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The Rest-of-Season Pass is <b>$29, one
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
@@ -607,12 +598,17 @@ const PLAN_PARAM = RESTORED_PLAN !== null ? RESTORED_PLAN : QUERY.get("plan") ||
 const WANTS_MONTHLY = MONTHLY_OFFERED && PLAN_PARAM === "monthly";
 const WANTS_PASS = PLAN_PARAM === "pass";
 const SEAT_MODE = QUERY.has("pass") && !WANTS_PASS;
-// ?pass=<20 hex> — the seat link a League Pass buyer's welcome email carries
-// (contract C4): the pass is named by a code only the intake can make, so a
-// leaguemate types no buyer's address and cannot mistype one. ?pass=1 (the
-// generic link) keeps asking for the address the pass was bought with.
+// ?pass=<20 hex> — the seat link a League Pass buyer's welcome email and
+// every one of their reports carry (contract C4): the pass is named by a code
+// only the intake can make, so a leaguemate types no buyer's address and
+// cannot mistype one. It is the ONLY way a seat is claimed (contract C3): the
+// generic link (pass=1) used to ask for the address the pass was bought
+// with, which let anyone who knew a buyer's address take the pass's seats and
+// told a stranger whether an address had bought one (pre-launch review
+// APPSEC-2). Any other ?pass= value now only says where the real link is.
 const PASS_TOKEN = SEAT_MODE && /^[0-9a-f]{20}$/.test(QUERY.get("pass") || "")
   ? QUERY.get("pass") : "";
+const SEAT_LINK_MISSING = SEAT_MODE && !PASS_TOKEN;
 // The plan being bought RIGHT NOW. It starts from the card they clicked and
 // can be switched on the page (Oct 9 2026): a mid-season buyer arriving from
 // the hero used to see only the $39 season pass, with monthly reachable only
@@ -1325,10 +1321,9 @@ $("form-email").addEventListener("submit", (event) => {
     return;
   }
   if (WANTS_PASS) {
-    // The pass thank-you page prefills its share line with the address that
-    // paid (thanks.html PAID_EMAIL_KEY, panel review LP-I9): this tab only,
-    // read once and deleted there, never a cookie and never sent anywhere.
-    try { sessionStorage.setItem("byl_paid_email", email); } catch (e) { /* private mode */ }
+    // The pass buyer's address is no longer kept for thanks.html: its share
+    // line carried the generic seat link with that address in it, and that
+    // route is closed (contract C3). Their seat link comes by email.
     showSeatLink();
   }
   window.location.assign(
@@ -1353,19 +1348,11 @@ function notSentWords(err) {
 }
 
 function submitSeat(email, ref) {
-  // A seat naming no pass is an unpaid report waiting to be sent. A seat link
-  // carrying the pass's own code (contract C4) names it already; the generic
-  // link (?pass=1) needs the address the pass was bought with before anything
-  // is posted. Whoever bought it — it need not be the commissioner (LP-D7).
-  const payer = PASS_TOKEN ? "" : $("pass-email").value.trim();
-  if (!PASS_TOKEN && (!EMAIL_RE.test(payer) || payer.length > 254)) {
-    showError("err-email", "We need the email the League Pass was bought with — " +
-      "it's in the message that sent you here.");
-    return;
-  }
-  if (!PASS_TOKEN && payer.toLowerCase() === email.toLowerCase()) {
-    showError("err-email", "That's your own address. We need the one the League " +
-      "Pass was bought with.");
+  // A seat naming no pass is an unpaid report waiting to be sent, and a seat
+  // names its pass ONLY by its own link's code (contracts C3/C4) — so without
+  // one nothing is posted at all.
+  if (!PASS_TOKEN) {
+    showError("err-email", seatLinkMissingWords() + " Nothing was sent or saved.");
     return;
   }
   if (!FORM_ENDPOINT) {
@@ -1378,9 +1365,7 @@ function submitSeat(email, ref) {
       "season. Nothing was sent or saved.");
     return;
   }
-  const row = PASS_TOKEN
-    ? { kind: "seat", email: email, ref: ref, via: SOURCE, pass_token: PASS_TOKEN }
-    : { kind: "seat", email: email, covered_by: payer, ref: ref, via: SOURCE };
+  const row = { kind: "seat", email: email, ref: ref, via: SOURCE, pass_token: PASS_TOKEN };
   fetch(FORM_ENDPOINT, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(row),
@@ -1397,6 +1382,14 @@ function submitSeat(email, ref) {
   }).catch((err) => {
     showError("err-email", notSentWords(err));
   });
+}
+
+// What a leaguemate who opened a seat page without their league's link is
+// told — on the page and if they press the button anyway.
+function seatLinkMissingWords() {
+  return "Seats are claimed with your league's own seat link. Ask whoever bought " +
+    "your league's League Pass for it — it's in their welcome email and on their " +
+    "weekly reports — and open that link instead.";
 }
 
 function submitUpdate(email, ref) {
@@ -1464,8 +1457,8 @@ function showSeatLink() {
   // their seat is claimed while every claim is dropped on Tuesday.
   // The link itself comes in the buyer's welcome email, after the payment
   // (contract C4): that one names THIS pass by a code, so a leaguemate types
-  // no buyer's address and cannot mistype it (LP-D1). The generic link
-  // (pass=1), which asks for the address, is the email's fallback.
+  // no buyer's address and cannot mistype it (LP-D1). There is no other
+  // route (contract C3).
   const share = $("seat-share");
   share.replaceChildren();
   share.appendChild(document.createTextNode(
@@ -1886,8 +1879,6 @@ if (TRY_MODE) {
   $("submit").textContent = "Claim my seat";
   nothingToPay("3 · Claim");
   $("lbl-email").textContent = "Your email — your reports go here";
-  // A seat link that names its pass (contract C4) asks for no buyer's address.
-  $("pass-field").style.display = PASS_TOKEN ? "none" : "block";
   $("seat-note").style.display = "list-item";
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
@@ -1903,6 +1894,19 @@ if (TRY_MODE) {
       "You're welcome to set up now to see how it works, but nothing is saved " +
       "until they open.";
     note.style.display = "block";
+  }
+  // No seat link, no seat (contract C3): before anything is typed, say where
+  // the real link is, and take the form away — there is nothing it could do.
+  if (SEAT_LINK_MISSING) {
+    $("header-pitch").textContent = "A League Pass seat costs you nothing, and " +
+      "it's claimed with your league's own link.";
+    const note = $("closed-note");
+    note.textContent = seatLinkMissingWords();
+    note.style.display = "block";
+    $("main").style.display = "none";
+    $("header-chips").style.display = "none";
+    const progress = document.querySelector(".progress");
+    if (progress) progress.style.display = "none";
   }
 } else if (WANTS_MONTHLY) {
   monthlyPlan();

@@ -108,11 +108,6 @@
     border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
   .chatline .blank{color:var(--flag);font-weight:700;white-space:nowrap;}
   .chatline b{overflow-wrap:anywhere;}
-  .chatline-label{display:block;margin-top:10px;padding:3px 0;font-size:13.5px;line-height:1.5;
-    color:var(--dusk2);}
-  #chat-email{display:block;width:100%;margin-top:6px;padding:10px 12px;font:inherit;font-size:16px;
-    color:var(--paper);background:rgba(255,255,255,.06);border:1.5px solid var(--gold-edge);}
-  #chat-email:focus-visible{outline:2px solid var(--flag);outline-offset:1px;}
   .chatline-msg{margin:6px 0 0;font-size:13.5px;color:var(--flag);}
   .chatline-msg:empty{display:none;}
   /* One big tap: the phone's own share sheet where there is one (the group
@@ -289,19 +284,20 @@
       <!-- One phrase for the address everywhere a seat meets it — this page,
            the seat page and the emails: "the email the pass was bought with",
            because any manager may buy it (panel review LP-D7). -->
-      <li><b>Send the league your link.</b> Your welcome email carries your league's seat link.
-      It needs only their roster. (The general seat page also asks for the email the pass
-      was bought with.)</li>
+      <li><b>Send the league your link.</b> Your welcome email carries your league's seat link,
+      and so do your weekly reports. It needs only their roster, and it's the only way
+      to claim a seat — nobody can take one by typing your email.</li>
       <li><b>Each manager pastes their roster.</b> About a minute, nothing to pay, and their
       first report lands the day they confirm their seat (we email them a button), then
       every Tuesday.</li>
     </ol>
-    <!-- The group-chat line (launch audit F4). Until the pass can be bought it
-         is an EXAMPLE with blanks: no live link and nothing to copy, because
-         "I got us the League Pass" is false before anybody has paid and the
-         seat link goes out only once a pass can be bought. The copyable
-         version carries the payer's email, because the seat form refuses a
-         claim without it. -->
+    <!-- The group-chat line (launch audit F4). It is an EXAMPLE with blanks in
+         every state: no live link and nothing to copy, because "I got us the
+         League Pass" is false before anybody has paid, and the only link that
+         claims a seat is the one made for each pass after it is paid for
+         (contract C3). The copyable version that used to appear here carried
+         the generic seat page and the payer's email — the route that let
+         anyone who knew a buyer's address take the pass's seats. -->
     <div id="chat-example">
       <p class="chatline-head">What you'll send the group chat once you've paid:</p>
       <div class="chatline">
@@ -309,22 +305,6 @@
         report every Tuesday, built from their own roster. Nothing to pay. Claim your seat
         here: <span class="blank">[your league's link, from your welcome email]</span></p>
       </div>
-    </div>
-    <div id="chat-live" hidden>
-      <p class="chatline-head">Once you've paid, use the link in your welcome email — or
-      paste this in the group chat:</p>
-      <label class="chatline-label" for="chat-email">The email you pay with — on this general
-      seat page, each manager enters it as the email the pass was bought with. It stays on
-      this page.</label>
-      <input type="email" id="chat-email" autocomplete="email" placeholder="you@example.com">
-      <div class="chatline">
-        <p id="chat-text">I got us the League Pass from Beat Your League: everyone gets their own
-        lineup report every Tuesday, built from their own roster. Nothing to pay. Set yours up
-        here: https://beatyourleague.com/join/?pass=1 — where it asks for the email the pass
-        was bought with, enter <b id="chat-email-echo">[the email I paid with]</b>.</p>
-        <button type="button" id="chat-copy">Copy</button>
-      </div>
-      <p class="chatline-msg" id="chat-msg" role="status"></p>
     </div>
   </div>
 
@@ -417,9 +397,6 @@ if (CHECKOUT_OPEN && SEATS_OPEN) {
   link.href = "join/index.html?plan=pass";
   link.textContent = "Buy the League Pass — $69";
   slot.replaceWith(link);
-  // Only now is the line true to send, so only now can it be copied.
-  document.getElementById("chat-example").hidden = true;
-  document.getElementById("chat-live").hidden = false;
 } else if (CHECKOUT_OPEN) {
   // Checkout is open for one team while seats wait on the form Worker. The
   // static "Leave your email" points at the landing's capture, which the
@@ -435,39 +412,6 @@ if (CHECKOUT_OPEN && SEATS_OPEN) {
   own.textContent = "set up your own team";
   small.append("It opens the day your league can claim its seats. Meanwhile, ", own, ".");
   slot.appendChild(small);
-}
-// The group-chat line: one tap, then paste. It needs the payer's email in it
-// — the seat form refuses a claim without one — so Copy waits for it. The
-// email is written into the line as text and goes nowhere else. Clipboard
-// writes can be refused (older browsers, in-app views); the text is
-// selectable either way.
-const copy = document.getElementById("chat-copy");
-if (copy) {
-  const input = document.getElementById("chat-email");
-  const echo = document.getElementById("chat-email-echo");
-  const line = document.getElementById("chat-text");
-  const msg = document.getElementById("chat-msg");
-  const blank = echo.textContent;
-  const valid = () => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.value.trim());
-  input.addEventListener("input", () => {
-    echo.textContent = valid() ? input.value.trim() : blank;
-    msg.textContent = "";
-  });
-  copy.addEventListener("click", () => {
-    if (!valid()) {
-      msg.textContent = "Add the email you pay with first — each manager needs it to claim a seat.";
-      input.focus();
-      return;
-    }
-    const text = line.textContent.replace(/\s+/g, " ").trim();
-    const done = () => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 2000); };
-    const selectIt = () => window.getSelection().selectAllChildren(line);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, selectIt);
-    } else {
-      selectIt();
-    }
-  });
 }
 // The ask before buying (LP-I5): true at any time, so it is always shareable.
 const ask = document.getElementById("ask-share");

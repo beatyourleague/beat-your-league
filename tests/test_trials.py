@@ -149,6 +149,9 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
             sent.append(message)
             return "id"
     monkeypatch.setattr(delivery, "build_provider", lambda *a, **k: Fake())
+    # The site's switch (SEC-06): these tests are about a free report that IS
+    # offered; tests/test_prelaunch_worker.py holds the closed case.
+    monkeypatch.setattr(trials, "free_reports_open", lambda *a, **k: True)
     monkeypatch.setattr(trials, "current_season", lambda *a, **k: SEASON, raising=False)
     monkeypatch.setattr("run.solo.current_season", lambda *a, **k: SEASON)
     monkeypatch.setattr("run.solo.current_week", lambda *a, **k: WEEK)
@@ -218,7 +221,7 @@ TUESDAY_1PM = "2026-01-06T13:00:00+00:00"
 
 
 def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=(),
-           dry=False):
+           dry=False, roster_rule=False, trial_open=True):
     """run.trials.main end to end on the fixture week, with a fake provider.
     `registry` is the file's text, or None for no file at all; `sent` is
     (key, sent_at) pairs already in the send log. -> (code, out, err, mailed)."""
@@ -254,9 +257,17 @@ def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=(),
     monkeypatch.setattr(trials, "week_underway_from",
                         lambda *a: datetime(2099, 1, 1, tzinfo=timezone.utc))
     monkeypatch.setattr(trials, "season_start", lambda *a: SINCE)
+    monkeypatch.setattr(trials, "free_reports_open", lambda *a, **k: trial_open)
+    # These drive one fixture roster from several addresses to test the caps
+    # and the clock; the one-roster rule (critique #3) has its own tests in
+    # tests/test_prelaunch_worker.py, so here it is off and starts empty.
+    if not roster_rule:
+        monkeypatch.setattr(trials, "too_close", lambda *a, **k: False)
     monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
     reg = tmp_path / "reg" / "rosters.json"
     reg.unlink(missing_ok=True)
+    if not roster_rule:
+        (reg.parent / trials.TRIAL_ROSTERS_NAME).unlink(missing_ok=True)
     if registry is not None:
         reg.parent.mkdir(parents=True, exist_ok=True)
         reg.write_text(registry)

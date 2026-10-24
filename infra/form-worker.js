@@ -19,18 +19,45 @@
  * included — is readable in one sitting.
  *
  * Setup (LAUNCH.md step 5): Workers & Pages → Create → paste this file →
- * Settings → Bindings → KV namespace, variable name ROWS → Variables:
- *   SITE_ORIGIN   = https://<domain>        (CORS; the only page allowed to POST)
+ * Settings → Bindings → KV namespace, variable name ROWS → (optional, for the
+ * visit counter) Analytics Engine dataset "byl_counts", variable name COUNTS →
+ * Variables:
+ *   SITE_ORIGIN   = https://<domain>        (the only page allowed to POST;
+ *                                           https://beatyourleague.com is
+ *                                           always allowed too)
  *   FORM_API_KEY  = <random>                (secret; the intake's read key)
+ *   TRIAL_OPEN    = true                    (ONLY once the free report is
+ *                                           switched on on the site; unset,
+ *                                           a free-report request is refused)
  * Then FORM_ENDPOINT = the Worker URL, in both the page and the GitHub secret.
+ * Also (owner, Cloudflare dashboard): one free rate-limiting rule on the
+ * Worker's route for POST, a few a minute per IP, and the workers.dev route
+ * switched OFF so the rule cannot be walked around.
  *
- * Limits worth knowing (Cloudflare free tier): 1,000 KV writes a day, so a
- * determined stranger can exhaust the day's writes and make seats, updates and
- * the waitlist refuse until tomorrow — nothing is lost that was already stored,
- * and the intake (which only READS) is unaffected.
+ * Abuse, and what bounds it (pre-launch review APPSEC-3, INFRA-03):
+ * - A POST must come from the site (its Origin) or carry the read key (the
+ *   operator's `make roster-update`). A page elsewhere cannot make a visitor's
+ *   browser post here, and every refusal still answers with CORS headers.
+ * - Rows are stored under a KIND PREFIX ("seat:", "trial:", …), and a reader
+ *   asks only for the kinds it reads (GET ?kinds=seat,confirm). A flood of one
+ *   kind never makes the hourly intake walk it.
+ * - A waitlist or free-report row is ONE row per (kind, mailbox, UTC day):
+ *   its key is derived from the canonical address (run/trials.canonical_email,
+ *   ported below), so a repeat overwrites rather than piling up. Never for a
+ *   seat claim, a roster request or a confirmation: overwriting by address
+ *   would let a stranger's request replace the real one and move the stamp
+ *   its emailed code is bound to.
+ * - Free-plan KV allows 1,000 writes a day. A determined stranger can still
+ *   exhaust them and make new posts refuse until tomorrow (each answers 503,
+ *   never a silent drop). Nothing already stored is lost, and the intake
+ *   still registers every Stripe payer and every logged seat while the read
+ *   fails (run/intake.py) — a form outage costs form posts, never sales.
  *
  * Contract (matches run/intake.py fetch_seats + run/updates.py):
- *   POST JSON  {kind:"seat",     email, ref, pass_token | covered_by}
+ *   POST JSON  {kind:"seat",     email, ref, pass_token}   (a seat names its
+ *                                pass ONLY by the per-pass seat link's code —
+ *                                contract C3; a typed buyer address is no
+ *                                longer a way in, and is not stored)
  *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
  *                                the operator's emailed change, run/updates.py)
  *   POST JSON  {kind:"update_request", email, ref, replaces?}  (confirm-by-
@@ -38,35 +65,42 @@
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
  *                                for a roster request OR a seat claim; the
  *                                intake knows which by recomputing both)
- *   POST JSON  {kind:"trial",    email, ref}          (the free first report)
+ *   POST JSON  {kind:"trial",    email, ref}          (the free first report;
+ *                                refused unless TRIAL_OPEN is "true")
  *   POST JSON  {kind:"waitlist", email, ref?}         (ref: the roster checked
  *                                while checkout was closed, run/waitlist.py)
+ *   Any other kind is refused (400). Every refusal is a 4xx/5xx with CORS.
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows,
- *                                each carrying its storage key as `_key`
+ *                                each carrying its storage key as `_key`,
+ *                                oldest first; ?kinds=a,b limits it to those
  *   DELETE ?key=<_key> + Authorization: Bearer <FORM_API_KEY>  →  removes one
  *                                row (a deletion request, run/privacy.py)
+ *   POST /e  text/plain {e, p, v, r, d, s}  →  ALWAYS 204, never a cookie: one
+ *                                anonymous visit count (contract C1) written to
+ *                                Analytics Engine (COUNTS), never to KV. Every
+ *                                field must match ^[a-z0-9.-]{0,40}$ or the
+ *                                count is dropped; only the site's Origin
+ *                                counts; with COUNTS unbound it does nothing.
+ *                                Blob order: event, page, via, referrer host,
+ *                                device, checkout state, country.
  * Every kind may also carry an optional `via` (^[a-z0-9-]{1,24}$, e.g. "x" or
  * "reply-kit"): where the visitor came from, read off the page's own URL, so
  * the owner can see which channel brings people without a cookie or a
  * tracker anywhere. Anything else in that field is dropped, never refused —
  * a bad attribution tag must not cost a signup.
  *
- * Rows EXPIRE about 400 days after they arrive (ROW_TTL_SECONDS). The privacy
- * page says form entries delete themselves within about 13 months of
- * arriving, and this TTL is the only thing that makes that true — before it,
- * nothing here ever deleted anything; every row lived in KV forever. 400
- * days is the longest any row is needed: a waitlist address waits at most one
- * offseason for its launch email, and everything else is acted on within days
- * — a seat claim is needed only until its address confirms it (7 days at most;
- * a confirmed seat is copied into the intake's own seat log, so no seat
- * depends on a row here, OPS-R6), a
- * confirmed roster update is copied into the intake's own log, a confirmation
- * code dies after 7 days, and a trial request is mailed within 14 days of
- * arriving or never (run/trials.py TRIAL_MAX_AGE, which also refuses one from
- * before the current season's first game). The row itself keeps the shared
- * TTL, which is harmless only because of that refusal: the trial key is per
- * SEASON, so a runner that re-read every stored row once mailed last
- * October's request again the next June.
+ * Rows EXPIRE (ROW_TTL_SECONDS for the waitlist, SHORT_ROW_TTL_SECONDS for
+ * everything else). The privacy page says form entries delete themselves
+ * within about 13 months of arriving, and these TTLs are the only thing that
+ * makes that true. A waitlist address waits at most one offseason for its
+ * launch email, so it keeps ~400 days; every other kind is acted on within
+ * two weeks or never — a seat claim is needed only until its address
+ * confirms it (7 days at most; a confirmed seat is copied into the intake's
+ * own seat log, so no seat depends on a row here, OPS-R6), a confirmed roster
+ * update is copied into the intake's own log, a confirmation code dies after
+ * 7 days, and a trial request is mailed within 14 days of arriving or never
+ * (run/trials.py TRIAL_MAX_AGE). So those keep 30 days, which also caps how
+ * much a flood can leave behind for the hourly reads to walk.
  *
  * ── THE SCHEDULER (Oct 2026) ──────────────────────────────────────────────
  * GitHub's own cron is best-effort, and in practice it was not good enough:
@@ -109,12 +143,58 @@ const SLUG = /^[0-9a-f]{10}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
 const CODE = /^[0-9a-f]{24}$/;
 const VIA = /^[a-z0-9-]{1,24}$/;
+// BYTES, not characters: KV's metadata limit is 1,024 bytes, and a row of
+// non-ASCII characters passed a character count and then threw inside put()
+// with no CORS header (APPSEC-3).
 const MAX_BODY = 2048;
+const MAX_ROW_BYTES = 1000;
 const ROW_TTL_SECONDS = 400 * 24 * 60 * 60;
+const SHORT_ROW_TTL_SECONDS = 30 * 24 * 60 * 60;
+// Every kind a row may be. Anything else is refused: an unknown kind used to
+// be stored as a seat.
+const KINDS = ["seat", "update", "update_request", "confirm", "trial", "waitlist"];
+// One row per (kind, mailbox, UTC day) for these two — see the header.
+const ONE_A_DAY = ["trial", "waitlist"];
+// Where a POST may come from, besides the site's own SITE_ORIGIN.
+const HOME_ORIGIN = "https://beatyourleague.com";
+const encoder = new TextEncoder();
+const bytes = (text) => encoder.encode(text).length;
+
+// run/trials.py canonical_email, line for line (tests/test_prelaunch_worker.py
+// runs both on the same addresses): lowercase, no `+tag`, and no dots in a
+// Gmail local part.
+function canonicalEmail(email) {
+  const address = String(email || "").trim().toLowerCase();
+  const at = address.indexOf("@");
+  let local = at === -1 ? address : address.slice(0, at);
+  let domain = at === -1 ? "" : address.slice(at + 1);
+  local = local.split("+", 1)[0];
+  if (domain === "gmail.com" || domain === "googlemail.com") {
+    local = local.replace(/\./g, "");
+    domain = "gmail.com";
+  }
+  return `${local}@${domain}`;
+}
+
+async function sha256hex(text) {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// The storage key. Every kind sits under its own prefix, so a reader lists
+// only what it reads. A waitlist or trial row is keyed by its mailbox and day
+// (a repeat overwrites); every other row by its arrival, which orders them.
+async function storageKey(row, now) {
+  if (ONE_A_DAY.includes(row.kind)) {
+    const day = now.toISOString().slice(0, 10);
+    return `${row.kind}:${day}:${(await sha256hex(canonicalEmail(row.email))).slice(0, 32)}`;
+  }
+  return `${row.kind}:${now.getTime().toString().padStart(14, "0")}-${crypto.randomUUID()}`;
+}
 
 function sanitizeKind(body) {
-  const kind = ["update", "update_request", "confirm", "waitlist", "trial"]
-    .includes(body.kind) ? body.kind : "seat";
+  const kind = body.kind;
+  if (!KINDS.includes(kind)) return null;
   if (kind === "confirm") {
     // Only the code. It means something only if it matches a request the
     // intake itself signed and mailed to the subscriber's own address.
@@ -149,20 +229,16 @@ function sanitizeKind(body) {
     return SLUG.test(replaces) ? { kind, email, ref, replaces } : { kind, email, ref };
   }
   if (kind === "seat") {
-    // A seat names its pass one of two ways (contract C4): the per-pass seat
-    // link's `pass_token` — a digest the intake recomputes over the addresses
-    // that really bought a pass, so the buyer's address never has to be typed
-    // or shared — or, from the generic link, the buyer's address typed as
-    // `covered_by`. One of the two is required; both may ride along. A claim
-    // is only a request: the intake mails the claimed address a code, and
-    // the seat exists once {kind:"confirm", code} comes back (OPS-R1).
+    // A seat names its pass ONLY by the per-pass seat link's `pass_token`
+    // (contracts C3/C4) — a digest the intake recomputes over the passes
+    // really bought, so the buyer's address is never typed, shared or
+    // guessed. The typed `covered_by` route let anyone who knew a buyer's
+    // address take every seat on the pass, and its replies told a stranger
+    // whether that address had bought one (APPSEC-2): it is not stored. A
+    // claim is only a request: the intake mails the claimed address a code,
+    // and the seat exists once {kind:"confirm", code} comes back (OPS-R1).
     const passToken = String(body.pass_token || "").trim().toLowerCase();
-    const payer = String(body.covered_by || "").trim().toLowerCase();
-    const named = {};
-    if (TOKEN.test(passToken)) named.pass_token = passToken;
-    if (EMAIL.test(payer) && payer.length <= 254) named.covered_by = payer;
-    if (!named.pass_token && !named.covered_by) return null;
-    return { kind, email, ref, ...named };
+    return TOKEN.test(passToken) ? { kind, email, ref, pass_token: passToken } : null;
   }
   // An update names the subscription it replaces — except the OPERATOR's
   // (`make roster-update`, run/updates.py), sent for a subscriber who emailed
@@ -181,6 +257,88 @@ function sanitize(body) {
   // shape that cannot carry an address or markup into the owner's stats.
   const via = String(body.via || "").trim().toLowerCase();
   return VIA.test(via) ? { ...row, via } : row;
+}
+
+// The read key, compared without an early exit (APPSEC-3: remote timing is
+// not practical here, and this costs nothing).
+function sameSecret(given, expected) {
+  const a = encoder.encode(String(given));
+  const b = encoder.encode(String(expected));
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    diff |= (a[i] || 0) ^ (b[i] || 0);
+  }
+  return diff === 0;
+}
+
+function authorized(request, env) {
+  return Boolean(env.FORM_API_KEY) && sameSecret(
+    request.headers.get("Authorization") || "", `Bearer ${env.FORM_API_KEY}`);
+}
+
+function siteOrigins(env) {
+  return [env.SITE_ORIGIN, HOME_ORIGIN].filter(Boolean);
+}
+
+// The Origin this request came from, when it is the site; null otherwise.
+function siteOrigin(request, env) {
+  const origin = request.headers.get("Origin") || "";
+  return siteOrigins(env).includes(origin) ? origin : null;
+}
+
+// ── the visit counter (contract C1) ──────────────────────────────────────
+
+const COUNT_FIELD = /^[a-z0-9.-]{0,40}$/;
+const COUNT_EVENTS = ["view", "roster", "checkout", "waitlist", "trial"];
+const COUNT_PAGES = ["index", "join", "join-pass", "join-try", "league-pass",
+  "how-it-works", "thanks", "sample", "this-week", "first-week", "404", "other"];
+const MAX_COUNT_BODY = 512;
+
+// One count row, or null to drop the request. Pure.
+function countRow(text, country) {
+  if (bytes(text) > MAX_COUNT_BODY) return null;
+  let body;
+  try { body = JSON.parse(text); } catch { return null; }
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const fields = {};
+  for (const name of ["e", "p", "v", "r", "d", "s"]) {
+    const value = body[name] === undefined ? "" : body[name];
+    if (typeof value !== "string" || !COUNT_FIELD.test(value)) return null;
+    fields[name] = value;
+  }
+  if (!COUNT_EVENTS.includes(fields.e)) return null;
+  if (!["m", "d", ""].includes(fields.d) || !["open", "closed", ""].includes(fields.s)) {
+    return null;
+  }
+  const page = COUNT_PAGES.includes(fields.p) ? fields.p : "other";
+  const where = /^[A-Z]{2}$/.test(String(country || "")) ? String(country) : "";
+  return {
+    blobs: [fields.e, page, fields.v, fields.r, fields.d, fields.s, where],
+    doubles: [1],
+    indexes: [fields.e],
+  };
+}
+
+// ALWAYS an empty 204 with CORS for the site, never a cookie, and nothing a
+// visitor's browser can be made to wait on: writeDataPoint is not awaited and
+// a failure inside it is swallowed. A count never touches ROWS.
+async function count(request, env) {
+  const origin = siteOrigin(request, env);
+  const headers = {
+    "Access-Control-Allow-Origin": origin || env.SITE_ORIGIN || HOME_ORIGIN,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Cache-Control": "no-store",
+    "Vary": "Origin",
+  };
+  const done = () => new Response(null, { status: 204, headers });
+  if (request.method !== "POST" || !origin || !env.COUNTS) return done();
+  if (Number(request.headers.get("Content-Length") || "0") > MAX_COUNT_BODY) return done();
+  try {
+    const row = countRow(await request.text(), request.cf && request.cf.country);
+    if (row) env.COUNTS.writeDataPoint(row);
+  } catch { /* a counter never fails a request */ }
+  return done();
 }
 
 // ── the scheduler ────────────────────────────────────────────────────────
@@ -252,10 +410,16 @@ async function dispatch(entry, env) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (url.pathname === "/e") return count(request, env);
+
+    const origin = siteOrigin(request, env);
+    // CORS names the site, never "*" (fail closed when SITE_ORIGIN is unset).
     const cors = {
-      "Access-Control-Allow-Origin": env.SITE_ORIGIN || "*",
+      "Access-Control-Allow-Origin": origin || env.SITE_ORIGIN || HOME_ORIGIN,
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Vary": "Origin",
     };
     const json = (value, status = 200) =>
       new Response(JSON.stringify(value), {
@@ -265,56 +429,92 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
 
     if (request.method === "POST") {
+      // From the site's own pages, or from the operator holding the read key.
+      if (!origin && !authorized(request, env)) return json({ error: "origin" }, 403);
+      if (Number(request.headers.get("Content-Length") || "0") > MAX_BODY) {
+        return json({ error: "too large" }, 413);
+      }
       const text = await request.text();
-      if (text.length > MAX_BODY) return json({ error: "too large" }, 413);
+      if (bytes(text) > MAX_BODY) return json({ error: "too large" }, 413);
       let body;
       try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
       const row = sanitize(body);
       if (!row) return json({ error: "bad row" }, 400);
-      // The key orders rows by arrival. `received_at` is stamped HERE, by this
-      // Worker's own clock — sanitize() drops any field the caller invents, so a
-      // request cannot choose its own timestamp — and it is what a roster-update
+      // SEC-06: a free report is served only while the site offers one. The
+      // runner checks the site too (run/trials.py); this keeps a request sent
+      // straight here from being stored at all.
+      if (row.kind === "trial" && env.TRIAL_OPEN !== "true") {
+        return json({ error: "free reports are not open" }, 403);
+      }
+      // `received_at` is stamped HERE, by this Worker's own clock —
+      // sanitize() drops any field the caller invents, so a request cannot
+      // choose its own timestamp — and it is what a roster-update or seat
       // confirmation code binds to (run/updates.py).
-      const key = `${Date.now().toString().padStart(14, "0")}-${crypto.randomUUID()}`;
-      const stored = { ...row, received_at: new Date().toISOString() };
+      const now = new Date();
+      const stored = { ...row, received_at: now.toISOString() };
       // The whole row lives in the key's METADATA (1 KB), not in a value that
       // must be fetched one row at a time: reading N rows was N+1 KV calls per
-      // hourly intake, which a free-tier Worker may refuse past ~50 — and a
-      // failed read makes run/intake.py refuse to write the registry at all.
-      // One list() call now returns everything. The longest legitimate row (a
-      // seat: two addresses, a ref and a `via`) is ~790 bytes.
-      if (JSON.stringify(stored).length > 1000) return json({ error: "too large" }, 413);
-      await env.ROWS.put(key, "1", { metadata: stored, expirationTtl: ROW_TTL_SECONDS });
+      // hourly intake. One list() call per kind returns everything. The
+      // longest legitimate row (a seat: an address, a ref, a code and a
+      // `via`) is well under the limit.
+      if (bytes(JSON.stringify(stored)) > MAX_ROW_BYTES) {
+        return json({ error: "too large" }, 413);
+      }
+      const options = row.kind === "waitlist"
+        ? { metadata: stored, expirationTtl: ROW_TTL_SECONDS }
+        : { metadata: stored, expirationTtl: SHORT_ROW_TTL_SECONDS };
+      try {
+        await env.ROWS.put(await storageKey(row, now), "1", options);
+      } catch {
+        // The day's free-tier writes are spent, or KV is down: said, with
+        // CORS, so the page can tell the visitor rather than guess.
+        return json({ error: "storage unavailable" }, 503);
+      }
       return json({ ok: true });
     }
 
     if (request.method === "GET") {
-      const auth = request.headers.get("Authorization") || "";
-      if (!env.FORM_API_KEY || auth !== `Bearer ${env.FORM_API_KEY}`) {
-        return json({ error: "unauthorized" }, 401);
+      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      const asked = (url.searchParams.get("kinds") || "").split(",")
+        .map((kind) => kind.trim()).filter(Boolean);
+      if (asked.some((kind) => !KINDS.includes(kind))) {
+        return json({ error: "unknown kind" }, 400);
       }
+      // No filter: every row (the privacy export, the owner's stats).
+      const prefixes = asked.length ? [...new Set(asked)].map((kind) => `${kind}:`) : [""];
       const rows = [];
-      let cursor;
-      do {
-        const page = await env.ROWS.list({ cursor });
-        for (const entry of page.keys) {
-          if (entry.metadata) rows.push({ ...entry.metadata, _key: entry.name });
+      try {
+        for (const prefix of prefixes) {
+          let cursor;
+          do {
+            const page = await env.ROWS.list(prefix ? { prefix, cursor } : { cursor });
+            for (const entry of page.keys) {
+              if (entry.metadata) rows.push({ ...entry.metadata, _key: entry.name });
+            }
+            cursor = page.list_complete ? undefined : page.cursor;
+          } while (cursor);
         }
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (cursor);
+      } catch {
+        return json({ error: "storage unavailable" }, 503);
+      }
+      // Oldest first, whatever the key shape: the readers judge order by the
+      // Worker's own stamp.
+      rows.sort((a, b) => String(a.received_at || "").localeCompare(String(b.received_at || ""))
+        || String(a._key).localeCompare(String(b._key)));
       return json(rows);
     }
 
     // One row, on a deletion request: same key as the read, never from a
     // browser (no CORS for it), so a stranger can't erase anybody's rows.
     if (request.method === "DELETE") {
-      const auth = request.headers.get("Authorization") || "";
-      if (!env.FORM_API_KEY || auth !== `Bearer ${env.FORM_API_KEY}`) {
-        return json({ error: "unauthorized" }, 401);
-      }
-      const key = new URL(request.url).searchParams.get("key") || "";
+      if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      const key = url.searchParams.get("key") || "";
       if (!key || key.length > 512) return json({ error: "bad key" }, 400);
-      await env.ROWS.delete(key);
+      try {
+        await env.ROWS.delete(key);
+      } catch {
+        return json({ error: "storage unavailable" }, 503);
+      }
       return json({ deleted: true });
     }
 

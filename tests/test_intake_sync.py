@@ -90,6 +90,12 @@ def directory(monkeypatch):
         directory = PlayerDirectory(people)
 
     monkeypatch.setattr(intake, "load_week_data", lambda *a, **k: _Data())
+    # This stand-in holds a directory and nothing a report is built from, so a
+    # first report could only ever fail to build here — and a paid signup's
+    # first report failing now fails the run (pre-launch review APPSEC-1).
+    # First reports are tested against the real fixture week instead
+    # (_first_email_env).
+    monkeypatch.setattr(intake, "_send_first_files", lambda *a, **k: 0)
     return _Data
 
 
@@ -344,8 +350,16 @@ def _stamp(hours_ago: float = 1.0) -> str:
 
 
 def _seat(**over) -> dict:
-    row = {"email": "member@example.com", "covered_by": "commish@example.com",
-           "ref": SEAT_REF, "received_at": _stamp()}
+    """A seat claim as the Worker stores it: through the pass's own seat link
+    (contract C3 — the only way a seat names its pass). ``covered_by=X`` is
+    kept as the tests' shorthand for "the seat link of the pass X bought"
+    (subscription PASS_SUB, signed under SEAT_SECRET); the row itself never
+    carries a typed payer address any more."""
+    from run.updates import seat_token
+    payer = over.pop("covered_by", "commish@example.com")
+    row = {"email": "member@example.com", "ref": SEAT_REF, "received_at": _stamp()}
+    if payer:
+        row["pass_token"] = seat_token(payer, SEAT_SECRET, PASS_SUB)
     row.update(over)
     return row
 
@@ -465,11 +479,16 @@ def test_a_seat_with_an_unusable_address_cannot_take_the_registry_down(
     load_rosters(tmp_path / intake.REGISTRY_NAME)        # still loadable
 
 
-def test_an_unreadable_seat_backend_refuses_rather_than_dropping_seats(
+def test_an_unreadable_seat_backend_still_registers_the_payer_and_goes_red(
         tmp_path, stripe, directory, monkeypatch, capsys) -> None:
-    """Writing a Stripe-only registry would silently drop every seat and read
-    as a quiet week."""
+    """It used to REFUSE — `return 1` before the registry was written — so a
+    flooded or unreachable form Worker stopped every new buyer being
+    registered, welcomed or sent a first report (pre-launch review APPSEC-3 /
+    INFRA-03). Confirmed seats live in the seat log now, so registering the
+    Stripe payers drops no seat; the run still exits 1 (tests/
+    test_prelaunch_worker.py holds the seat-log half)."""
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", f"s:{SEASON_LINK},p:{PASS_LINK}")
+    monkeypatch.setenv("UPDATE_SECRET", SEAT_SECRET)
     stripe["sessions"] = [_pass_session()]
     monkeypatch.setenv("FORM_ENDPOINT", "https://forms.example/seats")
 
@@ -477,7 +496,8 @@ def test_an_unreadable_seat_backend_refuses_rather_than_dropping_seats(
         raise intake.IntakeError("HTTP 503")
     monkeypatch.setattr(intake, "fetch_seats", _boom)
     assert _run(tmp_path) == 1
-    assert "Refusing to write a registry" in capsys.readouterr().err
+    assert "could not read the form backend" in capsys.readouterr().err
+    assert [r["email"] for r in _registry(tmp_path)] == ["commish@example.com"]
 
 
 def test_with_no_seat_backend_the_tier_simply_does_not_deliver_seats(
@@ -771,7 +791,9 @@ def test_the_worker_the_picker_and_the_intake_agree_on_the_update_contract() -> 
         assert re.search(token_re, page), f"{name} does not gate the token shape"
     assert len(slug_of(REF)) == 10 and len(update_token("a@b.co", SECRET)) == TOKEN_LENGTH
     # The Worker stores exactly the fields the intake reads, by name.
-    for field in ('"update"', '"update_request"', '"confirm"', "covered_by",
+    # A seat names its pass by `pass_token` only (contract C3): the typed
+    # `covered_by` route is closed, and the Worker no longer stores it.
+    for field in ('"update"', '"update_request"', '"confirm"', "pass_token",
                   "replaces", "token"):
         assert field in worker
     # The confirm-by-email code: the Worker, the confirm page and the intake
