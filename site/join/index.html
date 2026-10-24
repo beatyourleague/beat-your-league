@@ -2107,7 +2107,10 @@ if (TRY_MODE) {
     const note = $("closed-note");
     note.textContent = seatLinkMissingWords();
     note.style.display = "block";
-    $("main").style.display = "none";
+    // The note moves into <main> and the form inside it goes: the page keeps
+    // its one main landmark (a hidden <main> left it with none).
+    for (const child of $("main").children) child.style.display = "none";
+    $("main").prepend(note);
     $("header-chips").style.display = "none";
     const progress = document.querySelector(".progress");
     if (progress) progress.style.display = "none";

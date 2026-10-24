@@ -754,7 +754,8 @@ def test_the_seat_pages_offer_no_typed_address_route() -> None:
     assert "covered_by" not in join and 'id="pass-email"' not in join
     assert "const SEAT_LINK_MISSING = SEAT_MODE && !PASS_TOKEN;" in join
     branch = join.split("if (SEAT_LINK_MISSING) {")[1].split("\n  }\n")[0]
-    assert 'seatLinkMissingWords()' in branch and '$("main").style.display = "none"' in branch
+    assert 'seatLinkMissingWords()' in branch and 'for (const child of $("main").children) child.style.display = "none";' in branch
+    assert '$("main").prepend(note);' in branch      # one main landmark stays
     words = join.split("function seatLinkMissingWords()")[1].split("\n}\n")[0]
     assert "welcome email" in words and "reports" in words
     for name in ("league-pass.html", "thanks.html", "join/index.html"):

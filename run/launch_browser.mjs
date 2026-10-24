@@ -337,7 +337,11 @@ async function flowJob(port, job) {
         const shown = (el) => !!el && getComputedStyle(el).display !== "none";
         const button = document.getElementById("submit");
         if (button && button.offsetParent !== null) button.click();
-        return { note: shown(note) ? note.textContent.trim() : "", mainHidden: !shown(main) };
+        // mainHidden: nothing of the form is left on screen (the note itself
+        // may sit inside <main>, which keeps the page's main landmark).
+        const formShown = !!main && shown(main) &&
+          [...main.children].some((el) => el !== note && shown(el));
+        return { note: shown(note) ? note.textContent.trim() : "", mainHidden: !formShown };
       })()`));
       await sleep(1500);
       result.handoff = handoff;
