@@ -388,8 +388,22 @@ def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
         # ACTIVE in Stripe — so from the Dashboard this person still looks
         # like a customer, and the only place the revocation is visible is
         # here.
-        print(f"{len(paid.refunded)} subscription(s) were refunded in full "
-              f"and are no longer served: " + ", ".join(sorted(paid.refunded)))
+        print(f"{len(paid.refunded)} purchase(s) were refunded in full or "
+              f"lost a chargeback, and are no longer served: "
+              + ", ".join(sorted(paid.refunded)))
+    disputes = tuple(getattr(paid, "disputes", ()) or ())
+    if disputes:
+        # Still served — a dispute can be won — but one waiting on our
+        # evidence is lost by default at Stripe's deadline (critique #2).
+        print(f"{len(disputes)} purchase(s) under an open dispute, still served: "
+              + ", ".join(f"{i} ({state})" for i, state in disputes))
+        urgent = tuple(getattr(paid, "disputes_needing_response", ()) or ())
+        if urgent:
+            print(f"DISPUTE NEEDS A RESPONSE (Stripe Dashboard → Disputes): "
+                  + ", ".join(urgent), file=sys.stderr)
+    for problem in tuple(getattr(paid, "dispute_errors", ()) or ()):
+        print(f"Disputes: a disputed charge's status could not be read ({problem}). "
+              f"Give the cron key Disputes: Read (LAUNCH.md).", file=sys.stderr)
     had_registry = len(subscribers)
     subscribers = entitled
     if dropped:

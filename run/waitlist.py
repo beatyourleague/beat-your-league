@@ -30,6 +30,15 @@ three are permanent, because a list can only be burned once:
 3. **Sending by accident.** Dry-run is the default, as everywhere else in this
    repo: with no ``EMAIL_PROVIDER`` set and no ``--send``, this writes drafts
    and mails nobody. `run/batch.py` learned that the hard way.
+4. **Mailing a poisoned list** (pre-launch review APPSEC-1 / INFRA-03). The
+   capture is a public form, so a script can fill it with addresses nobody
+   asked to mail — and one launch send to them burns the sending domain's
+   reputation and the day's provider allowance. So the list is deduped by
+   MAILBOX (``+tag`` and Gmail dots fold away, ``run.trials.canonical_email``),
+   the preview prints the mailbox count and the five commonest domains, and a
+   real send needs ``--max`` (or ``WAITLIST_MAX``): the most the owner, having
+   read the preview, means to send. More than that still to announce, and
+   nothing is sent.
 
 The list itself lives in the form Worker (``infra/form-worker.js``) — the same
 mailbox the seats and roster updates use, read back here with the ``waitlist``
@@ -101,6 +110,7 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
     """
     if not path.is_file():
         raise FileNotFoundError(f"no waitlist export at {path}")
+    from run.trials import canonical_email
     addresses: list[str] = []
     problems: list[str] = []
     seen: set[str] = set()
@@ -120,9 +130,9 @@ def load_list(path: Path) -> tuple[list[str], list[str]]:
             if not EMAIL_RE.match(value):
                 problems.append(f"row {index}: not an address")
                 continue
-            if value in seen:
-                continue
-            seen.add(value)
+            if canonical_email(value) in seen:
+                continue                       # one mailbox, one message
+            seen.add(canonical_email(value))
             addresses.append(value)
     return addresses, problems
 
@@ -134,17 +144,30 @@ def waitlist_addresses(rows) -> list[str]:
     kind filter is load-bearing: a seat or update row carries a roster and a
     token, and a broadcast to those addresses would email people who never
     asked for this message.
+
+    One MAILBOX, one entry (the first spelling seen): ``a+1@`` and ``a+2@``
+    are one inbox, and so are Gmail's dotted spellings.
     """
+    from run.trials import canonical_email
     addresses: list[str] = []
     seen: set[str] = set()
     for row in rows:
         if str(row.get("kind") or "") != "waitlist":
             continue
         value = str(row.get("email") or "").strip().lower()
-        if EMAIL_RE.match(value) and value not in seen:
-            seen.add(value)
+        if EMAIL_RE.match(value) and canonical_email(value) not in seen:
+            seen.add(canonical_email(value))
             addresses.append(value)
     return addresses
+
+
+def top_domains(addresses: list[str], count: int = 5) -> list[tuple[str, int]]:
+    """The commonest domains on the list, most first — what a poisoned list
+    looks like at a glance (hundreds at one throwaway domain). Domains only,
+    never an address. Pure."""
+    from collections import Counter
+    tally = Counter(a.rsplit("@", 1)[-1] for a in addresses if "@" in a)
+    return sorted(tally.items(), key=lambda item: (-item[1], item[0]))[:count]
 
 
 def saved_refs(rows) -> dict[str, str]:
@@ -170,9 +193,13 @@ def saved_refs(rows) -> dict[str, str]:
     return out
 
 
+# The form kinds this runner reads (run.intake.fetch_seats `kinds`).
+WAITLIST_KINDS = ("waitlist",)
+
+
 def load_worker_list(endpoint: str, api_key: str | None) -> list[str]:
     """The launch list straight from the form Worker."""
-    return waitlist_addresses(fetch_seats(endpoint, api_key))
+    return waitlist_addresses(fetch_seats(endpoint, api_key, kinds=WAITLIST_KINDS))
 
 
 def restore_url(signup_url: str, ref: str | None) -> str:
@@ -208,9 +235,11 @@ def messages(addresses: list[str], signup_url: str,
     # Commercial email: sender identity with a postal address (CAN-SPAM,
     # CASL). main() refuses a real send without one; a preview shows the gap.
     sender = sender_line() or "[sender postal address not configured]"
+    from run.trials import canonical_email
+    by_mailbox = {canonical_email(a): r for a, r in (refs or {}).items()}
     out: list[Message] = []
     for address in addresses:
-        ref = (refs or {}).get(address)
+        ref = (refs or {}).get(address) or by_mailbox.get(canonical_email(address))
         url = restore_url(signup_url, ref)
         body = BODY.format(brand=brand, url=url, sender=sender)
         if ref:
@@ -299,7 +328,13 @@ def main(argv: list[str] | None = None) -> int:
                              "SITE_URL + /join/")
     parser.add_argument("--send", action="store_true",
                         help="actually send; without it this is a dry run")
+    parser.add_argument("--max", type=int, default=None,
+                        help="the most messages a real send may go out with, "
+                             "after reading the preview (or WAITLIST_MAX); "
+                             "required with --send")
     args = parser.parse_args(argv)
+    if args.max is None and os.environ.get("WAITLIST_MAX", "").strip().isdigit():
+        args.max = int(os.environ["WAITLIST_MAX"].strip())
 
     if not args.url:
         site = os.environ.get("SITE_URL", "").rstrip("/")
@@ -320,6 +355,12 @@ def main(argv: list[str] | None = None) -> int:
             print("NOTHING WAS SENT. Set these first (the same values as the "
                   "GitHub secrets): " + ", ".join(missing), file=sys.stderr)
             return 1
+        if args.max is None or args.max < 1:
+            print("NOTHING WAS SENT. Read `make waitlist-preview` first (the "
+                  "mailbox count and the commonest domains), then send with "
+                  "--max N (or WAITLIST_MAX=N): the most you mean to send.",
+                  file=sys.stderr)
+            return 1
 
     problems: list[str] = []
     refs: dict[str, str] = {}
@@ -336,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
                   "no waitlist to read.", file=sys.stderr)
             return 1
         try:
-            rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"))
+            rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"),
+                               kinds=WAITLIST_KINDS)
         except IntakeError as exc:
             print(f"Could not read the waitlist: {exc}", file=sys.stderr)
             return 1
@@ -377,6 +419,14 @@ def main(argv: list[str] | None = None) -> int:
         # Even a preview needs the key: the send-log key it checks is keyed.
         print(str(exc), file=sys.stderr)
         return 1
+    from run.delivery import load_sent
+    unsent = [m for m in built if m.key not in load_sent()]
+    if args.send and len(unsent) > args.max:
+        print(f"NOTHING WAS SENT. {len(unsent)} mailbox(es) are still to be "
+              f"announced, above --max {args.max}. Check the preview's "
+              f"commonest domains for a list somebody filled by script, then "
+              f"raise --max or clean the list.", file=sys.stderr)
+        return 1
     try:
         results = send_all(built, provider=provider)
     except DeliveryError as exc:
@@ -388,11 +438,16 @@ def main(argv: list[str] | None = None) -> int:
     failed = [r for r in results if not r.ok]
     print("=" * 62)
     print(f"{CAMPAIGN} via {provider.name}")
-    print(f"  on the list      : {len(addresses)}")
+    print(f"  on the list      : {len(addresses)} mailbox(es)")
+    print("  commonest domains: " + (", ".join(f"{d} {n}" for d, n in
+                                                top_domains(addresses)) or "none"))
     print(f"  sent             : {len(sent)}")
     print(f"  already announced: {len(already)}")
     print(f"  failed           : {len(failed)}")
-    print(f"  with their roster: {sum(1 for a in addresses if a in refs)}")
+    from run.trials import canonical_email
+    saved = {canonical_email(a) for a in refs}
+    print(f"  with their roster: "
+          f"{sum(1 for a in addresses if canonical_email(a) in saved)}")
     if provider.name == DRY_PROVIDER:
         print("  (dry run — nothing left this machine, and nothing was recorded)")
     elif sent:

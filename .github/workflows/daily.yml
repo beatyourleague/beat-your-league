@@ -150,6 +150,9 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_REPLY_TO: ${{ secrets.EMAIL_REPLY_TO }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Full access, read only by the bounce check (run/delivery.py):
+          # the sending key cannot read a sent email back. Optional.
+          RESEND_READ_KEY: ${{ secrets.RESEND_READ_KEY }}
           POSTMARK_TOKEN: ${{ secrets.POSTMARK_TOKEN }}
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}

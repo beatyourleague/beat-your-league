@@ -3618,38 +3618,34 @@ def test_the_league_pass_capture_never_points_at_a_hidden_form() -> None:
     assert lp.count("index.html#watch-form") == 1
 
 
-def test_the_group_chat_line_is_copyable_only_when_true_and_names_the_payer() -> None:
-    """Launch audit F4, reproduced at 390: the pre-purchase League Pass page
-    offered a live Copy of "I got us the League Pass … join/?pass=1" with
-    checkout and seats both closed — a purchase claim false when pasted, and
-    the seat link out before any payment. And the copied text, there and on
-    thanks.html?plan=pass, never carried the payer's email: a manager who used
-    it verbatim was stopped at "We need your commissioner's email". Now the
-    pre-purchase page shows an example with blanks (no link, no Copy) unless
-    CHECKOUT_OPEN && SEATS_OPEN, and on both pages Copy refuses until the
-    payer's email is in the line."""
+def test_the_group_chat_line_is_an_example_and_never_the_generic_seat_page() -> None:
+    """Launch audit F4, then contract C3. The pre-purchase page once offered a
+    live Copy of "I got us the League Pass … join/?pass=1" — false before
+    anybody paid — and the fix made it copyable only once checkout and seats
+    opened, carrying the payer's email for the generic seat page to match.
+    That generic page is closed now (pre-launch review APPSEC-2: anyone who
+    knew a buyer's address could take the pass's seats, and the replies said
+    whether an address had bought one). A seat is claimed only through the
+    link made for each pass after payment, which neither page can know: so
+    league-pass shows an example with a blank in every state, thanks.html
+    says where the link is, and neither offers a line to copy or asks for the
+    buyer's address."""
     lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
     example = re.search(r'<div id="chat-example">(.*?)\n    </div>', lp, re.S).group(1)
     assert "<button" not in example and "join/" not in example, \
-        "the example can be copied, or hands out the seat link before payment"
-    live = re.search(r'<div id="chat-live" hidden>(.*?)\n    </div>', lp, re.S)
-    assert live and 'id="chat-copy"' in live.group(1), \
-        "the copyable line must be hidden in the static (closed) page"
-    code = _js_code(lp)
-    opened = code.split("if (CHECKOUT_OPEN && SEATS_OPEN) {")[1].split("} else if")[0]
-    assert 'getElementById("chat-live").hidden = false' in opened
-    assert code.count('getElementById("chat-live").hidden = false') == 1
-    for page, copy_id, line_id, echo_id in (
-            (lp, "chat-copy", "chat-text", "chat-email-echo"),
-            (THANKS, "pass-copy", "pass-chat", "pass-chat-email")):
-        line = re.search(rf'<p id="{line_id}">(.*?)</p>', page, re.S).group(1)
-        assert f'id="{echo_id}"' in line, "the copied line has no place for the payer's email"
-        assert "join/?pass=1" in line
-        assert f'id="{copy_id}"' in page
-        handler = _js_code(page).split('copy.addEventListener("click"')[1]
-        assert handler.index("if (!valid())") < handler.index("writeText"), \
-            "Copy hands over a line with no payer email in it"
+        "the example can be copied, or hands out a seat link before payment"
+    assert 'id="chat-live"' not in lp and 'id="chat-copy"' not in lp
+    assert "chat-live" not in _js_code(lp)
+    for name, page in (("league-pass", lp), ("thanks", THANKS)):
+        markup = re.sub(r"<!--.*?-->", "", page, flags=re.S)
+        assert "join/?pass=1" not in markup, f"{name} still hands out the generic seat page"
+        assert not re.search(r'<input[^>]+type="email"', markup.split("<main")[-1]
+                             if name == "thanks" else markup), \
+            f"{name} asks for the buyer's address"
         assert ".innerHTML" not in _js_code(page)
+    note = re.search(r'<div class="note passnote" id="pass-note" hidden>(.*?)</div>',
+                     THANKS, re.S).group(1)
+    assert "welcome email" in prose(note) and "<button" not in note
 
 
 def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
@@ -3914,14 +3910,16 @@ def test_seat_links_name_their_pass_and_bring_their_settings() -> None:
     """Contract C4 / LP-I1 / LP-I3. A 20-hex pass code in the seat link names
     the pass, so the page asks for NO buyer's address and posts the code; the
     link's s/n/t prefill the league's settings, said out loud and editable.
-    ?pass=1 keeps the typed-address path."""
+    ?pass=1 no longer has a typed-address path (contract C3, pre-launch review
+    APPSEC-2): without a code the page says where the league's link is and
+    posts nothing."""
     code = _js_code(JOIN)
     assert "/^[0-9a-f]{20}$/.test(QUERY.get(\"pass\") || \"\")" in code
     seat = _js_function(JOIN, "submitSeat")
     assert 'kind: "seat", email: email, ref: ref, via: SOURCE, pass_token: PASS_TOKEN' in seat
-    token_row = seat.split("? {")[1].split("}")[0]
-    assert "covered_by" not in token_row, "a coded seat link must not post a typed payer"
-    assert '$("pass-field").style.display = PASS_TOKEN ? "none" : "block"' in code
+    assert "covered_by" not in code, "the page still posts a typed payer"
+    assert seat.index("if (!PASS_TOKEN)") < seat.index("fetch(")
+    assert 'id="pass-field"' not in JOIN and 'id="pass-email"' not in JOIN
     read = _js_function(JOIN, "settingsFromLink")
     for param in ('QUERY.get("s")', 'QUERY.get("n")', 'QUERY.get("t")'):
         assert param in read
@@ -3979,8 +3977,10 @@ def test_the_seat_page_asks_for_whoever_bought_the_pass_with_visible_labels() ->
     LP-D1 then dropped), and the copy names whoever bought the pass — any
     manager can — never "your commissioner's email"."""
     assert '<label class="optlabel" id="lbl-email" for="email">' in JOIN
-    assert '<label class="optlabel" id="lbl-pass-email" for="pass-email">' in JOIN
-    assert "The email the League Pass was bought with" in prose(JOIN)
+    # The second address is gone with the typed-address route (contract C3):
+    # a seat page asks only for the claimer's own address.
+    assert 'id="lbl-pass-email"' not in JOIN
+    assert "The email the League Pass was bought with" not in prose(JOIN)
     assert "commissioner's email" not in JOIN_PROSE
     assert "paid by your commissioner" not in JOIN_PROSE
     assert '$("footer-checkout").style.display = "none"' in _js_function(JOIN, "nothingToPay")
@@ -4640,8 +4640,9 @@ def test_the_privacy_policy_names_an_accountable_role_and_true_storage() -> None
     assert "the storage that automation carries between runs" in privacy
     section1 = privacy[privacy.find("1. What we collect"):privacy.find("2. What we never")]
     assert re.search(r"waitlist.{0,260}short code standing for that roster", section1, re.S)
-    assert re.search(r"pass code in your league's own link", section1)
-    assert "the email the pass was bought with" in section1
+    assert re.search(r"pass code\s+in your league's own seat link", section1)
+    # Contract C3: the typed buyer address is no longer collected for a seat.
+    assert "the email the pass was bought with" not in section1
     stripe = privacy[privacy.find("Stripe handles payment"):][:600]
     assert "channel tag" in stripe
     assert "sample roster's report" in privacy
@@ -4659,8 +4660,13 @@ def test_league_pass_copy_names_the_address_the_seat_page_asks_for() -> None:
         # never sees them.
         text = prose(re.sub(r"<!--.*?-->", "", markup_only(page), flags=re.S))
         assert "commissioner's email" not in text and "commissioner's pass" not in text, name
-    assert "the email the pass was bought with" in prose(LEAGUE_PASS)
-    assert "the email the pass was bought with" in prose(THANKS)
+    # Contract C3 (pre-launch review APPSEC-2): no surface asks a leaguemate
+    # for the buyer's address at all any more — a seat is claimed only
+    # through its pass's own link — so the phrase that once named it is gone.
+    for page in (LEAGUE_PASS, THANKS, PRIVACY):
+        text = prose(re.sub(r"<!--.*?-->", "", markup_only(page), flags=re.S))
+        assert "the email the pass was bought with" not in text
+        assert "join/?pass=1" not in text
 
 
 def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
@@ -4678,25 +4684,19 @@ def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
 
 
 def test_the_pass_share_is_one_tap_and_prefilled() -> None:
-    """Panel review LP-I6, LP-I9: the pass buyer's one job after paying was a
-    small Copy button, and they had to retype the email they gave the signup
-    page two minutes earlier. Now: one big button using the phone's share
-    sheet where there is one (a copy otherwise), on both pages, from ONE
-    function; and thanks.html prefills the address from the join page's
-    session-storage key, read once and deleted."""
-    assert _js_function(THANKS, "shareLine") == _js_function(LEAGUE_PASS, "shareLine")
-    share = _js_function(THANKS, "shareLine")
+    """Panel review LP-I6, LP-I9: the share is one big button using the
+    phone's share sheet where there is one (a copy otherwise). It lives on the
+    League Pass page's ask before buying. thanks.html had a second one for the
+    generic seat line, prefilled from the join page's session storage; that
+    line is gone with the generic route (contract C3), and with it the only
+    thing either page kept in the browser — nothing is stored now."""
+    share = _js_function(LEAGUE_PASS, "shareLine")
     assert "navigator.share" in share and "navigator.clipboard.writeText" in share
     assert 'err.name !== "AbortError"' in share, "a cancelled share sheet is not a failure"
-    assert 'const PAID_EMAIL_KEY = "byl_paid_email";' in THANKS
-    branch = _js_code(THANKS).split('get("plan") === "pass") {')[1]
-    assert "sessionStorage.getItem(PAID_EMAIL_KEY)" in branch
-    assert "sessionStorage.removeItem(PAID_EMAIL_KEY)" in branch
-    assert branch.index("try {") < branch.index("sessionStorage.getItem")
-    handler = branch.split('copy.addEventListener("click"')[1]
-    assert handler.index("if (!valid())") < handler.index("shareLine(")
-    assert 'class="sharebtn" id="pass-copy"' in THANKS
-    assert re.search(r"\.passnote \.sharebtn\{[^}]*min-height:(4[4-9]|[5-9]\d)px", THANKS)
+    assert "shareLine(" in _js_code(LEAGUE_PASS).split('ask.addEventListener("click"')[1]
+    for page in (THANKS, JOIN):
+        assert "byl_paid_email" not in page and "PAID_EMAIL_KEY" not in _js_code(page)
+    assert 'id="pass-copy"' not in THANKS
 
 
 def test_league_pass_answers_the_commissioners_questions_twice_alike() -> None:

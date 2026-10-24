@@ -229,10 +229,10 @@ def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
     """(the lead-in, the link, the message to paste) a League Pass payer sends
     their league; None for anybody else.
 
-    With the league's own seat link (C4) the message is complete. Without it,
-    the generic seat page matches a seat by the payer's address, so the
-    payer is told to give it out; with no site at all there is no link to
-    give, and the email says something true instead of a dead href."""
+    With the league's own seat link (C4) the message is complete — and it is
+    the only way a seat is claimed (contract C3: the generic page that matched
+    a seat by the payer's typed address is closed). Without it there is no
+    link to give, and the email says something true instead of a dead href."""
     if plan not in PAYER_PLANS:
         return None
     if seat_link and seat_link.startswith("https://"):

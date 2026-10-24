@@ -209,7 +209,8 @@ def test_the_payer_counts_seats_only_against_the_cap(monkeypatch) -> None:
     assert tuesday.subscriber_meta(seat, {PASS_SUB: 12}, "https://x.test/s",
                                    12)["seats_full"] is True
     assert tuesday.pass_seat_cap(seat, {PASS_SUB: payer}) == 12
-    assert rr.seats_text({**full, "plan": "pass"}) == "League Pass: Every seat is claimed."
+    assert rr.seats_text({**full, "plan": "pass"}) == ("League Pass: Every seat is claimed."
+                                                        + rr.SEAT_RESET_LINE)
 
 
 def test_no_seat_is_offered_without_a_signed_link_or_once_the_pass_is_full(

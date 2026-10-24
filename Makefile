@@ -5,7 +5,7 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
-        og brand billing billing-preview roster-update seat-release waitlist-preview waitlist-send live-sample
+        og brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample
 
 week:
 	$(PY) -m run.week
@@ -104,6 +104,15 @@ roster-update:
 seat-release:
 	$(PY) -m run.suppress "$(EMAIL)"
 
+# A League Pass buyer replied "reset seats" (run/seat_resets.py): the pass's
+# seat link changes and every seat claimed before now is released. PASS is the
+# pass's Stripe id (pi_… on its payment); EMAIL, the buyer's address, prints
+# the new link (needs SITE_URL and UPDATE_SECRET). Commit and push the file
+# before sending the buyer the link.
+#   make seat-reset PASS=pi_123 EMAIL=buyer@example.com
+seat-reset:
+	$(PY) -m run.seat_resets "$(PASS)" $(if $(EMAIL),--email "$(EMAIL)")
+
 # The launch announcement, the one email the waitlist was promised. Preview
 # first. The send needs EMAIL_PROVIDER + its key (RESEND_API_KEY or
 # POSTMARK_TOKEN), EMAIL_FROM, SITE_URL, SENDER_POSTAL_ADDRESS, and FORM_ENDPOINT
@@ -115,8 +124,10 @@ seat-release:
 waitlist-preview:
 	$(PY) -m run.waitlist $(if $(LIST),--list "$(LIST)")
 
+# --send refuses without a ceiling: MAX=<n> (the mailbox count the preview
+# printed) or WAITLIST_MAX in the environment.
 waitlist-send:
-	$(PY) -m run.waitlist --send $(if $(LIST),--list "$(LIST)")
+	$(PY) -m run.waitlist --send $(if $(MAX),--max $(MAX)) $(if $(LIST),--list "$(LIST)")
 
 # This week's live sample (site/this-week.html + site/week.json). Its FIRST
 # build before the week's first kickoff RECORDS its odds on the public ledger,

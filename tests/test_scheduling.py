@@ -360,7 +360,7 @@ def test_a_queued_second_run_reads_what_the_first_one_pushed() -> None:
 # --------------------------------------------------------------------- #
 
 ROWS = {
-    "seat": {"kind": "seat", "email": "m@example.com", "covered_by": "c@example.com",
+    "seat": {"kind": "seat", "email": "m@example.com", "pass_token": "0123456789abcdef0123",
              "ref": "s3-abc"},
     "update": {"kind": "update", "email": "m@example.com", "ref": "s3-abc",
                "replaces": "0123456789", "token": "0123456789abcdef0123"},
@@ -374,12 +374,13 @@ ROWS = {
 def _post_all(tmp_path, bodies: list[dict]):
     return _node(tmp_path, f"""
       const puts = [];
-      const env = {{ SITE_ORIGIN: "https://x.test",
+      const env = {{ SITE_ORIGIN: "https://x.test", TRIAL_OPEN: "true",
                      ROWS: {{ put: async (key, value, opts) => puts.push({{ key, value, opts }}) }} }};
       const statuses = [];
       for (const body of {json.dumps(bodies)}) {{
         const res = await worker.fetch(new Request("https://w.test/", {{
-          method: "POST", body: JSON.stringify(body) }}), env);
+          method: "POST", headers: {{ Origin: "https://x.test" }},
+          body: JSON.stringify(body) }}), env);
         statuses.push(res.status);
       }}
       return {{ statuses, puts }};
@@ -391,14 +392,19 @@ def test_every_stored_row_expires(tmp_path) -> None:
     """The privacy page says we delete what we hold a short period after it
     stops being used, and nothing deleted anything: every row lived in KV
     forever (reproduced: the put carried metadata and no expiry). About 400
-    days is the longest any row is needed (a seat claim serves the season it
-    names; a waitlist address waits one offseason at most)."""
+    days is the longest any row is needed (a waitlist address waits one
+    offseason at most); every other kind is acted on within two weeks, so it
+    keeps 30 days (pre-launch review APPSEC-3: a flood's backlog is capped)."""
     got = _post_all(tmp_path, list(ROWS.values()))
     assert got["statuses"] == [200] * len(ROWS)
     for put in got["puts"]:
         ttl = put["opts"]["expirationTtl"]
-        assert 395 * 86400 <= ttl <= 405 * 86400, ttl
-        assert put["opts"]["metadata"]["kind"], "the row moved out of metadata"
+        kind = put["opts"]["metadata"]["kind"]
+        if kind == "waitlist":
+            assert 395 * 86400 <= ttl <= 405 * 86400, ttl
+        else:
+            assert ttl == 30 * 86400, (kind, ttl)
+        assert put["key"].startswith(f"{kind}:"), "every row sits under its kind's prefix"
 
 
 @needs_node
@@ -428,9 +434,9 @@ def test_any_kind_may_say_where_it_came_from_and_a_bad_tag_costs_nothing(tmp_pat
 def test_the_worker_stores_the_new_shapes_and_nothing_looser(tmp_path) -> None:
     """Three Worker-side halves of shared contracts, run under node:
 
-    - C4: a seat claim from the per-pass seat link carries `pass_token` (20
-      hex) and NO payer address; one of the two is required, and a token of
-      any other shape is dropped like a bad `via`, never stored.
+    - C4/C3: a seat claim carries `pass_token` (20 hex) and nothing else
+      names its pass: a typed payer address is no longer stored, and a claim
+      without a well-shaped token is refused (pre-launch review APPSEC-2).
     - C6: a waitlist row may carry the `ref` checkout would have used; a ref
       that is not Stripe-safe is dropped and the address still lands (a bad
       ref must not cost a sign-up).
@@ -451,13 +457,11 @@ def test_the_worker_stores_the_new_shapes_and_nothing_looser(tmp_path) -> None:
         {"kind": "update", "email": "u@example.com", "ref": "s3-abc"},
     ]
     got = _post_all(tmp_path, rows)
-    assert got["statuses"] == [200, 200, 400, 200, 200, 200, 400, 400]
+    assert got["statuses"] == [200, 400, 400, 200, 200, 200, 400, 400]
     stored = [{k: v for k, v in p["opts"]["metadata"].items() if k != "received_at"}
               for p in got["puts"]]
     assert stored == [
         {"kind": "seat", "email": "m@example.com", "ref": "s3-abc", "pass_token": token},
-        {"kind": "seat", "email": "m@example.com", "ref": "s3-abc",
-         "covered_by": "c@example.com"},
         {"kind": "waitlist", "email": "w@example.com", "ref": "s3-abc_via-x"},
         {"kind": "waitlist", "email": "w@example.com"},
         {"kind": "update", "email": "u@example.com", "ref": "s3-abc", "token": token},
@@ -751,7 +755,8 @@ def test_the_worker_lists_row_keys_and_deletes_one_row_only_with_the_key(tmp_pat
       };
       const env = { ROWS, FORM_API_KEY: "k" };
       const post = (row) => worker.fetch(new Request("https://w/", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify(row) }), env);
+        headers: { "Content-Type": "application/json", Origin: "https://beatyourleague.com" },
+        body: JSON.stringify(row) }), env);
       await post({ kind: "waitlist", email: "a@example.com" });
       await post({ kind: "waitlist", email: "b@example.com" });
       const read = async () => (await worker.fetch(new Request("https://w/",

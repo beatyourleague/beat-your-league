@@ -11,9 +11,12 @@ and nowhere else:
   nothing happens until it is pressed — a new seat, or a roster change to a
   seat they hold, alike.
 - **No pass matched** (LP-D1). A leaguemate who claimed was told on the page
-  "Your seat request is in" — and when the address they typed was not the one
-  the pass was bought with, the claim was dropped with a line in a CI log and
-  nobody ever told them.
+  "Your seat request is in" — and when the claim matched no pass, it was
+  dropped with a line in a CI log and nobody ever told them. Since contract
+  C3 a seat is claimed only through its pass's own link, so "no pass" means
+  that link matched none (mangled in a paste, or another pass's); a claim
+  that typed a buyer's address instead is never answered at all, because an
+  answer would tell a stranger whether that address bought a pass.
 - **The pass is full** (OPS-R7). A pass covers as many seats as its league
   has teams, and no more.
 
@@ -38,10 +41,9 @@ SUBJECT = "Your League Pass seat isn't set up yet"
 LEDE = ("You asked for a seat on a League Pass with this address, and the claim "
         "didn't match a League Pass purchase, so no seat was set up and no "
         "reports are coming yet.")
-CHECK = ("Ask whoever bought your league's pass for their seat link and claim "
-         "again with it — the link is matched to the pass for you. If you typed "
-         "their email instead, it has to be the exact address the pass was "
-         "bought with.")
+CHECK = ("Ask whoever bought your league's pass for its seat link — it's in their "
+         "welcome email and on each of their reports — and claim again with "
+         "that exact link. Seats are claimed only through that link.")
 IGNORE = "Didn't ask for this? Ignore this email — nothing happens."
 
 CONFIRM_SUBJECT = "Confirm your League Pass seat"

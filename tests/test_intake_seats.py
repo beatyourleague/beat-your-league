@@ -48,19 +48,23 @@ def _notes(sends):
 
 def test_a_claim_that_matches_no_pass_is_told_once_and_counted(
         tmp_path, stripe, directory, monkeypatch, capsys) -> None:
-    """Reproduced (LP-D1): a leaguemate typed 'comish@example.com' for a pass
-    bought as 'commish@example.com'. The page said "Your seat request is in",
-    seats_to_rows returned no row and a CI-log line, the intake exited 0, and
-    nobody — not the leaguemate, not the buyer — ever heard another word. Now
-    the claimer gets one note per claim saying it matched no pass and what to
-    check, the intake counts unmatched claims, and the buyer hears nothing
-    about anybody (a stranger's claim is not their business)."""
+    """Reproduced (LP-D1): a leaguemate's claim matched no pass — then a typed
+    'comish@example.com' for 'commish@example.com'; since contract C3, a seat
+    link that matches no League Pass (mangled in a paste, or another pass's).
+    The page said "Your seat request is in", seats_to_rows returned no row and
+    a CI-log line, the intake exited 0, and nobody ever heard another word.
+    Now the claimer gets one note per claim saying it matched no pass and what
+    to check, the intake counts unmatched claims, and the buyer hears nothing
+    about anybody (a stranger's claim is not their business). Another claim
+    through the real link keeps the run from reading this as a dead secret
+    (OPS-R10)."""
     sends = _capture_sends(monkeypatch, tmp_path)
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS)
     # D10: a League Pass on file without UPDATE_SECRET exits non-zero.
     monkeypatch.setenv("UPDATE_SECRET", "test-secret-do-not-ship")
     stripe["sessions"] = [_pass_session()]
-    _seats(monkeypatch, _seat(covered_by="comish@example.com", received_at=_at(8)))
+    _seats(monkeypatch, _seat(covered_by="comish@example.com", received_at=_at(8)),
+           _seat(email="mate@example.com", received_at=_at(8)))
     assert _run(tmp_path) == 0
     out = capsys.readouterr().out
     assert "1 matched no League Pass" in out
@@ -474,8 +478,13 @@ def _origin(first: dict, pass_id: str = PASS_SUB) -> str:
 
 
 def _claim(email="m@example.com", ref=SEAT_REF, hours=2.0, **over) -> dict:
-    row = {"email": email, "covered_by": "commish@example.com", "ref": ref,
-           "received_at": _at(hours)}
+    """A claim through a pass's own seat link (contract C3). ``covered_by=X``
+    is shorthand for the link of the pass X bought (PASS_SUB, under SECRET);
+    an empty one adds no token, so the test supplies its own."""
+    payer = over.pop("covered_by", "commish@example.com")
+    row = {"email": email, "ref": ref, "received_at": _at(hours)}
+    if payer:
+        row["pass_token"] = seat_token(payer, SECRET, PASS_SUB)
     row.update(over)
     return row
 
@@ -837,19 +846,22 @@ def test_the_full_note_is_held_to_the_seat_notes_rules() -> None:
 # --------------------------------------------------------------------- #
 
 def test_an_address_whose_claim_matched_is_never_told_its_typo_matched_nothing() -> None:
-    """Reproduced (OPS-R9): a claim typed with the payer's address misspelt,
-    then a claim through the seat link an hour later, and one intake mailed
-    the same address "Your seat is in" AND "Your League Pass seat isn't set
-    up yet … no reports are coming". An address with a matched claim in the
-    sweep is dropped from the unmatched notes."""
+    """Reproduced (OPS-R9): a claim that matched no pass (then a misspelt
+    payer address; since contract C3 a mangled seat link), then a claim
+    through the real seat link an hour later, and one intake mailed the same
+    address "Your seat is in" AND "Your League Pass seat isn't set up yet … no
+    reports are coming". An address with a matched claim in the sweep is
+    dropped from the unmatched notes."""
     typo = _claim(email="seat@example.com", covered_by="paye@example.com", hours=8)
     token = seat_token("commish@example.com", SECRET, PASS_SUB)
     good = _claim(email="seat@example.com", covered_by="", pass_token=token, hours=7)
     swept = intake.sweep_seats([typo, good], PASSES, None, SECRET,
                                confirm_codes=[_code(good)])
     assert len(swept.rows) == 1 and swept.unmatched == []
-    alone = intake.sweep_seats([typo], PASSES, None, SECRET)
-    assert alone.unmatched, "a claim that matched nothing stopped being told"
+    other = _claim(email="mate@example.com", hours=7)
+    alone = intake.sweep_seats([typo, other], PASSES, None, SECRET)
+    assert [r["email"] for r in alone.unmatched] == ["seat@example.com"], \
+        "a claim that matched nothing stopped being told"
 
 
 # --------------------------------------------------------------------- #

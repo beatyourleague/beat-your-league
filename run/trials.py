@@ -10,8 +10,21 @@ for the current week through the real pipeline and mails it.
 
 Rules, each a way a free report could cost more than it earns:
 
+- **Only while the site offers one.** The landing's ``TRIAL_OPEN`` switch is
+  read from the checkout this runs in (``free_reports_open``): with the button
+  hidden, a request posted straight to the form was still built and mailed
+  (pre-launch review SEC-06). The Worker refuses such a row too, unless its
+  own ``TRIAL_OPEN`` is set.
 - **One per address per season.** Keyed in the send log on a digest of the
   address, never the address itself (the log is committed).
+- **One per ROSTER per season, too** (pre-launch review, critique #3). The
+  per-address limit alone let the same roster be had every week from another
+  inbox — an alias, a Hide My Email address, a catch-all domain — which adds
+  up to the whole pass for free. A request whose roster shares at least
+  ROSTER_OVERLAP of its players (and ROSTER_OVERLAP_MIN_SHARED or more) with
+  a roster already given a free report this season, or with a subscriber's
+  roster, is refused. Served rosters are remembered as KEYED digests of each
+  player id (``run/digest.py``, beside the registry), never as a roster.
 - **Only a fresh request, made this season.** A request older than
   TRIAL_MAX_AGE, or received before the current season's first game, is
   never mailed. The Worker keeps rows ~400 days and the key is per season, so
@@ -70,6 +83,18 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# The landing page, whose TRIAL_OPEN switch shows the free-report button.
+LANDING = REPO_ROOT / "site" / "index.html"
+_TRIAL_FLAG = re.compile(r"^const TRIAL_OPEN = (true|false);", re.M)
+# The form kinds this run reads (run.intake.fetch_seats `kinds`).
+TRIAL_KINDS = ("trial",)
+# Beside the registry (gitignored, cached with it): the rosters already given
+# a free report, as keyed per-player digests only.
+TRIAL_ROSTERS_NAME = "trial-rosters.jsonl"
+ROSTER_OVERLAP = 0.8
+ROSTER_OVERLAP_MIN_SHARED = 5
+
 MAX_PER_RUN = 50
 TRIAL_DAILY_CAP = 40
 # A request is acted on within days or not at all: past this it is somebody
@@ -82,6 +107,10 @@ TRIAL_MAX_AGE = timedelta(days=14)
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
 # then the watchdog says so separately.
 TUESDAY_RELEASE_HOUR = 20
+# The same on a Saturday (UTC) for the final check (saturday.yml, 16:17 UTC),
+# which mails only subscribers who must change something: free reports and
+# seat notes are unpaid, and must not spend the day's allowance before it.
+SATURDAY_RELEASE_HOUR = 20
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # run/rosters.py's rule (D14)
 
 
@@ -94,6 +123,70 @@ def canonical_email(email: str) -> str:
     if domain in ("gmail.com", "googlemail.com"):
         local, domain = local.replace(".", ""), "gmail.com"
     return f"{local}@{domain}"
+
+
+def free_reports_open(landing: Path | None = None) -> bool:
+    """Whether the site offers the free report right now: the landing's ONE
+    ``const TRIAL_OPEN = true;`` (the switch its button is gated on). A page
+    that cannot be read, or that says it twice or not at all, is closed —
+    the failure that matters is mailing reports the site is not offering."""
+    try:
+        text = (landing or LANDING).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return _TRIAL_FLAG.findall(text) == ["true"]
+
+
+def roster_digests(season: str, player_ids) -> frozenset[str]:
+    """A roster as keyed one-way codes, one per player id, scoped to the
+    season: enough to measure overlap, never enough to rebuild a roster
+    without LOG_SECRET (run/digest.py)."""
+    from run.digest import keyed
+    return frozenset(keyed(f"trial-roster|{season}|{pid}", 16) for pid in player_ids)
+
+
+def too_close(a, b) -> bool:
+    """Two rosters (sets of ids or of digests) the same team for the
+    free-report limit: they share at least ROSTER_OVERLAP of the smaller one's
+    players, and at least ROSTER_OVERLAP_MIN_SHARED of them — the smaller
+    side, so pasting a subset of a served roster is the same roster too.
+    Pure."""
+    a, b = set(a), set(b)
+    shared = len(a & b)
+    smaller = min(len(a), len(b))
+    return (smaller > 0 and shared >= ROSTER_OVERLAP_MIN_SHARED
+            and shared >= ROSTER_OVERLAP * smaller)
+
+
+def served_rosters(path: Path, season: str) -> list[frozenset[str]]:
+    """This season's rosters already given a free report (their digests). A
+    torn line is skipped, never a reason to lose the rest."""
+    import json
+    if not path.is_file():
+        return []
+    out: list[frozenset[str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and str(entry.get("season")) == str(season) \
+                and isinstance(entry.get("players"), list):
+            out.append(frozenset(str(d) for d in entry["players"]))
+    return out
+
+
+def remember_rosters(path: Path, season: str, rosters) -> None:
+    """Append served rosters' digests (and nothing else) to ``path``."""
+    import json
+    rosters = [sorted(digests) for digests in rosters]
+    if not rosters:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        for digests in rosters:
+            handle.write(json.dumps({"season": str(season), "players": digests},
+                                    separators=(",", ":")) + "\n")
 
 
 def trial_key(season: str, email: str) -> str:
@@ -121,6 +214,18 @@ def held_for_tuesday(now: datetime, sent: set[str], season: str, week: int) -> b
     now = now.astimezone(timezone.utc)
     return (now.weekday() == 1 and now.hour < TUESDAY_RELEASE_HOUR
             and not tuesday_finished(sent, season, week))
+
+
+def held_for_subscribers(now: datetime, sent: set[str], season: str, week: int) -> bool:
+    """True while a paid run of today may still be mailing: Tuesday's reports
+    (``held_for_tuesday``) or Saturday's final check, until its run marker
+    (run/watchdog.run_key) is in the send log or SATURDAY_RELEASE_HOUR."""
+    from run.watchdog import SATURDAY, run_key
+    if held_for_tuesday(now, sent, season, week):
+        return True
+    now = now.astimezone(timezone.utc)
+    return (now.weekday() == 5 and now.hour < SATURDAY_RELEASE_HOUR
+            and run_key(SATURDAY, season, week) not in sent)
 
 
 def sent_today(entries, now: datetime) -> int:
@@ -224,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     from run.intake import IntakeError, fetch_seats
     try:
-        rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"))
+        rows = fetch_seats(endpoint, os.environ.get("FORM_API_KEY"), kinds=TRIAL_KINDS)
     except IntakeError as exc:
         print(f"Free reports: could not read the form backend ({exc}).",
               file=sys.stderr)
@@ -247,12 +352,22 @@ def main(argv: list[str] | None = None) -> int:
     if not pending(rows, set(), sent, season, since=since):
         print("Free reports: none pending.")
         return 0
+    if not free_reports_open():
+        # SEC-06: the button is hidden, so nobody was offered one. Waiting,
+        # not failing — the requests expire on their own (TRIAL_MAX_AGE).
+        print("Free reports: requests are waiting, but the site does not offer "
+              "the free report (site/index.html TRIAL_OPEN is not true) — none "
+              "built or sent.")
+        return 0
     prelaunch = not_configured(args.registry)
+    subscriber_rosters: list[set[str]] = []
     if prelaunch:
         registry_emails: set[str] = set()      # nobody can have paid yet
     else:
         try:
-            registry_emails = {s.email.lower() for s in load_rosters(args.registry)}
+            subscribers = load_rosters(args.registry)
+            registry_emails = {s.email.lower() for s in subscribers}
+            subscriber_rosters = [set(s.player_ids) for s in subscribers]
         except RosterRegistryError as exc:
             # Fail CLOSED: with the subscriber list unreadable, every
             # subscriber would read as eligible for a "free" report.
@@ -273,15 +388,30 @@ def main(argv: list[str] | None = None) -> int:
               f"they go out with the next week's build.")
         return 0
     # Before launch there are no subscriber reports to go first.
-    if not prelaunch and held_for_tuesday(now, sent, season, week):
-        print(f"Free reports: {len(todo)} waiting — subscribers' Tuesday reports "
-              f"go out first (until that run finishes, or "
-              f"{TUESDAY_RELEASE_HOUR}:00 UTC).")
+    if not prelaunch and held_for_subscribers(now, sent, season, week):
+        which = ("Tuesday reports go" if now.astimezone(timezone.utc).weekday() == 1
+                 else "Saturday check goes")
+        print(f"Free reports: {len(todo)} waiting — subscribers' {which} out "
+              f"first (until that run finishes, or {TUESDAY_RELEASE_HOUR}:00 UTC).")
         return 0
-    room = TRIAL_DAILY_CAP - sent_today(sent_entries(), now)
-    if room <= 0:
+    # Two ceilings: the free reports' own daily cap, and the day's whole
+    # sending allowance less a headroom kept for paid mail (run/intake.py
+    # DAY_HEADROOM, EMAIL_DAILY_HEADROOM on a paid plan). Without the second,
+    # 40 free reports plus the day's seat notes left Saturday's final check,
+    # welcomes and first reports about 40 of the free tier's 100.
+    from run.intake import day_headroom, sent_on
+    entries = sent_entries()
+    own_room = TRIAL_DAILY_CAP - sent_today(entries, now)
+    if own_room <= 0:
         print(f"Free reports: {len(todo)} waiting — today's {TRIAL_DAILY_CAP} "
               f"have gone out; the rest go tomorrow.")
+        return 0
+    room = min(own_room, day_headroom() - sent_on(entries, now))
+    if room <= 0:
+        print(f"Free reports: {len(todo)} waiting — today's allowance for unpaid "
+              f"mail is spent (nothing optional once the day's sends reach "
+              f"{day_headroom()}, which keeps room for paid mail); the rest go "
+              f"tomorrow.")
         return 0
     limit = min(MAX_PER_RUN, room)
 
@@ -311,12 +441,23 @@ def main(argv: list[str] | None = None) -> int:
               f"({exc}).")
         return 0
 
-    messages, failed, skipped = [], 0, []
+    from run.rosters import DEFAULT_ROSTERS
+    rosters_path = Path(args.registry or DEFAULT_ROSTERS).parent / TRIAL_ROSTERS_NAME
+    served = served_rosters(rosters_path, season)
+    digests_of: dict[str, frozenset[str]] = {}
+    messages, failed, skipped, refused = [], 0, [], 0
     known = {p.player_id for p in data.directory.players}
     for email, ref in todo:
         if len(messages) >= limit:
             break                       # the caps count BUILT reports only
         roster = decode_roster(ref)
+        digests = roster_digests(season, roster.player_ids)
+        if (any(too_close(digests, old) for old in served)
+                or any(too_close(roster.player_ids, held) for held in subscriber_rosters)):
+            # Critique #3: the same team from another inbox. Not mailed, not
+            # counted toward the caps; the address is never printed.
+            refused += 1
+            continue
         if any(pid not in known for pid in roster.player_ids):
             # A ref that decodes but names a player the directory has never
             # heard of: skipped and named, never a failed run.
@@ -331,6 +472,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  trial not built ({type(exc).__name__}: {exc})")
             continue
         report["meta"]["trial"] = True
+        # Held as served from the moment it is built, so a second request for
+        # the same roster in this run is refused too.
+        served.append(digests)
+        digests_of[trial_key(season, email)] = digests
         messages.append(Message(
             to=email, subject=f"Your free report: Week {data.week}, decided",
             html=render_email(report), text=text_summary(report),
@@ -342,12 +487,20 @@ def main(argv: list[str] | None = None) -> int:
     if skipped:
         print(f"Free reports: {len(skipped)} request(s) skipped as unbuildable "
               f"({', '.join(skipped[:5])}).")
+    if refused:
+        print(f"Free reports: {refused} request(s) refused — the roster is "
+              f"{int(ROSTER_OVERLAP * 100)}% or more one already given a free "
+              f"report this season, or a subscriber's.")
     if args.dry_run or provider is None:
         print(f"Free reports (dry run): {len(messages)} built.")
         return 0
     sends = send_all(messages, provider=provider)
     sent_now = sum(1 for s in sends if s.ok and not s.skipped)
     errors = [s for s in sends if not s.ok]
+    # Only what really went out is remembered; a failed send retries as new.
+    remember_rosters(rosters_path, season,
+                     [digests_of[s.message.key] for s in sends
+                      if s.ok and not s.skipped and s.message.key in digests_of])
     print(f"Free reports via {provider.name}: {sent_now} sent, {len(errors)} failed.")
     for result in errors:
         print(f"    TRIAL FAILED {result.message.key}: {result.detail}",

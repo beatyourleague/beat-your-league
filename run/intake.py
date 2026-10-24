@@ -35,10 +35,12 @@ operator's update for a change emailed in (``make roster-update``, both in
 run/updates.py), and moves the roster under the subscription's first slug.
 
 **League Pass seats** come from the form Worker and pay nothing, so they are
-validated harder than anything else here: a seat names its pass by the
-per-pass seat link's token or the payer's typed address, and is honoured
-only when that pass was really bought and its subscription is active now
-(``sweep_seats``, RULE E2). A claim is a request: the claimed address must
+validated harder than anything else here: a seat names its pass ONLY by the
+per-pass seat link's token (contract C3 — the typed-payer-address route let
+anyone who knew a buyer's address take the pass's seats, and its replies said
+whether that address had bought one), and is honoured only when that pass was
+really bought and its subscription is active now (``sweep_seats``, RULE E2).
+A claim is a request: the claimed address must
 confirm it by email before it becomes a seat, and a re-claim — a roster
 change — is confirmed the same way (OPS-R1). Confirmed seats live in the
 intake's own seat log, so their identity outlives the Worker's rows (OPS-R6).
@@ -50,6 +52,21 @@ confirmed, by the same rules as a purchase (LP-I4).
 **One roster, one report** (LP2-D1): an address holding two subscriptions
 for the same roster gets one row; the newer purchase's welcome says the other
 keeps billing until they cancel it. Nothing here ever cancels or refunds.
+
+**What is mailed, in what order, and how much** (pre-launch review APPSEC-1).
+The provider's free tier is 100 messages a day, shared with Tuesday's paid
+reports, and every seat note goes to an address a stranger can type into a
+public form. So the run sends what people PAID for first — welcomes, then
+first reports — then roster-update confirmations (only ever to a subscriber's
+own address), then seat confirmations (at most a pass's seat count a day per
+pass), and the unmatched/full/inactive notes last, under their own small
+daily cap. Every optional note is counted against one daily cap read from the
+send log, per-address allowances are counted per MAILBOX (``+tag`` and Gmail
+dots fold away), nothing optional goes out on a Tuesday before the subscriber
+run's marker, and none goes out at all once the day's total sends near the
+allowance. A cap that holds a note back, a welcome or first report that
+fails, a Worker read that fails, an open dispute and a bounced or complained
+paid email each make the run exit 1, so none of them is a green cron.
 """
 
 from __future__ import annotations
@@ -596,16 +613,30 @@ def unservable(signups: Iterable[RosterSignup],
 # League Pass seats — the one path with no payment behind it
 # --------------------------------------------------------------------- #
 
-def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
-    """Read seat claims from the form backend.
+def fetch_seats(endpoint: str, api_key: str | None = None,
+                kinds: Iterable[str] | None = None) -> list[dict]:
+    """Read rows from the form backend — every kind, or only ``kinds``.
 
     Deliberately one small function against a plain JSON endpoint: every hosted
     form vendor can produce one, and swapping vendors is this function rather
     than an architecture.
+
+    ``kinds`` asks the Worker for those kinds alone (``GET ?kinds=a,b``,
+    infra/form-worker.js): each kind is stored under its own key prefix, so a
+    flood of one kind — the waitlist is the one that keeps 400 days — never
+    makes the hourly intake or free-report run walk it (pre-launch review
+    APPSEC-3). The rows that come back are still filtered by kind by every
+    caller; the parameter bounds the read, it is not trusted as a filter.
     """
     import urllib.error
+    import urllib.parse
     import urllib.request
 
+    wanted = sorted({str(kind) for kind in kinds}) if kinds else []
+    if wanted:
+        joiner = "&" if "?" in endpoint else "?"
+        endpoint = (f"{endpoint}{joiner}kinds="
+                    f"{urllib.parse.quote(','.join(wanted), safe=',_')}")
     request = urllib.request.Request(endpoint, method="GET")
     if api_key:
         request.add_header("Authorization", f"Bearer {api_key}")
@@ -642,6 +673,10 @@ def fetch_seats(endpoint: str, api_key: str | None = None) -> list[dict]:
             f"seat backend returned {type(payload).__name__}, not a row list")
     return [row for row in rows if isinstance(row, dict)]
 
+
+# The form kinds this run reads (fetch_seats `kinds`): never the waitlist or
+# free-report rows, which other runners read and a flood would fill.
+INTAKE_KINDS = ("seat", "update", "update_request", "confirm")
 
 _SEAT_TOKEN = re.compile(r"^[0-9a-f]{20}$")
 # The intake's own record of every CONFIRMED seat claim, append-only beside
@@ -827,6 +862,20 @@ class SeatSweep:
     # Seat-link claims are arriving and not one matches a pass: a rotated or
     # missing signing secret, not a run of typos (OPS-R10). Exits non-zero.
     links_dead: bool = False
+    # Claims that named their pass by a typed payer address instead of the
+    # pass's own link (contract C3): never honoured and never answered.
+    typed_payer: int = 0
+    # Seats released, and claims through a pass's OLD link ignored, because the
+    # buyer asked for a reset (run/seat_resets.py, APPSEC-2): neither is told.
+    reset_released: int = 0
+    reset_stale: int = 0
+    # Confirmation codes held back THIS RUN because more mailboxes than one
+    # pass has seats were already sent a code for it today (APPSEC-1). Set by
+    # the send stage (``per_pass_allowance``), which reads the send log; a
+    # held code goes out on a later day's run.
+    held_per_pass: int = 0
+    # pass_id -> seats it carries, for the send stage's per-pass allowance.
+    seat_caps: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -841,30 +890,45 @@ class _Claim:
 
 def _match_claims(rows: Iterable[Mapping], passes: list[PassInfo], keys: list[str],
                   known_ids: set[str] | None, season_from: datetime | None,
-                  out: SeatSweep) -> tuple[list[_Claim], set[str], list[Mapping], int]:
+                  out: SeatSweep, resets: Mapping[str, list[str]] | None = None,
+                  ) -> tuple[list[_Claim], set[str], list[Mapping], int]:
     """Each well-formed claim of this season -> the pass it names, or an
     unmatched row. -> (claims, addresses that matched, seat-link rows, how
-    many seat-link rows matched). Problems are written onto ``out``."""
-    by_token = {seat_token(p.payer, key, p.pass_id): p for p in passes for key in keys}
-    by_payer: dict[str, list[PassInfo]] = {}
-    for p in passes:
-        by_payer.setdefault(p.payer, []).append(p)
+    many seat-link rows matched). Problems are written onto ``out``.
+    ``resets``: pass id -> its seat resets' stamps, oldest first
+    (run/seat_resets.py); a reset pass is matched only by its NEWEST link, and
+    claims through any older one are counted (``reset_stale``) and never
+    answered."""
+    resets = resets or {}
+    by_token = {seat_token(p.payer, key, p.pass_id, (resets.get(p.pass_id) or [""])[-1]): p
+                for p in passes for key in keys}
+    stale = {seat_token(p.payer, key, p.pass_id, nonce) for p in passes for key in keys
+             if resets.get(p.pass_id) for nonce in ["", *resets[p.pass_id][:-1]]}
     claims: list[_Claim] = []
     matched: set[str] = set()
     token_rows: list[Mapping] = []
     token_hits = 0
     for row in sorted(rows, key=lambda r: _received(r) or _EPOCH):
         email = str(row.get("email") or "").strip().lower()
-        typed = str(row.get("covered_by") or "").strip().lower()
         token = str(row.get("pass_token") or "").strip().lower()
         ref = str(row.get("ref") or "").strip()
         # Validated to run/rosters.py's own standard HERE, because this endpoint
         # is public and the registry loader fails the WHOLE file on one bad row.
         # Accepting "not an email" would let any stranger stop every
         # subscriber's Tuesday.
-        named = _SEAT_TOKEN.match(token) or _EMAIL_RE.match(typed)
-        if not _EMAIL_RE.match(email) or not named:
+        if not _EMAIL_RE.match(email):
             out.problems.append("a seat claim arrived with unusable addresses")
+            continue
+        if not _SEAT_TOKEN.match(token):
+            # CONTRACT C3: a seat comes only through its pass's own signed link.
+            # The typed-address route (`covered_by`) let anyone who knew a
+            # League Pass buyer's address take every seat on the pass, and the
+            # replies — a confirmation for a buyer, a "no pass" note for anyone
+            # else — told a stranger whether an address had bought one
+            # (APPSEC-2, reproduced). Such a claim is NOT honoured and NOT
+            # answered: any email back would rebuild the oracle. The Worker no
+            # longer stores the field; a row like this is from before that.
+            out.typed_payer += 1
             continue
         at = _received(row)
         if season_from is not None and at is not None and at < season_from:
@@ -876,25 +940,18 @@ def _match_claims(rows: Iterable[Mapping], passes: list[PassInfo], keys: list[st
             out.problems.append(f"seat claim from {_no_email(email)} carries an "
                                 f"unreadable roster ({exc})")
             continue
-        if _SEAT_TOKEN.match(token):
-            token_rows.append(row)
-            found = by_token.get(token)
-            token_hits += found is not None
-        else:
-            options = by_payer.get(typed, [])
-            found = options[0] if len(options) == 1 else None
-            if len(options) > 1:
-                out.problems.append(
-                    f"seat claim from {_no_email(email)} names a payer with "
-                    f"{len(options)} League Passes — only a league's own seat "
-                    f"link can say which")
+        if token in stale and token not in by_token:
+            # The link the buyer asked us to retire. Answered, it would tell
+            # whoever holds it that it was once good.
+            out.reset_stale += 1
+            continue
+        token_rows.append(row)
+        found = by_token.get(token)
+        token_hits += found is not None
         if found is None:
             out.problems.append(
-                f"seat claim from {_no_email(email)} "
-                + ("carries a seat link that matches no League Pass"
-                   if _SEAT_TOKEN.match(token) else
-                   "names a payer with no League Pass")
-                + " — not honoured")
+                f"seat claim from {_no_email(email)} carries a seat link that "
+                f"matches no League Pass — not honoured")
             out.unmatched.append(dict(row))
             continue
         matched.add(email)
@@ -967,20 +1024,29 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                 confirm_codes: Iterable[str | Mapping] = (),
                 log: Iterable[SeatEntry] = (), now: datetime | None = None,
                 season_from: datetime | None = None,
-                stopped: "Callable[[str], bool] | None" = None) -> SeatSweep:
+                stopped: "Callable[[str], bool] | None" = None,
+                resets: Mapping[str, "str | list[str]"] | None = None) -> SeatSweep:
     """Seat claims and the seat log -> registry rows, confirmations to send,
     and claims newly confirmed. Pure: everything it reads is an argument.
+
+    ``resets`` (pass id -> its seat resets' stamps, oldest first, or the one
+    stamp; run/seat_resets.py) is the BUYER's control (APPSEC-2): a reset pass is
+    claimed only through its new link, and every seat on it claimed before
+    the reset is released (``reset_released``) — the leaguemates the buyer
+    wants claim again, the rest are gone, and nobody is told.
 
     ``passes`` are the League Passes actually bought (``pass_infos``), built
     from sessions whose own `payment_link` was the pass link — never from what
     a seat claims. The seat form is public by necessity, so without that check
     it is a free-report generator for anyone who finds the URL.
 
-    A claim names its pass one of two ways. The per-pass seat link (contract
-    C4) carries ``pass_token``, recomputed here under every signing secret
+    A claim names its pass ONE way: the per-pass seat link (contracts C3/C4)
+    carries ``pass_token``, recomputed here under every signing secret
     (``run.updates.signing_secrets``) and never trusted from the row. The older
-    route has the leaguemate type the payer's address as ``covered_by``, which
-    names a pass only when that address bought exactly one.
+    route — the leaguemate typing the payer's address as ``covered_by`` — is
+    closed: it let anyone who knew a buyer's address take the pass's seats,
+    and its replies told a stranger whether an address had bought a pass
+    (APPSEC-2). Such a claim is counted (``typed_payer``) and nothing else.
 
     **A claim is a REQUEST, never a seat (OPS-R1).** The seat link rides on
     every pass report, written to be forwarded, so it proves nothing about who
@@ -1022,14 +1088,22 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     out = SeatSweep()
     passes = list(passes)
     by_id = {p.pass_id: p for p in passes}
+    from run.seat_resets import reset_time
+    resets = {pass_id: ([stamps] if isinstance(stamps, str) else sorted(stamps))
+              for pass_id, stamps in (resets or {}).items() if stamps}
+    reset_at = {pass_id: when for pass_id, stamps in resets.items()
+                if (when := reset_time(stamps[-1])) is not None}
     claims, matched, token_rows, token_hits = _match_claims(
-        rows, passes, keys, known_ids, season_from, out)
+        rows, passes, keys, known_ids, season_from, out, resets)
 
     # The log, this season's part of it, plus whatever came back confirmed now.
     entries: list[SeatEntry] = []
     for entry in log:
         if season_from is not None and (entry.at or _EPOCH) < season_from:
             out.retired += 1
+            continue
+        if entry.pass_id in reset_at and (entry.at or _EPOCH) < reset_at[entry.pass_id]:
+            out.reset_released += 1
             continue
         if stopped is not None and stopped(entry.email):
             out.released += 1
@@ -1156,15 +1230,23 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
     if unsigned:
         out.problems.append(f"{unsigned} seat claim(s) cannot be confirmed: "
                             f"UPDATE_SECRET is not set")
-    # At most CONFIRMS_PER_DAY codes reach one address a day (by the Worker's
+    # At most CONFIRMS_PER_DAY codes reach one MAILBOX a day (by the Worker's
     # date): the form is public, so a stranger can annoy an inbox a little and
-    # never flood it.
+    # never flood it. Counted per canonical mailbox (APPSEC-1): bucketed on the
+    # raw address, victim+1@…, victim+2@… were 150 buckets for one inbox. The
+    # per-PASS allowance (a pass's seat count of mailboxes a day) is applied
+    # where codes are SENT, against the send log (``per_pass_allowance``):
+    # counted here, on the claim's own date, a held claim stayed held on every
+    # later run until it expired (pre-launch review).
+    from run.trials import canonical_email
     per_day: dict[tuple[str, str], int] = {}
     for request in sorted(pending, key=lambda r: r.ts):
-        bucket = (request.email, request.ts[:10])
+        bucket = (canonical_email(request.email), request.ts[:10])
         per_day[bucket] = per_day.get(bucket, 0) + 1
-        if per_day[bucket] <= CONFIRMS_PER_DAY:
-            out.awaiting.append(request)
+        if per_day[bucket] > CONFIRMS_PER_DAY:
+            continue
+        out.awaiting.append(request)
+    out.seat_caps = {p.pass_id: p.seat_cap for p in passes}
 
     # OPS-R9: an address whose claim DID match a pass is never also told its
     # other claim matched nothing — a typo'd first try and a matched second
@@ -1294,30 +1376,34 @@ def unmatched_key(row: Mapping) -> str:
 
 def unmatched_due(unmatched: Iterable[Mapping], now: datetime) -> list[Mapping]:
     """The unmatched claims to tell, oldest first: past the grace period,
-    within the age limit, at most UNMATCHED_PER_DAY per address per Worker
-    date. A claim with no readable Worker stamp cannot be shown to be fresh,
-    so it is not mailed. Pure."""
+    within the age limit, at most UNMATCHED_PER_DAY per MAILBOX (canonical:
+    ``+tag`` and Gmail dots fold away, APPSEC-1) per Worker date. A claim
+    with no readable Worker stamp cannot be shown to be fresh, so it is not
+    mailed. Pure."""
     due: list[tuple[datetime, Mapping]] = []
     for row in unmatched:
         at = _received(row)
         if at is None or not (UNMATCHED_GRACE <= now - at <= UNMATCHED_MAX_AGE):
             continue
         due.append((at, row))
+    from run.trials import canonical_email
     per_day: dict[tuple[str, str], int] = {}
     out: list[Mapping] = []
     for at, row in sorted(due, key=lambda item: item[0]):
-        bucket = (str(row.get("email") or "").strip().lower(), at.date().isoformat())
+        bucket = (canonical_email(str(row.get("email") or "")), at.date().isoformat())
         per_day[bucket] = per_day.get(bucket, 0) + 1
         if per_day[bucket] <= UNMATCHED_PER_DAY:
             out.append(row)
     return out
 
 
-def _send_unmatched_notes(unmatched: list[Mapping], now: datetime) -> None:
-    """One note per unmatched claim, idempotent through the send log."""
-    due = unmatched_due(unmatched, now)
+def _unmatched_messages(unmatched: list[Mapping], now: datetime) -> list:
+    """One note per unmatched claim that is due, keyed so it is sent once —
+    never one that arrived inside a flood (``in_flood``)."""
+    flood = in_flood(unmatched)
+    due = [row for row in unmatched_due(unmatched, now) if id(row) not in flood]
     if not due:
-        return
+        return []
     from render.report import seat_stop_href
     from render.seat_claim import inactive_email, unmatched_email
     from run.delivery import Message
@@ -1329,19 +1415,19 @@ def _send_unmatched_notes(unmatched: list[Mapping], now: datetime) -> None:
                                 subject=subject, html=html, text=text,
                                 key=unmatched_key(row),
                                 unsubscribe=seat_stop_href()))
-    _send_notes("Unmatched seat claims", messages)
+    return messages
 
 
-def _send_notes(what: str, messages: list) -> None:
+def _send_notes(what: str, messages: list) -> int:
     """Send a batch of seat notes through the idempotent delivery layer, or
-    say they are pending when no provider is configured."""
+    say they are pending when no provider is configured. -> failures."""
     if not messages:
-        return
+        return 0
     provider = build_provider(None)
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
         print(f"{what}: {len(messages)} note(s) pending — "
               f"EMAIL_PROVIDER is not set, so none were sent.")
-        return
+        return 0
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
@@ -1350,6 +1436,7 @@ def _send_notes(what: str, messages: list) -> None:
     for result in failures:
         print(f"    SEAT NOTE FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
+    return len(failures)
 
 
 # A pass whose league's seats are all taken (OPS-R7) tells the claimer so,
@@ -1366,21 +1453,22 @@ def full_key(row: Mapping) -> str:
 
 def full_due(full: Iterable[Mapping], now: datetime) -> list[Mapping]:
     """The full-pass notes to send: within UNMATCHED_MAX_AGE of the claim, at
-    most UNMATCHED_PER_DAY per address per Worker date. Pure."""
+    most UNMATCHED_PER_DAY per MAILBOX per Worker date. Pure."""
+    from run.trials import canonical_email
     per_day: dict[tuple[str, str], int] = {}
     out: list[Mapping] = []
     for row in sorted(full, key=lambda r: _received(r) or _EPOCH):
         at = _received(row)
         if at is None or now - at > UNMATCHED_MAX_AGE:
             continue
-        bucket = (str(row.get("email") or "").strip().lower(), at.date().isoformat())
+        bucket = (canonical_email(str(row.get("email") or "")), at.date().isoformat())
         per_day[bucket] = per_day.get(bucket, 0) + 1
         if per_day[bucket] <= UNMATCHED_PER_DAY:
             out.append(row)
     return out
 
 
-def _send_full_notes(full: list[Mapping], now: datetime) -> None:
+def _full_messages(full: list[Mapping], now: datetime) -> list:
     from render.report import seat_stop_href
     from render.seat_claim import full_email
     from run.delivery import Message
@@ -1390,7 +1478,7 @@ def _send_full_notes(full: list[Mapping], now: datetime) -> None:
         messages.append(Message(to=str(row.get("email")).strip().lower(),
                                 subject=subject, html=html, text=text,
                                 key=full_key(row), unsubscribe=seat_stop_href()))
-    _send_notes("Full League Pass claims", messages)
+    return messages
 
 
 def seat_confirmation_key(request: PendingSeat) -> str:
@@ -1400,11 +1488,60 @@ def seat_confirmation_key(request: PendingSeat) -> str:
             f"{hashlib.sha256(request.code.encode('utf-8')).hexdigest()[:10]}")
 
 
-def _send_seat_confirmations(awaiting: list[PendingSeat], data) -> None:
+def per_pass_allowance(awaiting: list[PendingSeat], caps: Mapping[str, int],
+                       entries: Iterable[Mapping], now: datetime
+                       ) -> tuple[list[PendingSeat], int]:
+    """The confirmations this run may send under the per-pass allowance, and
+    how many it holds. A pass's codes reach at most its seat count of distinct
+    MAILBOXES a UTC day, counted from the codes the send log shows went out
+    TODAY (a held claim is mailed on a later day's run, never stranded): a
+    real league is bounded by its own size, so anything past that is somebody
+    spending the day's sending allowance through one forwarded link
+    (APPSEC-1). A mailbox already sent a code today for the pass costs no
+    extra slot — a corrected resubmission is not a thirteenth leaguemate.
+    Codes the log already holds pass through (delivery skips them). Pure."""
+    from run.trials import canonical_email
+    entries = list(entries)
+    sent = {str(entry.get("key") or "") for entry in entries}
+    day = now.astimezone(timezone.utc).date()
+    today: set[str] = set()
+    for entry in entries:
+        key = str(entry.get("key") or "")
+        if not key.startswith("seat-confirm-"):
+            continue
+        try:
+            at = datetime.fromisoformat(str(entry.get("sent_at") or ""))
+            at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+            when = at.astimezone(timezone.utc).date()
+        except ValueError:
+            when = day                     # unreadable: counts, never frees a slot
+        if when == day:
+            today.add(key)
+    boxes: dict[str, set[str]] = {}
+    for request in awaiting:
+        if seat_confirmation_key(request) in today:
+            boxes.setdefault(request.pass_id, set()).add(canonical_email(request.email))
+    allowed: list[PendingSeat] = []
+    held = 0
+    for request in sorted(awaiting, key=lambda r: r.ts):
+        if seat_confirmation_key(request) in sent:
+            allowed.append(request)
+            continue
+        box = canonical_email(request.email)
+        seen = boxes.setdefault(request.pass_id, set())
+        if box in seen or len(seen) < max(1, int(caps.get(request.pass_id, 1) or 1)):
+            seen.add(box)
+            allowed.append(request)
+        else:
+            held += 1
+    return allowed, held
+
+
+def _seat_confirmation_messages(awaiting: list[PendingSeat], data) -> list:
     """One confirmation per claim, ever, to the CLAIMED address only — the
     one inbox that can turn the claim into a seat (OPS-R1)."""
     if not awaiting:
-        return
+        return []
     from render.report import seat_stop_href
     from render.seat_claim import confirm_email
     from run.delivery import Message
@@ -1413,7 +1550,7 @@ def _send_seat_confirmations(awaiting: list[PendingSeat], data) -> None:
     if not site:
         print(f"Seat confirmations: {len(awaiting)} pending — SITE_URL is not "
               f"set, so none were sent.")
-        return
+        return []
     names = getattr(data, "players", None) if data is not None else None
     messages = []
     for request in awaiting:
@@ -1424,7 +1561,184 @@ def _send_seat_confirmations(awaiting: list[PendingSeat], data) -> None:
         messages.append(Message(to=request.email, subject=subject, html=html,
                                 text=text, key=seat_confirmation_key(request),
                                 unsubscribe=seat_stop_href()))
-    _send_notes("Seat confirmations", messages)
+    return messages
+
+
+# --------------------------------------------------------------------- #
+# the day's allowance (pre-launch review APPSEC-1)
+# --------------------------------------------------------------------- #
+#
+# Reproduced end to end: 150 forged seat claims through the real Worker and
+# the real intake, against a provider standing in for Resend's free tier
+# (100 a day). The run sent the buyer's welcome, then 99 "no pass" notes to
+# ONE inbox (victim+N@gmail.com), and then REFUSED the buyer's first report —
+# exit 0, green cron. Every seat note goes to an address a stranger can type,
+# so they are capped as a group, counted from the send log the way the free
+# reports already are (run/trials.py TRIAL_DAILY_CAP), and sent only after
+# everything somebody paid for.
+#
+# - SEAT_NOTES_DAILY_CAP: all seat mail to addresses that are not seats yet
+#   (confirmations, no-pass, pass-full, pass-inactive), per UTC day.
+# - STRAY_NOTES_DAILY_CAP: of those, the notes that answer a claim matching
+#   nothing usable — the ones a stranger can trigger without any link. They
+#   go last, so they can never starve a real leaguemate's confirmation.
+# - DAY_HEADROOM: once the day's total sends (every key) reach this, no
+#   optional note goes out at all; what is left belongs to paid reports. Sized
+#   for the provider's free 100 a day; on a paid plan set EMAIL_DAILY_HEADROOM
+#   (an integer) so a big Tuesday does not hold every seat note to tomorrow.
+# - UNMATCHED_FLOOD: more than this many unmatched claims within 24 hours of
+#   each other is a flood, not a week of typos. None of those claims is ever
+#   answered (later runs included — a backlog trickled out at the daily cap
+#   would still be a thousand notes to addresses nobody asked to mail), and
+#   while one is under way the run goes red.
+# Anything a cap holds back is NOT logged, so it goes out on a later run, and
+# the run exits 1 while it waits: a held note is never a green cron.
+
+SEAT_NOTE_PREFIXES = ("seat-confirm-", "seat-unmatched-", "seat-full-")
+STRAY_NOTE_PREFIXES = ("seat-unmatched-", "seat-full-")
+SEAT_NOTES_DAILY_CAP = 30
+STRAY_NOTES_DAILY_CAP = 10
+DAY_HEADROOM = 60
+
+
+def day_headroom() -> int:
+    """DAY_HEADROOM, or EMAIL_DAILY_HEADROOM when that is a whole number."""
+    raw = os.environ.get("EMAIL_DAILY_HEADROOM", "").strip()
+    return int(raw) if raw.isdigit() else DAY_HEADROOM
+UNMATCHED_FLOOD = 20
+
+
+def sent_on(entries: Iterable[Mapping], now: datetime,
+            prefixes: tuple[str, ...] | None = None) -> int:
+    """Sends the log records on ``now``'s UTC date — every key, or only those
+    starting with one of ``prefixes``. An unreadable stamp counts (never
+    frees a slot), as in run/trials.sent_today. Pure."""
+    day = now.astimezone(timezone.utc).date()
+    count = 0
+    for entry in entries:
+        key = str(entry.get("key") or "")
+        if prefixes is not None and not key.startswith(prefixes):
+            continue
+        try:
+            at = datetime.fromisoformat(str(entry.get("sent_at") or ""))
+        except ValueError:
+            count += 1
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if at.astimezone(timezone.utc).date() == day:
+            count += 1
+    return count
+
+
+def flooded(unmatched: Iterable[Mapping], now: datetime) -> bool:
+    """More than UNMATCHED_FLOOD unmatched claims stamped in the last 24
+    hours: a flood under way. Pure."""
+    recent = [row for row in unmatched
+              if (at := _received(row)) is not None
+              and timedelta(0) <= now - at <= timedelta(hours=24)]
+    return len(recent) > UNMATCHED_FLOOD
+
+
+def in_flood(unmatched: Iterable[Mapping]) -> set[int]:
+    """``id()`` of every unmatched claim with more than UNMATCHED_FLOOD
+    unmatched claims (itself included) stamped within 24 hours either side of
+    it. Judged on the Worker's stamps alone, so every run agrees. Pure."""
+    import bisect
+    rows = [(at, row) for row in unmatched if (at := _received(row)) is not None]
+    stamps = sorted(at for at, _row in rows)
+    window = timedelta(hours=24)
+    out: set[int] = set()
+    for at, row in rows:
+        near = (bisect.bisect_right(stamps, at + window)
+                - bisect.bisect_left(stamps, at - window))
+        if near > UNMATCHED_FLOOD:
+            out.add(id(row))
+    return out
+
+
+@dataclass
+class NotePlan:
+    """What the day's allowance lets out this run, and what it holds."""
+
+    confirmations: list = field(default_factory=list)
+    strays: list = field(default_factory=list)
+    held: int = 0
+    reason: str = ""
+
+
+def plan_notes(confirmations: list, strays: list, entries: list[Mapping],
+               now: datetime) -> NotePlan:
+    """Budget this run's seat notes against the day's send log: the
+    confirmations first, the stray notes after, all inside DAY_HEADROOM and
+    SEAT_NOTES_DAILY_CAP, the strays inside STRAY_NOTES_DAILY_CAP too.
+    Messages the log already holds cost nothing (delivery skips them). Pure."""
+    sent = {str(entry.get("key") or "") for entry in entries}
+    confirmations = [m for m in confirmations if m.key not in sent]
+    strays = [m for m in strays if m.key not in sent]
+    plan = NotePlan()
+    total = sent_on(entries, now)
+    headroom = day_headroom()
+    room = min(headroom - total,
+               SEAT_NOTES_DAILY_CAP - sent_on(entries, now, SEAT_NOTE_PREFIXES))
+    room = max(0, room)
+    plan.confirmations = confirmations[:room]
+    room -= len(plan.confirmations)
+    stray_room = max(0, min(room, STRAY_NOTES_DAILY_CAP
+                            - sent_on(entries, now, STRAY_NOTE_PREFIXES)))
+    plan.strays = strays[:stray_room]
+    capped = (len(confirmations) - len(plan.confirmations)
+              + len(strays) - len(plan.strays))
+    if capped:
+        plan.held = capped
+        plan.reason = ("the day's sends are near the provider allowance"
+                       if total >= headroom else "today's cap on seat notes is reached")
+    return plan
+
+
+def _send_seat_notes(seats: "SeatSweep", data, now: datetime, season: str) -> bool:
+    """Every seat note this run owes, inside the day's allowance and after
+    everything paid for. -> True when something was held back by a cap or a
+    flood, or failed (the run then exits 1)."""
+    from run.trials import held_for_subscribers
+    entries = _sent_entries()
+    awaiting, seats.held_per_pass = per_pass_allowance(
+        seats.awaiting, seats.seat_caps, entries, now)
+    if seats.held_per_pass:
+        print(f"SEAT CONFIRMATIONS HELD: {seats.held_per_pass} code(s) not sent this "
+              f"run — more mailboxes than a League Pass has seats were already sent "
+              f"a code for it today. They go out on a later day's run; exiting "
+              f"non-zero.", file=sys.stderr)
+    confirmations = _seat_confirmation_messages(awaiting, data)
+    strays = [*_unmatched_messages(seats.unmatched, now),
+              *_full_messages(seats.full, now)]
+    flood = flooded(seats.unmatched, now)
+    if flood:
+        print(f"SEAT CLAIM FLOOD: more than {UNMATCHED_FLOOD} claims matching no "
+              f"League Pass arrived in the last 24 hours. None of them is "
+              f"answered, now or later. Exiting non-zero; if it goes on, add "
+              f"the rate-limiting rule on the form Worker (LAUNCH.md step 5).",
+              file=sys.stderr)
+    held_pass = bool(seats.held_per_pass)
+    if not confirmations and not strays:
+        return flood or held_pass
+    week = getattr(data, "week", None) if data is not None else None
+    if isinstance(week, int) and held_for_subscribers(
+            now, {str(e.get("key") or "") for e in entries}, season, week):
+        # Nothing optional before the subscribers' Tuesday reports or the
+        # Saturday check are out (the free reports' rule, run/trials.py):
+        # waiting, not failing.
+        print(f"Seat notes: {len(confirmations) + len(strays)} waiting — "
+              f"subscribers' mail goes out first.")
+        return flood or held_pass
+    plan = plan_notes(confirmations, strays, entries, now)
+    failed = _send_notes("Seat confirmations", plan.confirmations)
+    failed += _send_notes("Seat claims told no seat", plan.strays)
+    if plan.held:
+        print(f"SEAT NOTES HELD: {plan.held} note(s) not sent this run — "
+              f"{plan.reason}. They go out on a later run; exiting non-zero so "
+              f"this is not a green cron.", file=sys.stderr)
+    return bool(plan.held or failed or flood or held_pass)
 
 
 def registry_plan(purchase: str) -> tuple[str, str | None]:
@@ -1543,8 +1857,9 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
 def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
                    season: str,
                    duplicates: Mapping[tuple[str, str], str] | None = None,
-                   season_over: bool = False) -> None:
-    """One acknowledgment per subscription, idempotent forever.
+                   season_over: bool = False) -> int:
+    """One acknowledgment per subscription, idempotent forever. -> how many
+    failed to send (each retries next run; the run exits 1 meanwhile).
 
     Built from the SIGNUPS rather than the registry rows, because the registry
     deliberately flattens a League Pass payer to a season row — and the renewal
@@ -1563,7 +1878,7 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
     messages = [_welcome(s, season, (duplicates or {}).get(s.key), season_over)
                 for s in [*servable, *seats]]
     if not messages:
-        return
+        return 0
 
     provider = build_provider(None)
     implicit_dry = (provider.name == DRY_PROVIDER
@@ -1572,7 +1887,7 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
         print(f"Welcomes: {len(messages)} pending — EMAIL_PROVIDER is not set, "
               f"so none were sent and none were recorded. They send on the "
               f"first configured run; nobody is welcomed twice.")
-        return
+        return 0
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
@@ -1583,6 +1898,7 @@ def _send_welcomes(servable: list[RosterSignup], seats: list[RosterSignup],
         # Retries next run: only successes reach the sent log.
         print(f"    WELCOME FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
+    return len(failures)
 
 
 def _on_file(request: PendingRequest, rows: Iterable[Mapping]) -> Mapping | None:
@@ -1597,7 +1913,7 @@ def _on_file(request: PendingRequest, rows: Iterable[Mapping]) -> Mapping | None
 
 
 def _send_confirmations(awaiting: list[PendingRequest], data,
-                        on_file: Iterable[Mapping] = ()) -> None:
+                        on_file: Iterable[Mapping] = ()) -> int:
     """One confirmation per request, ever, to the address on the subscription
     only. The per-address daily allowance is applied where requests are
     validated (run/updates.py), so what arrives here is already bounded; the
@@ -1608,7 +1924,7 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
     email prints the settings the change applies, a moved one as old → new
     (FUNNEL F1 — an update replaces the scoring, size and lineup on file)."""
     if not awaiting:
-        return
+        return 0
     from render.roster_update import confirm_email
     from run.delivery import Message
 
@@ -1617,7 +1933,7 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
     if not site or not secret:
         print(f"Roster confirmations: {len(awaiting)} pending — SITE_URL or "
               f"UPDATE_SECRET is not set, so none were sent.")
-        return
+        return 0
     names = getattr(data, "players", None) if data is not None else None
     rows = list(on_file)
     messages = []
@@ -1634,7 +1950,7 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
         print(f"Roster confirmations: {len(messages)} pending — EMAIL_PROVIDER "
               f"is not set, so none were sent.")
-        return
+        return 0
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
@@ -1643,6 +1959,7 @@ def _send_confirmations(awaiting: list[PendingRequest], data,
     for result in failures:
         print(f"    CONFIRMATION FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
+    return len(failures)
 
 
 def _served_since_purchase(signup, entries: list[dict]) -> bool:
@@ -1773,8 +2090,10 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 def _send_first_files(servable: list[RosterSignup], data, season: str,
                       processed_dir=None, first_plans: Path | None = None,
                       out_dir: Path | None = None,
-                      seat_counts: Mapping[str, int] | None = None) -> None:
-    """The file they get for paying, on the day they pay.
+                      seat_counts: Mapping[str, int] | None = None) -> int:
+    """The file they get for paying, on the day they pay. -> how many paid
+    signups this run could not build or send one for (pre-launch review
+    APPSEC-1: a quota-starved buyer's refused first report used to exit 0).
 
     The weekly product cannot say anything until box scores exist, so a buyer
     who signed up in draft season used to hold nothing for up to a fortnight.
@@ -1810,7 +2129,7 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     entries = _sent_entries()
     servable = [s for s in servable if not _served_since_purchase(s, entries)]
     if not servable:
-        return
+        return 0
     if data is None:
         # Two very different states shared one silent return. Nobody to send to
         # is nothing to say; a paid signup we could not build a file for is the
@@ -1821,13 +2140,13 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
         print(f"First files: skipped for {len(servable)} paid signup(s) — this "
               f"week's data could not be loaded. They send on the next run.",
               file=sys.stderr)
-        return
+        return 0
     try:
         byes = bye_by_team(CACHE_DIR, season)
     except Exception as exc:  # noqa: BLE001
         print(f"First files: skipped, the {season} schedule could not be read "
               f"({exc})", file=sys.stderr)
-        return
+        return 0
 
     # Decided BEFORE anything is built, because it decides whether a week's
     # report built here may ever enter the public record.
@@ -1835,6 +2154,7 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     sending = not (provider.name == DRY_PROVIDER)
     sent = {str(entry.get("key") or "") for entry in entries}
     messages, plans, weeklies = [], {}, []
+    unbuilt = 0
     for signup in servable:
         try:
             weekly = _first_file(signup, data, season, processed_dir, record=sending,
@@ -1865,15 +2185,19 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
                 signup.email, signup.slug, report,
                 purchased_at=str(signup.seen_at or ""), **extra))
         except Exception as exc:  # noqa: BLE001 — batch contract
+            # Counted only when something is really being delivered: a dry
+            # preview builds nothing anybody receives (and the registry, not
+            # the mail, is this run's contract without a provider).
+            unbuilt += int(sending)
             print(f"    FIRST FILE FAILED for {signup.slug}: {exc!r}",
                   file=sys.stderr)
     if not messages:
-        return
+        return unbuilt
 
     if provider.name == DRY_PROVIDER and not os.environ.get("EMAIL_PROVIDER"):
         print(f"First files: {len(messages)} pending — EMAIL_PROVIDER is not "
               f"set, so none were sent and none were recorded.")
-        return
+        return unbuilt
     sends = send_all(messages, provider=provider)
     delivered = [r for r in sends if r.ok and not r.skipped]
     failures = [r for r in sends if not r.ok]
@@ -1909,6 +2233,7 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     for result in failures:
         print(f"    FIRST FILE SEND FAILED {result.message.key}: {result.detail}",
               file=sys.stderr)
+    return unbuilt + len(failures)
 
 
 def _updated_refs(registry_dir: Path) -> dict[tuple[str, str], str]:
@@ -1952,6 +2277,90 @@ def _live_passes(signups: Iterable[RosterSignup], api_key: str) -> list[PassInfo
     from run.subscriptions import load_paid_from_stripe
     paid = load_paid_from_stripe(api_key)
     return pass_infos(passes, paid.subscription_ids or ())
+
+
+def dispute_alarm(api_key: str) -> bool:
+    """Report every open chargeback, loudly. -> True when one is waiting on
+    OUR evidence (lost by default when Stripe's deadline passes), which makes
+    the run exit 1 until it is answered (pre-launch review, critique #2). A
+    lost dispute is not reported here: it already ended entitlement like a
+    full refund (run/subscriptions.py). A Stripe read failure is a note,
+    never a failure — the passes check above refuses on its own."""
+    if not api_key:
+        return False
+    from run.subscriptions import DISPUTE_ACTION, load_paid_from_stripe
+    try:
+        paid = load_paid_from_stripe(api_key)
+    except SubscriptionError as exc:
+        print(f"Disputes: could not be checked this run ({exc}).", file=sys.stderr)
+        return False
+    for problem in tuple(getattr(paid, "dispute_errors", ()) or ()):
+        # A warning, not a failure: entitlement was read without it. Every
+        # disputed charge it could not place is listed below as "unknown".
+        print(f"Disputes: a disputed charge's status could not be read "
+              f"({problem}). Give the cron key Disputes: Read (LAUNCH.md).",
+              file=sys.stderr)
+    disputes = list(getattr(paid, "disputes", ()) or ())
+    for purchase, state in disputes:
+        urgent = state in DISPUTE_ACTION or state == "unknown"
+        print(f"  {'DISPUTE NEEDS A RESPONSE' if urgent else 'dispute under review'}: "
+              f"{purchase} ({state}). Answer it in the Stripe Dashboard → "
+              f"Disputes before its deadline: the evidence is the consent record "
+              f"on the customer, the terms version, and the send-log keys with "
+              f"their message ids.", file=sys.stderr if urgent else sys.stdout)
+    return any(state in DISPUTE_ACTION or state == "unknown" for _p, state in disputes)
+
+
+def bounce_alarm(now: datetime) -> bool:
+    """After the run's sends: ask the provider what became of the recent ones
+    (run/delivery.check_bounces). -> True when mail somebody PAID for bounced,
+    failed or was marked as spam — usually a mistyped address on a purchase,
+    which the buyer cannot change at Stripe and which ends in a "not
+    received" chargeback unless somebody reaches them first (pre-launch
+    review, critique #1). Prints send-log keys only, never an address."""
+    provider = os.environ.get("EMAIL_PROVIDER", "").strip().lower()
+    if provider != "resend":
+        if provider and provider != DRY_PROVIDER:
+            print(f"Bounces: not checked — only Resend's per-message lookup is "
+                  f"wired, and EMAIL_PROVIDER is {provider}.")
+        return False
+    from run.delivery import BOUNCE_LOOKBACK_HOURS, check_bounces
+    report = check_bounces(_sent_entries(), now)
+    if report.skipped:
+        print(f"Bounces: not checked — {report.skipped}.")
+        return False
+    if report.key_cannot_read:
+        # One line, every run, not a failure: the send already happened and a
+        # red cron every hour for a missing optional key teaches nobody
+        # anything. `make launch-check` carries the same OWNER line.
+        print("OWNER: bounces are not checked — the Resend key can only send. "
+              "Create a Full access key in Resend and save it as the GitHub "
+              "secret RESEND_READ_KEY (LAUNCH.md step 2).")
+        return False
+    if report.errors and not report.checked:
+        print(f"Bounces: NOT CHECKED this run — all {report.errors} lookup(s) "
+              f"failed. The next run looks back {BOUNCE_LOOKBACK_HOURS} hours "
+              f"again.", file=sys.stderr)
+    elif report.errors:
+        print(f"Bounces: {report.errors} lookup(s) failed; checked "
+              f"{report.checked}.", file=sys.stderr)
+    for key, event in report.paid:
+        print(f"  PAID EMAIL {event.upper()}: {key}. The address on that purchase "
+              f"may be mistyped or dead — find the purchase in the Stripe "
+              f"Dashboard (the key's date and slug say which) and refund or "
+              f"reach that buyer before their next report.", file=sys.stderr)
+    if report.unpaid:
+        print(f"Bounces: {len(report.unpaid)} message(s) to unpaid addresses "
+              f"(free reports, seat notes, the launch list) did not land.")
+    return bool(report.paid)
+
+
+def _after_mail_checks(api_key: str, now: datetime) -> bool:
+    """The checks that read what already happened: open disputes and bounced
+    paid mail. -> True when either needs a person."""
+    disputed = dispute_alarm(api_key)
+    bounced = bounce_alarm(now)
+    return disputed or bounced
 
 
 def _season_from(cache: Path, season: str) -> datetime | None:
@@ -2081,17 +2490,30 @@ def main(argv: list[str] | None = None) -> int:
     secret = os.environ.get("UPDATE_SECRET", "")
     seat_log_path = registry_dir / SEAT_LOG_NAME
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
+    form_down = False
     if seat_endpoint:
         try:
-            form_rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"))
+            form_rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"),
+                                    kinds=INTAKE_KINDS)
         except IntakeError as exc:
-            # Refuse rather than writing a Stripe-only registry: that would
-            # silently drop every seat and read as a quiet week.
-            print(f"could not read the seat backend: {exc}", file=sys.stderr)
-            print("  Refusing to write a registry that would drop every League "
-                  "Pass seat. Fix the backend, or unset FORM_ENDPOINT to run "
-                  "without seats deliberately.", file=sys.stderr)
-            return 1
+            # A FORM OUTAGE COSTS FORM POSTS, NEVER SALES (pre-launch review
+            # APPSEC-3 / INFRA-03). This used to refuse outright — `return 1`
+            # before the registry was written — so a flooded or unreachable
+            # Worker stopped every new buyer being registered, welcomed or sent
+            # a first report. The refusal existed so a Stripe-only registry
+            # could not silently drop every seat; the seat LOG (OPS-R6) has
+            # since made that impossible, because confirmed seats no longer
+            # depend on a Worker row. So: register every Stripe payer and every
+            # logged seat and roster update, skip what only the Worker holds
+            # (new claims, roster requests, confirmations, and their notes),
+            # and exit 1 so the cron still goes red.
+            form_down = True
+            form_rows = []
+            print(f"could not read the form backend: {exc}", file=sys.stderr)
+            print("  Writing the registry from Stripe and the seat and update "
+                  "logs anyway; new seat claims, roster requests and "
+                  "confirmations wait for a run that can read the form. "
+                  "Exiting non-zero.", file=sys.stderr)
         # One backend, several kinds of row: a seat claim (the default, for
         # rows written before updates existed), roster updates and requests,
         # and the confirm page's codes — which confirm seat claims and roster
@@ -2115,17 +2537,32 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         from run.updates import signing_secrets
         stop_list = _stop_list(problems)
+        try:
+            from run.seat_resets import load_history, pass_code
+            reset_codes = load_history()
+        except Exception as exc:  # noqa: BLE001 — SeatResetError, carries no id
+            # A reset quietly ignored hands the old link's holders their seats
+            # back, so an unreadable list refuses like an unreadable pass list.
+            print(f"{exc}; refusing to write a registry that would serve seats "
+                  f"a buyer asked to reset.", file=sys.stderr)
+            return 1
+        resets = {p.pass_id: reset_codes[pass_code(p.pass_id)] for p in passes
+                  if pass_code(p.pass_id) in reset_codes}
         seats = sweep_seats(
             claims, passes, known or None,
             signing_secrets(secret, os.environ.get("UPDATE_SECRET_PREVIOUS", "")),
             confirm_codes=confirm_rows,
             log=seat_log, now=datetime.now(timezone.utc),
             season_from=_season_from(args.cache, known_season),
-            stopped=stop_list)
+            stopped=stop_list, resets=resets)
         seat_rows = seats.rows
         problems.extend(seats.problems)
         if not args.dry_run:
             append_seat_log(seats.confirmed, seat_log_path)
+        if seats.typed_payer:
+            print(f"Seats: {seats.typed_payer} claim(s) named a pass by a typed "
+                  f"buyer address — not honoured and not answered (seats come "
+                  f"only through each pass's own link, contract C3)")
         # Counted, so a run where claims are going nowhere is visible in the
         # log; each claimer is told by email.
         print(f"Seats: {len(seat_rows)} served; {len(seats.confirmed)} newly "
@@ -2134,7 +2571,9 @@ def main(argv: list[str] | None = None) -> int:
               f"the newest stands); {len(seats.unmatched)} matched no League "
               f"Pass; {seats.overflow} past a full pass; {seats.lapsed} on a pass "
               f"not active now; {seats.retired} from an earlier season; "
-              f"{seats.released} released (holder on the stop list)")
+              f"{seats.released} released (holder on the stop list); "
+              f"{seats.reset_released} released and {seats.reset_stale} old-link "
+              f"claim(s) ignored by a buyer's seat reset")
 
     candidate = to_rows(merged.signups) + seat_rows
 
@@ -2261,7 +2700,8 @@ def main(argv: list[str] | None = None) -> int:
         print("A LEAGUE PASS IS ON FILE AND UPDATE_SECRET IS NOT SET: no seat link "
               "can be built, so no leaguemate can claim a seat. Set it (LAUNCH.md "
               "step 5).", file=sys.stderr)
-    failing = bool(blocked or unattributed or seats.links_dead or unsigned_pass)
+    failing = bool(blocked or unattributed or seats.links_dead or unsigned_pass
+                   or form_down)
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
@@ -2302,19 +2742,30 @@ def main(argv: list[str] | None = None) -> int:
         # collision and any update — so nobody is welcomed or sent a first
         # report for a seat that was not written.
         seat_signups = seat_signups_from(rows, seats.first_claimed)
-        _send_welcomes(servable, seat_signups, known_season, merged.duplicates,
-                       season_over=season_over)
-        _send_confirmations(awaiting, data, on_file=current)
-        now = datetime.now(timezone.utc)
-        _send_seat_confirmations(seats.awaiting, data)
-        _send_unmatched_notes(seats.unmatched, now)
-        _send_full_notes(seats.full, now)
+        # PAID MAIL FIRST (APPSEC-1). The provider's daily allowance is shared,
+        # and every note below goes to an address a stranger can type: sent
+        # first, 99 of them spent the allowance and the buyer's first report
+        # was refused (reproduced). Welcomes, then first reports, then the
+        # roster-update confirmations (only ever to a subscriber's own
+        # address), then the seat notes inside the day's caps.
+        unsent = _send_welcomes(servable, seat_signups, known_season,
+                                merged.duplicates, season_over=season_over)
         from run.saturday import FIRST_PLANS_NAME
         # The merged list: one first report per roster, never one per purchase
         # of it (LP2-D1).
-        _send_first_files([*merged.signups, *seat_signups], data, known_season,
-                          first_plans=registry_dir / FIRST_PLANS_NAME,
-                          seat_counts=seat_counts(rows))
+        unsent += _send_first_files([*merged.signups, *seat_signups], data,
+                                    known_season,
+                                    first_plans=registry_dir / FIRST_PLANS_NAME,
+                                    seat_counts=seat_counts(rows))
+        if unsent:
+            print(f"{unsent} welcome(s) or first report(s) owed to a paid signup "
+                  f"did not go out — they retry next run; exiting non-zero so "
+                  f"this is not a green cron.", file=sys.stderr)
+        unsent += _send_confirmations(awaiting, data, on_file=current)
+        now = datetime.now(timezone.utc)
+        notes_held = _send_seat_notes(seats, data, now, known_season)
+        failing = bool(failing or unsent or notes_held)
+        failing = _after_mail_checks(api_key, now) or failing
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered
