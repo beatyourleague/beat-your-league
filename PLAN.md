@@ -3,7 +3,7 @@
 Owner: solo operator + Claude Code. Budget hard cap: **$100** (plan below uses ≤ $68 through launch).
 **Where this stands (Oct 16 2026, Week 6 of 18):** the Sep 8 launch did not happen, checkout is
 still closed, and no payment has ever been processed. It opens once the owner's setup in
-`LAUNCH.md` is done — the form Worker first, then the payment links (LAUNCH, "The order"). The
+`LAUNCH.md` is done — the form Worker first, then the payment links (LAUNCH, "This weekend, in order"). The
 Oct 11 gates were read late and measured nothing (§6); a proof-season reset is proposed and
 waits on the owner (LAUNCH §10). Passages events overtook are marked where they sit.
 This file is the business plan. `CLAUDE.md` is the engineering spec. `LAUNCH.md` is the owner's
@@ -248,7 +248,7 @@ the plan-level view.
 | Email Sleeper; sample leagues for FAAB use; run the owner's own league | **Dropped** — the product left Sleeper instead (§0), and the waiver market went with it |
 | Project inbox, contact address, jurisdiction | **Done** — `hello@beatyourleague.com`; terms under Ontario law |
 | Domain, DNS, GitHub Pages | **Done** — `beatyourleague.com`. SPF/DKIM arrive with Resend (LAUNCH.md step 2) |
-| Stripe products and payment links | **Done.** The key, the secrets and one real purchase are LAUNCH.md steps 1–4 |
+| Stripe products and payment links | **2027's done; 2026's one-time links are LAUNCH.md step 1.** The keys, the secrets and one real purchase are steps 3–4 |
 | Send rehearsal | **Not done** — LAUNCH.md step 4, and nobody else's money moves before it |
 | League Pass open to any manager | **Done** |
 | Take the sample to 5+ leagues and close passes | **Not done** — checkout never opened. Now LAUNCH.md section 6 |
@@ -322,8 +322,9 @@ an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 
 **2026 SELLS ONE-TIME PASSES (owner decision, Oct 18 2026; CLAUDE.md "2026 pricing").** For the
 mid-season launch: the **$29 Rest-of-Season Pass**, the **$19 Playoff Pass** (automatic once a
-buyer's first report would be Week 13) and the **$69 League Pass for the rest of the season**
-(on its own page) — each one payment, nothing renews, monthly not sold. 2026 buyers' 2027
+buyer's first report would be Week 13; its link stays switched off until Week 12's first
+kickoff, Wed Nov 25, 8:00 PM ET — LAUNCH.md section 8) and the **$69 League Pass for the rest
+of the season** (on its own page) — each one payment, nothing renews, monthly not sold. 2026 buyers' 2027
 season pass is the founding $39. Everything below about $39 / $14.99 / $99 subscriptions,
 renewals and the ladder invariant is the **2027** design and stays as written for it. What the
 2026 prices leave, and the base case (about $727 after fixed costs for 30 passes + 2 League
@@ -514,7 +515,7 @@ Substack stays the fallback and the free-list home. If it is used for billing in
 export path covers it; the 10% fee is the price of not running the checkout.
 
 New launch blockers from this decision: `STRIPE_API_KEY` (a **restricted** key — now Checkout
-Sessions read, Customers write and Subscriptions write; LAUNCH.md step 3), `EMAIL_PROVIDER` + that provider's key, and `EMAIL_FROM` on a
+Sessions, Payment Intents, Charges and Disputes read, Customers and Subscriptions write; LAUNCH.md step 3), `EMAIL_PROVIDER` + that provider's key, and `EMAIL_FROM` on a
 domain with SPF/DKIM configured — an unauthenticated From address goes to spam, which at this
 volume is indistinguishable from not sending at all.
 
@@ -553,12 +554,14 @@ every Tuesday with no human step anywhere. Mechanics in CLAUDE.md; the operator-
 - With `STRIPE_API_KEY` unset it is a no-op, so enabling the whole pipeline is a secret, not a
   deploy.
 - `make sync-preview` shows what the next run would change without writing or stamping anything.
-- The restricted Stripe key needs **write** on Customers as well as read, for the metadata
-  promotion. Nothing else needs write.
+- The restricted Stripe key needs **write** on Customers (the metadata promotion) and on
+  Subscriptions (`run/billing.py`), and read on the rest it uses; the exact list is LAUNCH.md
+  step 3.
 - **`STRIPE_PAYMENT_LINKS` is a launch blocker, not an optimisation.** Set it to
-  `s:<season link id>,m:<monthly link id>,p:<pass link id>`. It is what makes the purchased plan
-  a fact about the payment instead of a claim in the buyer's URL — without it, no purchase can
-  grant League Pass coverage (deliberate: fail closed). Adversarial review found that trusting the
+  `s:<$29 link id>,o:<$19 Playoff Pass link id>,p:<$69 League Pass link id>` in 2026 (`m:` is
+  the monthly link, back in 2027). It is what makes the purchased plan a fact about the
+  payment instead of a claim in the buyer's URL — without it, no purchase can grant League
+  Pass coverage (deliberate: fail closed). Adversarial review found that trusting the
   URL let anyone buy the $99 pass for $9.99, for any league; see CLAUDE.md for the three rules
   that now hold.
 - Make the **$99 League Pass a recurring annual price**, not a one-time charge. A one-time payment
@@ -643,7 +646,7 @@ operator eats the payment-processing fee on every refund — about $2.72 on a $3
 Canadian account, about $1.94 with a USD payout account (`run/economics.py`) — so even
 without abuse, refunds are never free; that is a reason to prevent the *causes* of refunds, not to
 obstruct the refunds themselves. Enforcement is manual and trivial at this scale: refunds are
-issued by the operator in the Stripe dashboard (LAUNCH.md section 7), where prior refunds against
+issued by the operator in the Stripe dashboard (LAUNCH.md section 8), where prior refunds against
 the same email are visible before granting one.
 Do not attempt device/IP fingerprinting or any other tracking to detect repeat refunders — it is
 disproportionate, hostile, and would collect exactly the data this project promises never to hold.

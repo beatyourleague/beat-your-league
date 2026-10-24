@@ -115,6 +115,10 @@ jobs:
           SITE_URL: ${{ secrets.SITE_URL }}
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
           SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
+          # A game postponed or suspended that the schedule still shows at its
+          # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
+          # variable set for one week, AWAY@HOME. Unset excuses nothing.
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m run.saturday
       # The only step handed a token that can push (the helper reads it from
       # this step's environment; .git/config never holds it).

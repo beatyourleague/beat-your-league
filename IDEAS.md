@@ -202,9 +202,10 @@ Confirmed or sharpened by the review, and bigger than its fixes:
   Show "Reports go to <address> — right?" with common-domain typo suggestions before the
   redirect, and have the next intake check each Resend message id (already in `sent.jsonl`)
   for a bounce or complaint, exit 1 and tell the owner so a refund comes first.
-- **A lost dispute keeps the reports coming.** Entitlement ends only on a full refund; a lost
-  chargeback is not one. Count a `disputed` charge as an intake alarm, and end entitlement
-  once the dispute is lost (LAUNCH §8 has the manual stop until then).
+- ~~**A lost dispute keeps the reports coming.**~~ — **built Oct 24 2026**: a lost (or
+  accepted) dispute ends entitlement like a full refund (`run/subscriptions.py`), and one
+  waiting on our evidence turns the hourly intake red (`run/intake.dispute_alarm`). LAUNCH §8
+  has the one dispute procedure.
 - **The free report repeats per inbox, not per roster.** One per address per season; a second
   inbox gets the same roster again. Also limit by a keyed digest of the roster (refuse at 80%+
   overlap with one already served, or with a subscriber's).
@@ -227,6 +228,23 @@ Confirmed or sharpened by the review, and bigger than its fixes:
   somewhere else the owner controls would put one beyond it — a new service needs a PLAN §2
   line first.
 
+
+## From the final review's ops lens (Oct 24 2026)
+
+- **A cron key short a permission should go red within the hour, not on Tuesday.** The cron
+  key was made Sep 29 with three permissions and the code now needs six. With the old key the
+  hourly intake still registers and welcomes a buyer (its sweep expands only the customer),
+  prints one stderr note from the dispute check, and stays green — and the Tuesday send then
+  reads no paid list and mails nobody. Make the intake exit 1 when the paid-list read is
+  refused with HTTP 403, naming the missing permission. LAUNCH step 3 now edits the key; this
+  would catch the next one.
+- **The launch check reads `www` once the host moves.** After section 11's move, a GET on
+  `https://www.beatyourleague.com/join/` must answer 301 to the bare domain; served directly,
+  every form post from it is refused by the Worker's origin check and the counter is silent.
+  LAUNCH A1.4 has the curl; a live gate would keep it true after the next DNS change.
+- **The flood limit is one free rule, and the forms took it.** Cloudflare's Free plan allows
+  one rate-limiting rule, matched on the path only, and `/rows` uses it. Anything else that
+  wants one (a future `/e` cap) needs Pro, which needs a PLAN §2 line first.
 
 ## Model ideas that need a preregistered arm first
 

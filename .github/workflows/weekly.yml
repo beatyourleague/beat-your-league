@@ -11,8 +11,10 @@
 # being a row in data/registry/rosters.json.
 #
 # Secrets that matter here:
-#   STRIPE_API_KEY        — restricted, read access to subscriptions+customers
-#   STRIPE_PAYMENT_LINKS  — s:plink_A,m:plink_B,p:plink_C (the plan is a FACT)
+#   STRIPE_API_KEY        — restricted; its exact permissions are LAUNCH.md step 3
+#   STRIPE_PAYMENT_LINKS  — s:plink_A,o:plink_B,p:plink_C in 2026 ($29, $19
+#                           Playoff, $69; m: is monthly, from 2027) — the plan
+#                           is a FACT about the link that took the money
 #   EMAIL_PROVIDER + that provider's key — unset means dry-run, which FAILS the
 #                           job rather than silently mailing nobody.
 #   SENDER_POSTAL_ADDRESS — the sender line every commercial email carries;
@@ -215,6 +217,10 @@ jobs:
           UPDATE_SECRET: ${{ secrets.UPDATE_SECRET }}
           # A rotated UPDATE_SECRET's old value (OPS-R10; run/updates.py).
           UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
+          # A game postponed or suspended that the schedule still shows at its
+          # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
+          # variable set for one week, AWAY@HOME. Unset excuses nothing.
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: |
           set +e
           .venv/bin/python -m run.intake --no-mail
@@ -253,6 +259,10 @@ jobs:
           # (render/sender.py reads only the environment, so a secret no step
           # maps reaches no email).
           SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
+          # A game postponed or suspended that the schedule still shows at its
+          # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
+          # variable set for one week, AWAY@HOME. Unset excuses nothing.
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m run.tuesday
       # The live sample (render/live_sample.py): this week's report for the
       # published sample roster, so the site shows the product running now,
@@ -267,6 +277,10 @@ jobs:
       # fails the run rather than publishing odds off the record.
       - name: Publish this week's sample report
         if: always()
+        env:
+          # The same postponed-game excuse as the send above (LAUNCH.md
+          # section 8): the sample builds the week the subscribers get.
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m render.live_sample
       # The same report, as posts ready to paste (run/drops.py): one file,
       # overwritten each Tuesday, so the owner reads a single page on a phone.

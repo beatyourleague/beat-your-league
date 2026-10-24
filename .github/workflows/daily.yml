@@ -58,6 +58,13 @@ on:
         description: "Also run the once-a-day steps (end-of-season billing stop, missed-run watchdog)"
         type: boolean
         default: false
+      # The only way to clear a remembered payment alarm once the owner has
+      # dealt with it: the memory lives in the sealed registry, out of reach of
+      # a local run. Default false, and the Worker's dispatch never sends it.
+      clear_unresolved:
+        description: "Forget the payments already dealt with (PAID-UNATTRIBUTED, PLAYOFF-EARLY) — only once every one the log lists is handled"
+        type: boolean
+        default: false
 
 # One run at a time: two runs reading the same committed send log can mail the
 # same message twice (the 14:17 UTC daily run fires from BOTH its crons at
@@ -166,9 +173,22 @@ jobs:
           # Spare daily sends to keep in hand: a repo variable, for when the
           # email plan's daily cap changes (unset = the code's own default).
           EMAIL_DAILY_HEADROOM: ${{ vars.EMAIL_DAILY_HEADROOM }}
+          # A game postponed or suspended that the schedule still shows at its
+          # old kickoff (run/solo.py POSTPONED_GAMES, LAUNCH.md section 8): a repo
+          # variable set for one week, AWAY@HOME. Unset excuses nothing.
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
+          # "true" only when the owner ticks the dispatch box below, after
+          # dealing with every payment the run keeps reporting (PAID-UNATTRIBUTED,
+          # PLAYOFF-EARLY; LAUNCH.md section 8). A scheduled run has no inputs,
+          # so this is "false" and nothing is forgotten.
+          CLEAR_UNRESOLVED: ${{ inputs.clear_unresolved == true }}
         run: |
           set +e
-          .venv/bin/python -m run.intake
+          if [ "$CLEAR_UNRESOLVED" = "true" ]; then
+            .venv/bin/python -m run.intake --clear-unresolved
+          else
+            .venv/bin/python -m run.intake
+          fi
           echo "code=$?" >> "$GITHUB_OUTPUT"
           exit 0
       # The free first report (run/trials.py): one per person per season, this
@@ -201,6 +221,14 @@ jobs:
           SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
+          # The day's hold on optional mail (run/intake.py DAY_HEADROOM, 60 on
+          # the free email tier). run.trials applies it too, so without this the
+          # repo variable set for a paid plan (LAUNCH.md step 2) would still
+          # hold free reports at 60 a day.
+          EMAIL_DAILY_HEADROOM: ${{ vars.EMAIL_DAILY_HEADROOM }}
+          # A free report builds this week's report, so the same postponed-game
+          # excuse as the intake above (LAUNCH.md section 8).
+          POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m run.trials
       # The pre-renewal notice (Cal. B&P §17602(b) and a promise this site
       # makes in seven places). The window is 15-45 days wide, so a missed day

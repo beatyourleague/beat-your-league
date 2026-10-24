@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample
 
 week:
@@ -83,6 +83,19 @@ proving:
 # registry if a copy is here). Counts only, never an address. Read-only.
 stats:
 	$(PY) -m run.stats
+
+# The same summary with the subscriber list (seats per League Pass, free report
+# -> paid), which lives only in the runs' sealed storage (run/statebox.py).
+# Downloads the newest sealed-registry backup into a temporary folder OUTSIDE
+# the repo, opens it there with CACHE_KEY from the shell, runs the stats and
+# deletes the folder on exit, whatever happened. Never writes data/registry.
+# Needs `gh` logged in and CACHE_KEY (read -s CACHE_KEY && export CACHE_KEY).
+stats-registry:
+	@test -n "$$CACHE_KEY" || { echo "CACHE_KEY is not in this shell: read -s CACHE_KEY && export CACHE_KEY"; exit 2; }
+	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	  gh run download -n sealed-registry -D "$$dir/data/sealed" && \
+	  $(PY) -I -S run/statebox.py open registry --root "$$dir" && \
+	  $(PY) -m run.stats --registry "$$dir/data/registry/rosters.json"
 
 # A roster change a subscriber sent by email ("reply with your new roster"),
 # applied through the same validated path as a confirmed self-serve update: it
