@@ -56,7 +56,7 @@ EVENTS = ("view", "roster", "checkout", "waitlist", "trial")
 # sample` after merging, and this-week.html is rebuilt by the Tuesday cron.
 # Their generator carries COUNT_TAG (pinned below); DELETE THIS SET once they
 # are rebuilt, so every page must carry the tag exactly once.
-PENDING_REGENERATION = {"sample-report.html", "sample-first-week.html", "this-week.html"}
+PENDING_REGENERATION: set[str] = set()
 NOW = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
 
 
@@ -593,17 +593,16 @@ def test_the_referrer_line_counts_arrivals_not_steps_inside_the_site() -> None:
     assert "join 60" in pages and "how-it-works 30" in pages
 
 
-def test_the_waitlist_row_says_it_is_the_buy_pages_save_only() -> None:
-    """Reproduction (review): only the join page's closed-checkout save calls
-    bylCount("waitlist"); the landing hero's capture — the main waitlist path
-    — is never counted, so a row labelled "Waitlist joined" undercounted
-    badly beside the FORMS block's real total. The row names what it counts."""
+def test_the_waitlist_row_counts_both_captures() -> None:
+    """Reproduction (review): only the join page's closed-checkout save called
+    bylCount("waitlist"); the landing hero's capture, the main waitlist path,
+    was never counted, so the "Waitlist joined" row undercounted badly beside
+    the FORMS block's real total. Both captures count it now, and the row
+    says the whole waitlist again."""
     labels = [label for label, _t in stats.FUNNEL]
-    assert "Waitlist joined" not in labels
-    assert "Waitlist joined on the buy page" in labels
-    landing = (SITE / "index.html").read_text(encoding="utf-8")
-    assert 'bylCount("waitlist"' not in landing, \
-        "the landing counts its capture now: relabel the row back to the whole waitlist"
+    assert "Waitlist joined" in labels and "Waitlist joined on the buy page" not in labels
+    for page in (SITE / "index.html", SITE / "join" / "index.html"):
+        assert 'bylCount("waitlist"' in page.read_text(encoding="utf-8"), page
 
 
 # --------------------------------------------------------------------- #

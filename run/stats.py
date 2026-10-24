@@ -438,9 +438,9 @@ FUNNEL = (
     ("Rosters checked on the buy page", lambda r: r["e"] == "roster" and r["p"] in BUY_PAGES),
     ("Buy pressed, checkout open", lambda r: r["e"] == "checkout" and r["s"] == "open"),
     ("Buy pressed, checkout closed", lambda r: r["e"] == "checkout" and r["s"] == "closed"),
-    # The join page's closed-checkout save only: the landing's own capture is
-    # not a counted step, so the whole waitlist is the FORMS block's figure.
-    ("Waitlist joined on the buy page", lambda r: r["e"] == "waitlist"),
+    # Both captures count it: the landing's hero form and the join page's
+    # closed-checkout save (the FORMS block still has the stored total).
+    ("Waitlist joined", lambda r: r["e"] == "waitlist"),
     ("Free-report page views", lambda r: r["e"] == "view" and r["p"] == "join-try"),
     ("Free-report rosters checked", lambda r: r["e"] == "roster" and r["p"] == "join-try"),
     ("Free reports requested", lambda r: r["e"] == "trial"),

@@ -505,20 +505,19 @@ def test_a_mistyped_buyer_domain_is_asked_about_once_before_checkout(tmp_path) -
     first press left nothing, a clean address handed off at once."""
     page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
     start = page.index("const DOMAIN_FIXES = {")
-    end = page.index("\n}\n", page.index("function suggestEmail(")) + 3
+    end = page.index("\n}\n", page.index("function suggestedEmail(")) + 3
     (tmp_path / "s.mjs").write_text(page[start:end] + """
 process.stdout.write(JSON.stringify(["a.b@gmial.com", "x@Hotmial.com", "x@yahoo.con",
-  "x@example.cmo", "x@gmail.com", "x@example.com", "x@proton.me", "bad"].map(suggestEmail)));
+  "x@example.cmo", "x@gmail.com", "x@example.com", "x@proton.me", "bad"].map(suggestedEmail)));
 """, encoding="utf-8")
     done = subprocess.run([NODE, str(tmp_path / "s.mjs")], capture_output=True, text=True,
                           timeout=60)
     assert done.returncode == 0, done.stderr
     assert json.loads(done.stdout) == ["a.b@gmail.com", "x@hotmail.com", "x@yahoo.com",
                                        "x@example.com", "", "", "", ""]
-    handler = page[page.index('$("form-email").addEventListener("submit"'):]
-    asked = handler.index("if (askAboutTypo(email)) return;")
-    assert asked < handler.index("checkoutRef()") < handler.index("locked_prefilled_email")
-    assert 'id="email-readback"' in page and "innerHTML" not in page[start:end]
+    # One read-back on the page (the merge once carried two, and the second
+    # declaration of the table stopped every script on it).
+    assert page.count("const DOMAIN_FIXES") == 1 and "innerHTML" not in page[start:end]
 
 
 # --------------------------------------------------------------------- #

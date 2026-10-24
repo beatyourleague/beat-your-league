@@ -741,7 +741,7 @@ def restamp_chrome(page: str) -> str:
     would have moved the numbers: after kickoff a --force rebuild drops
     every odds whose game has started. Idempotent."""
     from render.report import (JOIN_PROMISE, cancel_html, sample_cta, site_bar,
-                               stop_route)
+                               stop_route, with_counter)
     page = _SITEBAR.sub(lambda _m: site_bar(uid="bylm"), page)
     # A page restamp_last already marked as an OVER season's last report
     # keeps its closed asks: checkout is closed once the season is over (D9),
@@ -763,8 +763,11 @@ def restamp_chrome(page: str) -> str:
     page = re.sub(r"<title>Beat Your League — (\d{4}) Week (\d+) Report</title>",
                   r"<title>Beat Your League — sample fantasy football report, \1 Week \2</title>",
                   page, count=1)
-    return re.sub(r"the lineup we(?:&#x27;|')d set, with odds on \d+ of its \d+ slots",
+    page = re.sub(r"the lineup we(?:&#x27;|')d set, with odds on \d+ of its \d+ slots",
                   "every slot decided", page)
+    # The page counter is chrome too (contract C1): a page built before it
+    # existed is counted from its next restamp, not its next rebuild.
+    return with_counter(page)
 
 
 def restamp_style(page: str, template: str) -> str:

@@ -426,10 +426,6 @@ Baltimore Ravens
       </div>
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
-      <!-- Read back as typed (critique #1): checkout locks this address, so a
-           typo is a buyer who paid and whose every report goes nowhere. -->
-      <p class="terms-line" id="email-readback" aria-live="polite"></p>
-      <div class="note" id="email-suggest" role="alert" style="display:none"></div>
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The Rest-of-Season Pass is <b>$29, one
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
@@ -770,74 +766,6 @@ function showError(id, message) {
 // Something that WORKED, in the done style (role=status, not alert).
 function showOk(message) {
   $("ok-email").textContent = message;
-}
-
-// Critique #1: the address goes to Stripe LOCKED (locked_prefilled_email), so
-// the buyer cannot fix a typo there, and "gmial.com" meant a paid pass whose
-// welcome and every report went to a dead mailbox. The page reads the address
-// back as it is typed and, for the commonest domain slips, asks once before
-// anything leaves: the suggestion is a button, never a silent rewrite.
-const DOMAIN_FIXES = {
-  "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com",
-  "gamil.com": "gmail.com", "gmaill.com": "gmail.com", "gnail.com": "gmail.com",
-  "gmail.co": "gmail.com", "gmail.cm": "gmail.com", "gmail.om": "gmail.com",
-  "gmail.con": "gmail.com", "gmail.comm": "gmail.com", "gmali.com": "gmail.com",
-  "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "yhoo.com": "yahoo.com",
-  "yaoo.com": "yahoo.com", "yahoo.con": "yahoo.com", "yahoo.cm": "yahoo.com",
-  "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com", "hotmai.com": "hotmail.com",
-  "hotnail.com": "hotmail.com", "hotmail.co": "hotmail.com", "hotmail.con": "hotmail.com",
-  "outlok.com": "outlook.com", "outllok.com": "outlook.com", "outlook.co": "outlook.com",
-  "outlook.con": "outlook.com", "iclod.com": "icloud.com", "icoud.com": "icloud.com",
-  "icloud.co": "icloud.com", "icloud.con": "icloud.com", "aol.co": "aol.com",
-  "aol.con": "aol.com", "comcast.com": "comcast.net", "live.co": "live.com",
-};
-function suggestEmail(email) {
-  const at = email.lastIndexOf("@");
-  if (at < 1) return "";
-  const domain = email.slice(at + 1).toLowerCase();
-  let fixed = DOMAIN_FIXES[domain] || "";
-  if (!fixed && /\.(con|cmo|ocm|vom|comm)$/.test(domain)) {
-    fixed = domain.replace(/\.(con|cmo|ocm|vom|comm)$/, ".com");
-  }
-  return fixed && fixed !== domain ? email.slice(0, at + 1) + fixed : "";
-}
-function drawReadback() {
-  const email = $("email").value.trim();
-  const paying = !SEAT_MODE && !UPDATE_MODE && !TRY_MODE;
-  $("email-readback").textContent = EMAIL_RE.test(email)
-    ? "Reports go to " + email + (paying ? " — checkout can't change it, so check it now." : ".")
-    : "";
-  const box = $("email-suggest");
-  if (state.suggested && state.suggested.typed !== email) {
-    state.suggested = null;
-    box.replaceChildren();
-    box.style.display = "none";
-  }
-}
-$("email").addEventListener("input", drawReadback);
-// -> true when the address looks like a slip and the reader has not yet been
-// asked about this exact spelling: the press only asks. A second press with
-// the same spelling goes ahead, because the address may really be that.
-function askAboutTypo(email) {
-  const fixed = suggestEmail(email);
-  if (!fixed || (state.suggested && state.suggested.typed === email)) return false;
-  state.suggested = { typed: email, fixed: fixed };
-  const box = $("email-suggest");
-  const use = document.createElement("button");
-  use.type = "button";
-  use.className = "retry";
-  use.textContent = "Use " + fixed;
-  use.addEventListener("click", () => {
-    $("email").value = fixed;
-    drawReadback();
-    $("email").focus();
-  });
-  box.replaceChildren(
-    document.createTextNode("Did you mean " + fixed + "? Your reports go to this address. "),
-    use,
-    document.createTextNode(" Or press the button below again to keep " + email + "."));
-  box.style.display = "block";
-  return true;
 }
 
 // Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
@@ -1357,7 +1285,6 @@ $("form-email").addEventListener("submit", (event) => {
     showError("err-email", "That email doesn't look right.");
     return;
   }
-  if (askAboutTypo(email)) return;
   if (!state.ready) {
     showError("err-email", "Check your roster above first.");
     return;
@@ -1496,20 +1423,28 @@ function leaveForCheckout(link, tagged, email) {
 // The domains people mistype most, and what they meant. Only a domain on this
 // list is ever questioned, and only ever as a question.
 const DOMAIN_FIXES = {
-  "gmial.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com",
-  "gnail.com": "gmail.com", "gmaill.com": "gmail.com", "gmail.co": "gmail.com",
-  "gmail.con": "gmail.com", "gmail.cm": "gmail.com", "gmail.om": "gmail.com",
-  "hotmial.com": "hotmail.com", "hotmai.com": "hotmail.com", "hotmail.co": "hotmail.com",
-  "hotmail.con": "hotmail.com", "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com",
-  "yahoo.con": "yahoo.com", "outlok.com": "outlook.com", "outlook.co": "outlook.com",
+  "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com",
+  "gamil.com": "gmail.com", "gmaill.com": "gmail.com", "gnail.com": "gmail.com",
+  "gmail.co": "gmail.com", "gmail.cm": "gmail.com", "gmail.om": "gmail.com",
+  "gmail.con": "gmail.com", "gmail.comm": "gmail.com", "gmali.com": "gmail.com",
+  "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "yhoo.com": "yahoo.com",
+  "yaoo.com": "yahoo.com", "yahoo.con": "yahoo.com", "yahoo.cm": "yahoo.com",
+  "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com", "hotmai.com": "hotmail.com",
+  "hotnail.com": "hotmail.com", "hotmail.co": "hotmail.com", "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com", "outllok.com": "outlook.com", "outlook.co": "outlook.com",
   "outlook.con": "outlook.com", "iclod.com": "icloud.com", "icoud.com": "icloud.com",
-  "icloud.co": "icloud.com", "icloud.con": "icloud.com", "aol.con": "aol.com",
+  "icloud.co": "icloud.com", "icloud.con": "icloud.com", "aol.co": "aol.com",
+  "aol.con": "aol.com", "comcast.com": "comcast.net", "live.co": "live.com",
 };
 function suggestedEmail(email) {
   const at = email.lastIndexOf("@");
   if (at < 1) return "";
-  const fix = DOMAIN_FIXES[email.slice(at + 1).toLowerCase()];
-  return fix ? email.slice(0, at + 1) + fix : "";
+  const domain = email.slice(at + 1).toLowerCase();
+  let fix = DOMAIN_FIXES[domain] || "";
+  if (!fix && /\.(con|cmo|ocm|vom|comm)$/.test(domain)) {
+    fix = domain.replace(/\.(con|cmo|ocm|vom|comm)$/, ".com");
+  }
+  return fix && fix !== domain ? email.slice(0, at + 1) + fix : "";
 }
 // Paths that send nothing to Stripe ask only about a likely typo, once per
 // address: true when there is nothing to ask, or the buyer kept what they typed.

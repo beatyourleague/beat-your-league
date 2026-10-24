@@ -46,7 +46,7 @@ def test_the_hero_phone_names_no_week_number() -> None:
     says what the email does; the caption under it names the 2024 week."""
     screen = HERO.split('<div class="screen">')[1].split('<p class="realtag">')[0]
     assert not re.search(r"\bWeek \d+", _flat(screen)), "the phone names a week again"
-    assert "Your lineup, decided. Closest call with odds: Robinson over Chase Brown, 70%." \
+    assert "Your lineup, decided. Closest call with odds: Kittle over LaPorta, 72%." \
         in _flat(screen)
     tag = HERO.split('<p class="realtag">')[1].split("</p>")[0]
     assert "2024" in tag and "Week 10" in _flat(tag), "the sample's week left its caption"
@@ -89,11 +89,11 @@ def test_the_phone_screen_runs_on_with_the_samples_own_rows() -> None:
     for item in re.findall(r"<li>(.*?)</li>", peek, re.S):
         assert _flat(item).strip() in flat_sample, f"not the sample's words: {_flat(item)}"
     figures = set(re.findall(r"\d+\.\d+", _flat(peek))) | set(re.findall(r"\d+%", _flat(peek)))
-    assert {"70%", "24.0", "11.9", "9.5"} <= figures
+    assert {"72%", "24.0", "11.9", "9.5"} <= figures
     for figure in figures:
         assert figure in flat_sample, f"the hero phone cites {figure!r}, which the sample lacks"
     assert "Rising Roles" in flat_sample and "Rising roles" in _flat(peek)
-    assert re.search(r'class="flippct">70%</span>', peek), "the bar lost its number"
+    assert re.search(r'class="flippct">72%</span>', peek), "the bar lost its number"
 
 
 def test_every_closest_call_bar_on_the_landing_is_drawn_from_fifty() -> None:
@@ -376,7 +376,7 @@ def test_no_headline_is_used_twice_and_the_note_does_not_repeat_its_card() -> No
     cards = re.findall(r"<h3>([^<]+)</h3>", BODY.split('<div class="method">')[1].split("</section>")[0])
     assert not set(strip) & set(cards), set(strip) & set(cards)
     note = _flat(BODY.split("<b>The close one, called</b>")[1].split("</div>")[0])
-    assert "70%" not in note and "15.1" not in note
+    assert "72%" not in note and "14.1" not in note
 
 
 def test_the_title_names_the_category_a_searcher_types() -> None:
