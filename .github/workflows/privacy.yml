@@ -1,10 +1,10 @@
 # One person's data: show, export or delete it (run/privacy.py, D5).
 #
 # The privacy policy promises access, correction, deletion and portability
-# within 30 days. The registry lives only in this repo's Actions cache, which
-# cannot be edited by hand, so the request is run here: restore the caches,
-# act, save fresh caches, and delete the older cache entries that still hold
-# the person's rows.
+# within 30 days. The registry lives only in this repo's Actions cache and its
+# backup artifacts, sealed (run/statebox.py), so the request is run here:
+# restore and open them, act, seal and save fresh copies, and delete the older
+# cache entries and backups that still hold the person's rows.
 #
 # The input is a KEYED CODE, never an address — this repo is public and the
 # dispatch inputs show in the log. Make it on your own machine:
@@ -33,37 +33,56 @@ concurrency:
   group: daily-intake
   cancel-in-progress: false
 
-permissions:
-  contents: write   # commit the stop list and the forgotten-customer list
-  actions: write    # delete the older cache entries that still hold the rows
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 jobs:
   privacy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # commit the stop list and the forgotten-customer list
+      actions: write    # delete the older caches and backups that still hold the rows
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
+      # push token kept out of .git/config until the commit step (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked, runtime packages only (INFRA-07; requirements.lock).
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Restore subscriber registry (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-          restore-keys: registry-
-      - name: Restore stored plans
-        uses: actions/cache/restore@v4
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+          restore-keys: sealed-registry-
+      - name: Restore stored plans (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/plans
-          key: plans-${{ github.run_id }}
-          restore-keys: plans-
+          path: data/sealed/plans.enc
+          key: sealed-plans-${{ github.run_id }}
+          restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
+      - name: Open the registry and the stored plans
+        id: open
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       - name: Act on the request
         id: privacy
         env:
@@ -81,40 +100,96 @@ jobs:
           FORM_ENDPOINT: ${{ secrets.FORM_ENDPOINT }}
           FORM_API_KEY: ${{ secrets.FORM_API_KEY }}
         run: .venv/bin/python -m run.privacy "$ACTION" "$CODE" --send
-      - name: Save subscriber registry
-        if: success() && github.event.inputs.action == 'delete'
-        uses: actions/cache/save@v4
-        with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-      - name: Save stored plans
-        if: success() && github.event.inputs.action == 'delete'
-        uses: actions/cache/save@v4
-        with:
-          path: data/plans
-          key: plans-${{ github.run_id }}
-      # The fresh caches above are now the newest, so every restore picks them.
-      # The older entries still hold the deleted rows until GitHub evicts them
-      # (7 days unused); delete them now rather than wait.
-      - name: Delete the older caches that still hold the rows
+      - name: Seal the edited registry and plans
+        id: seal
         if: success() && github.event.inputs.action == 'delete'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
+        run: python -I -S run/statebox.py seal registry plans
+      - name: Save subscriber registry (sealed)
+        if: success() && github.event.inputs.action == 'delete' && steps.seal.outputs.registry_sealed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+      - name: Save stored plans (sealed)
+        if: success() && github.event.inputs.action == 'delete' && steps.seal.outputs.plans_sealed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: data/sealed/plans.enc
+          key: sealed-plans-${{ github.run_id }}
+      # The fresh backups FIRST, so pruning the older ones below never leaves
+      # no backup at all (run/statebox.py RULE S3 and S4).
+      - name: Back up the edited registry
+        if: success() && github.event.inputs.action == 'delete' && steps.seal.outputs.registry_sealed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sealed-registry
+          path: data/sealed/registry.enc
+          retention-days: 90
+          if-no-files-found: error
+      - name: Back up the edited plans
+        if: success() && github.event.inputs.action == 'delete' && steps.seal.outputs.plans_sealed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sealed-plans
+          path: data/sealed/plans.enc
+          retention-days: 90
+          if-no-files-found: error
+      # The fresh copies above are now the newest, so every restore picks them.
+      # The older entries still hold the deleted rows (encrypted, but held)
+      # until GitHub evicts them (7 days unused) or they expire (90 days);
+      # delete them now rather than wait. The pre-sealing `registry-`/`plans-`
+      # caches, if any were ever made, are plain text and all go.
+      #
+      # EVERY older one: hourly runs keep a week of cache entries (well past
+      # 100), so each prefix is re-listed until nothing but this run's key is
+      # left rather than read once to a --limit, and statebox pages through
+      # every backup before deleting. A rate limit part-way stops the step
+      # red; running the same delete again finds the person gone and finishes.
+      # gh is the runner's own binary and statebox runs under -I -S, so this
+      # Actions: write token never sits in a process with a third-party package.
+      - name: Delete the older caches and backups that still hold the rows
+        if: success() && github.event.inputs.action == 'delete'
+        env:
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          for prefix in registry- plans-; do
-            gh cache list --key "$prefix" --limit 100 --json key --jq '.[].key' |
-              grep -v -x "${prefix}${{ github.run_id }}" |
-              while read -r key; do gh cache delete "$key"; done
-          done
+          set -euo pipefail
+          # Every key under a prefix but $2, until a fresh listing shows none.
+          drain() {
+            local prefix="$1" keep="${2:-}" keys passes=0
+            while :; do
+              keys=$(gh cache list --key "$prefix" --limit 1000 --json key --jq '.[].key' |
+                grep -v -x -F -e "${keep:-(none)}" || true)
+              [ -z "$keys" ] && return 0
+              passes=$((passes + 1))
+              if [ "$passes" -gt 20 ]; then
+                echo "caches under $prefix are still listed after 20 passes" >&2
+                return 1
+              fi
+              while read -r key; do gh cache delete "$key"; done <<< "$keys"
+            done
+          }
+          drain sealed-registry- "sealed-registry-${GITHUB_RUN_ID}"
+          drain sealed-plans- "sealed-plans-${GITHUB_RUN_ID}"
+          drain registry-
+          drain plans-
+          python -I -S run/statebox.py prune registry plans --keep-run "$GITHUB_RUN_ID"
+      # The only step handed a token that can push (the credential helper reads
+      # it from this step's environment; .git/config never holds it).
       - name: Commit the stop list and the forgotten-customer list
         if: success() && github.event.inputs.action == 'delete'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           [ -f data/processed/suppressed.txt ] && git add data/processed/suppressed.txt || true
           [ -f data/processed/forgotten.txt ] && git add -f data/processed/forgotten.txt || true
           git diff --cached --quiet && echo "nothing to commit" && exit 0
           git commit -m "Privacy request: deletion applied"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push

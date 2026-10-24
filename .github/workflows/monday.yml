@@ -41,13 +41,16 @@ concurrency:
   group: monday-receipts
   cancel-in-progress: false
 
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
+
 jobs:
   receipts:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write
-      issues: write
+      contents: write   # commit the graded ledger and its page
+      issues: write     # one open issue per kind of failure
     steps:
       # fetch-depth: 0 because this job COMMITS BACK. The default is a
       # shallow clone, and `git pull --rebase` against a shallow history
@@ -58,23 +61,28 @@ jobs:
       # out the ledger as it was when it was QUEUED — before the run ahead
       # of it pushed — and grade from a stale record. (A double trigger is
       # routine now: the Worker's dispatch plus GitHub's backup.)
-      - uses: actions/checkout@v4
+      #
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
+      # push token kept out of .git/config until the persist step (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked, runtime packages only (INFRA-07; requirements.lock).
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
       # Availability and the ledger arrive with the checkout now: they are
       # committed, not cached, because an Actions cache is evicted after 7 days
       # without access and neither can be rebuilt if it is lost.
       # The nflverse download cache, shared with the Tuesday cron.
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -92,13 +100,13 @@ jobs:
         run: .venv/bin/python -m run.posts all
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
       - name: Upload drafts, cards, and ledger page
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: receipts-monday
           # content/ is back: run/posts.py rebuilt the drafts on the roster
@@ -110,13 +118,29 @@ jobs:
             site/ledger/
             data/processed/ledger/
           if-no-files-found: warn
+      # The republished page's inline-script hashes (site/_headers), re-derived
+      # in a step of its own BEFORE the persist step: that one holds the push
+      # token, and no venv Python (third-party packages and their startup
+      # hooks) ever runs beside it (INFRA-07). Same opt-out as the page itself.
+      - name: Refresh the security headers
+        if: always() && vars.PUSH_LEDGER != 'false'
+        run: .venv/bin/python -m render.headers
       # The graded ledger is persisted whether or not the page is published —
       # the record is the asset, the page is only its rendering.
+      #
+      # The only step handed a token that can push (the credential helper reads
+      # it from this step's environment; .git/config never holds it), and the
+      # repo variable arrives as an environment value, never pasted into the
+      # shell (INFRA-14).
       - name: Persist the graded record
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_LEDGER: ${{ vars.PUSH_LEDGER }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           # data/raw/availability is NOT added: only ingest.pull writes it, and
           # this cron no longer runs it. The committed history stays in the repo
           # (it is unrebuildable) but the path stops accumulating; the roster
@@ -130,10 +154,15 @@ jobs:
           # publishes is not a record. Set PUSH_LEDGER to "false" to hold it
           # back deliberately (e.g. before launch), which is the opposite
           # default and the safe direction for a promise about honesty.
-          if [ "${{ vars.PUSH_LEDGER }}" != "false" ]; then git add site/ledger/; fi
+          # The page's inline-script hashes go with it (site/_headers, made by
+          # the step above), so the republished page never meets a stale
+          # Content-Security-Policy.
+          if [ "$PUSH_LEDGER" != "false" ]; then
+            git add site/ledger/ site/_headers
+          fi
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Monday grading run: ledger settled"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
       # ONE open issue per kind of failure: a later failure comments on the
       # open one instead of opening another (before launch these crons filed
@@ -150,7 +179,7 @@ jobs:
           body="$(date -u +%Y-%m-%d): grading did not complete, so published calls stay pending and the
           public record is stale.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then

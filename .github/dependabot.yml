@@ -1,5 +1,14 @@
 # Monthly dependency review per CLAUDE.md security NFR.
 # Activates automatically once this repo is pushed to GitHub.
+#
+# pip: Dependabot bumps the pins in requirements.txt. The crons and CI install
+# only the hash-locked copies (requirements.lock, requirements-dev.lock), so a
+# bump PR stays red (tests/test_prelaunch_infra.py) until somebody runs
+# `make lock` on it and commits the regenerated locks — which is the review
+# step: a version nobody re-hashed never installs.
+#
+# github-actions: every action is pinned to a full commit with its tag in a
+# comment (INFRA-06); Dependabot updates the commit and the comment together.
 version: 2
 updates:
   - package-ecosystem: "pip"

@@ -10,6 +10,10 @@
 # GITHUB_TOKEN, and pushes made with that token deliberately do NOT trigger
 # on:push workflows, so without the workflow_run trigger the public ledger
 # would go stale the moment it mattered.
+#
+# GitHub Pages ignores site/_headers (it cannot set response headers at all);
+# that file takes effect when the site moves to Cloudflare Pages (LAUNCH.md,
+# "The repo and the host"), and this workflow is retired then.
 name: pages
 
 on:
@@ -26,10 +30,8 @@ on:
     workflows: [monday-receipts, weekly-report]
     types: [completed]
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 concurrency:
   group: pages
@@ -37,16 +39,26 @@ concurrency:
 
 jobs:
   deploy:
+    # A workflow_run fired by a run from somebody else's fork never deploys
+    # (the checkout resolves to this branch's tip anyway; this says so).
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Pinned to full commits, tags in the comments (INFRA-06).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

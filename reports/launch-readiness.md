@@ -29,12 +29,13 @@ Treat the rest of 2026 as a proof season. The profit case is August 2027.
 **The busy money-league regular**: about 28–49, a white-collar job, 1–3 leagues with at
 least one $50–$100 buy-in on ESPN, Yahoo or CBS (average entry fees: CBS $122, Yahoo $91,
 ESPN $70, Sleeper $45). Already in the top quarter of fantasy spenders, about 4.5 hours a
-week on it, and wants the decision made rather than another tool to run. **Sell him the $39
-season pass.**
+week on it, and wants the decision made rather than another tool to run. **Sell him the $29
+Rest-of-Season Pass** (2026 sells one-time passes; the $39 season pass is 2027's).
 
-**Second: his league's commissioner**, buying the $99 League Pass out of dues (about $8.25 a
-manager in a 12-team league). Each sale puts the brand in front of 10–12 managers, and word
-of mouth is how players find tools — which matters most for an anonymous brand.
+**Second: his league's commissioner**, buying the $69 League Pass for the rest of the season
+out of the pot (about $5.75 a manager in a 12-team league). Each sale puts the brand in front
+of 10–12 managers, and word of mouth is how players find tools — which matters most for an
+anonymous brand.
 
 Not yet: multi-league grinders (FantasyPros covers 50 leagues), Sleeper-native under-30s
 (lowest buy-ins, free AI, and a two-FLEX default lineup the product can't set up yet), free
@@ -104,30 +105,37 @@ All in `LAUNCH.md`, in this order:
    `SENDER_POSTAL_ADDRESS`. The launch announcement refuses to send without it.
 4. **Step 4:** one real purchase watched from payment to inbox, then open — ideally for the
    Week 7 Tuesday (Oct 20). Each closed week costs about an eighth of what's left of 2026.
+   *(Oct 23: Week 7 passed with checkout closed. The target is now a weekend proving purchase
+   and an opening before the Week 8 Tuesday, Oct 27 — LAUNCH.md "Where things stand".)*
 5. **Then** Resend Pro and the free own-roster report (`TRIAL_OPEN`).
 
 ## The money
 
-From `run/economics.py` (assumptions at its top) and the audit's model.
+From `run/economics.py` (assumptions at its top) and the audit's model. **Re-based Oct 23
+2026 on what 2026 actually sells** — one-time $29 / $19 / $69 passes, no Stripe Billing fee,
+Stripe's C$15 dispute fee counted, and the weeks left counted from an Oct 26 opening (BIZ-03).
+The audit's first version priced the retired $39 / $99 subscriptions from an Oct 20 opening
+and came to about $1,114 for the same sales — half as much again as 2026's prices leave.
 
 | Number | Value |
 |---|---|
-| Stripe on a $39 pass (Canadian account, US card, CAD payout) | about 7.0% — $2.72, kept by Stripe on a refund |
-| With a USD payout account | about $1.94 |
-| Net per season pass after Stripe, 8% refunds, disputes | about $32.93 |
-| Net per League Pass | about $84, plus an expected renewal |
-| Break-even on this season's fixed costs | a handful of purchases (mailbox, domain) |
-| Base case for 2026, open Week 7 | about 30 purchases + 2 League Passes: about $1,114 after Stripe, refunds, disputes and fixed costs (`run/economics.py`; the audit's first hand estimate was about $880) |
-| Owner time for that base case | about 64 hours — PLAN §5's own budget of ~35 min a day for 12 weeks (49 h), the weekly QA-and-refunds hour (12 h) and setup (3 h) — so about $17 an hour. `run/economics.py` counts it the same way (it counted 20 minutes a day, about $26 an hour, until Oct 17 2026), and `make launch-check` fails if the two disagree |
+| Stripe on a $29 Rest-of-Season Pass (Canadian account, US card, CAD payout) | about 6.4% — $1.87, kept by Stripe on a refund |
+| With a USD payout account | about $1.29 |
+| Net per pass after Stripe, 8% refunds and disputes | $29 pass about $24.57 · $19 Playoff Pass about $16.00 · $69 League Pass about $58.85 |
+| Break-even on this season's fixed costs | two $29 passes (mailbox, domain) |
+| Base case for 2026, opening Mon Oct 26 (first report Week 8) | about 30 purchases + 2 League Passes, the 30 split 20 Rest-of-Season and 10 Playoff (Weeks 13–17 assumed to sell at half a regular week, to the half of a league still alive): about $727 after Stripe, refunds, disputes and fixed costs (`run/economics.py`) |
+| Owner time for that base case | about 59 hours — PLAN §5's own budget of ~35 min a day for 11 weeks (45 h), the weekly QA-and-refunds hour (11 h) and setup (3 h) — so about $12 an hour. `run/economics.py` counts it the same way, and `make launch-check` fails if the two disagree |
 | 100 subscribers by Week 10 | would need 5,000–20,000 visitors in 2–3 weeks: not organic |
-| Paid ads | cost $50–$300 per buyer against about $42 of value: none this season |
-| Biggest lever | the refund rate: 15% costs about $128, 25% about $310 per 50 purchases |
+| Paid ads | cost $50–$300 per buyer against about $34 of value (a $29 pass plus a 30% chance of a 2027 re-buy at $39): none this season |
+| Biggest lever | the refund rate: 15% costs about $95, 25% about $231 per 50 $29 passes |
 | Free email capacity | Resend's free tier lasts to about 85 recipients a send day |
 | GST/HST | not until C$30,000 of sales in four quarters |
 
-**Pricing:** keep $14.99 and $39, never prorate; the pass earns more than monthly in every
-join week. Don't advertise the pass's 12-month coverage until rosters roll to a new season
-(IDEAS.md), or 2027 reports would be built from 2026 rosters.
+**Pricing:** 2026 is one payment per pass and nothing renews; a 2026 buyer coming back in
+2027 is a new purchase at the founding $39, so the model calls it a re-buy rate, never a
+renewal rate. For 2027 keep $14.99 and $39, never prorate; the pass earns more than monthly in
+every join week. Don't advertise a pass's 12-month coverage until rosters roll to a new
+season (IDEAS.md), or 2027 reports would be built from 2026 rosters.
 
 ## What was deliberately not done
 

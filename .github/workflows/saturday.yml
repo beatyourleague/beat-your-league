@@ -32,45 +32,69 @@ concurrency:
   group: saturday-final-check
   cancel-in-progress: false
 
-permissions:
-  contents: write   # persist sent.jsonl — it is what stops a second send
-  issues: write
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # persist sent.jsonl — it is what stops a second send
+      issues: write
+      actions: read     # the sealed registry's and plans' backups, when the cache is gone
     steps:
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
       # out the send log as it was when it was QUEUED — before the run ahead
       # of it pushed — and mail everything that run just mailed. (A double
       # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
-      - uses: actions/checkout@v4
+      #
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
+      # push token kept out of .git/config until the persist step (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked, runtime packages only (INFRA-07; requirements.lock).
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      # Read-only here: Saturday opens the sealed registry and plans and saves
+      # nothing back (run/statebox.py). A file that fails its check stops the
+      # run before anybody is told to change a lineup on the strength of it.
+      - name: Restore subscriber registry (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-          restore-keys: registry-
-      - name: Restore sent lineups
-        uses: actions/cache/restore@v4
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+          restore-keys: sealed-registry-
+      - name: Restore sent lineups (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/plans
-          key: plans-${{ github.run_id }}
-          restore-keys: plans-
+          path: data/sealed/plans.enc
+          key: sealed-plans-${{ github.run_id }}
+          restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
+      - name: Open the registry and the sent lineups
+        id: open
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -92,15 +116,20 @@ jobs:
           BILLING_PORTAL_URL: ${{ secrets.BILLING_PORTAL_URL }}
           SENDER_POSTAL_ADDRESS: ${{ secrets.SENDER_POSTAL_ADDRESS }}
         run: .venv/bin/python -m run.saturday
+      # The only step handed a token that can push (the helper reads it from
+      # this step's environment; .git/config never holds it).
       - name: Persist the send log
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Saturday final check: send log"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
       # ONE open issue per kind of failure: a later failure comments on the
       # open one instead of opening another (before launch these crons filed
@@ -116,11 +145,11 @@ jobs:
         run: |
           body="$(date -u +%Y-%m-%d): the Saturday final check failed, so subscribers whose lineup changed may not have been told.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
           Check in this order: whether this week's injury report was published
-          (the log says so), whether the plans cache was restored, the email
-          provider credentials."
+          (the log says so), whether the sealed plans were restored and opened
+          (CACHE_KEY), the email provider credentials."
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then

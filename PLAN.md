@@ -223,11 +223,13 @@ show anyway.
 | Claude Pro (Aug + Sep) | $40 | powers Claude Code build + language layer |
 | GitHub, GitHub Actions, GH Pages, Cloudflare (DNS, email forwarding, the form Worker) | $0 | free tiers. Sleeper is no longer used (§0) |
 | Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
-| Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94 | no fixed cost |
+| Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94. 2026's one-time passes carry no Billing fee: $1.87 on the $29 pass, $1.30 on the $19 and $4.15 on the $69, each kept on a refund. A dispute adds C$15 | no fixed cost |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
 | Resend Pro | $20/mo | **trigger: past about 85 recipients on one day (subscribers + free reports).** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000. `make launch-check` counts it |
 | Sender mailbox | ≈US$10/mo | a rented mailbox or PO box for the postal address commercial email must carry (US and Canadian law) — never a home address |
-| GitHub Actions minutes | $0 while public | **only if the repo goes private** (LAUNCH §10, hosting): 2,000 free minutes a month, and the hourly intake is ~720 runs. Any paid minutes get their own line here first |
+| GitHub Actions minutes | $0 while public | **only if the repo goes private** (LAUNCH §11): 2,000 free minutes a month, every job billed at least a minute, and the hourly intake is ~720 runs once GitHub's backup cron is dropped (~1,440 with it — so it is dropped first). A $0 budget with an alert. Any paid minutes get their own line here first |
+| Cloudflare Pages (the site's host, LAUNCH §11) | $0 | free plan: 500 builds a month, built only when `site/` changes. It is what serves `site/_headers` (HSTS, CSP, no framing), which GitHub Pages cannot |
+| GitHub Pro | not budgeted | $4/mo, only if branch rulesets or environments are wanted back after the repo goes private — a line here first |
 | Capafy listing (optional side bet) | $0.99 | closed-source skill version |
 | **Total through launch** | **≤ $68** | leaves buffer inside the $100 cap |
 
@@ -255,20 +257,25 @@ the plan-level view.
 | Mention campaign | **Written, on hold** — the owner is not emailing other sites for now (`content/pitches.md`) |
 | `robots.txt`, JSON-LD | **Done.** No `sitemap.xml` or canonical links yet — hygiene, not a lever |
 
-### Now → January, from Week 6
+### Now → January, from Week 7 (rewritten Oct 23 2026)
+0. **Lock the accounts** — LAUNCH.md step 0 (passkeys, a login address on no public page and
+   not on the domain, DMARC, the domain verified for GitHub Pages). The static site has no
+   server to break into; the accounts are the way in.
 1. **Deploy the form Worker** — LAUNCH.md step 5, first: without it roster changes, seats and
    the email list have nowhere to go, and checkout does not open before it.
-2. **Open checkout** — LAUNCH.md steps 1–4 and 6, with fresh payment links. Every week this
-   slips is a week of the season nobody can buy.
+2. **Open checkout** — LAUNCH.md steps 1–4 and 6, with fresh one-time payment links. Week 7
+   passed closed; the target is a proving purchase Sat Oct 24 and an opening Oct 25–26, so the
+   Week 8 send (Oct 27) carries the first buyers. Every week this slips is about a tenth of
+   what is left.
 3. **Talk to five managers, then sell to people** in §5.1's order; LAUNCH.md section 7 has
-   the commands.
-4. **The public record starts with Week 7 — it holds no rows yet.** The code that records the
-   live sample's odds landed Oct 15 at 4:16 PM ET, after Week 6's last pre-kickoff build; the
-   Oct 16 rebuild ran after kickoff with `--force`, which records nothing. The Week 7 Tuesday
-   build (Oct 20) is the first that can record, and Monday grades it, so from then the record
-   grows with no subscriber. After Oct 20, check that `data/processed/ledger/typed-ppr-12-2026`
-   was committed (correction, Oct 17: this line said it had been recording since Oct 15).
-5. **Decide the proof-season gates** (§6, LAUNCH §10). The Oct 11 gates measured nothing.
+   the commands (the five free reports: Tue Oct 27, for Week 8).
+4. **The public record started with Week 7.** The Oct 20 Tuesday build recorded the live
+   sample's first three calls (`data/processed/ledger/typed-ppr-12-2026`), and Monday grades
+   them, so the record grows with no subscriber.
+5. **Adopt the proof-season gates, counted from the opening day D** (§6, LAUNCH §10). The
+   Oct 11 gates measured nothing.
+6. **Move the site to Cloudflare Pages before the first launch post; make the repo private
+   after the Worker has proven itself** (LAUNCH §11, in that order).
 
 ### Weekly loop, once checkout is open
 - **Tue:** the cron builds and mails every subscriber's file; the owner opens their own as QA.
@@ -311,6 +318,16 @@ an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 | ~~ESPN / Yahoo~~ | **Already true** — a pasted roster works from any platform |
 
 ## 4. Offer ladder & monetization rules
+
+**2026 SELLS ONE-TIME PASSES (owner decision, Oct 18 2026; CLAUDE.md "2026 pricing").** For the
+mid-season launch: the **$29 Rest-of-Season Pass**, the **$19 Playoff Pass** (automatic once a
+buyer's first report would be Week 13) and the **$69 League Pass for the rest of the season**
+(on its own page) — each one payment, nothing renews, monthly not sold. 2026 buyers' 2027
+season pass is the founding $39. Everything below about $39 / $14.99 / $99 subscriptions,
+renewals and the ladder invariant is the **2027** design and stays as written for it. What the
+2026 prices leave, and the base case (about $727 after fixed costs for 30 passes + 2 League
+Passes, opening Oct 26), is `run/economics.py`; a 2026 buyer coming back in 2027 is a
+**re-buy**, never a renewal, and the model counts it that way.
 
 **REVISED Aug 17 2026 — the price rises and a free door opens.** The Aug 13 decision was "charge
 from day one, no free tier," with the public ledger and the Week-2 refund as the risk-reversal.
@@ -849,20 +866,29 @@ product. Spend the rest of the season on exactly two things — generate graded 
 publish the weekly content feed — then relaunch in August 2027. That is a materially better
 position than any amount of feature work bought in October 2026.
 
-**Proposed proof-season gates (Oct 16 2026 — binding only once the owner adopts them).** Dated
-from the week checkout actually opens, written before any buyer exists:
+**Proposed proof-season gates (Oct 16 2026, rewritten Oct 23 — binding only once the owner
+adopts them).** The Oct 16 version said "dated from the week checkout actually opens" and then
+wrote fixed dates (Nov 10, Dec 22) for an opening that slipped; it also leaned on a Tuesday
+open rate, which the privacy promise ("no tracking of what you read") rules out and
+`run/delivery.py` never measures. So the gates are counted from **D, the day checkout opens**
+(write the date here when it happens: D = ____), written before any buyer exists:
 
 | Read by | Metric | Green | Red → do this |
 |---|---|---|---|
-| **Nov 10** | Free reports sent (hand-run or self-serve) | ≥30 | <15 → the selling hours aren't happening; fix that before anything else |
-| **Nov 10** | Paid purchases | ≥10, ≥3 from outside your own leagues | <5 from ≥30 free reports → stop selling hours; spend the season on the 2027 work (season roll, owned list) |
+| **D+14** | Free reports sent (hand-run or self-serve) | ≥20 | <10 → the selling hours aren't happening; fix that before anything else |
+| **D+14** | Paid purchases | ≥5, ≥2 from outside the owner's own leagues | <5 → stop selling hours; spend the season on the 2027 work (season roll, owned list) |
+| **D+14** after each League Pass | Seats claimed | ≥ half its `seat_cap` | Fewer → ask the commissioner what stopped the group chat before selling another |
+| **D+28** | Refund rate | ≤15% | ≥25% → talk to every refunder before another selling hour |
 | **Dec 22** (Week 16) | Purchases + League Passes | ~30 + 2 | Fewer → 2026 was the proof season; write down why before August |
 | **Dec 22** | Graded rows on the public record | ≥30 | Fewer → find which week's calls never settled |
 
 Until then: no new features except launch blockers and defects a paying customer would hit.
 
-Leading indicators watched weekly: trial signups, Tuesday open rate, free→paid conversion, League
-Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, follower count.
+Leading indicators watched weekly: free reports sent and how many became a paid pass within 14
+days, replies to reports, roster-update requests per subscriber (the engagement stand-in for an
+open rate we do not measure), stop requests, refunds, League Pass seats claimed vs `seat_cap`,
+and the owner's hours against `run/economics.py`'s ~59-hour budget. Vanity metrics ignored:
+impressions, likes, follower count.
 
 ## 7. Risks & mitigations
 
@@ -886,6 +912,15 @@ Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, f
 - **Seasonality** → dynasty/keeper or a draft-week product are the realistic year-round candidates;
   see §4. Do not bill through months with no product.
 - **Solo burnout** → if a week slips, subscriber reports ship and content skips.
+- **Account takeover** (pre-launch review, Oct 2026) → the static site has no server to
+  attack; one Cloudflare login holds the domain, DNS, mail and the Worker, and mail resets
+  every other account. Mitigation: LAUNCH step 0 (passkeys, a private login address that is
+  neither on the domain nor in the repo's history, offline recovery codes).
+- **The public repo** → the playbook, the delivery logs and an old personal address are public,
+  and a stranger's approved pull request can reach the Actions cache. Mitigation: the
+  subscriber list and plans are cached only encrypted (`run/statebox.py`), with a durable
+  encrypted backup; the site moves to Cloudflare Pages and the repo goes private in LAUNCH
+  §11's order.
 - **Scope creep** → nothing gets built that isn't in §3. New ideas go to IDEAS.md.
 
 ## 8. Definition of success
@@ -893,6 +928,14 @@ Pass seats claimed vs league size. Vanity metrics ignored: impressions, likes, f
 **Revised Aug 17 2026, downward and honestly.** The arithmetic: 40 season passes at $39 is $1,560;
 three League Passes is $297; infra ~$15. **A realistic good outcome is $1,500–$3,000 for the
 season, essentially all of it from channels that are people, not pages.**
+
+**Revised again Oct 23 2026, for what 2026 actually sells.** At the one-time prices, opening in
+Week 8, the base case — 20 Rest-of-Season Passes, 10 Playoff Passes and 2 League Passes — leaves
+about $727 after Stripe, refunds, disputes and fixed costs, for about 59 owner-hours
+(`run/economics.py`; the launch check fails if `reports/launch-readiness.md` stops agreeing).
+2026 is a proof season worth a few hundred dollars; whether this is profitable is a 2027
+question, decided by the four open items in IDEAS.md (2027 price and founder link, a second
+team on its own link, League Pass as the channel, the season roll).
 
 If the threshold for "makes money" is higher than that, no strategy in five research lenses reaches
 it this season, and the correct move is to run 2026 deliberately as **the paid pilot that builds the
@@ -930,9 +973,11 @@ The product refuses to publish a number it cannot stand behind. The plan gets th
 **The largest gap: zero voice-of-customer.** Not one fantasy manager's own words were read; Reddit
 was blocked at the tool level in every research lens. Every demand claim in this plan is revealed
 preference from vendor pricing pages, and *"three competitors sell this"* is equally consistent
-with *"three competitors are failing to sell this."* **It is still the largest gap (Oct 16 2026):
-no payment has been processed yet. Five free reports to managers the owner already knows, with
-three questions each (LAUNCH.md section 7.2), is the cheapest way to start closing it.** No
+with *"three competitors are failing to sell this."* **It is still the largest gap (Oct 23 2026):
+no payment has been processed and IDEAS.md's "What managers said" is empty. Five free reports
+to managers the owner already knows, with three questions each (LAUNCH.md section 7.2, on Tue
+Oct 27 for Week 8), is the cheapest way to start closing it — and once checkout is open, the
+link: a purchase is the only real answer to "would you pay".** No
 competitor's subscriber count, revenue or download figure was confirmed anywhere.
 
 **Unknowable from public data:** free-to-paid conversion for this niche (no benchmark exists;

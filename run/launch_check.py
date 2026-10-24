@@ -88,10 +88,13 @@ PERSONAL_DOMAINS = r"@(gmail|googlemail|outlook|hotmail|live|yahoo|icloud|me|aol
 # EMAIL_REPLY_TO is optional since D7: an unset one means hello@ (run/delivery).
 # LOG_SECRET keys every address-derived code in the public send log and stop
 # list (run/digest.py); without it every real send refuses.
+# CACHE_KEY seals the registry and the sent lineups between runs
+# (run/statebox.py): once STRIPE_API_KEY is set, a run without it goes red and
+# saves nothing — so "all present" without it was the OPS-4 failure again.
 REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", "EMAIL_FROM",
                     "LOG_SECRET", "RESEND_API_KEY", "SITE_URL", "BILLING_PORTAL_URL",
                     "FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
-                    "SENDER_POSTAL_ADDRESS")
+                    "SENDER_POSTAL_ADDRESS", "CACHE_KEY")
 # What each feature stops doing without which secret, so a missing name says
 # what a buyer loses rather than only that a box is empty. UPDATE_SECRET keys
 # two things since Oct 2026: the roster-update confirmation codes AND each
@@ -107,6 +110,7 @@ FEATURE_SECRETS = {
     "A League Pass payer's own seat link": ("FORM_ENDPOINT", "FORM_API_KEY", "UPDATE_SECRET",
                                             "SITE_URL"),
     "Free reports and the waitlist": ("FORM_ENDPOINT", "FORM_API_KEY"),
+    "Keeping subscribers, seats and roster changes between runs": ("CACHE_KEY",),
 }
 
 
@@ -1476,6 +1480,94 @@ def check_dns() -> list[Gate]:
     ]
 
 
+# The GitHub account that owns the repo and its Pages site: the verified
+# domain's TXT record is named after it.
+GITHUB_ACCOUNT = "beatyourleague"
+SECURITY_TXT = SITE / ".well-known" / "security.txt"
+
+
+def check_security_txt(today: date | None = None) -> list[Gate]:
+    """INFRA-15: site/.well-known/security.txt (RFC 9116) names where a
+    security report goes, and its Expires is ahead — a lapsed one tells a
+    reporter the address is dead. Read from the repo, so it runs offline."""
+    name = "security.txt names a contact and has not expired"
+    if not SECURITY_TXT.is_file():
+        return [Gate("Site", name, "FAIL", "site/.well-known/security.txt is missing")]
+    fields: dict[str, str] = {}
+    for line in SECURITY_TXT.read_text(encoding="utf-8").splitlines():
+        if ":" in line and not line.startswith("#"):
+            key, value = line.split(":", 1)
+            fields.setdefault(key.strip().lower(), value.strip())
+    try:
+        expires = datetime.fromisoformat(fields.get("expires", "").replace("Z", "+00:00"))
+    except ValueError:
+        return [Gate("Site", name, "FAIL", "no readable Expires line")]
+    if not fields.get("contact", "").startswith(("mailto:", "https://")):
+        return [Gate("Site", name, "FAIL", "no Contact line")]
+    left = (expires.date() - (today or date.today())).days
+    if left < 0:
+        return [Gate("Site", name, "FAIL", f"expired {expires.date()} — set a new Expires")]
+    return [_gate("Site", name, left >= 30,
+                  f"expires {expires.date()} — set a new Expires (at most a year ahead)",
+                  f"{fields['contact']}, expires {expires.date()}", fail="WARN")]
+
+
+def check_hardening() -> list[Gate]:
+    """INFRA-15: the owner's account and DNS hardening (LAUNCH.md step 0 and
+    section 11), read back from outside — each an OWNER line until done, like
+    the DMARC gate. Read-only: dig, `gh api` GETs and two HTTPS GETs."""
+    import requests
+    gates: list[Gate] = []
+    try:
+        challenge = _dig("TXT", f"_github-pages-challenge-{GITHUB_ACCOUNT}.{DOMAIN}")
+        ds = _dig("DS", DOMAIN)
+        caa = _dig("CAA", DOMAIN)
+    except (RuntimeError, subprocess.TimeoutExpired) as exc:
+        gates.append(Gate("Owner", "The domain's hardening can be read", "SKIP", str(exc)))
+    else:
+        gates += [
+            _gate("Owner", "The domain is verified for GitHub Pages", bool(challenge),
+                  f"no _github-pages-challenge-{GITHUB_ACCOUNT} TXT record — LAUNCH.md "
+                  "step 0.7, before ANY hosting or visibility change", "verified",
+                  fail="OWNER"),
+            _gate("Owner", "DNSSEC is on", bool(ds),
+                  "no DS record — Cloudflare → DNS → Settings → DNSSEC (LAUNCH.md step 0.3)",
+                  "DS published", fail="OWNER"),
+            _gate("Owner", "CAA records limit who may issue the certificate", bool(caa),
+                  "no CAA record — optional; add it once the site's host is settled "
+                  "(LAUNCH.md section 11), so it names the authority that host uses",
+                  ", ".join(caa[:3]), fail="WARN"),
+        ]
+    rules = _gh_json("repos/{owner}/{repo}/rules/branches/main")
+    if not isinstance(rules, list):
+        gates.append(Gate("Owner", "main can't be force-pushed or deleted", "OWNER",
+                          "can't read main's rules from here (gh signed out, or a private "
+                          "repo on the Free plan, which has none) — LAUNCH.md step 0.5"))
+    else:
+        types = {r.get("type") for r in rules if isinstance(r, dict)}
+        gates.append(_gate("Owner", "main can't be force-pushed or deleted",
+                           {"deletion", "non_fast_forward"} <= types,
+                           "no ruleset with Restrict deletions and Block force pushes on "
+                           "main — LAUNCH.md step 0.5", "ruleset active", fail="OWNER"))
+    try:
+        page = requests.get(f"{LIVE}/join/", timeout=20)
+        missing = [h for h in ("strict-transport-security", "content-security-policy")
+                   if h not in {k.lower() for k in page.headers}]
+        gates.append(_gate("Live", "The live site sends HSTS and a Content-Security-Policy",
+                           not missing, "no " + " or ".join(missing) + " — GitHub Pages "
+                           "can't send headers; site/_headers takes effect on Cloudflare "
+                           "Pages (LAUNCH.md section 11)", "both present", fail="OWNER"))
+        found = requests.get(f"{LIVE}/.well-known/security.txt", timeout=20)
+        gates.append(_gate("Live", "The live site serves security.txt",
+                           found.status_code == 200 and "Contact:" in found.text,
+                           f"/.well-known/security.txt answered {found.status_code} — "
+                           "pushed yet?", "served", fail="WARN"))
+    except requests.RequestException as exc:
+        gates.append(Gate("Live", "The live site's security headers", "SKIP",
+                          type(exc).__name__))
+    return gates
+
+
 def check_live() -> list[Gate]:
     import requests
     gates = []
@@ -2221,6 +2313,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("compliance text", check_compliance), ("every email's sender and way out",
                                                 check_email_senders),
         ("owner secrets", check_secrets), ("economics", check_economics),
+        ("security.txt", check_security_txt),
     ]
     if not offline:
         steps += [("email DNS", check_dns), ("live site", check_live),
@@ -2229,7 +2322,8 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
                   ("Stripe billing page", check_billing_portal),
                   ("refunds and disputes", check_refund_rates), ("email volume and tax",
                                                                  check_volume),
-                  ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval)]
+                  ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval),
+                  ("account and domain hardening", check_hardening)]
     if not fast:
         steps += [("browser", check_browser), ("email width", check_email_widths),
                   ("join flows", check_join_flows), ("accessibility", check_accessibility),

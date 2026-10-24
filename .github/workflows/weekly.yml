@@ -67,14 +67,17 @@ concurrency:
   group: weekly-report
   cancel-in-progress: false
 
-permissions:
-  contents: write   # commit the record (ledger, send log, player directory) back
-  issues: write     # raise an issue when a run fails, so it is never silent
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 jobs:
   week:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write   # commit the record (ledger, send log, player directory) back
+      issues: write     # raise an issue when a run fails, so it is never silent
+      actions: read     # the sealed registry's and plans' backups, when the cache is gone
     steps:
       # fetch-depth: 0 because this job COMMITS BACK. The default is a
       # shallow clone, and `git pull --rebase` against a shallow history
@@ -85,17 +88,22 @@ jobs:
       # out the send log as it was when it was QUEUED — before the run ahead
       # of it pushed — and mail everything that run just mailed. (A double
       # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
-      - uses: actions/checkout@v4
+      #
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
+      # push token kept out of .git/config until the persist step (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked, runtime packages only (INFRA-07; requirements.lock).
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
       # The ledger and the send log arrive WITH the checkout — they are
       # committed. The registry holds subscriber emails, so it is gitignored and
       # has to be restored, or the send step has nothing to send and silently
@@ -106,29 +114,49 @@ jobs:
       # byl_roster_ref it stamps on the Stripe customer, so a subscriber whose
       # Checkout Session has aged out of Stripe's listing is unrecoverable.
       # GitHub evicts caches after 7 days without access and this cron touches
-      # it on exactly a 7-day cycle, so one skipped week is the whole margin.
-      - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+      # it on exactly a 7-day cycle, so one skipped week was the whole margin —
+      # which is why every sealed save also leaves a backup artifact, and the
+      # open step reaches for it on a cache miss (run/statebox.py RULE S3).
+      #
+      # SEALED (INFRA-02): only data/sealed/*.enc is cached or uploaded,
+      # encrypted under CACHE_KEY, because a pull-request run can restore this
+      # branch's caches. A file that fails its check fails the open step, and
+      # every save below is gated on it.
+      - name: Restore subscriber registry (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-          restore-keys: registry-
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+          restore-keys: sealed-registry-
       # The lineups each subscriber was sent, for Saturday's final check
       # (run/saturday.py). Their OWN key, never inside data/registry: the
       # hourly intake cron saves that cache constantly, and a save racing this
       # run's would drop the week's plans. Restored before the send so the
       # 16:17 retry — which writes no new plans when everything was already
       # sent — saves the 12:17 run's plans forward instead of an empty folder.
-      - name: Restore sent lineups
-        uses: actions/cache/restore@v4
+      - name: Restore sent lineups (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/plans
-          key: plans-${{ github.run_id }}
-          restore-keys: plans-
+          path: data/sealed/plans.enc
+          key: sealed-plans-${{ github.run_id }}
+          restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
+      - name: Open the registry and the sent lineups
+        id: open
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       # The nflverse download cache. Both run.intake and run.tuesday call
       # load_week_data, so without this one cron run downloads ~30 MB twice.
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -165,9 +193,16 @@ jobs:
       # hourly daily run, both mailed the same new buyer a welcome and a first
       # report (reproduced, launch review OPS-6, Oct 2026). The daily run's
       # next half-hour sends whatever this one leaves.
+      #
+      # Never after a failed open (wrong CACHE_KEY, a file that failed its
+      # check, GitHub down mid-restore): data/registry is then EMPTY, and a
+      # full Stripe sweep would write a Stripe-only registry with no seat log
+      # and no roster changes — and the send below would mail every payer a
+      # report on their signup roster, logged as sent, so the right one never
+      # goes. The open's failure already turns the run red and files the issue.
       - name: Turn payments into subscribers
         id: intake
-        if: always()
+        if: always() && steps.open.outcome == 'success'
         continue-on-error: true
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -191,9 +226,10 @@ jobs:
       # empty inboxes — so this step is safe to enable now and starts mailing
       # the day the secret is added, with no code change. Before launch (no
       # registry file and no STRIPE_API_KEY) it exits 0 and says why: a red
-      # run every Tuesday for a checkout that is not open is noise.
+      # run every Tuesday for a checkout that is not open is noise. Gated on
+      # the open like the intake above: never a report off an empty registry.
       - name: Send subscriber reports
-        if: always()
+        if: always() && steps.open.outcome == 'success'
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
@@ -238,41 +274,81 @@ jobs:
       - name: Draft this week's public posts
         if: always()
         run: .venv/bin/python -m run.drops
-      - name: Save subscriber registry
-        if: always()
-        uses: actions/cache/save@v4
+      # Sealed before they leave the runner (run/statebox.py RULE S1): without
+      # CACHE_KEY this exits 1 once there is anything to seal.
+      - name: Seal the registry and the sent lineups
+        id: seal
+        if: always() && steps.open.outcome == 'success'
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
+        run: python -I -S run/statebox.py seal registry plans
+      - name: Save subscriber registry (sealed)
+        if: always() && steps.seal.outputs.registry_sealed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-      - name: Save sent lineups
-        if: always()
-        uses: actions/cache/save@v4
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+      - name: Save sent lineups (sealed)
+        if: always() && steps.seal.outputs.plans_sealed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/plans
-          key: plans-${{ github.run_id }}
+          path: data/sealed/plans.enc
+          key: sealed-plans-${{ github.run_id }}
+      # The durable copies (RULE S3), when this run changed them. The 16:17
+      # retry that finds everyone already sent changes nothing and uploads
+      # nothing; the daily run keeps the registry's copy fresh regardless.
+      - name: Back up the sealed registry
+        if: always() && steps.seal.outputs.registry_sealed == 'true' && steps.seal.outputs.registry_changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sealed-registry
+          path: data/sealed/registry.enc
+          retention-days: 90
+          if-no-files-found: error
+      - name: Back up the sealed lineups
+        if: always() && steps.seal.outputs.plans_sealed == 'true' && steps.seal.outputs.plans_changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sealed-plans
+          path: data/sealed/plans.enc
+          retention-days: 90
+          if-no-files-found: error
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
+      # The live sample's page is rebuilt above, so its inline script hashes
+      # are re-derived before the commit: a stale site/_headers would block
+      # that page's script once the site is served from Cloudflare Pages.
+      - name: Refresh the security headers
+        if: always()
+        run: .venv/bin/python -m render.headers
       # Persist what cannot be rebuilt. `always()` so a failed send still records
       # who WAS mailed — the alternative is double-sending them on the retry.
       # Rebase before pushing: Monday's run commits too.
+      #
+      # The only step handed a token that can push: the credential helper reads
+      # it from this step's environment, so .git/config never holds it.
       - name: Persist the record
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json content/this-week.md
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
+          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Weekly run: ledger, send log, player directory"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: weekly-reports
           # reports/subscribers/ and reports/outbox/ are EXCLUDED deliberately.
@@ -322,11 +398,12 @@ jobs:
         run: |
           body="$(date -u +%Y-%m-%d): the Tuesday pipeline failed. Subscribers may not have been mailed.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
 
           Check in this order: nflverse releases reachable, STRIPE_API_KEY valid,
-          any BLOCKED line in the intake log (a paid roster naming a player the
-          directory does not have), email provider credentials, then whether
+          CACHE_KEY set and unchanged (the open and seal steps), any BLOCKED line
+          in the intake log (a paid roster naming a player the directory does not
+          have), email provider credentials, then whether
           data/processed/sent.jsonl shows a partial send."
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)

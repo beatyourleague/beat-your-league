@@ -1,7 +1,14 @@
-# Pinned per CLAUDE.md security requirements. Runtime:
+# Pinned per CLAUDE.md security requirements. This is the human-edited source;
+# CI installs ONLY the hash-locked copies `make lock` generates from it
+# (requirements.lock: the runtime set, installed by every cron;
+# requirements-dev.lock: runtime plus tests, installed by the test job), each
+# with --require-hashes (INFRA-07). Change a pin here, then run `make lock` and
+# commit all three — the suite fails while they disagree.
+
+# Runtime:
 requests==2.34.2
 
-# Development / tests:
+# Development / tests (never installed beside the crons' secrets):
 pytest==9.1.1
 # The workflow tests parse .github/workflows/*.yml, and the paid-path import
 # walk reads which runners the crons execute. Unpinned, CI never had it: the
