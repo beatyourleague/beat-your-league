@@ -252,15 +252,30 @@ def share_text(report: Mapping[str, Any]) -> tuple[str, str]:
     preview as "a real weekly report" with a 2024 description while the page
     itself was Week 6 of 2026 — a preview that contradicted the page."""
     meta = report["meta"]
-    lineup = report.get("lineup") or []
-    odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
     title = f"Beat Your League — this week's report, Week {meta['week']} of {meta['season']}"
     when = ("Rebuilt after this week's first kickoff." if meta.get("rebuilt_after_kickoff")
             else "Rebuilt every Tuesday of the season.")
     desc = (f"Week {meta['week']} of the {meta['season']} NFL season, for a sample "
-            f"roster: the lineup we'd set, with odds on {odds} of its "
-            f"{len(lineup)} slots. {when}")
+            f"roster: {_listed(share_facts(report))}. {when}")
     return title, desc
+
+
+def share_facts(report: Mapping[str, Any]) -> list[str]:
+    """What the shared preview says the page holds — only what this week's
+    report actually has (launch review M7). It used to count the odds ("odds
+    on 3 of its 9 slots"), which advertises the six slots WITHOUT one to
+    somebody who has not opened the page yet; what sells is what the report
+    does. Every slot is decided every week; the rest is said only when the
+    report carries it."""
+    facts = ["every slot decided"]
+    if (report.get("regret") or {}).get("confidence") is not None:
+        facts.append("the week's closest call")
+    actions = [str(item.get("action") or "") for item in report.get("checklist") or []]
+    if any("can't play this week" in a for a in actions):
+        facts.append("who can't play")
+    if any(a.startswith("Byes ahead") for a in actions):
+        facts.append("byes ahead")
+    return facts
 
 
 # --------------------------------------------------------------------- #
@@ -649,7 +664,7 @@ def last_report_text(season: str, week: str | int) -> tuple[str, str, str]:
 _LAST_BANNER = re.compile(
     r"<b>THE (\d{4}) SEASON(?:\x27|&#x27;)S LAST REPORT</b> — Week (\d+),")
 _CTA = re.compile(
-    r'<a class="btn" href="(?:join/index\.html|index\.html#watch-form)">[^<]*</a>')
+    r'<a class="btn(?: gold)?" href="(?:join/index\.html|index\.html#watch-form)">[^<]*</a>')
 _CARD = re.compile(r'(<div class="ctacard"><p>)(.*?)(</p>)', re.S)
 # The kept page's closing card once the season is over: checkout is closed
 # (D9), so it promises no "first report the day you join".
@@ -676,7 +691,7 @@ def restamp_last(page: str, *, season_over: bool = True) -> str:
         page = _LIVE_BANNER.sub(lambda _m: f'<div class="notice">{banner}</div>',
                                 page, count=1)
     page = _REBUILT_LINE.sub("", page)
-    cta = (f'<a class="btn" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
+    cta = (f'<a class="btn gold" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
            if season_over else sample_cta())
     page = _CTA.sub(lambda _m: cta, page)
     card = (f"This is the {season} season&#x27;s last report, for a sample roster. "
@@ -696,6 +711,66 @@ def _with_share(page: str, title: str, desc: str) -> str:
         else:
             page = page.replace("</head>", tag + "\n</head>", 1)
     return page
+
+
+# --------------------------------------------------------------------- #
+# a published page's chrome follows what the site sells today (D1, QA-01)
+# --------------------------------------------------------------------- #
+
+_SITEBAR = re.compile(r'<div class="sitebar">.*?</nav></div>', re.S)
+_STOP_BLOCK = re.compile(r"<b>Done with this\?</b>.*?(?=</footer>)", re.S)
+_PROMISE = re.compile(r"(<div class=\"ctacard\"><p>.*?)Yours is built from your own "
+                      r"roster.*?(</p>)", re.S)
+# The footer's data line as the Oct 20 build printed it ("scored to your
+# league's settings": INFO-113 retired the overclaim), and the line now.
+_OLD_SOURCE = "Aggregated and scored to your league&#x27;s settings by us."
+_NEW_SOURCE = ("Aggregated and scored by us under the scoring you chose (full PPR, "
+               "half PPR or standard).")
+
+
+def restamp_chrome(page: str) -> str:
+    """A published sample with today's chrome and nothing else moved: the
+    site nav, both asks (sample_cta, which follows the landing's
+    CHECKOUT_OPEN), the closing card's promise, and the footer's way out
+    (render.report.stop_route — while the site sells one-time passes, the
+    one-payment stop route). No number, banner, stamp or row is touched.
+
+    Why it exists: the cron builds this page from whatever origin/main holds,
+    and the Oct 20 build ran from code that predated the one-time passes —
+    so the page linked from the hero told a one-payment buyer to "cancel it
+    yourself from your own billing page" and sent them into a closed
+    checkout (launch review D1, QA-01, F8). Rebuilding to fix the words
+    would have moved the numbers: after kickoff a --force rebuild drops
+    every odds whose game has started. Idempotent."""
+    from render.report import (JOIN_PROMISE, cancel_html, sample_cta, site_bar,
+                               stop_route)
+    page = _SITEBAR.sub(lambda _m: site_bar(uid="bylm"), page)
+    page = _CTA.sub(lambda _m: sample_cta(), page)
+    page = _PROMISE.sub(lambda m: m.group(1) + esc(JOIN_PROMISE) + m.group(2), page,
+                        count=1)
+    stop = cancel_html(stop_route({"anonymized_demo": True}), sample=True)
+    page = _STOP_BLOCK.sub(lambda _m: stop, page, count=1)
+    page = page.replace(_OLD_SOURCE, _NEW_SOURCE)
+    # The two head lines a rebuild would also change, said the way it would
+    # (render.report.render's sample title; share_text's facts, minus the
+    # ones only the report can confirm): the odds count advertised the slots
+    # WITHOUT a number (M7).
+    page = re.sub(r"<title>Beat Your League — (\d{4}) Week (\d+) Report</title>",
+                  r"<title>Beat Your League — sample fantasy football report, \1 Week \2</title>",
+                  page, count=1)
+    return re.sub(r"the lineup we(?:&#x27;|')d set, with odds on \d+ of its \d+ slots",
+                  "every slot decided", page)
+
+
+def restamp_style(page: str, template: str) -> str:
+    """The page's <style> swapped for the template's current design, so the
+    restamped nav is drawn with the CSS it was written for. The page's own
+    style is the template's extract plus the mark rules (render.report.render),
+    so this changes presentation only."""
+    from render.report import MARK_CSS, extract_design
+    style, _links = extract_design(template)
+    return re.sub(r"<style>.*?</style>", lambda _m: f"<style>{style + MARK_CSS}</style>",
+                  page, count=1, flags=re.S)
 
 
 def keep_last_page(out: Path, *, season_over: bool = True) -> None:
@@ -742,7 +817,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-record", action="store_true",
                         help="a preview before kickoff: build the page, record nothing")
     parser.add_argument("--now", help="ISO time to judge kickoff against (tests)")
+    parser.add_argument("--restamp", nargs="*", type=Path, metavar="PAGE",
+                        help="rewrite only the chrome (nav, asks, footer way out) of "
+                             "published pages — default this week's — moving no number")
     args = parser.parse_args(argv)
+    if args.restamp is not None:
+        template = TEMPLATE_PATH.read_text(encoding="utf-8")
+        for path in args.restamp or [args.out]:
+            before = path.read_text(encoding="utf-8")
+            after = restamp_style(restamp_chrome(before), template)
+            path.write_text(after, encoding="utf-8")
+            print(f"{path}: chrome {'restamped' if after != before else 'already current'}")
+        return 0
     now = (datetime.fromisoformat(args.now.replace("Z", "+00:00")) if args.now
            else datetime.now(timezone.utc))
     context: dict = {}

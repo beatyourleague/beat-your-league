@@ -51,7 +51,8 @@ def test_every_post_fits_says_sample_and_links_the_live_report() -> None:
     assert [p["name"] for p in posts] == ["The closest call", "The if/then", "Rising roles"]
     for post in posts:
         assert len(post["text"]) <= drops.LIMIT, post["name"]
-        assert URL in post["text"]
+        # The link rides the first reply, never the post (launch review M8).
+        assert URL not in post["text"] and URL in post["reply"]
     assert "sample roster" in posts[0]["text"] and "sample roster" in posts[1]["text"]
     assert "55%" in posts[0]["text"]
 
@@ -105,7 +106,9 @@ def test_a_call_with_no_like_for_like_fact_is_not_drafted() -> None:
 def test_the_fact_line_gives_way_before_the_post_is_dropped() -> None:
     """Long names push the post past 280: a shorter like-for-like fact takes
     the place of a long one; the question and the number never go."""
-    long_a, long_b = "Christopher Longname-Hyphen", "Bartholomew Extralongsurname"
+    # Longer since the link left the post for its first reply (M8): the
+    # same names now fit with the long line, so the case needs longer ones.
+    long_a, long_b = "Christopher Longname-Hyphenationist", "Bartholomew Extralongsurnamesmiths"
     regret = {**_report()["regret"], "start_name": long_a, "over_name": long_b}
     lineup = [{**_report()["lineup"][0], "player_name": long_a,
                "games": [12.25, 18.5, 9.75]}]
@@ -114,7 +117,7 @@ def test_the_fact_line_gives_way_before_the_post_is_dropped() -> None:
     text = _named(drops.drafts(_report(regret=regret, lineup=lineup, bench=bench)),
                   "The closest call")
     assert len(text) <= drops.LIMIT
-    assert text.startswith("Start Longname-Hyphen or Extralongsurname at FLEX this week? ")
+    assert text.startswith("Start Longname-Hyphenationist or Extralongsurnamesmiths at FLEX this week? ")
     assert "55%" in text
     assert "Last games" not in text and "projects 10.6" in text, "the long line did not give way"
 
@@ -182,7 +185,7 @@ def test_a_week_with_no_call_still_drafts_a_facts_only_post() -> None:
     assert names == ["Rising roles"]
     posts = drops.drafts(_report(regret=gated, pivots=[], rising=[]))
     text = _named(posts, "Workloads")
-    assert "sample roster" in text and URL in text and len(text) <= drops.LIMIT
+    assert "sample roster" in text and URL not in text and len(text) <= drops.LIMIT
     assert "Judkins, last 4 games: 18 targets (4.5 a game), 61 carries" in text
     assert "%" not in text
     # A week WITH a call does not add it: one facts-only post is the floor.
@@ -195,7 +198,7 @@ def test_a_post_that_cannot_fit_drops_a_line_rather_than_truncating() -> None:
                               "recent": 15.5, "earlier": 2.0}] * 6)
     [post] = [p for p in drops.drafts(report) if p["name"] == "Rising roles"]
     assert len(post["text"]) <= drops.LIMIT
-    assert post["text"].count(long_name) < 6 and post["text"].rstrip().endswith("this-week.html")
+    assert post["text"].count(long_name) < 6 and post["text"].rstrip().endswith("your league.")
 
 
 def test_no_post_promises_a_result_or_uses_a_banned_word() -> None:

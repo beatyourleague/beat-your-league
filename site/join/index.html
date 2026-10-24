@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — Set Up Your Team</title>
+<title>Beat Your League — set up your weekly fantasy football report</title>
 <link rel="canonical" href="https://beatyourleague.com/join/">
 <meta name="description" content="Paste your roster from any league app, pick your scoring and lineup — a start/sit report for your own team every Tuesday.">
-<meta property="og:title" content="Beat Your League — Set Up Your Team">
+<meta property="og:title" content="Beat Your League — set up your weekly fantasy football report">
 <meta property="og:description" content="Paste your roster from any league app, pick your scoring and lineup — a start/sit report for your own team every Tuesday.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
@@ -31,26 +31,33 @@
 <link rel="stylesheet" href="../fonts/fonts.css">
 <style>
   :root{
+    --display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;
+    --sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
     --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
     --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
     --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   body{background:#E7E4DA;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;color:var(--navy);
     padding:14px 8px 44px;-webkit-font-smoothing:antialiased;}
   .page{max-width:560px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
     padding:24px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:15px;
-    letter-spacing:.24em;text-transform:uppercase;color:var(--flag);}
-  .brand svg.mark{width:22px;height:22px;flex:none;}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
-  a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
-    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
-    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
-  .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
   header h1{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:38px;line-height:.95;
     text-transform:uppercase;margin-top:8px;}
   header p{margin-top:10px;font-size:14px;color:#C9D4E2;line-height:1.5;}
@@ -59,10 +66,14 @@
     letter-spacing:.24em;text-transform:uppercase;color:var(--slate);margin-bottom:12px;}
   input[type=text], input[type=email]{width:100%;padding:12px 14px;font:inherit;font-size:16px;
     border:2px solid var(--navy);background:var(--card);}
+  /* Contract C2: one primary style, the site's gold — "Check my roster" was
+     the one green CTA on the site (launch review D3). */
   button{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;padding:12px 22px;margin-top:10px;
-    background:var(--turf);color:#fff;border:none;cursor:pointer;}
-  button:disabled{background:var(--slate);cursor:default;}
+    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));color:var(--navy);
+    border:none;cursor:pointer;}
+  button:disabled{background:var(--slate);color:#fff;cursor:default;}
+  button:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
   .cards{display:grid;gap:8px;margin-top:6px;}
   .cardbtn{display:block;width:100%;text-align:left;background:var(--card);
     border:1px solid var(--line);padding:12px 14px;margin:0;color:var(--navy);
@@ -99,11 +110,6 @@
   .scout .cite{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);
     font-size:12px;color:var(--slate);line-height:1.55;}
   .scout .kicker{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:600;}
-  .checkout{display:inline-block;margin-top:14px;background:var(--turf);color:#fff;
-    text-decoration:none;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:17px;
-    letter-spacing:.1em;text-transform:uppercase;padding:13px 26px;
-    transition:transform .15s ease;}
-  .checkout:hover{transform:translateY(-2px);}
   .beta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
   .beta-chips span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
     border:1px solid rgba(246,244,238,.35);color:#F2C230;padding:4px 9px;border-radius:2px;}
@@ -136,12 +142,13 @@
     line-height:1.45;cursor:pointer;}
   .settings-ok input{margin:0;width:24px;height:24px;flex:none;}
   .hidden{display:none;}
+  .checkmail[hidden],.checkmail [hidden]{display:none!important;}
   footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
   /* Default browser blue is the only blue in the brand, and it lands on the
      terms link directly under the email field. */
-  footer a,.note a{color:var(--brick);text-decoration:underline;text-underline-offset:2px;}
-  footer a:hover,.note a:hover{color:var(--navy);}
+  footer a,.note a{color:var(--navy);text-decoration:underline;text-underline-offset:2px;}
+  footer a:hover,.note a:hover{color:var(--brick);}
 
   /* The resolved roster. One row per player, and a row that could not be
      resolved is visibly UNFINISHED rather than quietly missing — intake cannot
@@ -163,7 +170,16 @@
   .row{grid-template-columns:minmax(0,1fr) auto;}
   .row.choose{grid-template-columns:1fr;}
   .row.choose .fix{justify-content:flex-start;}
-  .row .drop{color:var(--slate);border-style:dashed;}
+  /* Removing a row is a quiet × (launch review D14): fifteen outlined
+     REMOVE boxes were the loudest thing on a checked roster. Always
+     visible — a hover-only control is one a thumb never finds — and a 32px
+     target; the aria-label names the player. */
+  .row .fix button.drop{width:32px;height:32px;min-width:32px;padding:0;border:0;
+    background:transparent;color:var(--slate);font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;
+    font-size:22px;font-weight:500;line-height:1;letter-spacing:0;text-transform:none;
+    display:inline-flex;align-items:center;justify-content:center;}
+  .row .fix button.drop:hover,.row .fix button.drop:focus-visible{color:var(--brick);
+    background:var(--brick-tint);transform:none;}
   .twin{font-size:12px;color:#8A6A10;font-weight:600;}
   .tally{margin-top:10px;font-size:13px;color:var(--slate);font-weight:600;}
   .tally.bad{color:var(--brick);}
@@ -185,7 +201,7 @@
   .shell{max-width:980px;margin:0 auto;display:grid;
     grid-template-columns:minmax(0,600px) minmax(0,330px);gap:28px;align-items:start;
     justify-content:center;}
-  .page{max-width:none;margin:0;border-radius:4px;overflow:hidden;
+  .page{max-width:none;margin:0;border-radius:0;overflow:hidden;
     box-shadow:0 30px 60px -30px rgba(16,30,51,.35),0 2px 10px rgba(16,30,51,.06);}
   header h1{font-size:42px;margin-top:14px;}
   .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:18px;}
@@ -218,19 +234,17 @@
   .opts label:has(input:checked) .optsub{color:#C9D4E2;}
   #player-search{border-radius:3px;}
   textarea{border-radius:3px;}
-  #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:3px;}
-  /* Green moves you forward through the steps; gold is the one button that
-     leaves for checkout — the same gold as every primary button on the site. */
-  #submit{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
-    color:var(--navy);box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
+  #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:0;
+    box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
   .optlabel{margin:16px 0 0;font-size:12px;font-weight:800;letter-spacing:.12em;
     text-transform:uppercase;color:var(--ink2);}
   .optlabel + .opts{margin-top:6px;}
   #opt-plan{margin-bottom:6px;}
   #lbl-plan{margin-top:0;}
-  /* The closed state of the checkout button: the landing's switched-off shape,
-     still pressable so it can say what to do instead. */
-  #submit.is-closed{background:#EEEBE2;color:var(--slate);border:1.5px dashed #C9C3B4;
+  /* The closed state of the checkout button: a real button in the site's
+     secondary style (contract C2), still pressable so it can say what to do
+     instead — never the dashed box that read as a wireframe (D4). */
+  #submit.is-closed{background:var(--card);color:var(--navy);border:2px solid var(--navy);
     box-shadow:none;}
   #submit.is-closed:hover{transform:none;}
   /* Pressed and done (the launch list kept the email): it stops posting rows. */
@@ -238,12 +252,25 @@
     box-shadow:none;transform:none;}
   .retry{margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
     font-size:14px;padding:9px 14px;}
+  /* The address, read back before checkout (critique #1). */
+  .checkmail{margin-top:12px;padding:12px 14px;background:var(--card);border:2px solid var(--navy);
+    font-size:14px;line-height:1.5;}
+  .checkmail p{margin:0;}
+  .checkmail p + p{margin-top:6px;}
+  .checkmail b{overflow-wrap:anywhere;}
+  .checkmail .checkbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .checkmail .checkbtns button{margin-top:0;}
+  .checkmail button.alt{background:var(--card);color:var(--navy);border:2px solid var(--navy);
+    padding:10px 18px;}
+  /* A button naming an address shows it as typed, never in capitals. */
+  .checkmail button.addr{text-transform:none;letter-spacing:.01em;
+    font-family:var(--sans);font-weight:700;font-size:15px;}
   .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
     font-size:12.5px;color:var(--slate);font-weight:600;}
   .secure svg{width:12px;height:14px;flex:none;}
   /* sidebar */
   .side{position:sticky;top:22px;background:linear-gradient(180deg,#182A45,var(--navy));
-    color:var(--paper);border-radius:4px;padding:22px 22px 20px;
+    color:var(--paper);border-radius:0;padding:22px 22px 20px;
     box-shadow:0 30px 60px -30px rgba(16,30,51,.5);}
   .side h2{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:22px;letter-spacing:.04em;
     text-transform:uppercase;color:var(--flag);}
@@ -255,8 +282,9 @@
   .side li b{color:#fff;}
   .side .proof{margin-top:18px;padding-top:16px;border-top:1px solid rgba(246,244,238,.14);
     font-size:13.5px;line-height:1.5;color:#C9D4E2;}
-  .side .proof b{display:block;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:34px;
-    color:var(--flag);line-height:1;margin-bottom:4px;}
+  /* Uppercase like every display head on the site (D14). */
+  .side .proof b{display:block;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:30px;
+    color:var(--flag);line-height:1;margin-bottom:6px;text-transform:uppercase;letter-spacing:.02em;}
   .side a{color:var(--flag);}
   .side .trust{margin-top:16px;padding-top:14px;border-top:1px solid rgba(246,244,238,.14);
     display:grid;gap:6px;font-size:13px;color:#C9D4E2;}
@@ -268,7 +296,7 @@
   header .note a{color:var(--flag);}
   @media (max-width:960px){
     .shell{grid-template-columns:minmax(0,600px);}
-    .side{position:static;}
+    .side{position:static;box-shadow:none;}
   }
   @media (max-width:480px){
     body{padding:0 0 40px;}
@@ -282,7 +310,7 @@
 <div class="shell">
 <div class="page">
   <header>
-    <div class="topbar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="byljClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#byljClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><a class="home" href="../index.html">← Home</a></div>
+    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="../how-it-works.html">How it works</a><a href="../sample-report.html">See a real report</a><a class="hidesm" href="../index.html#pricing">Pricing</a></nav></div>
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Every lineup from here to your title game, decided for your
@@ -381,7 +409,10 @@ Baltimore Ravens
   </section>
 
   <section id="step-email" class="hidden">
-    <div class="eyebrow" id="step3-head">3 · Where do reports go?</div>
+    <!-- The step's name, like the progress bar's; the field below carries its
+         own label. "Where do reports go?" over "Where reports go" said it
+         twice (D14). nothingToPay() renames it for the modes that pay nothing. -->
+    <div class="eyebrow" id="step3-head">3 · Checkout</div>
     <div class="note" id="seat-share" style="display:none"></div>
     <form id="form-email" novalidate>
       <div class="optlabel" id="lbl-plan" style="display:none">Your plan</div>
@@ -409,6 +440,18 @@ Baltimore Ravens
       the season ends first) — one per person, and a re-subscription after a refund is final.</p>
       <button id="submit" type="submit">Continue to checkout — $29</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
+      <!-- The address, read back before it is locked at Stripe
+           (locked_prefilled_email) — a typo there was a paid pass and an
+           empty inbox, found by nobody (critique #1). Filled as text only. -->
+      <div class="checkmail" id="check-email" role="group" aria-labelledby="check-head" hidden>
+        <p id="check-head"><span id="check-lead">Reports go to</span> <b id="check-address"></b><span id="check-tail"> — right?</span></p>
+        <p id="check-fix" hidden>Did you mean <b id="check-suggest"></b>?</p>
+        <div class="checkbtns">
+          <button type="button" class="addr" id="check-use" hidden></button>
+          <button type="button" id="check-yes">Yes, continue to checkout</button>
+          <button type="button" class="alt" id="check-edit">Edit</button>
+        </div>
+      </div>
     </form>
     <div class="err" id="err-email" role="alert" tabindex="-1"></div>
     <div class="ok" id="ok-email" role="status"></div>
@@ -972,7 +1015,8 @@ function draw(focusAt) {
     const drop = document.createElement("button");
     drop.type = "button";
     drop.className = "drop";
-    drop.textContent = "remove";
+    drop.textContent = "×";
+    drop.title = "Remove";
     // Every button named for its row: "remove" twelve times tells a screen
     // reader nothing (launch audit W4).
     drop.setAttribute("aria-label", "Remove " + (match.player ? match.player.name : match.typed));
@@ -1250,6 +1294,10 @@ $("form-email").addEventListener("submit", (event) => {
     submitSeat(email, ref);
     return;
   }
+  // A likely typo in the domain is asked about once, before anything is sent
+  // (critique #1) — a suggestion, never a silent change. Only where something
+  // IS sent: a switched-off checkout keeps nothing, so it asks nothing.
+  if ((UPDATE_MODE || TRY_MODE) && !typoSettled(email)) return;
   // AN UPDATE IS NOT A PAYMENT EITHER. It changes the roster on a subscription
   // that already exists; the payment path is never reached from here.
   if (UPDATE_MODE) {
@@ -1279,6 +1327,7 @@ $("form-email").addEventListener("submit", (event) => {
     // Without one, the roster is kept only in this page's own address.
     if (closedAction(otherLink) === "list") {
       if (state.listed) return;            // one row a visit; the button is off
+      if (!typoSettled(email)) return;      // the launch email goes to this address
       $("submit").disabled = true;          // a second press mid-flight is a second row
       fetch(NOTIFY_LIST_ENDPOINT, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -1324,6 +1373,17 @@ $("form-email").addEventListener("submit", (event) => {
       "the front page for one message the morning checkout opens.");
     return;
   }
+  // Stripe locks the address, so it is read back once before the page leaves:
+  // "Reports go to <address> — right?" (critique #1). Yes goes on from here.
+  if (state.confirmedEmail !== email) {
+    askAboutEmail(email, { link: link, tagged: tagged, email: email });
+    return;
+  }
+  leaveForCheckout(link, tagged, email);
+});
+
+// The hand-off to Stripe, once the address has been read back.
+function leaveForCheckout(link, tagged, email) {
   if (WANTS_PASS) {
     // The pass thank-you page prefills its share line with the address that
     // paid (thanks.html PAID_EMAIL_KEY, panel review LP-I9): this tab only,
@@ -1335,6 +1395,90 @@ $("form-email").addEventListener("submit", (event) => {
     link + (link.indexOf("?") === -1 ? "?" : "&") +
     "client_reference_id=" + encodeURIComponent(tagged) +
     "&locked_prefilled_email=" + encodeURIComponent(email));
+}
+
+// ---- the address, read back (critique #1) -------------------------------
+// The domains people mistype most, and what they meant. Only a domain on this
+// list is ever questioned, and only ever as a question.
+const DOMAIN_FIXES = {
+  "gmial.com": "gmail.com", "gmai.com": "gmail.com", "gamil.com": "gmail.com",
+  "gnail.com": "gmail.com", "gmaill.com": "gmail.com", "gmail.co": "gmail.com",
+  "gmail.con": "gmail.com", "gmail.cm": "gmail.com", "gmail.om": "gmail.com",
+  "hotmial.com": "hotmail.com", "hotmai.com": "hotmail.com", "hotmail.co": "hotmail.com",
+  "hotmail.con": "hotmail.com", "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com",
+  "yahoo.con": "yahoo.com", "outlok.com": "outlook.com", "outlook.co": "outlook.com",
+  "outlook.con": "outlook.com", "iclod.com": "icloud.com", "icoud.com": "icloud.com",
+  "icloud.co": "icloud.com", "icloud.con": "icloud.com", "aol.con": "aol.com",
+};
+function suggestedEmail(email) {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "";
+  const fix = DOMAIN_FIXES[email.slice(at + 1).toLowerCase()];
+  return fix ? email.slice(0, at + 1) + fix : "";
+}
+// Paths that send nothing to Stripe ask only about a likely typo, once per
+// address: true when there is nothing to ask, or the buyer kept what they typed.
+function typoSettled(email) {
+  if (!suggestedEmail(email) || state.keptEmail === email) return true;
+  askAboutEmail(email, null);
+  return false;
+}
+// The read-back. ``go`` is the checkout waiting on a yes; null when only a
+// typo is in question (nothing leaves for Stripe on that path).
+function askAboutEmail(email, go) {
+  const fix = suggestedEmail(email);
+  state.pendingCheckout = go;
+  $("check-address").textContent = email;
+  $("check-lead").textContent = go ? "Reports go to" : "You typed";
+  $("check-tail").textContent = go ? " — right?" : ".";
+  $("check-fix").hidden = !fix;
+  $("check-suggest").textContent = fix;
+  $("check-use").hidden = !fix;
+  $("check-use").textContent = fix ? "Use " + fix : "";
+  $("check-yes").textContent = go ? "Yes, continue to checkout" : "Keep " + email;
+  // One gold button: the suggestion when there is one, otherwise the yes.
+  $("check-yes").classList.toggle("alt", Boolean(fix));
+  $("check-yes").classList.toggle("addr", !go);
+  $("check-email").hidden = false;
+  (fix ? $("check-use") : $("check-yes")).focus();
+}
+function closeEmailCheck() {
+  $("check-email").hidden = true;
+  state.pendingCheckout = null;
+}
+$("check-yes").addEventListener("click", () => {
+  const email = $("email").value.trim();
+  const go = state.pendingCheckout;
+  if (go && go.email === email) {
+    state.confirmedEmail = email;
+    closeEmailCheck();
+    leaveForCheckout(go.link, go.tagged, go.email);
+    return;
+  }
+  // Kept as typed: carry on with whatever the button does on this path.
+  state.keptEmail = email;
+  closeEmailCheck();
+  $("submit").click();
+});
+$("check-use").addEventListener("click", () => {
+  const fixed = suggestedEmail($("email").value.trim());
+  if (!fixed) return;
+  $("email").value = fixed;
+  const go = state.pendingCheckout;
+  // The corrected address is read back too: Yes is what sends it.
+  if (go) { askAboutEmail(fixed, { link: go.link, tagged: go.tagged, email: fixed }); return; }
+  state.keptEmail = fixed;
+  closeEmailCheck();
+  $("submit").click();
+});
+$("check-edit").addEventListener("click", () => {
+  closeEmailCheck();
+  $("email").focus();
+  $("email").select();
+});
+// An address typed over after the read-back is another address.
+$("email").addEventListener("input", () => {
+  if (!$("check-email").hidden) closeEmailCheck();
 });
 
 // D14: the page, the Worker and the intake accept the same addresses, so a
@@ -1653,6 +1797,7 @@ const SEASON_SUBMIT = $("submit").textContent;
 // A mode that charges nothing shows no checkout step and no currency line.
 function nothingToPay(stepLabel) {
   document.querySelector(".progress .s3").textContent = stepLabel;
+  $("step3-head").textContent = stepLabel;
   $("currency-note").style.display = "none";
   document.querySelector(".secure").style.display = "none";
   // No checkout here, so the footer must not describe one (LP-D7).

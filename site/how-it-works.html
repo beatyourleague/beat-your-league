@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — How it works</title>
+<title>Beat Your League — how the weekly fantasy football report works</title>
 <link rel="canonical" href="https://beatyourleague.com/how-it-works.html">
 <meta name="description" content="What your weekly report contains, where the numbers come from, and how to check any call yourself.">
-<meta property="og:title" content="Beat Your League — How it works">
+<meta property="og:title" content="Beat Your League — how the weekly fantasy football report works">
 <meta property="og:description" content="What your weekly report contains, where the numbers come from, and how to check any call yourself.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
@@ -30,33 +30,30 @@
   :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;--flag-deep:#D9A81B;}
   *{margin:0;padding:0;box-sizing:border-box;}
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
-    text-transform:uppercase;color:var(--flag);}
-  .brand svg.mark{width:22px;height:22px;flex:none;}
-  /* The site's routes on every page, the samples' masthead row (launch
-     review I5): a visitor arriving from a shared link had only a Home pill. */
-  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
-    flex-wrap:wrap;}
-  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
-    font-size:14px;font-weight:600;}
-  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
-  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
-  .sitenav a.home{color:var(--paper);padding:8px 15px;}
-  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
-  a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
-    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
-    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
-  .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
+  .headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
      and cancellation instructions a nervous buyer came here to read. */
-  main a,p a,li a{color:var(--brick);text-decoration:underline;
+  main a,p a,li a{color:var(--navy);text-decoration:underline;
     text-underline-offset:2px;text-decoration-thickness:1px;}
-  main a:hover,p a:hover,li a:hover{color:var(--navy);}
+  main a:hover,p a:hover,li a:hover{color:var(--brick);}
   header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;
     text-wrap:balance;}
   header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
@@ -79,6 +76,8 @@
   @media (max-width:600px){.steps{grid-template-columns:1fr;}}
   h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
     margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
+  /* The report's and the landing's section numbering: "01", never "1." (D8). */
+  h2 .n{display:block;font-size:13px;letter-spacing:.24em;color:var(--slate);margin-bottom:2px;}
   p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
   ul{margin-left:20px;}
   b{color:var(--navy);}
@@ -89,40 +88,83 @@
   dl.terms{margin:10px 0 4px;}
   dl.terms dt{font-weight:800;color:var(--navy);margin-top:14px;font-size:15px;}
   dl.terms dd{margin:2px 0 0 0;font-size:14.5px;line-height:1.65;color:var(--ink2);}
-  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
-  .cta a{display:inline-block;font-family:var(--display);font-weight:800;letter-spacing:.1em;
-    text-transform:uppercase;font-size:16px;padding:12px 22px;text-decoration:none;
-    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));color:var(--navy);
-    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
-    transition:transform .15s ease;}
-  .cta a:hover{transform:translateY(-1px);}
-  .cta a.ghost{background:transparent;color:var(--navy);border:2px solid var(--navy);clip-path:none;
-    padding:10px 20px;}
-  main .cta a:hover{color:var(--navy);}
-  /* The masthead's ask, as on the published samples: the gold button. */
-  .headcta{margin-top:16px;}
-  .headcta .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
-    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;color:var(--navy);
-    padding:12px 22px;background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
+  /* Contract C2: one primary (.btn.gold), one secondary (.btn.ghost). */
+  .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
+    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
+    padding:12px 22px;border:0;line-height:1.2;transition:transform .15s ease;}
+  .btn.gold{color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  .btn.ghost{background:transparent;color:var(--navy);border:2px solid var(--navy);padding:10px 20px;}
+  .btn:hover{transform:translateY(-1px);}
+  main a.btn,main a.btn:hover{color:var(--navy);text-decoration:none;}
+  @media (prefers-reduced-motion: reduce){.btn{transition:none;transform:none!important;}}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
+  .headcta{margin-top:16px;}
+  /* The report itself, beside the words that explain it (launch review D8):
+     rows copied from the published 2024 Week 10 sample, every figure pinned
+     to it (tests/test_prelaunch_pages.py) — never a mock-up. Drawn the way
+     the report draws them: square cards, the odds bar starting at 50%. */
+  .anno{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px 24px;
+    align-items:start;margin:16px 0 8px;}
+  .anno .terms{margin:0;}
+  .anno .terms dt:first-child{margin-top:0;}
+  .filecard{background:var(--card);border:1px solid var(--line);
+    box-shadow:0 12px 26px -20px rgba(16,30,51,.55);}
+  .filehead{background:var(--navy);color:var(--paper);font-family:var(--display);font-weight:800;
+    font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;padding:8px 14px;}
+  .frow{display:grid;grid-template-columns:40px minmax(0,1fr) 38px 86px;gap:8px;align-items:center;
+    padding:9px 14px;border-top:1px solid #EDEAE1;font-size:13.5px;line-height:1.35;}
+  .filehead + .frow{border-top:0;}
+  .frow .slot{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.06em;
+    color:var(--slate);}
+  .frow b{display:block;color:var(--navy);}
+  .frow small{display:block;font-size:11.5px;color:var(--slate);}
+  .frow .proj{font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+  .frow .call{font-size:11.5px;font-weight:700;color:var(--slate);}
+  .frow .pct{font-family:var(--display);font-weight:800;font-size:17px;color:var(--turf);}
+  .cbar{display:block;height:6px;background:#E6E2D6;margin-top:3px;}
+  .cbar i{display:block;height:100%;background:var(--turf);}
+  .task{display:grid;grid-template-columns:18px 1fr;gap:10px;padding:10px 14px;
+    border-top:1px solid #EDEAE1;font-size:13.5px;line-height:1.45;}
+  .filehead + .task{border-top:0;}
+  .task .box{width:16px;height:16px;border:2px solid var(--navy);margin-top:2px;}
+  .task b{display:block;color:var(--navy);}
+  .task small{display:block;font-size:11.5px;font-weight:700;color:var(--brick);
+    text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+  .total{display:flex;align-items:baseline;gap:14px;padding:12px 14px;}
+  .total .big{font-family:var(--display);font-weight:800;font-size:40px;line-height:1;
+    font-variant-numeric:tabular-nums;}
+  .total small{display:block;font-size:11.5px;font-weight:700;color:var(--slate);
+    text-transform:uppercase;letter-spacing:.08em;}
+  .total .range{font-family:var(--display);font-weight:800;font-size:22px;}
+  .pivot{padding:12px 14px;font-size:14px;line-height:1.5;}
+  .pivot .if{font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--brick);}
+  .realfoot{font-size:12.5px;color:var(--slate);margin:4px 0 0;}
+  @media (max-width:640px){
+    .anno{grid-template-columns:1fr;}
+    .frow{grid-template-columns:34px minmax(0,1fr) 34px 74px;padding:9px 10px;}
+  }
   [hidden]{display:none!important;}
+  /* A phone shows the page, not a sheet on a desk (launch review D15). */
+  @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
 </style>
 </head>
 <body>
 <div class="sheet">
   <header>
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html" aria-current="page">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="how-it-works.html" aria-current="page">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
     <h1>How your report works</h1>
     <p>What lands in your inbox, what each part means, where the numbers come from, and how
     to check any call yourself. You paste your roster when you sign up, and again whenever
     it changes (every report tells you how). No login, no league connection.</p>
     <!-- Closed state is the static markup (fail closed), like the landing's;
          CHECKOUT_OPEN below, pinned equal to the landing's, opens it (D15). -->
-    <p class="headcta"><a class="btn" href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a></p>
+    <p class="headcta"><a class="btn gold" href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a></p>
   </header>
   <main>
 
-    <h2>1. What you get, and when</h2>
+    <h2><span class="n">01</span>What you get, and when</h2>
     <ul>
       <li><b>Tuesday morning:</b> one report for your roster, under the scoring you pick (full
       PPR, half PPR or standard): every slot decided, every close call explained, the odds
@@ -137,19 +179,35 @@
       before it renews. No promotions.</li>
     </ul>
 
-    <h2 id="read">2. Reading your report</h2>
-    <dl class="terms">
+    <h2 id="read"><span class="n">02</span>Reading your report</h2>
+    <!-- Each card is the published sample's own rows (site/sample-report.html,
+         2024 Week 10), beside the entries that explain them. -->
+    <div class="anno">
+      <div class="filecard" data-real="2024-w10">
+        <div class="filehead">Your game plan</div>
+        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Bench Sam LaPorta — Tony Pollard starts at FLEX</b>Sam LaPorta projects 9.5, Tony Pollard 10.3.<small>before this week's first kickoff</small></span></div>
+        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Sunday morning: check Tony Pollard's status</b>Your if/then below already has the answer either way.<small>gameday morning</small></span></div>
+      </div><!--/card-->
+      <dl class="terms">
       <dt>Game plan</dt>
       <dd>The checklist at the top. Tick the boxes and you're done; everything below is the why.</dd>
+      </dl>
+    </div>
+    <div class="anno">
+      <div class="filecard" data-real="2024-w10">
+        <div class="filehead">Your lineup · 2024 Week 10</div>
+        <div class="frow"><span class="slot">WR</span><span><b>Amon-Ra St. Brown</b><small>+7.6 over Courtland Sutton on your bench</small></span><span class="proj">16.9</span><span class="call"><span class="pct">80%</span><span class="cbar"><i style="width:60%"></i></span></span></div>
+        <div class="frow"><span class="slot">WR</span><span><b>Ja'Marr Chase</b><small>+6.7 over Courtland Sutton on your bench</small></span><span class="proj">16.0</span><span class="call"><span class="pct">73%</span><span class="cbar"><i style="width:46%"></i></span></span></div>
+        <div class="frow"><span class="slot">TE</span><span><b>George Kittle</b><small>+4.7 over Sam LaPorta on your bench</small></span><span class="proj">14.1</span><span class="call"><span class="pct">72%</span><span class="cbar"><i style="width:44%"></i></span></span></div>
+        <div class="frow"><span class="slot">FLEX</span><span><b>Tony Pollard</b><small>Questionable in Week 9 (foot) — played, 18.4</small></span><span class="proj">10.3</span><span class="call">questionable · see if/then</span></div>
+        <div class="frow"><span class="slot">QB</span><span><b>Josh Allen</b><small>2024: 20.1 a game</small></span><span class="proj">19.8</span><span class="call">no bench QB</span></div>
+        <div class="frow"><span class="slot">DEF</span><span><b>Denver Broncos</b><small>+2.2 over Baltimore Ravens on your bench</small></span><span class="proj">6.9</span><span class="call">projection only</span></div>
+      </div><!--/card-->
+      <dl class="terms">
       <dt>Proj</dt>
       <dd>Projected fantasy points for that player this week, under the scoring you picked
       (full PPR, half PPR or standard). From Week 2; in Week 1 each row shows last season's
       points per game instead.</dd>
-      <!-- render.report.RANGE_DEFINITION, verbatim: every report prints the
-           range, and no page said what it was (panel review SS-I1). -->
-      <dt>Realistic range</dt>
-      <dd>Your projected total, give or take the week-to-week swing in your starters'
-      scoring, combined. It shows how far the week can move, not where it will land.</dd>
       <dt>The percentage on a row</dt>
       <dd>The chance your starter outscores your best bench player at that spot. 50% is a coin flip,
       and the bar starts there. A 70% call is a strong lean, not a lock: it can still lose.</dd>
@@ -164,14 +222,40 @@
       defense — last season counted in. Never on defenses, and never in Week 1. From Week 2
       those rows still get a projection (in Week 1 each row shows last season's scoring
       instead), and the report says why there's no number.</dd>
+      </dl>
+    </div>
+    <div class="anno">
+      <div class="filecard" data-real="2024-w10">
+        <div class="filehead">Your week</div>
+        <div class="total"><span><span class="big">126.1</span><small>proj</small></span><span><span class="range">94 – 158</span><small>realistic range</small></span></div>
+      </div><!--/card-->
+      <dl class="terms">
+      <!-- render.report.RANGE_DEFINITION, verbatim: every report prints the
+           range, and no page said what it was (panel review SS-I1). -->
+      <dt>Realistic range</dt>
+      <dd>Your projected total, give or take the week-to-week swing in your starters'
+      scoring, combined. It shows how far the week can move, not where it will land.</dd>
+      </dl>
+    </div>
+    <div class="anno">
+      <div class="filecard" data-real="2024-w10">
+        <div class="filehead">If/then for gameday</div>
+        <div class="pivot"><div class="if">If Tony Pollard (FLEX) is ruled out</div>Move Sam LaPorta into FLEX (projects 9.5).</div>
+      </div><!--/card-->
+      <dl class="terms">
+      <dt>If/then for gameday</dt>
+      <dd>What to do if a questionable player is ruled out, decided in advance so Sunday morning
+      isn't a scramble.</dd>
       <!-- The report's own label (COPY:F4, SS2-D2): the closest call WITH
            odds, and a narrower decision without them is named beside it. -->
       <dt>The week's closest call with odds</dt>
       <dd>The tightest decision that carries a percentage, with a side picked and how sure to
       be. If a closer one has no odds this week, the report names it too.</dd>
-      <dt>If/then for gameday</dt>
-      <dd>What to do if a questionable player is ruled out, decided in advance so Sunday morning
-      isn't a scramble.</dd>
+      </dl>
+    </div>
+    <p class="realfoot">The cards are rows from the <a href="sample-report.html">2024 Week 10
+    sample report</a>, a real week built for a sample roster.</p>
+    <dl class="terms">
       <dt>Byes ahead</dt>
       <dd>A line in the game plan when a bye still to come — playoff weeks included — leaves a
       starting spot nobody on your roster can fill, with players at that spot who play that week
@@ -186,7 +270,7 @@
       call where neither player scored, or a tie, reads "no result".</dd>
     </dl>
 
-    <h2>3. Where the numbers come from</h2>
+    <h2><span class="n">03</span>Where the numbers come from</h2>
     <p>Your roster and your scoring settings, plus public NFL data from
     <b>nflverse</b>, an open project: box scores, the schedule and the league's injury reports.
     In Weeks 4 to 16, when the week's game lines are in, a player's projection starts from his
@@ -197,7 +281,7 @@
     <p>That's all of it. We have no inside information and no view into your league's other
     teams. Your report is built only from your roster and public data.</p>
 
-    <h2>4. How to check us</h2>
+    <h2><span class="n">04</span>How to check us</h2>
     <ul>
       <li>Every call shows the projection behind it and the player's recent games, so you can
       look up the box scores and see for yourself.</li>
@@ -213,20 +297,20 @@
       rebuilt every Tuesday of the season. Read it beside your own league app.</span></li>
     </ul>
 
-    <h2>5. What it doesn't do</h2>
+    <h2><span class="n">05</span>What it doesn't do</h2>
     <p>It decides who starts. It doesn't rank draft picks, value trades or tell you who to
     pick up; Rising roles only points at who's getting more work. And football is noisy: a good
     call can lose, and a bad one can win. What we add: every close call decided with a reason,
     and late news planned for, before kickoff.</p>
 
-    <h2>6. Who's behind it</h2>
+    <h2><span class="n">06</span>Who's behind it</h2>
     <!-- One person built it — terms §15 says "an independent solo project" —
          so no sentence here counts builders in the plural (BE-D4). -->
     <p>Beat Your League is independent and small: one fantasy player built it, after too
     many lineups set at 12:55 on Sunday. It's paid for only by subscribers: no ads and no
     selling your data. Questions or something that looks wrong: <b>hello@beatyourleague.com</b>.</p>
 
-    <h2>7. The money, briefly</h2>
+    <h2><span class="n">07</span>The money, briefly</h2>
     <p>$29 for the rest of the season — one payment, no subscription ($19 for the Playoff
     Pass once your first report would be Week 13 or later) — with a full refund (one per
     person) until your second weekly report's week kicks off
@@ -237,10 +321,10 @@
     <!-- The page's ask is the one action it leads to: setting up a team
          (launch review PE-3). The proof link follows the live-week rule. -->
     <div class="cta">
-      <a href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a>
-      <a class="ghost" href="sample-report.html" data-pinned-week>See a real report</a>
-      <a class="ghost" href="this-week.html" data-live-week hidden>See this week's report</a>
-      <a class="ghost" href="index.html#pricing">Pricing</a>
+      <a class="btn gold" href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a>
+      <a class="btn ghost" href="sample-report.html" data-pinned-week>See a real report</a>
+      <a class="btn ghost" href="this-week.html" data-live-week hidden>See this week's report</a>
+      <a class="btn ghost" href="index.html#pricing">Pricing</a>
     </div>
 </main>
   <footer><b>Beat Your League</b> — analysis, not betting picks. Projections are analysis, not

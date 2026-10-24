@@ -778,19 +778,66 @@ def team_name(report: Mapping[str, Any]) -> str | None:
     return f"{lead['player_name']}'s team"
 
 
-def _site_bar() -> str:
-    """The published samples' masthead row: the wordmark home, the site's own
-    routes, and the labelled Home button every site page carries above its
-    headline (tests/test_site.py). Relative links: the samples sit at the site
-    root, and the live sample's ?via= carry rewrites exactly these."""
+# The site's nav, one drawing for every page that carries it (contract C2,
+# launch review D5/D10). The brand is the official lockup — the mark, then
+# "BEAT YOUR" in paper and "LEAGUE" in the logo's gold, Barlow Condensed 900
+# italic, as site/brand/logo.png draws it (render/brand.py logo_html) — and it
+# is the way home: the "← Home" pill beside it wrapped onto a row of its own on
+# a phone and repeated a link the lockup already is. On a phone the bar is the
+# lockup and ONE link, "See a real report"; How it works and Pricing return at
+# 600px. Every nav sits on navy or darker, so this is the dark-ground lockup.
+# Hand-written pages paste SITE_BAR_CSS and site_bar()'s markup verbatim (the
+# page defines --display and --sans, as every page's type does), and
+# tests/test_prelaunch_pages.py holds every copy to these two.
+SITE_NAV_REAL_REPORT = "See a real report"
+SITE_BAR_CSS = (
+    "  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}\n"
+    "  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;\n"
+    "    font-family:var(--display);\n"
+    "    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;\n"
+    "    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}\n"
+    "  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}\n"
+    "  .sitebar .brand .lg{color:#F0B62A;}\n"
+    "  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;\n"
+    "    font-family:var(--sans);\n"
+    "    font-size:14px;font-weight:600;}\n"
+    "  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}\n"
+    "  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}\n"
+    "  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}\n"
+    "  @media (max-width:599px){.sitenav .hidesm{display:none;}"
+    ".sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}\n")
+
+
+def site_bar(prefix: str = "", home: str | None = None, current: str | None = None,
+             uid: str = "byln") -> str:
+    """The nav row every site page carries above its headline. ``prefix`` is
+    the way back to the site root from the page ("" at the root, "../" one
+    folder down, "/" for the 404, which is served at any depth); ``home`` the
+    lockup's href (default ``prefix + "index.html"``, "/" for the 404);
+    ``current`` the route this page is ("how-it-works.html", …), marked
+    aria-current. Relative links, so the live sample's ?via= carry rewrites
+    exactly these."""
+    home = home or f"{prefix}index.html"
+    routes = (("how-it-works.html", "How it works", True),
+              ("sample-report.html", SITE_NAV_REAL_REPORT, False),
+              ("index.html#pricing", "Pricing", True))
+    links = []
+    for href, label, hide in routes:
+        klass = ' class="hidesm"' if hide else ""
+        here = ' aria-current="page"' if href == current else ""
+        links.append(f'<a{klass} href="{prefix}{href}"{here}>{esc(label)}</a>')
+    links = "".join(links)
     return (
         '<div class="sitebar">'
-        f'<a class="brand" href="index.html">{mark_svg("bylm")}'
-        '<span>Beat Your League</span></a>'
-        '<nav class="sitenav" aria-label="Site">'
-        '<a href="how-it-works.html">How it works</a>'
-        '<a href="index.html#pricing">Pricing</a>'
-        '<a class="home" href="index.html">← Home</a></nav></div>')
+        f'<a class="brand" href="{home}">{mark_svg(uid)}'
+        '<span>Beat Your <span class="lg">League</span></span></a>'
+        f'<nav class="sitenav" aria-label="Site">{links}</nav></div>')
+
+
+def _site_bar() -> str:
+    """The published samples' masthead row (panel review I3, I5): the site's
+    nav, at the site root where the samples sit."""
+    return site_bar(uid="bylm")
 
 
 # The samples' one ask, at the top and at the end. It follows the landing's
@@ -818,8 +865,8 @@ def checkout_open(landing: Path | None = None) -> bool:
 
 def sample_cta() -> str:
     if checkout_open():
-        return f'<a class="btn" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
-    return f'<a class="btn" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
+        return f'<a class="btn gold" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
+    return f'<a class="btn gold" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
 
 
 def header(meta: Mapping[str, Any], team: str | None = None) -> str:
@@ -1858,13 +1905,16 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
 
 
 # What a sample promises a buyer (INFO-113): three scoring settings, not every
-# league's rules, and the day-one report is this week's only from Week 2 and
-# before the week's games start (run/intake._first_file).
+# league's rules, and a first report the hour they join. Which report that is
+# (this week's, or the roster report once the week's games are underway —
+# run/intake._first_file) is the join page's to say, on the day: the card's
+# old either/or sentence was the longest line on it (launch review QA-03).
+# "Usually": the intake runs hourly, and the promise audit's rule for hourly
+# things is "usually within the hour".
 JOIN_PROMISE = ("Yours is built from your own roster, under the scoring you pick "
-                "(full PPR, half PPR or standard). Your first report lands the day "
-                "you join: this week's lineup, or your roster report if it's before "
-                "Week 2 or the week's games are underway. Then a new one every "
-                "Tuesday of the season.")
+                "(full PPR, half PPR or standard). Your first report usually lands "
+                "within the hour of joining, then a new one every Tuesday of the "
+                "season.")
 
 
 def demo_band(meta: Mapping[str, Any]) -> str:
@@ -2412,6 +2462,12 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
     body = number_sections(body)
     title = (f'Beat Your League — {meta["season"]} Week {meta["week"]} '
              + ("Report" if meta.get("solo") else "Rival Report"))
+    if meta.get("anonymized_demo") and meta.get("solo"):
+        # A published sample is a page people search for and share, and no
+        # title on the site said what it is about (launch review, critique
+        # #8). A subscriber's own report keeps its plain title.
+        title = (f'Beat Your League — sample fantasy football report, '
+                 f'{meta["season"]} Week {meta["week"]}')
     # Only the public demo gets share meta: it is the one render of this
     # template that lives on the open web. Subscriber reports are private —
     # share tags on them would just invite pasting a paid report around.

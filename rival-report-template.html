@@ -367,17 +367,24 @@
   .notice b{font-weight:800;}
   /* ================= the published samples' site furniture ================= */
   /* A sample is a site page reached from a shared link, so it carries the
-     site's routes — how it works, pricing, home — and the landing's gold
-     CTA, at the top and the end. A subscriber's own report never does. */
-  .sitebar{display:flex;align-items:center;justify-content:space-between;
-    gap:8px 14px;flex-wrap:wrap;}
-  .sitebar .brand{text-decoration:none;}
-  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;
-    font-family:var(--sans);font-size:14px;font-weight:600;}
-  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
-  .sitenav a:hover{color:var(--paper);}
-  .sitenav a.home{color:var(--paper);padding:8px 15px;line-height:1;white-space:nowrap;
-    border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
+     site's nav — the logo lockup, how it works, a real report, pricing
+     (render.report.SITE_BAR_CSS, every page's one copy) — and the
+     landing's gold CTA, at the top and the end. A subscriber's own report
+     never does. */
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;text-decoration:none;color:var(--navy);
     padding:12px 22px;background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,#D9A81B);
@@ -387,7 +394,7 @@
     text-align:center;font-size:14.5px;line-height:1.55;}
   .ctacard p{max-width:520px;margin:0 auto 14px;}
   .ctacard a:not(.btn){color:var(--flag);font-weight:700;}
-  .sitebar a:focus-visible,.headcta a:focus-visible,.ctacard a:focus-visible{
+  .headcta a:focus-visible,.ctacard a:focus-visible{
     outline:3px solid var(--flag);outline-offset:2px;}
   footer{padding:18px 24px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}

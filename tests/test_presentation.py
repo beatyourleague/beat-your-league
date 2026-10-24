@@ -504,7 +504,7 @@ def test_the_samples_carry_the_sites_routes_and_one_ask_top_and_bottom(monkeypat
         page = rr.render(_published_sample(week), TEMPLATE)
         top = page.split("<h1")[0]
         assert 'href="how-it-works.html"' in top and 'href="index.html#pricing"' in top
-        assert '<a class="home" href="index.html">← Home</a>' in top
+        assert rr.site_bar(uid="bylm") in top, "the sample's nav is not the site's (C2)"
         masthead = page.split("</header>")[0]
         assert rr.sample_cta() in masthead
         end = page.split("</main>")[0].rsplit("<section", 1)[1]

@@ -168,16 +168,16 @@ def test_the_share_card_names_the_week(tmp_path, monkeypatch, week) -> None:
     """GTM-9, reproduced: every link to this-week.html previewed as "a real
     weekly report" with a description of a past season, while the page was
     Week 6 of 2026 — the preview contradicted the page. og:title, og:description
-    and description now name the week and count the odds the page shows."""
+    and description now name the week and say what the page holds — never
+    an odds count, which advertised the slots without one (launch review M7)."""
     code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False, extra=("--no-record",))
     page = out.read_text(encoding="utf-8")
-    report = week()
-    odds = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     assert (f'<meta property="og:title" content="Beat Your League — this week&#x27;s '
             f'report, Week {WEEK} of {SEASON}">') in page
     for name in ('property="og:description"', 'name="description"'):
         tag = page.split(f"<meta {name} content=\"", 1)[1].split('"', 1)[0]
-        assert f"Week {WEEK} of the {SEASON}" in tag and f"odds on {odds} of" in tag
+        assert f"Week {WEEK} of the {SEASON}" in tag and "every slot decided" in tag
+        assert "odds on" not in tag
         assert "file" not in tag.lower()
     assert page.count('property="og:title"') == 1
 

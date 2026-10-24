@@ -332,6 +332,14 @@ async function flowJob(port, job) {
       }
       document.getElementById("submit").click();
     })()`);
+    // The join page reads the address back before it leaves for Stripe
+    // ("Reports go to … — right?"): answer it as a buyer would.
+    await sleep(150);
+    await evaluate(s, `(() => {
+      const box = document.getElementById("check-email");
+      const yes = document.getElementById("check-yes");
+      if (box && yes && !box.hidden) yes.click();
+    })()`);
     const end = Date.now() + 6000;
     while (Date.now() < end && !handoff && !posted.length) await sleep(100);
     await sleep(300);
