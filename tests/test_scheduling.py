@@ -372,14 +372,19 @@ ROWS = {
 
 
 def _post_all(tmp_path, bodies: list[dict]):
+    # A kind:"update" row is the operator's (`make roster-update`), which
+    # carries the read key; from the site's Origin alone it is refused (final
+    # review SEC-1, pinned in tests/test_final_security.py).
     return _node(tmp_path, f"""
       const puts = [];
-      const env = {{ SITE_ORIGIN: "https://x.test", TRIAL_OPEN: "true",
+      const env = {{ SITE_ORIGIN: "https://x.test", TRIAL_OPEN: "true", FORM_API_KEY: "k",
                      ROWS: {{ put: async (key, value, opts) => puts.push({{ key, value, opts }}) }} }};
       const statuses = [];
       for (const body of {json.dumps(bodies)}) {{
+        const headers = body.kind === "update"
+          ? {{ Origin: "https://x.test", Authorization: "Bearer k" }} : {{ Origin: "https://x.test" }};
         const res = await worker.fetch(new Request("https://w.test/", {{
-          method: "POST", headers: {{ Origin: "https://x.test" }},
+          method: "POST", headers,
           body: JSON.stringify(body) }}), env);
         statuses.push(res.status);
       }}

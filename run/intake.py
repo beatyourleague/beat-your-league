@@ -84,8 +84,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from run.digest import address as keyed_address, keyed
-from run.checkout import (CUSTOMERS_API, customer_id as _customer_id, is_paid,
-                          parse_link_plans, post as _stripe_post,
+from run.checkout import (CUSTOMERS_API, PLAYOFF_FROM_WEEK,
+                          customer_id as _customer_id, is_paid,
+                          parse_link_plans, parse_link_prefixes, playoff_links,
+                          post as _stripe_post,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
@@ -144,6 +146,16 @@ def split_via(ref: str) -> tuple[str, str | None]:
 # pipeline simply is not switched on yet, which is not a failure to alert about.
 NOT_CONFIGURED = 2
 
+# The problems that persist in roster-sync-state.json and keep the run red
+# until ``--clear-unresolved``: a payment that will receive nothing, which the
+# watermark moves past within days. PLAYOFF-EARLY is deliberately NOT one: that
+# buyer IS served, and no workflow passes --clear-unresolved, so persisting it
+# would turn every hourly run red for good over $10. It is re-reported (and
+# red) on every run while its session is inside the sweep's window
+# (run/checkout.WATERMARK_SLACK_SECONDS, three days past the newest session),
+# and the first red run files the issue.
+_REMEMBERED = ("PAID-UNATTRIBUTED",)
+
 
 class IntakeError(RuntimeError):
     """The sweep could not run at all."""
@@ -184,6 +196,10 @@ class RosterSignup:
     # Only on a row merge_same_roster folded together: every subscription
     # behind it, so the row is served while ANY of them is paid for (D2).
     group_subscriptions: tuple[str, ...] = ()
+    # Paid through the $19 Playoff Pass link (``o:``, contract C4): a season
+    # row in every other respect; its welcome names the Playoff Pass and its
+    # price. Logged only when true, so every other log line is unchanged.
+    playoff: bool = False
 
     @property
     def key(self) -> tuple[str, str]:
@@ -243,7 +259,10 @@ def append_log(signups: Iterable[RosterSignup], path: Path) -> int:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with Path(path).open("a", encoding="utf-8") as handle:
         for signup in fresh:
-            handle.write(json.dumps(asdict(signup), separators=(",", ":")) + "\n")
+            row = asdict(signup)
+            if not row.get("playoff"):
+                row.pop("playoff", None)
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
     return len(fresh)
 
 
@@ -386,15 +405,71 @@ def write_state(state: dict[str, Any], path: Path) -> None:
 # the sweep
 # --------------------------------------------------------------------- #
 
+def playoff_opens(created: int, cache: Path | None = None) -> datetime | None:
+    """When the $19 Playoff Pass went on sale for the season a purchase made
+    at ``created`` belongs to: the first kickoff of the week before
+    ``PLAYOFF_FROM_WEEK`` (Week 12's), read from the schedule — the join
+    page's rule (a buyer's first weekly report would be Week 13 or later),
+    never a hardcoded date. The season is the first whose last game is on or
+    after the purchase day, the way one-time entitlement reads it
+    (run/subscriptions.one_time_entitled_until). None when the schedule
+    cannot say."""
+    from run.solo import season_ends, week_first_kickoff
+    cache = cache or CACHE_DIR
+    try:
+        ends = season_ends(cache, live=False)
+    except Exception:  # noqa: BLE001 — unknown schedule: the caller says so
+        return None
+    bought = datetime.fromtimestamp(int(created), timezone.utc).date().isoformat()
+    later = sorted(season for season, end in ends.items() if end >= bought)
+    if not later:
+        return None
+    return week_first_kickoff(cache, later[0], PLAYOFF_FROM_WEEK - 1)
+
+
+def _playoff_early(session: dict, opens: "Callable[[int], datetime | None]") -> str | None:
+    """The PLAYOFF-EARLY problem for a purchase through the $19 link made
+    before the Playoff Pass went on sale, or None (contract C4)."""
+    created = session.get("created")
+    switch = opens(created) if isinstance(created, int) else None
+    if isinstance(created, int) and switch is not None:
+        if datetime.fromtimestamp(created, timezone.utc) >= switch:
+            return None
+        when = (f"on {datetime.fromtimestamp(created, timezone.utc):%Y-%m-%d %H:%M} "
+                f"UTC, before it went on sale at {switch:%Y-%m-%d %H:%M} UTC "
+                f"(Week {PLAYOFF_FROM_WEEK - 1}'s first kickoff)")
+    else:
+        when = ("at a time the schedule could not place against Week "
+                f"{PLAYOFF_FROM_WEEK - 1}'s first kickoff")
+    return (f"PLAYOFF-EARLY session {session.get('id')} paid the $19 Playoff Pass "
+            f"link {when}. It is served like the Rest-of-Season Pass because the "
+            f"buyer paid; needs a human — look the payment up in Stripe and decide "
+            f"(the $19 link may be public in the page source)")
+
+
 def sweep(api_key: str, since: int | None = None,
           link_plans: dict[str, str] | None = None,
-          promote: bool = True) -> tuple[list[RosterSignup], int | None, list[str]]:
+          promote: bool = True, *,
+          playoff: Iterable[str] = (),
+          opens: "Callable[[int], datetime | None] | None" = None,
+          ) -> tuple[list[RosterSignup], int | None, list[str]]:
     """Completed sessions -> roster signups, newest watermark, problems.
 
     Problems are returned rather than raised: one unreadable reference is a
     payment that needs a human, not a reason to deny everybody else their
     report.
+
+    ``playoff`` names the $19 Playoff Pass link(s) (``o:`` in
+    STRIPE_PAYMENT_LINKS, contract C4). A purchase through one is a season
+    row, welcomed as the Playoff Pass. Bought before ``opens(created)`` — the
+    moment the join page starts offering it — it is still served (the buyer
+    paid; refusing would strand them), and reported as PLAYOFF-EARLY, which
+    exits the run non-zero: the $19 link sits in the page source, and a
+    buyer who used it early bought every report through Week 18 for $10 less
+    (final review SEC-3).
     """
+    playoff = frozenset(playoff or ())
+    opens = opens or playoff_opens
     signups: list[RosterSignup] = []
     problems: list[str] = []
     promoted: set[str] = set()
@@ -466,6 +541,15 @@ def sweep(api_key: str, since: int | None = None,
                 f"session {session.get('id')} claims a League Pass but it paid "
                 f"the {plan} link — recorded as an ordinary subscription")
 
+        # The $19 Playoff Pass (contract C4): a season row like the $29 pass,
+        # welcomed under its own name and price — and, bought before the join
+        # page offers it, served and reported for a human (SEC-3).
+        is_playoff = isinstance(paid_link, str) and paid_link in playoff
+        if is_playoff:
+            early = _playoff_early(session, opens)
+            if early:
+                problems.append(early)
+
         customer = _customer_id(session)
         created = session.get("created")
         subscription = _subscription_id(session)
@@ -483,7 +567,8 @@ def sweep(api_key: str, since: int | None = None,
             # their pass, not anything else stored on this row.
             plan=plan,
             seen_at=str(created) if isinstance(created, int) else "",
-            stripe_customer_id=customer, via=via, subscription_id=subscription))
+            stripe_customer_id=customer, via=via, subscription_id=subscription,
+            playoff=is_playoff))
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
@@ -671,7 +756,41 @@ def fetch_seats(endpoint: str, api_key: str | None = None,
     else:
         raise IntakeError(
             f"seat backend returned {type(payload).__name__}, not a row list")
-    return [row for row in rows if isinstance(row, dict)]
+    out = FormRows(row for row in rows if isinstance(row, dict) and _encodable(row))
+    out.dropped = sum(1 for row in rows if isinstance(row, dict)) - len(out)
+    if out.dropped:
+        print(f"form backend: {out.dropped} row(s) carried text that is not valid "
+              f"Unicode (a lone surrogate) and were dropped unread", file=sys.stderr)
+    return out
+
+
+class FormRows(list):
+    """``fetch_seats``'s rows, with how many it dropped as unreadable
+    (``dropped``) — so the intake can count them among its problems while
+    every other reader just gets the clean list."""
+
+    dropped: int = 0
+
+
+def _encodable(row: Mapping) -> bool:
+    """Can this row be written out as UTF-8? A LONE SURROGATE cannot.
+
+    JSON "\\ud800" parses to a one-character string that every regex here
+    accepts, and the first ``.encode("utf-8")`` downstream — the update token,
+    the seat note's key, the free report's key, the launch email's key, the
+    privacy tool's match — raised UnicodeEncodeError with nothing catching
+    it. One anonymous POST stopped every intake run (no buyer registered,
+    welcomed or sent a first report) for the row's 30-day life, and the
+    privacy tool that would delete it crashed too (final review SEC-1). The
+    Worker refuses such a row now; this is the one choke point every reader
+    of the Worker shares (the intake, free reports, the waitlist, privacy,
+    stats and the launch check), so a row stored before that fix — or by any
+    backend — is dropped here rather than crashing whoever reads it."""
+    try:
+        json.dumps(row, ensure_ascii=False).encode("utf-8")
+    except (UnicodeEncodeError, TypeError, ValueError):
+        return False
+    return True
 
 
 # The form kinds this run reads (fetch_seats `kinds`): never the waitlist or
@@ -979,6 +1098,50 @@ def _match_claims(rows: Iterable[Mapping], passes: list[PassInfo], keys: list[st
     return claims, matched, token_rows, token_hits
 
 
+# OPS-R10's "the secret was rotated" alarm, on evidence a stranger cannot
+# supply (final review SEC-4). It used to fire whenever recent seat-link claims
+# matched no pass — and one forged POST with a random 20-hex token is exactly
+# that whenever no real claim landed in the window: every hourly run red for
+# 14 days, the operator sent hunting a rotation that never happened, and the
+# alarm that guards real breakage learned to be ignored. Now the intake keeps
+# a fingerprint of the secret seat links are signed with in its own sealed
+# state (roster-sync-state.json), and a rotation is a fingerprint that moved
+# without the old value kept in UPDATE_SECRET_PREVIOUS.
+SEAT_KEY_CHECK = "seat_key_check"
+_SEAT_KEY_LABEL = b"byl-seat-key-check"
+
+
+def seat_key_check(secret: str) -> str | None:
+    """A 16-hex fingerprint of a signing secret (an HMAC of a fixed label
+    under it, so it says nothing about the secret), or None for no secret."""
+    import hmac
+    if not secret:
+        return None
+    return hmac.new(secret.encode("utf-8"), _SEAT_KEY_LABEL, hashlib.sha256).hexdigest()[:16]
+
+
+def seat_key_rotated(stored: str | None, current: str,
+                     previous: str = "") -> tuple[bool, str | None]:
+    """-> (was the seat-link secret replaced WITHOUT the old one kept, the
+    fingerprint to store for next run).
+
+    No stored fingerprint is a first sighting, never a rotation. A moved
+    fingerprint whose old value is named in UPDATE_SECRET_PREVIOUS is a
+    rotation done right: the new secret is stored, and dropping the old one
+    later is a deliberate retirement, not an accident. A moved one with the
+    old value nowhere is the OPS-R10 accident; the old fingerprint stays
+    stored, so the alarm holds until the old value is put back."""
+    now = seat_key_check(current)
+    if stored is None:
+        return False, now
+    if now == stored:
+        return False, stored
+    kept = {seat_key_check(p.strip()) for p in (previous or "").split(",") if p.strip()}
+    if stored in kept:
+        return False, now
+    return True, stored
+
+
 def seat_origin(first: SeatEntry) -> str:
     """A seat's slug: its FIRST confirmed claim — pass, roster and the Worker's
     own stamp on that claim — never the roster alone (EMAILS-146). Two
@@ -1025,9 +1188,15 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                 log: Iterable[SeatEntry] = (), now: datetime | None = None,
                 season_from: datetime | None = None,
                 stopped: "Callable[[str], bool] | None" = None,
-                resets: Mapping[str, "str | list[str]"] | None = None) -> SeatSweep:
+                resets: Mapping[str, "str | list[str]"] | None = None,
+                rotated: bool = False) -> SeatSweep:
     """Seat claims and the seat log -> registry rows, confirmations to send,
     and claims newly confirmed. Pure: everything it reads is an argument.
+
+    ``rotated`` is ``seat_key_rotated``'s verdict: the signing secret was
+    replaced without the old one kept. Only then do recent seat-link claims
+    matching nothing raise ``links_dead`` (OPS-R10); otherwise they are
+    ordinary unmatched claims, told so under the capped note (SEC-4).
 
     ``resets`` (pass id -> its seat resets' stamps, oldest first, or the one
     stamp; run/seat_resets.py) is the BUYER's control (APPSEC-2): a reset pass is
@@ -1260,12 +1429,15 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                                  and by_id.get(pass_id) is not None
                                  and by_id[pass_id].entitled
                                  for (email, pass_id) in seats)]
-    # OPS-R10: seat-link claims arriving and NOT ONE matching is a signing
-    # secret that was rotated or unset, not a run of typos. Loud, and nobody
-    # is told "no pass" for a link that was good when it was sent.
+    # OPS-R10: seat-link claims arriving and NOT ONE matching, while the
+    # signing secret was replaced without the old one kept (``rotated`` —
+    # evidence from our own state, never from the rows: one forged claim with
+    # a random token used to raise this, SEC-4). Loud, and nobody is told "no
+    # pass" for a link that was good when it was sent. An UNSET secret is the
+    # unsigned-pass alarm's case in main(), not this one.
     recent = [row for row in token_rows
               if (at := _received(row)) is not None and now - at <= UNMATCHED_MAX_AGE]
-    if recent and not token_hits and (passes or not keys):
+    if recent and not token_hits and rotated and passes:
         out.links_dead = True
         out.problems.append(
             f"SEAT LINKS MATCH NO PASS: {len(recent)} claim(s) through a seat link "
@@ -1273,6 +1445,11 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
             f"League Pass. If UPDATE_SECRET was rotated, set the old value in "
             f"UPDATE_SECRET_PREVIOUS; if it is unset, set it. Nobody is told "
             f"their claim failed until this is fixed.")
+        out.unmatched = [row for row in out.unmatched
+                         if not _SEAT_TOKEN.match(str(row.get("pass_token") or "").lower())]
+    elif not keys:
+        # No secret, so no seat link could be checked at all: nobody is told
+        # theirs failed. The loud half is main()'s unsigned-pass alarm.
         out.unmatched = [row for row in out.unmatched
                          if not _SEAT_TOKEN.match(str(row.get("pass_token") or "").lower())]
     return out
@@ -1850,6 +2027,12 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
         extra["season_over"] = True
     if (signup.subscription_id or "").startswith("pi_"):
         extra["one_time"] = True        # a one-time pass: nothing renews
+    if signup.playoff:
+        # The $19 Playoff Pass (contract C4): its own name and price in place
+        # of the Rest-of-Season Pass's. Passed only for that purchase, and
+        # never caught — a welcome_message without the keyword must fail
+        # loudly rather than tell a $19 buyer they bought the $29 pass.
+        extra["playoff"] = True
     return welcome_message(signup.email, signup.plan, signup.slug, season,
                            purchased_at=str(signup.seen_at or ""), **extra)
 
@@ -2285,13 +2468,32 @@ def dispute_alarm(api_key: str) -> bool:
     the run exit 1 until it is answered (pre-launch review, critique #2). A
     lost dispute is not reported here: it already ended entitlement like a
     full refund (run/subscriptions.py). A Stripe read failure is a note,
-    never a failure — the passes check above refuses on its own."""
+    never a failure — the passes check above refuses on its own — EXCEPT a
+    403: that is the cron key missing a permission the entitlement read
+    needs, and it fails the run here, naming what to add (final review
+    OPS-5). The sweep itself only expands the customer, so a key made with
+    the Sep 29 recipe registered and welcomed every buyer, stayed green, and
+    then the Tuesday run's entitlement read (the same call as this one) found
+    nobody paid and mailed nobody. This is the one place the gap shows
+    before Tuesday."""
     if not api_key:
         return False
     from run.subscriptions import DISPUTE_ACTION, load_paid_from_stripe
     try:
         paid = load_paid_from_stripe(api_key)
     except SubscriptionError as exc:
+        if getattr(exc, "status", None) == 403:
+            named = sorted(set(re.findall(r"rak_[a-z_]+", str(exc))))
+            print("STRIPE KEY IS MISSING A PERMISSION: reading who has paid "
+                  "(the same read the Tuesday run makes) got HTTP 403"
+                  + (f" — Stripe names {', '.join(named)}" if named else "")
+                  + ". Edit the cron key (Stripe → Developers → API keys → "
+                  "github-actions-crons → Edit) and give it Payment Intents: "
+                  "Read, Charges: Read and Disputes: Read beside Checkout "
+                  "Sessions: Read and Subscriptions (LAUNCH.md step 3); the key "
+                  "value does not change. Until then Tuesday's report goes to "
+                  "nobody.", file=sys.stderr)
+            return True
         print(f"Disputes: could not be checked this run ({exc}).", file=sys.stderr)
         return False
     for problem in tuple(getattr(paid, "dispute_errors", ()) or ()):
@@ -2424,21 +2626,34 @@ def main(argv: list[str] | None = None) -> int:
 
     state = read_state(state_path)
     since = None if args.full else state.get("watermark")
-    link_plans = parse_link_plans(os.environ.get("STRIPE_PAYMENT_LINKS", ""))
+    raw_links = os.environ.get("STRIPE_PAYMENT_LINKS", "")
+    link_plans = parse_link_plans(raw_links)
+    cache = Path(args.cache)
 
     try:
         swept, newest, problems = sweep(api_key, since if isinstance(since, int) else None,
-                                        link_plans, promote=not args.dry_run)
+                                        link_plans, promote=not args.dry_run,
+                                        playoff=playoff_links(raw_links),
+                                        opens=lambda created: playoff_opens(created, cache))
     except SubscriptionError as exc:
         print(f"could not read Stripe: {exc}", file=sys.stderr)
         return 1
+    seasons = [p for p in parse_link_prefixes(raw_links).values() if p == "s"]
+    if len(seasons) > 1:
+        # LAUNCH.md's first 2026 map filed the $19 link under s: beside the
+        # $29 one, which reads every early Playoff Pass as a $29 pass and
+        # reports nothing (SEC-3). Said every run; the launch check fails it.
+        problems.append(
+            f"STRIPE_PAYMENT_LINKS lists {len(seasons)} s: links — the $19 Playoff "
+            f"Pass goes under o: (s:…,o:…,p:…), or a purchase of it before Week "
+            f"{PLAYOFF_FROM_WEEK - 1}'s first kickoff is never reported")
 
     # Unattributable payments PERSIST. The watermark moves past the session
     # within days, so a once-only message meant the third run forgot a customer
     # who is still being charged.
     remembered = [] if args.clear_unresolved else list(state.get("unresolved") or [])
     for problem in problems:
-        if problem.startswith("PAID-UNATTRIBUTED") and problem not in remembered:
+        if problem.startswith(_REMEMBERED) and problem not in remembered:
             remembered.append(problem)
 
     added = 0 if args.dry_run else append_log(swept, log_path)
@@ -2488,6 +2703,12 @@ def main(argv: list[str] | None = None) -> int:
     request_rows: list[dict] = []
     confirm_rows: list[dict] = []
     secret = os.environ.get("UPDATE_SECRET", "")
+    # SEC-4: whether the seat-link secret moved without the old one kept,
+    # against the fingerprint this state file held (stored for next run below).
+    stored_check = state.get(SEAT_KEY_CHECK)
+    key_rotated, next_check = seat_key_rotated(
+        stored_check if isinstance(stored_check, str) else None, secret,
+        os.environ.get("UPDATE_SECRET_PREVIOUS", ""))
     seat_log_path = registry_dir / SEAT_LOG_NAME
     seat_endpoint = os.environ.get("FORM_ENDPOINT", "")
     form_down = False
@@ -2495,6 +2716,15 @@ def main(argv: list[str] | None = None) -> int:
         try:
             form_rows = fetch_seats(seat_endpoint, os.environ.get("FORM_API_KEY"),
                                     kinds=INTAKE_KINDS)
+            unreadable = int(getattr(form_rows, "dropped", 0) or 0)
+            if unreadable:
+                # Said every run while the rows live, never fatal: a stranger
+                # can post one, and a red cron they can cause at will is the
+                # SEC-1 outage again by another door (final review SEC-1).
+                problems.append(
+                    f"{unreadable} form row(s) carried text that is not valid "
+                    f"Unicode (a lone surrogate) and were dropped unread — not a "
+                    f"real address; they expire on their own")
         except IntakeError as exc:
             # A FORM OUTAGE COSTS FORM POSTS, NEVER SALES (pre-launch review
             # APPSEC-3 / INFRA-03). This used to refuse outright — `return 1`
@@ -2554,7 +2784,7 @@ def main(argv: list[str] | None = None) -> int:
             confirm_codes=confirm_rows,
             log=seat_log, now=datetime.now(timezone.utc),
             season_from=_season_from(args.cache, known_season),
-            stopped=stop_list, resets=resets)
+            stopped=stop_list, resets=resets, rotated=key_rotated)
         seat_rows = seats.rows
         problems.extend(seats.problems)
         if not args.dry_run:
@@ -2638,6 +2868,8 @@ def main(argv: list[str] | None = None) -> int:
     # human clears it, and a re-run that goes green is how it gets forgotten.
     unattributed = [p for p in list(problems) + list(remembered)
                     if str(p).startswith("PAID-UNATTRIBUTED")]
+    # Contract C4 / SEC-3: served, and red while the session is in the sweep.
+    playoff_early = [p for p in problems if str(p).startswith("PLAYOFF-EARLY")]
 
     line = "=" * 62
     print(f"\n{line}\nROSTER INTAKE{' (dry run)' if args.dry_run else ''}\n{line}")
@@ -2701,7 +2933,7 @@ def main(argv: list[str] | None = None) -> int:
               "can be built, so no leaguemate can claim a seat. Set it (LAUNCH.md "
               "step 5).", file=sys.stderr)
     failing = bool(blocked or unattributed or seats.links_dead or unsigned_pass
-                   or form_down)
+                   or form_down or playoff_early)
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
@@ -2769,6 +3001,8 @@ def main(argv: list[str] | None = None) -> int:
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered
+    if next_check:
+        state[SEAT_KEY_CHECK] = next_check
     state["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     write_state(state, state_path)
     try:
@@ -2785,6 +3019,10 @@ def main(argv: list[str] | None = None) -> int:
     if seats.links_dead:
         print("League Pass seat links match no pass — exiting non-zero so this "
               "is not a green cron.", file=sys.stderr)
+    if playoff_early:
+        print(f"{len(playoff_early)} Playoff Pass purchase(s) made before the "
+              f"Playoff Pass was on sale (PLAYOFF-EARLY) — served, and exiting "
+              f"non-zero so a human decides.", file=sys.stderr)
     print(line)
     return 1 if failing else 0
 

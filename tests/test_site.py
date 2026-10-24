@@ -3338,7 +3338,7 @@ def test_a_mistyped_password_never_reaches_stripe() -> None:
 
     source = (SITE.parent / "infra" / "stripe_paylink_text.py").read_text(encoding="utf-8")
     # The refusal must come BEFORE the first request, or the guard is decoration.
-    assert source.index("KEY_SHAPE.match(key)") < source.index("for plan in ("), (
+    assert source.index("KEY_SHAPE.match(key)") < source.index("for link, plan in links:"), (
         "the shape check runs after the first Stripe call")
     assert "NOT your Mac password" in source, (
         "the prompt no longer says what it is not, which is what caused this")

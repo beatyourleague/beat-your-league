@@ -96,6 +96,11 @@ MIN_KEY_LENGTH = 32
 MAGIC = b"BYLSEAL1"
 ITERATIONS = 200_000
 MIN_ITERATIONS = 10_000
+# The header's count is read BEFORE the tag can be checked (the tag's key comes
+# from it), so a damaged or planted blob naming 4,294,967,295 iterations made
+# the job spin for hours before the MAC rejected it (final review, appsec).
+# Ten times what this module writes; anything above is refused unread.
+MAX_ITERATIONS = 2_000_000
 SALT_LEN = IV_LEN = 16
 TAG_LEN = 32
 # The newest few backups are tried in turn: a planted or truncated artifact
@@ -186,7 +191,7 @@ def decrypt(blob: bytes, secret: str) -> bytes:
     if len(blob) < head_len + TAG_LEN + 16 or not blob.startswith(MAGIC):
         raise SealError("not a sealed file (wrong format or truncated)")
     iterations = int.from_bytes(blob[len(MAGIC):len(MAGIC) + 4], "big")
-    if iterations < MIN_ITERATIONS:
+    if not MIN_ITERATIONS <= iterations <= MAX_ITERATIONS:
         raise SealError("sealed file failed its integrity check")
     salt = blob[len(MAGIC) + 4:len(MAGIC) + 4 + SALT_LEN]
     iv = blob[len(MAGIC) + 4 + SALT_LEN:head_len]

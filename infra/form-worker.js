@@ -61,7 +61,9 @@
  *                                contract C3; a typed buyer address is no
  *                                longer a way in, and is not stored)
  *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
- *                                the operator's emailed change, run/updates.py)
+ *                                the operator's emailed change, run/updates.py;
+ *                                accepted ONLY with the read key — 403 from the
+ *                                site's own Origin, final review SEC-1)
  *   POST JSON  {kind:"update_request", email, ref, replaces?}  (confirm-by-
  *                                email, step 1; replaces = the link's &o= tag,
  *                                12 hex — run/updates.py origin_tag)
@@ -142,7 +144,15 @@
 // apostrophes and non-ASCII included): a stricter Worker answered 400 to an
 // address the page had passed and a subscription could hold (JOIN-129).
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const REF = /^[A-Za-z0-9_-]{1,200}$/;
+// A LONE UTF-16 surrogate (JSON "\ud800") is one character to EMAIL above,
+// so the row was stored — and Python's json.loads rebuilt it, and the first
+// .encode("utf-8") in every reader raised: one anonymous POST stopped every
+// intake run, the free report, the launch email and the privacy tool for the
+// row's whole life (final review SEC-1). Refused here, beside EMAIL rather
+// than in it: EMAIL is the one rule the page and run/rosters.py share
+// (JOIN-129). Emoji, accents and apostrophes are whole code points and pass.
+const LONE_SURROGATE = /\p{Cs}/u;
+const REF =/^[A-Za-z0-9_-]{1,200}$/;
 const SLUG = /^[0-9a-f]{10}$/;
 // The update link's &o= (run/updates.py origin_tag, ORIGIN_TAG_LENGTH = 12):
 // an HMAC of the subscription's origin slug, posted back as `replaces` on an
@@ -217,7 +227,7 @@ function sanitizeKind(body) {
     return CODE.test(code) ? { kind, code } : null;
   }
   const email = String(body.email || "").trim().toLowerCase();
-  if (!EMAIL.test(email) || email.length > 254) return null;
+  if (!EMAIL.test(email) || email.length > 254 || LONE_SURROGATE.test(email)) return null;
   if (kind === "waitlist") {
     // The launch list holds the address (plus the optional via tag sanitize()
     // adds to every kind) and, when checkout was closed for the plan picked
@@ -455,6 +465,14 @@ export default {
       try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
       const row = sanitize(body);
       if (!row) return json({ error: "bad row" }, 400);
+      // A roster UPDATE is the operator's route alone (`make roster-update`,
+      // run/updates.py post_row, which sends the read key). No report link
+      // has ever carried a token, and the public door to it is how one
+      // anonymous row reached the intake's update validator (final review
+      // SEC-1): from the site's Origin it is refused, whatever it carries.
+      if (row.kind === "update" && !authorized(request, env)) {
+        return json({ error: "unauthorized" }, 403);
+      }
       // SEC-06: a free report is served only while the site offers one. The
       // runner checks the site too (run/trials.py); this keeps a request sent
       // straight here from being stored at all.

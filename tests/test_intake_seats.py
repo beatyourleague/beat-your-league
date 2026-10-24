@@ -888,9 +888,17 @@ def test_a_rotated_secret_orphans_no_seat_and_a_dead_link_is_loud() -> None:
                                  signing_secrets("new-secret", "old-secret"))
     assert not rotated.links_dead and rotated.awaiting, \
         "an old link was not matched under UPDATE_SECRET_PREVIOUS"
-    dead = intake.sweep_seats([claim], PASSES, None, "new-secret")
+    # SEC-4: the alarm needs evidence of a rotation from the intake's own
+    # state (intake.seat_key_rotated), never just claims that match nothing.
+    rotated_without_old, _ = intake.seat_key_rotated(
+        intake.seat_key_check("old-secret"), "new-secret")
+    assert rotated_without_old
+    dead = intake.sweep_seats([claim], PASSES, None, "new-secret",
+                              rotated=rotated_without_old)
     assert dead.links_dead and dead.unmatched == []
     assert any("SEAT LINKS MATCH NO PASS" in p for p in dead.problems)
+    assert not intake.sweep_seats([claim], PASSES, None, "new-secret").links_dead, \
+        "claims matching nothing, with no rotation on record, raised the alarm"
     assert signing_secrets("a", " b, a ,c") == ["a", "b", "c"]
 
 
@@ -901,6 +909,10 @@ def test_seat_links_matching_nothing_fail_the_intake(
     daily cron files its issue."""
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS)
     monkeypatch.setenv("UPDATE_SECRET", "rotated-secret")
+    # The links were signed under SECRET, and the intake's state remembers
+    # that (SEC-4) — which is what makes "rotated-secret" a rotation.
+    intake.write_state({intake.SEAT_KEY_CHECK: intake.seat_key_check(SECRET)},
+                       tmp_path / intake.STATE_NAME)
     stripe["sessions"] = [_pass_session()]
     token = seat_token("commish@example.com", SECRET, PASS_SUB)
     _seats(monkeypatch, {"email": "member@example.com", "ref": SEAT_REF,
