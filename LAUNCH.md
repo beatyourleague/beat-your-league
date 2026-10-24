@@ -69,7 +69,7 @@ still open one. Make three new links and switch the old ones off.
    |---|---|---|
    | Enable Managed Payments | Off | 3.5% on top, and it makes Stripe the seller, which contradicts the terms |
    | Require customers to accept your terms of service | On | |
-   | Collect customer addresses | On | Tax thresholds count per country and state; the address stays in Stripe |
+   | Collect customer addresses | Off | A card payment already takes the card's country and, where the card needs one, its postal code — enough to place a buyer for the per-country and per-state tax thresholds. A full address is more than anything uses, and privacy §1 says checkout asks for one only if it is set to |
    | Customer names, business names, phone | Off | Nothing uses them |
    | Collect tax automatically | Off | Not registered for tax anywhere yet |
    | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
@@ -257,11 +257,12 @@ nothing: every row is checked before it reaches the subscriber list.
 ## 5b. The page counter (~10 min, right after step 5)
 
 Without it you can see sign-ups and sales but not visits, where people come from, or where
-the signup page loses them. `site/count.js` (on every page) sends one anonymous line per page
-view and per signup step — which page or step, the `?via=` tag, the referring site, phone or
-desktop, checkout open or closed — to the form Worker's `/e`, which adds the country and
-writes it to **Cloudflare Analytics Engine** (free: 100,000 lines a day, kept three months).
-Not KV: KV's 1,000 writes a day belong to the forms, and running out makes seats and the
+the signup page loses them. `site/count.js` — on every public page, the generated ones too
+(both samples, this week's sample, the ledger and the backtest page carry it from their next
+build) — sends one anonymous line per page view and per signup step (which page or step, the
+`?via=` tag, the referring site, phone or desktop, checkout open or closed) to the form
+Worker's `/e`, which adds the country and writes it to **Cloudflare Analytics Engine** (free:
+100,000 lines a day, kept three months). Not KV: KV's 1,000 writes a day belong to the forms, and running out makes seats and the
 waitlist refuse. No cookie, no IP address, no email, and nothing at all from a browser that
 sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly this.
 
@@ -295,10 +296,14 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
    ```
    Not a GitHub secret: `make stats` never runs in CI (it refuses to), because on a public
    repo the job log — the counts and the sales — is public.
-8. Turn on Do Not Track or Global Privacy Control in your own browsers, phone included
+8. Turn on Do Not Track or Global Privacy Control in your own computer's browsers
    (Chrome: Settings → Privacy and security → Third-party cookies → Send a "Do Not Track"
    request; Firefox: Settings → Privacy & Security → Tell websites not to sell or share my
-   data), so your own visits aren't counted.
+   data), so your own visits aren't counted. **On an iPhone, Safari and Chrome send
+   neither**, so a visit from them counts like anybody's. To keep your phone out, open the
+   site in DuckDuckGo's browser (it sends Global Privacy Control on its own), or in Firefox
+   on Android with the same setting on — or accept that your own phone views are in the
+   numbers, a handful a day at most.
 9. **Tell me "counter on".** I set `ENDPOINT` in `site/count.js` to
    `https://forms.beatyourleague.com/e` and run the launch check ("The page counter answers
    204 with no cookie").

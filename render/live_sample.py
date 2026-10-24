@@ -62,8 +62,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from engine.subscriber import RosterSpec
-from render.report import (JOIN_PROMISE, SAMPLE_CTA_CLOSED, TEMPLATE_PATH, esc,
-                           render, sample_cta)
+from render.report import (JOIN_PROMISE, SAMPLE_CTA_CLOSED, TEMPLATE_PATH,
+                           before_counter, esc, render, sample_cta)
 from render.sample import SLOTS
 from run.solo import CACHE_DIR, SeasonOver, SoloError, load_week_data, report_for
 
@@ -138,12 +138,10 @@ if (VIA) {
 
 
 def with_via_carry(page: str) -> str:
-    """The rendered page with VIA_SCRIPT just before its closing body tag (at
-    the end, so every link it decorates already exists)."""
-    head, tag, tail = page.rpartition("</body>")
-    if not tag:
-        return page + VIA_SCRIPT
-    return head + VIA_SCRIPT + tag + tail
+    """The rendered page with VIA_SCRIPT at the end of its body (so every link
+    it decorates already exists), before the page counter, which stays the
+    last thing on every public page (render.report.COUNT_TAG)."""
+    return before_counter(page, VIA_SCRIPT)
 
 
 def build(cache_dir: Path = CACHE_DIR, season: str | None = None,

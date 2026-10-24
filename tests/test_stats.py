@@ -1,8 +1,11 @@
 """`make stats` — the owner's view of demand, from data already stored.
 
-The site has no analytics by promise, so this is the only view of whether
-anyone is asking. It is the kind of output that gets pasted somewhere, so it
-prints counts and never an address.
+The site carries no third-party analytics by promise: its only counter is
+its own, cookieless one (site/count.js -> the form Worker's /e -> Cloudflare
+Analytics Engine; privacy section 3), and tests/test_site.py replaced the old
+tracker-name denylist with an allowlist of the origins a page may load from.
+So this is the owner's one view of whether anyone is asking. It is the kind of
+output that gets pasted somewhere, so it prints counts and never an address.
 """
 
 from __future__ import annotations

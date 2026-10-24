@@ -236,6 +236,39 @@ SOCIAL_IMAGE_TAGS = (
     'four roster slots, three with a percentage, one marked questionable.">\n'
 )
 
+# The site's own page counter (site/count.js, contract C1, privacy section 3).
+# Every PUBLIC page loads it with this one line, the last thing before </body>:
+# the samples, the live sample, the ledger and the backtest page as much as the
+# hand-written ones — the landing's main proof link lands on a sample, so a
+# counter that skipped the generated pages would read the proof as unvisited.
+# Never on a subscriber's own report: that render is private, mailed or
+# archived, and is nobody's page view.
+COUNT_TAG = '<script src="/count.js" defer></script>'
+
+
+def with_counter(page: str) -> str:
+    """``page`` with COUNT_TAG as the last thing before its closing body tag,
+    exactly once. A page that already carries it is returned unchanged."""
+    if COUNT_TAG in page:
+        return page
+    head, tag, tail = page.rpartition("</body>")
+    if not tag:
+        return page
+    return head + COUNT_TAG + "\n" + tag + tail
+
+
+def before_counter(page: str, snippet: str) -> str:
+    """``page`` with ``snippet`` inserted at the end of its body, but before
+    COUNT_TAG when the counter closes it, so the counter stays last."""
+    head, tag, tail = page.rpartition("</body>")
+    if not tag:
+        return page + snippet
+    closing = COUNT_TAG + "\n"
+    if head.endswith(closing):
+        return head[:-len(closing)] + snippet + closing + tag + tail
+    return head + snippet + tag + tail
+
+
 FAVICON_LINK = ('<link rel="icon" href="/favicon.ico" sizes="32x32">\n'
                 '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
                 '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
@@ -2438,6 +2471,9 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
             + SOCIAL_IMAGE_TAGS
         )
     favicon = FAVICON_LINK + '\n'
+    # The counter rides the same gate as the share meta: a public sample is a
+    # site page, a subscriber's report is not (COUNT_TAG).
+    counter = COUNT_TAG + "\n" if meta.get("anonymized_demo") else ""
     # The three public samples are indexable pages with one address each; a
     # subscriber's private archive is neither, so it carries no canonical.
     if meta.get("anonymized_demo"):
@@ -2450,7 +2486,7 @@ def render(report: Mapping[str, Any], template_html: str) -> str:
         f'{PAGE_META}<title>{esc(title)}</title>\n{social}{favicon}'
         f'{font_preloads()}{links}\n<style>{style}</style>\n'
         f'</head>\n<body>\n<div class="report">\n{landmarks(body)}\n</div>\n'
-        f'</body>\n</html>\n'
+        f'{counter}</body>\n</html>\n'
     )
 
 

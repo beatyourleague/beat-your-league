@@ -17,7 +17,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from render.report import FAVICON_LINK, NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg
+from render.report import (FAVICON_LINK, NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg,
+                           with_counter)
 from typing import Any, Mapping
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -114,7 +115,8 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
             '<span class="stampbox">RULES FROZEN &middot; NOTHING EDITED AFTER THE FACT</span></div>'
         )
 
-    return f'''<!DOCTYPE html>
+    # A public page, so it carries the site's page counter (COUNT_TAG).
+    return with_counter(f'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -202,7 +204,7 @@ def render_ledger(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],
 </div>
 </body>
 </html>
-'''
+''')
 
 
 def write_ledger_site(entries: list[Mapping[str, Any]], summary: Mapping[str, Any],

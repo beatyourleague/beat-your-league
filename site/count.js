@@ -14,8 +14,10 @@
 //   - fire-and-forget: it never throws, never waits and never holds up a
 //     navigation, so a counter that is down costs a visitor nothing.
 // ENDPOINT stays empty until LAUNCH.md step 5b is done; empty sends nothing.
-// The same <script src="/count.js" defer> line is on every page. The join
-// page calls window.bylCount("roster" | "checkout" | "waitlist" | "trial").
+// The same <script src="/count.js" defer> line is on every public page,
+// generated ones included (render.report.COUNT_TAG). The join page names its
+// mode in window.bylPage and calls window.bylCount("roster" | "checkout" |
+// "waitlist" | "trial").
 (function () {
   "use strict";
   // "https://forms.beatyourleague.com/e" once the Worker is live — never a
@@ -36,6 +38,8 @@
   // Pages answering with 404.html, so that is what it counts as.
   const OTHER = ["join/confirm", "terms", "privacy", "legal", "compare", "confidence",
                  "projections", "no-call", "backtest", "ledger"];
+  // The keys the join page may name for itself (window.bylPage).
+  const JOIN_KEYS = ["join", "join-pass", "join-try", "other"];
   const sent = {};
 
   function pageKey(path, query) {
@@ -44,8 +48,13 @@
     let page = Object.prototype.hasOwnProperty.call(PAGES, bare) ? PAGES[bare]
              : OTHER.indexOf(bare) >= 0 ? "other" : "404";
     if (page === "join") {
-      // The join page's own mode rules: a seat claim or a roster update is
-      // not the buy page, so neither is counted as one.
+      // The join page names its own mode (window.bylPage, set from the flags
+      // it runs on), so a roster restored from the launch email's ?ref= — a
+      // League Pass with no ?plan=pass — counts as the pass page it shows.
+      const own = window.bylPage;
+      if (JOIN_KEYS.indexOf(own) >= 0) return own;
+      // Otherwise the same rules read off the address: a seat claim or a
+      // roster update is not the buy page, so neither is counted as one.
       const plan = query.get("plan") || "";
       const seat = query.has("pass") && plan !== "pass";
       const update = !seat && query.has("update");
@@ -72,7 +81,10 @@
     const via = (query.get("via") || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24);
     let ref = "";
     try { ref = new URL(document.referrer).hostname.toLowerCase(); } catch (e) { ref = ""; }
-    if (ref === LIVE || ref.endsWith("." + LIVE)) ref = "";       // a step inside the site
+    // A step inside the site says so with our own name — still a bare host —
+    // so "(direct or hidden)" in make stats means arrivals, not every click
+    // from the landing to the join page.
+    if (ref === LIVE || ref.endsWith("." + LIVE)) ref = LIVE;
     const row = {
       e: event, p: pageKey(window.location.pathname, query), v: via, r: ref,
       d: (window.innerWidth || 0) < 768 ? "m" : "d",

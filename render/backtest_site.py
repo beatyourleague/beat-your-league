@@ -47,7 +47,8 @@ import re
 import sys
 from pathlib import Path
 
-from render.report import FAVICON_LINK, NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg
+from render.report import (FAVICON_LINK, NOINDEX_TAG, SOCIAL_IMAGE_TAGS, mark_svg,
+                           with_counter)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # The frozen method's per-surface mapping (reports/nflverse-backtest-method.md
@@ -649,8 +650,9 @@ def build(source: Path = SOURCE) -> str:
                  .replace("@@TITLE@@", html.escape(title, quote=True))
                  .replace("@@HEADING@@", html.escape(heading, quote=False))
                  .replace("@@LEDE@@", lede))
-    page = shell + "  <main>\n" + to_html(markdown) + "\n" + TAIL.replace(
-        "@@SIBLING@@", "")
+    # A public page, so it carries the site's page counter (COUNT_TAG).
+    page = with_counter(shell + "  <main>\n" + to_html(markdown) + "\n" + TAIL.replace(
+        "@@SIBLING@@", ""))
     problems = verify(markdown, page)
     if problems:
         raise SystemExit("refusing to publish an unfaithful backtest page:\n  "

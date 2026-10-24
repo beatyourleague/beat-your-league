@@ -417,6 +417,10 @@ def free_to_paid_line(rows: Iterable[Mapping], sessions: Iterable[Mapping],
 
 COUNT_DATASET = "byl_counts"
 COUNT_JS = Path(__file__).resolve().parent.parent / "site" / "count.js"
+# count.js names our own site as the referrer of a step from one of our pages
+# to another, so the referrer line can leave those out: "(direct or hidden)"
+# then counts arrivals, not every click from the landing to the join page.
+OWN_HOST = "beatyourleague.com"
 AE_SQL = "https://api.cloudflare.com/client/v4/accounts/{account}/analytics_engine/sql"
 ACCOUNT_RE = re.compile(r"^[0-9a-f]{32}$")
 # blob1 event, blob2 page, blob3 via, blob4 referring host, blob5 device,
@@ -434,7 +438,9 @@ FUNNEL = (
     ("Rosters checked on the buy page", lambda r: r["e"] == "roster" and r["p"] in BUY_PAGES),
     ("Buy pressed, checkout open", lambda r: r["e"] == "checkout" and r["s"] == "open"),
     ("Buy pressed, checkout closed", lambda r: r["e"] == "checkout" and r["s"] == "closed"),
-    ("Waitlist joined", lambda r: r["e"] == "waitlist"),
+    # The join page's closed-checkout save only: the landing's own capture is
+    # not a counted step, so the whole waitlist is the FORMS block's figure.
+    ("Waitlist joined on the buy page", lambda r: r["e"] == "waitlist"),
     ("Free-report page views", lambda r: r["e"] == "view" and r["p"] == "join-try"),
     ("Free-report rosters checked", lambda r: r["e"] == "roster" and r["p"] == "join-try"),
     ("Free reports requested", lambda r: r["e"] == "trial"),
@@ -527,7 +533,9 @@ def traffic_lines(week: list[dict], month: list[dict]) -> list[str]:
               "  Channels, 7 days (views → rosters → buy presses): "
               + (", ".join(f"{v} {a} → {b} → {c}" for v, (a, b, c) in channels)
                  or "none yet"),
-              "  Referrers, 7 days: " + _top(week, "r", "(direct or hidden)"),
+              "  Referrers, 7 days: " + _top(
+                  [r for r in week if r["r"] != OWN_HOST and not r["r"].endswith("." + OWN_HOST)],
+                  "r", "(direct or hidden)") + " (steps inside the site left out)",
               "  Pages, 7 days:     " + _top(week, "p", "unknown", 8),
               "  Devices, 7 days:   " + _top(week, "d", "unknown",
                                              names={"m": "phone", "d": "desktop"}),

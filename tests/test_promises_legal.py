@@ -19,8 +19,10 @@ SITE = ROOT / "site"
 # the words change; never edit an old one. The last pair must match the page.
 PRIVACY_VERSIONS = [
     ("2026-10-18", "25bc5d53a2db85c1"),
-    # The page counter (ANALYTICS-04) and the card's postal code (critique #7).
-    ("2026-10-23", "83390cb12c707aec"),
+    # The page counter (ANALYTICS-04), the card's country and postal code
+    # (critique #7), seats through the pass's own link only (C3), the free
+    # report's roster codes, the encrypted backups, and the site's nav (C2).
+    ("2026-10-23", "21135e51cc4a22a7"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),

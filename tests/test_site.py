@@ -115,8 +115,14 @@ def test_every_page_but_the_home_page_has_a_home_button() -> None:
     was not. The two published samples had no way back at all: a buyer who
     opened one from the landing page left it with the browser's back button or
     not at all. A wordmark is a convention an experienced visitor knows and a
-    less experienced one does not, so every page carries a labelled button,
+    less experienced one does not, so every page carried a labelled button,
     above its headline, beside a wordmark that is one link logo and all.
+
+    Contract C2 (launch review D5, Oct 2026) retired the pill: at 390px it
+    wrapped onto a row of its own under the routes, repeating a link the
+    logo lockup already is, and the nav it now sits in names its routes in
+    words (tests/test_prelaunch_pages.py holds the pages that carry it). What
+    stays pinned here, on every page, is the way home above the headline.
 
     legal.html is a redirect stub and is never seen."""
     for path in sorted(SITE.rglob("*.html")):
@@ -128,10 +134,8 @@ def test_every_page_but_the_home_page_has_a_home_button() -> None:
         root = "/" if rel == "404.html" else re.escape("../" * rel.count("/") + "index.html")
         top = (path.read_text(encoding="utf-8")
                .split("<body", 1)[1].split("<h1", 1)[0])
-        assert re.search(rf'<a class="home" href="{root}"[^>]*>← Home</a>', top), \
-            f"{rel} has no home button above its headline"
         assert re.search(rf'<a class="brand" href="{root}"', top), \
-            f"{rel}'s wordmark is not one link, logo and all"
+            f"{rel}'s wordmark is not one link home, logo and all, above its headline"
 
 
 def test_a_subscribers_own_report_carries_no_home_button() -> None:
@@ -3121,11 +3125,12 @@ def test_the_policy_discloses_the_address_stripe_now_collects() -> None:
 
     assert re.search(r"billing address", page, re.I), \
         "the address is collected and the policy does not say so"
-    # Oct 23 2026 (critique #7): LAUNCH recommends the address toggle Off, so
-    # what checkout always takes is the card's country and postal code, and a
-    # full address only when the toggle is on — the note says both, true
-    # either way.
-    assert re.search(r"country and postal code Stripe takes with your card at checkout",
+    # Oct 23 2026 (critique #7): LAUNCH sets the address toggle Off, so what
+    # checkout always takes is the card's country and, where the card needs
+    # one, its postal code, and a full address only when the toggle is on —
+    # the note says both, true either way.
+    assert re.search(r"your card's country and, where the card needs one, its postal code, "
+                     r"which Stripe takes with the card at checkout",
                      page, re.I), "the exhaustive 'whole list' note omits the postal code"
     assert re.search(r"full\s+billing address only if", page, re.I), (
         "the exhaustive 'whole list' note omits the address checkout may ask for")
@@ -4779,7 +4784,9 @@ def test_the_privacy_policy_names_an_accountable_role_and_true_storage() -> None
     section1 = privacy[privacy.find("1. What we collect"):privacy.find("2. What we never")]
     assert re.search(r"waitlist.{0,260}short code standing for that roster", section1, re.S)
     assert re.search(r"pass code in your league's own link", section1)
-    assert "the email the pass was bought with" in section1
+    # Contract C3: a seat comes only through the pass's own link, so its claim
+    # holds the pass code and never the buyer's address.
+    assert "the email the pass was bought with" not in section1
     stripe = privacy[privacy.find("Stripe handles payment"):][:600]
     assert "channel tag" in stripe
     assert "sample roster's report" in privacy
@@ -4919,10 +4926,13 @@ def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
     root = "/" if name == "404.html" else ""
     nav = re.search(r'<nav class="sitenav" aria-label="Site">(.*?)</nav>', page, re.S)
     assert nav, f"{name} has no site nav"
+    # "See a real report" is contract C2's label (site_bar); terms and privacy
+    # keep "Real report" until their words next change, because their visible
+    # text is pinned to their Last-updated date (tests/test_promises_legal.py).
     for href, label in ((f"{root}how-it-works.html", "How it works"),
-                        (f"{root}sample-report.html", "Real report"),
+                        (f"{root}sample-report.html", "(?:See a real|Real) report"),
                         (f"{root}index.html#pricing", "Pricing")):
-        assert re.search(rf'<a href="{re.escape(href)}"[^>]*>{label}</a>', nav.group(1)), \
+        assert re.search(rf'<a [^>]*href="{re.escape(href)}"[^>]*>{label}</a>', nav.group(1)), \
             f"{name}: no {label}"
     assert page.index("sitenav") < page.index("<h1"), "the routes sit above the headline"
 
