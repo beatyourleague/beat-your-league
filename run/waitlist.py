@@ -56,7 +56,6 @@ import re
 import sys
 from pathlib import Path
 
-from render.report import BRAND_LINE
 from run.delivery import (DRY_PROVIDER, DeliveryError, Message, build_provider,
                           send_all)
 from run.digest import DigestError, address as keyed_address
@@ -70,17 +69,29 @@ CAMPAIGN = "launch-2026"
 # Same standard run/registry.py applies, so a bad row cannot reach a provider.
 EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[a-zA-Z]{2,}$")
 
+# The subject when the season clock (site/week.json) can't say which week a
+# buyer's first weekly report is — absent, stale, or out of season.
 SUBJECT = "Signups are open — your first report lands the day you join"
+# With the clock (final review, copy improvements): the week this buyer's
+# lineup is for, the join page's own rule (``launch_frame``).
+SUBJECT_TUESDAY = "It's open — your Week {week} lineup lands {day}"
+SUBJECT_BEFORE_KICKOFF = "It's open — get your Week {week} lineup before kickoff"
 
+# Mid-season (owner decision, Oct 18 2026): sold as every lineup from here to
+# the title game. The three things it does, each one the product does in every
+# setup; "you type your roster once" went (a roster can be updated any week,
+# so "once" said the opposite of the FAQ). The price paragraph carries the
+# one-payment and refund terms beside the price, as every selling surface does.
 BODY = """\
-You asked to hear when this opened. It's open.
+{opening}
 
-{brand}
+Paste your roster from any app: no login, no league to connect. Your first
+report usually lands within the hour. Then every Tuesday through your title
+game, one email sets your lineup for your scoring: every slot decided, every
+close call explained, an if/then for late news, and any bye still ahead that
+leaves a spot empty, playoff weeks included.
 
-You type your roster once and your first report lands the day you join. Then
-every Tuesday morning: the lineup we would set with the odds on the close calls,
-the one decision worth arguing about, and who is actually earning the ball —
-real target and carry counts, not adjectives.
+{offer}
 
   {url}
 
@@ -90,6 +101,20 @@ Unsubscribe button) and you're off within 10 business days; we do not ask why.
 
 {sender}
 """
+OPENING = "You asked to hear when this opened. It's open."
+OPENING_WEEK = "You asked to hear when this opened. It's open, in time for Week {week}."
+# The join page's own terms line for each pass (site/join/index.html), so the
+# email and the checkout state one offer in one set of words.
+_REFUND = ("Refunds are no-questions until your second weekly report's week "
+           "kicks off — one per person.")
+OFFER = ("The Rest-of-Season Pass is {price}, one payment: nothing renews and "
+         "nothing more is charged. " + _REFUND)
+OFFER_PLAYOFF = ("The Playoff Pass is {price}, one payment: nothing renews and "
+                 "nothing more is charged. " + _REFUND)
+# The join page's switch (PLAYOFF_FROM_WEEK): the $19 pass replaces the $29
+# one once a buyer's first weekly report would be this week or later — and
+# only while its payment link is on the page.
+PLAYOFF_FROM_WEEK = 13
 
 # What the body must NOT promise, and why — this list is a test, not a comment:
 # the waiver market needs a league transaction log we no longer read, the rival
@@ -218,8 +243,86 @@ SAVED_LINE = ("That link brings back the roster you checked while signups were "
               "closed, so it's already filled in when you open it.")
 
 
+def launch_frame(clock: dict | None, now=None) -> tuple[int, bool, str] | None:
+    """(the week a buyer's first weekly report is for, whether it goes out
+    before that week's kickoff, the day it lands) from the season clock the
+    live build writes (site/week.json), by the join page's own rule: that
+    week's report before its first kickoff, the next week's after. None when
+    the clock is absent, out of season or stale — then the email names no
+    week, which is never false."""
+    from datetime import date, datetime, time, timedelta, timezone
+    from zoneinfo import ZoneInfo
+    clock = clock or {}
+    if clock.get("phase") not in (None, "season"):
+        return None
+    try:
+        week = int(clock["week"])
+        lands = date.fromisoformat(str(clock["lands_on"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+    eastern = ZoneInfo("America/New_York")
+    now = now or datetime.now(timezone.utc)
+    if now >= datetime.combine(lands + timedelta(days=1), time(0), eastern):
+        return None                                  # a clock nobody rebuilt
+    kick = None
+    try:
+        kick = datetime.fromisoformat(str(clock["first_kickoff"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        pass
+    kicked = kick is not None and now >= kick
+    first = week + 1 if kicked else week
+    last = clock.get("last_week")
+    if isinstance(last, int) and first > last:
+        return None                                  # the season's last report is out
+    today = now.astimezone(eastern).date()
+    day = "today" if today == lands else f"{lands:%A}"
+    return first, not kicked, day
+
+
+def _playoff_link_live() -> bool:
+    """Is the $19 Playoff Pass link on the join page? The email may offer
+    only what the checkout it links to sells."""
+    page = REPO_ROOT / "site" / "join" / "index.html"
+    try:
+        found = re.search(r'const STRIPE_LINK_PLAYOFF = "([^"]*)"',
+                          page.read_text(encoding="utf-8"))
+    except OSError:
+        return False
+    return bool(found and found.group(1).strip())
+
+
+def _clock() -> dict:
+    from render.live_sample import read_week_json
+    return read_week_json(REPO_ROOT / "site" / "week.json")
+
+
+def compose(url: str, sender: str, clock: dict | None = None,
+            now=None) -> tuple[str, str, str]:
+    """(subject, plain-text body, inbox preview) for one launch email."""
+    from render.welcome import PLAYOFF_PRICE, SEASON_PRICE
+    frame = launch_frame(clock, now)
+    playoff = bool(frame and frame[0] >= PLAYOFF_FROM_WEEK and _playoff_link_live())
+    offer = (OFFER_PLAYOFF.format(price=PLAYOFF_PRICE) if playoff
+             else OFFER.format(price=SEASON_PRICE))
+    if frame is None:
+        subject, opening = SUBJECT, OPENING
+        preview = "Signups are open. Your first report usually lands within the hour."
+    else:
+        week, before_kickoff, day = frame
+        subject = (SUBJECT_BEFORE_KICKOFF.format(week=week) if before_kickoff
+                   else SUBJECT_TUESDAY.format(week=week, day=day))
+        opening = OPENING_WEEK.format(week=week)
+        preview = (f"It's open, in time for Week {week}. Paste your roster; your "
+                   f"first report usually lands within the hour.")
+    import textwrap
+    body = BODY.format(opening=opening, offer=textwrap.fill(offer, 78),
+                       url=url, sender=sender)
+    return subject, body, preview
+
+
 def messages(addresses: list[str], signup_url: str,
-             refs: dict[str, str] | None = None) -> list[Message]:
+             refs: dict[str, str] | None = None, clock: dict | None = None,
+             now=None) -> list[Message]:
     """One Message per address, keyed so it can only ever be sent once.
 
     The key carries a DIGEST of the address, not the address: sent.jsonl is
@@ -227,11 +330,12 @@ def messages(addresses: list[str], signup_url: str,
     never hold the list itself. Somebody who checked a roster while checkout
     was closed gets their own link back to it (``refs``, contract C6) — the
     same one message, never a second.
+
+    ``clock``: the season clock (site/week.json, read when omitted), which
+    names the week in the subject and the opening line.
     """
     from render.sender import CONTACT, sender_line
-    # The brand line, sentence-cased properly: .capitalize() lowered every
-    # other letter, so it read "every tuesday" (launch audit L2).
-    brand = BRAND_LINE[:1].upper() + BRAND_LINE[1:]
+    clock = _clock() if clock is None else clock
     # Commercial email: sender identity with a postal address (CAN-SPAM,
     # CASL). main() refuses a real send without one; a preview shows the gap.
     sender = sender_line() or "[sender postal address not configured]"
@@ -241,12 +345,13 @@ def messages(addresses: list[str], signup_url: str,
     for address in addresses:
         ref = (refs or {}).get(address) or by_mailbox.get(canonical_email(address))
         url = restore_url(signup_url, ref)
-        body = BODY.format(brand=brand, url=url, sender=sender)
+        subject, body, preview = compose(url, sender, clock, now)
         if ref:
             body = body.replace(f"  {url}\n", f"  {url}\n\n{SAVED_LINE}\n", 1)
         out.append(Message(
-            to=address, subject=SUBJECT,
-            html=_html(body, url, saved=bool(ref), sender=sender), text=body,
+            to=address, subject=subject,
+            html=_html(body, url, saved=bool(ref), sender=sender,
+                       subject=subject, preview=preview), text=body,
             # A keyed code, never the address (run/digest.py): the send log
             # is public, and a plain hash would let anyone holding an
             # address test whether it joined the list.
@@ -256,7 +361,10 @@ def messages(addresses: list[str], signup_url: str,
     return out
 
 
-def _html(body: str, url: str, *, saved: bool, sender: str) -> str:
+def _html(body: str, url: str, *, saved: bool, sender: str,
+          subject: str = SUBJECT,
+          preview: str = "Signups are open. Your first report usually lands "
+                         "within the hour.") -> str:
     """The launch email in the welcome email's shell (PANEL:R2): navy
     masthead, a preview line, the message and ONE button.
 
@@ -298,9 +406,9 @@ def _html(body: str, url: str, *, saved: bool, sender: str) -> str:
     return (
         f'<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'{EMAIL_META}<title>{esc(SUBJECT)}</title></head>'
+        f'{EMAIL_META}<title>{esc(subject)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'{preheader_html("Signups are open. Your first report lands the day you join.")}'
+        f'{preheader_html(preview)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:18px 8px;"><table role="presentation" width="560" '

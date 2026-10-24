@@ -520,15 +520,10 @@ def recorded_only(report: dict, processed_dir: Path = PROCESSED_DIR) -> dict:
 def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
     """The Tuesday the NEXT weekly report goes out: the first Tuesday after the
     last game of ``week`` (the week this build's report covers), as an ISO
-    date. None when the schedule cannot say."""
-    from datetime import date, timedelta
-    from run.solo import _schedule, _weeks
-    days = (_weeks(_schedule(cache_dir), season).get(int(week)) or [])
-    if not days:
-        return None
-    last = date.fromisoformat(max(days))
-    ahead = (1 - last.weekday()) % 7 or 7            # Tuesday is weekday 1
-    return (last + timedelta(days=ahead)).isoformat()
+    date. None when the schedule cannot say. One rule, in run/solo, shared
+    with the roster report's "your Week N report lands Tuesday"."""
+    from run.solo import next_report_day as _day
+    return _day(cache_dir, season, week)
 
 
 def write_week_json(report: dict, path: Path, lands_on: str | None = None,

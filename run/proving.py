@@ -1,6 +1,8 @@
 """The proving run — `make proving`: weeks 4-8 of 2025, twelve subscribers, every runner.
 
-`python -m run.proving <dir> 14-18` runs other weeks (the season's end).
+`python -m run.proving <new dir> 14-18` runs other weeks (the season's end). The
+directory must be new, empty, or one an earlier proving run made: anything else
+is refused before a byte is deleted.
 
 Every serious bug in this repo lived in a path nobody had executed, so this
 executes all of them in sequence on a real past season.
@@ -13,14 +15,62 @@ import csv, json, sys, shutil, datetime as dt
 from collections import Counter
 from pathlib import Path
 
-import tempfile
-ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="proving-"))
+import argparse, re, tempfile
+
+# The marker this run writes into its own scratch directory. A directory is
+# only ever emptied when it is missing, empty, or carries this file — final
+# review PIPE-8: ROOT came straight from sys.argv and was rmtree'd before
+# anything else, so `python -m run.proving data 14-18` (a natural reading of
+# the documented "<dir>") wiped data/ — registry, ledger, plans, raw cache —
+# and a rejected span ("not-a-span") still wiped it first, because the span
+# was parsed after the delete. `--help` made a ./--help directory.
+MARKER = ".proving-root"
+
+
+def _span(text: str) -> list[int]:
+    found = re.fullmatch(r"(\d{1,2})(?:-(\d{1,2}))?", text.strip())
+    if not found:
+        raise argparse.ArgumentTypeError(f"weeks must read like 4-8, not {text!r}")
+    first, last = int(found.group(1)), int(found.group(2) or found.group(1))
+    if not 1 <= first <= last <= 18:
+        raise argparse.ArgumentTypeError(f"weeks must be within 1-18, first <= last: {text!r}")
+    return list(range(first, last + 1))
+
+
+def scratch_root(path: Path | None) -> Path:
+    """Make (or reuse) the scratch directory, refusing anything this run did
+    not create itself. Nothing is deleted before this check passes."""
+    if path is None:
+        root = Path(tempfile.mkdtemp(prefix="proving-"))
+    else:
+        root = path
+        if root.exists() and not root.is_dir():
+            raise SystemExit(f"run.proving: {root} is a file, not a scratch directory")
+        if root.is_dir() and any(root.iterdir()) and not (root / MARKER).exists():
+            raise SystemExit(
+                f"run.proving: refusing to empty {root} — it is not empty and was "
+                f"not made by a proving run (no {MARKER} in it). Pass a new "
+                f"directory, or leave it out for a fresh temporary one.")
+        shutil.rmtree(root, ignore_errors=True)
+        root.mkdir(parents=True)
+    (root / MARKER).write_text("written by run.proving; safe to delete\n")
+    return root
+
+
+_parser = argparse.ArgumentParser(
+    prog="python -m run.proving",
+    description="Drive a past season through every runner into a scratch "
+                "directory (never the real registry, ledger, plans or send log).")
+_parser.add_argument("root", nargs="?", type=Path, default=None,
+                     help="a NEW scratch directory (default: a fresh temporary one)")
+_parser.add_argument("weeks", nargs="?", type=_span, default=_span("4-8"),
+                     help="the weeks to run, e.g. 4-8 (default) or 14-18")
+_args = _parser.parse_args()
 # Everything is written under ROOT; the real registry, ledger, plans and send
 # log are never touched.
-shutil.rmtree(ROOT, ignore_errors=True); ROOT.mkdir(parents=True)
+ROOT = scratch_root(_args.root)
 SEASON = "2025"
-_span = sys.argv[2] if len(sys.argv) > 2 else "4-8"
-WEEKS = list(range(int(_span.split("-")[0]), int(_span.split("-")[-1]) + 1))
+WEEKS = _args.weeks
 
 import run.delivery as delivery
 import run.tuesday as tuesday

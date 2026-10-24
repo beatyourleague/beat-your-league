@@ -71,7 +71,10 @@ _REFUND_WINDOW = ("Refunds are no-questions until your second weekly report's "
                   "week kicks off. If the season ends first, the window closes "
                   "a week after your last report; if your second report reaches "
                   "you late, a week after it arrives.")
-REFUND_TERMS = (_REFUND_WINDOW + " One per person, and a re-subscription after "
+# "A second purchase", never "a re-subscription" (contract C5, final review
+# COPY-9): every 2026 pass is one payment, and the retainable copy of the
+# terms should not describe a subscription the buyer never had.
+REFUND_TERMS = (_REFUND_WINDOW + " One per person, and a second purchase after "
                 "a refund is final.")
 REFUND_TERMS_LEAGUE = _REFUND_WINDOW + " One per league."
 
@@ -105,14 +108,32 @@ ONCE_TWICE = ("This address already bought a pass for this same roster, so you "
               "window is open.")
 SEATS_END_ONCE = ("Your league's seats last through this season with your pass; "
                   "if you take a refund, every seat's reports stop too.")
+# A pass buyer can reset every seat (run/seat_resets.py) and the released
+# holders are deliberately not told, so a squatter learns nothing — which left
+# a legitimate seat holder able to go quiet mid-season with nothing they had
+# read saying it could happen (final review COPY-7). Said once, up front.
+SEAT_RESET_NOTE = ("If whoever paid for your league's pass resets its seats, "
+                   "yours is released; claim it again with the new link they "
+                   "share.")
 
 
-def _plan_terms(plan: str, one_time: bool = False) -> tuple[str, list[str]]:
-    """(what you bought, the disclosures that purchase legally requires)."""
+def _plan_terms(plan: str, one_time: bool = False,
+                playoff: bool = False) -> tuple[str, list[str]]:
+    """(what you bought, the disclosures that purchase legally requires).
+
+    ``playoff``: bought through the $19 Playoff Pass link (contract C4: the
+    ``o:`` entry in STRIPE_PAYMENT_LINKS, a season row in the registry). The
+    retainable copy must name the product the buyer paid for — "You bought
+    the Rest-of-Season Pass" on a $19 purchase named one they did not (final
+    review COPY-4). Always one payment, so it implies ``one_time``."""
     if one_time and plan in PAYER_PLANS:
         return ("the League Pass for the rest of this season — one payment for "
                 "your whole league",
                 [ONCE_LINE, REFUND_TERMS_LEAGUE, SEATS_END_ONCE])
+    if playoff and plan not in ("monthly", "seat", *PAYER_PLANS):
+        return (f"the Playoff Pass — {PLAYOFF_PRICE} USD, one payment for every "
+                "weekly report from now through this season's last",
+                [ONCE_LINE, REFUND_TERMS])
     if one_time and plan not in ("monthly", "seat"):
         return ("the Rest-of-Season Pass — every weekly report from now through "
                 "this season's last, for one payment",
@@ -145,7 +166,7 @@ def _plan_terms(plan: str, one_time: bool = False) -> tuple[str, list[str]]:
             # may buy the pass (panel review LP-D7).
             ["Nothing bills you for this seat, ever — your league's pass "
              "covers it. If the pass lapses, your reports stop; they never "
-             "quietly convert into a charge."],
+             "quietly convert into a charge.", SEAT_RESET_NOTE],
         )
     return (
         f"the season pass — {SEASON_PRICE} USD for the season",
@@ -293,6 +314,15 @@ NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
                 "for a 12-team PPR standard lineup), and any bye still ahead — "
                 "playoff weeks included — that leaves a spot nobody on your "
                 "roster can fill. The game plan at the top takes about a minute.")
+# From Week 4 on, odds already print in every setup, so "odds ... from Week 4"
+# told a Week-8 buyer about a start that is behind them (final review,
+# business #6). The pre-Week-4 promise above stays exactly as it was.
+NEXT_TUESDAY_LIVE = ("The week's report: the lineup we'd set for your roster "
+                     "under your scoring, with odds on the close calls, and any "
+                     "bye still ahead — playoff weeks included — that leaves a "
+                     "spot nobody on your roster can fill. The game plan at the "
+                     "top takes about a minute.")
+ODDS_EVERYWHERE_FROM = 4
 NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")
 
@@ -310,7 +340,8 @@ SEAT_SEASON_OVER_SUBJECT = ("Your seat is in — your first report comes when ne
 
 
 def _next_rows(seat: bool, carries_on: bool = False,
-               season_over: bool = False) -> list[tuple[str, str]]:
+               season_over: bool = False,
+               week: int | None = None) -> list[tuple[str, str]]:
     """``carries_on``: a second purchase of a roster this address already
     gets reports for (LP2-D1). Its reports simply continue, so "Today: your
     first report" would promise something the intake does not send.
@@ -319,8 +350,31 @@ def _next_rows(seat: bool, carries_on: bool = False,
     today = ([] if carries_on else
              [(NEXT_SCHEDULE_WHEN, NEXT_SCHEDULE)] if season_over else
              [("Today", NEXT_TODAY)])
-    return [*today, ("Every Tuesday", NEXT_TUESDAY),
+    tuesday = (NEXT_TUESDAY_LIVE if week is not None and not season_over
+               and week >= ODDS_EVERYWHERE_FROM else NEXT_TUESDAY)
+    return [*today, ("Every Tuesday", tuesday),
             ("Saturday, if needed", NEXT_SATURDAY)]
+
+
+def week_at(season: str, purchased_at: str) -> int | None:
+    """The week the purchase fell in, from the cached schedule — the week its
+    first weekly report is about — or None when that can't be read (then the
+    pre-Week-4 wording stands, which is never false: odds do start by Week 4).
+    Derived from the PURCHASE clock, never today's, so a retried send says
+    what was true when they paid."""
+    raw = str(purchased_at or "").strip()
+    if not raw:
+        return None
+    try:
+        stamp = (datetime.fromtimestamp(int(raw), timezone.utc) if raw.isdigit()
+                 else datetime.fromisoformat(raw))
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        from run.solo import CACHE_DIR, current_week
+        # The cached schedule (the intake run refreshed it): no download.
+        return current_week(CACHE_DIR, str(season), stamp.date(), live=False)
+    except Exception:               # no cache, no schedule, a bad clock
+        return None
 
 
 # A seat link is one long unbroken string; unwrapped, it pushed the email
@@ -357,15 +411,24 @@ def _block(title: str, inner: str) -> str:
 def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "", seat_link: str | None = None,
                     duplicate: str | None = None,
-                    season_over: bool = False, one_time: bool = False) -> Message:
+                    season_over: bool = False, one_time: bool = False,
+                    playoff: bool = False, week: int | None = None) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
     league seat link (C4), or None to fall back to the generic seat page.
     ``duplicate`` is the plan of another subscription this address already
     holds for the same roster (``duplicate_line``). ``season_over``: sent in
     the offseason (run.solo.SeasonOver), when no first report goes out until
-    next season's schedule exists."""
-    bought, terms = _plan_terms(plan, one_time)
+    next season's schedule exists. ``playoff``: bought through the Playoff
+    Pass link (contract C4), so the email names the Playoff Pass and its price;
+    it is one payment, so it implies ``one_time``. ``week``: the week the
+    purchase fell in (``week_at`` reads it from the schedule when omitted),
+    which decides whether "odds from Week 4" is still news."""
+    if playoff and plan not in ("monthly", "seat", *PAYER_PLANS):
+        one_time = True
+    bought, terms = _plan_terms(plan, one_time, playoff)
+    if week is None and not season_over:
+        week = week_at(season, purchased_at)
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
     # for it: the portal finds no customer at that address, which left a seat
@@ -425,7 +488,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'{esc(when_)}</td><td style="{BASE}padding:9px 0;'
         f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
         for when_, what in _next_rows(seat, carries_on=bool(twice),
-                                      season_over=season_over))
+                                      season_over=season_over, week=week))
     blocks = []
     twice_text = None
     if twice:
@@ -512,7 +575,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text_lines += ["", "WHAT HAPPENS NEXT",
                    *[f"{when_}: {what}" for when_, what
                      in _next_rows(seat, carries_on=bool(twice),
-                                   season_over=season_over)],
+                                   season_over=season_over, week=week)],
                    "", "THE TERMS, IN WRITING", *terms,
                    f"{terms_ref}: " + (terms_url or "on our site's terms page."),
                    "", CANCEL_HEAD.upper(), stop_text,

@@ -16,6 +16,7 @@ from __future__ import annotations
 from render.report import buyer_slots
 
 import argparse
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,11 +24,12 @@ from typing import Any, Mapping
 
 from engine.preseason import NO_RECORD
 from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAVICON_LINK,
-                           MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE, PAGE_META,
-                           SECTION_MARK, TEMPLATE_PATH, cancel_destination, esc,
+                           MARK_CSS, NFLVERSE_LINE, NO_BETTING_LINE, ONCE, PAGE_META,
+                           SECTION_MARK, SELLING_ONE_TIME, TEMPLATE_PATH,
+                           cancel_destination, esc,
                            extract_design, font_preloads, landmarks, mark_svg,
                            number_sections, sender_html, cancel_html,
-                           cancel_lines, unsubscribe_target)
+                           cancel_lines, stop_route, unsubscribe_target)
 from render.sender import sender_line
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -120,6 +122,109 @@ def out_note(entry: Mapping[str, Any]) -> str:
     thin spot would have leaned on, or ""."""
     out = entry.get("out") or []
     return f"out today: {', '.join(out)}" if out else ""
+
+def bye_names(hit: Mapping[str, Any]) -> list[str]:
+    """Who is on bye in a hole: only the players who play the emptied slot
+    (``short``), as the weekly report's byes-ahead line names them — "Week 9:
+    no one to start at K / on bye: Chris Boswell, Tyjae Spears" put a running
+    back under a kicker hole (final review GROWTH-2)."""
+    return list(hit.get("short") or hit["players"])
+
+
+# Mid-season this report is the buyer's FIRST email whenever they pay between
+# a week's kickoff and Tuesday (final review, business #2): it opens with the
+# day the thing they bought arrives.
+def next_report_line(meta: Mapping[str, Any]) -> str:
+    """'Your Week 8 report lands Tuesday, Oct 27.' or "" (not certain)."""
+    nxt = meta.get("next_report") or {}
+    try:
+        from datetime import date
+        day = date.fromisoformat(str(nxt.get("lands_on")))
+        week = int(nxt["week"])
+    except (KeyError, TypeError, ValueError):
+        return ""
+    return f"Your Week {week} report lands {day:%A}, {day:%b} {day.day}."
+
+
+CANT_PLAY_HEAD = "Can't play right now"
+CANT_PLAY_BASIS = ("Today's NFL roster status: injured reserve, the PUP or "
+                   "non-football injury list, suspended, exempt or released. "
+                   "Your weekly report shows each of them out until that changes.")
+
+
+def cant_play_line(entry: Mapping[str, Any]) -> str:
+    """'De'Von Achane · RB · MIA · on injured reserve'."""
+    bits = [entry["name"], entry.get("position") or "", entry.get("team") or "",
+            entry.get("why") or ""]
+    return " · ".join(b for b in bits if b)
+
+
+# This season's record beside last season's (business #2): the figures the
+# weekly report's row prints, so the two emails never disagree about a game.
+SEASON_HEAD = "This season"
+FORM_HEAD_INSEASON = "Your roster, under your rules"
+SEASON_BASIS = ("This season counts every game he's played through Week {week} "
+                "under your scoring: his average and his last three, the same "
+                "figures your weekly report prints.")
+NO_GAME_YET = "no games yet"
+
+
+def season_cell(row: Mapping[str, Any]) -> tuple[str, str]:
+    """(this season's average, his last three) as text, or (absence, "")."""
+    so_far = row.get("season_so_far")
+    if not so_far:
+        return ("—" if row.get("position") == "DEF" else NO_GAME_YET), ""
+    last = ", ".join(f"{v:.1f}" for v in so_far.get("last_three") or [])
+    return (f'{so_far["per_game"]:.1f} a game over {so_far["games"]}',
+            f"last {len(so_far.get('last_three') or [])}: {last}" if last else "")
+
+
+def season_line(row: Mapping[str, Any], season: str) -> str:
+    """'2026: 22.3 a game over 6 · last 3: 19.6, 16.2, 17.4' — this season's
+    record under the name, named by its season as the weekly row names it.
+    A line rather than a fourth column: four columns at 390px wrapped every
+    figure onto its own line. Empty for a defense (not scored here)."""
+    if row.get("position") == "DEF":
+        return ""
+    lead, recent = season_cell(row)
+    return f"{season}: {lead}" + (f" · {recent}" if recent else "")
+
+
+def _unbroken(line: str) -> str:
+    """Each '·'-separated figure on its own line, a count never parted from
+    its number — wrapped as one run it broke mid-figure at 390px ("2026: 22.3
+    a game over" / "6 · last 3"). No nowrap: a whole figure held on one line
+    widened the email past a 320px phone."""
+    glue = lambda part: re.sub(r"\b(over|last) (\d)", "\\1\u00a0\\2", part)
+    return "<br>".join(esc(glue(part)) for part in line.split(" · "))
+
+
+def prior_label(meta: Mapping[str, Any]) -> str:
+    """'2025' — the season last season's column is about, by name, beside a
+    line named '2026'."""
+    season = str(meta.get("season") or "")
+    return str(meta.get("prior_season")
+               or (str(int(season) - 1) if season.isdigit() else "last season"))
+
+
+def form_head(meta: Mapping[str, Any]) -> str:
+    return FORM_HEAD_INSEASON if meta.get("through_week") else FORM_HEAD
+
+
+def form_basis(meta: Mapping[str, Any]) -> str:
+    week = meta.get("through_week")
+    return (SEASON_BASIS.format(week=week) + " " + FORM_BASIS) if week else FORM_BASIS
+
+
+def way_out(meta: Mapping[str, Any]) -> "bool | str":
+    """The roster report's way out, by render.report.stop_route's rule: a seat
+    says stop, a one-time pass says stop (nothing renews), a subscription
+    cancels on its billing page. The first email of every 2026 buyer who paid
+    after a week's kickoff told a one-time pass holder to cancel a
+    subscription they don't have, and its List-Unsubscribe was a billing page
+    with nothing to cancel (final review COPY-1/GROWTH-1)."""
+    return True if meta.get("seat") else stop_route(meta)
+
 
 THIN_HEAD = "One deep"
 THIN_BASIS = ("Positions where everyone who can play the slot is already "
@@ -236,7 +341,7 @@ def section_byes(report: Mapping[str, Any]) -> str:
         items = []
         for hit in collisions:
             slots = ", ".join(hit["slots"])
-            who = ", ".join(hit["players"])
+            who = ", ".join(bye_names(hit))
             note = out_note(hit)
             items.append(
                 f'<tr class="trow"><td class="tslot">W{esc(hit["week"])}</td>'
@@ -248,6 +353,21 @@ def section_byes(report: Mapping[str, Any]) -> str:
                 f'<col style="width:86%"></colgroup>{"".join(items)}</table>')
     body += f'<div class="withheld">{esc(bye_basis(report["meta"]))}</div>'
     return _pre_section(BYE_HEAD, body)
+
+
+def section_cant_play(report: Mapping[str, Any]) -> str:
+    out = report.get("cant_play") or []
+    if not out:
+        return ""
+    rows = "".join(
+        f'<tr class="trow"><td class="tslot">{esc(e.get("position") or "")}</td>'
+        f'<td class="tside you"><span class="tname">{esc(e["name"])}</span>'
+        f'<span class="tsub">{esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b))}'
+        f'</span></td></tr>' for e in out)
+    body = (f'<table class="tape"><colgroup><col style="width:14%">'
+            f'<col style="width:86%"></colgroup>{rows}</table>'
+            f'<div class="withheld">{esc(CANT_PLAY_BASIS)}</div>')
+    return _pre_section(CANT_PLAY_HEAD, body)
 
 
 def section_thin(report: Mapping[str, Any]) -> str:
@@ -271,22 +391,28 @@ def section_thin(report: Mapping[str, Any]) -> str:
 
 
 def section_form(report: Mapping[str, Any]) -> str:
+    meta = report["meta"]
+    current = bool(meta.get("through_week"))
     rows = []
     for row in report["roster"]:
         bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
         team = row.get("team") or "—"
+        now = season_line(row, meta["season"]) if current else ""
         rows.append(
             f'<tr class="trow"><td class="tslot">{esc(row["position"])}</td>'
             f'<td class="tside you"><span class="tname">{esc(row["name"])}</span>'
-            f'<span class="tsub">{esc(team)} · {esc(bye)}</span></td>'
-            f'<td class="tcall">{_record_cell(row)}</td></tr>')
-    head = ('<tr class="thead"><td></td><td>Your roster</td>'
-            '<td style="text-align:right">Last season</td></tr>')
-    body = (f'<table class="tape"><colgroup><col style="width:11%">'
-            f'<col style="width:59%"><col style="width:30%"></colgroup>'
+            f'<span class="tsub">{esc(team)} · {esc(bye)}</span>'
+            + (f'<span class="tsub">{_unbroken(now)}</span>' if now else "")
+            + f'</td><td class="tcall">{_record_cell(row)}</td></tr>')
+    head = ('<tr class="thead"><td></td><td>Your roster'
+            + (f' · {esc(SEASON_HEAD.lower())}' if current else "")
+            + '</td><td style="text-align:right">Last season</td></tr>')
+    cols = ('<col style="width:11%"><col style="width:59%">'
+            '<col style="width:30%">')
+    body = (f'<table class="tape"><colgroup>{cols}</colgroup>'
             f'{head}{"".join(rows)}</table>'
-            f'<div class="withheld">{esc(FORM_BASIS)}</div>')
-    return _pre_section(FORM_HEAD, body)
+            f'<div class="withheld">{esc(form_basis(meta))}</div>')
+    return _pre_section(form_head(meta), body)
 
 
 def _pre_section(title: str, body: str) -> str:
@@ -305,20 +431,24 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'<div class="sub">{esc(meta.get("label") or "Your Team")} · '
         f'{esc(scoring)} · {esc(len(meta.get("slots") or []))} starting spots'
         f' &nbsp;—&nbsp; built {esc(_stamp())}</div></header>'
-        f'<section><p class="read">'
-        f'{esc(opener(meta))}'
-        f'</p></section>'
+        f'<section>'
+        + (f'<p class="read" style="margin-bottom:10px;">'
+           f'<b>{esc(next_report_line(meta))}</b></p>'
+           if next_report_line(meta) else "")
+        + f'<p class="read">{esc(opener(meta))}</p></section>'
     )
 
 
 def _footer(meta: Mapping[str, Any]) -> str:
-    if meta.get("seat"):
-        # A League Pass seat has no billing to cancel (launch review C4).
+    route = way_out(meta)
+    if route:
+        # A League Pass seat has no billing to cancel (launch review C4), and
+        # neither has a one-time pass (COPY-1/GROWTH-1).
         return (
             f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}<br>'
             f'{esc(WEEKLY_PROMISE)}<br>'
             f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
-            f'{sender_html()}{cancel_html(seat=True)}</footer>'
+            f'{sender_html()}{cancel_html(seat=route)}</footer>'
         )
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}">{esc(label)}</a>.' if href else "")
@@ -335,6 +465,8 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     """Byes first: it is the only thing here a manager can still act on."""
     return [
         _header(report["meta"]),
+        # Who can't play today leads in-season: it is about THIS week.
+        section_cant_play(report),
         section_byes(report),
         section_thin(report),
         section_form(report),
@@ -369,15 +501,20 @@ def text_summary(report: Mapping[str, Any]) -> str:
     lines = [f'{meta["season"]} · {file_title(report).upper()}',
              f'{meta.get("label") or "Your Team"} · {scoring_name(meta)}',
              "",
-             opener(meta),
-             "", BYE_HEAD.upper()]
+             *([next_report_line(meta), ""] if next_report_line(meta) else []),
+             opener(meta)]
+    if report.get("cant_play"):
+        lines += ["", CANT_PLAY_HEAD.upper(),
+                  *[f"  {cant_play_line(e)}" for e in report["cant_play"]],
+                  "", f"  {CANT_PLAY_BASIS}"]
+    lines += ["", BYE_HEAD.upper()]
     if not report["collisions"]:
         lines.append(f"  {bye_none(meta)}")
     else:
         for hit in report["collisions"]:
             lines.append(f'  Week {hit["week"]}: no one to start at '
                          f'{", ".join(hit["slots"])}')
-            lines.append(f'    on bye: {", ".join(hit["players"])}')
+            lines.append(f'    on bye: {", ".join(bye_names(hit))}')
             if out_note(hit):
                 lines.append(f"    {out_note(hit)}")
     lines += ["", f"  {bye_basis(meta)}"]
@@ -390,7 +527,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
                          + (f' · {out_note(spot)}' if out_note(spot) else ""))
         lines += ["", f"  {THIN_BASIS}"]
 
-    lines += ["", FORM_HEAD.upper()]
+    lines += ["", form_head(meta).upper()]
+    current = bool(meta.get("through_week"))
     for row in report["roster"]:
         record = row.get("record")
         if record:
@@ -400,12 +538,21 @@ def text_summary(report: Mapping[str, Any]) -> str:
         else:
             last = row.get("no_record_reason") or NO_RECORD
         bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
-        lines.append(f'  {row["position"]:<5} {row["name"]:<24} '
-                     f'{(row.get("team") or "—"):<4} {bye:<14} {last}')
-    lines += ["", f"  {FORM_BASIS}", "", WEEKLY_PROMISE, "",
+        if current:
+            # This season first, then last (business #2), one fact a line.
+            now = season_line(row, meta["season"])
+            lines += [f'  {row["position"]:<5} {row["name"]:<24} '
+                      f'{(row.get("team") or "—"):<4} {bye}',
+                      *([f"        {now}"] if now else []),
+                      f"        {prior_label(meta)}: {last}"]
+        else:
+            lines.append(f'  {row["position"]:<5} {row["name"]:<24} '
+                         f'{(row.get("team") or "—"):<4} {bye:<14} {last}')
+    lines += ["", f"  {form_basis(meta)}", "", WEEKLY_PROMISE, "",
               NO_BETTING_LINE, NFLVERSE_LINE]
-    if report["meta"].get("seat"):
-        lines += ["", *cancel_lines(seat=True)]
+    route = way_out(report["meta"])
+    if route:
+        lines += ["", *cancel_lines(seat=route)]
     else:
         href, label = cancel_destination()
         if href:
@@ -497,7 +644,7 @@ def email_html(report: Mapping[str, Any]) -> str:
             f'<tr><td style="{slot_cell}">W{esc(hit["week"])}</td>'
             f'<td style="{cell}"><b>No one to start at '
             f'{esc(", ".join(hit["slots"]))}</b><br>'
-            f'<span style="{SMALL}">on bye: {esc(", ".join(hit["players"]))}'
+            f'<span style="{SMALL}">on bye: {esc(", ".join(bye_names(hit)))}'
             + (f' · {esc(out_note(hit))}' if out_note(hit) else "")
             + '</span></td></tr>'
             for hit in report["collisions"])
@@ -513,7 +660,21 @@ def email_html(report: Mapping[str, Any]) -> str:
         + '</span></td></tr>'
         for spot in report["thin"])
 
+    current = bool(meta.get("through_week"))
+    cant_rows = "".join(
+        f'<tr><td style="{slot_cell}">{esc(e.get("position") or "")}</td>'
+        f'<td style="{cell}"><b>{esc(e["name"])}</b><br>'
+        f'<span style="{SMALL}">'
+        f'{esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b))}'
+        f'</span></td></tr>'
+        for e in report.get("cant_play") or [])
     form_rows = ""
+    if current:
+        form_rows += (f'<tr><td style="{SMALL}padding:0 10px 6px 10px;"></td>'
+                      f'<td style="{SMALL}padding:0 10px 6px 10px;">Your roster · '
+                      f'{esc(SEASON_HEAD.lower())}</td>'
+                      f'<td style="{SMALL}padding:0 10px 6px 10px;text-align:right;">'
+                      f'Last season</td></tr>')
     for row in report["roster"]:
         record = row.get("record")
         rank = rank_phrase(row)
@@ -529,19 +690,25 @@ def email_html(report: Mapping[str, Any]) -> str:
                 f'<span style="{SMALL}">'
                 f'{esc(row.get("no_record_reason") or NO_RECORD)}</span>')
         bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
+        now = season_line(row, meta["season"]) if current else ""
         form_rows += (
             f'<tr><td style="{slot_cell}">{esc(row["position"])}</td>'
             f'<td style="{cell}"><b>{esc(row["name"])}</b><br>'
             f'<span style="{SMALL}">{esc(row.get("team") or "—")} · {esc(bye)}'
-            f'</span></td>'
+            f'</span>'
+            + (f'<br><span style="{SMALL}color:{NAVY};">{_unbroken(now)}</span>'
+               if now else "")
+            + f'</td>'
             f'<td style="{cell}text-align:right;">{last}</td>'
             f'</tr>')
 
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
               if href else "")
-    way_out = (cancel_html(seat=True) if meta.get("seat") else
-               f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}')
+    route = way_out(meta)
+    exit_html = (cancel_html(seat=route) if route else
+                 f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}')
+    lede = next_report_line(meta)
     scoring = scoring_name(meta)
     return (
         f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
@@ -563,16 +730,19 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;'
         f'color:#B9C2D0;">{esc(meta.get("label") or "Your Team")} · {esc(scoring)}'
         f'</div></td></tr>'
-        f'<tr><td style="{BASE}padding:20px 26px 0 26px;">'
+        + (f'<tr><td style="{BASE}font-size:17px;font-weight:bold;color:{NAVY};'
+           f'padding:20px 26px 0 26px;">{esc(lede)}</td></tr>' if lede else "")
+        + f'<tr><td style="{BASE}padding:20px 26px 0 26px;">'
         f'{esc(opener(meta))}'
         f'</td></tr>'
+        + (block(CANT_PLAY_HEAD, cant_rows, CANT_PLAY_BASIS) if cant_rows else "")
         + block(BYE_HEAD, bye_rows, bye_basis(meta))
         + (block(THIN_HEAD, thin_rows, THIN_BASIS) if thin_rows else "")
-        + block(FORM_HEAD, form_rows, FORM_BASIS)
+        + block(form_head(meta), form_rows, form_basis(meta))
         + f'<tr><td style="background:{PAPER};padding:20px 26px 26px 26px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(WEEKLY_PROMISE)}<br>{esc(NO_BETTING_LINE)}<br>'
-        f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{way_out}</p></td></tr>'
+        f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{exit_html}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )
 
@@ -589,7 +759,8 @@ def _season_first_kickoff(season: str, cache_dir: Path | None = None) -> datetim
 
 
 def preseason_message(email: str, slug: str, report: Mapping[str, Any],
-                      purchased_at: str = "", seat: bool = False):
+                      purchased_at: str = "", seat: "bool | str" = False,
+                      one_time: "bool | None" = None):
     """The pre-season report as a Message, keyed so it can only be sent once.
 
     Keyed on the PURCHASE, exactly like the welcome and for the same reason: a
@@ -602,9 +773,23 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
     Once the season has started the subject counts only the weeks still ahead,
     the same ones the body lists (launch audit C7: a Week-6 buyer's subject
     counted Week 5).
+
+    ``one_time``: a one-time pass (a ``pi_`` purchase — run/intake's
+    _welcome rule), whose way out is a stop request: nothing renews, so there
+    is nothing to cancel. ``seat=ONCE`` says the same (render.report's own
+    vocabulary). Left unsaid, it is what the site sells this season
+    (SELLING_ONE_TIME): every 2026 purchase is one payment, and the
+    subscription footer told each of those buyers "Reports continue to the
+    end of the period you've already paid for" (COPY-1/GROWTH-1).
     """
     from run.delivery import Message
 
+    if seat == ONCE:
+        seat, one_time = False, True
+    if one_time is None:
+        one_time = SELLING_ONE_TIME
+    if one_time and not seat:
+        report = {**report, "meta": {**report["meta"], "one_time": True}}
     if seat:
         # ``seat``: a League Pass seat's roster report, sent when the claim
         # lands outside the Tuesday-to-kickoff window (LP-I4). A seat pays
@@ -630,5 +815,7 @@ def preseason_message(email: str, slug: str, report: Mapping[str, Any],
         html=email_html(report),
         text=text_summary(report),
         key=f"preseason-{purchased_at or meta['season']}-{slug}",
-        unsubscribe=unsubscribe_target(seat),
+        # The mailto stop for a seat or a one-time pass (unsubscribe_target
+        # takes ONCE as truthy), the billing page only for a subscription.
+        unsubscribe=unsubscribe_target(way_out(meta)),
     )

@@ -73,7 +73,7 @@ def test_email_carries_the_way_out(tmp_path: Path) -> None:
 def test_email_carries_the_disclaimers(tmp_path: Path) -> None:
     html_out = render_email(_report(tmp_path))
     assert NO_BETTING_LINE.split(" — ")[0] in html_out
-    assert "no betting picks" in html_out
+    assert "not betting picks" in html_out
     # Data-age basis (principle 3): the email says what it couldn't confirm.
     # (Apostrophes render escaped, so match the apostrophe-free phrase.)
     assert re.search(r"Injury and inactive data as of|confirm injuries or inactives",

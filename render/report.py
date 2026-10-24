@@ -284,13 +284,18 @@ MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
 # Updated Aug 18 2026 with the Sleeper decision (PLAN §0). The old line —
 # "built around your rival, not just your roster" — described a product that
 # read the league and tracked a named opponent. Neither is true any more, and
-# this constant renders in the report footer, the email footer AND the launch
-# announcement, so a stale promise here is a false claim on every surface at
-# once.
+# this constant renders in every report and email footer, so a stale promise
+# here is a false claim on every surface at once. (The launch announcement
+# carried it too until Oct 24 2026; it now says what the pass does in its
+# own words — run/waitlist.BODY.)
 BRAND_LINE = ("the weekly scouting report for your fantasy roster, "
               "every Tuesday of the season.")
-NO_BETTING_LINE = ("Projections are analysis, not guarantees — no betting "
-                   "picks, no staking advice. Fantasy decisions are yours to make.")
+# Contract C5 (final review FUN-6/COPY-8): the one betting phrase any surface
+# may carry is "not betting picks". The old line denied a second betting term
+# by name on every report, both samples and every email. One constant; the
+# email's text half used to keep two copies of its own.
+NO_BETTING_LINE = ("Projections are analysis, not guarantees — not betting "
+                   "picks. Fantasy decisions are yours to make.")
 SLEEPER_LINE = ("Built from your league's own record on Sleeper. "
                 "Not affiliated with Sleeper or the NFL.")
 # RULE N1: CC-BY-4.0 grants commercial use IN EXCHANGE FOR attribution, so this
@@ -574,9 +579,12 @@ _GATE_PHRASES = (
     # Method §15 C9: the practice squad plays only if elevated.
     ("not confirmed to play", "a player in that pair is on the practice squad"),
     ("held: the lineup changed", "the lineup changed around a player who can't play this week"),
-    # D11: a later flex swap started the player the odds were figured against.
+    # D11: a later swap started the player the odds were figured against, or
+    # moved a better one to the bench. Not always at FLEX (final review
+    # PIPE-5): a RULE-3 re-seat at a plain WR slot does it too, and "a flex
+    # swap" then named a swap that never happened.
     ("held: the bench changed",
-     "a flex swap changed who your best bench player there is"),
+     "a later swap in your lineup changed who your best bench player there is"),
     # Pre-launch review F3: odds against a rising bench player ran high.
     ("held: the bench option's role is growing",
      "your bench player there is getting more of the ball lately, and his "
@@ -636,7 +644,11 @@ def row_label(slot: Mapping[str, Any]) -> str:
     if gate.startswith(("we don't put odds on defenses",
                         "odds once this lineup shape is graded",
                         "held: an input")):
-        return "projection only"
+        # A defense on bye (or otherwise certainly out) prints a dash where
+        # the projection would be, so "projection only" named a projection
+        # the row does not show (final review PIPE-6) — the row's OUT flag
+        # says it all, as it does for an on-bye QB.
+        return "" if slot.get("status") == "out" else "projection only"
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
         # a starter with five games and a usage line counting four of them —

@@ -14,8 +14,8 @@ import pytest
 
 from render.report import BRAND_LINE
 from run.delivery import Message, load_sent, send_all
-from run.waitlist import (BODY, CAMPAIGN, FORBIDDEN_CLAIMS, SUBJECT, load_list,
-                          main, messages)
+from run.waitlist import (BODY, CAMPAIGN, FORBIDDEN_CLAIMS, SUBJECT, compose,
+                          load_list, main, messages)
 
 EXPORT = """Email Address,Signed up
 Fan@Example.com,2026-08-18
@@ -81,7 +81,7 @@ def test_the_announcement_promises_only_what_exists() -> None:
     no longer read, and the self-updating report is not built. This test exists
     because the first draft of this email promised two of those — inherited
     from BRAND_LINE, which still described the Sleeper product."""
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com").lower()
+    body = compose("https://x/join/", "Beat Your League · PO Box 1 · hello@beatyourleague.com", {})[1].lower()
     for claim in FORBIDDEN_CLAIMS:
         assert claim not in body, (
             f"the launch email promises {claim!r}, which this product does not "
@@ -96,7 +96,7 @@ def test_the_brand_line_no_longer_describes_the_sleeper_product() -> None:
 
 
 def test_the_announcement_states_its_own_volume_and_exit() -> None:
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com")
+    body = compose("https://x/join/", "Beat Your League · PO Box 1 · hello@beatyourleague.com", {})[1]
     assert "only one you are getting" in body
     assert "unsubscribe" in body.lower()
 
@@ -104,7 +104,7 @@ def test_the_announcement_states_its_own_volume_and_exit() -> None:
 def test_the_signup_url_is_the_only_link() -> None:
     """A launch email with several destinations converts worse and looks like
     marketing. One address, one thing to do."""
-    body = BODY.format(brand=BRAND_LINE.capitalize(), url="https://x/join/", sender="Beat Your League · PO Box 1 · hello@beatyourleague.com")
+    body = compose("https://x/join/", "Beat Your League · PO Box 1 · hello@beatyourleague.com", {})[1]
     assert body.count("http") == 1
 
 

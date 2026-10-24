@@ -407,8 +407,11 @@ def build_solo_report(
                                          availability=availability,
                                          early_calls=early_calls,
                                          extra=(early_items + watch_items
-                                                + rising_hold_items(rising_held,
-                                                                    players)
+                                                + rising_hold_items(
+                                                    [(p, c) for p, c in rising_held
+                                                     if not row_is_tossup(
+                                                         p, availability)],
+                                                    players)
                                                 + practice_squad_items(
                                                     picks, unconfirmed, players,
                                                     game_of)
@@ -619,7 +622,8 @@ def hold_unconfirmed(picks: Sequence[SlotPick], unconfirmed: Mapping[str, str],
 
 
 # Why a slot prints no odds when the bench player its odds were figured
-# against ends up STARTING (a later FLEX or SUPER_FLEX swap seated him), or a
+# against ends up STARTING (a later swap seated him — FLEX, SUPER_FLEX, or a
+# RULE-3 re-seat at any later slot, a plain WR included), or a
 # player that swap moved to the bench now outranks him there (D11). The odds
 # were a call against somebody who is no longer the best bench option at that
 # spot, so they are withheld — never recomputed. The bracket names who starts.
@@ -1730,6 +1734,27 @@ def _even_pair(pick: SlotPick, other_id: str | None, other_value: float | None,
         return True
     return (pick.alternative_id == other_id and pick.confidence is not None
             and printed_percent(pick.confidence) <= TOSSUP_PERCENT)
+
+
+def row_is_tossup(pick: SlotPick,
+                  availability: WeekAvailability | None) -> bool:
+    """Does this pick's lineup row read "toss-up: either is fine"? The same
+    test ``_form_facts`` applies to the row, from the same printed figure (a
+    bench player with no games this season prints no figure, so no toss-up).
+
+    Final review PIPE-3: a rising-held pair that is ALSO dead even read
+    "Kelce or Pitts at TE — a toss-up, keep whichever you have" as the game
+    plan's first line and the preheader, and then "Travis Kelce ... starts —
+    no odds against Kyle Pitts ... the lineup stands" two lines below. The
+    toss-up is the honest reading of a 0.3-point gap against a player the
+    hold says is under-projected, so the hold line drops that slot rather
+    than the toss-up: it names only the slots it actually decides. Wording
+    only; no seat, number or gate moves."""
+    alternative = pick.alternative_projection
+    if not pick.alternative_id or alternative is None or not alternative.games:
+        return False
+    return _even_pair(pick, pick.alternative_id, round(alternative.mean, 1),
+                      availability)
 
 
 def _doubt_words(availability: WeekAvailability | None, player_id: str) -> str:
