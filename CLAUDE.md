@@ -245,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status (Sep 29 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (979 tests passing). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
+**Status (Oct 24 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (2,117 tests passing after the pre-launch review, below). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -1280,7 +1280,7 @@ code-side item was built, merged and pinned. Rules it left:
   welcome, the League Pass bought over a season pass, the three seat notes, the launch
   announcement with and without a saved roster, the roster confirmation at its longest — is
   built for the sender audit AND measured at 390px. `run/economics.py` counts selling at PLAN
-  §5's ~35 min a day (about 64 owner-hours, about $17 an hour, matching
+  §5's ~35 min a day (about 59 owner-hours, about $12 an hour at the 2026 one-time prices since the pre-launch review, matching
   `reports/launch-readiness.md`), and the fee gate fails when that report's base case drifts.
 
 **The promise audit (Oct 17–18 2026) — every sentence a buyer could hold us to, checked
@@ -1373,6 +1373,85 @@ card, the League Pass stays on its own page per PLAN §4). Founding rate: 2026 b
   models `ONE_TIME` beside them (no Stripe Billing fee). The subscription machinery (billing,
   renewals, portal) stays for 2027.
 
+**The pre-launch review (Oct 23–24 2026) — eight lenses, then six build branches.** A marketer,
+designer, product, QA, analytics, app-security, infra-security and business review, each finding
+verified before it counted, then six build agents in their own worktrees (the form Worker and
+signup safety, the report, analytics, the landing, the other pages, infra and docs), an
+adversarial reviewer per branch, a fix round, and one integration. Rules it left:
+- **Analytics is ours and counts only (contract C1).** `site/count.js` posts `{e,p,v,r,d,s}`
+  (event, page key, `?via=` tag, referrer HOST, m/d, checkout state) as text/plain to the Worker's
+  `POST /e`, which re-validates every field against `^[a-z0-9.-]{0,40}$`, checks the Origin, always
+  answers an empty 204, never sets a cookie, and writes one Analytics Engine point to `byl_counts`
+  (binding COUNTS; unbound = silent no-op; never KV). Nothing is sent off the live host, or when
+  GPC/DNT is set or the browser is automated. Every page carries the tag exactly once, last before
+  `</body>` (generated pages via `render.report.COUNT_TAG`/`with_counter`, `restamp_chrome` too).
+  `make stats` opens with TRAFFIC and pass sales and refuses to run in CI (the repo is public).
+  Off switch: an empty `ENDPOINT` in count.js (it is off until LAUNCH 5b).
+- **The site's design system (contract C2):** one nav (`render.report.site_bar()` +
+  `SITE_BAR_CSS`, the logo lockup; on phones the logo and "See a real report"), `.btn.gold`
+  primary and `.btn.ghost` secondary only, a closed checkout is a real button plus the email
+  capture, square cards, nothing lifts that isn't a link. terms.html keeps the old nav until its
+  words next change (its visible text is digest-pinned to its date).
+- **League Pass seats come ONLY through the pass's own signed link (contract C3).** `?pass=1` or
+  any non-token `?pass=` shows "ask whoever bought the pass for the league's seat link" and sends
+  nothing; the Worker never stores `covered_by`; a typed payer address is never honoured or
+  answered (that was a purchase oracle and a seat-squatting route). The buyer's report counts
+  seats and says to reply "reset seats": `make seat-reset PASS=pi_… EMAIL=…` appends to the
+  committed `data/processed/seat-resets.txt`, which re-keys that pass's link and releases seats
+  claimed before it.
+- **The form Worker fails closed:** site Origin or the read key on every POST, kind-prefixed keys,
+  one row per (kind, canonical mailbox, day), unknown kinds 400, byte limits, KV errors 503,
+  `GET ?kinds=` so each reader lists only its own rows, `GET ?status=1` for its switches. A
+  waitlist row carrying a ref keeps its own key, so a later email-only row can't erase the roster.
+- **Free reports have two switches that must agree:** the site's `TRIAL_OPEN` (landing and join
+  twins) and the Worker's `TRIAL_OPEN` variable (it 403s trial rows otherwise); `run/trials.py`
+  serves only when the landing says open; the launch check FAILs on site-on/Worker-off. A free
+  report is refused when the roster shares ≥80% (and ≥5 players) with one already served this
+  season or a subscriber's (keyed digests only), and waits behind Tuesday's and Saturday's sends.
+- **Mail order and caps:** the intake sends welcomes and first reports before any note; seat
+  notes share one daily cap from sent.jsonl, counted by canonical mailbox; a pass gets at most its
+  seat count of confirmation codes a day, counted at SEND time, so a held claim goes out on a later
+  run. `make waitlist-send MAX=<n>` refuses without a ceiling.
+- **Disputes and bounces:** a lost chargeback ends entitlement like a full refund; an open one
+  stays entitled and is listed (read with `GET /v1/disputes?charge=` only for a disputed charge —
+  the pinned API version has no `Charge.dispute` to expand). After each mailing intake the bounce
+  check reads recent sends back from Resend with `RESEND_READ_KEY` (a Full access key, optional;
+  without it one OWNER line per run). Never refund a disputed payment (LAUNCH §8).
+- **The report withholds more, moves nothing (F1–F3, P8–P11):** odds are held on any slot whose
+  bench alternative is a riser (`engine.solo_report.hold_rising_alternatives`; the seat stands and
+  the row reads "start · <name> rising"; measured on 240 rosters: 965 → 874 odds, a strict subset);
+  a build refuses until EVERY regular-season game of week W−1 has both scores and stat rows
+  (`run.solo.assert_week_is_complete`; `POSTPONED_GAMES=AWAY@HOME` for a game the schedule still
+  shows at its old kickoff); Saturday counts a team as filed only on a report_status row; every
+  emptied slot gets its own cover list; Rising Roles never offers this season's starters and says
+  "targets + carries"; a standing line promises the Saturday check; empty spots lead the plan and
+  the subject. The pinned 2024 sample moved with the hold (Barkley 74% withheld; closest call now
+  Kittle over LaPorta 72%) and the landing, og card and pins moved with it.
+- **The email address is read back before Stripe locks it** (join: "Reports go to <address> —
+  right?", a "Use <fix>" button for common domain slips, Yes rebuilds the ref from the page as it
+  stands). One implementation: the merge once carried two and the second `DOMAIN_FIXES` stopped
+  every script on the page — `node --check` each page script after a merge.
+- **Infra:** the registry and plans are cached only sealed (`run/statebox.py`, CACHE_KEY;
+  encrypt-then-MAC, 90-day encrypted backup artifacts on a content change and daily, restored on a
+  cache miss; a missing copy after anyone was served is a red run unless the repo variable
+  `ALLOW_EMPTY_REGISTRY=true` for one run); every registry-reading step waits on a successful open;
+  statebox runs as `python -I -S` (stdlib only) so no third-party code sits beside a job token;
+  actions pinned to commits, `permissions: {}` plus per-job grants, no expressions in `run:`;
+  hash-locked installs (`make lock`); provider errors redacted (`run/redact.py`); `site/_headers`
+  generated per page with a floor CSP (`make headers` after ANY inline-script change; it takes
+  effect on Cloudflare Pages, not GitHub Pages); `site/.well-known/security.txt`; the launch check
+  reads CACHE_KEY, the Worker switches, the bounce key and the owner's hardening (Pages TXT,
+  DNSSEC, ruleset, live HSTS/CSP). `run/economics.py` is based on the 2026 one-time prices
+  (base case about $727, about 59 owner-hours, about $12 an hour).
+- **Pages:** the samples and this-week carry the one-time footer and a CTA true in the current
+  checkout state (`python -m render.live_sample --restamp PAGES` rewrites chrome only, idempotent);
+  How it works shows real cards from the pinned sample (pinned row by row); thanks has next steps
+  (add the sender, the League Pass, share); drafted posts carry no link (the link goes in the
+  first reply); projections.html is marked as a retired study; titles name "fantasy football".
+- **Open owner decisions it left:** the repo is public and old commits carry a personal address
+  (LAUNCH §11: move to Cloudflare Pages, then private); a lawyer before the first $69 sale
+  (LAUNCH §12); US/Canada-only terms (would need a TERMS_VERSION bump).
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever
@@ -1391,8 +1470,9 @@ Week 18 warns that resting starters are mostly announced after Friday's report (
 league's pass). No billing sentence on samples or free reports. The last report drops the
 "your next report follows it" roster line (there is none).
 
-**`make stats` (`run/stats.py`, Oct 9 2026)** — the owner's demand view, since the site has no
-analytics by promise: Worker rows by kind (ever / 7 days / 24 h / distinct mailboxes, counted
+**`make stats` (`run/stats.py`, Oct 9 2026)** — the owner's demand view, since the site's only
+counter is its own cookieless one (`site/count.js` → Worker `/e` → Analytics Engine; privacy §3,
+TRAFFIC block added Oct 23): Worker rows by kind (ever / 7 days / 24 h / distinct mailboxes, counted
 the way the free report canonicalises them), the committed send log by week, and, when a
 registry copy is present, how many free-report and waitlist mailboxes subscribe now. Counts
 only, never an address; read-only; an unreadable Worker exits 1 rather than printing zeros.
@@ -1512,7 +1592,7 @@ was SENT and mails only the ones who must change something. Rules (`engine/final
 - **It reads a stored plan, never a rebuilt report.** `run/tuesday.py` writes
   `data/plans/{season}/wNN-{slug}.json` only for a send that happened in that run (never a dry
   preview, never a retry that skipped). Rebuilding on Saturday could compare against a lineup
-  nobody was sent. Plans are cached under their OWN key (`plans-`), never inside the registry
+  nobody was sent. Plans are cached under their OWN key (`plans-`, sealed by `run/statebox.py` since Oct 23), never inside the registry
   cache the hourly intake saves constantly. No plan for anybody = lost cache, exit 1.
 - **F1** a player whose game has kicked off is never moved or offered (Thursday games).
   **F2** "cleared" needs the team's FINAL report (two days before its game, in NFL time — a
@@ -2274,10 +2354,10 @@ keeps all 15 sections and their original numbers (renumbering would have broken 
 own "section 4" and "section 15" cross-references), with §10 now pointing at the policy
 rather than containing it. `site/privacy.html` is a real standalone policy — collection,
 processors, retention, deletion rights, age — and it leads with the strongest claim the site
-can honestly make: **no cookies, no analytics, no trackers**, verified by a test that sweeps
-every page for tracker scripts. It also names Google Fonts, because the pages do load type
-from Google and "no trackers" beside a silent third-party request is the small untruth that
-discredits a whole page. `site/legal.html` stays as a redirect stub with a canonical link:
+can honestly make: **no cookies, no third-party trackers, and a counter of our own** (privacy
+§3, since Oct 23), held by `tests/test_site.py`'s origin allowlist (every URL a page makes the
+browser fetch must be ours), which replaced the tracker-name denylist. Type is self-hosted, so
+no page makes a third-party request at all. `site/legal.html` stays as a redirect stub with a canonical link:
 the site was already live, and a 404 on a terms link is the worst broken link a paid site
 can have. The `#cancel` anchor moved with the terms, so the route printed in every report
 (`cancel_destination`) is `terms.html#cancel`.
