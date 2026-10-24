@@ -375,7 +375,10 @@ def _checklist(items: list[Mapping[str, Any]],
     # done in ninety seconds", so the file carries the boxes.
     rows = []
     for i, item in enumerate(items, 1):
-        color = TURF if item.get("urgency") in ("now", "done") else SLATE
+        # The web report's .task .dl: bold capitals, brick for a deadline
+        # still to meet, turf once it is in hand (D13 — the email's were slate
+        # lowercase, so the same plan read calmer in the inbox than online).
+        color = TURF if item.get("urgency") in ("now", "done") else BRICK
         rule = f'border-top:1px solid {LINE};' if i > 1 else ""
         rows.append(
             f'<tr><td style="padding:10px 12px 10px 0;vertical-align:top;width:18px;'
@@ -384,7 +387,8 @@ def _checklist(items: list[Mapping[str, Any]],
             f'<b>{esc(item["action"])}</b><br>'
             + (f'<span style="{SMALL}color:{NAVY};">{esc(item["detail"])}</span><br>'
                if item.get("detail") else "")
-            + f'<span style="{SMALL}color:{color};">{esc(item["deadline"])}</span>'
+            + f'<span style="{SMALL}font-weight:bold;text-transform:uppercase;'
+            f'letter-spacing:.5px;color:{color};">{esc(item["deadline"])}</span>'
             f'</td></tr>'
         )
     body = (f'<table role="presentation" width="100%" cellpadding="0" '
@@ -1025,8 +1029,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines.append(f"THE WEEK'S CLOSEST CALL: {no_call_line(regret)}")
     else:
         before, joiner, after = regret_verdict(regret)
+        if not regret_tossup(regret):
+            # "Start X" reads "start X" after the colon; a toss-up's head is
+            # the bare NAME, which keeps its capital ("george Pickens or ...").
+            before = before[:1].lower() + before[1:]
         lines.append(
-            f"THE WEEK'S CLOSEST CALL: {before[:1].lower()}{before[1:]} {joiner} "
+            f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
             f"{after} ({regret['confidence']:.0%})"
             + (f" — {regret['label'].lower()}" if regret.get("label") else ""))
         for key in ("definition", "reason", "closer"):
@@ -1436,7 +1444,9 @@ def _bench(report: Mapping[str, Any]) -> str:
     th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
           f'color:{SLATE};padding:14px 8px 5px 8px;border-bottom:1px solid {LINE};')
     head = (f'<tr><td width="{_SLOT_W}" style="{th}"></td>'
-            f'<td style="{th}">{esc(BENCH_HEAD)}</td>'
+            # "Bench", one word that never wraps: "ON YOUR / BENCH" broke over
+            # two lines in the narrow header at 390px (D13).
+            f'<td style="{th}white-space:nowrap;">Bench</td>'
             f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
             f'<td width="{_CALL_W}" style="{th}"></td></tr>')
     return (f'<table role="presentation" width="100%" cellpadding="0" '

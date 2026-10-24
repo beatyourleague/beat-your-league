@@ -54,7 +54,7 @@ from engine.availability import PlayerStatus, Status
 from engine.history import FLEX_ELIGIBILITY
 from engine.projection import ProjectionModel
 from engine.roster import Player, PlayerDirectory, normalize
-from engine.solo_report import _games_line
+from engine.solo_report import RISING_GATE, _games_line
 from engine.subscriber import (SUBSCRIBER_ROSTER_ID, RosterSpec, _team_week,
                                build_season, rosterable_field)
 from engine.week_report import SlotPick, _slot_json, optimal_lineup
@@ -63,7 +63,7 @@ from run.solo import (ANCHOR_WEIGHT, CACHE_DIR, CONTEXT_WEEKS,
                       EARLY_SEASON_LAMBDA, MEASURED_TEMPLATE, SoloError,
                       WeekData, _schedule, _team_before, anchored,
                       calibrator_for, fallback_for, load_week_data,
-                      seeded_scope, week_has_kicked_off)
+                      rising_hold_pool, seeded_scope, week_has_kicked_off)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = REPO_ROOT / "data" / "processed"
@@ -207,6 +207,12 @@ def head_to_head(data: WeekData, a: Player, b: Player, scoring: str,
                             calibrate=calibrator_for(data.week, seeded, anchor,
                                                      contextual),
                             confirmed_fallback=fallback_for(data.week, seeded))
+    # The report's own withholding, from the same pool (pre-launch review F3):
+    # odds against a rising bench player stated 63.5% and landed 55.7%, so the
+    # report holds them — and a reply recording one here would put on the
+    # public record exactly the number every subscriber was not sent.
+    from engine.solo_report import hold_rising_alternatives
+    hold_rising_alternatives([pick], rising_hold_pool(data) or {}, data.players)
     return Call(slot, pick, season.league_id, model)
 
 
@@ -223,8 +229,13 @@ def why_no_call(call: Call, statuses: dict[str, PlayerStatus],
     for pid in statuses:
         if projected.get(pid) is None:
             return f"{names[pid]} has no games on record this season yet"
-    return (call.pick.confidence_gate if call.pick and call.pick.confidence_gate
-            else "nothing the report would publish")
+    gate = call.pick.confidence_gate if call.pick else None
+    if gate and gate.startswith(RISING_GATE):
+        riser = gate[len(RISING_GATE):].strip(" ()")
+        return (f"{riser} is getting more of the ball lately and his projection "
+                f"still counts his earlier games as much, so the report holds "
+                f"the odds on this one")
+    return gate or "nothing the report would publish"
 
 
 # --------------------------------------------------------------------- #
@@ -430,7 +441,7 @@ def main(argv: list[str] | None = None, *, session=None) -> int:
 
     try:
         data = load_week_data(args.cache, args.season, args.week,
-                              session=session, today=now.date())
+                              session=session, today=now.date(), now=now)
         a, b = resolve_pair(data.directory, args.a, args.b)
     except (SoloError, AskError) as exc:
         print(str(exc), file=sys.stderr)

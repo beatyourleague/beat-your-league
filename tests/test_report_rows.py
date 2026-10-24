@@ -564,11 +564,13 @@ def sample10():
 
 
 def test_the_sample_warns_about_its_thursday_starter(sample10) -> None:
-    """2024 week 10: Cincinnati at Baltimore, Thursday 8:15 PM ET."""
+    """2024 week 10: Cincinnati at Baltimore, Thursday 8:15 PM ET. Chase was
+    on no injury report, so it is the lock-time note, not a status check
+    (pre-launch review F6)."""
     chase = _row(sample10, "Ja'Marr Chase")
     assert chase["game"] == "@ BAL · Thu 8:15 PM ET"
     assert any(i["action"] == "Thursday night: Ja'Marr Chase kicks off at 8:15 PM ET "
-                              "— check his status before then."
+                              "— set your lineup before then."
                for i in sample10["checklist"])
 
 

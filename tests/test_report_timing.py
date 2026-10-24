@@ -468,8 +468,10 @@ def test_the_thursday_line_names_nobody_already_decided() -> None:
                      schedule=_schedule(SEA=_game("DEN", THU, "20:15")))
     assert "game" not in _row(report, "Wes Slotman")
     thursday = _item(report, "Thursday night")
+    # Wade is healthy, so the line is the lock-time note, not a status chore
+    # (pre-launch review F6).
     assert thursday["action"] == ("Thursday night: Wade Wideout kicks off at "
-                                  "8:15 PM ET — check his status before then.")
+                                  "8:15 PM ET — set your lineup before then.")
 
 
 def test_a_defense_has_no_status_to_check() -> None:

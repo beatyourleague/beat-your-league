@@ -47,7 +47,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Collection, Mapping, Sequence
 
 from engine.availability import Status, WeekAvailability
 from engine.final_check import (INACTIVES_LEAD, clauses, elevation_note,
@@ -218,6 +218,7 @@ def build_solo_report(
     if all(p.projection is None for p in picks):
         notable = []
     standins = stand_ins(picks, bench)
+    standin_ids = stand_ins(picks, bench, key="player_id")
 
     gaps: list[dict[str, str]] = []
     if not availability.has_snapshot:
@@ -344,7 +345,15 @@ def build_solo_report(
     # this week" asked the reader to check on somebody already decided.
     deciding = [p.player_id for p in picks if p.player_id and not _certainly_out(p)]
     deciding += [pid for _, _, starter, pid in news if not starter]
-    early_items, early_ids = early_kickoff_items(deciding, players, game_of, sunday)
+    # Whose status there is something to check (pre-launch review F6): on
+    # last week's report, not confirmed to play, or news that moves a seat. A
+    # healthy Thursday kicker was told "check his status before then" — the
+    # same chore every week, about a status nobody flagged.
+    designated = ({pid for pid in deciding
+                   if availability.classify(pid).status is not Status.ACTIVE}
+                  | set(unconfirmed) | {pid for *_, pid in news})
+    early_items, early_ids = early_kickoff_items(deciding, players, game_of, sunday,
+                                                 designated=designated)
     # A questionable starter seated level with a healthy bench player says why,
     # on his row and on the game-plan line that benches that player — which
     # read "Bench George Pickens — Zay Flowers starts at WR. … Projects 9.6,
@@ -412,7 +421,8 @@ def build_solo_report(
                                          late_news_skip=early_ids,
                                          late_news_when=decide_at.get,
                                          news=news, planned=planned,
-                                         unplanned=unplanned, standins=standins)),
+                                         unplanned=unplanned, standins=standins,
+                                         standin_ids=standin_ids)),
         "matchup": _matchup(spec, my_range, team_range_gate(picks, standins)),
         "lineup": [_slot(p, players, usage_lookup,
                          game=game_label(game_of(p.player_id)),
@@ -807,7 +817,8 @@ def _certainly_out(pick: SlotPick) -> bool:
 
 
 def stand_ins(picks: Sequence[SlotPick],
-              bench: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
+              bench: Sequence[Mapping[str, Any]], *,
+              key: str = "name") -> dict[str, list[str]]:
     """Seated starter who can't (or may not) play -> the bench players out only
     on last week's report who could start in his slot (launch audit R4).
 
@@ -818,7 +829,7 @@ def stand_ins(picks: Sequence[SlotPick],
     for pick in picks:
         if not (pick.player_id and pick.status and pick.status.status is Status.OUT):
             continue
-        names = [entry["name"] for entry in bench
+        names = [entry[key] for entry in bench
                  if entry.get("out_kind") == "designation"
                  and _fits(entry.get("position"), pick.slot)]
         if names:
@@ -1860,6 +1871,14 @@ def _named_reason(pick: SlotPick, players: PlayerIndex,
     # Cook ("his status isn't confirmed yet") for odds the missing input held.
     if gate.startswith(SHAPE_INPUT_GATE):
         return "an input these odds need is missing this week"
+    if gate.startswith(RISING_GATE):
+        # F3's hold names one player, so the reason does too. Without this it
+        # fell into the generic hold below, and the closest-call card read
+        # "no odds, because this lineup's odds are on hold this week" — an
+        # outage, to a reader, beside a lineup whose other odds printed.
+        riser = gate[len(RISING_GATE):].strip(" ()") or other or "your bench player"
+        return (f"{riser} is getting more of the ball lately, and his projection "
+                f"still counts his earlier games as much")
     if gate.startswith("held:"):
         # Any other hold is about the lineup, never one player's status.
         return "this lineup's odds are on hold this week"
@@ -2253,10 +2272,21 @@ def cover_parts(cover: Sequence[Mapping[str, Any]]) -> str | None:
         slot = _SLOT_WORDS.get(entry["slot"], entry["slot"])
         names = entry.get("names") or []
         parts.append(f"{slot}, {entry['cut']}: "
-                     + ", ".join(f"{c['name']} {c['per_game']:.1f}" for c in names)
+                     + ", ".join(_cover_name(c) for c in names)
                      if names else
                      f"{slot}: nobody {entry['cut']} with three games yet")
     return "; ".join(parts)
+
+
+def _cover_name(entry: Mapping[str, Any]) -> str:
+    """"Colston Loveland 8.1" — and, when his role is growing, the counted
+    usage that says so (P2), in Rising Roles' own words."""
+    text = f"{entry['name']} {entry['per_game']:.1f}"
+    rising = entry.get("rising")
+    if rising:
+        text += (f" (rising: {rising['recent']:.1f} targets + carries a game "
+                 f"over his last two, up from {rising['earlier']:.1f})")
+    return text
 
 
 def cover_sentence(cover: Sequence[Mapping[str, Any]], when: str, league_size: int,
@@ -2273,7 +2303,9 @@ def cover_sentence(cover: Sequence[Mapping[str, Any]], when: str, league_size: i
 
 def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,
                      game_of: Callable[[str], Mapping[str, Any] | None],
-                     sunday: date | None) -> tuple[list[dict[str, str]], set[str]]:
+                     sunday: date | None, *,
+                     designated: Collection[str] | None = None,
+                     ) -> tuple[list[dict[str, str]], set[str]]:
     """(checklist items, the players they name) for games before Sunday.
 
     "Sunday morning: check his status" is three days late for a Thursday-night
@@ -2287,7 +2319,12 @@ def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,
     RQ-09): a London kickoff is 9:30 AM ET, its inactives 8:00 AM — 5 AM in
     California — and seven starters at Wembley got only "Sunday morning:
     check his status (gameday morning)". A defense has no status to check
-    (RQ-18), so a group of defenses alone is told to set the lineup."""
+    (RQ-18), so a group of defenses alone is told to set the lineup.
+
+    ``designated`` names the players with a status worth checking (pre-launch
+    review F6): anyone else in an early game gets the lock-time note instead
+    — "set your lineup before then" — never a status chore about a healthy
+    player. None (no injury information) treats everybody as worth a check."""
     if sunday is None:
         return [], set()
     groups: dict[tuple[str, str], list[str]] = {}
@@ -2307,13 +2344,17 @@ def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,
         when = day.strftime("%A") + part
         one = len(pids) == 1
         at = f" at {_clock(clock)} ET" if _clock(clock) else ""
-        people = [p for p in pids if not p.startswith(f"{DEFENSE}-")]
+        humans = [p for p in pids if not p.startswith(f"{DEFENSE}-")]
+        people = [p for p in humans if designated is None or p in designated]
         if not people:
             ask = "set your lineup before then"
-        elif len(people) == len(pids) or len(people) > 1:
+        elif people == humans and (len(people) == len(pids) or len(people) > 1):
             ask = f"check {'his' if one else 'their'} status before then"
-        else:
+        elif len(people) == 1:
             ask = f"check {players.name(people[0])}'s status before then"
+        else:
+            ask = (f"check the status of "
+                   f"{_join_words([players.name(p) for p in people])} before then")
         items.append({
             "action": (f"{when}: {_join_words([players.name(p) for p in pids])} "
                        f"{'kicks off' if one else 'kick off'}{at} — {ask}."),

@@ -190,7 +190,7 @@ def _pivot_post(report: Mapping[str, Any], url: str) -> str | None:
 
 def _short_rising(row: Mapping[str, Any]) -> str:
     return (f"{row['name']} ({row['team']} {row['position']}) "
-            f"{row['recent']:.1f} touches a game, up from {row['earlier']:.1f}")
+            f"{row['recent']:.1f} targets + carries a game, up from {row['earlier']:.1f}")
 
 
 def _rising_post(report: Mapping[str, Any], week: int, url: str) -> str | None:

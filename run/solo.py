@@ -214,17 +214,56 @@ def week_one_due(cache_dir: Path, season: str, week: int,
 
 # How long after a kickoff a game's box score is expected in the stat release.
 # Monday night ends around 04:00 UTC and nflverse stamps the stats release
-# about 07:35 UTC, so eight hours covers the slowest game of a normal week.
-# It is used for the WORDS only — "should be in by now" versus "usually lands
-# about eight hours after kickoff" — never to excuse a game: every game of the
-# week projected from must be in before anything is built.
+# about 07:35 UTC, so eight hours covers the slowest game of a normal week. A
+# game that kicked off longer ago than this is REQUIRED: both scores and stat
+# rows for both teams, or nothing is built.
 BOX_SCORE_LAG = timedelta(hours=8)
+
+# The operator's escape hatch for a postponement the schedule release has not
+# caught up with yet (it still shows the old kickoff, so the clock rule below
+# cannot see it): "AWAY@HOME[,AWAY@HOME]", e.g. POSTPONED_GAMES=PIT@BAL. Each
+# game named is treated exactly like one the schedule has moved: not yet
+# played, counted as a bye for both teams, and said so on the report.
+POSTPONED_ENV = "POSTPONED_GAMES"
+
+
+def postponed_from_env(environ: Mapping[str, str] | None = None) -> frozenset[str]:
+    import os
+    import re
+    raw = (os.environ if environ is None else environ).get(POSTPONED_ENV) or ""
+    return frozenset(g for g in (part.strip().upper()
+                                 for part in re.split(r"[\s,]+", raw))
+                     if re.fullmatch(r"[A-Z]{2,3}@[A-Z]{2,3}", g))
+
+
+def regular_week_end(days: Sequence[str]) -> str:
+    """The last day of a week's REGULAR window, as an ISO date: the Monday on
+    or after the day most of its games are played (ties: the later day), or
+    the week's last game day when that is earlier (week 18 has no Monday).
+
+    A game scheduled after it was moved out of its week. Across every cached
+    season (1999-2026) that is exactly the postponements: MIN@PHI 2010
+    (snowstorm, Tuesday), and 2020-21's COVID moves — BUF@TEN Tuesday,
+    BAL@PIT Wednesday, DAL@BAL Tuesday, SEA@LA and WAS@PHI Tuesday. Every
+    Christmas-Saturday week (2005, 2011, 2016, 2022) keeps its Monday game,
+    because the window runs to the Monday after the busiest day, not to the
+    day after it."""
+    try:
+        parsed = sorted(date.fromisoformat(str(d)) for d in days)
+    except ValueError:
+        return max(str(d) for d in days)
+    from collections import Counter
+    counts = Counter(parsed)
+    top = max(counts.values())
+    busiest = max(d for d in counts if counts[d] == top)
+    monday = busiest + timedelta(days=(0 - busiest.weekday()) % 7)
+    return min(parsed[-1], monday).isoformat()
 
 
 def _prior_week_games(cache_dir: Path, season: str, week: int
-                      ) -> list[tuple[str, str, "datetime | None", bool]] | None:
-    """(away, home, kickoff UTC or None, both scores posted) for every REG
-    game of ``week``; None when the schedule cannot be read."""
+                      ) -> list[tuple[str, str, "datetime | None", bool, str]] | None:
+    """(away, home, kickoff UTC or None, both scores posted, game day) for
+    every REG game of ``week``; None when the schedule cannot be read."""
     import csv as _csv
     from zoneinfo import ZoneInfo
 
@@ -233,7 +272,7 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
     except NflverseError:
         return None
     eastern = ZoneInfo("America/New_York")
-    out: list[tuple[str, str, "datetime | None", bool]] = []
+    out: list[tuple[str, str, "datetime | None", bool, str]] = []
     with path.open(encoding="utf-8", newline="") as handle:
         for row in _csv.DictReader(handle):
             if str(row.get("season") or "") != str(season):
@@ -249,8 +288,8 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
             home = (row.get("home_team") or "").strip()
             if not away or not home:
                 continue
+            day = (row.get("gameday") or "").strip()
             try:
-                day = (row.get("gameday") or "").strip()
                 clock = (row.get("gametime") or "").strip() or "13:00"
                 kick: "datetime | None" = datetime.strptime(
                     f"{day} {clock}", "%Y-%m-%d %H:%M").replace(
@@ -259,19 +298,23 @@ def _prior_week_games(cache_dir: Path, season: str, week: int
                 kick = None
             scored = bool((row.get("home_score") or "").strip()
                           and (row.get("away_score") or "").strip())
-            out.append((away, home, kick, scored))
+            out.append((away, home, kick, scored, day))
     return out
 
 
 def assert_week_is_complete(cache_dir: Path, season: str, week: int,
                             weekly: Mapping[int, Mapping[str, Any]],
-                            now: "datetime | None" = None) -> None:
-    """Refuse to build a report from a week whose box scores have not landed.
+                            now: "datetime | None" = None,
+                            postponed: "frozenset[str] | None" = None
+                            ) -> tuple[str, ...]:
+    """Refuse to build a report from a week whose box scores have not landed,
+    and return the week's POSTPONED games ("AWAY@HOME"), which do not block.
 
-    The report for week W projects from weeks 1..W-1, so W-1 has to be
-    COMPLETE: EVERY game of it needs both scores posted in the schedule AND
-    stat rows for both teams. Anything less raises, and the next scheduled
-    run (the 16:17 UTC backup on a Tuesday) retries.
+    The report for week W projects from weeks 1..W-1, so W-1 has to be in, and
+    the clock decides what "in" means. A game that kicked off more than
+    BOX_SCORE_LAG ago needs both scores posted in the schedule AND stat rows
+    for both teams. A game kicked off more recently, and not yet in, is being
+    played or has just finished: refused, and the next run retries.
 
     It used to trust the schedule's posted scores to say which games were
     over: ``final`` was the teams whose game carried a score, and an empty
@@ -283,7 +326,19 @@ def assert_week_is_complete(cache_dir: Path, season: str, week: int,
     projection 21.4 -> 16.9) while odds still printed beside him and would
     have been recorded (pre-launch review F2, Oct 2026). Every completed
     regular-season game in the schedule archive carries a score — a cancelled
-    one is removed, not left blank — so requiring all of them cannot deadlock.
+    one is removed, not left blank — so requiring them cannot deadlock.
+
+    A POSTPONED game must not block everybody's report either (2020: BUF@TEN
+    on a Tuesday, BAL@PIT on a Wednesday, nflverse keeping the original week
+    label). Requiring it would hold week W until the game was played, and if
+    that is after week W's first kickoff, week W could never be built at all.
+    So a game the schedule has moved OUT of its week's regular window
+    (``regular_week_end``) and that has not kicked off yet is not required —
+    nor is one the operator names in POSTPONED_GAMES. It is returned so the
+    report can say so beside its box-score line, and the context model counts
+    it as a bye for both teams: excused, never a game missed. A game still
+    INSIDE its window that has not kicked off is the week not being over (a
+    Monday-morning build with Monday night still to play), and refuses.
 
     The consequence of building early is never a crash, which is why it needed
     a guard: a player is projected from one fewer game, and one close enough
@@ -297,58 +352,77 @@ def assert_week_is_complete(cache_dir: Path, season: str, week: int,
     fallback handles a warm one (whose games then have to pass this check).
     """
     if week <= 1:
-        return
+        return ()
     prior = week - 1
     games = _prior_week_games(cache_dir, season, prior)
     if not games:
-        return                      # no schedule to read
+        return ()                   # no schedule to read
     now = now or datetime.now(timezone.utc)
+    named = postponed_from_env() if postponed is None else frozenset(
+        g.strip().upper() for g in postponed)
+    window_end = regular_week_end([day for *_, day in games if day])
     observed = {str((row or {}).get("team") or "").strip()
                 for row in (weekly.get(prior) or {}).values()}
-    unplayed, unscored, no_rows = [], [], []
-    for away, home, kick, scored in games:
+    lag = int(BOX_SCORE_LAG.total_seconds() // 3600)
+    unplayed, unscored, no_rows, moved = [], [], [], []
+    for away, home, kick, scored, day in games:
         game = f"{away}@{home}"
+        if scored and away in observed and home in observed:
+            continue                # in: nothing to decide
+        if game in named or (kick is not None and now < kick
+                             and day and day > window_end):
+            moved.append(game)      # postponed: excused, said on the report
+            continue
         if kick is not None and now < kick + BOX_SCORE_LAG:
-            # Kicked off too recently (or not at all) for a box score to be
-            # expected: still incomplete, said differently.
-            if not (scored and away in observed and home in observed):
-                unplayed.append(game)
+            unplayed.append(game)   # being played, just over, or still to play
             continue
         if not scored:
             unscored.append(game)
-        elif away not in observed or home not in observed:
+        else:
             no_rows.append(game)
     if not (unplayed or unscored or no_rows):
-        return
+        return tuple(moved)
     parts = []
     if no_rows:
         parts.append(f"the schedule says {', '.join(no_rows)} finished, but the "
                      f"stat release has no rows for "
                      f"{'it' if len(no_rows) == 1 else 'them'}")
     if unscored:
-        parts.append(f"{', '.join(unscored)} kicked off more than "
-                     f"{int(BOX_SCORE_LAG.total_seconds() // 3600)} hours ago and "
-                     f"{'has' if len(unscored) == 1 else 'have'} no final score "
-                     f"in the schedule")
+        parts.append(f"{', '.join(unscored)} kicked off more than {lag} hours "
+                     f"ago and {'has' if len(unscored) == 1 else 'have'} no final "
+                     f"score in the schedule")
     if unplayed:
         parts.append(f"{', '.join(unplayed)} {'is' if len(unplayed) == 1 else 'are'} "
                      f"not over and in yet (a box score usually lands about "
-                     f"{int(BOX_SCORE_LAG.total_seconds() // 3600)} hours after "
-                     f"kickoff)")
+                     f"{lag} hours after kickoff)")
     raise SoloError(
         f"week {prior}'s box scores are not all in — {'; '.join(parts)}. A report "
         f"built now would project week {week} from an incomplete week {prior}, "
         f"counting every game not yet in as a game missed. Re-run once nflverse "
-        f"has published.")
+        f"has published. (A postponed game the schedule still shows at its old "
+        f"kickoff can be named for one run: {POSTPONED_ENV}=AWAY@HOME.)")
 
 
-def box_scores_line(week: int) -> str | None:
+def _at(game: str) -> str:
+    return game.replace("@", " at ")
+
+
+def box_scores_line(week: int, postponed: Sequence[str] = ()) -> str | None:
     """The box-score half of the data-age line (principle 3), beside the
     injury-data sentence. True by construction: a report only builds once
-    ``assert_week_is_complete`` has seen every game of the week before."""
+    ``assert_week_is_complete`` has seen every game of the week before, apart
+    from a postponed game, which is named."""
     if week <= 1:
         return None
-    return f"Box scores through Week {week - 1}, every game."
+    if not postponed:
+        return f"Box scores through Week {week - 1}, every game."
+    from engine.week_report import _join_words
+    many = len(postponed) > 1
+    return (f"Box scores through Week {week - 1}, every game played — "
+            f"{_join_words([_at(g) for g in postponed])} "
+            f"{'were' if many else 'was'} postponed and "
+            f"{'haven' if many else 'hasn'}'t been played yet, so "
+            f"{'they count as byes for those teams' if many else 'it counts as a bye for both teams'}.")
 
 
 # --------------------------------------------------------------------- #
@@ -449,13 +523,21 @@ def current_week(cache_dir: Path, season: str, today: date | None = None, *,
     The first week whose last game has not been played. Run on a Tuesday that
     is the week ahead, which is what the product delivers; run mid-week it is
     still the current one, which is what someone re-running the pipeline means.
+
+    "Last game" is the last day of the week's REGULAR window
+    (``regular_week_end``), so a game postponed into the next week's days does
+    not hold the calendar back: with BUF@TEN moved to a Tuesday (2020), the
+    last game day said week 5 all that Tuesday, and the run refused week 5 as
+    already kicked off — nobody's week-6 report could go out on time
+    (pre-launch review F2). For every week without a postponement the answer
+    is unchanged.
     """
     weeks = _weeks(_schedule(cache_dir, session=session), season)
     if not weeks:
         raise SoloError(f"the schedule release carries no {season} regular season")
     when = (today or datetime.now(timezone.utc).date()).isoformat()
     for week in sorted(weeks):
-        if max(weeks[week]) >= when:
+        if regular_week_end(weeks[week]) >= when:
             return week
     return max(weeks)                            # season over: the last week
 
@@ -500,6 +582,9 @@ class WeekData:
     # describes today, so its teams may stand in for a row's team in that week
     # and never in a replayed one (principle 3).
     is_live_week: bool = False
+    # Week W-1 games postponed and not yet played ("AWAY@HOME"): excused like
+    # a bye and named beside the box-score line (assert_week_is_complete).
+    postponed: tuple[str, ...] = ()
     # gsis -> why he can't play (injured reserve, PUP, released...), from
     # TODAY's players release; empty unless this is the live week. The gate
     # already reads it for every player it can place on a team; the report
@@ -813,6 +898,19 @@ def _byes_ahead(spec: RosterSpec, data: "WeekData",
 RISING_ALTERNATIVE_HOLD = True
 
 
+def rising_hold_pool(data: "WeekData") -> dict[str, Mapping[str, Any]] | None:
+    """The bench players F3 withholds odds against, keyed by id: the
+    league-wide pool with RETURNS left out (weeks missed before the jump), the
+    definition the 508-call subset was measured on. One function, read by
+    every surface that prints or records a % — the subscriber report and
+    `make ask --publish` — so the public record never holds a number the
+    report withholds."""
+    if not RISING_ALTERNATIVE_HOLD:
+        return None
+    return {c["player_id"]: c for c in getattr(data, "rising", None) or []
+            if not c.get("missed")}
+
+
 # How many players a cover list names per emptied slot, and how many games a
 # player needs this season before his per-game figure is worth printing.
 BYE_COVER_NAMES = 3
@@ -897,10 +995,16 @@ def cover_for(slots: Sequence[str], spec: RosterSpec, data: "WeekData",
 
     A RECORD, never a projection, and never a claim that anybody is free:
     the item says to check (we can't see the league). ``plays`` narrows the
-    field further (this week's cover: playing late enough, not listed)."""
+    field further (this week's cover: playing late enough, not listed).
+
+    A name whose role is growing (F3's definition, ``rising_hold_pool``)
+    carries his counted usage, so the line says so where it matters most —
+    beside the hole he could fill (pre-launch review P2: "you need a TE:
+    Colston Loveland is rising"). Counted facts; nothing about this week."""
     from engine.preseason import _eligible
     if not data.weekly:
         return []
+    risers = rising_hold_pool(data) or {}
     form = _season_form(data, spec.rule)
     cut = rostered_cut(spec.slots, league_size)
     by_position: dict[str, list[tuple[float, str]]] = {}
@@ -944,8 +1048,11 @@ def cover_for(slots: Sequence[str], spec: RosterSpec, data: "WeekData",
         chosen = picks[:BYE_COVER_NAMES]
         named |= {pid for _neg, pid, _name, _pg in chosen}
         out.append({"slot": slot, "cut": _cut_words(positions, cut),
-                    "names": [{"name": name, "per_game": per_game}
-                              for _neg, _pid, name, per_game in chosen]})
+                    "names": [{"name": name, "per_game": per_game,
+                               **({"rising": {"recent": risers[pid]["recent"],
+                                              "earlier": risers[pid]["earlier"]}}
+                                  if pid in risers else {})}
+                              for _neg, pid, name, per_game in chosen]})
     return out
 
 
@@ -970,13 +1077,19 @@ def _this_week_cover(report: dict, spec: RosterSpec, data: "WeekData",
     games = getattr(data, "games", None) or {}
     listed = getattr(data, "listed", None) or {}
     teams = _row_teams(spec, data)
+    from engine.week_report import _join_words
+    names = {p.player_id: p.name for p in data.directory.players}
     for item in report.get("checklist") or []:
         zero = item.get("zero")
         if not zero:
             continue
-        waits = [kickoff(games.get(teams.get(pid, ""))) for pid in zero.get("wait_on") or []]
-        waits = [moment for moment in waits if moment is not None]
-        latest = max(waits) if waits else None
+        # The players whose news decides the slot: the starter who may still
+        # play, or the stand-in out on last week's report (F6/P2). A pickup
+        # must kick off no earlier than the last of them, so it can wait.
+        waited = [(pid, kickoff(games.get(teams.get(pid, ""))))
+                  for pid in zero.get("wait_on") or []]
+        waited = [(pid, moment) for pid, moment in waited if moment is not None]
+        latest = max(moment for _, moment in waited) if waited else None
 
         def plays(player, latest=latest) -> bool:
             game = games.get(player.team or "")
@@ -987,12 +1100,11 @@ def _this_week_cover(report: dict, spec: RosterSpec, data: "WeekData",
 
         cover = cover_for(zero["slots"], spec, data, set(spec.player_ids),
                           week=data.week, league_size=league_size, plays=plays)
-        waiting = len(zero.get("wait_on") or [])
         line = cover_sentence(
             cover, "this week", league_size,
             after=("" if latest is None else
-                   ", kicking off no earlier than him" if waiting == 1 else
-                   ", kicking off no earlier than them"))
+                   ", kicking off no earlier than "
+                   + _join_words([names.get(pid, "him") for pid, _ in waited])))
         if line:
             item["detail"] = f"{item['detail']} {line}" if item.get("detail") else line
 
@@ -1088,7 +1200,7 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
     # same rule engine/ledger.py applies before it grades, from the same
     # schedule data, so the two halves cannot disagree about what "the week
     # is in" means.
-    assert_week_is_complete(cache_dir, season, week, weekly, now=now)
+    postponed = assert_week_is_complete(cache_dir, season, week, weekly, now=now)
 
     is_live_week = _is_live_week(cache_dir, season, week, today, session=session)
     roster_out = _live_roster_out(players_csv, is_live_week)
@@ -1118,7 +1230,8 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
         # exactly this reason.
         usage=_nflverse_usage(weekly, week),
         context=_context_inputs(cache_dir, season, week, directory, weekly,
-                                live=live, session=session),
+                                live=live, session=session, postponed=postponed),
+        postponed=postponed,
         rising=rising_candidates(weekly, week),
         last_week=last_week(cache_dir, season, session=session),
     )
@@ -1126,7 +1239,8 @@ def load_week_data(cache_dir: Path = CACHE_DIR, season: str | None = None,
 
 def _context_inputs(cache_dir: Path, season: str, week: int,
                     directory: PlayerDirectory, weekly, *, live: bool = True,
-                    session: requests.Session | None = None) -> dict | None:
+                    session: requests.Session | None = None,
+                    postponed: Sequence[str] = ()) -> dict | None:
     """The context arm's inputs for this week, or None (see WeekData.context).
 
     The injury reports used are weeks 1..W-1 — every one published before the
@@ -1148,6 +1262,14 @@ def _context_inputs(cache_dir: Path, season: str, week: int,
                               session=session)
         with schedule_path.open(encoding="utf-8", newline="") as handle:
             schedule = games_by_week(csv.DictReader(handle), season)
+        if postponed and schedule.get(week - 1):
+            # A postponed week W-1 game has not been played: both teams were
+            # off that week, so availability excuses it like a bye — never a
+            # game missed (assert_week_is_complete, F2).
+            schedule[week - 1] = [
+                g for g in schedule[week - 1]
+                if f"{(g.get('away_team') or '').strip()}@"
+                   f"{(g.get('home_team') or '').strip()}" not in set(postponed)]
         injury_path = fetch("injuries", f"injuries_{season}.csv", cache_dir,
                             live=live, session=session)
         injury_weeks = {w: r for w, r in
@@ -1538,9 +1660,7 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
                                shape_gate=odds_gate,
                                # F3: the same definition the withholding was
                                # measured on — league-wide, returns left out.
-                               rising=({c["player_id"]: c for c in data.rising
-                                        if not c.get("missed")}
-                                       if RISING_ALTERNATIVE_HOLD else None),
+                               rising=rising_hold_pool(data),
                                injury_report=({"week": data.week - 1,
                                                "listed": getattr(data, "listed", {})}
                                               if data.week > 1 else None))
@@ -1563,7 +1683,8 @@ def report_for(spec: RosterSpec, data: WeekData, league_size: int = 12,
     if getattr(data, "is_live_week", False):
         # Principle 3 on the surface: the injury line already dates its data;
         # the box scores the projections stand on are dated beside it (F2).
-        report["meta"]["box_scores_as_of"] = box_scores_line(data.week)
+        report["meta"]["box_scores_as_of"] = box_scores_line(
+            data.week, getattr(data, "postponed", ()))
     # The rest of the season (mid-season planning): byes still ahead that
     # leave a slot empty, as one checklist item. Facts only, nothing graded.
     _this_week_cover(report, spec, data, league_size)

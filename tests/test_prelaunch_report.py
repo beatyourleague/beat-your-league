@@ -11,7 +11,7 @@ line), M5 (the free report's price and refund terms).
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -416,10 +416,11 @@ def test_this_weeks_zero_names_cover_who_play_late_enough(monkeypatch) -> None:
                              "zero": {"slots": ["QB"], "wait_on": ["00-mine"]}}]}
     solo._this_week_cover(report, spec, data, league_size=0)
     detail = report["checklist"][0]["detail"]
-    assert "kicking off no earlier than him" in detail
+    assert "kicking off no earlier than P 00-mine" in detail
     assert "P 00-late 18.0" in detail
+    named = detail.split(": ", 1)[1]                # the cover list itself
     for absent in ("00-thu", "00-hurt", "00-bye", "00-mine"):
-        assert absent not in detail
+        assert absent not in named
     assert detail.endswith("Check who's free in your league.")
     data.is_live_week = False                       # a replayed week names nobody
     replay = {"checklist": [dict(report["checklist"][0], detail=None)]}
@@ -598,3 +599,331 @@ def test_every_sample_carries_the_one_time_way_out(page) -> None:
                     "run rebuilds it with the one-time footer")
     assert not stale, f"{page} still describes a subscription"
     assert rr.ONCE_STOP_BODY.split(":")[0] in text
+
+
+# --------------------------------------------------------------------- #
+# Review round — the reviewer's reproductions, each now a guard
+# --------------------------------------------------------------------- #
+
+# F2 — a postponed game does not block everyone's report.
+
+WEEK5_2020 = [(5, "2020-10-08", "20:20", "TB", "CHI", True),
+              (5, "2020-10-11", "13:00", "LV", "KC", True),
+              (5, "2020-10-11", "13:00", "ARI", "NYJ", True),
+              (5, "2020-10-11", "16:25", "IND", "CLE", True),
+              (5, "2020-10-12", "19:05", "LAC", "NO", True),
+              # Postponed out of its week: Tuesday, after the Monday game.
+              (5, "2020-10-13", "19:00", "BUF", "TEN", False),
+              (6, "2020-10-15", "20:20", "KC", "BUF", False),
+              (6, "2020-10-18", "13:00", "CHI", "CAR", False)]
+TUESDAY_2020 = datetime(2020, 10, 13, 16, 17, tzinfo=timezone.utc)
+
+
+def _games_2020(tmp_path: Path, games: list[tuple]) -> Path:
+    rows = [{"season": "2020", "game_type": "REG", "week": w, "gameday": day,
+             "gametime": clock, "away_team": away, "home_team": home,
+             "away_score": 17 if scored else "", "home_score": 24 if scored else ""}
+            for w, day, clock, away, home, scored in games]
+    cache = tmp_path / "nflverse"
+    _write(cache / "games.csv", rows, GAME_FIELDS)
+    return cache
+
+
+def test_a_game_moved_out_of_its_week_does_not_block_the_next_report(tmp_path) -> None:
+    """Reproduction (review of F2): the guard required every week W-1 game with
+    no way past one that had been postponed — 2020's BUF@TEN moved to the
+    Tuesday, BAL@PIT to a Wednesday, nflverse keeping the original week label.
+    Week 6 could not be built that Tuesday, and a game moved past week 6's
+    first kickoff would have made week 6 unbuildable for good. A game moved
+    OUT of its week's window that has not kicked off is excused, returned, and
+    named on the report; the rest of the week still has to be in."""
+    cache = _games_2020(tmp_path, WEEK5_2020)
+    weekly = {5: _rows("TB", "CHI", "LV", "KC", "ARI", "NYJ", "IND", "CLE", "LAC", "NO")}
+    assert solo.assert_week_is_complete(cache, "2020", 6, weekly, now=TUESDAY_2020,
+                                        postponed=frozenset()) == ("BUF@TEN",)
+    line = solo.box_scores_line(6, ("BUF@TEN",))
+    assert line == ("Box scores through Week 5, every game played — BUF at TEN was "
+                    "postponed and hasn't been played yet, so it counts as a bye "
+                    "for both teams.")
+    # The calendar moves on too: the moved game no longer holds week 5 open.
+    assert solo.current_week(cache, "2020", date(2020, 10, 13)) == 6
+    assert solo.current_week(cache, "2020", date(2020, 10, 12)) == 5
+    # Once it has kicked off it is a game being played, and must land first.
+    during = datetime(2020, 10, 14, 1, 0, tzinfo=timezone.utc)
+    with pytest.raises(solo.SoloError, match="BUF@TEN is not over and in yet"):
+        solo.assert_week_is_complete(cache, "2020", 6, weekly, now=during,
+                                     postponed=frozenset())
+
+
+def test_a_game_still_inside_its_week_is_not_mistaken_for_postponed(tmp_path) -> None:
+    """Monday night still to play on a Monday morning is the week not being
+    over, never a postponement: built then, week 6 would count LAC@NO as a bye."""
+    games = [g if g[3] != "LAC" else (5, "2020-10-12", "19:05", "LAC", "NO", False)
+             for g in WEEK5_2020 if g[3] != "BUF"]
+    cache = _games_2020(tmp_path, games)
+    monday = datetime(2020, 10, 12, 14, 0, tzinfo=timezone.utc)
+    with pytest.raises(solo.SoloError, match="LAC@NO is not over and in yet"):
+        solo.assert_week_is_complete(cache, "2020", 6,
+                                     {5: _rows("TB", "CHI", "LV", "KC", "ARI", "NYJ",
+                                               "IND", "CLE")},
+                                     now=monday, postponed=frozenset())
+
+
+def test_the_operator_can_name_a_postponement_the_schedule_has_not_caught(
+        tmp_path, monkeypatch) -> None:
+    """When the release still shows the old kickoff, the clock cannot tell a
+    postponement from a missing box score, so the refusal names the escape
+    hatch, and POSTPONED_GAMES=AWAY@HOME excuses exactly that game."""
+    stale = [g for g in WEEK5_2020 if g[3] != "BUF"] + [
+        (5, "2020-10-11", "13:00", "BUF", "TEN", False)]
+    cache = _games_2020(tmp_path, stale)
+    weekly = {5: _rows("TB", "CHI", "LV", "KC", "ARI", "NYJ", "IND", "CLE", "LAC", "NO")}
+    monkeypatch.delenv(solo.POSTPONED_ENV, raising=False)
+    with pytest.raises(solo.SoloError, match="POSTPONED_GAMES=AWAY@HOME"):
+        solo.assert_week_is_complete(cache, "2020", 6, weekly, now=TUESDAY_2020)
+    monkeypatch.setenv(solo.POSTPONED_ENV, "buf@ten, nonsense")
+    assert solo.assert_week_is_complete(cache, "2020", 6, weekly,
+                                        now=TUESDAY_2020) == ("BUF@TEN",)
+
+
+def test_a_postponed_game_is_excused_like_a_bye(tmp_path, monkeypatch) -> None:
+    """Counted as a game MISSED, a postponement lowers every appearance rate on
+    both teams (the F2 harm, wearing a different hat). The context model gets a
+    week W-1 schedule without it, so both teams read as off that week."""
+    import engine.context as context
+    from test_solo_run import OFFLINE, SEASON, WEEK, _cache
+    seen = {}
+
+    def capture(players, weekly, schedule, injuries, week):
+        seen["schedule"] = schedule
+        return {}
+    monkeypatch.setattr(context, "excused_weeks", capture)
+    monkeypatch.setattr(context, "market_table", lambda games: list(range(99)))
+    monkeypatch.setattr(context, "multiplier_for", lambda *a, **k: (lambda pid, w: 1.0))
+    cache = _cache(tmp_path)
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    teams = {(g["away_team"], g["home_team"]) for g in
+             __import__("csv").DictReader((cache / "games.csv").open())
+             if g["week"] == str(WEEK - 1)}
+    away, home = sorted(teams)[0]
+    solo._context_inputs(cache, SEASON, WEEK, data.directory, data.weekly,
+                         session=OFFLINE, postponed=(f"{away}@{home}",))
+    kept = {(g["away_team"], g["home_team"]) for g in seen["schedule"][WEEK - 1]}
+    assert kept == teams - {(away, home)}
+
+
+# F3 in `make ask` — the public record never holds a % the report withholds.
+
+def test_make_ask_withholds_the_odds_the_report_withholds(tmp_path, monkeypatch) -> None:
+    """Reproduction (review of F3): run.ask.head_to_head called optimal_lineup
+    and never applied the rising hold, so Pickens over Nabers (2026 W7, half
+    PPR, 10 teams) printed and would have RECORDED 57% while every subscriber
+    report holding the pair withheld it. Same pool, same hold, nothing
+    recorded."""
+    import json
+    import run.ask as ask
+    from engine.solo_report import RISING_GATE
+    from test_solo_run import OFFLINE, SEASON, WEEK, _cache, _pid, _spec
+    cache = _cache(tmp_path)
+    bell_cow = _pid(2)                             # the alternative in the call
+    monkeypatch.setattr(solo, "rising_candidates",
+                        lambda weekly, week: [_riser(bell_cow, position="RB")])
+    data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
+    players = {p.player_id: p for p in data.directory.players}
+    call = ask.head_to_head(data, players[_pid(8)], players[bell_cow], "ppr", 12)
+    assert call.pick.confidence is None
+    assert call.pick.confidence_gate.startswith(RISING_GATE)
+    report = solo.report_for(_spec(), data, cache_dir=cache)
+    row = next(r for r in report["lineup"] if r["alternative_id"] == bell_cow)
+    assert row["confidence"] is None
+    processed = tmp_path / "processed"
+    import contextlib
+    import io
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = ask.main(["Hank Benchman", "Bell Cow", "--season", SEASON, "--week",
+                         str(WEEK), "--cache", str(cache), "--processed-dir",
+                         str(processed), "--now", "2024-09-10T12:00:00Z",
+                         "--publish"], session=OFFLINE)
+    assert code == 0 and "No % — Bell Cow is getting more of the ball" in out.getvalue()
+    assert "%" not in out.getvalue().replace("No % —", "")
+    assert not [json.loads(line) for p in processed.rglob("calls.jsonl")
+                for line in p.read_text().splitlines() if line]
+
+
+# The rising hold's reason on the closest-call card.
+
+def test_the_closest_call_names_the_rising_bench_player_as_the_reason() -> None:
+    """Reproduction (review of F3): RISING_GATE starts "held:", so _named_reason
+    fell to the generic hold and the card read "no odds, because this lineup's
+    odds are on hold this week" — an outage, to a reader — both as the
+    closest decision with no odds anywhere and as the "closer" line under a
+    printed %."""
+    alts = {r["alternative_id"] for r in _solo()["lineup"] if r.get("alternative_id")}
+    none = _solo(rising={a: _riser(a) for a in alts})["regret"]
+    assert none["closest"].endswith(
+        "because Alpha Wideout is getting more of the ball lately, and his "
+        "projection still counts his earlier games as much.")
+    mixed = _solo(rising={"00-0000004": _riser("00-0000004")})["regret"]
+    assert mixed["confidence"] is not None
+    assert "because Alpha Wideout is getting more of the ball lately" in mixed["closer"]
+    for text in (none["closest"], mixed["closer"]):
+        assert "on hold this week" not in text
+
+
+# P10 in plain text — a toss-up keeps the starter's capital.
+
+def test_a_tossup_in_the_text_email_keeps_the_name_capitalised() -> None:
+    """Reproduction (review of P10): text_summary lowercased the first letter
+    of whatever regret_verdict put first — right for "Start X", wrong for a
+    toss-up's bare name: "george Pickens or Garrett Wilson — either is fine"."""
+    from render.email import text_summary
+    report = _solo()
+    report["regret"] = dict(report["regret"], confidence=0.52, reason="")
+    name = report["regret"]["start_name"]
+    assert f"THE WEEK'S CLOSEST CALL: {name} or " in text_summary(report)
+    report["regret"]["confidence"] = 0.72
+    assert f"THE WEEK'S CLOSEST CALL: start {name} over " in text_summary(report)
+
+
+# F6/P2 — a zero tag says what its sentence says.
+
+def test_a_zero_that_waits_on_a_stand_in_is_not_counted_as_certain() -> None:
+    """Reproduction (review of F6/P2): "Rory Runner (RB) isn't playing … the
+    only bench player who could start there, Remy Reserve, was out on last
+    week's injury report. If he isn't cleared, that's a zero" was tagged a
+    CERTAIN zero — so it led the subject's "empty spots to fill" count and
+    this week's cover could name players kicking off before Remy's news. It
+    waits on Remy now; the two-out-last-week group waits on both."""
+    from render.email import empty_spots
+    from test_report_timing import BASE, RB1, RB2, _item, _report
+    roster = dict(BASE, **{RB1: ("Rory Runner", "RB", "DET"),
+                           RB2: ("Remy Reserve", "RB", "NYJ")})
+    report = _report(roster, yards={RB1: 90, RB2: 80}, missed={RB2: {4}},
+                     designations={RB2: "Out"}, listed={RB2: ("out", "quadricep")},
+                     byes=frozenset({"DET"}))
+    item = _item(report, "Rory Runner (RB) isn't playing this week")
+    assert item["zero"] == {"slots": ["RB"], "wait_on": [RB2]}
+    assert empty_spots(report) == 0
+    both = _report(dict(BASE, **{RB2: ("Remy Reserve", "RB", "KC")}),
+                   yards={RB1: 90, RB2: 80}, missed={RB1: {4}, RB2: {4}},
+                   designations={RB1: "Out", RB2: "Out"},
+                   listed={RB1: ("out", "ankle"), RB2: ("out", "thumb")})
+    item = _item(both, "Rory Runner (RB) was out on last week's injury report, and so")
+    assert item["zero"] == {"slots": ["RB"], "wait_on": [RB1, RB2]}
+
+
+def test_two_empty_slots_at_one_position_are_two_empty_spots() -> None:
+    """Reproduction: the unfillable tag used sorted(set(...)), so two empty RB
+    slots counted as one spot in the subject line."""
+    from render.email import empty_spots
+    from test_report_timing import QB1, TE1, WR1, _report
+    report = _report({QB1: ("Quinn Passer", "QB", "KC"),
+                      WR1: ("Wade Wideout", "WR", "KC"),
+                      TE1: ("Ted End", "TE", "KC")},
+                     slots=("QB", "RB", "RB"))
+    item = next(i for i in report["checklist"] if i["action"].startswith(
+        "You have nobody to start at RB."))
+    assert item["zero"] == {"slots": ["RB", "RB"], "certain": True}
+    assert empty_spots(report) == 2
+
+
+# F6 — an early-kickoff line asks for a status check only where one exists.
+
+def test_a_healthy_early_kickoff_gets_the_lock_time_note_not_a_status_chore() -> None:
+    """Reproduction (review of F6): "Thursday night: Ja'Marr Chase kicks off at
+    8:15 PM ET — check his status before then" for a player on no injury
+    report (the rebuilt 2024 sample), and "Sunday morning: Chris Boswell kicks
+    off at 9:30 AM ET" in the live one."""
+    from datetime import date as _date
+    from engine.roster import Player, PlayerDirectory
+    from engine.solo_report import early_kickoff_items
+    from engine.subscriber import player_index
+    players = player_index(PlayerDirectory([Player("a", "Ann Healthy", "WR", "CIN"),
+                                            Player("b", "Bo Listed", "WR", "CIN"),
+                                            Player("c", "Cy Listed", "RB", "CIN")]))
+    games = {pid: {"day": "2026-10-22", "time": "20:15"} for pid in "abc"}
+    sunday = _date(2026, 10, 25)
+
+    def ask(pids, designated):
+        items, _ = early_kickoff_items(pids, players, games.get, sunday,
+                                       designated=designated)
+        return items[0]["action"].split(" — ", 1)[1]
+    assert ask(["a"], set()) == "set your lineup before then."
+    assert ask(["b"], {"b"}) == "check his status before then."
+    assert ask(["a", "b"], {"b"}) == "check Bo Listed's status before then."
+    assert ask(["a", "b", "c"], {"b", "c"}) == (
+        "check the status of Bo Listed and Cy Listed before then.")
+    assert ask(["b", "c"], {"b", "c"}) == "check their status before then."
+    # No injury information at all: everybody is worth a check, as before.
+    assert ask(["a"], None) == "check his status before then."
+
+
+# P2 — a rising player beside the hole he could fill says so.
+
+def test_a_rising_player_in_a_cover_list_says_his_role_is_growing(monkeypatch) -> None:
+    """P2 (review): "when a Rising Roles player fills a hole, say so" was not
+    done — the cover list printed his points a game and nothing else. Counted
+    usage, in Rising Roles' words; nothing about this week."""
+    import engine.preseason as preseason
+    from types import SimpleNamespace
+    from engine.solo_report import cover_parts
+    riser = _player("00-rise", "TE", "CHI")
+    other = _player("00-plain", "TE", "SEA")
+    form = {"00-rise": {"per_game": 8.1, "games": 5},
+            "00-plain": {"per_game": 9.0, "games": 5}}
+    monkeypatch.setattr(preseason, "prior_season_form", lambda weekly, rule: dict(form))
+    data = _cover_data([riser, other], form, week=7)
+    data.rising = [_riser("00-rise", position="TE", recent=9.5, earlier=4.0),
+                   _riser("00-plain", position="TE", missed=[3])]   # a return
+    spec = SimpleNamespace(rule="ppr", player_ids=(), slots=("TE",))
+    cover = solo.cover_for(["TE"], spec, data, set(), week=7, league_size=0)
+    said = cover_parts(cover)
+    assert ("P 00-rise 8.1 (rising: 9.5 targets + carries a game over his last "
+            "two, up from 4.0)") in said
+    assert "P 00-plain 9.0" in said and "P 00-plain 9.0 (" not in said
+
+
+# F2 better fix — a cache fallback is said, not silent.
+
+def test_a_download_that_falls_back_to_the_cache_says_so(tmp_path, capsys) -> None:
+    """Review of F2: fetch fell back to the cached copy on an outage in
+    silence, and a copy restored from actions/cache can predate Monday night.
+    It says so on stderr (once per asset) and records the copy's age."""
+    import requests
+    import ingest.nflverse as nflverse
+
+    class Down:
+        def get(self, url, **_kwargs):
+            raise requests.ConnectionError("release host down")
+    cached = tmp_path / "games.csv"
+    cached.write_text("season,week\n2026,7\n")
+    old = 1_700_000_000
+    import os
+    os.utime(cached, (old, old))
+    nflverse.STALE_FALLBACKS.pop("games.csv", None)
+    for _ in range(2):
+        assert nflverse.fetch("schedules", "games.csv", tmp_path, live=True,
+                              session=Down()) == cached
+    err = capsys.readouterr().err
+    assert err.count("could not refresh games.csv (ConnectionError); using the "
+                     "cached copy written 2023-11-14 22:13 UTC") == 1
+    assert nflverse.STALE_FALLBACKS["games.csv"] == "2023-11-14 22:13 UTC"
+    nflverse.STALE_FALLBACKS.pop("games.csv", None)
+
+
+# D13 polish — the email's deadline and bench header match the web report.
+
+def test_the_email_deadline_wears_the_web_reports_colour_and_bench_never_wraps() -> None:
+    from render.email import BRICK, TURF, render_email
+    report = _solo()
+    report["checklist"] = [
+        {"action": "Do a thing", "deadline": "before the Thursday kickoff",
+         "urgency": "deadline"},
+        {"action": "Done thing", "deadline": "nothing to change", "urgency": "done"}]
+    page = render_email(report)
+    assert (f"text-transform:uppercase;letter-spacing:.5px;color:{BRICK};\">before "
+            f"the Thursday kickoff") in page
+    assert f"color:{TURF};\">nothing to change" in page
+    assert "white-space:nowrap;\">Bench</td>" in page
+    assert ">On your bench<" not in page
