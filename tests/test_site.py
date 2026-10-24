@@ -4447,7 +4447,8 @@ def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at
     figure, and the card says what the call IS (PC-03): the closest call that
     carries odds on that roster, not a coin flip."""
     assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
-    assert '<div class="fliplegend">The mark in the middle is 50%, a toss-up.</div>' in LANDING
+    # Pre-launch review D12: the bar is drawn from 50%, as the report draws it.
+    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
     assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
     note = prose(LANDING).split("The close one, called")[1][:300]
     assert "The week's closest call with odds on this roster, decided:" in note
@@ -4761,9 +4762,11 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     now, and every #watch-form link puts the cursor in the field. The open
     state's finance rewrite keeps the League Pass link by its href, because the
     closed line's FIRST link is now the capture link it retires."""
+    # Pre-launch review D4: the closed card's control is a real gold button
+    # into the form, not a dashed box holding a link.
     for cta in ("season-cta",):
-        soon = re.search(rf'<div class="soon" id="{cta}">(.*?)</div>', LANDING).group(1)
-        assert '<a href="#watch-form" data-to-capture>' in soon and "above" not in soon
+        assert re.search(rf'<a class="btn gold" id="{cta}" href="#watch-form" data-to-capture>'
+                         r'Tell me when it opens</a>', LANDING)
     handler = LANDING.split('document.addEventListener("click"')[1].split("\n});")[0]
     assert "closest('a[href=\"#watch-form\"]')" in handler
     assert "field.focus({ preventScroll: true })" in handler
