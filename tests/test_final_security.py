@@ -404,11 +404,10 @@ def test_an_early_playoff_purchase_is_served_and_reported(
     through the sweep as 'problems: []', 'plan: season', entitled until
     2027-01-24 — identical to a $29 purchase. Now, under o:, it is still a
     season row (they paid; a refusal would strand them) and the run reports
-    PLAYOFF-EARLY and exits 1 on every run that sweeps the session (three
-    days past the newest one). It is not persisted like PAID-UNATTRIBUTED: the
-    buyer is served, and no workflow can pass --clear-unresolved, so a
-    remembered one would keep the hourly cron red for good. A purchase after
-    the switch is quiet."""
+    PLAYOFF-EARLY and exits 1. It is remembered like PAID-UNATTRIBUTED (a
+    sweep-window-only alarm could neither be acknowledged nor be relied on to
+    last), so it stays red until daily-intake's clear_unresolved box clears
+    it. A purchase after the switch is quiet."""
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS_2026)
     monkeypatch.setattr(intake, "playoff_opens", lambda created, cache=None: OPENS)
     stripe["sessions"] = [_playoff_session(datetime(2026, 10, 27, 15, tzinfo=timezone.utc))]
@@ -422,9 +421,10 @@ def test_an_early_playoff_purchase_is_served_and_reported(
     assert _run(tmp_path, "--no-mail") == 1, "the next sweep of it was green"
     assert "PLAYOFF-EARLY session cs_po" in capsys.readouterr().err
     state = json.loads((tmp_path / intake.STATE_NAME).read_text())
-    assert not any(p.startswith("PLAYOFF-EARLY") for p in state["unresolved"])
+    assert any(p.startswith("PLAYOFF-EARLY") for p in state["unresolved"])
     stripe["sessions"] = []                     # the sweep window moved past it
-    assert _run(tmp_path, "--no-mail") == 0
+    assert _run(tmp_path, "--no-mail") == 1, "forgotten once the sweep moved on"
+    assert _run(tmp_path, "--no-mail", "--clear-unresolved") == 0
     assert len(_registry(tmp_path)) == 1, "the early buyer stopped being served"
     capsys.readouterr()
 
@@ -544,9 +544,11 @@ def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
     Pay button is a price. The sentence is terms.html §5's window, and every
     message fits Stripe's 1,200 characters."""
     module = _paylink()
-    refund = "Full refund, no questions, until your second weekly report's week kicks off."
+    refund = ("Full refund, no questions, until your second weekly report's week kicks off "
+              "(or a week after your last report, if the season ends first)")
     assert module.REFUND == refund
-    assert module.ONE_TIME.endswith(refund) and module.MESSAGES["league_pass"].endswith(refund)
+    assert module.ONE_TIME.endswith(refund + " — one per person.")
+    assert module.MESSAGES["league_pass"].endswith(refund + " — one per league.")
     assert "for every manager in your league who claims a seat" in module.MESSAGES["league_pass"]
     for plan in module.MESSAGES:
         assert len(module.MESSAGES[plan]) <= module.STRIPE_TEXT_LIMIT == 1200
@@ -724,3 +726,50 @@ def test_a_sealed_blob_cannot_name_a_huge_iteration_count(monkeypatch) -> None:
     with pytest.raises(sb.SealError):
         sb.decrypt(over, secret)
     assert sb.ITERATIONS <= sb.MAX_ITERATIONS
+
+
+# --------------------------------------------------------------------- #
+# review round on this branch (lead, after merging)
+# --------------------------------------------------------------------- #
+
+def test_playoff_early_persists_until_a_human_clears_it() -> None:
+    """Reviewer, reproduced: PLAYOFF-EARLY was red only while its session was
+    the newest in the sweep window, so it could not be acknowledged and could
+    stay red indefinitely. It is remembered like PAID-UNATTRIBUTED and cleared
+    with daily-intake's clear_unresolved box."""
+    from run import intake
+    assert "PLAYOFF-EARLY" in intake._REMEMBERED
+
+
+def test_a_real_restricted_key_403_keeps_the_permission_names(monkeypatch) -> None:
+    """Reviewer, reproduced: _stripe_get kept 200 characters of the body, and
+    a real restricted-key 403 spends about 107 of them on the masked key, so
+    the rak_ name the alarm promised to print was always cut off."""
+    import io
+    import urllib.error
+    from run import subscriptions
+    body = ('{"error": {"message": "The provided key \'rk_live_' + "*" * 90 + 'AbCd\' does '
+            'not have the required permissions for this endpoint on account '
+            '\'acct_1Abcdefghijklmno\'. Having the \'rak_payment_intent_read\' permission '
+            'would allow this request to continue.", "type": "invalid_request_error"}}')
+    def refuse(*_a, **_k):
+        raise urllib.error.HTTPError("https://api.stripe.com/v1/x", 403, "Forbidden", {},
+                                     io.BytesIO(body.encode()))
+    monkeypatch.setattr(subscriptions.urllib.request, "urlopen", refuse)
+    try:
+        subscriptions._stripe_get("https://api.stripe.com/v1/x", "rk_test_x")
+    except subscriptions.SubscriptionError as exc:
+        assert exc.status == 403 and exc.permissions == ("rak_payment_intent_read",)
+        assert "rk_test_x" not in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("a 403 must raise")
+
+
+def test_the_pay_button_refund_sentence_carries_its_limits() -> None:
+    """Reviewer: the refund sentence above Stripe's Pay button left out the
+    limits every other surface states (one per person / one per league, and
+    the season-ends-first clause)."""
+    from infra.stripe_paylink_text import MESSAGES
+    assert "one per person" in MESSAGES["season"] and "one per league" in MESSAGES["league_pass"]
+    for plan in ("season", "league_pass"):
+        assert "if the season ends first" in MESSAGES[plan]

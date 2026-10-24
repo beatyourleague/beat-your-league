@@ -69,11 +69,14 @@ def recipients(subscribers, paid) -> list:
 def notice_message(sub, page: str, effective: date, summary: str, site_url: str):
     """One notice, both halves, in the seat notes' shell (render/seat_claim)."""
     from render.email import BASE, NAVY
-    from render.report import cancel_html, cancel_lines, esc, unsubscribe_target
+    from render.report import ONCE, cancel_html, cancel_lines, esc, unsubscribe_target
     from render.seat_claim import _footer_lines, _para, _shell
     from run.delivery import Message
     name, file = PAGES[page]
-    seat = sub.is_league_seat
+    # A seat's stop route, a one-payment pass's stop route (nothing to
+    # cancel), or a subscription's billing page — never a billing page for a
+    # pass that has none (final review COPY-1).
+    seat = True if sub.is_league_seat else (ONCE if getattr(sub, "one_time", False) else False)
     when = f"{effective:%B} {effective.day}, {effective.year}"
     url = f"{site_url.rstrip('/')}/{file}" if site_url.startswith("https://") else ""
     subject = f"We're updating {name} on {when}"

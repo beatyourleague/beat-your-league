@@ -744,8 +744,9 @@ email → the older subscription → **Cancel subscription → At period end**.
 within 30 days:
 1. `make privacy-code EMAIL=their@example.com` on your Mac (needs `LOG_SECRET`). It prints a
    12-character code. Never put the address itself into GitHub.
-2. Actions → **privacy-request** → Run workflow → action **show**, **export** or **delete**,
-   and the code. The result lands in hello@, never in the log. A **delete** also replaces the
+2. `make privacy-approval ACTION=<show|export|delete> CODE=<that code>` on your Mac prints an
+   approval code. Then Actions → **privacy-request** → Run workflow → the same action, the
+   code, and the approval code in the **approval** box (without it every run is refused). The result lands in hello@, never in the log. A **delete** also replaces the
    encrypted cache and backup copies and deletes every older one, which still held the rows. A **correction** to a roster is
    `make roster-update`; to an email address, cancel and re-buy, or ask me.
 3. For **delete**: the email lists what's left by hand — the Stripe customer (cancel any live

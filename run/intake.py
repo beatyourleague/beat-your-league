@@ -148,13 +148,11 @@ NOT_CONFIGURED = 2
 
 # The problems that persist in roster-sync-state.json and keep the run red
 # until ``--clear-unresolved``: a payment that will receive nothing, which the
-# watermark moves past within days. PLAYOFF-EARLY is deliberately NOT one: that
-# buyer IS served, and no workflow passes --clear-unresolved, so persisting it
-# would turn every hourly run red for good over $10. It is re-reported (and
-# red) on every run while its session is inside the sweep's window
-# (run/checkout.WATERMARK_SLACK_SECONDS, three days past the newest session),
-# and the first red run files the issue.
-_REMEMBERED = ("PAID-UNATTRIBUTED",)
+# watermark moves past within days. PLAYOFF-EARLY persists too: the buyer IS
+# served, but a sweep-window-only alarm could neither be acknowledged nor be
+# relied on to last (final review). Both clear with daily-intake's
+# "clear_unresolved" dispatch box (run.intake --clear-unresolved), once handled.
+_REMEMBERED = ("PAID-UNATTRIBUTED", "PLAYOFF-EARLY")
 
 
 class IntakeError(RuntimeError):
@@ -981,6 +979,8 @@ class SeatSweep:
     # Seat-link claims are arriving and not one matches a pass: a rotated or
     # missing signing secret, not a run of typos (OPS-R10). Exits non-zero.
     links_dead: bool = False
+    # Seat-link claims that matched a pass under the keys in use this run.
+    token_hits: int = 0
     # Claims that named their pass by a typed payer address instead of the
     # pass's own link (contract C3): never honoured and never answered.
     typed_payer: int = 0
@@ -1264,6 +1264,7 @@ def sweep_seats(rows: Iterable[dict], passes: Iterable[PassInfo],
                 if (when := reset_time(stamps[-1])) is not None}
     claims, matched, token_rows, token_hits = _match_claims(
         rows, passes, keys, known_ids, season_from, out, resets)
+    out.token_hits = token_hits
 
     # The log, this season's part of it, plus whatever came back confirmed now.
     entries: list[SeatEntry] = []
@@ -2483,7 +2484,8 @@ def dispute_alarm(api_key: str) -> bool:
         paid = load_paid_from_stripe(api_key)
     except SubscriptionError as exc:
         if getattr(exc, "status", None) == 403:
-            named = sorted(set(re.findall(r"rak_[a-z_]+", str(exc))))
+            named = sorted(set(getattr(exc, "permissions", ()) or ())
+                           | set(re.findall(r"rak_[a-z_]+", str(exc))))
             print("STRIPE KEY IS MISSING A PERMISSION: reading who has paid "
                   "(the same read the Tuesday run makes) got HTTP 403"
                   + (f" — Stripe names {', '.join(named)}" if named else "")
@@ -2869,7 +2871,8 @@ def main(argv: list[str] | None = None) -> int:
     unattributed = [p for p in list(problems) + list(remembered)
                     if str(p).startswith("PAID-UNATTRIBUTED")]
     # Contract C4 / SEC-3: served, and red while the session is in the sweep.
-    playoff_early = [p for p in problems if str(p).startswith("PLAYOFF-EARLY")]
+    playoff_early = [p for p in list(problems) + list(remembered)
+                     if str(p).startswith("PLAYOFF-EARLY")]
 
     line = "=" * 62
     print(f"\n{line}\nROSTER INTAKE{' (dry run)' if args.dry_run else ''}\n{line}")
@@ -2932,8 +2935,11 @@ def main(argv: list[str] | None = None) -> int:
         print("A LEAGUE PASS IS ON FILE AND UPDATE_SECRET IS NOT SET: no seat link "
               "can be built, so no leaguemate can claim a seat. Set it (LAUNCH.md "
               "step 5).", file=sys.stderr)
+    # Two s: links is the SEC-3 hole left open (the $19 link reads as the $29
+    # pass and an early purchase is never reported): red until the map is fixed.
+    link_map_bad = any(str(p).startswith("STRIPE_PAYMENT_LINKS lists") for p in problems)
     failing = bool(blocked or unattributed or seats.links_dead or unsigned_pass
-                   or form_down or playoff_early)
+                   or form_down or playoff_early or link_map_bad)
     if args.dry_run:
         print("(dry run — nothing written, no customer metadata stamped)")
         print(line)
@@ -3001,6 +3007,13 @@ def main(argv: list[str] | None = None) -> int:
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered
+    if key_rotated and seats.token_hits and secret:
+        # A rotation without the old value kept (the right move when it
+        # leaked): once a claim through a NEW link matches a pass, the new
+        # links are in circulation, so the new secret becomes the baseline.
+        # Otherwise the alarm held forever and the only cure was re-arming
+        # the leaked secret (final review).
+        next_check = seat_key_check(secret)
     if next_check:
         state[SEAT_KEY_CHECK] = next_check
     state["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")

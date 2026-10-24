@@ -58,9 +58,13 @@ class SubscriptionError(ValueError):
     permission, which a caller can name rather than retry (final review
     OPS-5)."""
 
-    def __init__(self, message: str = "", status: int | None = None) -> None:
+    def __init__(self, message: str = "", status: int | None = None,
+                 permissions: tuple[str, ...] = ()) -> None:
         super().__init__(message)
         self.status = status
+        # The rak_ permission names a restricted key's 403 cites, read from the
+        # whole body: the masked key alone runs past the 200-character excerpt.
+        self.permissions = permissions
 
 
 @dataclass(frozen=True)
@@ -198,11 +202,13 @@ def _stripe_get(url: str, api_key: str) -> dict:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         # Never echo the request — it carries the secret key.
-        detail = exc.read().decode("utf-8", "replace")[:200]
+        body = exc.read().decode("utf-8", "replace")
+        detail = body[:200]
+        named = tuple(sorted(set(re.findall(r"rak_[a-z_]+", body))))
         raise SubscriptionError(
             f"Stripe returned HTTP {exc.code}. Check STRIPE_API_KEY is a valid "
             f"secret key with read access. Response: {detail}",
-            status=exc.code) from None
+            status=exc.code, permissions=named) from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise SubscriptionError(f"could not reach Stripe: {exc}") from None
     except json.JSONDecodeError:

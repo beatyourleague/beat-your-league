@@ -610,3 +610,19 @@ def test_the_report_pages_lose_the_sheet_frame_on_a_phone() -> None:
     from render.preseason import render
     page = render(_roster_report(), template)
     assert "@media (max-width:480px){body{padding:0;background:var(--paper);}" in page
+
+
+def test_a_change_notice_gives_a_one_time_pass_the_stop_route_not_a_billing_page() -> None:
+    """Final review COPY-1, second half (reproduced): run/notice.py chose the
+    way out from is_league_seat alone, so a $29 one-payment buyer's terms
+    notice told them to cancel from a billing page that has nothing to
+    cancel, and its List-Unsubscribe pointed there too."""
+    from datetime import date
+    from types import SimpleNamespace
+    from render.report import ONCE_STOP_BODY
+    from run import notice
+    sub = SimpleNamespace(email="fan@example.com", is_league_seat=False, one_time=True)
+    message = notice.notice_message(sub, "terms", date(2026, 11, 1), "Wording.",
+                                    "https://beatyourleague.com")
+    assert ONCE_STOP_BODY in message.text and "billing page" not in message.text
+    assert message.unsubscribe and message.unsubscribe.startswith("mailto:")

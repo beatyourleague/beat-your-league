@@ -59,9 +59,9 @@ CANCEL = ("you can cancel any time from your billing page")
 ONE_TIME_COVERS = ("It covers every weekly report from today through the "
                    "season's last")
 REFUND = ("Full refund, no questions, until your second weekly report's week "
-          "kicks off.")
+          "kicks off (or a week after your last report, if the season ends first)")
 ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews and nothing more is "
-            f"ever charged. {ONE_TIME_COVERS}. {REFUND}")
+            f"ever charged. {ONE_TIME_COVERS}. {REFUND} — one per person.")
 MESSAGES = {
     "season": ONE_TIME,
     "monthly": (
@@ -71,7 +71,7 @@ MESSAGES = {
         f"{CANCEL[0].upper()}{CANCEL[1:]}."),
     "league_pass": ("One payment — no subscription, nothing to cancel. Nothing renews and "
                     f"nothing more is ever charged. {ONE_TIME_COVERS}, for every manager "
-                    f"in your league who claims a seat. {REFUND}"),
+                    f"in your league who claims a seat. {REFUND} — one per league."),
 }
 # Stripe's limit on both custom_text messages (Payment Links API).
 STRIPE_TEXT_LIMIT = 1200

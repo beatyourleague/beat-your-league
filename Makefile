@@ -177,7 +177,7 @@ sitemap:
 # site/_headers — Cloudflare Pages' security headers, with each page's inline
 # scripts hashed into its Content-Security-Policy. Run after editing any
 # page's <script>; tests fail if it is stale (GitHub Pages ignores the file).
-.PHONY: headers lock notice-approval
+.PHONY: headers lock notice-approval privacy-approval
 headers:
 	$(PY) -m render.headers
 
@@ -197,6 +197,11 @@ lock:
 shell_quote = '$(subst ','\'',$(value $(1)))'
 notice-approval:
 	$(PY) -m run.approval notice $(call shell_quote,PAGE) $(call shell_quote,EFFECTIVE) $(if $(value SUMMARY),$(call shell_quote,SUMMARY),-)
+
+# The approval code privacy-request asks for (needs LOG_SECRET in your shell):
+#   make privacy-approval ACTION=delete CODE=0123456789ab
+privacy-approval:
+	$(PY) -m run.approval privacy $(call shell_quote,ACTION) $(call shell_quote,CODE)
 
 # Settle last week's published calls against the real box scores and republish
 # the public record. No secrets, no league — grading reads public data only.
