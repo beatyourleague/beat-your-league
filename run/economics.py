@@ -498,12 +498,16 @@ def summary_lines() -> list[tuple[str, str, str]]:
     saving_now = round(stripe_fee(REST_OF_SEASON, one_time=True)
                        - stripe_fee(REST_OF_SEASON, usd_payout=True, one_time=True), 2)
     usd = os.environ.get("STRIPE_PAYOUT_CURRENCY", "").lower() == "usd"
+    # Decided Oct 24 2026 (owner): payouts in USD. Until the account exists
+    # (STRIPE_PAYOUT_CURRENCY=usd in the shell says it does) the
+    # conversion is still being paid, so the line stays a warning.
     rows.append(("Payouts in USD keep the currency-conversion fee",
                  "PASS" if usd else "WARN",
                  "USD payout account in use" if usd else
-                 f"paid out in CAD: ${saving_now:.2f} of every $29 pass goes to conversion "
-                 f"(${saving:.2f} of a 2027 $39 pass), kept on every refund — decide in "
-                 f"LAUNCH.md section 10, then set STRIPE_PAYOUT_CURRENCY=usd here"))
+                 f"paid out in CAD until the USD account exists: ${saving_now:.2f} of every "
+                 f"$29 pass goes to conversion (${saving:.2f} of a 2027 $39 pass), kept on "
+                 f"every refund — add it (LAUNCH.md step 1.8), then set "
+                 f"STRIPE_PAYOUT_CURRENCY=usd in your shell"))
     try:
         plan = (REPO_ROOT / "PLAN.md").read_text(encoding="utf-8")
         stale = "| Stripe | 2.9% + 30¢ per charge |" in plan or "3.7%" in plan

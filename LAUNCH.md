@@ -28,7 +28,7 @@ section with the exact strings and clicks.
 5. **Payment links** (~25 min) — [step 1](#1-fresh-payment-links-25-min): switch the three old
    links off; make the $29, $19 and $69 one-payment links; set the text above Stripe's Pay
    button; **then switch the $19 link off until Wed Nov 25**; public details, the
-   card-statement name and branding; delete the setup key.
+   card-statement name and branding; delete the setup key; add the USD payout account.
 6. **Resend** (~20 min, plus up to an hour for DNS) — [step 2](#2-resend--the-sender-20-min):
    the domain, the sending key, the optional bounce key. **Start renting the mailbox today**
    (step 2.6): reports go out without it, but the waitlist email can't, and a mailbox can take
@@ -271,6 +271,11 @@ still open one. Make three new links and switch the old ones off.
    8:00 PM ET, section 8's "The Playoff Pass" switches it back on.
 7. **Delete the `setup-payment-link-text` key.** A key that edits payment links can change
    what buyers pay.
+8. **Payouts in US dollars (5 min; decided Oct 24).** Stripe → **Settings → Payouts** → add a
+   **USD bank account** (a US-dollar account at your Canadian bank works; check its fees) and
+   make it the payout account for USD. Every sale is in USD, so this keeps the 2% conversion
+   ($0.58 of each $29 pass, kept by Stripe even on a refund). Then run the launch check with
+   `STRIPE_PAYOUT_CURRENCY=usd` in your shell so it stops asking.
 
 **Tell me** what Terminal printed (it never shows the key).
 
@@ -901,10 +906,7 @@ your hours against the ~59-hour budget — never an open rate, which the privacy
 out measuring. Under 5 paid by D+14 means stop selling hours and spend the rest of the season
 on the 2027 work below. Tell me the day you adopt them; I write D into PLAN §6.
 
-**A USD payout account.** Stripe converts every US-dollar sale to Canadian dollars at 2%:
-$0.58 of each $29 pass, and it keeps that on a refund. *Recommend:* add a USD bank account in
-Stripe → Settings → Payouts before the first sale (check your bank's fees for it). Then
-`STRIPE_PAYOUT_CURRENCY=usd` in your shell clears the launch-check line.
+**A USD payout account — decided (Oct 24): yes.** It is step 1.8 now.
 
 **Hosting, and the public repo** — now its own section, 11, with the steps in order.
 
