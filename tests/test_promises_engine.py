@@ -82,7 +82,7 @@ def test_odds_against_a_bench_player_who_ends_up_starting_are_withheld() -> None
     assert wr.alternative_id == "h", "the row still names a starter as its bench"
     assert flex.confidence == 0.55, "a row whose comparison is on the bench lost its odds"
     assert rr.row_label({"confidence_gate": wr.confidence_gate}) == "held this week"
-    assert "flex swap" in rr.gate_phrase(wr.confidence_gate)
+    assert "a later swap" in rr.gate_phrase(wr.confidence_gate)
 
 
 def test_a_player_the_swap_moved_to_the_bench_outranking_the_comparison_withholds() -> None:

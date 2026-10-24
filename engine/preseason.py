@@ -110,6 +110,82 @@ def _current_week(cache_dir: Path, season: str) -> int | None:
         return None
 
 
+def season_so_far(weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
+                  player_ids: Collection[str], rule, before_week: int
+                  ) -> dict[str, dict[str, Any]]:
+    """player -> {games, per_game, last_three} for THIS season's weeks before
+    ``before_week``, scored under the subscriber's own rule — the figures the
+    weekly report's row prints ("2026: 17.2 a game · last 3: 22.1, 18.0, 9.4",
+    engine.solo_report._form_facts): one game per stat row (an appearance,
+    exactly as the model counts one), per appearance, rounded the same way.
+
+    A RECORD, like everything here: nothing in it is about a game not yet
+    played, so it carries no calibration burden. Defenses are left out, as
+    they are from last season's column (DEFENSE_NOT_SCORED), and a player with
+    no game yet is simply absent — never a zero (RULE P1)."""
+    out: dict[str, dict[str, Any]] = {}
+    for player_id in player_ids:
+        if str(player_id).startswith(f"{DEFENSE}-"):
+            continue
+        games = [score(row, rule)
+                 for week in sorted(weekly) if 0 < int(week) < before_week
+                 for row in [(weekly.get(week) or {}).get(player_id)]
+                 if row is not None]
+        if games:
+            out[player_id] = {
+                "games": len(games),
+                "per_game": round(sum(games) / len(games), 1),
+                "last_three": [round(v, 1) for v in games[-3:]],
+            }
+    return out
+
+
+_SEASON_ROWS: dict[tuple[str, str], Any] = {}
+
+
+def _this_season_rows(cache_dir: Path, season: str):
+    """This season's stat rows from the cache, read once per process (a batch
+    of roster reports shares one read, as run/solo's per-week load does), or
+    None when they can't be read — then the column is simply not printed."""
+    key = (str(cache_dir), str(season))
+    if key not in _SEASON_ROWS:
+        try:
+            from ingest.nflverse import season_rows
+            _SEASON_ROWS[key] = season_rows(Path(cache_dir), str(season))
+        except Exception:  # noqa: BLE001 — an unreadable file drops a column
+            _SEASON_ROWS[key] = None
+    return _SEASON_ROWS[key]
+
+
+def next_weekly_report(cache_dir: Path, season: str, week: int | None,
+                       now=None) -> dict[str, Any] | None:
+    """{"week", "lands_on"} for the weekly report a buyer's roster report
+    precedes, or None.
+
+    The roster report is a purchase's first email when the week it fell in
+    has already kicked off (run/intake._first_file), so the next weekly report
+    is the NEXT week's, out the Tuesday after this week's last game — the day
+    the live build's season clock names (run.solo.next_report_day). Said only
+    when that is certain: the week must have kicked off by the clock, and not
+    be the season's last (then nothing follows)."""
+    if not week:
+        return None
+    try:
+        from datetime import datetime, timezone
+        from run.solo import last_week, next_report_day, week_first_kickoff
+        # The cached schedule the run already refreshed: no download here.
+        kick = week_first_kickoff(Path(cache_dir), str(season), int(week), live=False)
+        if kick is None or (now or datetime.now(timezone.utc)) < kick:
+            return None
+        last = last_week(Path(cache_dir), str(season), live=False)
+        if last is None or int(week) + 1 > last:
+            return None
+        day = next_report_day(Path(cache_dir), str(season), int(week), live=False)
+    except Exception:  # noqa: BLE001 — an unreadable schedule says nothing
+        return None
+    return {"week": int(week) + 1, "lands_on": day} if day else None
+
+
 def bye_by_team(cache_dir: Path, season: str) -> dict[str, int]:
     """team -> the week it is idle. Straight off the published schedule.
 
@@ -261,6 +337,8 @@ def build_preseason_report(
     byes: Mapping[str, int] | None = None,
     from_week: int | None = None,
     roster_out: Mapping[str, str] | None = None,
+    weekly: Mapping[int, Mapping[str, Mapping[str, Any]]] | None = None,
+    now=None,
 ) -> dict[str, Any]:
     """One subscriber's pre-season report: byes, thin spots and last year's
     record.
@@ -285,6 +363,15 @@ def build_preseason_report(
     roster cannot fill went unlisted (EMAILS-119/126-130). He is named, with
     the reason, wherever he would have counted. Never applied pre-season:
     today's list says nothing about a week months away (principle 3).
+
+    Mid-season this report is a buyer's FIRST email whenever they pay between
+    a week's kickoff and Tuesday (final review, business #2), so once the
+    season has started it also carries this season's record per player
+    (``season_so_far``, from ``weekly`` — WeekData.weekly — or the cache), who
+    can't play today (the reserve list above, named in one place), and the
+    day their first weekly report lands (``next_weekly_report``; ``now`` is
+    the clock it is judged by). Facts only: no projection, no percentage,
+    nothing recorded.
     """
     by_id = {p.player_id: p for p in directory.players}
     byes = dict(byes) if byes is not None else bye_by_team(cache_dir, season)
@@ -295,6 +382,11 @@ def build_preseason_report(
     form = prior_season_form(prior, spec.rule)
     ranks = positional_ranks(form, directory)
     slots = list(spec.slots)
+    this_season: dict[str, dict[str, Any]] = {}
+    if season_started and from_week and from_week > 1:
+        rows = weekly if weekly is not None else _this_season_rows(cache_dir, season)
+        if rows:
+            this_season = season_so_far(rows, spec.player_ids, spec.rule, from_week)
 
     roster: list[dict[str, Any]] = []
     for player_id in spec.player_ids:
@@ -318,6 +410,8 @@ def build_preseason_report(
             "bye": byes.get(player.team) if player.team else None,
             # RULE P1: absent, never zero.
             "record": dict(record) if record else None,
+            # This season's games before the week being played (in-season).
+            "season_so_far": this_season.get(player_id),
             # Which KIND of absence, so the render can say the true one.
             # (position, rank, pool) or None — see positional_ranks.
             "rank": list(ranks[player_id]) if player_id in ranks else None,
@@ -354,6 +448,12 @@ def build_preseason_report(
     no_record = sorted(r["name"] for r in roster
                        if r["no_record_reason"] == NO_RECORD)
 
+    # Who can't play right now, in one place (in-season, when today's list
+    # was applied) — the weekly report shows each of them OUT.
+    cant_play = [{"name": r["name"], "position": r["position"],
+                  "team": r.get("team"), "why": r["out_today"]}
+                 for r in roster if r.get("out_today")]
+
     return {
         "meta": {
             "season": str(season),
@@ -376,7 +476,13 @@ def build_preseason_report(
             "byes_ahead": any(r["bye"] is not None
                               and (from_week is None or r["bye"] >= from_week)
                               for r in roster),
+            # The last week this season's column counts (in-season only).
+            "through_week": (from_week - 1 if this_season and from_week else None),
+            # The weekly report this one precedes, when it is certain.
+            "next_report": (next_weekly_report(cache_dir, season, from_week, now)
+                            if season_started else None),
         },
+        "cant_play": cant_play,
         "roster": roster,
         "collisions": collisions,
         "thin": thin,

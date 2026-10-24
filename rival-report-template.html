@@ -42,6 +42,11 @@
   }
   .report{max-width:680px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
+  /* On a phone the sheet frame is 16px of grey and a border around the whole
+     report: the paper runs edge to edge instead, as on thanks.html and
+     how-it-works.html (funnel review D15). */
+  @media (max-width:480px){body{padding:0;background:var(--paper);}
+    .report{border:0;box-shadow:none;}}
 
   /* ================= header ================= */
   .bug{

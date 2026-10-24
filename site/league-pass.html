@@ -241,7 +241,7 @@
       <p>Each report goes only to the manager it's about. We never share one manager's
       report with another, and we never publish your league's names anywhere.</p></div>
     <div class="box"><h3>Under $6 a manager, out of the pot</h3>
-      <p>Twelve Rest-of-Season Passes would cost $348, and ten would cost $290. The League
+      <p><span id="lp-compare">Twelve Rest-of-Season Passes would cost $348, and ten would cost $290. </span>The League
       Pass is $69 for the whole league: $5.75 a manager in a 12-team league. Easy to take
       from the pot.</p></div>
   </div>
@@ -469,6 +469,22 @@ function shareLine(text, line, status) {
   navigator.share({ text: text }).then(
     () => { status.textContent = ""; },
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
+}
+// From Week 13 the individual pass on sale may be the $19 Playoff Pass, and a
+// comparison against $29 passes would argue with a price that isn't offered
+// (final review COPY-4). The landing's own rule for "a buyer's first weekly
+// report" (week.json: that week's before its first kickoff, the next one's
+// after); the sentence after it is true at any price, so it stays.
+if (window.fetch) {
+  fetch("week.json", { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((w) => {
+      if (!w || !Number.isInteger(w.week) || (w.phase && w.phase !== "season")) return;
+      const kicked = w.first_kickoff && new Date() >= new Date(w.first_kickoff);
+      const compare = document.getElementById("lp-compare");
+      if (compare && (kicked ? w.week + 1 : w.week) >= 13) compare.remove();
+    })
+    .catch(() => {});
 }
 // AFTER every href this script writes (the Buy button, the own-team link).
 if (VIA) {

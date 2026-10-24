@@ -1190,6 +1190,21 @@ function showPlayoffPass(week) {
   // (a real button to the email capture), and must keep saying what it does.
   const cta = document.getElementById("season-cta");
   if (cta && cta.hasAttribute("data-buy")) cta.textContent = PASS_LABEL;
+  // The structured data's Offer follows the page (final review COPY-4): it
+  // kept saying $29 to every crawler that runs this script beside a $19 card.
+  try {
+    const ld = document.querySelector('script[type="application/ld+json"]');
+    const data = JSON.parse(ld.textContent);
+    (data["@graph"] || []).forEach((node) => (node.offers || []).forEach((offer) => {
+      if (offer.price !== "29") return;
+      offer.price = "19";
+      offer.description = "Playoff Pass — one payment, no subscription: every " +
+        "weekly report from Week " + week + " through your title game; your first " +
+        "report usually lands within the hour of joining. No-questions refund " +
+        "until your second weekly report's week kicks off.";
+    }));
+    ld.textContent = JSON.stringify(data);
+  } catch (e) { /* unreadable structured data: the visible page is still right */ }
 }
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");

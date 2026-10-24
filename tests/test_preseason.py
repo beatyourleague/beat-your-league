@@ -479,7 +479,7 @@ def test_a_seats_roster_report_gives_its_stop_route_not_a_billing_page(monkeypat
         assert "within 10 business days" in body
         assert "billing" not in body.lower()
     assert "seat" not in report["meta"], "the caller's report was mutated"
-    paid = preseason_message("fan@example.com", "abcdef0123", report)
+    paid = preseason_message("fan@example.com", "abcdef0123", report, one_time=False)
     assert paid.unsubscribe == "https://billing.stripe.com/p/test"
     assert "billing.stripe.com/p/test" in paid.html
     assert "billing.stripe.com/p/test" in paid.text

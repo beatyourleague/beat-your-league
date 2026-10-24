@@ -162,14 +162,16 @@ def week_has_kicked_off(cache_dir: Path, season: str, week: int,
 WEEK_ONE_LEAD = timedelta(days=9)
 
 
-def week_first_kickoff(cache_dir: Path, season: str, week: int) -> "datetime | None":
+def week_first_kickoff(cache_dir: Path, season: str, week: int, *,
+                       live: bool = True) -> "datetime | None":
     """The earliest TIMED kickoff of a REG week, in UTC, or None when the
-    schedule can't be read or carries no time for that week."""
+    schedule can't be read or carries no time for that week. ``live=False``
+    reads the cached copy a run already refreshed (no download)."""
     from zoneinfo import ZoneInfo
 
     eastern = ZoneInfo("America/New_York")
     try:
-        path = fetch("schedules", "games.csv", cache_dir, live=True)
+        path = fetch("schedules", "games.csv", cache_dir, live=live)
     except NflverseError:
         return None
     first: "datetime | None" = None
@@ -361,8 +363,16 @@ def assert_week_is_complete(cache_dir: Path, season: str, week: int,
     named = postponed_from_env() if postponed is None else frozenset(
         g.strip().upper() for g in postponed)
     window_end = regular_week_end([day for *_, day in games if day])
+    # PLAYER rows only. By the time load_week_data calls this, merge_defenses
+    # has folded the team-defense rows (stats_team plus the schedule's scores)
+    # into the same dict, each carrying its team — so a stats_player download
+    # that failed or lagged beside a fresh stats_team passed "stat rows for
+    # both teams" on the defense rows alone, and the report said "every game"
+    # about a week whose player box scores were missing (final review PIPE-1).
+    # engine/ledger.py's twin check has always counted player rows only.
     observed = {str((row or {}).get("team") or "").strip()
-                for row in (weekly.get(prior) or {}).values()}
+                for pid, row in (weekly.get(prior) or {}).items()
+                if not str(pid).startswith("DEF-")}
     lag = int(BOX_SCORE_LAG.total_seconds() // 3600)
     unplayed, unscored, no_rows, moved = [], [], [], []
     for away, home, kick, scored, day in games:
@@ -510,13 +520,30 @@ def season_over(cache_dir: Path, season: str, today: date | None = None, *,
     return bool(end) and end < when
 
 
-def last_week(cache_dir: Path, season: str, *,
+def next_report_day(cache_dir: Path, season: str, week: int, *,
+                    live: bool = True) -> str | None:
+    """The Tuesday the NEXT weekly report goes out: the first Tuesday after the
+    last game of ``week``, as an ISO date. None when the schedule cannot say.
+
+    One rule for every surface that names that day — the season clock the
+    live build writes (render/live_sample re-exports this) and the roster
+    report's "your Week N report lands Tuesday" — so they cannot disagree."""
+    days = (_weeks(_schedule(cache_dir, live=live), season).get(int(week)) or [])
+    if not days:
+        return None
+    last = date.fromisoformat(max(days))
+    ahead = (1 - last.weekday()) % 7 or 7            # Tuesday is weekday 1
+    return (last + timedelta(days=ahead)).isoformat()
+
+
+def last_week(cache_dir: Path, season: str, *, live: bool = True,
               session: requests.Session | None = None) -> int | None:
-    weeks = _weeks(_schedule(cache_dir, session=session), season)
+    weeks = _weeks(_schedule(cache_dir, live=live, session=session), season)
     return max(weeks) if weeks else None
 
 
 def current_week(cache_dir: Path, season: str, today: date | None = None, *,
+                 live: bool = True,
                  session: requests.Session | None = None) -> int:
     """The week a report written today is ABOUT.
 
@@ -532,7 +559,7 @@ def current_week(cache_dir: Path, season: str, today: date | None = None, *,
     (pre-launch review F2). For every week without a postponement the answer
     is unchanged.
     """
-    weeks = _weeks(_schedule(cache_dir, session=session), season)
+    weeks = _weeks(_schedule(cache_dir, live=live, session=session), season)
     if not weeks:
         raise SoloError(f"the schedule release carries no {season} regular season")
     when = (today or datetime.now(timezone.utc).date()).isoformat()

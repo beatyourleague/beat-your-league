@@ -110,8 +110,12 @@ SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
 TRIAL_HEAD = "Your free report"
 TRIAL_INTRO = "This one's on us, built from the roster you sent."
+# "You won't hear from us again" was untrue across seasons (the limit is one
+# per address per SEASON), and terms §4 promises the free report can be
+# stopped by replying "stop" while the email never said so (final review
+# COPY-2). The stop list is checked before every send (run/delivery.send_all).
 TRIAL_ONLY = ("This is the only email we'll send you unless you sign up. Didn't "
-              "ask for it? Ignore it — you won't hear from us again.")
+              "ask for it? Reply \"stop\" and we won't send another, ever.")
 # The free report's one ask (panel review I2). It was an unlinked URL inside
 # the grey legal footer, after the data-source and no-betting lines, on the
 # email whose whole job is to convert. No price here: the join page states
@@ -1058,10 +1062,14 @@ def text_summary(report: Mapping[str, Any]) -> str:
         # before the paid footer's sender line, so it never printed one.
         # The ask comes BEFORE the fine print (panel review I2): it used to
         # be the last line, after the data source and the no-betting line.
+        # The data-age sentence (principle 3) rides the text half too: the
+        # HTML footer has always printed it and this half never did, so the
+        # version `run.trial --print` pastes into a group chat carried no
+        # "as of" and no box-score line (final review PIPE-7).
         lines += [*_trial_cta_lines(meta),
-                  "", "Projections are analysis, not guarantees — no betting "
-                      "picks, no staking advice. Your decisions are yours.",
+                  "", NO_BETTING_LINE,
                   source_line(meta),
+                  availability_basis(meta),
                   *([sender_line()] if sender_line() else [])]
         return "\n".join(lines) + "\n"
     lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
@@ -1073,9 +1081,9 @@ def text_summary(report: Mapping[str, Any]) -> str:
     # The gap list is operator bookkeeping (field names, internal reasons) and
     # never goes in a subscriber's email — the report already says, in place and
     # in plain words, wherever it declined to call something.
-    lines += ["", "Projections are analysis, not guarantees — no betting picks, "
-                  "no staking advice. Your decisions are yours.",
+    lines += ["", NO_BETTING_LINE,
               source_line(meta),
+              availability_basis(meta),
               *read_lines(meta),
               *update_lines(meta),
               *_forward_lines(meta),
