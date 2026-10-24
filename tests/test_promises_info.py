@@ -48,7 +48,7 @@ def test_the_sample_ask_follows_the_landing_flag(tmp_path, monkeypatch) -> None:
     assert rr.SAMPLE_CTA_CLOSED in rr.sample_cta()
     assert "join/index.html" not in rr.sample_cta()
     landing.write_text("<script>\nconst CHECKOUT_OPEN = true;\n</script>")
-    assert rr.sample_cta() == f'<a class="btn" href="join/index.html">{rr.SAMPLE_CTA}</a>'
+    assert rr.sample_cta() == f'<a class="btn gold" href="join/index.html">{rr.SAMPLE_CTA}</a>'
 
 
 # --------------------------------------------------------------------- #

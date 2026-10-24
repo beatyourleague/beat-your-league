@@ -146,8 +146,9 @@ def test_a_subscribers_own_report_carries_no_home_button() -> None:
     masthead = header(meta)
     assert 'class="home"' not in masthead
     assert '<div class="brand">' in masthead
-    assert 'class="home"' in header({**meta, "historical_demo": True,
-                                      "anonymized_demo": True, "season": 2024})
+    # A published sample is a site page: it carries the site's nav (C2).
+    assert 'class="sitenav"' in header({**meta, "historical_demo": True,
+                                        "anonymized_demo": True, "season": 2024})
 
 
 def test_the_join_sidebar_sells_only_to_a_buyer_and_quotes_the_real_count() -> None:
@@ -1640,7 +1641,7 @@ def test_the_published_sample_is_the_solo_product() -> None:
     a page full of features the paid product does not have. The published
     sample must always be the solo render: its title says Report (not Rival
     Report), and it carries the solo banner."""
-    assert "Week 10 Report" in SAMPLE_REPORT
+    assert "Week 10 · Your Report" in SAMPLE_REPORT
     assert "Rival Report" not in SAMPLE_REPORT
     assert "a real week from the 2024 NFL season" in SAMPLE_REPORT
     makefile = (SITE.parent / "Makefile").read_text(encoding="utf-8")
@@ -3758,10 +3759,13 @@ def test_the_league_pass_capture_never_points_at_a_hidden_form() -> None:
         "the landing hides its capture outside the CHECKOUT_OPEN block"
     code = _js_code(lp)
     branch = code.split("} else if (CHECKOUT_OPEN) {")[1].split("\n}\n")[0]
-    assert "league-cta" in branch and "join/index.html" in branch
+    assert "ctaSlots" in branch and "join/index.html" in branch
     assert "watch-form" not in branch, "the open-checkout state still links the hidden capture"
-    # The static closed state is the only place the landing's capture is linked.
-    assert lp.count("index.html#watch-form") == 1
+    # The static closed state — the price card's ask and, since D18, the
+    # closer's — is the only place the landing's capture is linked.
+    slots = re.findall(r'<div class="ctaslot"[^>]*data-lp-cta>(.*?)</div>', lp, re.S)
+    assert len(slots) == 2 and all("index.html#watch-form" in s for s in slots)
+    assert lp.count("index.html#watch-form") == len(slots)
 
 
 def test_the_group_chat_line_is_an_example_and_never_the_generic_seat_page() -> None:
@@ -4686,7 +4690,7 @@ def test_how_it_works_asks_for_the_one_action_it_leads_to() -> None:
     # email capture until CHECKOUT_OPEN turns it into setting up a team.
     assert first.group(2) in ("join/index.html", "index.html#watch-form") \
         and "ghost" not in first.group(1)
-    assert re.search(r'<p class="headcta"><a class="btn" href="(?:join/index\.html|'
+    assert re.search(r'<p class="headcta"><a class="btn gold" href="(?:join/index\.html|'
                      r'index\.html#watch-form)"', HOW)
 
 
@@ -4827,7 +4831,8 @@ def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
     once, and carries no seat link (that goes out only after payment)."""
     ask = LEAGUE_PASS.split('<div class="steps ask">')[1].split("\n  </div>")[0]
     line = prose(re.search(r'<p id="ask-text">(.*?)</p>', ask, re.S).group(1))
-    assert line.startswith("Should we put the League Pass")
+    # Late October: out of the pot, not "this year's dues" (launch review M11).
+    assert line.startswith("Should we take the League Pass")
     assert "join/" not in ask and "I got us" not in ask
     assert "league-pass.html" in line
     assert 'id="ask-share"' in ask
@@ -4924,7 +4929,10 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     assert "finance.querySelector('a[href=\"league-pass.html\"]')" in LANDING
 
 
-@pytest.mark.parametrize("name", _PAPER + ("league-pass.html",))
+# thanks.html is reached by paying, so its nav offers no Pricing (launch
+# review D5): tests/test_prelaunch_pages.py pins its routes (NAV_PAGES).
+@pytest.mark.parametrize("name", tuple(p for p in _PAPER if p != "thanks.html")
+                         + ("league-pass.html",))
 def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
     """Launch review I5: only the landing had a nav; How it works, League
     Pass, terms, privacy, thanks and 404 offered a Home pill alone, so a

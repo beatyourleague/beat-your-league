@@ -29,28 +29,25 @@
   :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
-    text-transform:uppercase;color:var(--flag);}
-  .brand svg.mark{width:22px;height:22px;flex:none;}
-  /* The site's routes on every page, the samples' masthead row (launch
-     review I5): a visitor arriving from a shared link had only a Home pill. */
-  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
-    flex-wrap:wrap;}
-  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
-    font-size:14px;font-weight:600;}
-  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
-  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
-  .sitenav a.home{color:var(--paper);padding:8px 15px;}
-  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
-  a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
-    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
-    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
-  .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
+  .headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
      and cancellation instructions a nervous buyer came here to read. */
   main a,p a,li a{color:var(--brick);text-decoration:underline;
@@ -86,13 +83,36 @@
   .passnote p.small{font-size:13px;color:var(--slate);}
   footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
+  /* Contract C2: the primary button. */
+  .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:15px;
+    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
+    padding:11px 18px;border:0;line-height:1.2;}
+  .btn.gold{color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,#D9A81B);}
+  .btn.gold:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
+  /* What a buyer can do next (launch review M9): keep the reports out of
+     spam, cover the league they run, tell a manager in ANOTHER league —
+     never their own, whose managers they are playing. Square cards that are
+     not links, so they do not lift (contract C2). */
+  .nextsteps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0 4px;}
+  .nextcard{background:var(--card);border:1px solid var(--line);border-top:4px solid var(--navy);
+    padding:12px 14px;font-size:13.5px;line-height:1.5;display:flex;flex-direction:column;}
+  .nextcard > b{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.08em;
+    text-transform:uppercase;}
+  .nextcard p{font-size:13.5px;line-height:1.5;margin:6px 0 0;}
+  .nextcard .btn{display:block;width:100%;text-align:center;margin-top:10px;}
+  [hidden]{display:none!important;}
+  .nextcard p.msg{color:var(--slate);font-size:12.5px;}
+  .nextcard p.msg:empty{display:none;}
+  @media (max-width:700px){.nextsteps{grid-template-columns:1fr;}}
+  /* A phone shows the page, not a sheet on a desk (launch review D15). */
+  @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
 </style>
 <meta name="robots" content="noindex">
 </head>
 <body>
 <div class="sheet">
   <header>
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a></nav></div>
     <div class="done"><svg class="check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
     <h1>You&#x27;re in.</h1></div>
     <p>Payment went through and your pass is live. Here is exactly what happens
@@ -131,6 +151,26 @@
       <li><b>Saturday, if needed</b>A short final check when injury news changes your lineup,
       or a starting spot still has nobody to fill it.</li>
     </ol>
+
+    <!-- Hidden on the League Pass view (?plan=pass), whose one job is the
+         seat link above, and once the season is over. The sender is
+         LAUNCH.md's EMAIL_FROM (tests/test_prelaunch_pages.py). -->
+    <div class="nextsteps" id="next-steps">
+      <div class="nextcard"><b>Keep it out of spam</b>
+        <p>Reports come from <b>reports@beatyourleague.com</b>. Add it to your contacts and
+        Tuesday's report lands in your inbox.</p></div>
+      <div class="nextcard"><b>Run this league?</b>
+        <p>The <a href="league-pass.html">League Pass</a> gives every manager in your league
+        their own weekly report: $69 for the whole league, one payment, nothing renews, and a
+        no-questions refund until your second weekly report's week kicks off (one per league).
+        Buy it with this same email, then reply to any report while your own pass's refund
+        window is open and we'll refund it, so you haven't paid twice.</p></div>
+      <div class="nextcard"><b>Know a manager in another league?</b>
+        <p id="friend-line">Beat Your League sends a lineup report for your own roster every
+        Tuesday, every slot decided: https://beatyourleague.com/?via=friend</p>
+        <button type="button" class="btn gold" id="friend-share">Send it to them</button>
+        <p class="msg" id="friend-msg" role="status"></p></div>
+    </div>
 
     <h2>1. What arrives, and when</h2>
     <ul>
@@ -182,6 +222,35 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
   // standing on this branch (launch audit C12).
   document.getElementById("refund-limit").textContent = "one per league";
 }
+// The individual buyer's next steps (launch review M9). A League Pass buyer
+// has the seat link to send instead, and is already covering their league.
+if (new URLSearchParams(location.search).get("plan") === "pass") {
+  document.getElementById("next-steps").hidden = true;
+}
+// The share for a manager in ANOTHER league: the phone's share sheet, a copy,
+// or failing both the line selected. Its own function, because shareLine's
+// words are the League Pass's — "paste it in the group chat" — and the group
+// chat is the buyer's own league, whose managers they are playing.
+function shareWithFriend(text, line, status) {
+  const byHand = () => {
+    window.getSelection().selectAllChildren(line);
+    status.textContent = "The message is selected — copy it and send it to them.";
+  };
+  const copyIt = () => {
+    if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
+    navigator.clipboard.writeText(text).then(
+      () => { status.textContent = "Copied — send it to them."; }, byHand);
+  };
+  if (!navigator.share) return copyIt();
+  navigator.share({ text: text }).then(
+    () => { status.textContent = ""; },
+    (err) => { if (!err || err.name !== "AbortError") copyIt(); });
+}
+document.getElementById("friend-share").addEventListener("click", () => {
+  const line = document.getElementById("friend-line");
+  shareWithFriend(line.textContent.replace(/\s+/g, " ").trim(), line,
+                  document.getElementById("friend-msg"));
+});
 // D9: site/week.json's phase. "Today" holds only while there is a report to
 // send — once the season is over (phase "over", or past the last week's
 // report day, ET) nothing goes out until next season, and the page says so
@@ -210,6 +279,7 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
           "hello@beatyourleague.com."));
         document.getElementById("step-today").hidden = true;
         document.getElementById("what-today").hidden = true;
+        document.getElementById("next-steps").hidden = true;
       })
       .catch(() => {});
   } catch (e) { /* the page stays as it is */ }

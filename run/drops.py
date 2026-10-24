@@ -16,8 +16,12 @@ Rules, each because a post is the one place we speak without a report around it:
 - **Facts and the report's own calls, no promises.** No outcome claim, no
   betting language, none of the grade-C banned words (calibrated, tested,
   proven, accurate). Pinned by tests/test_drops.py.
-- **Fits the post.** Each is at most 280 characters, links included; a post
-  that cannot fit is dropped rather than truncated mid-thought.
+- **Fits the post.** Each is at most 280 characters; a post that cannot fit
+  is dropped rather than truncated mid-thought.
+- **The link goes in the first reply, never the post** (launch review M8).
+  Each draft carries the post, a first reply holding the link, and the card
+  to screenshot and attach — the real report's own card, never a mock-up.
+  The post stands on its own; the link is one tap below it.
 - **The call leads with the question, then a reason, then the number**
   (launch audit). It used to open with the % and a link, and the closest call
   is by construction near a coin flip — a bare "55%" explained nothing. Now it
@@ -37,6 +41,11 @@ Rules, each because a post is the one place we speak without a report around it:
   Monday's grading will not settle.
 - **An if/then that changes no seat is not news.** "If X (bench) is cleared:
   keep Y" was drafted as a plan; only plans that move somebody are drafted.
+- **A Thursday starter gets his own post, for Thursday** (launch review M8).
+  The one game the Saturday check is too late for: his kickoff as his row
+  prints it, and the if/then the report printed for him when there is one
+  that moves somebody — else the report's own "check his status" line. No
+  number of any kind. Drafted with the rest on Tuesday, marked for Thursday.
 - **A week with no call still says something true.** No call means no
   number, never an empty page: the rising roles, or failing those the
   workloads the report already prints — counts, no %.
@@ -144,7 +153,7 @@ def _question(regret: Mapping[str, Any], a: str, b: str) -> str:
     return f"Start {a} or {b}" + (f" at {slot}" if slot else "") + " this week?"
 
 
-def _call_post(report: Mapping[str, Any], url: str) -> str | None:
+def _call_post(report: Mapping[str, Any]) -> str | None:
     """Question, one like-for-like line of facts, then the number. None when
     no version of it fits, rather than a post cut off mid-thought."""
     regret = report.get("regret") or {}
@@ -157,7 +166,7 @@ def _call_post(report: Mapping[str, Any], url: str) -> str | None:
     tail = (f"Our sample roster's report starts {a}: "
             f"{round(regret['confidence'] * 100)}% to outscore {b}"
             + (" (last season counted in)" if seeded else "")
-            + f". Full report: {url}")
+            + ".")
     # The best like-for-like fact that fits. A call with no fact at all is the
     # bare number this template exists to replace.
     for fact in _like_for_like(report, regret, a, b):
@@ -175,7 +184,7 @@ def _changes_a_seat(plan: Mapping[str, str]) -> bool:
     return str(plan.get("action") or "").startswith(("Move ", "Start "))
 
 
-def _pivot_post(report: Mapping[str, Any], url: str) -> str | None:
+def _pivot_post(report: Mapping[str, Any]) -> str | None:
     plan = next((p for p in report.get("pivots") or [] if _changes_a_seat(p)), None)
     if plan is None:
         return None
@@ -185,7 +194,42 @@ def _pivot_post(report: Mapping[str, Any], url: str) -> str | None:
     action = str(plan["action"]).strip().rstrip(".")
     action = action[:1].lower() + action[1:]
     return (f"If {plan['condition']}: {action}. That's the if/then we set on "
-            f"Tuesday for our sample roster, so Sunday isn't a scramble. {url}")
+            f"Tuesday for our sample roster, so Sunday isn't a scramble.")
+
+
+# A row's game as render prints it: "vs NE · Thu 8:15 PM ET".
+_THURSDAY = re.compile(r"^(vs|@) ([A-Z]{2,3}) · Thu(?: (\d{1,2}:\d\d [AP]M) ET)?$")
+
+
+def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
+    """(post, card) for the first starter whose game is Thursday night, or
+    None. His if/then — a printed plan ABOUT him that moves somebody, and not
+    the one Tuesday's if/then post already quotes — when it fits, else the
+    report's own instruction to check his status before kickoff."""
+    for row in report.get("lineup") or []:
+        found = _THURSDAY.match(str(row.get("game") or ""))
+        if not (found and row.get("player_name")):
+            continue
+        name, slot = row["player_name"], str(row.get("slot") or "").replace(
+            "SUPER_FLEX", "SFLEX")
+        where, team, clock = found.groups()
+        when = f" at {clock} ET" if clock else ""
+        head = f"Thursday night: {name} ({slot}, {where} {team}) kicks off{when}."
+        tuesday = next((p for p in report.get("pivots") or [] if _changes_a_seat(p)), None)
+        plan = next((p for p in report.get("pivots") or []
+                     if p.get("about") == row.get("player_id") and _changes_a_seat(p)
+                     and p is not tuesday), None)
+        tries = []
+        if plan is not None:
+            action = str(plan["action"]).strip().rstrip(".")
+            action = action[:1].lower() + action[1:]
+            tries.append((f"{head} The if/then we set on Tuesday for our sample "
+                          f"roster: if {plan['condition']}, {action}.",
+                          "If/Then for Gameday"))
+        tries.append((f"{head} Our sample roster's Tuesday report flags it: check "
+                      f"his status before then.", "The Lineup"))
+        return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
+    return None
 
 
 def _short_rising(row: Mapping[str, Any]) -> str:
@@ -193,20 +237,19 @@ def _short_rising(row: Mapping[str, Any]) -> str:
             f"{row['recent']:.1f} targets + carries a game, up from {row['earlier']:.1f}")
 
 
-def _rising_post(report: Mapping[str, Any], week: int, url: str) -> str | None:
+def _rising_post(report: Mapping[str, Any], week: int) -> str | None:
     rows = list(report.get("rising") or [])
     while rows:
         text = (f"Getting more of the ball lately (Week {week}): "
                 + "; ".join(_short_rising(r) for r in rows)
-                + f". Box-score facts, not picks. Check who's free in your "
-                  f"league. {url}")
+                + ". Box-score facts, not picks. Check who's free in your league.")
         if len(text) <= LIMIT:
             return text
         rows = rows[:-1]
     return None
 
 
-def _workload_post(report: Mapping[str, Any], week: int, url: str) -> str | None:
+def _workload_post(report: Mapping[str, Any], week: int) -> str | None:
     """The facts-only post for a week with no call and no riser: the counted
     usage the lineup rows already print, as many as fit. Counts of what
     happened, nothing about who will score."""
@@ -216,28 +259,52 @@ def _workload_post(report: Mapping[str, Any], week: int, url: str) -> str | None
         text = (f"Who's getting the ball on our sample roster (Week {week}): "
                 + "; ".join(f"{_surname(r['player_name'])}, {r['usage']}"
                             for r in rows)
-                + f". Box-score counts, not picks. {url}")
+                + ". Box-score counts, not picks.")
         if len(text) <= LIMIT:
             return text
         rows = rows[:-1]
     return None
 
 
+# The card on this-week.html each post describes, by the heading the report
+# prints over it: the owner's screenshot to attach.
+CARDS = {"The closest call": "The Week's Closest Call",
+         "The if/then": "If/Then for Gameday",
+         "Rising roles": "Rising Roles",
+         "Workloads": "The Lineup",
+         "Thursday night": "The Lineup"}
+# When a draft is meant to go up, if not Tuesday with the rest.
+WHEN = {"Thursday night": "Thursday, before his kickoff"}
+
+
+def reply_text(url: str) -> str:
+    """The first reply under every post: where the whole report is."""
+    return f"The whole report, rebuilt every Tuesday for our sample roster: {url}"
+
+
 def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str, str]]:
-    """The week's candidate posts, in the order worth posting them."""
+    """The week's candidate posts, in the order worth posting them. Each is the
+    post itself (``text``, no link), its first reply (``reply``, the link)
+    and the card to screenshot and attach (``card``); a draft meant for
+    another day says which (``when``)."""
     week = report["meta"]["week"]
     url = f"{site}/this-week.html"
-    call = _call_post(report, url)
-    rising = _rising_post(report, week, url)
-    out = [{"name": name, "text": text} for name, text in (
+    call = _call_post(report)
+    rising = _rising_post(report, week)
+    thursday = _thursday_post(report)
+    out = [{"name": name, "text": text, "reply": reply_text(url), "card": CARDS[name]}
+           for name, text in (
         ("The closest call", call),
-        ("The if/then", _pivot_post(report, url)),
+        ("The if/then", _pivot_post(report)),
         ("Rising roles", rising),
         # Only when the week has neither a call nor a riser: a facts-only
         # post rather than an empty file.
         ("Workloads", None if (call or rising)
-         else _workload_post(report, week, url)),
+         else _workload_post(report, week)),
     ) if text]
+    if thursday:
+        out.append({"name": "Thursday night", "text": thursday[0], "reply": reply_text(url),
+                    "card": thursday[1], "when": WHEN["Thursday night"]})
     return [d for d in out if len(d["text"]) <= LIMIT
             and not any(w in d["text"].lower() for w in BANNED)]
 
@@ -249,13 +316,22 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
              "Built from the live sample roster's report "
              f"({SITE_ORIGIN}/this-week.html). Read before posting: each says "
              "it's a sample roster, makes no promise about results and no "
-             "betting claim. Nothing here posts itself.", ""]
+             "betting claim. Nothing here posts itself.", "",
+             "How to post one: the post goes up with no link in it. Attach a "
+             "phone screenshot of the card named under it, from this week's "
+             "page — the real report, never a mock-up. Then put the first "
+             "reply under your own post: that is where the link goes.", ""]
     if not posts:
         lines.append("_Nothing to draft this week: the sample report had no "
-                     "closest call, if/then, rising role or workload to quote._")
+                     "closest call, if/then, rising role, workload or Thursday "
+                     "starter to quote._")
     for i, post in enumerate(posts, 1):
-        lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", "",
-                  post["text"], ""]
+        lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", ""]
+        if post.get("when"):
+            lines += [f"Post it: {post['when']}.", ""]
+        lines += [post["text"], "",
+                  f"Attach: a screenshot of the \"{post['card']}\" card.", "",
+                  f"First reply: {post['reply']}", ""]
     return "\n".join(lines) + "\n"
 
 

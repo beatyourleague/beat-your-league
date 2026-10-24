@@ -51,7 +51,8 @@ def test_every_post_fits_says_sample_and_links_the_live_report() -> None:
     assert [p["name"] for p in posts] == ["The closest call", "The if/then", "Rising roles"]
     for post in posts:
         assert len(post["text"]) <= drops.LIMIT, post["name"]
-        assert URL in post["text"]
+        # The link rides the first reply, never the post (launch review M8).
+        assert URL not in post["text"] and URL in post["reply"]
     assert "sample roster" in posts[0]["text"] and "sample roster" in posts[1]["text"]
     assert "55%" in posts[0]["text"]
 
@@ -105,7 +106,9 @@ def test_a_call_with_no_like_for_like_fact_is_not_drafted() -> None:
 def test_the_fact_line_gives_way_before_the_post_is_dropped() -> None:
     """Long names push the post past 280: a shorter like-for-like fact takes
     the place of a long one; the question and the number never go."""
-    long_a, long_b = "Christopher Longname-Hyphen", "Bartholomew Extralongsurname"
+    # Longer since the link left the post for its first reply (M8): the
+    # same names now fit with the long line, so the case needs longer ones.
+    long_a, long_b = "Christopher Longname-Hyphenationist", "Bartholomew Extralongsurnamesmiths"
     regret = {**_report()["regret"], "start_name": long_a, "over_name": long_b}
     lineup = [{**_report()["lineup"][0], "player_name": long_a,
                "games": [12.25, 18.5, 9.75]}]
@@ -114,7 +117,7 @@ def test_the_fact_line_gives_way_before_the_post_is_dropped() -> None:
     text = _named(drops.drafts(_report(regret=regret, lineup=lineup, bench=bench)),
                   "The closest call")
     assert len(text) <= drops.LIMIT
-    assert text.startswith("Start Longname-Hyphen or Extralongsurname at FLEX this week? ")
+    assert text.startswith("Start Longname-Hyphenationist or Extralongsurnamesmiths at FLEX this week? ")
     assert "55%" in text
     assert "Last games" not in text and "projects 10.6" in text, "the long line did not give way"
 
@@ -182,7 +185,7 @@ def test_a_week_with_no_call_still_drafts_a_facts_only_post() -> None:
     assert names == ["Rising roles"]
     posts = drops.drafts(_report(regret=gated, pivots=[], rising=[]))
     text = _named(posts, "Workloads")
-    assert "sample roster" in text and URL in text and len(text) <= drops.LIMIT
+    assert "sample roster" in text and URL not in text and len(text) <= drops.LIMIT
     assert "Judkins, last 4 games: 18 targets (4.5 a game), 61 carries" in text
     assert "%" not in text
     # A week WITH a call does not add it: one facts-only post is the floor.
@@ -195,7 +198,7 @@ def test_a_post_that_cannot_fit_drops_a_line_rather_than_truncating() -> None:
                               "recent": 15.5, "earlier": 2.0}] * 6)
     [post] = [p for p in drops.drafts(report) if p["name"] == "Rising roles"]
     assert len(post["text"]) <= drops.LIMIT
-    assert post["text"].count(long_name) < 6 and post["text"].rstrip().endswith("this-week.html")
+    assert post["text"].count(long_name) < 6 and post["text"].rstrip().endswith("your league.")
 
 
 def test_no_post_promises_a_result_or_uses_a_banned_word() -> None:
@@ -257,3 +260,37 @@ def test_the_drafter_withholds_before_it_drafts() -> None:
     body = src.split("def main", 1)[1]
     assert "recorded_only(build()" in body
     assert body.index("recorded_only(") < body.index("drafts(report)")
+
+
+def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
+    """Launch review M8 (the verifier's draft): posts were Tuesday-only, and
+    the one game the Saturday check is too late for — a Thursday-night
+    starter — had no post. The draft gives his kickoff as his row prints it
+    and the if/then the report printed ABOUT him that moves somebody; with
+    none, the report's own "check his status" line. Marked for Thursday, no
+    number of any kind, the link in the first reply like every post."""
+    lineup = [{"slot": "QB", "player_id": "00-1", "player_name": "Brock Purdy",
+               "game": "@ ATL · Sun 1:00 PM ET"},
+              {"slot": "FLEX", "player_id": "00-0039919", "player_name": "Rome Odunze",
+               "game": "vs NE · Thu 8:15 PM ET"}]
+    tuesday = {"condition": "Tony Pollard (RB) is ruled out",
+               "action": "Move Chase Brown into RB (projects 10.3)", "about": "00-9"}
+    his = {"condition": "Rome Odunze (FLEX) is ruled out before game day",
+           "action": "Start Rashid Shaheed at FLEX (projects 8.1).", "about": "00-0039919"}
+    keep = {"condition": "Rome Odunze (FLEX) is cleared", "action": "Keep him.",
+            "about": "00-0039919"}
+    posts = drops.drafts(_report(lineup=lineup, pivots=[tuesday, keep, his]))
+    [post] = [p for p in posts if p["name"] == "Thursday night"]
+    assert post["text"] == ("Thursday night: Rome Odunze (FLEX, vs NE) kicks off at 8:15 PM "
+                            "ET. The if/then we set on Tuesday for our sample roster: if "
+                            "Rome Odunze (FLEX) is ruled out before game day, start Rashid "
+                            "Shaheed at FLEX (projects 8.1).")
+    assert post["when"].startswith("Thursday") and post["card"] == "If/Then for Gameday"
+    assert "%" not in post["text"] and URL not in post["text"] and URL in post["reply"]
+    plain = drops.drafts(_report(lineup=lineup, pivots=[tuesday]))
+    [post] = [p for p in plain if p["name"] == "Thursday night"]
+    assert post["text"].endswith("Our sample roster's Tuesday report flags it: check his "
+                                 "status before then.") and post["card"] == "The Lineup"
+    assert "Post it: Thursday, before his kickoff." in drops.render(_report(), plain)
+    sunday = [dict(row, game="vs NE · Sun 1:00 PM ET") for row in lineup]
+    assert "Thursday night" not in [p["name"] for p in drops.drafts(_report(lineup=sunday))]
