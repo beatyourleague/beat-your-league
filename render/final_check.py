@@ -14,8 +14,8 @@ from render.report import buyer_slots
 from datetime import datetime
 from typing import Any, Mapping
 
-from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP, WATCH,
-                                Change)
+from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP,
+                                UNBLOCKED, WATCH, Change)
 from render.email import (tick_box, BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
                           NAVY, PAPER, SLATE, SMALL, TURF, TURF_TINT, _sec)
 from render.report import (EMAIL_META, preheader_html, NFLVERSE_LINE,
@@ -71,13 +71,18 @@ def subject_for_check(week: int, changes: list[Change]) -> str:
         return f"Week {week}: {len(moves)} changes before kickoff"
     if holes:
         return f"Week {week}: {hole_words} in your lineup before kickoff"
+    cleared = [c for c in changes if c.kind == UNBLOCKED]
+    if cleared:
+        return (f"Week {week}: {cleared[0].action.split(' is cleared')[0]} is "
+                f"cleared — no pickup needed" if len(cleared) == 1 else
+                f"Week {week}: {len(cleared)} starters cleared — no pickups needed")
     return f"Week {week}: a starter is questionable — here's your plan"
 
 
 def _groups(changes: list[Change]) -> list[tuple[str, list[Change]]]:
     return [(key, [c for c in changes if c.kind in kinds])
             for key, kinds in (("act", ACT), ("watch", KEEP_AN_EYE),
-                               ("good", (CLEARED,)))
+                               ("good", (UNBLOCKED, CLEARED)))
             if any(c.kind in kinds for c in changes)]
 
 

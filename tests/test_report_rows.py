@@ -538,7 +538,7 @@ def test_rising_roles_is_styled_where_it_renders() -> None:
     the intro rendered as bare text."""
     report = _week()
     report["rising"] = [{"name": "Braelon Allen", "line": "Braelon Allen (NYJ, RB): "
-                         "22.0 touches a game over his last two, up from 8.0 before."}]
+                         "22.0 targets + carries a game over his last two, up from 8.0 before."}]
     pages = _surfaces(report)
     assert '<ul class="rising">' in pages["browser"]
     assert '<p class="risingintro">' in pages["browser"]
@@ -564,11 +564,13 @@ def sample10():
 
 
 def test_the_sample_warns_about_its_thursday_starter(sample10) -> None:
-    """2024 week 10: Cincinnati at Baltimore, Thursday 8:15 PM ET."""
+    """2024 week 10: Cincinnati at Baltimore, Thursday 8:15 PM ET. Chase was
+    on no injury report, so it is the lock-time note, not a status check
+    (pre-launch review F6)."""
     chase = _row(sample10, "Ja'Marr Chase")
     assert chase["game"] == "@ BAL · Thu 8:15 PM ET"
     assert any(i["action"] == "Thursday night: Ja'Marr Chase kicks off at 8:15 PM ET "
-                              "— check his status before then."
+                              "— set your lineup before then."
                for i in sample10["checklist"])
 
 

@@ -544,6 +544,10 @@ _GATE_PHRASES = (
     # D11: a later flex swap started the player the odds were figured against.
     ("held: the bench changed",
      "a flex swap changed who your best bench player there is"),
+    # Pre-launch review F3: odds against a rising bench player ran high.
+    ("held: the bench option's role is growing",
+     "your bench player there is getting more of the ball lately, and his "
+     "projection still counts his earlier games as much"),
     # A graded lineup whose week lacked an input its arm's model needs.
     ("held: an input", "odds are held this week: something they need didn't come in"),
     ("nobody on your bench", "no bench player at that position"),
@@ -620,6 +624,9 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # squad)" — the row names who.
         who = gate[len("not confirmed to play"):].strip(" ()").split(":")[0]
         return f"{who} on practice squad" if who else "practice squad"
+    if gate.startswith("held: the bench option's role is growing"):
+        # The starter starts either way; the row says who the odds wait on.
+        return f"start · {alt} rising" if alt else "held this week"
     if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):
@@ -662,6 +669,8 @@ def short_gate(gate: str | None, slot: str) -> str:
         return f"{NO_CALL} · lineup shape not graded yet"
     if gate.startswith("held: an input"):
         return f"{NO_CALL} · held this week"
+    if gate.startswith("held: the bench option's role is growing"):
+        return f"{NO_CALL} · bench role growing"
     if gate.startswith("no eligible player"):
         return NO_CALL
     return f"{NO_CALL} · status unconfirmed"
@@ -682,9 +691,10 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
     if meta.get("rebuilt_after_kickoff") and rebuilt:
         # Rebuilt after kickoff from Tuesday's information: "the last complete
         # one before this report goes out" was false of it (INFO-117).
-        return (f"Injury and inactive data as of the week {rebuilt.group(1)} "
-                f"injury report, the one this week's Tuesday report was built on; "
-                f"this rebuild doesn't read later injury news.")
+        return _with_box_scores(
+            f"Injury and inactive data as of the week {rebuilt.group(1)} "
+            f"injury report, the one this week's Tuesday report was built on; "
+            f"this rebuild doesn't read later injury news.", meta)
     if availability:
         try:
             stamp = datetime.fromisoformat(str(availability))
@@ -692,9 +702,19 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
             availability = eastern(stamp)
         except (TypeError, ValueError):
             pass
-        return f"Injury and inactive data as of {availability}."
-    return ("We couldn't confirm injuries or inactives for this week, so "
-            "some calls are left unmade rather than guessed.")
+        return _with_box_scores(f"Injury and inactive data as of {availability}.",
+                                meta)
+    return _with_box_scores(
+        "We couldn't confirm injuries or inactives for this week, so "
+        "some calls are left unmade rather than guessed.", meta)
+
+
+def _with_box_scores(sentence: str, meta: Mapping[str, Any]) -> str:
+    """The box-score date beside the injury one (pre-launch review F2): a
+    live report says which week's box scores its projections stand on. Set
+    by run/solo.report_for on the week being played only."""
+    box = meta.get("box_scores_as_of")
+    return f"{sentence} {box}" if box else sentence
 
 
 def esc(value: Any) -> str:
@@ -968,7 +988,8 @@ def _generated_stamp(meta: Mapping[str, Any]) -> str:
     return "Built " + eastern(stamp)
 
 
-def section_checklist(items: list[Mapping[str, Any]]) -> str:
+def section_checklist(items: list[Mapping[str, Any]],
+                      meta: Mapping[str, Any] | None = None) -> str:
     tasks = []
     for item in items:
         klass = "dl ok" if item.get("urgency") in ("now", "done") else "dl"
@@ -979,7 +1000,12 @@ def section_checklist(items: list[Mapping[str, Any]]) -> str:
                if item.get("detail") else "")
             + f'<div class="{klass}">{esc(item["deadline"])}</div></div></div>'
         )
-    return _section("Your Game Plan", 1, f'<div class="plan">{"".join(tasks)}</div>')
+    standing = ""
+    if saturday_line(meta):
+        standing = (f'<div class="benchnote"><b>{esc(SATURDAY_LINE_HEAD)}:</b> '
+                    f'{esc(SATURDAY_LINE)}</div>')
+    return _section("Your Game Plan", 1,
+                    f'<div class="plan">{"".join(tasks)}</div>{standing}')
 
 
 def section_last_week(last: Mapping[str, Any] | None) -> str:
@@ -1472,6 +1498,26 @@ def no_call_line(regret: Mapping[str, Any]) -> str:
     return line[:1].upper() + line[1:]
 
 
+def regret_tossup(regret: Mapping[str, Any]) -> bool:
+    """A closest call printed at a toss-up's odds or carrying the toss-up
+    sentence — the card, the row and the preview all say "either is fine"."""
+    from engine.solo_report import TOSSUP_PERCENT, TOSSUP_SENTENCE
+    return (regret.get("confidence") is not None
+            and (_pct(regret["confidence"]) <= TOSSUP_PERCENT
+                 or TOSSUP_SENTENCE in str(regret.get("reason") or "")))
+
+
+def regret_verdict(regret: Mapping[str, Any]) -> tuple[str, str, str]:
+    """(before, joiner, after) for the closest call's headline. A toss-up's
+    card said "Start Ashton Jeanty over Chuba Hubbard" above "A toss-up:
+    either is fine" (pre-launch review P10) — an instruction the card itself
+    declined to give. The odds still print beside it; no number moves."""
+    if regret_tossup(regret):
+        return (str(regret["start_name"]), "or",
+                f"{regret['over_name']} — either is fine")
+    return (f"Start {regret['start_name']}", "over", str(regret["over_name"]))
+
+
 def section_regret(regret: Mapping[str, Any]) -> str:
     if "gate" in regret:
         # No .call frame: a heavy navy card whose only content is an absence
@@ -1491,8 +1537,9 @@ def section_regret(regret: Mapping[str, Any]) -> str:
     extra = "".join(f'<p class="why">{esc(regret[key])}</p>'
                     for key in ("reason", "closer") if regret.get(key))
     body = (
-        f'<div class="call"><div class="verdict">Start {esc(regret["start_name"])} '
-        f'<span class="over">over</span> {esc(regret["over_name"])}</div>'
+        f'<div class="call"><div class="verdict">{esc(regret_verdict(regret)[0])} '
+        f'<span class="over">{esc(regret_verdict(regret)[1])}</span> '
+        f'{esc(regret_verdict(regret)[2])}</div>'
         # Drawn from 50%, like the lineup bars, so "the bar starts at 50%"
         # is true of every bar in the report (promise audit LANDING-35).
         f'<div class="conf"><div class="bar"><i style="width:{_bar_from_even(regret["confidence"])}%"></i></div>'
@@ -1509,6 +1556,23 @@ def section_regret(regret: Mapping[str, Any]) -> str:
 # hence "if he is", never "either way". Never on a free report: there is no
 # Saturday check behind one.
 SATURDAY_FOLLOWUP = "If he is, Saturday's final check will tell you."
+# The standing line under every subscriber's game plan (pre-launch review F7):
+# not one of five weekly reports said a Saturday check existed. Never "no
+# email means it stands" — a Saturday run that refuses (the final report not
+# in, a failure) sends nothing, and that promise would turn a failure into
+# false reassurance. Never on a free report: there is no Saturday check
+# behind one.
+SATURDAY_LINE_HEAD = "Saturday"
+SATURDAY_LINE = ("after Friday's final injury report, we email you if it "
+                 "changes your lineup.")
+
+
+def saturday_line(meta: Mapping[str, Any] | None) -> str | None:
+    """The standing Saturday line, or None where no Saturday check follows."""
+    meta = meta or {}
+    if not meta.get("solo") or meta.get("trial"):
+        return None
+    return f"{SATURDAY_LINE_HEAD}: {SATURDAY_LINE}"
 
 
 def pivot_action(plan: Mapping[str, Any], meta: Mapping[str, Any] | None = None) -> str:
@@ -2382,7 +2446,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     if meta.get("solo"):
         return [
             header(meta, team_name(report)),
-            section_checklist(report["checklist"]),
+            section_checklist(report["checklist"], report["meta"]),
             section_your_week(report["matchup"], report.get("no_opponent")),
             section_your_lineup(report),
             section_regret(report["regret"]),
@@ -2393,7 +2457,7 @@ def compose(report: Mapping[str, Any]) -> list[str]:
         ]
     return [
         header(meta),
-        section_checklist(report["checklist"]),
+        section_checklist(report["checklist"], report["meta"]),
         section_last_week(report.get("last_week")),
         section_matchup(report["matchup"]),
         section_rival_watch(report.get("rival_watch")),

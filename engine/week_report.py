@@ -1282,6 +1282,7 @@ def checklist(
     unplanned: Mapping[str, str] | None = None,
     standins: Mapping[str, Sequence[str]] | None = None,
     late_news_when: Callable[[str], datetime | None] | None = None,
+    standin_ids: Mapping[str, Sequence[str]] | None = None,
 ) -> list[dict[str, str]]:
     """The game plan. ``extra`` items (the solo report's kickoff and
     cleared-player lines) go immediately before the late-news line, which
@@ -1292,8 +1293,16 @@ def checklist(
     ``news`` (late_news, timed), ``planned`` (players an if/then is printed
     for) with ``unplanned`` (player -> the sentence for one who has none), and
     ``standins`` (absent starter -> bench players out only on last week's
-    report who could start there), and ``late_news_when`` (player -> when
-    his news must be acted on, Eastern) so the late-news line names that day.
+    report who could start there; ``standin_ids`` the same by id), and
+    ``late_news_when`` (player -> when his news must be acted on, Eastern) so
+    the late-news line names that day.
+
+    Each item that can leave a slot empty carries ``zero``: ``slots`` (one
+    entry per slot, so two empty RB slots are two), and either ``certain``
+    (the slot scores zero unless somebody is added) or ``wait_on`` (the
+    players whose news decides it). The plan's order, the subject's count of
+    empty spots and this week's cover lists all read it, so a tag has to say
+    what its sentence says (pre-launch review F6/P2).
     """
     seated = [p for p in my_picks if p.player_id is not None]
     items: list[dict[str, str]] = []
@@ -1352,6 +1361,11 @@ def checklist(
                           f"off waivers, or that slot scores zero.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # A certain zero (pre-launch review F6/P2): leads the plan, and
+                # run.solo names who could fill it this week. One entry per
+                # slot — two empty RB slots are two empty spots, though the
+                # sentence names the position once.
+                "zero": {"slots": sorted(unfillable), "certain": True},
             })
         # A SEATED player who cannot play. optimal_lineup puts him there
         # because nothing eligible remains, which is right — you must field
@@ -1384,6 +1398,7 @@ def checklist(
                           f"someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                "zero": {"slots": [p.slot for p in alone], "certain": True},
             })
         for names, group in _by_standins(certain, cover):
             one = len(names) == 1
@@ -1401,6 +1416,10 @@ def checklist(
                           + f" cleared, {zero} unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # Not certain: the sentence says it is a zero only if the
+                # stand-in isn't cleared, so it waits on HIS news.
+                "zero": {"slots": [p.slot for p in group],
+                         "wait_on": _standin_ids(group, standin_ids)},
             })
         alone = [p for p in doubtful if not cover.get(p.player_id or "")]
         if alone:
@@ -1414,6 +1433,10 @@ def checklist(
                           f"again, that's a zero unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # He may still play: a pickup must kick off no earlier than
+                # him, so it can wait for his news (P2).
+                "zero": {"slots": [p.slot for p in alone],
+                         "wait_on": [p.player_id for p in alone if p.player_id]},
             })
         for names, group in _by_standins(doubtful, cover):
             one = len(names) == 1
@@ -1432,6 +1455,12 @@ def checklist(
                           + f" is, {zero} unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # Whoever is cleared starts: the starters' news and the
+                # stand-ins' both decide it.
+                "zero": {"slots": [p.slot for p in group],
+                         "wait_on": list(dict.fromkeys(
+                             [p.player_id for p in group if p.player_id]
+                             + _standin_ids(group, standin_ids)))},
             })
         # The late-news item used to live only below this return, so the solo
         # product — the one that ships — never printed it, while the landing
@@ -1536,6 +1565,13 @@ def _by_standins(picks: list[SlotPick], cover: Mapping[str, Sequence[str]]
         if names:
             groups.setdefault(names, []).append(pick)
     return list(groups.items())
+
+
+def _standin_ids(picks: list[SlotPick],
+                 standin_ids: Mapping[str, Sequence[str]] | None) -> list[str]:
+    """The stand-ins' ids for a group of absent starters, in order, once."""
+    return list(dict.fromkeys(pid for p in picks
+                              for pid in (standin_ids or {}).get(p.player_id or "", ())))
 
 
 def _named_slots(picks: list[SlotPick], players: PlayerIndex) -> str:

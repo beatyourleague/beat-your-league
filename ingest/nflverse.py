@@ -40,6 +40,7 @@ is deprecated upstream; reading it would silently give stale schemas.
 from __future__ import annotations
 
 import csv
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,6 +59,13 @@ ATTRIBUTION = ("NFL data: nflverse (nflverse-data), CC-BY-4.0. "
 # revalidated on the same 6h window the rest of the ingest layer uses — nflverse
 # rebuilds during and after games.
 LIVE_MAX_AGE_SECONDS = 6 * 60 * 60
+
+# Every asset this process served from its cached copy because the download
+# failed: asset -> when that copy was written (UTC). ``fetch`` also says so on
+# stderr, once per asset, so the cron log shows that a run read stale files —
+# it used to fall back in silence (pre-launch review F2), and a fallback copy
+# restored from actions/cache can predate Monday night.
+STALE_FALLBACKS: dict[str, str] = {}
 
 
 class NflverseError(RuntimeError):
@@ -129,6 +137,7 @@ def fetch(release: str, asset: str, cache_dir: Path, *, live: bool = False,
         # record of games that were actually played, and the report flags its
         # age (principle 3). Only a cold cache is fatal.
         if path.is_file() and path.stat().st_size > 0:
+            _report_fallback(asset, path, exc)
             return path
         raise NflverseError(f"could not fetch {url}: {exc}") from exc
     if not response.content:
@@ -145,6 +154,17 @@ def fetch(release: str, asset: str, cache_dir: Path, *, live: bool = False,
             f"(starts {response.content[:40]!r})")
     path.write_bytes(response.content)
     return path
+
+
+def _report_fallback(asset: str, path: Path, exc: Exception) -> None:
+    """Record, and say once on stderr, that ``asset`` came from the cache."""
+    from datetime import datetime, timezone
+    written = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    when = written.strftime("%Y-%m-%d %H:%M UTC")
+    if asset not in STALE_FALLBACKS:
+        print(f"nflverse: could not refresh {asset} ({type(exc).__name__}); "
+              f"using the cached copy written {when}", file=sys.stderr)
+    STALE_FALLBACKS[asset] = when
 
 
 def _looks_like_csv(body: bytes) -> bool:

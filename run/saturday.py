@@ -66,9 +66,15 @@ PLANS_DIR = REPO_ROOT / "data" / "plans"
 # injury report says: a player moved to injured reserve on Thursday simply
 # stops appearing on it.
 from engine.availability import PRACTICE_SQUAD, ROSTER_OUT  # noqa: E402 — one definition, shared
-# Below this share of still-to-play teams with ANY row in the week's report,
-# the report is not in yet. Measured on 2024: every team that played filed
-# every week but one (week 1, 31 of 32), so a real report clears this easily.
+# Below this share of the teams whose FINAL report is due (game two days off
+# or less, NFL time) carrying a GAME STATUS — Out, Doubtful, Questionable —
+# the final report is not in yet. A practice row is not a final report: the
+# Wednesday and Thursday participation lists carry every team and no game
+# status, and counting those as "filed" passed the 26-of-26 check on Friday
+# morning's file while only CHI, NE and PIT had ruled anybody in or out
+# (pre-launch review F1, Oct 2026). Measured on 2023-2026: in every complete
+# week at least 27 of 32 teams carry a status (lowest 84%), so a real final
+# report clears this easily.
 REPORT_COVERAGE_FLOOR = 0.75
 NFL_TIME = "America/New_York"
 
@@ -280,7 +286,17 @@ def kickoffs(cache_dir: Path, season: str, week: int) -> dict[str, datetime]:
 
 def designations(cache_dir: Path, season: str, week: int
                  ) -> tuple[dict[str, tuple[str, str]], set[str]]:
-    """(gsis -> (designation, injury), teams that filed anything this week).
+    """(gsis -> (designation, injury), teams whose game-status report is in).
+
+    A team counts as FILED only once it has a row carrying a game status
+    (``report_status``). Practice rows arrive from Wednesday for every team
+    with no status at all, and reading them as the final report called a
+    player who missed every practice "off the injury report": with Friday
+    morning's 2026 Week-7 file at Saturday 16:00 UTC, Mike Evans (DNP Wed and
+    Thu) read as cleared and Rashee Rice (Out in Week 6, DNP all week) was
+    mailed back into a lineup (pre-launch review F1). A team with nobody
+    listed at all never reads as final, which is the safe direction: no
+    "cleared", no "back" — Out and Doubtful still act whenever they appear.
 
     Read straight off the archive rather than through ``ingest.injuries``,
     which folds Doubtful into Out: the backtest wants that, and a subscriber
@@ -300,9 +316,9 @@ def designations(cache_dir: Path, season: str, week: int
             except ValueError:
                 continue
             team = (row.get("team") or "").strip()
-            if team:
-                filed.add(team)
             status = (row.get("report_status") or "").strip().lower()
+            if team and status:
+                filed.add(team)
             gsis = (row.get("gsis_id") or "").strip()
             if gsis and status in {"out", "doubtful", "questionable"}:
                 injury = (row.get("report_primary_injury") or "").strip().lower()
@@ -349,13 +365,9 @@ def state_for(player_id: str, *, starts: Mapping[str, datetime],
         return Now(playing=False)                 # bye: Tuesday already said so
     locked = at >= kickoff
     # RULE F2: a team's final report comes two days before its game, so on a
-    # Saturday a Monday-night team has not filed it — and a team that filed
-    # nothing at all this week has told us nothing.
-    # Calendar days in NFL time: a Sunday-night kickoff is Monday in UTC.
-    from zoneinfo import ZoneInfo
-    eastern = ZoneInfo(NFL_TIME)
-    days = (kickoff.astimezone(eastern).date() - at.astimezone(eastern).date()).days
-    final = team in filed and days <= 1
+    # Saturday a Monday-night team has not filed it — and a team with no game
+    # status on the file (practice rows only, or nothing) has told us nothing.
+    final = team in filed and _final_due(kickoff, at)
     # The kickoff rides on every state: engine.final_check refuses a cover who
     # plays before a still-questionable starter's inactives only when it knows
     # both games' times (panel review RQ-01, one clock for Tuesday and Saturday).
@@ -372,19 +384,41 @@ def state_for(player_id: str, *, starts: Mapping[str, datetime],
     return Now(locked=locked, final=final, kickoff=kickoff, practice_squad=squad)
 
 
+def _final_due(kickoff: datetime, at: datetime) -> bool:
+    """Is this team's final injury report due by ``at``? It comes two days
+    before the game, counted in calendar days in NFL time (a Sunday-night
+    kickoff is Monday in UTC)."""
+    from zoneinfo import ZoneInfo
+    eastern = ZoneInfo(NFL_TIME)
+    return (kickoff.astimezone(eastern).date() - at.astimezone(eastern).date()).days <= 1
+
+
 def check_report_is_in(starts: Mapping[str, datetime], filed: set[str],
                        at: datetime, week: int) -> None:
-    """Refuse when the week's injury report has not been published yet."""
+    """Refuse when the week's final injury report has not been published yet.
+
+    Measured over the teams whose final report is DUE (still to play, game
+    two days off or less), never over every team still to play: a
+    Monday-night team files on Saturday, so counting it against Saturday's
+    floor would refuse a complete Sunday report in a week with several of
+    them. ``filed`` is the teams carrying a game status (``designations``)."""
     pending = {team for team, kickoff in starts.items() if kickoff > at}
     if not pending:
         raise SaturdayError(f"every week-{week} game has already kicked off — "
                             "there is nothing left to change")
-    share = len(pending & filed) / len(pending)
+    due = {team for team in pending if _final_due(starts[team], at)}
+    if not due:
+        raise SaturdayError(
+            f"no week-{week} team still to play has its final injury report due "
+            f"yet, so nothing can be read as cleared or ruled out. Nothing was sent.")
+    share = len(due & filed) / len(due)
     if share < REPORT_COVERAGE_FLOOR:
         raise SaturdayError(
-            f"the week-{week} injury report isn't in yet: {len(pending & filed)} "
-            f"of {len(pending)} teams still to play have filed anything. With "
-            f"it missing, every player would read as healthy. Nothing was sent.")
+            f"the week-{week} final injury report isn't in yet: {len(due & filed)} "
+            f"of {len(due)} teams whose final report is due have posted game "
+            f"statuses (practice reports don't count). With it missing, a "
+            f"player who sat out practice all week would read as cleared. "
+            f"Nothing was sent.")
 
 
 # --------------------------------------------------------------------- #

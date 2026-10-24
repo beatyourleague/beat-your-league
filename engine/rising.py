@@ -12,7 +12,9 @@ about what already happened: "9.5 touches a game over his last two, up from
 3.0 in Weeks 1–3."
 
 Definitions, frozen here and pinned by tests:
-- **touches** = targets + carries, from the weekly stat rows.
+- **touches** = targets + carries, from the weekly stat rows — printed as
+  "targets + carries" (pre-launch review F10): to an expert "touches" means
+  catches + carries, which is a different, smaller number.
 - A player is RISING when, over the two most recent completed weeks, he
   appeared in both, averaged at least MIN_RECENT touches, and averaged at
   least MIN_JUMP more than in his earlier appearances this season (he needs at
@@ -20,7 +22,9 @@ Definitions, frozen here and pinned by tests:
 - Sorted by the size of the jump, then by id, so a report is byte-identical
   across runs. Starters last season (the top of his position, under the
   subscriber's own scoring) are left out — nobody needs telling a top-24 back
-  is "rising".
+  is "rising" — and so are this season's (pre-launch review P8): Malik Nabers,
+  hurt for most of 2025, was offered as a pickup "to check whether he's free"
+  while a top-five receiver this year.
 - "Before" names its weeks (launch review SS-I13, Oct 2026): "up from 0.0
   before" read as a role grown from nothing, with no way to tell which weeks
   it covered — and a player with weeks out of the box score (his team played,
@@ -106,7 +110,8 @@ def candidates(weekly: Mapping[int, Mapping[str, Mapping[str, Any]]],
 
 def for_roster(pool: Sequence[Mapping[str, Any]], roster: Sequence[str],
                ranks: Mapping[str, tuple[str, int, int]],
-               names: Any, teams: Mapping[str, str] | None = None
+               names: Any, teams: Mapping[str, str] | None = None,
+               this_season: Mapping[str, tuple[str, int, int]] | None = None
                ) -> list[dict[str, Any]]:
     """The lines one subscriber sees, never last season's starters under
     their scoring: their own risers first, marked "on your roster", then up
@@ -120,6 +125,12 @@ def for_roster(pool: Sequence[Mapping[str, Any]], roster: Sequence[str],
         pid = cand["player_id"]
         ranked = ranks.get(pid)
         if ranked and ranked[1] <= STARTER_CUT.get(cand["position"], 0):
+            continue
+        # A PICKUP suggestion only: one of their own players stays, because
+        # his counted change is news about a projection built on the old role.
+        now = (this_season or {}).get(pid)
+        if (pid not in held and now
+                and now[1] <= STARTER_CUT.get(cand["position"], 0)):
             continue
         name = names.name(pid)
         if pid in held:
@@ -157,5 +168,5 @@ def line(name: str, cand: Mapping[str, Any], *, on_roster: bool = False,
     mark = ", on your roster" if on_roster else ""
     tie = f" Same team and position as your {teammate}." if teammate else ""
     return (f"{name} ({cand['team']}, {cand['position']}){mark}: "
-            f"{cand['recent']:.1f} touches a game over his last two, "
+            f"{cand['recent']:.1f} targets + carries a game over his last two, "
             f"up from {cand['earlier']:.1f} {before}.{back}{tie}")
