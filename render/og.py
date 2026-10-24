@@ -231,8 +231,12 @@ def build_html(page: str) -> str:
   .left{{position:relative;width:556px;flex:none;}}
   .mark{{display:flex;align-items:center;gap:12px;margin-bottom:26px;}}
   .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
+  /* The official lockup (render/brand.py logo_html, contract C2): heavy
+     italic capitals, "Beat Your" in paper and "League" in the logo's gold.
+     It was tracked gold caps, upright — an eyebrow, not the logo (D10). */
   .mark span{{font-family:'Barlow Condensed';font-weight:900;font-size:23px;
-    letter-spacing:.2em;text-transform:uppercase;color:#F2C230;}}
+    font-style:italic;letter-spacing:.01em;text-transform:uppercase;color:#F6F4EE;}}
+  .mark span .lg{{color:#F0B62A;}}
   /* The landing hero's own treatment (launch review I13): heavy italic
      capitals, the payoff phrase on the tilted gold slab. */
   h1{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:96px;
@@ -271,7 +275,7 @@ def build_html(page: str) -> str:
 </style></head>
 <body>
   <div class="left">
-    <div class="mark">{mark}<span>Beat Your League</span></div>
+    <div class="mark">{mark}<span>Beat Your <span class="lg">League</span></span></div>
     <h1>{head}</h1>
     <div class="sub">Your lineup, decided every Tuesday — from <b>your exact
       roster</b>, scored PPR, half-PPR or standard.</div>

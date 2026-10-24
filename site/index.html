@@ -7,7 +7,8 @@
 <link rel="canonical" href="https://beatyourleague.com/">
 <meta name="description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
 <meta property="og:title" content="Beat Your League — weekly fantasy football start/sit report, through your title game">
-<meta property="og:description" content="Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds wherever both players are playing, off the injury report and have enough games on record (not on team defenses), and an if/then plan for late news.">
+<meta property="og:description" content="Your lineup decided every Tuesday, for your exact roster from any app, no login. Close calls explained, late injury news planned for, byes flagged through your title game.">
+<meta name="twitter:description" content="Your lineup decided every Tuesday, for your exact roster from any app, no login. Close calls explained, late injury news planned for, byes flagged through your title game.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -122,7 +123,7 @@
   .heroline .clock{color:var(--flag);font-weight:800;}
   /* The season clock and this week's link both arrive with the Tuesday
      build's week file, a beat after first paint on a slow phone. Their room is
-     reserved — three lines for the clock's sentence, the live report's chip
+     reserved — three lines for the clock's sentence, the live report's link
      its own line under it — so their arrival moves nothing (measured in Chrome on
      Slow 4G at 1280px: CLS 0.10, the button row and the whole page below the
      hero pushed down by one line each). */
@@ -131,6 +132,10 @@
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;align-items:center;}
   .cta-row .textlink{color:var(--dusk2);font-size:15px;padding:10px 2px;}
   .cta-row .textlink:hover{color:var(--paper);}
+  /* A phone's route to the price (review M13): the nav's Pricing is hidden
+     below 600px (contract C2: the logo plus one link), so the hero and the
+     closer carry a small text link to #pricing there instead. */
+  .cta-row .onlysm{display:none;}
 
   /* the Tuesday email, as it arrives: a phone, an inbox row, the report */
   .phonewrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;}
@@ -229,7 +234,7 @@
     grid-template-columns:30px 1fr auto;gap:9px;align-items:start;padding:9px 11px;
     background:#FCFBF8;border-radius:16px;color:#000;
     box-shadow:0 12px 30px -10px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.05);
-    opacity:0;transform:translateY(-130%);pointer-events:none;}
+    opacity:0;transform:translateY(-175%);pointer-events:none;}
   .notif .av{width:30px;height:30px;border-radius:8px;background:var(--navy);
     display:grid;place-items:center;}
   .notif .av svg{width:24px;height:24px;}
@@ -238,10 +243,15 @@
   .notif time{font-size:11px;color:#777;}
   .js .notif.go{animation:notif 1.9s cubic-bezier(.2,.8,.2,1) forwards;}
   /* Full opacity the whole way: it enters and leaves behind the opaque status
-     bar, and is switched off only once it is out of sight. */
-  @keyframes notif{0%{opacity:1;transform:translateY(-130%)}
-    14%,72%{opacity:1;transform:none}99%{opacity:1;transform:translateY(-130%)}
-    100%{opacity:0;transform:translateY(-130%)}}
+     bar, and is switched off only once it is out of sight. Parked at -175%,
+     not -130%: at -130% the card hid behind the 48px bar but its drop shadow
+     (12px down, 30px blur) reached ~30px below it and greyed the mail row on
+     the way in and out (review, CDP frames at 1800 vs 3000 ms). At -175% the
+     card's bottom sits at 46px - 0.75h, so the shadow ends above the bar's
+     edge for any card 40px tall or more. */
+  @keyframes notif{0%{opacity:1;transform:translateY(-175%)}
+    14%,72%{opacity:1;transform:none}99%{opacity:1;transform:translateY(-175%)}
+    100%{opacity:0;transform:translateY(-175%)}}
   /* Centred under the phone and no wider than it: at 1440 the caption hung
      60px left of the phone and wrapped its last link alone (review D7). */
   .realtag{font-size:13.5px;color:var(--dusk);letter-spacing:.02em;text-align:center;
@@ -252,13 +262,17 @@
   .realtag a{display:inline-block;padding:4px 0;}
   /* This week's live report, as prominent as is honest (review M4): shown
      only in a week the Tuesday build says it carries 3+ odds and a closest
-     call, labelled with the week and the day it was built. A chip, not a
-     third button style: the hero's buttons stay gold and ghost. */
-  .livepill{display:inline-flex;align-items:center;gap:9px;padding:9px 14px;margin-top:14px;
-    border:1px solid rgba(242,194,48,.5);background:rgba(242,194,48,.08);
-    color:var(--paper);font-size:13.5px;font-weight:700;text-decoration:none;
-    line-height:1.3;text-align:left;text-wrap:balance;}
-  .livepill:hover{border-color:var(--flag);background:rgba(242,194,48,.14);}
+     call, labelled with the week and the day it was built. A TEXT link with a
+     live dot — no border, no fill, no padded box. Drawn as a bordered chip it
+     was a third button-like control stacked between the gold form button
+     and the ghost "See a real report" (contract C2: one primary, one
+     secondary). Its 24px target comes from padding, not a box. */
+  .livepill{display:inline-flex;align-items:center;gap:9px;padding:5px 0;margin-top:12px;
+    color:var(--paper);font-size:14px;font-weight:600;text-decoration:none;
+    line-height:1.35;text-align:left;text-wrap:balance;}
+  .livepill #this-week-label{text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:rgba(242,194,48,.55);}
+  .livepill:hover #this-week-label{text-decoration-color:var(--flag);}
   .livepill .dot{width:8px;height:8px;flex:none;border-radius:50%;background:var(--turf-glow);
     box-shadow:0 0 0 3px rgba(46,169,104,.25);}
   .livepill .go{color:var(--flag);}
@@ -639,6 +653,19 @@
     .js .anim .frow{opacity:1!important;transform:none!important;transition:none!important;}
     .faq summary::after{transition:none!important;}
   }
+  /* Printed or saved as PDF, nothing waits for a scroll that never comes: the
+     revealed sections printed as blank navy pages (QA-06, Chrome
+     --print-to-pdf). The fixed bars would repeat on every sheet. */
+  @media print{
+    .js .reveal,.js .stagger > *,.js .anim .frow{opacity:1!important;transform:none!important;
+      transition:none!important;}
+    .js .cred.stagger svg *{stroke-dashoffset:0!important;transition:none!important;}
+    .js h2.reveal::after{transform:none!important;transition:none!important;}
+    .fbar i,.ubar i,.flipbar .a{transition:none!important;}
+    [data-n]{opacity:1!important;}
+    .notif,.stickybar,.scrollbar{display:none!important;}
+    .phonewrap::before,.js .hero .phone{animation:none!important;}
+  }
 
   /* A note beside its card needs about 330px or it wraps taller than the card
      and stretches the paper into a blank sheet (measured: 200px of it at 900px
@@ -689,6 +716,7 @@
     /* The form is the action on a phone; a second gold button in the nav
        above it competes with it. The sticky bar takes over once it scrolls. */
     nav .btn{display:none;}
+    .cta-row .onlysm{display:inline-block;}
   }
   @media (max-width:560px){
     .urow{grid-template-columns:1fr auto;gap:6px 10px;}
@@ -706,6 +734,9 @@
     /* The phone shrinks with the screen, so its columns tighten too. */
     .frow{grid-template-columns:26px 1fr 44px 38px;gap:8px;}
   }
+  /* 320px: at 19px the lockup ended 3px before "See a real report"
+     (measured: brand 22..187, link 190..298). */
+  @media (max-width:360px){.brand{font-size:17px;}}
 </style>
 </head>
 <body>
@@ -766,6 +797,7 @@
       <a class="btn gold" id="hero-open" hidden href="join/index.html">Set up my team</a>
       <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
       <a class="btn ghost" id="hero-sample" href="sample-report.html">See a real report</a>
+      <a class="textlink onlysm" href="#pricing">See pricing</a>
     </div>
   </div>
   <div class="phonewrap">
@@ -818,7 +850,7 @@
       </div>
     </div>
     <!-- The full pinned sample is always one tap away; this week's live
-         report has its own chip under the season clock. -->
+         report has its own link under the season clock. -->
     <p class="realtag"><b>Real report</b> · 2024, Week 10 ·
     <a href="sample-report.html" style="color:var(--flag)">read it all</a></p>
   </div>
@@ -1030,6 +1062,7 @@
   <div class="cta-row">
     <a class="btn gold" id="closer-cta" href="#watch-form">Tell me when it opens</a>
     <a class="textlink" href="sample-report.html">or read a real report first</a>
+    <a class="textlink onlysm" href="#pricing">See pricing</a>
   </div>
 </section>
 
@@ -1207,6 +1240,7 @@ if (watchForm) {
           throw err;
         }
         note.textContent = "You're on the list. One email when signups open, nothing else.";
+        if (window.bylCount) window.bylCount("waitlist", "closed");
       } catch (err) {
         // A failed request is a failed request — falling through to the
         // "isn't wired up" message below would explain it with a falsehood.
@@ -1466,6 +1500,13 @@ if (!reduced && "IntersectionObserver" in window) {
 } else {
   cards.forEach((card) => card.classList.add("in"));
 }
+// Printed or saved as PDF, every card is decided at once: each bar at its own
+// figure, every numeral shown (QA-06 — the print came out with empty bars,
+// because nothing scrolls a printout into view).
+window.addEventListener("beforeprint", () => {
+  document.querySelectorAll("[data-w]").forEach((bar) => { bar.style.width = bar.dataset.w + "%"; });
+  cards.forEach((card) => card.classList.add("in"));
+});
 
 // Sections rise in as they arrive. Only what starts below the fold is held
 // back, so nothing the visitor is already looking at ever disappears.
@@ -1473,7 +1514,9 @@ if (!reduced && "IntersectionObserver" in window) {
   const parts = document.querySelectorAll(
     "section:not(.proof) > h2, section:not(.proof) > .lede, .rows, .realfoot, " +
     ".plans, .finance, .faqgrid > div:first-child, .leaguepass, .closer > *");
+  let heard = false;
   const rise = new IntersectionObserver((entries) => {
+    heard = true;
     for (const e of entries) {
       if (!e.isIntersecting) continue;
       e.target.classList.add("shown");
@@ -1485,6 +1528,11 @@ if (!reduced && "IntersectionObserver" in window) {
     el.classList.add("reveal");
     rise.observe(el);
   });
+  // Failsafe, like the cards' and the groups' (QA-06): nothing may stay hidden
+  // if the observer misfires. A working observer reports every element once
+  // the moment it is observed, so only one that has said nothing in 6s is
+  // distrusted — and the sections still rise as they are scrolled to.
+  setTimeout(() => { if (!heard) parts.forEach((el) => el.classList.add("shown")); }, 6000);
 }
 
 // Groups arrive one item after another (credibility strip, the method cards,
@@ -1574,7 +1622,7 @@ if (!reduced) {
         if (phase === "season" && fresh && Number.isInteger(w.odds) &&
             w.odds >= 3 && w.closest_call) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
-          // The hero's chip names the week and the day the page was built, so
+          // The hero's link names the week and the day the page was built, so
           // it is plainly this week's report and not the 2024 sample above it.
           const label = document.getElementById("this-week-label");
           const built = Date.parse(w.built_at || "");
@@ -1649,12 +1697,17 @@ if (!reduced) {
   } catch (e) { /* the static sentence stays */ }
 })();
 
-// The phone-width bar: shown only while neither the hero nor the closer (each
-// with its own button) is on screen.
+// The phone-width bar: shown only while none of the hero, the pricing card's
+// own gold button and the closer (each with its own) is on screen. The card's
+// button was not watched once it became a real button (D4), so at 390px its
+// "Tell me when it opens" sat stacked over the bar's identical one (pre-launch
+// review); open, "Get the Rest-of-Season Pass" sat over "Set up my team". The
+// BUTTON is watched, not the card: with only the card's heading in view the
+// bar is still the one action on screen.
 const stickybar = document.getElementById("stickybar");
 if (stickybar && "IntersectionObserver" in window) {
-  const watched = [document.querySelector(".hero"), document.querySelector(".closer")]
-    .filter(Boolean);
+  const watched = [document.querySelector(".hero"), document.getElementById("season-cta"),
+                   document.querySelector(".closer")].filter(Boolean);
   const onScreen = new Set(watched);
   const obs = new IntersectionObserver((entries) => {
     for (const e of entries) e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target);

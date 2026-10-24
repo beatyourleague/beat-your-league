@@ -120,7 +120,7 @@ def test_every_closest_call_bar_on_the_landing_is_drawn_from_fifty() -> None:
 def test_the_live_report_chip_waits_for_the_heros_rule_and_names_its_week() -> None:
     """M4, reproduced: this week's 2026 report was four words of small
     underlined text ("see this week's") at the fold under a phone showing a
-    2024 week. It is a chip under the season clock now, still shown only by
+    2024 week. It is a link of its own under the season clock now, still shown only by
     the three-odds rule, and it names the week and the day it was built.
     Run under node: a week.json with 3 odds reveals it labelled from the
     file; one with 2 leaves it hidden and untouched."""
@@ -391,3 +391,194 @@ def test_the_title_names_the_category_a_searcher_types() -> None:
     for words in ("fantasy football", "start/sit", "title game"):
         assert words in title, words
     assert title.startswith("Beat Your League — ")
+
+
+# --------------------------------------------------------------------- #
+# the review of this branch (Oct 24 2026)
+# --------------------------------------------------------------------- #
+
+def test_the_live_report_link_never_promotes_a_page_with_subscription_terms() -> None:
+    """Review (medium), reproduced: the hero's live-report link made
+    site/this-week.html far more visible (a 288x38 chip at y=647 at 390,
+    where it had been a 100x17 inline link under the phone) while that page,
+    built by the Oct 20 cron from code older than the one-time passes, still
+    said "Cancel it yourself from your own billing page … Reports continue to
+    the end of the period you've already paid for" (grep -c 'billing page'
+    = 1) and sent both its asks into the closed join page — beside a landing
+    that says "One payment. Nothing renews". The link waits on week.json's
+    three-odds rule, which says nothing about the page's terms, so this test
+    is the gate: while the site sells one-time passes, the page the link
+    opens may not describe a subscription, and while checkout is closed it
+    may not send anybody into join/. It fails until this-week.html is
+    restamped (`python -m render.live_sample --restamp`, the pages branch)
+    or rebuilt by the Tuesday cron with today's code."""
+    from render import report as rr
+    from test_site import SITE
+
+    link = re.search(r'<a class="livepill"[^>]*href="([^"]+)"', HERO).group(1)
+    target = (SITE / link).read_text(encoding="utf-8")
+    if rr.SELLING_ONE_TIME:
+        for subscription in ("billing page", "does not stop a subscription",
+                             "the period you&#x27;ve already paid for",
+                             "the period you've already paid for"):
+            assert subscription not in target, (
+                f"{link} describes a subscription ({subscription!r}) under a one-payment "
+                f"landing — restamp it before the hero links it")
+    if "const CHECKOUT_OPEN = false;" in LANDING:
+        assert 'href="join/' not in markup_only(target), \
+            f"{link} sends buyers into a closed checkout"
+
+
+def test_the_live_report_link_is_a_text_link_not_a_third_button() -> None:
+    """Review (low), contract C2: the live-report "chip" was bordered,
+    padded, bold and gold-tinted with an arrow — a third button-like control
+    stacked between the gold form button and the ghost "See a real report"
+    (measured at 1440: y=700, between the two). It is a text link with the
+    live dot: no border, no fill, no horizontal padding, its room still
+    reserved so its arrival moves nothing."""
+    rule = re.search(r"\n  \.livepill\{([^}]*)\}", CSS).group(1)
+    for prop in ("border:", "background:", "border-radius"):
+        assert prop not in rule, f"the live link is drawn as a box again ({prop})"
+    pad = re.search(r"padding:([^;]+);", rule).group(1).split()
+    assert len(pad) == 2 and pad[1] == "0", f"the live link has a padded box: {pad}"
+    assert not re.search(r"\.livepill:hover\{[^}]*(?:border|background)", CSS)
+    assert ".livepill[hidden]{display:inline-flex!important;visibility:hidden;}" in CSS
+    chip = re.search(r'<a class="livepill"[^>]*>', HERO).group(0)
+    assert "btn" not in chip
+
+
+def test_the_sticky_bar_hides_while_the_pricing_cards_button_is_on_screen() -> None:
+    """Review (low), reproduced at 390x844: with #season-cta scrolled to
+    centre, the card's gold "Tell me when it opens" (top=339..382) and the
+    sticky bar's identical button (top=780, class "stickybar show") were both
+    on screen — the bar watched only the hero and the closer, and the card
+    had become a real button in D4. The card's button is watched too
+    (measured after: the bar hides while it is in view and returns once it
+    leaves)."""
+    script = LANDING.split('const stickybar = document.getElementById("stickybar");')[1] \
+        .split("\n}\n")[0]
+    watched = re.search(r"const watched = \[(.*?)\]", script, re.S).group(1)
+    for source in ('document.querySelector(".hero")', 'document.getElementById("season-cta")',
+                   'document.querySelector(".closer")'):
+        assert source in watched, f"the sticky bar no longer watches {source}"
+    assert 'id="season-cta"' in BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]
+
+
+def test_the_parked_notification_hides_its_shadow_too() -> None:
+    """Review (low), reproduced in CDP at 1440 with the card frozen where the
+    keyframes park it: at translateY(-130%) the 83px card hid behind the 48px
+    status bar but its shadow (0 12px 30px -10px) reached below it — up to 33
+    of 255 levels darker than the page at rest just under the bar, for a
+    fraction of a second on every play. At -175% the card's bottom sits at
+    46 - 0.75 x 83 = -16px and the frozen frame differs from rest by at most
+    3 levels (noise). Every parked stop — the resting rule, 0%, 99% and 100%
+    — sits at the same -175%; the card still never fades where it can be
+    seen."""
+    rest = re.search(r"\.notif\{([^}]*)\}", CSS).group(1)
+    frames = re.search(r"@keyframes notif\{(.*?\})\}", CSS, re.S).group(1)
+    parked = re.findall(r"translateY\((-?\d+)%\)", rest + frames)
+    assert len(parked) == 4, f"read {len(parked)} parked positions — the guard went blind"
+    top = int(re.search(r"top:(\d+)px", rest).group(1))
+    shadow = re.search(r"box-shadow:0 (\d+)px (\d+)px (-?\d+)px", rest).groups()
+    reach = sum(int(v) for v in shadow)            # offset + blur + spread below the card
+    bar = int(re.search(r"\.statusbar\{[^}]*?height:(\d+)px", CSS).group(1))
+    for pct in parked:
+        # The shortest card this can hold (two lines, measured 83px) must
+        # park with its shadow above the status bar's lower edge.
+        bottom = top + 83 * (1 + int(pct) / 100)
+        assert bottom + reach <= bar, f"translateY({pct}%) leaves the shadow below the bar"
+
+
+def test_the_phone_nav_has_room_at_320() -> None:
+    """Review (low), measured at 320x800: the lockup (19px below 430) ended at
+    x=187 and "See a real report" began at 190 — 3px. Below 360px the lockup
+    is 17px (after: brand 22..170, link 190..298, no sideways scroll)."""
+    narrow = _block(CSS, "@media (max-width:360px)")
+    assert re.search(r"\.brand\{font-size:(\d+)px;\}", narrow).group(1) == "17"
+
+
+def test_the_share_preview_is_a_short_benefit_line_not_the_entity_sentence() -> None:
+    """M12: og:description was the 70-word, gate-qualified entity sentence,
+    so a link pasted in a group chat unfurled with fine print under the title
+    (and twitter:description, absent, fell back to it). PLAN §1's entity
+    sentence lives on in the meta description and the JSON-LD, its named
+    surfaces; the share preview is ~25 words of what the report does — no
+    odds (which would owe the gate), no price, nothing it cannot keep."""
+    og = re.search(r'<meta property="og:description" content="([^"]+)">', LANDING).group(1)
+    tw = re.search(r'<meta name="twitter:description" content="([^"]+)">', LANDING).group(1)
+    meta = re.search(r'<meta name="description" content="([^"]+)">', LANDING).group(1)
+    assert og == tw
+    assert og != meta and meta.startswith("Beat Your League is a weekly start/sit report")
+    words = len(og.split())
+    assert 15 <= words <= 30, f"the share preview is {words} words"
+    for banned in (r"\bodds\b", r"\$", r"\bfile\b", r"calibrat|proven|accurate|tested",
+                   r"\bbet", r"\bwin more\b"):
+        assert not re.search(banned, og, re.I), banned
+    for promise in ("Tuesday", "exact roster", "no login"):
+        assert promise in og, promise
+
+
+def test_a_printout_shows_every_section_and_every_bar() -> None:
+    """QA-06, reproduced with headless Chrome --print-to-pdf: the pages
+    holding the section heads, the real-report rows, pricing, the FAQ and the
+    closer printed as blank navy (.reveal is opacity:0 until a scroll that a
+    printout never makes, with no failsafe), and the report cards' bars
+    printed empty (the motion zeroes them). After: a print rule shows
+    everything the script holds back and drops the fixed bars, beforeprint
+    sets every bar to its figure, and the rise observer has a failsafe — one
+    that only distrusts an observer that never reported, so sections still
+    rise as they are scrolled to (measured: 7 pages, none blank, bars full)."""
+    printed = _block(CSS, "@media print")
+    for held in (".js .reveal", ".js .stagger > *", ".js .anim .frow", "[data-n]"):
+        assert held in printed, f"{held} can still print invisible"
+    assert "opacity:1!important" in printed and ".stickybar" in printed
+    rise = LANDING.split("const rise = new IntersectionObserver")[1].split("\n}\n")[0]
+    assert "heard = true" in rise
+    assert re.search(r"setTimeout\(\(\) => \{ if \(!heard\) parts\.forEach\(\(el\) => "
+                     r"el\.classList\.add\(\"shown\"\)\); \}, 6000\)", rise)
+    handler = LANDING.split('window.addEventListener("beforeprint"')[1].split("\n});")[0]
+    assert "bar.dataset.w" in handler and 'classList.add("in")' in handler
+
+
+def test_a_phone_has_a_route_to_the_price() -> None:
+    """M13 (phone half): below 600px the nav carries the lockup and one link
+    (contract C2), so a phone had no route to the price, about 4,700px down.
+    The hero's button row and the closer each carry a small "See pricing"
+    text link to #pricing, shown only below 600px (measured at 390: beside
+    "See a real report" and "or read a real report first"; at 1440 hidden,
+    where the nav's Pricing shows). A text link, never a third button, and no
+    price figure in the hero."""
+    closer = BODY.split('<section class="closer">')[1].split("</section>")[0]
+    for where, block in (("hero", HERO), ("closer", closer)):
+        assert re.search(r'<a class="textlink onlysm" href="#pricing">See pricing</a>', block), where
+    assert ".cta-row .onlysm{display:none;}" in CSS
+    assert ".cta-row .onlysm{display:inline-block;}" in _block(CSS, "@media (max-width:599px)")
+    assert "$" not in _flat(HERO)
+
+
+def test_a_waitlist_signup_is_counted_once_it_is_accepted() -> None:
+    """Routed from the analytics branch (contract C1): the landing's capture
+    counts a waitlist signup only after the form accepted it — after the
+    success note, never on a refusal — through the guarded call the page
+    counter defines (window.bylCount, absent until count.js loads)."""
+    handler = LANDING.split('watchForm.addEventListener("submit"')[1].split("\n  });")[0]
+    ok = handler.index("You're on the list.")
+    call = handler.index('if (window.bylCount) window.bylCount("waitlist", "closed");')
+    assert ok < call < handler.index("} catch (err)")
+    assert LANDING.count('window.bylCount("waitlist"') == 1
+
+
+def test_the_share_card_sets_the_name_as_the_logo() -> None:
+    """D10, og half: the share card set the name like the old nav — tracked
+    gold caps, upright (letter-spacing:.2em, #F2C230) — rather than as the
+    logo lockup the landing now carries: heavy italic, "Beat Your" in paper
+    and "League" in the logo's gold. site/og.png is rebuilt from this by
+    `make og` (test_og's digest test holds the image to it)."""
+    from render import og
+
+    built = og.build_html(LANDING)
+    assert '<span>Beat Your <span class="lg">League</span></span>' in built
+    rule = re.search(r"\.mark span\{([^}]*)\}", built).group(1)
+    assert "font-style:italic" in rule and "letter-spacing:.01em" in rule \
+        and "color:#F6F4EE" in rule and ".2em" not in rule
+    assert ".mark span .lg{color:#F0B62A;}" in built
