@@ -115,12 +115,19 @@ jobs:
           path: data/sealed/registry.enc
           key: sealed-registry-${{ github.run_id }}
           restore-keys: sealed-registry-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
       - name: Open the registry
         id: open
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m run.statebox open registry --backup
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry --backup
       - name: Restore nflverse cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -153,6 +160,9 @@ jobs:
           # A rotated UPDATE_SECRET's old value, comma-separated: seat links
           # already sent are still matched while it is set (OPS-R10).
           UPDATE_SECRET_PREVIOUS: ${{ secrets.UPDATE_SECRET_PREVIOUS }}
+          # Spare daily sends to keep in hand: a repo variable, for when the
+          # email plan's daily cap changes (unset = the code's own default).
+          EMAIL_DAILY_HEADROOM: ${{ vars.EMAIL_DAILY_HEADROOM }}
         run: |
           set +e
           .venv/bin/python -m run.intake
@@ -169,8 +179,10 @@ jobs:
       # how run.trials tells "before launch" (no registry and no key, so nobody
       # can be a subscriber) from "the registry is missing" (fail closed, or
       # every subscriber reads as eligible for a free report).
+      # Never after a failed open: an empty registry would make every
+      # subscriber look like a stranger owed a free report.
       - name: Send free reports
-        if: always()
+        if: always() && steps.open.outcome == 'success'
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
@@ -291,7 +303,7 @@ jobs:
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
-        run: .venv/bin/python -m run.statebox seal registry
+        run: python -I -S run/statebox.py seal registry
       - name: Save subscriber registry (sealed)
         if: always() && steps.seal.outputs.registry_sealed == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

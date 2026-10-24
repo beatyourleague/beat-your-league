@@ -2,9 +2,16 @@
 they leave the runner, with a durable encrypted copy beside the cache.
 
 Usage (the crons run these; the owner runs them by hand to restore):
-    python -m run.statebox open registry [--backup]   # data/sealed/registry.enc -> data/registry/
-    python -m run.statebox seal registry              # data/registry/ -> data/sealed/registry.enc
-    python -m run.statebox prune registry plans --keep-run <run id>   # privacy deletes
+    python -I -S run/statebox.py open registry [--backup]   # data/sealed/registry.enc -> data/registry/
+    python -I -S run/statebox.py seal registry              # data/registry/ -> data/sealed/registry.enc
+    python -I -S run/statebox.py prune registry plans --keep-run <run id>   # privacy deletes
+
+``-I -S`` because the open and prune steps hold the job's own token (Actions
+read, or write for the prune) and this file needs nothing but the standard
+library: no site-packages means no third-party package — and no ``.pth``
+startup hook — runs in a process that can reach the token (INFRA-07). The
+GitHub calls use urllib for the same reason, and never forward the token
+across a redirect to another host (the artifact download is one).
 
 Why (INFRA-02, pre-launch review Oct 2026). ``data/registry`` (every
 subscriber's address, roster and Stripe ids) and ``data/plans`` (the lineups
@@ -31,17 +38,29 @@ So, four rules:
 - **RULE S3 — losing the cache is not losing customers.** Every run that seals
   something new also uploads it as an artifact (``sealed-<name>``, kept 90
   days, the longest a public repo allows), and the once-a-day run uploads even
-  when nothing changed, so a quiet offseason still keeps a fresh copy. ``open
-  --backup`` reaches for the newest one when the cache comes back empty —
-  only artifacts made on this repo's own branch, newest first, the first that
-  passes RULE S2. An API failure exits 1 rather than carrying on as if there
-  were nothing to restore: a run that then wrote a fresh registry would make
-  the partial one the newest copy.
+  when nothing changed, so a quiet offseason still keeps a fresh copy. "New"
+  means CONTENT: the intake stamps ``last_run`` into its state file on every
+  run, so that stamp is left out of the comparison (``VOLATILE``) — counted,
+  it made every hourly run "changed" and left a backup each time, thousands
+  of copies of every subscriber that a privacy delete then had to reach.
+  ``open --backup`` reaches for the newest one when the cache comes back
+  empty — only artifacts made on this repo's own branch, newest first, the
+  first that passes RULE S2. An API failure exits 1 rather than carrying on
+  as if there were nothing to restore: a run that then wrote a fresh registry
+  would make the partial one the newest copy. And "nothing anywhere" is only
+  innocent before anyone has been served: once the committed send log shows a
+  subscriber was mailed, an empty cache AND no backup means the copy was lost
+  (expired, or deleted by a token that can delete), and the run goes red
+  rather than rebuild a Stripe-only registry without the seats and roster
+  changes Stripe never held. ``ALLOW_EMPTY_REGISTRY=true`` (a repo variable,
+  set for one run, LAUNCH.md) is the deliberate fresh start.
 - **RULE S4 — a deletion reaches every copy.** The privacy workflow's delete
   seals the edited state, uploads it, then ``prune`` deletes every older
   ``sealed-<name>`` artifact, the same way it deletes the older caches. An
   encrypted backup still holds the person's rows, and the privacy policy says
-  deleted means deleted.
+  deleted means deleted. EVERY older one: the list is read page by page to
+  the end before anything is deleted (the API answers 100 at a time, newest
+  first, so one page left everything older in place).
 
 ``CACHE_KEY`` is a GitHub secret (``openssl rand -hex 32``) with a copy in the
 owner's password manager. Losing it makes every sealed copy unreadable; the
@@ -54,14 +73,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import http.client
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -79,6 +103,19 @@ TAG_LEN = 32
 BACKUP_CANDIDATES = 5
 MAX_BACKUP_BYTES = 50 * 1024 * 1024
 API = "https://api.github.com"
+# The artifacts list answers at most 100 a page; 100 pages is 10,000 backups,
+# far past anything RULE S3 makes (about one a day plus real changes, 90 days).
+PER_PAGE = 100
+MAX_PAGES = 100
+# Written on every run whatever happened, so never evidence of a change: the
+# intake's `last_run` stamp (run/intake.py). Left out of content_digest only —
+# the sealed copy still carries it.
+VOLATILE = {"roster-sync-state.json": ("last_run",)}
+# A send-log key that means somebody was SERVED as a customer (a welcome, a
+# roster report, a weekly or Saturday report, a seat or roster confirmation)
+# — as opposed to the run markers, free reports, waitlist and notices.
+SERVED = re.compile(r"^(welcome-|preseason-|seat-confirm-|confirm-|\d{4}-w\d{2}-)")
+ALLOW_EMPTY = "ALLOW_EMPTY_REGISTRY"
 
 
 class SealError(RuntimeError):
@@ -87,6 +124,10 @@ class SealError(RuntimeError):
 
 class NoKeyError(SealError):
     """CACHE_KEY is not set at all (a short one is a plain SealError)."""
+
+
+class RateLimited(SealError):
+    """GitHub's hourly request limit stopped a prune part-way."""
 
 
 def data_dir(name: str, root: Path | None = None) -> Path:
@@ -164,14 +205,32 @@ def _files(src: Path) -> list[Path]:
     return sorted(p for p in src.rglob("*") if p.is_file() and not p.is_symlink())
 
 
+def _stable_bytes(path: Path, rel: str) -> bytes:
+    """A file's bytes for the change check, minus any VOLATILE stamp."""
+    data = path.read_bytes()
+    drop = VOLATILE.get(rel)
+    if not drop:
+        return data
+    try:
+        state = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return data                      # unreadable: every byte counts
+    if not isinstance(state, dict):
+        return data
+    kept = {k: v for k, v in state.items() if k not in drop}
+    return json.dumps(kept, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
 def content_digest(src: Path) -> str:
-    """sha256 over every file's relative path and bytes. Stays on the runner:
-    it only answers "did this run change anything?"."""
+    """sha256 over every file's relative path and bytes (VOLATILE stamps
+    aside). Stays on the runner: it only answers "did this run change
+    anything?"."""
     h = hashlib.sha256()
     for path in _files(src):
-        rel = path.relative_to(src).as_posix().encode("utf-8")
-        data = path.read_bytes()
-        h.update(len(rel).to_bytes(4, "big") + rel + len(data).to_bytes(8, "big") + data)
+        rel = path.relative_to(src).as_posix()
+        data = _stable_bytes(path, rel)
+        name = rel.encode("utf-8")
+        h.update(len(name).to_bytes(4, "big") + name + len(data).to_bytes(8, "big") + data)
     return h.hexdigest()
 
 
@@ -258,15 +317,88 @@ def open_sealed(name: str, root: Path | None = None, blob: bytes | None = None) 
 # the durable copy: this repo's own artifacts (RULE S3, S4)
 # --------------------------------------------------------------------- #
 
+class _Reply:
+    """What a GitHub call answered: status, body, headers."""
+
+    def __init__(self, status_code: int, content: bytes = b"", headers=None) -> None:
+        self.status_code, self.content = status_code, content
+        self.headers = headers if headers is not None else {}
+
+    def json(self):
+        return json.loads(self.content.decode("utf-8") or "null")
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Hand every redirect back to :class:`_Http`, which decides whether the
+    token may follow it. urllib's own handler copies Authorization onto the
+    next request whatever its host — and the artifact download redirects to
+    blob storage, which has no business seeing the job's token."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002
+        return None
+
+
+class _Http:
+    """GET/DELETE on the standard library alone (see the module docstring:
+    no third-party code in a process that holds the token)."""
+
+    REDIRECTS = (301, 302, 303, 307, 308)
+
+    def __init__(self) -> None:
+        self.opener = urllib.request.build_opener(_NoRedirect)
+
+    def _send(self, method: str, url: str, headers: dict, timeout: float) -> _Reply:
+        if urllib.parse.urlsplit(url).scheme != "https":
+            raise SealError("refusing a GitHub call that is not https")
+        request = urllib.request.Request(url, headers=dict(headers or {}), method=method)
+        try:
+            with self.opener.open(request, timeout=timeout) as reply:
+                body = reply.read(MAX_BACKUP_BYTES + 1)
+                if len(body) > MAX_BACKUP_BYTES:
+                    raise SealError("GitHub sent more than any sealed state could be")
+                return _Reply(reply.status, body, reply.headers)
+        except urllib.error.HTTPError as exc:
+            return _Reply(exc.code, b"", exc.headers)
+        except (urllib.error.URLError, http.client.HTTPException, OSError) as exc:
+            # The type only: a message could carry the URL, never the token,
+            # but there is nothing in it the log needs.
+            raise SealError(f"could not reach GitHub ({type(exc).__name__})") from None
+
+    def get(self, url: str, headers=None, timeout: float = 30, params=None,
+            allow_redirects: bool = True) -> _Reply:
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        headers = dict(headers or {})
+        for _ in range(5):
+            reply = self._send("GET", url, headers, timeout)
+            location = reply.headers.get("Location") if reply.headers else None
+            if reply.status_code not in self.REDIRECTS or not allow_redirects or not location:
+                return reply
+            following = urllib.parse.urljoin(url, location)
+            if urllib.parse.urlsplit(following).netloc != urllib.parse.urlsplit(url).netloc:
+                headers = {k: v for k, v in headers.items() if k.lower() != "authorization"}
+            url = following
+        raise SealError("GitHub redirected too many times")
+
+    def delete(self, url: str, headers=None, timeout: float = 30) -> _Reply:
+        return self._send("DELETE", url, dict(headers or {}), timeout)
+
+
+def _rate_limited(reply) -> bool:
+    headers = getattr(reply, "headers", None) or {}
+    return reply.status_code == 429 or (
+        reply.status_code == 403 and str(headers.get("X-RateLimit-Remaining", "")) == "0")
+
+
 class GitHub:
     """The few Actions REST calls this needs, with the job's own token."""
 
     def __init__(self, repo: str, token: str, session=None) -> None:
-        import requests
-        self.repo, self.http = repo, session or requests.Session()
+        self.repo, self.http = repo, session or _Http()
         self.headers = {"Authorization": f"Bearer {token}",
                         "Accept": "application/vnd.github+json",
-                        "X-GitHub-Api-Version": "2022-11-28"}
+                        "X-GitHub-Api-Version": "2022-11-28",
+                        "User-Agent": "beat-your-league-statebox"}
 
     @classmethod
     def from_env(cls, session=None) -> "GitHub | None":
@@ -284,9 +416,22 @@ class GitHub:
         return int(self._get(f"{API}/repos/{self.repo}").json()["id"])
 
     def artifacts(self, name: str) -> list[dict]:
-        data = self._get(f"{API}/repos/{self.repo}/actions/artifacts",
-                         params={"name": name, "per_page": 100}).json()
-        return [a for a in data.get("artifacts") or [] if a.get("name") == name]
+        """EVERY artifact called ``name``, read page by page to the end (the
+        API answers at most 100 at a time, newest first). Never a partial
+        list: past MAX_PAGES it refuses rather than prune or restore from
+        part of the record."""
+        found: list[dict] = []
+        for page in range(1, MAX_PAGES + 1):
+            data = self._get(f"{API}/repos/{self.repo}/actions/artifacts",
+                             params={"name": name, "per_page": PER_PAGE,
+                                     "page": page}).json() or {}
+            batch = data.get("artifacts") or []
+            found += [a for a in batch if a.get("name") == name]
+            total = int(data.get("total_count") or 0)
+            if len(batch) < PER_PAGE or (total and page * PER_PAGE >= total):
+                return found
+        raise SealError(f"more than {MAX_PAGES * PER_PAGE} {name!r} "
+                        f"backups listed — refusing to act on part of the list")
 
     def download(self, artifact: dict) -> bytes:
         if int(artifact.get("size_in_bytes") or 0) > MAX_BACKUP_BYTES:
@@ -296,8 +441,11 @@ class GitHub:
     def delete(self, artifact: dict) -> None:
         response = self.http.delete(f"{API}/repos/{self.repo}/actions/artifacts/{artifact['id']}",
                                     headers=self.headers, timeout=30)
-        if response.status_code not in (204, 404):
-            raise SealError(f"GitHub answered {response.status_code} deleting a backup")
+        if response.status_code in (204, 404):
+            return
+        if _rate_limited(response):
+            raise RateLimited(f"GitHub's rate limit stopped the delete ({response.status_code})")
+        raise SealError(f"GitHub answered {response.status_code} deleting a backup")
 
 
 def _ours(artifacts: list[dict], repo_id: int, branch: str) -> list[dict]:
@@ -349,15 +497,57 @@ def restore_backup(name: str, gh: GitHub, root: Path | None = None,
 
 
 def prune(names: tuple[str, ...], gh: GitHub, keep_run: int) -> int:
-    """Delete every sealed-<name> backup except those this run uploaded."""
+    """Delete every sealed-<name> backup except those this run uploaded. The
+    whole list is read first (deleting while paging would shift the pages
+    under the walk); a rate limit part-way says how far it got, and a re-run
+    of the same privacy delete finds the person gone and finishes the job."""
+    doomed = [artifact for name in names for artifact in gh.artifacts(artifact_name(name))
+              if (artifact.get("workflow_run") or {}).get("id") != keep_run]
     deleted = 0
-    for name in names:
-        for artifact in gh.artifacts(artifact_name(name)):
-            if (artifact.get("workflow_run") or {}).get("id") == keep_run:
-                continue
+    for artifact in doomed:
+        try:
             gh.delete(artifact)
-            deleted += 1
+        except RateLimited as exc:
+            raise SealError(f"{exc} after {deleted} of {len(doomed)} older backups — "
+                            f"run the same privacy delete again in an hour; it finds "
+                            f"the person already gone and deletes the rest") from None
+        deleted += 1
     return deleted
+
+
+def served(root: Path | None = None) -> int:
+    """How many sends in the committed send log were to a customer (SERVED).
+    Read here, not through run.delivery: this module imports nothing outside
+    the standard library."""
+    path = (root or REPO_ROOT) / "data" / "processed" / "sent.jsonl"
+    if not path.is_file():
+        return 0
+    count = 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            key = json.loads(line).get("key")
+        except (json.JSONDecodeError, AttributeError):
+            continue
+        if isinstance(key, str) and SERVED.match(key):
+            count += 1
+    return count
+
+
+def nothing_anywhere(name: str, root: Path | None, why: str) -> dict:
+    """No cache and no backup. Before anyone was served that is the first run;
+    after, it is a lost copy, and carrying on would rebuild the registry from
+    Stripe alone (RULE S3)."""
+    customers = served(root) if name == "registry" else 0
+    allowed = os.environ.get(ALLOW_EMPTY, "").strip().lower() == "true"
+    if customers and not allowed:
+        raise SealError(
+            f"{why}, but the send log shows {customers} send(s) to customers — the "
+            f"sealed {name} is lost, not new. Nothing ran on an empty {name}: rebuilt "
+            f"from Stripe it would drop every confirmed seat and roster change. Restore "
+            f"a copy, or set the repo variable {ALLOW_EMPTY}=true for one run to start "
+            f"fresh on purpose (LAUNCH.md, 'If the sealed registry is lost')")
+    note = f" ({ALLOW_EMPTY} is set: starting fresh on purpose)" if customers else ""
+    return {"opened": False, "detail": why + note}
 
 
 def _output(**values: object) -> None:
@@ -410,9 +600,13 @@ def main(argv: list[str] | None = None) -> int:
                 if not result["opened"] and args.backup:
                     gh = GitHub.from_env()
                     if gh is None:
-                        result["detail"] += "; no GitHub token, so no backup was looked for"
+                        result = nothing_anywhere(
+                            name, args.root, result["detail"]
+                            + "; no GitHub token, so no backup was looked for")
                     else:
                         result = restore_backup(name, gh, args.root)
+                        if not result["opened"]:
+                            result = nothing_anywhere(name, args.root, result["detail"])
             print(result["detail"])
     except SealError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
@@ -420,11 +614,6 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError, tarfile.TarError, json.JSONDecodeError) as exc:
         print(f"REFUSED: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
-    except Exception as exc:  # noqa: BLE001 — a network library's own error
-        if type(exc).__module__.startswith("requests"):
-            print(f"REFUSED: could not reach GitHub ({type(exc).__name__})", file=sys.stderr)
-            return 1
-        raise
     return 0
 
 

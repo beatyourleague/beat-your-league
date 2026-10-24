@@ -80,11 +80,19 @@ jobs:
           path: data/sealed/plans.enc
           key: sealed-plans-${{ github.run_id }}
           restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
       - name: Open the registry and the sent lineups
+        id: open
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m run.statebox open registry plans --backup
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       - name: Restore nflverse cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:

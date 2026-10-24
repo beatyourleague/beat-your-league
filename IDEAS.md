@@ -215,10 +215,17 @@ Confirmed or sharpened by the review, and bigger than its fixes:
   "never edited" record keeps an outside copy anyone can diff.
 - **The nflverse cache is saved under a new key every hourly run** (~110 MB each), churning
   the repo's 10 GB cache budget. Save it only when the download changed.
-- **Launch-check gates for the owner's hardening** (INFRA-15): the verified Pages domain TXT,
-  DMARC, the main ruleset while public, DNSSEC/CAA, `CACHE_KEY` in the secrets list, and the
-  live site's HSTS/CSP once on Cloudflare — read-only OWNER lines like the DMARC gate. And a
-  `site/.well-known/security.txt` with the hello@ contact and an expiry date.
+- ~~**Launch-check gates for the owner's hardening**~~ (INFRA-15) — **built Oct 24 2026**:
+  `check_hardening` reads the verified Pages domain, DNSSEC, the main ruleset and the live
+  HSTS/CSP (OWNER lines; CAA a WARN until the host settles), `CACHE_KEY` is in the secrets
+  list, and `site/.well-known/security.txt` exists with `check_security_txt` watching its
+  expiry.
+- **A sealed copy out of the dispatch token's reach** (INFRA-06 remainder). The Worker's
+  `GH_DISPATCH_TOKEN` (Actions: write) can delete the caches AND the backup artifacts. A run
+  now goes red rather than rebuild a registry once the send log shows anyone was served
+  (RULE S3), but the copy itself is still within that token's reach. A weekly sealed copy
+  somewhere else the owner controls would put one beyond it — a new service needs a PLAN §2
+  line first.
 
 
 ## Model ideas that need a preregistered arm first

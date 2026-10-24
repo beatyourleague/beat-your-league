@@ -63,10 +63,16 @@ say "Checkout opens at launch", because nothing read Stripe without step 3's key
   for n in $(seq 6 21); do gh issue close $n --comment "Fixed: runs exit quietly until launch."; done
   ```
 - **Close the five Dependabot pull requests from Aug 26** (checkout, cache, upload-artifact,
-  configure-pages, deploy-pages major-version jumps). They were written against the old
-  `@v4`-style lines; every action is now pinned to a commit, and next month's Dependabot run
+  configure-pages, deploy-pages major-version jumps) **and delete their branches now**, not at
+  section 11. They were written against the old `@v4`-style lines and still carry the old
+  daily.yml and weekly.yml, and anyone with Actions access can dispatch a workflow on a branch
+  — with its secrets. Every action is now pinned to a commit, and next month's Dependabot run
   proposes updates in that form. Merge none without a green test run — and from then on, one
   look a month (CLAUDE.md's dependency rule).
+  ```bash
+  git ls-remote --heads origin 'dependabot/*' | sed 's#.*refs/heads/##' |
+    while read -r b; do git push origin --delete "$b"; done
+  ```
 
 ---
 
@@ -123,7 +129,10 @@ account whose login is on the domain. Do these in this order, which is blast rad
    Anyone can send mail as hello@ until it exists. Read the reports for two clean weeks, then
    `p=quarantine`, and later `p=reject` (Resend signs as `beatyourleague.com`, so it aligns).
 
-**Tell me** when these are done; I add nothing to the code for them.
+**Tell me** when these are done. `make launch-check` reads items 3 (DNSSEC), 5 (the ruleset),
+7 (the verified domain) and 8 (DMARC) back from outside and shows each as owner setup until
+it is. A CAA record is optional and waits for the host to settle (section 11), so it names the
+authority that host's certificates come from.
 
 ## 1. Fresh payment links (~20 min)
 
@@ -468,6 +477,16 @@ records its odds on the public record — commit the ledger file with the page.
 page as it stands until Tuesday. A forced rebuild (`--force`) records nothing, so don't publish
 one — Week 6's page was rebuilt that way on Oct 16 and printed odds that are on no record.
 
+**If the sealed registry is lost** (an issue saying the send log shows sends to customers but
+no sealed registry exists): every cache entry and every backup is gone — expired after 90 days
+of failed runs, or deleted. Nothing is mailed until it's fixed, because a registry rebuilt from
+Stripe alone drops every confirmed League Pass seat and roster change and would send those
+people the wrong report. If you have a copy (`data/sealed/registry.enc` from a run's artifact),
+ask me to restore it. If not: Settings → Secrets and variables → Actions → Variables → add
+`ALLOW_EMPTY_REGISTRY` = `true`, run **daily-intake** once by hand, then **delete the
+variable**. Seat holders and anyone who changed their roster then re-confirm through their
+links; tell me first so I can list who.
+
 **A roster change sent by email** (until the Worker is live, or a subscriber who'd rather
 reply): put the names they sent in a file, one per line, then
 ```bash
@@ -513,8 +532,11 @@ effect: Actions → **change-notice** → page, effective date, a one-or-two-sen
 what changes; run it once unticked (dry). For the real send, first make its approval code on
 your Mac (`LOG_SECRET` in the shell), with the same page, date and words:
 ```bash
-make notice-approval PAGE=terms EFFECTIVE=2026-11-15 SUMMARY="What changes, as you'll paste it."
+make notice-approval PAGE=terms EFFECTIVE=2026-11-15
 ```
+and paste the summary when it asks, exactly as it goes in the workflow's box (it prints back
+the words it signed). Don't put the summary on the command line in double quotes: the shell
+turns `$69` into `9`, the code is signed over other words, and the workflow refuses it.
 then run it again ticked, with that code in the **approval** box. Everyone entitled today gets
 one email. Without the code the run refuses and sends nothing — so the Worker's dispatch
 token, which can start any workflow, can't mail every subscriber words of its own.
@@ -713,7 +735,7 @@ question, and it comes before the first $69 sale, not "before scale".
 **What is public today** (checked Oct 23 2026). The repo is public, owned by a personal GitHub
 account, with 0 forks and not yet archived by Software Heritage. Its history holds your
 **personal Gmail address** — added to the join page in two August commits, removed later, and
-still reachable from `main` and the five Dependabot branches — and one commit message carries a
+still reachable from `main` (and from the five Dependabot branches until you delete them) — and one commit message carries a
 local path with your **first name**; the test fixtures use the same name. The playbook is
 public too (CLAUDE.md's selling strategy, PLAN's status, this file), as are the Actions logs,
 artifacts and the auto-filed issues, and once sales start the committed send log shows how
@@ -753,8 +775,8 @@ private once the Worker has proven itself.**
    daily, weekly, Saturday and Monday runs.
 3. GitHub → Settings → **Billing and plans → Budgets and alerts**: a $0 Actions budget with an
    email alert at 75%, so the cap warns instead of surprising.
-4. Settings → General → **Change visibility → Private**. Then close the old issues, and
-   delete (or merge) the five Dependabot branches from August.
+4. Settings → General → **Change visibility → Private**. Then close the old issues (the
+   August Dependabot branches went in "Where things stand").
 5. A week later, Settings → Billing: check the minutes used. Paid minutes need a PLAN §2 line
    first.
 
@@ -768,8 +790,8 @@ was already copied: treat the Gmail address as public for good (step 0.1).
 
 **B — stay public and rewrite history** (not recommended). `git filter-repo --replace-text`
 with a file kept outside the repo that maps the old address to `hello@beatyourleague.com`,
-plus `--replace-message` for the path, then a force-push of `main`, deleting the Dependabot
-branches, re-cloning every copy (including this machine's worktrees), renaming the test
+plus `--replace-message` for the path, then a force-push of `main` (with the Dependabot
+branches already deleted), re-cloning every copy (including this machine's worktrees), renaming the test
 fixtures, and asking GitHub Support to purge cached views of the old commits. What it costs:
 **every commit id changes** — and the preregistrations this product's numbers rest on are
 cited by commit id (CLAUDE.md: 6bacdc7, 6833098, 5846734, d4cfe73, cc98c2a, 3f224ae, a199a01),

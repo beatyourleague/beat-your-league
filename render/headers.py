@@ -31,6 +31,12 @@ What it says:
   matching rules' values for one header with a comma, and two CSPs joined are
   enforced together — the page would get the intersection, i.e. neither
   page's hashes, and every script would stop.
+- ``/*`` carries only a FLOOR policy: the directives that restrict no fetch a
+  page makes (no framing, no ``<base>``, no plugins, forms to this origin,
+  https only), each worded exactly as in every page's own policy, so the
+  intersection on a page is that page's policy unchanged. It exists for the
+  404 page Cloudflare serves at an unknown path: that response matches only
+  ``/*``, so without the floor it carried no policy at all.
 
 Why not also a ``<meta http-equiv="Content-Security-Policy">`` in each page,
 which GitHub Pages WOULD honour today: decided against. A meta policy cannot
@@ -69,6 +75,15 @@ COMMON = (
     ("Permissions-Policy", "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
                            "magnetometer=(), microphone=(), payment=(), usb=()"),
     ("X-Frame-Options", "DENY"),
+)
+# Every page policy carries these, word for word; the splat repeats them and
+# nothing else, so it can never narrow what a page is allowed to load.
+FLOOR = (
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "upgrade-insecure-requests",
 )
 SCRIPT = re.compile(r"<script\b([^>]*)>(.*?)</script\s*>", re.S | re.I)
 EXECUTABLE_TYPES = {"", "text/javascript", "application/javascript", "module"}
@@ -110,11 +125,7 @@ def csp_for(html: str) -> str:
         "font-src 'self'",
         f"connect-src 'self' {FORMS_ORIGIN}",
         "manifest-src 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "base-uri 'none'",
-        "object-src 'none'",
-        "upgrade-insecure-requests",
+        *FLOOR,
     ])
 
 
@@ -140,6 +151,7 @@ def build() -> str:
              "# Cloudflare Pages reads this file; GitHub Pages ignores it.",
              "", "/*"]
     lines += [f"  {name}: {value}" for name, value in COMMON]
+    lines += [f"  Content-Security-Policy: {'; '.join(FLOOR)}"]
     for page in pages():
         policy = csp_for(page.read_text(encoding="utf-8"))
         for path in paths_for(page):

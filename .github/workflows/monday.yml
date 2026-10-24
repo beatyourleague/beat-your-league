@@ -118,6 +118,13 @@ jobs:
             site/ledger/
             data/processed/ledger/
           if-no-files-found: warn
+      # The republished page's inline-script hashes (site/_headers), re-derived
+      # in a step of its own BEFORE the persist step: that one holds the push
+      # token, and no venv Python (third-party packages and their startup
+      # hooks) ever runs beside it (INFRA-07). Same opt-out as the page itself.
+      - name: Refresh the security headers
+        if: always() && vars.PUSH_LEDGER != 'false'
+        run: .venv/bin/python -m render.headers
       # The graded ledger is persisted whether or not the page is published —
       # the record is the asset, the page is only its rendering.
       #
@@ -147,10 +154,10 @@ jobs:
           # publishes is not a record. Set PUSH_LEDGER to "false" to hold it
           # back deliberately (e.g. before launch), which is the opposite
           # default and the safe direction for a promise about honesty.
-          # The page's inline-script hashes go with it (site/_headers), so the
-          # republished page never meets a stale Content-Security-Policy.
+          # The page's inline-script hashes go with it (site/_headers, made by
+          # the step above), so the republished page never meets a stale
+          # Content-Security-Policy.
           if [ "$PUSH_LEDGER" != "false" ]; then
-            .venv/bin/python -m render.headers
             git add site/ledger/ site/_headers
           fi
           git diff --cached --quiet && echo "nothing to persist" && exit 0

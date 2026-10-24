@@ -70,11 +70,19 @@ jobs:
           path: data/sealed/plans.enc
           key: sealed-plans-${{ github.run_id }}
           restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
       - name: Open the registry and the stored plans
+        id: open
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m run.statebox open registry plans --backup
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       - name: Act on the request
         id: privacy
         env:
@@ -98,7 +106,7 @@ jobs:
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
-        run: .venv/bin/python -m run.statebox seal registry plans
+        run: python -I -S run/statebox.py seal registry plans
       - name: Save subscriber registry (sealed)
         if: success() && github.event.inputs.action == 'delete' && steps.seal.outputs.registry_sealed == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -134,22 +142,41 @@ jobs:
       # until GitHub evicts them (7 days unused) or they expire (90 days);
       # delete them now rather than wait. The pre-sealing `registry-`/`plans-`
       # caches, if any were ever made, are plain text and all go.
+      #
+      # EVERY older one: hourly runs keep a week of cache entries (well past
+      # 100), so each prefix is re-listed until nothing but this run's key is
+      # left rather than read once to a --limit, and statebox pages through
+      # every backup before deleting. A rate limit part-way stops the step
+      # red; running the same delete again finds the person gone and finishes.
+      # gh is the runner's own binary and statebox runs under -I -S, so this
+      # Actions: write token never sits in a process with a third-party package.
       - name: Delete the older caches and backups that still hold the rows
         if: success() && github.event.inputs.action == 'delete'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          for prefix in sealed-registry- sealed-plans-; do
-            gh cache list --key "$prefix" --limit 100 --json key --jq '.[].key' |
-              grep -v -x "${prefix}${GITHUB_RUN_ID}" |
-              while read -r key; do gh cache delete "$key"; done
-          done
-          for prefix in registry- plans-; do
-            gh cache list --key "$prefix" --limit 100 --json key --jq '.[].key' |
-              while read -r key; do gh cache delete "$key"; done
-          done
-          .venv/bin/python -m run.statebox prune registry plans --keep-run "$GITHUB_RUN_ID"
+          set -euo pipefail
+          # Every key under a prefix but $2, until a fresh listing shows none.
+          drain() {
+            local prefix="$1" keep="${2:-}" keys passes=0
+            while :; do
+              keys=$(gh cache list --key "$prefix" --limit 1000 --json key --jq '.[].key' |
+                grep -v -x -F -e "${keep:-(none)}" || true)
+              [ -z "$keys" ] && return 0
+              passes=$((passes + 1))
+              if [ "$passes" -gt 20 ]; then
+                echo "caches under $prefix are still listed after 20 passes" >&2
+                return 1
+              fi
+              while read -r key; do gh cache delete "$key"; done <<< "$keys"
+            done
+          }
+          drain sealed-registry- "sealed-registry-${GITHUB_RUN_ID}"
+          drain sealed-plans- "sealed-plans-${GITHUB_RUN_ID}"
+          drain registry-
+          drain plans-
+          python -I -S run/statebox.py prune registry plans --keep-run "$GITHUB_RUN_ID"
       # The only step handed a token that can push (the credential helper reads
       # it from this step's environment; .git/config never holds it).
       - name: Commit the stop list and the forgotten-customer list

@@ -322,6 +322,9 @@ def _command(step: dict) -> str:
 
 
 PUSH = "git" + " push"          # spelled apart: a literal here reads as a command to some tools
+# Every statebox call in a workflow: the runner's own interpreter, isolated, no
+# site-packages — the open and prune steps hold the job's token (INFRA-07).
+STATEBOX = "python -I -S run/statebox.py"
 
 
 def test_every_action_is_pinned_to_a_commit_with_its_tag_beside_it() -> None:
@@ -359,7 +362,7 @@ def test_every_workflow_grants_nothing_by_default_and_each_job_only_what_it_uses
             commands = "\n".join(_command(s) for s in job.get("steps") or [])
             pushes = PUSH in commands
             files_issues = "gh issue" in commands
-            deletes = "gh cache delete" in commands or "statebox prune" in commands
+            deletes = "gh cache delete" in commands or "statebox.py prune" in commands
             reads_backup = "--backup" in commands
             assert (perms.get("contents") == "write") == pushes, (name, perms)
             assert (perms.get("issues") == "write") == files_issues, (name, perms)
@@ -434,7 +437,7 @@ def test_subscriber_state_is_cached_and_uploaded_only_sealed() -> None:
                 f"{name}: {step.get('name')!r} saves without a successful seal"
             seal = next(s for s in job["steps"] if s.get("id") == "seal")
             assert job["steps"].index(seal) < index
-            assert "statebox seal" in _command(seal) and which in _command(seal)
+            assert STATEBOX + " seal" in _command(seal) and which in _command(seal)
         if "upload-artifact" in uses:
             assert step["with"]["name"] == f"sealed-{which}"
             assert step["with"]["retention-days"] == 90
@@ -454,17 +457,19 @@ def test_every_restore_is_opened_with_the_key_and_every_seal_waits_for_it() -> N
         if not restores:
             continue
         checked += 1
-        opens = [s for s in steps if "statebox open" in _command(s)]
+        opens = [s for s in steps if STATEBOX + " open" in _command(s)]
         assert len(opens) == 1, name
         [opener] = opens
         assert "--backup" in _command(opener)
         assert opener["env"]["CACHE_KEY"] == "${{ secrets.CACHE_KEY }}"
         assert opener["env"]["GH_TOKEN"] == "${{ github.token }}"
+        assert opener["env"]["ALLOW_EMPTY_REGISTRY"] == "${{ vars.ALLOW_EMPTY_REGISTRY }}"
+        assert opener.get("id") == "open", name
         for restore in restores:
             which = re.search(r"(registry|plans)", restore["with"]["path"]).group(1)
             assert which in _command(opener), (name, which)
             assert steps.index(restore) < steps.index(opener)
-        for seal in (s for s in steps if "statebox seal" in _command(s)):
+        for seal in (s for s in steps if STATEBOX + " seal" in _command(s)):
             assert seal["env"]["CACHE_KEY"] == "${{ secrets.CACHE_KEY }}"
             assert seal["env"]["STRIPE_KEY_SET"] == "${{ secrets.STRIPE_API_KEY != '' }}"
             if name != "privacy.yml":       # gated on its own action == 'delete'
@@ -483,7 +488,11 @@ def test_a_privacy_delete_reaches_every_copy() -> None:
     command = _command(delete)
     for prefix in ("sealed-registry-", "sealed-plans-", "registry-", "plans-"):
         assert f'"{prefix}"' in command or f" {prefix}" in command, prefix
-    assert 'statebox prune registry plans --keep-run "$GITHUB_RUN_ID"' in command
+    assert STATEBOX + ' prune registry plans --keep-run "$GITHUB_RUN_ID"' in command
+    # Re-listed until empty, never read once to a --limit (100 left a week of
+    # hourly entries behind), and a failed delete stops the step red.
+    assert "--limit 100 " not in command and "set -euo pipefail" in command
+    assert re.search(r"while :; do", command)
     assert names.index("Back up the edited registry") < names.index(delete["name"])
     assert names.index("Back up the edited plans") < names.index(delete["name"])
 
@@ -699,8 +708,14 @@ def test_every_page_carries_its_own_policy_and_none_rides_the_splat() -> None:
     """Reproduced (INFRA-10): no HSTS, CSP, anti-framing, nosniff or
     Referrer-Policy on any response, and /join/ rendered inside a foreign
     page. The common headers ride `/*`; each page's CSP rides its own path,
-    never `/*`, because Cloudflare joins two matching values with a comma
-    and two CSPs are enforced together — every script would stop."""
+    because Cloudflare joins two matching values with a comma and two CSPs
+    are enforced together — a script-src on `/*` would stop every script.
+    `/*` carries only the FLOOR (reviewer, Oct 24: the 404 Cloudflare serves
+    at an unknown path matches only `/*`, so it carried no policy at all):
+    directives that restrict no fetch, each word for word in every page's
+    own policy, so the intersection on any page is that page's policy.
+    Checked in headless Chrome with the two joined: /join/'s inline script
+    ran (players.json fetched); with a planted wrong hash it did not."""
     from render.headers import MAX_LINE, MAX_RULES, OUT, SITE, paths_for
     text = OUT.read_text(encoding="utf-8")
     rules = _rules(text)
@@ -710,7 +725,12 @@ def test_every_page_carries_its_own_policy_and_none_rides_the_splat() -> None:
     assert common["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert common["X-Frame-Options"] == "DENY"
     assert "camera=()" in common["Permissions-Policy"]
-    assert "Content-Security-Policy" not in common
+    from render.headers import FLOOR
+    floor = [d.strip() for d in common["Content-Security-Policy"].split(";")]
+    assert floor == list(FLOOR)
+    fetch = ("default-src", "script-src", "style-src", "img-src", "font-src",
+             "connect-src", "manifest-src", "media-src", "frame-src", "worker-src")
+    assert not any(d.split(" ", 1)[0] in fetch for d in floor), floor
     assert len(rules) <= MAX_RULES
     assert max(len(line) for line in text.splitlines()) <= MAX_LINE
     pages = sorted(SITE.rglob("*.html"))
@@ -723,6 +743,8 @@ def test_every_page_carries_its_own_policy_and_none_rides_the_splat() -> None:
             assert directives["object-src"] == "'none'" and directives["base-uri"] == "'none'"
             assert directives["connect-src"] == "'self' https://forms.beatyourleague.com"
             assert "'unsafe-inline'" not in directives["script-src"]
+            parts = [d.strip() for d in policy.split(";")]
+            assert all(d in parts for d in floor), (path, "the floor would narrow it")
             assert "'unsafe-eval'" not in policy and "*" not in policy
     assert rules["/join/"] == rules["/join/index.html"]
     assert rules["/terms"] == rules["/terms.html"]
@@ -869,3 +891,385 @@ def test_a_one_time_fee_figure_counts_only_beside_its_own_price() -> None:
         "A refund doesn't return Stripe's fee: about $1.87 on a $29 pass, or about $1.29 "
         "with a USD payout account.", "x") == []
     assert econ.doc_fee_mismatches("A refund keeps Stripe's fee of about $4.15.", "x")
+
+
+# --------------------------------------------------------------------- #
+# the review of this branch (Oct 24 2026), pinned
+# --------------------------------------------------------------------- #
+
+from test_intake_sync import REF, _session, directory, stripe  # noqa: E402,F401 (fixtures)
+
+import run.intake as intake  # noqa: E402
+
+# Every runner that reads data/registry (or data/plans) as the truth.
+REGISTRY_READERS = ("run.intake", "run.tuesday", "run.saturday", "run.notice",
+                    "run.privacy", "run.trials")
+
+
+def test_a_failed_open_stops_every_step_that_reads_the_registry() -> None:
+    """Reproduced (review): weekly.yml's 'Turn payments into subscribers' and
+    'Send subscriber reports' carried a bare `if: always()`, so both ran after
+    `statebox open` refused — a rotated CACHE_KEY, a file failing its tag,
+    GitHub down mid-restore. data/registry was then EMPTY: run.intake --no-mail
+    swept Stripe from scratch into a registry with no seat-log.jsonl and no
+    roster-updates.jsonl, and run.tuesday mailed every payer a report on their
+    SIGNUP roster, logged in the committed send log so the right one never
+    went. A step that reads the registry now runs only after a successful
+    open: no `if:` (success() is implied), an `if:` with no always()/
+    failure()/cancelled(), or one that names the open's outcome."""
+    checked = 0
+    for name, doc in _docs().items():
+        steps = list(doc["jobs"].values())[0]["steps"]
+        opener = next((s for s in steps if STATEBOX + " open" in _command(s)), None)
+        for index, step in enumerate(steps):
+            command = _command(step)
+            if not any(re.search(rf"-m {re.escape(r)}(?![\w.])", command)
+                       for r in REGISTRY_READERS):
+                continue
+            checked += 1
+            assert opener is not None and steps.index(opener) < index, (name, step.get("name"))
+            cond = str(step.get("if", ""))
+            if re.search(r"always\(\)|failure\(\)|cancelled\(\)", cond):
+                assert "steps.open.outcome == 'success'" in cond, \
+                    f"{name}: {step.get('name')!r} runs after a failed open"
+    assert checked == 7     # daily x2, weekly x2, saturday, notice, privacy
+
+
+def test_no_step_holding_the_job_token_runs_a_third_party_package() -> None:
+    """Reproduced (review, INFRA-07): every 'Open the registry' step handed
+    GH_TOKEN — the job's token, contents: write in five of the six — to a venv
+    Python that imports requests and its dependencies, the third-party code
+    whose .pth startup hook was the INFRA-07 concern; privacy.yml's prune
+    held Actions: write the same way, and monday.yml's persist step ran
+    render.headers beside its push token. A step that holds a token now runs
+    git, gh, or `python -I -S run/statebox.py` (no site-packages at all)."""
+    holders = 0
+    for name, _job, _j, _i, step in _all_steps():
+        env = step.get("env") or {}
+        if not any("github.token" in str(v) or "GITHUB_TOKEN" in str(v) for v in env.values()):
+            continue
+        holders += 1
+        command = _command(step)
+        assert ".venv/" not in command, (name, step.get("name"))
+        for line in command.splitlines():
+            if "python" in line:
+                assert line.strip().startswith(STATEBOX), (name, step.get("name"), line)
+    assert holders >= 15
+    monday = list(_docs()["monday.yml"]["jobs"].values())[0]["steps"]
+    refresh = next(s for s in monday if "-m render.headers" in _command(s))
+    assert refresh.get("if") == "always() && vars.PUSH_LEDGER != 'false'"
+    assert not refresh.get("env")
+
+
+def test_statebox_runs_on_the_standard_library_alone(tmp_path) -> None:
+    """The isolation above only holds if statebox needs nothing outside the
+    standard library: every import it makes is a stdlib module, and a seal
+    and an open really work under `-I -S` (no site-packages, no PYTHON*
+    variables, no current directory on the path)."""
+    import ast
+    import subprocess
+    import sys
+    tree = ast.parse((REPO / "run" / "statebox.py").read_text(encoding="utf-8"))
+    modules = {alias.name.split(".")[0] for node in ast.walk(tree)
+               if isinstance(node, ast.Import) for alias in node.names}
+    modules |= {node.module.split(".")[0] for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom) and node.module}
+    assert modules <= set(sys.stdlib_module_names) | {"__future__"}, modules
+    if shutil.which("openssl") is None:
+        pytest.skip("openssl is not installed")
+    _registry(tmp_path)
+    before = _tree(tmp_path / "data" / "registry")
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "CACHE_KEY": KEY}
+    script = str(REPO / "run" / "statebox.py")
+    for args in (["seal", "registry"], None, ["open", "registry"]):
+        if args is None:
+            shutil.rmtree(tmp_path / "data" / "registry")
+            continue
+        done = subprocess.run([sys.executable, "-I", "-S", script, *args, "--root", str(tmp_path)],
+                              capture_output=True, text=True, env=env, cwd=tmp_path)
+        assert done.returncode == 0, done.stderr
+    assert _tree(tmp_path / "data" / "registry") == before
+
+
+def test_the_token_never_follows_a_redirect_to_another_host(monkeypatch) -> None:
+    """The artifact download answers 302 to blob storage. urllib's own
+    redirect handler copies every header onto the next request, the job's
+    Authorization included, so redirects come back to statebox, which drops
+    the token when the host changes and keeps it when it does not."""
+    calls: list[tuple[str, dict]] = []
+
+    def send(self, method, url, headers, timeout):
+        calls.append((url, dict(headers)))
+        if url.startswith("https://api.github.com/"):
+            return sb._Reply(302, b"", {"Location": "https://blob.example.net/a.zip?sig=x"})
+        return sb._Reply(200, b"zip bytes", {})
+
+    monkeypatch.setattr(sb._Http, "_send", send)
+    gh = sb.GitHub("o/r", "tok")
+    artifact = {"size_in_bytes": 9,
+                "archive_download_url": "https://api.github.com/repos/o/r/actions/artifacts/1/zip"}
+    assert gh.download(artifact) == b"zip bytes"
+    assert calls[0][1]["Authorization"] == "Bearer tok"
+    assert calls[1][0].startswith("https://blob.example.net/")
+    assert "Authorization" not in calls[1][1]
+    assert sb._NoRedirect().redirect_request(None, None, 302, "Found", {}, "https://x/") is None
+
+
+@needs_openssl
+def test_a_run_with_no_new_payment_leaves_no_new_backup(tmp_path, monkeypatch, stripe,
+                                                       directory, capsys) -> None:
+    """Reproduced (review): run.intake writes `last_run` into
+    roster-sync-state.json on EVERY run, so content_digest differed every
+    time, `registry_changed` was always true, and every hourly run uploaded a
+    90-day backup — 24-48 a day, thousands retained, each a copy of every
+    subscriber a privacy delete then had to reach. The stamp is left out of
+    the change check (not out of the sealed copy): a real intake with no new
+    payment between open and seal is `changed: False`; a new payment is
+    `changed: True`."""
+    monkeypatch.setenv("CACHE_KEY", KEY)
+    reg = tmp_path / "data" / "registry"
+    stripe["sessions"] = [_session(REF)]
+    assert intake.main(["--registry-dir", str(reg)]) == 0, capsys.readouterr().err
+    state_path = reg / intake.STATE_NAME
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["last_run"] = "2026-11-02T14:47:00+00:00"          # the run an hour ago
+    state_path.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    sb.seal("registry", tmp_path, iterations=FAST)
+    shutil.rmtree(reg)
+    sb.open_sealed("registry", tmp_path)
+    assert intake.main(["--registry-dir", str(reg)]) == 0, capsys.readouterr().err
+    assert json.loads(state_path.read_text(encoding="utf-8"))["last_run"] != state["last_run"]
+    assert sb.seal("registry", tmp_path, iterations=FAST)["changed"] is False
+    stripe["sessions"].append(_session(REF, sid="cs_2", email="pal@example.com",
+                                       customer="cus_efgh5678", created=2000))
+    assert intake.main(["--registry-dir", str(reg)]) == 0, capsys.readouterr().err
+    assert sb.seal("registry", tmp_path, iterations=FAST)["changed"] is True
+
+
+class _PagedGitHub(_FakeGitHub):
+    """The artifacts list as the REST API serves it: newest first, at most 100
+    a page, `page` honoured, `total_count` beside it."""
+
+    def __init__(self, *args, rate_limit_after: int | None = None, **kw) -> None:
+        super().__init__(*args, **kw)
+        self.pages: list[int] = []
+        self.rate_limit_after = rate_limit_after
+
+    def get(self, url, headers=None, timeout=None, params=None, allow_redirects=True):
+        if url.endswith("/actions/artifacts"):
+            per, page = min(int(params.get("per_page", 30)), 100), int(params.get("page", 1))
+            named = sorted((a for a in self.artifacts if a["name"] == params["name"]),
+                           key=lambda a: a["created_at"], reverse=True)
+            self.pages.append(page)
+            return _Response(200, {"total_count": len(named),
+                                   "artifacts": named[(page - 1) * per:page * per]})
+        return super().get(url, headers, timeout, params, allow_redirects)
+
+    def delete(self, url, headers=None, timeout=None):
+        if self.rate_limit_after is not None and len(self.deleted) >= self.rate_limit_after:
+            response = _Response(403)
+            response.headers = {"X-RateLimit-Remaining": "0"}
+            return response
+        return super().delete(url, headers, timeout)
+
+
+def _hourly(count: int, name: str = "sealed-registry", start: int = 0, **kw) -> list[dict]:
+    return [_artifact(start + i, f"2026-11-{1 + i // 48:02d}T{(i // 2) % 24:02d}:{17 + 30 * (i % 2)}:00Z",
+                      run=10_000 + start + i, name=name, **kw) for i in range(count)]
+
+
+def test_a_privacy_delete_prunes_every_older_backup_past_the_first_page() -> None:
+    """Reproduced (review): `GitHub.artifacts()` made ONE request with
+    per_page=100 and no page, so prune deleted the newest 100 backups and left
+    every older encrypted copy of the deleted person for up to 90 days — on a
+    week of hourly backups, 236 of 336. The list is now read to the end
+    before anything is deleted (deleting while paging would shift the
+    pages), for both names, and this run's own uploads stay."""
+    registry = _hourly(336)
+    plans = _hourly(130, name="sealed-plans", start=1000)
+    keep_run = registry[-1]["workflow_run"]["id"]
+    gh = _PagedGitHub(registry + plans, {})
+    assert sb.prune(("registry", "plans"), sb.GitHub("o/r", "tok", session=gh), keep_run) == 465
+    assert len(gh.deleted) == 465 and registry[-1]["id"] not in gh.deleted
+    assert sorted(set(gh.pages)) == [1, 2, 3, 4]
+
+
+def test_a_rate_limit_part_way_through_a_prune_is_red_and_says_how_to_finish() -> None:
+    """Deleting hundreds of artifacts one call at a time can meet GITHUB_TOKEN's
+    hourly limit; prune raises part-way (the step goes red) and says that
+    running the same delete again finishes it — run.privacy finds the person
+    already gone and the prune deletes the rest."""
+    gh = _PagedGitHub(_hourly(150), {}, rate_limit_after=120)
+    with pytest.raises(sb.SealError, match=r"after 120 of 150 .* run the same privacy delete"):
+        sb.prune(("registry",), sb.GitHub("o/r", "tok", session=gh), keep_run=-1)
+
+
+@needs_openssl
+def test_a_restore_looks_past_the_first_page_for_this_repos_own_backup(
+        tmp_path, monkeypatch) -> None:
+    """The restore reads the same whole list: 150 newer artifacts a fork's
+    pull requests uploaded under the same name push ours to page 2, and the
+    restore still finds it (a one-page read said "no backup exists yet")."""
+    monkeypatch.setenv("CACHE_KEY", KEY)
+    reg = _registry(tmp_path)
+    before = _tree(reg)
+    sb.seal("registry", tmp_path, iterations=FAST)
+    good = sb.sealed_path("registry", tmp_path).read_bytes()
+    shutil.rmtree(tmp_path / "data")
+    ours = _artifact(1, "2026-10-01T00:00:00Z")
+    forks = [_artifact(100 + i, f"2026-10-20T00:{i % 60:02d}:{i // 60:02d}Z", head_repo=99)
+             for i in range(150)]
+    gh = _PagedGitHub([ours, *forks], {1: _zip("registry", good)})
+    result = sb.restore_backup("registry", sb.GitHub("o/r", "tok", session=gh), tmp_path,
+                               branch="main")
+    assert result["opened"] and _tree(tmp_path / "data" / "registry") == before
+
+
+def test_no_sealed_registry_anywhere_is_red_once_a_customer_was_served(
+        tmp_path, monkeypatch) -> None:
+    """The INFRA-06 remainder: the Worker's dispatch token (Actions: write) can
+    delete the caches AND the backups, and 90 days of failed runs expires
+    them, after which `open --backup` said "no backup exists yet", exited 0,
+    and the runs rebuilt a Stripe-only registry without the seats and roster
+    changes Stripe never held. Nothing anywhere is still the first run while
+    the committed send log holds only run markers, free reports, the waitlist
+    and notices; once it shows a customer was served it is a lost copy and a
+    red run, unless ALLOW_EMPTY_REGISTRY=true says to start fresh."""
+    monkeypatch.setenv("CACHE_KEY", KEY)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("GH_TOKEN", "tok")
+    monkeypatch.delenv("ALLOW_EMPTY_REGISTRY", raising=False)
+    real = sb.GitHub.from_env
+    monkeypatch.setattr(sb.GitHub, "from_env", classmethod(
+        lambda cls, session=None: real.__func__(cls, session=_PagedGitHub([], {}))))
+    log = tmp_path / "data" / "processed" / "sent.jsonl"
+    log.parent.mkdir(parents=True)
+    quiet = ["run-daily-2026-10-24", "run-tuesday-2026-w08", "trial-2026-abcdef123456",
+             "launch-2026-abcdef12", "notice-terms-2026-11-15-abcdef123456"]
+    log.write_text("".join(json.dumps({"key": k}) + "\n" for k in quiet), encoding="utf-8")
+    args = ["open", "registry", "--backup", "--root", str(tmp_path)]
+    assert sb.main(args) == 0
+    with log.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"key": "2026-w08-ab12cd34ef"}) + "\n")
+    assert sb.main(args) == 1
+    assert not (tmp_path / "data" / "registry").exists()
+    assert sb.main(["open", "plans", "--backup", "--root", str(tmp_path)]) == 0
+    monkeypatch.setenv("ALLOW_EMPTY_REGISTRY", "true")
+    assert sb.main(args) == 0
+    for key in ("welcome-2026-10-24-abc", "preseason-2026-abc", "2026-w08-final-abc",
+                "seat-confirm-ab-cd", "confirm-ab-cd"):
+        assert sb.SERVED.match(key), key
+    for key in quiet:
+        assert not sb.SERVED.match(key), key
+
+
+def test_the_approval_recipe_signs_exactly_the_words_typed(tmp_path) -> None:
+    """Reproduced (review): `make notice-approval` interpolated "$(SUMMARY)"
+    into a double-quoted shell word, so make expanded "$69" to "9" and the
+    shell dropped embedded quotes — the code was signed over words nobody
+    pasted and the workflow refused it, for any summary naming a price. The
+    recipe now passes each variable's RAW text, single-quoted, and with no
+    SUMMARY reads it from stdin; run here with a stand-in for Python that
+    prints what it was given."""
+    import subprocess
+    import sys
+    if shutil.which("make") is None:
+        pytest.skip("make is not installed")
+    fake = tmp_path / "fake_python.py"
+    fake.write_text("import json, sys\nprint(json.dumps([sys.argv[1:], sys.stdin.read()]))\n",
+                    encoding="utf-8")
+    summary = "The League Pass is now $69 for the \"rest\" of it, isn't it `x` $(HOME) $$y."
+    base = ["make", "-s", "-C", str(REPO), "notice-approval", f"PY={sys.executable} {fake}",
+            "PAGE=terms", "EFFECTIVE=2026-11-15"]
+    done = subprocess.run([*base, f"SUMMARY={summary}"], capture_output=True, text=True,
+                          stdin=subprocess.DEVNULL)
+    assert done.returncode == 0, done.stderr
+    argv, _ = json.loads(done.stdout)
+    assert argv == ["-m", "run.approval", "notice", "terms", "2026-11-15", summary]
+    done = subprocess.run(base, capture_output=True, text=True, input=summary + "\n")
+    argv, stdin = json.loads(done.stdout)
+    assert argv[-1] == "-" and stdin == summary + "\n"
+
+
+def test_a_summary_read_from_stdin_signs_the_same_code(monkeypatch, capsys) -> None:
+    """`run.approval notice PAGE EFFECTIVE -` reads the words from stdin (what
+    the make recipe does without SUMMARY), so no shell ever touches them;
+    the code is the one the argument form makes, and the words it signed
+    are echoed to the owner's own terminal."""
+    import run.approval as approval
+    monkeypatch.setenv("LOG_SECRET", "owner-secret")
+    words = 'Now $69, "quoted".'
+    monkeypatch.setattr("sys.stdin", io.StringIO(words + "\n"))
+    assert approval.main(["notice", "terms", "2026-11-15", "-"]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip() == approval.code("notice", "terms", "2026-11-15", words)
+    assert words in out.err
+
+
+def test_the_secrets_gate_counts_the_cache_key(monkeypatch) -> None:
+    """Reproduced (review): this branch made CACHE_KEY a required secret —
+    once STRIPE_API_KEY is set, a run without it goes red and keeps no
+    registry, seat log or roster changes between runs — but the launch check
+    still said "all 12 present" without it (the OPS-4 class)."""
+    import subprocess
+    import run.launch_check as lc
+    assert "CACHE_KEY" in lc.REQUIRED_SECRETS
+    names = [n for n in lc.REQUIRED_SECRETS if n != "CACHE_KEY"]
+    monkeypatch.setattr(lc.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(lc.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 0, json.dumps([{"name": n} for n in names]), ""))
+    [gate, *_] = lc.check_secrets()
+    assert gate.status == "OWNER" and "CACHE_KEY" in gate.detail
+    assert "Keeping subscribers, seats and roster changes between runs" in gate.detail
+
+
+def test_the_owners_hardening_is_read_back_by_the_launch_check(monkeypatch) -> None:
+    """INFRA-15: the verified Pages domain, DNSSEC, the main ruleset and the
+    live HSTS/CSP were owner steps nothing read back. Each is an OWNER line
+    until done (CAA a WARN: optional until the host settles), PASS after."""
+    import run.launch_check as lc
+
+    class Page:
+        def __init__(self, headers, status=200, text="Contact: mailto:x\n"):
+            self.headers, self.status_code, self.text = headers, status, text
+
+    def run(dns, rules, headers):
+        monkeypatch.setattr(lc, "_dig", lambda kind, name: dns.get(kind, []))
+        monkeypatch.setattr(lc, "_gh_json", lambda path: rules)
+        monkeypatch.setattr("requests.get", lambda url, timeout=None: Page(headers))
+        return {g.name: g.status for g in lc.check_hardening()}
+
+    bare = run({}, [], {"server": "GitHub.com"})
+    assert bare["The domain is verified for GitHub Pages"] == "OWNER"
+    assert bare["DNSSEC is on"] == "OWNER"
+    assert bare["main can't be force-pushed or deleted"] == "OWNER"
+    assert bare["The live site sends HSTS and a Content-Security-Policy"] == "OWNER"
+    assert bare["CAA records limit who may issue the certificate"] == "WARN"
+    done = run({"TXT": ["abc123"], "DS": ["2371 13 2 ABCD"], "CAA": ['0 issue "pki.goog"']},
+               [{"type": "deletion"}, {"type": "non_fast_forward"}],
+               {"Strict-Transport-Security": "max-age=31536000",
+                "Content-Security-Policy": "default-src 'self'"})
+    assert set(done.values()) == {"PASS"}, done
+
+
+def test_security_txt_names_the_contact_and_its_expiry_is_watched() -> None:
+    """INFRA-15: site/.well-known/security.txt (RFC 9116) tells a security
+    reporter where to write. The launch check passes it, warns in its last
+    30 days and fails once it has expired."""
+    from datetime import date
+    import run.launch_check as lc
+    text = (REPO / "site" / ".well-known" / "security.txt").read_text(encoding="utf-8")
+    assert "Contact: mailto:hello@beatyourleague.com" in text
+    assert "Canonical: https://beatyourleague.com/.well-known/security.txt" in text
+    assert [g.status for g in lc.check_security_txt(date(2026, 10, 24))] == ["PASS"]
+    assert [g.status for g in lc.check_security_txt(date(2027, 9, 15))] == ["WARN"]
+    assert [g.status for g in lc.check_security_txt(date(2027, 10, 2))] == ["FAIL"]
+
+
+def test_the_daily_intake_maps_the_email_headroom_variable() -> None:
+    """Routed from the delivery work: the daily intake reads
+    EMAIL_DAILY_HEADROOM for when the email plan's daily cap changes; it
+    arrives as a repo variable, never pasted into the shell."""
+    steps = list(_docs()["daily.yml"]["jobs"].values())[0]["steps"]
+    intake_step = next(s for s in steps if s.get("id") == "intake")
+    assert intake_step["env"]["EMAIL_DAILY_HEADROOM"] == "${{ vars.EMAIL_DAILY_HEADROOM }}"

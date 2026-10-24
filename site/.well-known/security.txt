@@ -1,0 +1,4 @@
+Contact: mailto:hello@beatyourleague.com
+Expires: 2027-10-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://beatyourleague.com/.well-known/security.txt

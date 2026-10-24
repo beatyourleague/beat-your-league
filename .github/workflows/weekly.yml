@@ -140,12 +140,19 @@ jobs:
           path: data/sealed/plans.enc
           key: sealed-plans-${{ github.run_id }}
           restore-keys: sealed-plans-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
       - name: Open the registry and the sent lineups
         id: open
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m run.statebox open registry plans --backup
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry plans --backup
       # The nflverse download cache. Both run.intake and run.tuesday call
       # load_week_data, so without this one cron run downloads ~30 MB twice.
       - name: Restore nflverse cache
@@ -186,9 +193,16 @@ jobs:
       # hourly daily run, both mailed the same new buyer a welcome and a first
       # report (reproduced, launch review OPS-6, Oct 2026). The daily run's
       # next half-hour sends whatever this one leaves.
+      #
+      # Never after a failed open (wrong CACHE_KEY, a file that failed its
+      # check, GitHub down mid-restore): data/registry is then EMPTY, and a
+      # full Stripe sweep would write a Stripe-only registry with no seat log
+      # and no roster changes — and the send below would mail every payer a
+      # report on their signup roster, logged as sent, so the right one never
+      # goes. The open's failure already turns the run red and files the issue.
       - name: Turn payments into subscribers
         id: intake
-        if: always()
+        if: always() && steps.open.outcome == 'success'
         continue-on-error: true
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
@@ -212,9 +226,10 @@ jobs:
       # empty inboxes — so this step is safe to enable now and starts mailing
       # the day the secret is added, with no code change. Before launch (no
       # registry file and no STRIPE_API_KEY) it exits 0 and says why: a red
-      # run every Tuesday for a checkout that is not open is noise.
+      # run every Tuesday for a checkout that is not open is noise. Gated on
+      # the open like the intake above: never a report off an empty registry.
       - name: Send subscriber reports
-        if: always()
+        if: always() && steps.open.outcome == 'success'
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
           EMAIL_PROVIDER: ${{ secrets.EMAIL_PROVIDER }}
@@ -267,7 +282,7 @@ jobs:
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
-        run: .venv/bin/python -m run.statebox seal registry plans
+        run: python -I -S run/statebox.py seal registry plans
       - name: Save subscriber registry (sealed)
         if: always() && steps.seal.outputs.registry_sealed == 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

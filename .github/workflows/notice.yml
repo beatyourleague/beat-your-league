@@ -8,7 +8,7 @@
 #
 # A real send needs the owner's approval code (run/approval.py, INFRA-06),
 # made on the owner's own machine for the exact page, date and summary:
-#     LOG_SECRET=... .venv/bin/python -m run.approval notice terms 2026-11-15 "..."
+#     make notice-approval PAGE=terms EFFECTIVE=2026-11-15    (then paste the summary)
 # The form Worker's dispatch token can start this workflow; it cannot make
 # that code, so it cannot mail every subscriber words of its own choosing.
 name: change-notice
@@ -33,7 +33,7 @@ on:
         type: boolean
         default: false
       approval:
-        description: "For a real send: the code from `python -m run.approval notice PAGE EFFECTIVE SUMMARY` on your machine"
+        description: "For a real send: the code from `make notice-approval PAGE=... EFFECTIVE=...` on your machine (it asks for the summary)"
         type: string
         required: false
         default: ""
@@ -74,11 +74,19 @@ jobs:
           path: data/sealed/registry.enc
           key: sealed-registry-${{ github.run_id }}
           restore-keys: sealed-registry-
+      # `python -I -S run/statebox.py`, not the venv: this step holds the job's
+      # token for the backup fallback, and -I -S loads no site-packages, so no
+      # third-party package (or its .pth startup hook) runs beside it (INFRA-07).
+      # ALLOW_EMPTY_REGISTRY: a repo variable set for ONE run to start a lost
+      # registry fresh on purpose (LAUNCH.md); unset, a lost copy after anyone
+      # was served is a red run, never a Stripe-only rebuild.
       - name: Open the registry
+        id: open
         env:
           CACHE_KEY: ${{ secrets.CACHE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python -m run.statebox open registry --backup
+          ALLOW_EMPTY_REGISTRY: ${{ vars.ALLOW_EMPTY_REGISTRY }}
+        run: python -I -S run/statebox.py open registry --backup
       # Before a single message is built: the owner's code for these exact
       # words. A dry run needs none — it mails nobody.
       - name: Check the owner's approval

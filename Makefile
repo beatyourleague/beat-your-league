@@ -163,9 +163,16 @@ lock:
 	$(PY) -m infra.lock_requirements
 
 # The owner's code for a real change-notice send (needs LOG_SECRET):
-#   make notice-approval PAGE=terms EFFECTIVE=2026-11-15 SUMMARY="..."
+#   make notice-approval PAGE=terms EFFECTIVE=2026-11-15
+# then paste the summary when asked, exactly as it goes in the workflow's box.
+# SUMMARY='...' in SINGLE quotes works too. Either way the words reach the code
+# as typed: the recipe passes each variable's RAW text ($(value ...)), single-
+# quoted for the shell. "$(SUMMARY)" let make expand "$69" to "9" (and a
+# double-quoted shell word drops quotes), so the code was signed over words
+# nobody pasted and the workflow refused it.
+shell_quote = '$(subst ','\'',$(value $(1)))'
 notice-approval:
-	$(PY) -m run.approval notice $(PAGE) $(EFFECTIVE) "$(SUMMARY)"
+	$(PY) -m run.approval notice $(call shell_quote,PAGE) $(call shell_quote,EFFECTIVE) $(if $(value SUMMARY),$(call shell_quote,SUMMARY),-)
 
 # Settle last week's published calls against the real box scores and republish
 # the public record. No secrets, no league — grading reads public data only.
