@@ -61,7 +61,13 @@ DEFAULT_REPLY_TO = None
 
 
 class DeliveryError(RuntimeError):
-    """A send failed. Carries no credentials, only what went wrong."""
+    """A send failed. Carries no credentials, only what went wrong — and no
+    address either: the text is redacted as it is made (run/redact.py),
+    because it is printed into public Actions logs."""
+
+    def __init__(self, message: object = "") -> None:
+        from run.redact import redact
+        super().__init__(redact(message))
 
 
 @dataclass(frozen=True)
@@ -97,6 +103,13 @@ class SendResult:
     # also ``skipped``, so every existing count treats it as not-a-failure;
     # this flag lets a runner say so separately.
     suppressed: bool = False
+
+    def __post_init__(self) -> None:
+        # A failure's detail is printed by every runner into a public log;
+        # whatever raised it, it carries no address (run/redact.py).
+        if not self.ok:
+            from run.redact import redact
+            self.detail = redact(self.detail)
 
 
 SUPPRESSED = "suppressed — this address asked us to stop"

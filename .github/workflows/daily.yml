@@ -66,39 +66,63 @@ concurrency:
   group: daily-intake
   cancel-in-progress: false
 
-permissions:
-  contents: write   # persist sent.jsonl — losing it double-welcomes everyone
-  issues: write
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 jobs:
   intake:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # persist sent.jsonl — losing it double-welcomes everyone
+      issues: write
+      actions: read     # the sealed registry's backup, when the cache is gone
     steps:
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
       # out the send log as it was when it was QUEUED — before the run ahead
       # of it pushed — and mail everything that run just mailed. (A double
       # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
-      - uses: actions/checkout@v4
+      #
+      # Every action is pinned to a full commit, its tag in the comment
+      # (INFRA-06): a moved tag cannot change what runs beside the live keys.
+      # persist-credentials: false keeps the push token out of .git/config for
+      # every step; only the persist step below is handed one (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked (INFRA-07): every package, transitive ones included, must
+      # match a hash in requirements.lock or nothing installs — and only the
+      # runtime set: pytest and PyYAML never sit beside the live secrets.
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      # The registry travels SEALED (run/statebox.py, INFRA-02): the cache and
+      # the backup artifact hold only data/sealed/registry.enc, encrypted under
+      # CACHE_KEY, because a pull-request run can restore this branch's caches.
+      # A cache miss falls back to the newest backup; a file that fails its
+      # check, or a GitHub outage mid-restore, fails this step, and every save
+      # below is gated on it, so a bad restore never overwrites a good copy.
+      - name: Restore subscriber registry (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-          restore-keys: registry-
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+          restore-keys: sealed-registry-
+      - name: Open the registry
+        id: open
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python -m run.statebox open registry --backup
       - name: Restore nflverse cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
@@ -258,21 +282,44 @@ jobs:
         if: always()
         run: .venv/bin/python -m run.posts replykit
 
-      - name: Save subscriber registry
-        if: always()
-        uses: actions/cache/save@v4
+      # Sealed before it leaves the runner, never in plain text: without
+      # CACHE_KEY this exits 1 once there is anything to seal (before launch,
+      # with no Stripe key either, it caches nothing and says so).
+      - name: Seal the registry
+        id: seal
+        if: always() && steps.open.outcome == 'success'
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          STRIPE_KEY_SET: ${{ secrets.STRIPE_API_KEY != '' }}
+        run: .venv/bin/python -m run.statebox seal registry
+      - name: Save subscriber registry (sealed)
+        if: always() && steps.seal.outputs.registry_sealed == 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+      # The durable copy (RULE S3): a cache entry is evicted after 7 days
+      # unused, and seat-log.jsonl cannot be rebuilt from Stripe. Uploaded when
+      # this run changed something, and by the once-a-day run regardless, so a
+      # quiet offseason still keeps a copy younger than 90 days. "The once-a-day
+      # run" is read off the claim step above, which runs only then.
+      - name: Back up the sealed registry
+        if: always() && steps.seal.outputs.registry_sealed == 'true' && (steps.seal.outputs.registry_changed == 'true' || steps.today.outcome == 'success')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sealed-registry
+          path: data/sealed/registry.enc
+          retention-days: 90
+          if-no-files-found: error
       - name: Save nflverse cache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: data/raw/nflverse
           key: nflverse-${{ github.run_id }}
       - name: Upload the day's reply kit
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: reply-kit
           path: content/
@@ -287,16 +334,23 @@ jobs:
       # (record_delivered). Staging only sent.jsonl committed the key that
       # stops the report being rebuilt and let its calls die with the runner:
       # published odds that never reached the public record.
+      #
+      # The only step handed a token that can push. The credential helper reads
+      # it from this step's environment, so .git/config holds the helper, never
+      # the token, and no earlier step could have used it.
       - name: Persist the send log and the record
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           git add -A data/processed/ledger
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Daily sweep: send log and ledger"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
       - name: Fail the run if a paid signup could not be served
         if: always() && steps.intake.outputs.code == '1'
@@ -335,10 +389,11 @@ jobs:
           TITLE: Daily signup sweep failed
         run: |
           body="$(date -u +%Y-%m-%d): a paid signup may be blocked, Stripe was
-          unreadable, a renewal notice or a free report was not sent, or monthly billing could
-          not be stopped. See the run.
+          unreadable, a renewal notice or a free report was not sent, monthly billing could
+          not be stopped, or the sealed registry could not be opened or sealed (CACHE_KEY).
+          See the run.
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then
@@ -361,7 +416,7 @@ jobs:
 
           $(cat "$RUNNER_TEMP/watchdog.txt")
 
-          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then

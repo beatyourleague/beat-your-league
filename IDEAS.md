@@ -183,12 +183,42 @@ The report is `reports/launch-readiness.md`; `make launch-check` holds the rest 
 - **Re-pin the published sample to a genuinely close call (52–62%)**, chosen by a stated rule
   before outcomes are looked at — the current flagship close call (70%) reads as "start your
   studs" to a savvy buyer. Moves every pinned landing figure, so it's a deliberate decision.
-- **Encrypt the registry and plans before caching** (defence in depth behind the fork-PR
-  approval setting in LAUNCH step 3), plus a nightly encrypted backup — the registry exists in
-  one Actions cache entry today.
+- ~~**Encrypt the registry and plans before caching**~~ — **built Oct 23 2026**
+  (`run/statebox.py`): sealed under `CACHE_KEY` before every cache save, opened after every
+  restore, with a 90-day encrypted backup artifact the open step falls back to.
 - **Move the site to Cloudflare Pages and the repo to private** (AFTER-10, G08). GitHub's
   Pages terms don't fit a site that sells a subscription, and the public repo shows internal
-  strategy. The decision and the steps are in LAUNCH §10; fonts are being self-hosted.
+  strategy. The decision and the steps are in LAUNCH §11; `site/_headers` is ready for the
+  host. After the move: point canonical links and the sitemap at the pretty URLs Cloudflare
+  serves (`/terms`, not `/terms.html`), which today redirect.
+
+
+## From the pre-launch review (Oct 23 2026)
+
+Confirmed or sharpened by the review, and bigger than its fixes:
+
+- **A typo'd buyer address pays and receives nothing.** The join page sends the address
+  straight to Stripe as a locked email, nothing reads it back, and no code reads bounces.
+  Show "Reports go to <address> — right?" with common-domain typo suggestions before the
+  redirect, and have the next intake check each Resend message id (already in `sent.jsonl`)
+  for a bounce or complaint, exit 1 and tell the owner so a refund comes first.
+- **A lost dispute keeps the reports coming.** Entitlement ends only on a full refund; a lost
+  chargeback is not one. Count a `disputed` charge as an intake alarm, and end entitlement
+  once the dispute is lost (LAUNCH §8 has the manual stop until then).
+- **The free report repeats per inbox, not per roster.** One per address per season; a second
+  inbox gets the same roster again. Also limit by a keyed digest of the roster (refuse at 80%+
+  overlap with one already served, or with a subscriber's).
+- **Drop GitHub's hourly backup cron** once the Worker has run a week or two on time — the
+  first step of making the repo private (LAUNCH §11): it halves the billed Actions minutes,
+  which a private repo on the Free plan would otherwise run out of mid-month.
+- **Publish the ledger's own JSONL beside `site/ledger/`** before the repo goes private, so the
+  "never edited" record keeps an outside copy anyone can diff.
+- **The nflverse cache is saved under a new key every hourly run** (~110 MB each), churning
+  the repo's 10 GB cache budget. Save it only when the download changed.
+- **Launch-check gates for the owner's hardening** (INFRA-15): the verified Pages domain TXT,
+  DMARC, the main ruleset while public, DNSSEC/CAA, `CACHE_KEY` in the secrets list, and the
+  live site's HSTS/CSP once on Cloudflare — read-only OWNER lines like the DMARC gate. And a
+  `site/.well-known/security.txt` with the hello@ contact and an expiry date.
 
 
 ## Model ideas that need a preregistered arm first

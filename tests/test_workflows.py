@@ -75,8 +75,11 @@ def test_the_artifact_never_publishes_subscriber_data() -> None:
     """An artifact is downloadable by anyone who can read the Actions tab.
     reports/subscribers/ holds personalised reports and reports/outbox/ holds
     the drafts with real addresses on them."""
+    # By name: the sealed-state backups (run/statebox.py) upload first now,
+    # and they hold only ciphertext (tests/test_prelaunch_infra.py pins that).
     upload = [s for s in _steps("weekly.yml")
-              if "upload-artifact" in str(s.get("uses", ""))]
+              if "upload-artifact" in str(s.get("uses", ""))
+              and s.get("name") == "Upload reports"]
     assert upload, "the Tuesday cron uploads no artifact at all"
     paths = str(upload[0]["with"]["path"])
     assert "reports/" in paths
@@ -169,7 +172,10 @@ def test_the_public_record_publishes_by_default() -> None:
                if "Persist" in str(s.get("name", ""))][0]
     run = str(persist["run"])
     assert "site/ledger/" in run
-    assert 'PUSH_LEDGER }}" != "false"' in run, (
+    # The variable arrives through the step's env, never pasted into the
+    # shell (INFRA-14) — the opt-out test reads the same either way.
+    assert (persist.get("env") or {}).get("PUSH_LEDGER") == "${{ vars.PUSH_LEDGER }}"
+    assert '"$PUSH_LEDGER" != "false"' in run, (
         "publishing the public record is opt-in; it must be opt-out")
 
 
@@ -182,6 +188,13 @@ def test_the_monday_cron_needs_no_secrets() -> None:
         if str(step.get("if", "")).strip() == "failure()":
             continue                        # the issue-filing step needs a token
         env = step.get("env") or {}
+        # The persist step is handed the job's own push token and the opt-out
+        # variable (INFRA-07/14: checkout no longer leaves the token in
+        # .git/config) — neither is a secret the owner has to set.
+        if "Persist" in str(step.get("name", "")):
+            assert env == {"GH_TOKEN": "${{ github.token }}",
+                           "PUSH_LEDGER": "${{ vars.PUSH_LEDGER }}"}, env
+            continue
         assert not env, f"{step.get('name')!r} needs {sorted(env)}"
 
 

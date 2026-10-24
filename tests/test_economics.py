@@ -109,19 +109,19 @@ def test_selling_time_is_plans_own_budget_and_the_audit_agrees(tmp_path, monkeyp
     time?". The model takes PLAN's budget, and the launch check fails when
     the audit's base case stops matching it."""
     assert econ.SELLING_MIN_PER_DAY == 35
-    assert econ.owner_hours() == 64.0
-    assert econ.base_case_figures() == ("about $1,114", "about 64 hours", "about $17 an hour")
+    assert econ.owner_hours() == 58.9          # 11 weeks from an Oct 26 opening (BIZ-03)
+    assert econ.base_case_figures() == ("about $727", "about 59 hours", "about $12 an hour")
     stale = tmp_path / "launch-readiness.md"
-    stale.write_text("about $1,114 after fixed costs; about 43 hours, so about $26 an hour",
+    stale.write_text("about $727 after fixed costs; about 43 hours, so about $26 an hour",
                      encoding="utf-8")
     missing = econ.readiness_base_case_mismatches(stale)
-    assert len(missing) == 2 and "about 64 hours" in missing[0], missing
+    assert len(missing) == 2 and "about 59 hours" in missing[0], missing
     # And the launch check's gate goes red on it.
     monkeypatch.setattr(econ, "READINESS", stale)
     [row] = [r for r in econ.summary_lines() if "base-case" in r[0]]
-    assert row[1] == "FAIL" and "about 64 hours" in row[2], row
+    assert row[1] == "FAIL" and "about 59 hours" in row[2], row
     wrapped = tmp_path / "wrapped.md"
-    wrapped.write_text("about $1,114 after costs. Owner time: about\n64 hours, so about $17\n"
+    wrapped.write_text("about $727 after costs. Owner time: about\n59 hours, so about $12\n"
                        "an hour.", encoding="utf-8")
     assert econ.readiness_base_case_mismatches(wrapped) == []
 

@@ -150,6 +150,23 @@ drops:
 sitemap:
 	$(PY) -m render.sitemap
 
+# site/_headers — Cloudflare Pages' security headers, with each page's inline
+# scripts hashed into its Content-Security-Policy. Run after editing any
+# page's <script>; tests fail if it is stale (GitHub Pages ignores the file).
+.PHONY: headers lock notice-approval
+headers:
+	$(PY) -m render.headers
+
+# requirements.lock / requirements-dev.lock, hash-locked from requirements.txt
+# (needs PyPI). Run after changing a pin and commit all three.
+lock:
+	$(PY) -m infra.lock_requirements
+
+# The owner's code for a real change-notice send (needs LOG_SECRET):
+#   make notice-approval PAGE=terms EFFECTIVE=2026-11-15 SUMMARY="..."
+notice-approval:
+	$(PY) -m run.approval notice $(PAGE) $(EFFECTIVE) "$(SUMMARY)"
+
 # Settle last week's published calls against the real box scores and republish
 # the public record. No secrets, no league — grading reads public data only.
 monday:

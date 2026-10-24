@@ -22,27 +22,36 @@ on:
   pull_request:
   workflow_dispatch: {}
 
-permissions:
-  contents: read
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+# A pull request's code runs here, so it is handed a read-only token, no
+# secrets, and no cache of ours to restore.
+permissions: {}
 
 jobs:
   pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # Pinned to full commits, tags in the comments (INFRA-06).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked (INFRA-07): the dev lock is the runtime lock plus pytest
+      # and PyYAML, every package matching a hash or nothing installs.
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements-dev.lock
       # node is what makes tests/test_intake.py meaningful: it runs the real
       # site/join/roster.js against the Python that has to decode what the
       # browser encodes. Without node those tests SKIP, so the JS<->Python
       # contract would be unenforced here exactly as it was everywhere else.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
       # -rs lists every SKIP with its reason. data/ and reports/ are gitignored

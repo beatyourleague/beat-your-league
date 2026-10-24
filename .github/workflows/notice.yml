@@ -5,6 +5,12 @@
 # new page is published and before its effective date: it mails every
 # subscriber and seat entitled today, one notice per mailbox, keyed in the send
 # log so a re-run sends nothing twice. Untick `send` for a dry run.
+#
+# A real send needs the owner's approval code (run/approval.py, INFRA-06),
+# made on the owner's own machine for the exact page, date and summary:
+#     LOG_SECRET=... .venv/bin/python -m run.approval notice terms 2026-11-15 "..."
+# The form Worker's dispatch token can start this workflow; it cannot make
+# that code, so it cannot mail every subscriber words of its own choosing.
 name: change-notice
 
 on:
@@ -26,36 +32,64 @@ on:
         description: "Actually send (unticked = dry run)"
         type: boolean
         default: false
+      approval:
+        description: "For a real send: the code from `python -m run.approval notice PAGE EFFECTIVE SUMMARY` on your machine"
+        type: string
+        required: false
+        default: ""
 
 # The send log is shared with the daily sweep; one writer at a time.
 concurrency:
   group: daily-intake
   cancel-in-progress: false
 
-permissions:
-  contents: write   # persist sent.jsonl, so a re-run never mails twice
+# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+permissions: {}
 
 jobs:
   notice:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # persist sent.jsonl, so a re-run never mails twice
+      actions: read     # the sealed registry's backup, when the cache is gone
     steps:
-      - uses: actions/checkout@v4
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
+      # push token kept out of .git/config until the persist step (INFRA-07).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.ref_name }}
-      - uses: actions/setup-python@v5
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
+      # Hash-locked, runtime packages only (INFRA-07; requirements.lock).
       - name: Install pinned dependencies
         run: |
           python -m venv .venv
-          .venv/bin/pip install --disable-pip-version-check -r requirements.txt
-      - name: Restore subscriber registry
-        uses: actions/cache/restore@v4
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Restore subscriber registry (sealed)
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: data/registry
-          key: registry-${{ github.run_id }}
-          restore-keys: registry-
+          path: data/sealed/registry.enc
+          key: sealed-registry-${{ github.run_id }}
+          restore-keys: sealed-registry-
+      - name: Open the registry
+        env:
+          CACHE_KEY: ${{ secrets.CACHE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python -m run.statebox open registry --backup
+      # Before a single message is built: the owner's code for these exact
+      # words. A dry run needs none — it mails nobody.
+      - name: Check the owner's approval
+        if: github.event.inputs.send == 'true'
+        env:
+          PAGE: ${{ github.event.inputs.page }}
+          EFFECTIVE: ${{ github.event.inputs.effective }}
+          SUMMARY: ${{ github.event.inputs.summary }}
+          APPROVAL: ${{ github.event.inputs.approval }}
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
+        run: .venv/bin/python -m run.approval verify notice "$APPROVAL" "$PAGE" "$EFFECTIVE" "$SUMMARY"
       - name: Send the notice
         env:
           PAGE: ${{ github.event.inputs.page }}
@@ -75,13 +109,18 @@ jobs:
         run: |
           .venv/bin/python -m run.notice --page "$PAGE" --effective "$EFFECTIVE" \
             --summary "$SUMMARY" $([ "$SEND" = "true" ] && echo --send)
+      # The only step handed a token that can push (the credential helper reads
+      # it from this step's environment; .git/config never holds it).
       - name: Persist the send log
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Change notice: send log"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
