@@ -50,9 +50,12 @@ LANDING_PROSE, JOIN_PROSE = prose(LANDING), prose(JOIN)
 # What the odds gate checks, in the selling pages' plain words (COPY:F7).
 # "wherever both players are healthy and playing" promised odds on a pair the
 # gate withholds — every team defense (graded D), every pair short of its
-# record — and claimed health a Tuesday report cannot know.
-GATE_CLAUSE = ("wherever both players are playing, off the injury report and have "
-               "enough games on record (not on team defenses)")
+# record — and claimed health a Tuesday report cannot know. Then "wherever"
+# itself (COPY-3, contract C5): the rising hold and the practice squad
+# withhold odds on pairs that pass all three checks, so the clause states the
+# checks as NECESSARY ("only where"), never as sufficient.
+GATE_CLAUSE = ("only where both players are playing, off the injury report and have "
+               "enough games on record (never on team defenses)")
 
 
 def _price(pattern: str) -> str:
@@ -3431,7 +3434,7 @@ def test_the_how_it_works_page_answers_who_what_and_how_to_check() -> None:
     page = prose(markup_only(HOW))
     for needed in ("Who's behind it", "Where the numbers come from", "How to check us",
                    "What it doesn't do", "chance your starter outscores",
-                   "not a lock", "nflverse", "independent and small"):
+                   "not a certainty", "nflverse", "independent and small"):
         assert needed in page, f"the how-it-works page lost {needed!r}"
     assert 'name="robots"' not in HOW, "the page that builds trust must be indexable"
     assert 'href="how-it-works.html"' in LANDING
@@ -4194,7 +4197,7 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
         "  globalThis.FORM_ENDPOINT = c[6];\n"
         "  out.push([firstChipText(), renewalDate() ? 'dated' : '']);\n}\n"
         "console.log(JSON.stringify(out));")
-    assert got == [["Season pass opens soon", ""], ["Monthly opens soon", ""],
+    assert got == [["Rest-of-Season Pass opens soon", ""], ["Monthly opens soon", ""],
                    ["League Pass opens soon", ""], ["Seats open soon", ""],
                    ["Weekly reports from Tue, Oct 20", "dated"],
                    ["Weekly reports from Tue, Oct 20", "dated"]]
@@ -4742,9 +4745,14 @@ def test_every_selling_page_states_the_odds_gate_in_the_same_plain_words() -> No
         # Inline emphasis dropped, so "<b>The odds</b> wherever" is read too.
         text = prose(re.sub(r"</?(?:b|i|em|strong|span)\b[^>]*>", "", page))
         assert "healthy and playing" not in text, f"{name} still claims health"
-        # Any "the odds wherever …" is the whole clause, defenses included.
-        for at in [m.start() for m in re.finditer(r"odds wherever", text)]:
-            assert text[at + len("odds "):].startswith(GATE_CLAUSE), \
+        # COPY-3: "wherever" promised odds on every pair that passes the
+        # checks; the old guard looked only for "odds wherever" and so passed
+        # vacuously once the wording moved. Now no form of the sufficient
+        # clause may appear, and every "only where both players" — the odds'
+        # or a percentage's — is the whole clause, defenses included.
+        assert not re.search(r"wherever both players", text), f"{name}: 'wherever' is back"
+        for at in [m.start() for m in re.finditer(r"only where both players", text)]:
+            assert text[at:].startswith(GATE_CLAUSE), \
                 f"{name}: {text[at:at + 160]!r}"
     explained = prose(HOW.split("<dt>Rows with no percentage</dt>")[1].split("</dd>")[0])
     for check in ("teams play this week", "questionable, doubtful or out",
