@@ -809,18 +809,19 @@ SITE_BAR_CSS = (
 
 
 def site_bar(prefix: str = "", home: str | None = None, current: str | None = None,
-             uid: str = "byln") -> str:
+             uid: str = "byln", pricing: bool = True) -> str:
     """The nav row every site page carries above its headline. ``prefix`` is
     the way back to the site root from the page ("" at the root, "../" one
     folder down, "/" for the 404, which is served at any depth); ``home`` the
     lockup's href (default ``prefix + "index.html"``, "/" for the 404);
     ``current`` the route this page is ("how-it-works.html", …), marked
-    aria-current. Relative links, so the live sample's ?via= carry rewrites
-    exactly these."""
+    aria-current. ``pricing``: False on a page reached by paying (thanks.html,
+    launch review D5), where "Pricing" offers what the visitor just bought.
+    Relative links, so the live sample's ?via= carry rewrites exactly these."""
     home = home or f"{prefix}index.html"
     routes = (("how-it-works.html", "How it works", True),
               ("sample-report.html", SITE_NAV_REAL_REPORT, False),
-              ("index.html#pricing", "Pricing", True))
+              *((("index.html#pricing", "Pricing", True),) if pricing else ()))
     links = []
     for href, label, hide in routes:
         klass = ' class="hidesm"' if hide else ""

@@ -335,6 +335,22 @@ async function flowJob(port, job) {
     // The join page reads the address back before it leaves for Stripe
     // ("Reports go to … — right?"): answer it as a buyer would.
     await sleep(150);
+    if (job.whileAsked) {
+      // A buyer who changes something while the read-back is open (a setting,
+      // a removed row): what leaves the page must be what is on it at the
+      // yes, never what was on it when the box opened. If the change closed
+      // the box, they press the button again, as a buyer would.
+      const refNow = "R.withVia(checkoutRef(), SOURCE)";
+      result.refAsked = await evaluate(s, refNow);
+      await evaluate(s, job.whileAsked);
+      await sleep(150);
+      result.closedByChange = await evaluate(s, 'document.getElementById("check-email").hidden');
+      if (result.closedByChange) {
+        await evaluate(s, 'document.getElementById("submit").click()');
+        await sleep(150);
+      }
+      result.refAtYes = await evaluate(s, refNow);
+    }
     await evaluate(s, `(() => {
       const box = document.getElementById("check-email");
       const yes = document.getElementById("check-yes");

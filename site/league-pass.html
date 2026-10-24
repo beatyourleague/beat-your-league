@@ -99,7 +99,7 @@
      markup, fail closed) it is a real button to the landing's email capture,
      never the dashed "opens soon" box that read as a wireframe (contract C2);
      the script below swaps both slots when checkout opens. */
-  .ctaslot{margin-top:18px;}
+  .ctaslot,.price > a.btn{margin-top:18px;}
   .ctaslot small{display:block;margin-top:8px;font-size:13px;font-weight:600;color:var(--slate);}
   .closer .ctaslot small{color:var(--dusk2);}
   .see{margin-top:14px;font-size:14px;}
@@ -111,11 +111,7 @@
   .chatline button{flex:none;font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
     border:0;padding:8px 12px;cursor:pointer;min-height:36px;}
-  /* A blank to fill in, drawn as one (D18): gold bracketed text read as a
-     link that had failed to render. */
-  .chatline .blank{display:inline-block;color:var(--paper);font-weight:700;font-size:13px;
-    line-height:1.4;background:rgba(242,194,48,.14);border:1px dashed var(--flag);
-    padding:0 8px;border-radius:99px;}
+  .chatline .blank{color:var(--flag);font-weight:700;white-space:nowrap;}
   .chatline b{overflow-wrap:anywhere;}
   .chatline-label{display:block;margin-top:10px;padding:3px 0;font-size:13.5px;line-height:1.5;
     color:var(--dusk2);}
@@ -249,7 +245,7 @@
     <div class="box"><h3>Nobody's team gets shared</h3>
       <p>Each report goes only to the manager it's about. We never share one manager's
       report with another, and we never publish your league's names anywhere.</p></div>
-    <div class="box"><h3>Under $6 a manager, out of dues</h3>
+    <div class="box"><h3>Under $6 a manager, out of the pot</h3>
       <p>Twelve Rest-of-Season Passes would cost $348, and ten would cost $290. The League
       Pass is $69 for the whole league: $5.75 a manager in a 12-team league. Easy to take
       from the pot.</p></div>
@@ -284,8 +280,8 @@
   <div class="steps ask">
     <h3>Ask the league first</h3>
     <div class="chatline">
-      <p id="ask-text">Should we put the League Pass from Beat Your League on this year's
-      dues? $69 covers the whole league for the rest of the season, and everyone gets their own lineup report every
+      <p id="ask-text">Should we take the League Pass from Beat Your League out of the
+      pot? $69 covers the whole league for the rest of the season, and everyone gets their own lineup report every
       Tuesday, built from their own roster: https://beatyourleague.com/league-pass.html</p>
     </div>
     <button type="button" class="sharebtn" id="ask-share">Send this to the group chat</button>
@@ -430,16 +426,23 @@ function carryVia(href, via) {
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
-// Both asks — the price card's and the closer's — say the same thing.
+// Both asks — the price card's (#league-cta) and the closer's — say the same
+// thing (D18): the closer's slot gets a copy of whatever the price card's
+// slot is given.
 const ctaSlots = document.querySelectorAll("[data-lp-cta]");
-if (CHECKOUT_OPEN && SEATS_OPEN) {
+function askInTheCloserToo(...nodes) {
   ctaSlots.forEach((slot) => {
-    const link = document.createElement("a");
-    link.className = "btn gold";
-    link.href = "join/index.html?plan=pass";
-    link.textContent = "Buy the League Pass — $69";
-    slot.replaceChildren(link);
+    if (slot.id !== "league-cta") slot.replaceChildren(...nodes.map((n) => n.cloneNode(true)));
   });
+}
+if (CHECKOUT_OPEN && SEATS_OPEN) {
+  const slot = document.getElementById("league-cta");
+  const link = document.createElement("a");
+  link.className = "btn gold";
+  link.href = "join/index.html?plan=pass";
+  link.textContent = "Buy the League Pass — $69";
+  askInTheCloserToo(link);
+  slot.replaceWith(link);
   // Only now is the line true to send, so only now can it be copied.
   document.getElementById("chat-example").hidden = true;
   document.getElementById("chat-live").hidden = false;

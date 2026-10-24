@@ -4678,7 +4678,8 @@ def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
     once, and carries no seat link (that goes out only after payment)."""
     ask = LEAGUE_PASS.split('<div class="steps ask">')[1].split("\n  </div>")[0]
     line = prose(re.search(r'<p id="ask-text">(.*?)</p>', ask, re.S).group(1))
-    assert line.startswith("Should we put the League Pass")
+    # Late October: out of the pot, not "this year's dues" (launch review M11).
+    assert line.startswith("Should we take the League Pass")
     assert "join/" not in ask and "I got us" not in ask
     assert "league-pass.html" in line
     assert 'id="ask-share"' in ask
@@ -4779,7 +4780,10 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     assert "finance.querySelector('a[href=\"league-pass.html\"]')" in LANDING
 
 
-@pytest.mark.parametrize("name", _PAPER + ("league-pass.html",))
+# thanks.html is reached by paying, so its nav offers no Pricing (launch
+# review D5): tests/test_prelaunch_pages.py pins its routes (NAV_PAGES).
+@pytest.mark.parametrize("name", tuple(p for p in _PAPER if p != "thanks.html")
+                         + ("league-pass.html",))
 def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
     """Launch review I5: only the landing had a nav; How it works, League
     Pass, terms, privacy, thanks and 404 offered a Home pill alone, so a

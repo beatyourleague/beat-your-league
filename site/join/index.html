@@ -411,8 +411,10 @@ Baltimore Ravens
   <section id="step-email" class="hidden">
     <!-- The step's name, like the progress bar's; the field below carries its
          own label. "Where do reports go?" over "Where reports go" said it
-         twice (D14). nothingToPay() renames it for the modes that pay nothing. -->
-    <div class="eyebrow" id="step3-head">3 · Checkout</div>
+         twice (D14), so the script names the step: "3 · Checkout" for a plan
+         that takes money, nothingToPay()'s label for the free modes. A seat
+         keeps this heading: the seat flow's copy is the WORKER's (contract C3). -->
+    <div class="eyebrow" id="step3-head">3 · Where do reports go?</div>
     <div class="note" id="seat-share" style="display:none"></div>
     <form id="form-email" novalidate>
       <div class="optlabel" id="lbl-plan" style="display:none">Your plan</div>
@@ -916,6 +918,7 @@ $("resolve").addEventListener("click", () => {
 // it is re-checked. (addPlayer sets the value programmatically, which fires no
 // input event — it re-checks itself on the next line.)
 $("roster-text").addEventListener("input", () => {
+  closeEmailCheck();
   if (!state.matches.length) return;
   state.stale = true;
   state.ready = false;
@@ -945,6 +948,8 @@ function whyUnread(match) {
 // ``focusAt``: after a remove or a choice, keyboard focus goes to the row now
 // at that display position (or the tally), rather than falling to the page.
 function draw(focusAt) {
+  // The roster changed, so a read-back on screen was about another purchase.
+  closeEmailCheck();
   const list = $("rows");
   list.replaceChildren();
   if (!state.matches.length) { $("tally").textContent = ""; return; }
@@ -1238,6 +1243,7 @@ function drawShapeNote() {
 }
 
 $("step-league").addEventListener("change", () => {
+  closeEmailCheck();
   drawShapeNote();
   // The tally counts starting spots and the kept address encodes the
   // settings, so both follow a change made after the roster was checked.
@@ -1375,8 +1381,11 @@ $("form-email").addEventListener("submit", (event) => {
   }
   // Stripe locks the address, so it is read back once before the page leaves:
   // "Reports go to <address> — right?" (critique #1). Yes goes on from here.
+  // The read-back holds only the ADDRESS: Yes presses this button again, so
+  // the ref and the link are rebuilt from the page as it stands then — a
+  // setting or roster changed while the box was open is what gets bought.
   if (state.confirmedEmail !== email) {
-    askAboutEmail(email, { link: link, tagged: tagged, email: email });
+    askAboutEmail(email, { email: email });
     return;
   }
   leaveForCheckout(link, tagged, email);
@@ -1423,8 +1432,10 @@ function typoSettled(email) {
   askAboutEmail(email, null);
   return false;
 }
-// The read-back. ``go`` is the checkout waiting on a yes; null when only a
-// typo is in question (nothing leaves for Stripe on that path).
+// The read-back. ``go`` ({email}) is a checkout waiting on a yes; null when
+// only a typo is in question (nothing leaves for Stripe on that path). It
+// never holds a ref or a link: a snapshot taken here was handed to Stripe
+// after the buyer had changed the scoring or removed a player (review, RULE R3).
 function askAboutEmail(email, go) {
   const fix = suggestedEmail(email);
   state.pendingCheckout = go;
@@ -1450,9 +1461,11 @@ $("check-yes").addEventListener("click", () => {
   const email = $("email").value.trim();
   const go = state.pendingCheckout;
   if (go && go.email === email) {
+    // Yes re-enters the normal path, which rebuilds the ref and the link from
+    // what is on the page now and finds the address confirmed.
     state.confirmedEmail = email;
     closeEmailCheck();
-    leaveForCheckout(go.link, go.tagged, go.email);
+    $("submit").click();
     return;
   }
   // Kept as typed: carry on with whatever the button does on this path.
@@ -1466,7 +1479,7 @@ $("check-use").addEventListener("click", () => {
   $("email").value = fixed;
   const go = state.pendingCheckout;
   // The corrected address is read back too: Yes is what sends it.
-  if (go) { askAboutEmail(fixed, { link: go.link, tagged: go.tagged, email: fixed }); return; }
+  if (go) { askAboutEmail(fixed, { email: fixed }); return; }
   state.keptEmail = fixed;
   closeEmailCheck();
   $("submit").click();
@@ -1797,7 +1810,9 @@ const SEASON_SUBMIT = $("submit").textContent;
 // A mode that charges nothing shows no checkout step and no currency line.
 function nothingToPay(stepLabel) {
   document.querySelector(".progress .s3").textContent = stepLabel;
-  $("step3-head").textContent = stepLabel;
+  // The step heading names the step, as the progress bar does (D14) — except
+  // a seat's, which is the seat flow's own copy (contract C3).
+  if (!SEAT_MODE) $("step3-head").textContent = stepLabel;
   $("currency-note").style.display = "none";
   document.querySelector(".secure").style.display = "none";
   // No checkout here, so the footer must not describe one (LP-D7).
@@ -2095,6 +2110,7 @@ if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
 // else (or nothing), and their own branch above set the page for it.
 // A declaration, so the submit handler's "Switch to …" button can call it.
 function applyPlan() {
+  closeEmailCheck();
   monthlyChosen = radio("plan") === "monthly";
   showError("err-email", "");
   showOk("");
@@ -2123,6 +2139,8 @@ function switchPlan() {
     " — its price and terms are just above the button.");
   $("submit").focus();
 }
+// A plan that takes money names its step 3 as the progress bar does (D14).
+if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) $("step3-head").textContent = "3 · Checkout";
 if (MONTHLY_OFFERED && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   $("lbl-plan").style.display = "block";
   $("lbl-email").style.display = "block";

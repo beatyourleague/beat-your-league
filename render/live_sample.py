@@ -745,7 +745,14 @@ def restamp_chrome(page: str) -> str:
     from render.report import (JOIN_PROMISE, cancel_html, sample_cta, site_bar,
                                stop_route)
     page = _SITEBAR.sub(lambda _m: site_bar(uid="bylm"), page)
-    page = _CTA.sub(lambda _m: sample_cta(), page)
+    # A page restamp_last already marked as an OVER season's last report
+    # keeps its closed asks: checkout is closed once the season is over (D9),
+    # whatever the landing's flag says, and the card beneath them says
+    # reports start again next season.
+    over = bool(_LAST_BANNER.search(page)) and esc(NEXT_SEASON) in page
+    cta = (f'<a class="btn gold" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
+           if over else sample_cta())
+    page = _CTA.sub(lambda _m: cta, page)
     page = _PROMISE.sub(lambda m: m.group(1) + esc(JOIN_PROMISE) + m.group(2), page,
                         count=1)
     stop = cancel_html(stop_route({"anonymized_demo": True}), sample=True)

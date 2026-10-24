@@ -41,6 +41,11 @@ Rules, each because a post is the one place we speak without a report around it:
   Monday's grading will not settle.
 - **An if/then that changes no seat is not news.** "If X (bench) is cleared:
   keep Y" was drafted as a plan; only plans that move somebody are drafted.
+- **A Thursday starter gets his own post, for Thursday** (launch review M8).
+  The one game the Saturday check is too late for: his kickoff as his row
+  prints it, and the if/then the report printed for him when there is one
+  that moves somebody — else the report's own "check his status" line. No
+  number of any kind. Drafted with the rest on Tuesday, marked for Thursday.
 - **A week with no call still says something true.** No call means no
   number, never an empty page: the rising roles, or failing those the
   workloads the report already prints — counts, no %.
@@ -192,6 +197,41 @@ def _pivot_post(report: Mapping[str, Any]) -> str | None:
             f"Tuesday for our sample roster, so Sunday isn't a scramble.")
 
 
+# A row's game as render prints it: "vs NE · Thu 8:15 PM ET".
+_THURSDAY = re.compile(r"^(vs|@) ([A-Z]{2,3}) · Thu(?: (\d{1,2}:\d\d [AP]M) ET)?$")
+
+
+def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
+    """(post, card) for the first starter whose game is Thursday night, or
+    None. His if/then — a printed plan ABOUT him that moves somebody, and not
+    the one Tuesday's if/then post already quotes — when it fits, else the
+    report's own instruction to check his status before kickoff."""
+    for row in report.get("lineup") or []:
+        found = _THURSDAY.match(str(row.get("game") or ""))
+        if not (found and row.get("player_name")):
+            continue
+        name, slot = row["player_name"], str(row.get("slot") or "").replace(
+            "SUPER_FLEX", "SFLEX")
+        where, team, clock = found.groups()
+        when = f" at {clock} ET" if clock else ""
+        head = f"Thursday night: {name} ({slot}, {where} {team}) kicks off{when}."
+        tuesday = next((p for p in report.get("pivots") or [] if _changes_a_seat(p)), None)
+        plan = next((p for p in report.get("pivots") or []
+                     if p.get("about") == row.get("player_id") and _changes_a_seat(p)
+                     and p is not tuesday), None)
+        tries = []
+        if plan is not None:
+            action = str(plan["action"]).strip().rstrip(".")
+            action = action[:1].lower() + action[1:]
+            tries.append((f"{head} The if/then we set on Tuesday for our sample "
+                          f"roster: if {plan['condition']}, {action}.",
+                          "If/Then for Gameday"))
+        tries.append((f"{head} Our sample roster's Tuesday report flags it: check "
+                      f"his status before then.", "The Lineup"))
+        return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
+    return None
+
+
 def _short_rising(row: Mapping[str, Any]) -> str:
     return (f"{row['name']} ({row['team']} {row['position']}) "
             f"{row['recent']:.1f} touches a game, up from {row['earlier']:.1f}")
@@ -231,7 +271,10 @@ def _workload_post(report: Mapping[str, Any], week: int) -> str | None:
 CARDS = {"The closest call": "The Week's Closest Call",
          "The if/then": "If/Then for Gameday",
          "Rising roles": "Rising Roles",
-         "Workloads": "The Lineup"}
+         "Workloads": "The Lineup",
+         "Thursday night": "The Lineup"}
+# When a draft is meant to go up, if not Tuesday with the rest.
+WHEN = {"Thursday night": "Thursday, before his kickoff"}
 
 
 def reply_text(url: str) -> str:
@@ -242,11 +285,13 @@ def reply_text(url: str) -> str:
 def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str, str]]:
     """The week's candidate posts, in the order worth posting them. Each is the
     post itself (``text``, no link), its first reply (``reply``, the link)
-    and the card to screenshot and attach (``card``)."""
+    and the card to screenshot and attach (``card``); a draft meant for
+    another day says which (``when``)."""
     week = report["meta"]["week"]
     url = f"{site}/this-week.html"
     call = _call_post(report)
     rising = _rising_post(report, week)
+    thursday = _thursday_post(report)
     out = [{"name": name, "text": text, "reply": reply_text(url), "card": CARDS[name]}
            for name, text in (
         ("The closest call", call),
@@ -257,6 +302,9 @@ def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str,
         ("Workloads", None if (call or rising)
          else _workload_post(report, week)),
     ) if text]
+    if thursday:
+        out.append({"name": "Thursday night", "text": thursday[0], "reply": reply_text(url),
+                    "card": thursday[1], "when": WHEN["Thursday night"]})
     return [d for d in out if len(d["text"]) <= LIMIT
             and not any(w in d["text"].lower() for w in BANNED)]
 
@@ -275,10 +323,13 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
              "reply under your own post: that is where the link goes.", ""]
     if not posts:
         lines.append("_Nothing to draft this week: the sample report had no "
-                     "closest call, if/then, rising role or workload to quote._")
+                     "closest call, if/then, rising role, workload or Thursday "
+                     "starter to quote._")
     for i, post in enumerate(posts, 1):
-        lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", "",
-                  post["text"], "",
+        lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", ""]
+        if post.get("when"):
+            lines += [f"Post it: {post['when']}.", ""]
+        lines += [post["text"], "",
                   f"Attach: a screenshot of the \"{post['card']}\" card.", "",
                   f"First reply: {post['reply']}", ""]
     return "\n".join(lines) + "\n"
