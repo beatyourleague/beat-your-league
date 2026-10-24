@@ -1793,11 +1793,14 @@ def test_the_entity_sentence_is_identical_everywhere() -> None:
     assert match, "PLAN §1 lost the blockquoted entity sentence"
     sentence = re.sub(r"\s+", " ", match.group(1).replace("> ", ""))
 
+    # PLAN §1 names its surfaces: meta description, JSON-LD, pitches, README,
+    # directories. og:description is NOT one — it is what a group chat shows
+    # under a shared link, and the 70-word gate-qualified sentence there read
+    # as fine print (pre-launch review M12), so it carries a short benefit line
+    # instead (tests/test_prelaunch_landing.py pins it).
     surfaces = {
         "landing meta description":
             re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1),
-        "landing og:description":
-            re.search(r'property="og:description" content="([^"]+)"', LANDING).group(1),
         "landing JSON-LD":
             re.search(r'"description": "([^"]+)"', LANDING).group(1),
     }
@@ -4590,7 +4593,8 @@ def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at
     figure, and the card says what the call IS (PC-03): the closest call that
     carries odds on that roster, not a coin flip."""
     assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
-    assert '<div class="fliplegend">The mark in the middle is 50%, a toss-up.</div>' in LANDING
+    # Pre-launch review D12: the bar is drawn from 50%, as the report draws it.
+    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
     assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
     note = prose(LANDING).split("The close one, called")[1][:300]
     assert "The week's closest call with odds on this roster, decided:" in note
@@ -4707,12 +4711,15 @@ def test_the_supported_scoring_and_the_odds_gate_are_stated_not_overclaimed() ->
         for overclaim in (r"your league's way", r"odds on (?:each one|every close call)",
                           r"every close call decided and the odds"):
             assert not re.search(overclaim, text, re.I), f"{name}: {overclaim}"
-        # The hero (Oct 21 2026: fewer words) promises no odds at all, so it
-        # owes no qualifier; any surface that mentions odds states the gate.
+        # The hero (Oct 21 2026: fewer words) and the share preview (M12: the
+        # benefit line, not the entity sentence) promise no odds at all, so
+        # they owe no qualifier; any surface that mentions odds states the gate.
         if name in ("hero", "thanks") and "the odds" not in text:
             continue
+        if name == "og" and not re.search(r"\bodds\b", text, re.I):
+            continue
         assert GATE_CLAUSE in text, name
-    for name in ("meta", "og", "JSON-LD"):
+    for name in ("meta", "JSON-LD"):
         assert "half-PPR or standard" in surfaces[name]
 
 
@@ -4905,9 +4912,11 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     now, and every #watch-form link puts the cursor in the field. The open
     state's finance rewrite keeps the League Pass link by its href, because the
     closed line's FIRST link is now the capture link it retires."""
+    # Pre-launch review D4: the closed card's control is a real gold button
+    # into the form, not a dashed box holding a link.
     for cta in ("season-cta",):
-        soon = re.search(rf'<div class="soon" id="{cta}">(.*?)</div>', LANDING).group(1)
-        assert '<a href="#watch-form" data-to-capture>' in soon and "above" not in soon
+        assert re.search(rf'<a class="btn gold" id="{cta}" href="#watch-form" data-to-capture>'
+                         r'Tell me when it opens</a>', LANDING)
     handler = LANDING.split('document.addEventListener("click"')[1].split("\n});")[0]
     assert "closest('a[href=\"#watch-form\"]')" in handler
     assert "field.focus({ preventScroll: true })" in handler
