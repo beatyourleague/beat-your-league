@@ -1928,27 +1928,22 @@ def _site() -> str:
     return os.environ.get("SITE_URL", "").rstrip("/")
 
 
-def league_seat_link(meta: Mapping[str, Any]) -> tuple[str, bool] | None:
-    """(where a leaguemate claims the seat their league's pass already paid
-    for, True) — while the pass still has a seat to give.
+def league_seat_link(meta: Mapping[str, Any]) -> str | None:
+    """Where a leaguemate claims the seat their league's pass already paid
+    for — while the pass still has a seat to give.
 
     Only the per-pass link (``meta["seat_link"]``, set by the run when it can
-    sign one). D10: the generic ``?pass=1`` page it used to fall back to
-    rendered exactly when UPDATE_SECRET was unset — the one state in which no
-    seat claim can be confirmed — so it offered a free seat nobody could
-    have. And a full pass (``meta["seats_full"]``) has no seat to offer."""
+    sign one): it is the ONLY way a seat is claimed (contract C3 — the generic
+    ``?pass=1`` page that matched a seat by the buyer's typed address is
+    closed, so the "you'll need the email the pass was bought with" note that
+    rode beside it is gone too). D10: that generic page rendered exactly when
+    UPDATE_SECRET was unset — the one state in which no seat claim can be
+    confirmed. And a full pass (``meta["seats_full"]``) has no seat to offer."""
     link = meta.get("seat_link")
     if (isinstance(link, str) and link.startswith("https://")
             and not meta.get("seats_full")):
-        return link, True
+        return link
     return None
-
-
-# The generic seat page matches a seat to its pass by the payer's address, so
-# a leaguemate sent there must know to ask for it — or their claim matches no
-# pass and is dropped.
-SEAT_ADDRESS_NOTE = ("you'll need the email address the pass was bought with; "
-                     "it's how your seat is matched.")
 
 
 def _forward_text(meta: Mapping[str, Any]) -> str:
@@ -1956,16 +1951,14 @@ def _forward_text(meta: Mapping[str, Any]) -> str:
     escape it; the text half prints it as is). Empty when there is nowhere to
     send anyone."""
     site = _site()
-    seat = league_seat_link(meta) if in_pass_league(meta) else None
-    if seat:
+    link = league_seat_link(meta) if in_pass_league(meta) else None
+    if link:
         # A seat's or a payer's report, forwarded to the league: the reader's
         # seat is already paid for. It used to send them to the $39 checkout
         # (panel review LP-D2). Only while the pass has a seat left (D10);
         # a full pass falls back to the plain line, which is true of anyone.
-        link, named = seat
         return ("Got this from a leaguemate? Your league's pass already covers "
-                f"your seat — claim it, free, with your own roster: {link}"
-                + ("" if named else f" — {SEAT_ADDRESS_NOTE}"))
+                f"your seat — claim it, free, with your own roster: {link}")
     if not site:
         return ""
     return (f"Got this from a leaguemate? Every manager gets their own report, "
@@ -1999,7 +1992,7 @@ def _forward_line(meta: Mapping[str, Any] | None = None) -> str:
     if not words:
         return ""
     seat = league_seat_link(meta) if in_pass_league(meta) else None
-    link = seat[0] if seat else f"{_site()}/join"
+    link = seat or f"{_site()}/join"
     return f"{_linked(words, link)}<br>"
 
 
@@ -2022,14 +2015,25 @@ def seats_text(meta: Mapping[str, Any]) -> str:
             or claimed < 0 or size < 1):
         return ""
     count = f"League Pass: {claimed} of {size} seats claimed."
+    # The buyer's one control over WHO holds the seats (APPSEC-2): the link
+    # is forwardable, the count names nobody (C2), so a reset — the link
+    # changes, every seat is released, the league claims again — is the
+    # remedy for seats they don't recognize (run/seat_resets.py).
+    reset = SEAT_RESET_LINE if claimed else ""
     if claimed >= size:
-        return "League Pass: Every seat is claimed."
-    seat = league_seat_link(meta)
-    if not seat:
-        return count
-    link, named = seat
+        return f"League Pass: Every seat is claimed.{reset}"
+    link = league_seat_link(meta)
+    if not link:
+        return f"{count}{reset}"
     return (f"{count} Your leaguemates claim theirs, free, with their own "
-            f"roster: {link}" + ("" if named else f" — {SEAT_ADDRESS_NOTE}"))
+            f"roster: {link}{reset}")
+
+
+# What a payer whose seats are held by people they don't know can do. No
+# colon in it: the footers split the line on its first ": ".
+SEAT_RESET_LINE = (" Seats you don't recognize? Reply \"reset seats\" and we'll "
+                   "change your league's link and clear every seat, so your league "
+                   "claims again with the new one.")
 
 
 def seats_line(meta: Mapping[str, Any]) -> str:
@@ -2040,7 +2044,7 @@ def seats_line(meta: Mapping[str, Any]) -> str:
     seat = league_seat_link(meta)
     label, _, rest = words.partition(": ")
     return (f"<b>{esc(label)}:</b> "
-            f"{_linked(rest, seat[0] if seat else None)}<br>")
+            f"{_linked(rest, seat)}<br>")
 
 
 def read_line(meta: Mapping[str, Any]) -> str:

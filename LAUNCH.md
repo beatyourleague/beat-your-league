@@ -124,6 +124,13 @@ still open one. Make three new links and switch the old ones off.
    **Verified** (minutes, sometimes an hour).
 3. **API Keys → Create:** **Sending access**, domain `beatyourleague.com`. Straight into the
    GitHub secret in step 3, nowhere else.
+   **And one for the bounce check:** after each mailing run the intake asks Resend whether
+   recent emails bounced (a buyer who mistyped their address paid and gets nothing). A
+   Sending access key "can only send emails" and cannot read one back, so create a second
+   key, **Full access**, named `github-actions-bounces`, and save it only as the GitHub secret
+   `RESEND_READ_KEY`. It is optional: without it every run prints one `OWNER:` line saying
+   bounces are not checked, and the launch check lists it. It can do anything in your Resend
+   account, so it goes nowhere but that secret.
 4. **DMARC (5 min):** Cloudflare → **Email → DMARC Management** → enable, or a TXT record
    `_dmarc` = `v=DMARC1; p=none; rua=mailto:hello@beatyourleague.com`. After a few clean
    weeks, `p=quarantine`.
@@ -164,7 +171,9 @@ holds subscribers' emails and rosters.
 
 `github-actions-crons` needs exactly: Checkout Sessions **Read**, Payment Intents **Read**
 and Charges **Read** (a one-time pass is entitled while its payment isn't refunded),
-Customers **Write**, Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
+Disputes **Read** (a lost chargeback ends a purchase like a refund; without it a disputed
+payment shows as "status unknown" and the run goes red until you look), Customers **Write**,
+Subscriptions **Write**, everything else None. Subscriptions must be Write: `run/billing.py`
 ends each monthly subscription when its final paid period ends (the month the season's last
 weekly report falls in).
 
@@ -221,7 +230,7 @@ nothing: every row is checked before it reaches the subscriber list.
 2. **Storage & Databases → KV** → create a namespace. Worker → **Settings → Bindings → KV
    namespace**, variable name **`ROWS`**.
 3. Worker → **Settings → Variables:** `SITE_ORIGIN` = `https://beatyourleague.com`, and
-   `FORM_API_KEY` = a random string, marked secret:
+   `FORM_API_KEY` = a random string, marked secret (and, later, `TRIAL_OPEN` — step 7):
    ```bash
    openssl rand -hex 24
    ```
@@ -236,10 +245,26 @@ nothing: every row is checked before it reaches the subscriber list.
    `UPDATE_SECRET` = step 4's value. (`SITE_URL` from step 3 builds the seat links.)
 6. **Your own domain (5 min):** Worker → **Settings → Domains & Routes → Add → Custom
    domain** → `forms.beatyourleague.com`. Use that as the Worker URL everywhere: a
-   `*.workers.dev` address is easily blocked, and the launch check warns about it.
+   `*.workers.dev` address is easily blocked, and the launch check warns about it. Then, on
+   the same screen, switch the **`workers.dev`** route **off**: left on, it is a second door
+   that the flood limit below does not cover.
+   - **A flood limit (5 min, free):** Cloudflare → `beatyourleague.com` → **Security → WAF
+     → Rate limiting rules → Create**: name `form posts`; when the hostname equals
+     `forms.beatyourleague.com` **and** the request method equals `POST`; same IP, more
+     than **5 requests per 1 minute** (if the free plan offers only 10 seconds, use that with
+     2 requests); action **Block** for the shortest duration offered. A real visitor posts
+     once; this keeps one stranger from spending the day's free writes.
+   - **The visit counter (2 min, optional):** **Storage & Databases → Analytics Engine** →
+     create a dataset `byl_counts`; Worker → **Settings → Bindings → Analytics Engine**,
+     variable name **`COUNTS`**, that dataset. Without it the counter does nothing and every
+     page still works.
 7. **Tell me the Worker URL** (not a secret). I wire it into the homepage form and the join,
    confirm and League Pass pages, switch on the League Pass button and the FAQ's roster
-   answer, and — once email sends (step 2) — the "Try it free" button (`TRIAL_OPEN`).
+   answer, and — once email sends (step 2) — the "Try it free" button (`TRIAL_OPEN`, on the
+   homepage and the join page). **The same day, set the Worker's own switch:** Worker →
+   **Settings → Variables → Add** `TRIAL_OPEN` = `true` (plain text). The Worker refuses
+   every free-report request while it is unset, and the launch check fails if the site and
+   the Worker disagree.
 8. **Start the crons on time (5 min, same Worker).** GitHub started the Tuesday runs 5–7
    hours late on Oct 6 and 13, so the Worker starts them and GitHub's own schedules stay as
    the backup.
@@ -271,12 +296,16 @@ nothing: every row is checked before it reaches the subscriber list.
      export SENDER_POSTAL_ADDRESS='<the mailbox address>'
      read -s LOG_SECRET && export LOG_SECRET
      ```
-   - Preview both lists, then send both:
+   - Preview both lists. Each preview prints how many mailboxes it would mail and the
+     commonest domains: read both, and stop if a domain or a count looks wrong (a flood of
+     sign-ups from one domain is not your audience). Then send each with its own ceiling, the
+     count its preview printed:
      ```bash
      make waitlist-preview && make waitlist-preview LIST=signups.csv
-     make waitlist-send && make waitlist-send LIST=signups.csv
+     make waitlist-send MAX=<first count> && make waitlist-send LIST=signups.csv MAX=<second count>
      ```
-     Anyone on both lists gets one email.
+     A send refuses without `MAX`, or if more are waiting than it says. Anyone on both lists
+     gets one email.
    - **Commit and push `data/processed/sent.jsonl`.** The crons read the committed copy; it
      is what stops a second send. Then delete `signups.csv`, **and delete the "Tell me when it
      opens" emails in Gmail** (and empty Gmail's Bin): the privacy policy says waitlist
@@ -365,8 +394,9 @@ reply): put the names they sent in a file, one per line, then
 ```bash
 make roster-update EMAIL=fan@example.com ROSTER=names.txt
 ```
-It needs `UPDATE_SECRET` and `FORM_ENDPOINT` in the shell. `ARGS=--dry-run` resolves the
-names and posts nothing. The next hourly intake applies it.
+It needs `UPDATE_SECRET`, `FORM_ENDPOINT` and `FORM_API_KEY` in the shell (the Worker takes
+a post from outside the site only with the read key). `ARGS=--dry-run` resolves the names and
+posts nothing. The next hourly intake applies it.
 
 **When someone asks to stop** (mail to hello@ saying stop or unsubscribe; a League Pass
 seat's unsubscribe button arrives with the subject "stop"):
@@ -378,6 +408,17 @@ seat's unsubscribe button arrives with the subject "stop"):
   .venv/bin/python -m run.suppress their@example.com
   ```
   Someone who signs up again: `.venv/bin/python -m run.suppress --remove their@example.com`.
+
+**A League Pass buyer asks to reset seats** (their report's seat count shows seats they
+don't recognize, usually because their link was forwarded outside the league): find the
+pass's payment in Stripe (its id starts `pi_`), then
+```bash
+make seat-reset PASS=pi_… EMAIL=buyer@example.com
+```
+(`SITE_URL` and `UPDATE_SECRET` in your shell print the new link.) Commit and push
+`data/processed/seat-resets.txt`, **then** reply to the buyer with the new link. The next
+hourly run releases every seat claimed before the reset, and the old link stops working;
+the leaguemates they want claim again with the new one.
 
 **Two subscriptions on one address, and they can't see the older one.** Stripe's billing
 page opens only the NEWEST customer for an email, so someone with two teams, or a season pass
@@ -442,6 +483,25 @@ next. After the last game every weekly job exits quietly until the next schedule
 | 18 | Sun Jan 10, 1:00pm — Saturday games are usually added late; recheck |
 
 From the published NFL schedule the product reads. A flexed game can move a row.
+
+**When a payment is disputed** (a chargeback). Stripe emails you, and the next hourly run
+goes red with `DISPUTE NEEDS A RESPONSE: <pi_… or sub_…>` until it is answered. The buyer is
+still served while it is open (a dispute can be won); a LOST one ends their reports like a
+full refund. Answer it before Stripe's deadline (it is lost by default after that): Stripe →
+**Payments → Disputes** → the dispute → **Submit evidence**, product type *digital
+service*, and attach:
+- **The consent record:** the customer in Stripe → **Metadata**: `byl_terms_accepted`
+  (they ticked the terms box at checkout), `byl_terms_accepted_at` and `byl_terms_version`,
+  the date of the terms in force when they paid (the matching page is `site/terms.html` at
+  that date in the repo's history).
+- **What was delivered, and when:** their send-log lines in `data/processed/sent.jsonl` —
+  each key carries the week and the subscription's code (never an address), with the time it
+  was sent and Resend's message id. Resend → **Emails** → search the id shows it delivered.
+  Ask me for the lines for one buyer if you can't find them.
+- **The refund policy they agreed to:** terms §5, and whether they asked for a refund (they
+  usually didn't).
+Never refund a payment that is already disputed: the dispute takes the money back, and a
+refund on top pays it twice.
 
 ## 9. The dates you pre-committed to (PLAN §6)
 

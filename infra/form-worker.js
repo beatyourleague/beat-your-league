@@ -43,7 +43,9 @@
  *   kind never makes the hourly intake walk it.
  * - A waitlist or free-report row is ONE row per (kind, mailbox, UTC day):
  *   its key is derived from the canonical address (run/trials.canonical_email,
- *   ported below), so a repeat overwrites rather than piling up. Never for a
+ *   ported below), so a repeat overwrites rather than piling up — and a
+ *   waitlist row carrying a roster keeps its own key, so an email-only row
+ *   the same day never erases the roster the launch email restores. Never for a
  *   seat claim, a roster request or a confirmation: overwriting by address
  *   would let a stranger's request replace the real one and move the stamp
  *   its emailed code is bound to.
@@ -61,7 +63,8 @@
  *   POST JSON  {kind:"update",   email, ref, token, replaces?}  (no replaces:
  *                                the operator's emailed change, run/updates.py)
  *   POST JSON  {kind:"update_request", email, ref, replaces?}  (confirm-by-
- *                                email, step 1; replaces = the link's &o= slug)
+ *                                email, step 1; replaces = the link's &o= tag,
+ *                                12 hex — run/updates.py origin_tag)
  *   POST JSON  {kind:"confirm",  code}                (step 2: the inbox's code —
  *                                for a roster request OR a seat claim; the
  *                                intake knows which by recomputing both)
@@ -72,7 +75,8 @@
  *   Any other kind is refused (400). Every refusal is a 4xx/5xx with CORS.
  *   GET  + Authorization: Bearer <FORM_API_KEY>  →  JSON array of stored rows,
  *                                each carrying its storage key as `_key`,
- *                                oldest first; ?kinds=a,b limits it to those
+ *                                oldest first; ?kinds=a,b limits it to those;
+ *                                ?status=1 answers {trial_open, counts} instead
  *   DELETE ?key=<_key> + Authorization: Bearer <FORM_API_KEY>  →  removes one
  *                                row (a deletion request, run/privacy.py)
  *   POST /e  text/plain {e, p, v, r, d, s}  →  ALWAYS 204, never a cookie: one
@@ -140,6 +144,12 @@
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const REF = /^[A-Za-z0-9_-]{1,200}$/;
 const SLUG = /^[0-9a-f]{10}$/;
+// The update link's &o= (run/updates.py origin_tag, ORIGIN_TAG_LENGTH = 12):
+// an HMAC of the subscription's origin slug, posted back as `replaces` on an
+// update_request. SLUG above is the raw 10-hex origin the operator's
+// kind:"update" carries; a 10-hex test here dropped every report link's tag
+// (pre-launch review APPSEC-5).
+const ORIGIN_TAG = /^[0-9a-f]{12}$/;
 const TOKEN = /^[0-9a-f]{20}$/;
 const CODE = /^[0-9a-f]{24}$/;
 const VIA = /^[a-z0-9-]{1,24}$/;
@@ -184,10 +194,15 @@ async function sha256hex(text) {
 // The storage key. Every kind sits under its own prefix, so a reader lists
 // only what it reads. A waitlist or trial row is keyed by its mailbox and day
 // (a repeat overwrites); every other row by its arrival, which orders them.
+// A waitlist row that carries a roster (`ref`, contract C6) has a key of its
+// own (":r"): the landing's email-only capture posted the same day used to
+// overwrite it and erase the roster the launch email restores (pre-launch
+// review). run/waitlist.py saved_refs takes the newest ref per mailbox.
 async function storageKey(row, now) {
   if (ONE_A_DAY.includes(row.kind)) {
     const day = now.toISOString().slice(0, 10);
-    return `${row.kind}:${day}:${(await sha256hex(canonicalEmail(row.email))).slice(0, 32)}`;
+    const box = (await sha256hex(canonicalEmail(row.email))).slice(0, 32);
+    return `${row.kind}:${day}:${box}${row.kind === "waitlist" && row.ref ? ":r" : ""}`;
   }
   return `${row.kind}:${now.getTime().toString().padStart(14, "0")}-${crypto.randomUUID()}`;
 }
@@ -225,8 +240,8 @@ function sanitizeKind(body) {
     // `replaces` is the origin slug the report's update link carried (&o=):
     // it picks which of the address's teams, never authorises one. A
     // malformed slug is dropped, never refused — the intake can still choose.
-    const replaces = String(body.replaces || "").trim();
-    return SLUG.test(replaces) ? { kind, email, ref, replaces } : { kind, email, ref };
+    const replaces = String(body.replaces || "").trim().toLowerCase();
+    return ORIGIN_TAG.test(replaces) ? { kind, email, ref, replaces } : { kind, email, ref };
   }
   if (kind === "seat") {
     // A seat names its pass ONLY by the per-pass seat link's `pass_token`
@@ -475,6 +490,12 @@ export default {
 
     if (request.method === "GET") {
       if (!authorized(request, env)) return json({ error: "unauthorized" }, 401);
+      // The Worker's own switches, for `make launch-check` (read-only, no
+      // rows): the site's TRIAL_OPEN must agree with this one, or every free
+      // report request is refused while the page offers it.
+      if (url.searchParams.get("status") === "1") {
+        return json({ trial_open: env.TRIAL_OPEN === "true", counts: Boolean(env.COUNTS) });
+      }
       const asked = (url.searchParams.get("kinds") || "").split(",")
         .map((kind) => kind.trim()).filter(Boolean);
       if (asked.some((kind) => !KINDS.includes(kind))) {

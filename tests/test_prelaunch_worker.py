@@ -28,6 +28,7 @@ The Worker tests need node and skip without it; CI installs it.
 from __future__ import annotations
 
 import json
+import urllib.parse
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -320,6 +321,206 @@ def test_a_free_report_request_is_refused_unless_the_worker_says_free_reports_ar
     assert got == {"shut": 403, "shutFalse": 403, "closedPuts": 0, "ok": 200, "openPuts": 1}
 
 
+@needs_node
+def test_the_join_page_says_free_reports_are_closed_instead_of_blaming_the_address(
+        tmp_path) -> None:
+    """Reproduced (pre-launch review): the Worker answers every trial row 403
+    {"error":"free reports are not open"} while its TRIAL_OPEN is unset, try
+    mode was gated only on FORM_ENDPOINT, and the page mapped any 4xx to "We
+    couldn't accept that address — check it for typos." Once FORM_ENDPOINT
+    was wired, every free-report request got that false sentence. The page
+    now has its own TRIAL_OPEN (the landing's twin; the launch check holds
+    them together) and reads the Worker's reason instead of guessing from the
+    status. Run here with the page's own functions against a real Response."""
+    page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    assert "const TRIAL_OPEN = false;" in page
+    assert "if (!FORM_ENDPOINT || !TRIAL_OPEN) {" in page
+    assert '"free reports are not open"' in WORKER.read_text(encoding="utf-8")
+    start = page.index("function refusedBy(response)")
+    end = page.index("\n}\n", page.index("async function refusedFrom(")) + 3
+    (tmp_path / "page.mjs").write_text(page[start:end] + """
+const said = async (status, body) => notSentWords(await refusedFrom(
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })));
+const out = [await said(403, { error: "free reports are not open" }),
+             await said(400, { error: "bad row" }),
+             notSentWords(refusedBy(new Response("x", { status: 400 }))),
+             notSentWords(new Error("network"))];
+process.stdout.write(JSON.stringify(out));
+""", encoding="utf-8")
+    done = subprocess.run([NODE, str(tmp_path / "page.mjs")], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    closed, bad, plain, network = json.loads(done.stdout)
+    assert closed.startswith("Free reports aren't open just yet") and "typos" not in closed
+    assert "typos" in bad and "typos" in plain and "connection" in network
+
+
+@needs_node
+def test_the_update_links_origin_tag_survives_the_page_and_the_worker(tmp_path) -> None:
+    """Reproduced (APPSEC-5): `public_update_url` emits `&o=` as 12 hex
+    (run/updates.py ORIGIN_TAG_LENGTH = 12), but the join page's UPDATE_ORIGIN
+    and the Worker's SLUG accepted only 10, so `replaces` was dropped from
+    every update_request and an address holding two teams had the wrong one
+    picked. End to end now: the link's tag passes the page's own regex, the
+    Worker stores it, and the intake's validate_requests names the team the
+    report came from. The operator's kind:"update" keeps the raw 10-hex slug."""
+    import re
+    from types import SimpleNamespace
+
+    from run import updates
+    from run.refs import encode_roster
+    from test_promises_engine import PLAYERS, SLOTS, _row as reg_row
+    link = updates.public_update_url("https://x.test", "s", "https://w.test",
+                                     roster=SimpleNamespace(scoring="ppr", league_size=12,
+                                                            slots=SLOTS, slug="bbbbbbbbbb"))
+    tag = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query)["o"][0]
+    assert len(tag) == updates.ORIGIN_TAG_LENGTH == 12
+    page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    found = re.search(r"const UPDATE_ORIGIN = UPDATE_MODE && (/\^[^/]+\$/)\.test", page)
+    assert found, "the join page's UPDATE_ORIGIN test moved"
+    half = encode_roster("season", "half_ppr", list(SLOTS), list(PLAYERS))
+    got = _node(tmp_path, f"""
+      const kv = fakeKV();
+      const env = {{ ROWS: kv, SITE_ORIGIN: "https://x.test", FORM_API_KEY: "k" }};
+      const pageAccepts = {found.group(1)}.test({json.dumps(tag)});
+      await post(env, {{ kind: "update_request", email: "fan@example.com",
+                         ref: {json.dumps(half)}, replaces: {json.dumps(tag)} }});
+      const operator = await post(env, {{ kind: "update", email: "fan@example.com",
+                                          ref: {json.dumps(half)}, token: "0".repeat(20),
+                                          replaces: {json.dumps(tag)} }});
+      return {{ pageAccepts, rows: (await read(env)).rows, operator: operator.status }};
+    """)
+    assert got["pageAccepts"] is True
+    [stored] = got["rows"]
+    assert stored["replaces"] == tag
+    assert got["operator"] == 400, "the operator's update names the raw 10-hex origin"
+    a = encode_roster("season", "ppr", list(SLOTS), list(PLAYERS))
+    two = [reg_row("fan@example.com", a, "aaaaaaaaaa"),
+           reg_row("fan@example.com", a, "bbbbbbbbbb", players=PLAYERS[:-1])]
+    now = datetime.fromisoformat(stored["received_at"].replace("Z", "+00:00")) \
+        + timedelta(minutes=5)
+    [request] = updates.validate_requests([stored], two, None, "s", now=now)[0]
+    assert request.replaces == "bbbbbbbbbb"
+
+
+@needs_node
+def test_a_waitlist_row_without_a_roster_never_erases_one_with(tmp_path) -> None:
+    """Reproduced (pre-launch review): waitlist rows were keyed one per
+    (kind, mailbox, UTC day), so the landing's email-only capture posted
+    after join's closed-checkout row (contract C6, which carries the roster)
+    overwrote it: KV held only {"email":"ab@gmail.com"} and the launch email
+    could no longer bring the roster back. A row carrying a roster has a key
+    of its own; run/waitlist.saved_refs still finds it, and the mailbox is
+    still mailed once."""
+    from run.waitlist import saved_refs, waitlist_addresses
+    from test_intake_sync import SEAT_REF
+    got = _node(tmp_path, f"""
+      const kv = fakeKV();
+      const env = {{ ROWS: kv, SITE_ORIGIN: "https://x.test", FORM_API_KEY: "k" }};
+      await post(env, {{ kind: "waitlist", email: "A.B+1@gmail.com", ref: {json.dumps(SEAT_REF)} }});
+      await post(env, {{ kind: "waitlist", email: "ab@gmail.com" }});
+      await post(env, {{ kind: "waitlist", email: "ab@gmail.com" }});
+      return {{ keys: [...kv.store.keys()].sort(), rows: (await read(env, "?kinds=waitlist")).rows }};
+    """)
+    assert len(got["keys"]) == 2 and sum(k.endswith(":r") for k in got["keys"]) == 1
+    assert list(saved_refs(got["rows"]).values()) == [SEAT_REF]
+    assert len(waitlist_addresses(got["rows"])) == 1
+
+
+@needs_node
+def test_the_worker_tells_the_read_key_its_switches_and_nobody_else(tmp_path) -> None:
+    """`make launch-check` must see whether the Worker's TRIAL_OPEN agrees
+    with the site's (pre-launch review). GET ?status=1 answers the switches,
+    only with the read key, and lists no row."""
+    got = _node(tmp_path, """
+      const kv = fakeKV();
+      const ask = async (env, auth) => {
+        const res = await worker.fetch(new Request("https://w.test/?status=1",
+          { headers: auth ? { Authorization: "Bearer k" } : {} }), env);
+        return [res.status, res.status === 200 ? await res.json() : null];
+      };
+      return { anon: await ask({ ROWS: kv, FORM_API_KEY: "k" }, false),
+               off: await ask({ ROWS: kv, FORM_API_KEY: "k" }, true),
+               on: await ask({ ROWS: kv, FORM_API_KEY: "k", TRIAL_OPEN: "true",
+                               COUNTS: { writeDataPoint() {} } }, true),
+               lists: kv.lists };
+    """)
+    assert got["anon"][0] == 401
+    assert got["off"] == [200, {"trial_open": False, "counts": False}]
+    assert got["on"] == [200, {"trial_open": True, "counts": True}]
+    assert got["lists"] == 0
+
+
+def test_the_launch_check_holds_the_three_trial_switches_together(monkeypatch) -> None:
+    """The landing's TRIAL_OPEN, the join page's twin and the Worker's
+    variable: any disagreement is a launch-check line, and a site that
+    offers free reports over a Worker that refuses them FAILs."""
+    import run.launch_check as lc
+    gates = {g.name: g for g in lc.check_funnel_config()}
+    assert gates["Landing and join page agree on whether free reports are open"].status == "PASS"
+    monkeypatch.delenv("FORM_ENDPOINT", raising=False)
+    monkeypatch.delenv("FORM_API_KEY", raising=False)
+    [skip] = lc.check_worker_switches()
+    assert skip.status == "SKIP"
+    monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
+    monkeypatch.setenv("FORM_API_KEY", "k")
+    real = lc.js_constants
+
+    def site_on(page):
+        found = real(page)
+        return {**found, "TRIAL_OPEN": "true"} if "TRIAL_OPEN" in found else found
+    for site, worker, want in ((False, False, "PASS"), (True, True, "PASS"),
+                               (True, False, "FAIL"), (False, True, "WARN")):
+        monkeypatch.setattr(lc, "js_constants", site_on if site else real)
+        monkeypatch.setattr(lc, "worker_status", lambda e, k, w=worker: {"trial_open": w})
+        assert lc.check_worker_switches()[0].status == want, (site, worker)
+    monkeypatch.delenv("RESEND_READ_KEY", raising=False)
+    assert lc.check_resend_read_key()[0].status == "OWNER"
+    monkeypatch.setenv("RESEND_READ_KEY", "re_full")
+    assert lc.check_resend_read_key()[0].status == "PASS"
+
+
+def test_the_privacy_page_no_longer_says_a_seat_is_matched_by_the_buyers_address() -> None:
+    """Reproduced (pre-launch review): privacy.html's seat bullet still said a
+    seat is matched by "either the pass code in your league's own link ... or
+    the email the pass was bought with" after contract C3 stopped the Worker
+    storing any typed buyer address — describing data no longer collected."""
+    import re
+    text = re.sub(r"<[^>]+>", " ", (ROOT / "site" / "privacy.html").read_text(encoding="utf-8"))
+    text = " ".join(text.split())
+    bullet = text[text.index("If you claim a League Pass seat"):][:400]
+    assert "the email the pass was bought with" not in bullet and " either " not in bullet
+    assert "pass code in your league's own seat link" in bullet
+
+
+@needs_node
+def test_a_mistyped_buyer_domain_is_asked_about_once_before_checkout(tmp_path) -> None:
+    """Critique #1, first half (reproduced): the join page handed the typed
+    address straight to Stripe as `locked_prefilled_email`, so "gmial.com"
+    was a buyer who paid, could not fix it at Stripe, and whose welcome and
+    every report went nowhere. The page now reads the address back as it is
+    typed and, for the commonest domain slips, asks once with a button that
+    fixes it; a second press with the same spelling goes ahead (the address
+    may be real). Never a silent rewrite. Checked in Chrome too: the typo's
+    first press left nothing, a clean address handed off at once."""
+    page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
+    start = page.index("const DOMAIN_FIXES = {")
+    end = page.index("\n}\n", page.index("function suggestEmail(")) + 3
+    (tmp_path / "s.mjs").write_text(page[start:end] + """
+process.stdout.write(JSON.stringify(["a.b@gmial.com", "x@Hotmial.com", "x@yahoo.con",
+  "x@example.cmo", "x@gmail.com", "x@example.com", "x@proton.me", "bad"].map(suggestEmail)));
+""", encoding="utf-8")
+    done = subprocess.run([NODE, str(tmp_path / "s.mjs")], capture_output=True, text=True,
+                          timeout=60)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == ["a.b@gmail.com", "x@hotmail.com", "x@yahoo.com",
+                                       "x@example.com", "", "", "", ""]
+    handler = page[page.index('$("form-email").addEventListener("submit"'):]
+    asked = handler.index("if (askAboutTypo(email)) return;")
+    assert asked < handler.index("checkoutRef()") < handler.index("locked_prefilled_email")
+    assert 'id="email-readback"' in page and "innerHTML" not in page[start:end]
+
+
 # --------------------------------------------------------------------- #
 # contract C1 — the visit counter
 # --------------------------------------------------------------------- #
@@ -586,17 +787,159 @@ def test_per_address_allowances_count_mailboxes_not_spellings() -> None:
     assert len(swept.awaiting) <= CONFIRMS_PER_DAY
 
 
-def test_a_pass_gets_at_most_its_seat_count_of_codes_a_day() -> None:
+def _sent_codes(requests, at: datetime) -> list[dict]:
+    return [{"key": intake.seat_confirmation_key(r), "provider": "resend",
+             "message_id": f"id-{i}", "sent_at": at.isoformat(timespec="seconds")}
+            for i, r in enumerate(requests)]
+
+
+def test_a_pass_gets_at_most_its_seat_count_of_mailboxes_a_day() -> None:
     """A real claim is bounded by its league; 40 distinct addresses claiming
     through one forwarded link in a day is somebody spending the allowance.
-    Codes past the pass's seat count wait for another day."""
-    now = datetime.now(timezone.utc)
+    Codes past the pass's seat count of MAILBOXES are held, counted from what
+    the send log shows went out today, and the next day's run sends them."""
+    now = datetime(2026, 10, 27, 20, tzinfo=timezone.utc)
     token = seat_token("commish@example.com", SECRET, "sub_commish01")
     claims = [{"email": f"m{i}@example{i}.com", "ref": _ref(), "pass_token": token,
                "received_at": _at(2 + i / 100, now)} for i in range(40)]
     swept = intake.sweep_seats(claims, PASSES, None, SECRET, now=now)
-    assert len(swept.awaiting) == 12 and swept.held_per_pass == 28
-    assert any("held back" in p for p in swept.problems)
+    assert len(swept.awaiting) == 40 and swept.seat_caps == {"sub_commish01": 12}
+    allowed, held = intake.per_pass_allowance(swept.awaiting, swept.seat_caps, [], now)
+    assert len(allowed) == 12 and held == 28
+    # The same run again, after those 12 went out: nothing new leaves today.
+    sent = _sent_codes(allowed, now)
+    again, held_again = intake.per_pass_allowance(swept.awaiting, swept.seat_caps, sent, now)
+    assert held_again == 28 and {r.code for r in again} == {r.code for r in allowed}
+    # Tomorrow: yesterday's codes free nothing up for today but no longer count.
+    tomorrow = now + timedelta(days=1)
+    later, held_later = intake.per_pass_allowance(swept.awaiting, swept.seat_caps, sent,
+                                                  tomorrow)
+    assert held_later == 16 and len(later) == 24
+
+
+def test_a_held_seat_code_goes_out_on_a_later_day_and_a_resubmission_costs_no_slot(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduced (pre-launch review): the per-pass cap counted CLAIMS in the
+    bucket (pass, the claim's own date), so a claim held on its day was held
+    on every later run until it expired, and it only added a line to
+    `problems` — the run stayed green. 12 leaguemates plus one corrected
+    resubmission on one evening stranded the 12th person, who had been told
+    "Your seat request is in": +0, +1, +2 and +5 days all printed
+    `held_per_pass=1 held_emails=['mate11@example11.com']`. Now the allowance
+    counts distinct mailboxes against the codes actually SENT today, so the
+    whole league is mailed at once; and a code held for a real flood is sent
+    the next day, with the holding run exiting non-zero."""
+    day = datetime(2026, 10, 27, 18, tzinfo=timezone.utc)
+    token = seat_token("commish@example.com", SECRET, "sub_commish01")
+    claims = [{"email": f"mate{i}@example{i}.com", "ref": _ref(), "pass_token": token,
+               "received_at": _at(-i / 60, day)} for i in range(12)]
+    from run.refs import encode_roster
+    from test_intake_sync import PLAYERS, SLOTS
+    other = encode_roster("season", "ppr", list(SLOTS), PLAYERS)   # a corrected roster
+    # The correction arrives after the whole league has claimed: by then 12
+    # mailboxes hold codes, and it must still cost no slot.
+    claims.append({"email": "mate3@example3.com", "ref": other, "pass_token": token,
+                   "received_at": _at(-0.5, day)})
+    now = day + timedelta(hours=1)
+    swept = intake.sweep_seats(claims, PASSES, None, SECRET, now=now)
+    allowed, held = intake.per_pass_allowance(swept.awaiting, swept.seat_caps, [], now)
+    assert held == 0 and len(allowed) == 13
+    assert {r.email for r in allowed} == {c["email"] for c in claims}
+    # A pass of 2 seats with 3 mailboxes: one held today, sent tomorrow.
+    small = {"sub_commish01": 2}
+    first, held_first = intake.per_pass_allowance(swept.awaiting[:3], small, [], now)
+    assert held_first == 1 and len(first) == 2
+    log = _sent_codes(first, now)
+    tomorrow = now + timedelta(days=1)
+    second, held_second = intake.per_pass_allowance(swept.awaiting[:3], small, log, tomorrow)
+    assert held_second == 0 and len(second) == 3
+    # The holding run is red: _send_seat_notes reports the hold as a failure.
+    monkeypatch.setattr(intake, "_sent_entries", lambda: [])
+    monkeypatch.setattr(intake, "_send_notes", lambda label, messages: 0)
+    monkeypatch.setattr(intake, "_seat_confirmation_messages",
+                        lambda awaiting, data: [_Msg(intake.seat_confirmation_key(r))
+                                                for r in awaiting])
+    held_sweep = intake.SeatSweep(awaiting=list(swept.awaiting[:3]), seat_caps=small)
+    assert intake._send_seat_notes(held_sweep, None, now, "2026") is True
+    assert held_sweep.held_per_pass == 1
+    assert "SEAT CONFIRMATIONS HELD: 1" in capsys.readouterr().err
+
+
+def test_a_buyer_can_reset_their_seats_and_the_old_link_stops_working(tmp_path) -> None:
+    """APPSEC-2, the payer-side control the review found unbuilt: the seat
+    link is forwardable and the buyer's report shows a count only (C2), so a
+    pass whose seats were taken by people outside the league had no remedy —
+    only the operator could release a seat, by the holder's address, which
+    nobody had. A reset (`make seat-reset`) rotates the pass's link (the
+    token takes the reset's stamp) and releases every seat claimed before
+    it; claims through the old link are ignored, never answered, and never
+    read as a dead signing secret. Count-only is kept: nobody is named."""
+    from run import seat_resets
+    from run.updates import seat_url
+    resets_file = tmp_path / "seat-resets.txt"
+    stamp = seat_resets.add_reset("sub_commish01", now=datetime(2026, 10, 27, 12,
+                                                              tzinfo=timezone.utc),
+                                  path=resets_file)
+    assert stamp == "2026-10-27T12:00:00Z"
+    text = resets_file.read_text(encoding="utf-8")
+    assert "sub_commish01" not in text and seat_resets.pass_code("sub_commish01") in text
+    assert seat_resets.load_resets(resets_file) == {seat_resets.pass_code("sub_commish01"): stamp}
+    with pytest.raises(ValueError):
+        seat_resets.add_reset("buyer@example.com", path=resets_file)
+    resets_file.write_text(text + "not a line\n", encoding="utf-8")
+    with pytest.raises(seat_resets.SeatResetError):
+        seat_resets.load_resets(resets_file)
+
+    now = datetime(2026, 10, 27, 15, tzinfo=timezone.utc)
+    old = seat_token("commish@example.com", SECRET, "sub_commish01")
+    new = seat_token("commish@example.com", SECRET, "sub_commish01", stamp)
+    assert new != old
+    link = seat_url("https://x.test", SECRET, "commish@example.com", None,
+                    pass_id="sub_commish01", nonce=stamp)
+    assert link == f"https://x.test/join/?pass={new}"
+    squatter = intake.SeatEntry(email="stranger@example.com", pass_id="sub_commish01",
+                                payer="commish@example.com", ref=_ref(),
+                                claimed_at=_at(30, now), confirmed_at=_at(29, now))
+    claims = [{"email": "again@example.com", "ref": _ref(), "pass_token": old,
+               "received_at": _at(1, now)},
+              {"email": "mate@example.com", "ref": _ref(), "pass_token": new,
+               "received_at": _at(1, now)}]
+    before = intake.sweep_seats(claims[:1], PASSES, None, SECRET, log=[squatter], now=now)
+    assert [r["email"] for r in before.rows] == ["stranger@example.com"]
+    after = intake.sweep_seats(claims, PASSES, None, SECRET, log=[squatter], now=now,
+                               resets={"sub_commish01": [stamp]})
+    assert after.rows == [] and after.reset_released == 1
+    assert after.reset_stale == 1 and not after.unmatched and not after.links_dead
+    assert [r.email for r in after.awaiting] == ["mate@example.com"]
+    # A second reset retires the first reset's link too.
+    later = "2026-10-28T09:00:00Z"
+    newer = seat_token("commish@example.com", SECRET, "sub_commish01", later)
+    twice = intake.sweep_seats(
+        [{**claims[1], "received_at": _at(1, datetime(2026, 10, 28, 12, tzinfo=timezone.utc))},
+         {"email": "x@example.com", "ref": _ref(), "pass_token": newer,
+          "received_at": _at(1, datetime(2026, 10, 28, 12, tzinfo=timezone.utc))}],
+        PASSES, None, SECRET, now=datetime(2026, 10, 28, 12, tzinfo=timezone.utc),
+        resets={"sub_commish01": [stamp, later]})
+    assert twice.reset_stale == 1 and [r.email for r in twice.awaiting] == ["x@example.com"]
+
+
+def test_the_payers_report_says_how_to_reset_seats_they_dont_recognize(monkeypatch) -> None:
+    """The control has to be findable by the one person who can use it: the
+    payer's seat count line says to reply "reset seats" once any seat is
+    claimed — and never on a pass with none, or on anybody else's report."""
+    import render.report as rr
+    link = "https://x.test/join/?pass=" + "a" * 20
+    some = rr.seats_text({"plan": "pass", "seat_link": link,
+                          "seats_claimed": {"claimed": 3, "size": 12}})
+    full = rr.seats_text({"plan": "pass", "seat_link": link, "seats_full": True,
+                          "seats_claimed": {"claimed": 12, "size": 12}})
+    none = rr.seats_text({"plan": "pass", "seat_link": link,
+                          "seats_claimed": {"claimed": 0, "size": 12}})
+    assert some.endswith(rr.SEAT_RESET_LINE) and full.endswith(rr.SEAT_RESET_LINE)
+    assert "reset seats" not in none and ": " not in rr.SEAT_RESET_LINE
+    assert "@" not in rr.SEAT_RESET_LINE
+    assert rr.seats_text({"plan": "league_pass", "seat_link": link,
+                          "seats_claimed": {"claimed": 3, "size": 12}}) == ""
 
 
 class _Msg:
@@ -775,6 +1118,35 @@ def test_forged_claims_can_no_longer_starve_a_buyers_first_report(
         "a seat note went out before the paid mail"
 
 
+def test_the_real_intake_honours_a_seat_reset_and_refuses_an_unreadable_list(
+        tmp_path, monkeypatch, capsys) -> None:
+    """End to end on the real main(): after a reset, a claim through the
+    pass's OLD link gets no confirmation (and no "no pass" note), a claim
+    through the NEW link gets its code, and a seat-reset list the run cannot
+    read refuses the registry rather than hand released seats back."""
+    from run import seat_resets
+    from test_intake_sync import SEAT_SECRET
+    now = datetime.now(timezone.utc)
+    resets = tmp_path / "seat-resets.txt"
+    stamp = seat_resets.add_reset("sub_commish01", now=now - timedelta(hours=3), path=resets)
+    monkeypatch.setattr(seat_resets, "RESETS_FILE", resets)
+    old = seat_token("commish@example.com", SEAT_SECRET, "sub_commish01")
+    new = seat_token("commish@example.com", SEAT_SECRET, "sub_commish01", stamp)
+    claims = [{"kind": "seat", "email": "squat@example.com", "ref": _ref(),
+               "received_at": _at(1, now), "pass_token": old},
+              {"kind": "seat", "email": "mate@example.com", "ref": _ref(),
+               "received_at": _at(1, now), "pass_token": new}]
+    code, keys = _mailing_run(tmp_path, monkeypatch, _Quota(room=100), claims)
+    out = capsys.readouterr().out
+    assert [k for k in keys if k.startswith("seat-confirm-")] and \
+        not [k for k in keys if k.startswith("seat-unmatched-")]
+    assert len([k for k in keys if k.startswith("seat-confirm-")]) == 1
+    assert "1 old-link claim(s) ignored by a buyer's seat reset" in out
+    resets.write_text("garbage\n", encoding="utf-8")
+    code, _keys = _mailing_run(tmp_path / "again", monkeypatch, _Quota(room=100), claims)
+    assert code == 1 and "seat-reset list" in capsys.readouterr().err
+
+
 def test_a_burst_under_the_flood_line_is_capped_and_goes_red(
         tmp_path, monkeypatch, capsys) -> None:
     """Fifteen unmatched claims from fifteen inboxes in a day — under the
@@ -887,6 +1259,38 @@ def test_with_the_switch_off_a_request_is_never_built_or_mailed(
     assert code == 0 and [m.to for m in mailed] == ["fan@example.com"]
 
 
+def test_free_reports_keep_the_days_headroom_and_wait_for_saturdays_check(
+        tmp_path, monkeypatch, capsys) -> None:
+    """Reproduced (pre-launch review): only the seat notes honoured the day's
+    headroom (DAY_HEADROOM, 60) — `grep day_headroom run/` matched only
+    run/intake.py, and run/trials.py's room was TRIAL_DAILY_CAP minus
+    today's free reports and nothing else. On a Saturday, 40 hourly free
+    reports plus the seat notes left about 40 of Resend's free 100 for the
+    16:17 final check and that day's welcomes and first reports. Free
+    reports now stop once the day's whole send count reaches the headroom,
+    and on a Saturday wait for the final check's run marker, as they do on
+    Tuesday. Mutation-checked: dropping either bound mails the request."""
+    from run.watchdog import run_key
+    from test_solo_run import SEASON, WEEK
+    from test_trials import THURSDAY, _drive, _fixture_ref, _row
+    monkeypatch.delenv("STRIPE_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_DAILY_HEADROOM", raising=False)
+    rows = [_row("fan@example.com", ref=_fixture_ref())]
+    busy = [(f"2026-w{WEEK:02d}-{i:04x}", THURSDAY) for i in range(intake.DAY_HEADROOM)]
+    code, out, _, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=THURSDAY,
+                                  sent=busy)
+    assert code == 0 and mailed == [] and "allowance for unpaid mail is spent" in out
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=THURSDAY,
+                        sent=busy[:-1])
+    assert len(mailed) == 1
+    saturday = "2026-01-03T13:00:00+00:00"
+    code, out, _, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=saturday)
+    assert code == 0 and mailed == [] and "Saturday check goes out first" in out
+    done = [(run_key("saturday", SEASON, WEEK), saturday)]
+    *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=saturday, sent=done)
+    assert len(mailed) == 1
+
+
 def test_one_roster_gets_one_free_report_a_season_whatever_the_inbox() -> None:
     """Critique #3, reproduced: the limit was per address only, so a second
     inbox (an alias, Hide My Email, a catch-all) got the same roster's report
@@ -949,46 +1353,111 @@ def test_a_subscribers_roster_is_never_a_free_report(tmp_path, monkeypatch, caps
 # critique #2 — disputes
 # --------------------------------------------------------------------- #
 
+def _disputed_session(pi, disputed=False):
+    charge = {"id": "ch_" + pi[3:], "payment_intent": pi, "amount": 2900,
+              "amount_refunded": 0, "refunded": False, "disputed": disputed}
+    from test_one_time_passes import PAID
+    return {"id": "cs_" + pi, "mode": "payment", "payment_status": "paid",
+            "created": PAID, "customer_details": {"email": f"{pi}@example.com"},
+            "payment_intent": {"id": pi, "latest_charge": charge}}
+
+
 def test_a_lost_chargeback_ends_entitlement_and_an_open_one_is_an_alarm(monkeypatch) -> None:
     """Reproduced: `_charge_refunded` returned False for a charge whose
     dispute was LOST — Stripe leaves `refunded` false and `amount_refunded`
     0 — so the buyer kept every report. A lost dispute now counts as refunded;
     one waiting on our response is listed (still entitled: it can be won);
-    one closed in our favour is nothing. Mutation-checked: dropping the lost
+    one closed in our favour is nothing; one whose status cannot be read is
+    "unknown". The status comes from GET /v1/disputes?charge=…, asked only
+    for a charge Stripe marks `disputed`. Mutation-checked: dropping the lost
     branch keeps pi_lost entitled."""
     from run import subscriptions
-    from test_one_time_passes import ENDS, PAID
+    from test_one_time_passes import ENDS
 
-    def paid(pi, dispute=None, disputed=False):
-        charge = {"amount": 2900, "amount_refunded": 0, "refunded": False,
-                  "disputed": disputed, "dispute": dispute}
-        return {"id": "cs_" + pi, "mode": "payment", "payment_status": "paid",
-                "created": PAID, "customer_details": {"email": f"{pi}@example.com"},
-                "payment_intent": {"id": pi, "latest_charge": charge}}
-    rows = [paid("pi_clean"), paid("pi_lost", {"status": "lost"}, True),
-            paid("pi_open", {"status": "needs_response"}, True),
-            paid("pi_review", {"status": "under_review"}, True),
-            paid("pi_won", {"status": "won"}, True),
-            paid("pi_unexpanded", "dp_123", True)]
+    status = {"ch_lost": ["lost"], "ch_open": ["needs_response"],
+              "ch_review": ["warning_closed", "under_review"], "ch_won": ["won"],
+              "ch_nothing": []}
+    rows = [_disputed_session("pi_clean"), _disputed_session("pi_lost", True),
+            _disputed_session("pi_open", True), _disputed_session("pi_review", True),
+            _disputed_session("pi_won", True), _disputed_session("pi_nothing", True)]
     urls: list[str] = []
-    monkeypatch.setattr(subscriptions, "_stripe_get",
-                        lambda url, key: urls.append(url) or {"data": rows, "has_more": False})
+
+    def get(url, key):
+        urls.append(url)
+        if url.startswith(subscriptions.DISPUTES_API):
+            charge = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["charge"][0]
+            return {"data": [{"status": s} for s in status[charge]], "has_more": False}
+        return {"data": rows, "has_more": False}
+    monkeypatch.setattr(subscriptions, "_stripe_get", get)
     disputes: list = []
     now = datetime(2026, 11, 3, tzinfo=timezone.utc)
     ids, _emails, refunded = subscriptions._one_time_purchases(
         "sk", now=now, season_ends=ENDS, disputes=disputes)
     assert "pi_lost" not in ids and "pi_lost" in refunded
-    assert {"pi_clean", "pi_open", "pi_review", "pi_won", "pi_unexpanded"} <= ids
-    assert sorted(disputes) == [("pi_open", "needs_response"),
-                                ("pi_review", "under_review"),
-                                ("pi_unexpanded", "unknown")]
-    assert "latest_charge.dispute" in urls[0].replace("%2E", ".")
+    assert {"pi_clean", "pi_open", "pi_review", "pi_won", "pi_nothing"} <= ids
+    assert sorted(disputes) == [("pi_nothing", "unknown"), ("pi_open", "needs_response"),
+                                ("pi_review", "under_review")]
+    # One dispute read per DISPUTED charge, none for the clean one.
+    asked = [u for u in urls if u.startswith(subscriptions.DISPUTES_API)]
+    assert len(asked) == 5 and not any("ch_clean" in u for u in asked)
     listed = subscriptions.PaidList(emails=frozenset(), source="stripe", status_column=None,
                                     disputes=tuple(disputes))
     assert set(listed.disputes_needing_response) == {"pi_open"}
-    sub = {"latest_invoice": {"charge": {"amount": 3900, "amount_refunded": 0,
-                                         "disputed": True, "dispute": {"status": "lost"}}}}
-    assert subscriptions.fully_refunded(sub)
+
+
+def test_the_entitlement_read_expands_no_dispute(monkeypatch) -> None:
+    """Reproduced (pre-launch review, blocker): the fix for critique #2
+    expanded `data.payment_intent.latest_charge.dispute` and
+    `data.latest_invoice.charge.dispute`. At the pinned Stripe-Version
+    (2024-06-20) a Charge has NO `dispute` property — stripe-node v16 types
+    only `disputed: boolean`, and v13's changelog removed `dispute` — and the
+    cron key had no Disputes permission, so the request fails, `_stripe_get`
+    raises, and `load_paid_from_stripe` fails for every runner: Tuesday mails
+    nobody. Now no request expands a dispute, and a dispute read that fails
+    (here a 403) is a warning: entitlement still loads, the disputed charge is
+    "unknown" and stays served."""
+    from run import subscriptions
+    rows = [_disputed_session("pi_ok"), _disputed_session("pi_hurt", True)]
+    urls: list[str] = []
+
+    def get(url, key):
+        urls.append(url)
+        if url.startswith(subscriptions.DISPUTES_API):
+            raise subscriptions.SubscriptionError("Stripe returned HTTP 403.")
+        if "checkout/sessions" in url:
+            return {"data": rows, "has_more": False}
+        return {"data": [], "has_more": False}
+    monkeypatch.setattr(subscriptions, "_stripe_get", get)
+    from test_one_time_passes import ENDS
+    monkeypatch.setattr("run.solo.season_ends", lambda *a, **k: ENDS)
+    paid = subscriptions.load_paid_from_stripe("rk_test")
+    for url in urls:
+        expands = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("expand[]", [])
+        assert not any(e.endswith(".dispute") for e in expands), url
+    assert {"pi_ok", "pi_hurt"} <= set(paid.subscription_ids)
+    assert ("pi_hurt", "unknown") in paid.disputes
+    assert paid.dispute_errors and "403" in paid.dispute_errors[0]
+    src = Path(subscriptions.__file__).read_text(encoding="utf-8")
+    assert ".dispute\")" not in src
+
+
+def test_a_lost_subscription_chargeback_ends_entitlement(monkeypatch) -> None:
+    """The subscription half: a lost chargeback on the latest invoice's charge
+    drops the subscription like a full refund, read through the same lookup."""
+    from run import subscriptions
+    charge = {"id": "ch_sub", "amount": 3900, "amount_refunded": 0, "disputed": True}
+    sub = {"id": "sub_lost", "customer": {"email": "a@example.com"},
+           "latest_invoice": {"charge": charge}}
+
+    def get(url, key):
+        if url.startswith(subscriptions.DISPUTES_API):
+            return {"data": [{"status": "lost"}]}
+        if "status=active" in url:
+            return {"data": [sub], "has_more": False}
+        return {"data": [], "has_more": False}
+    monkeypatch.setattr(subscriptions, "_stripe_get", get)
+    paid = subscriptions.load_paid_from_stripe("rk_test")
+    assert "sub_lost" in paid.refunded and not paid.covers("a@example.com")
 
 
 def test_a_dispute_waiting_on_us_turns_the_intake_red(monkeypatch, capsys) -> None:
@@ -1048,6 +1517,47 @@ def test_a_bounced_paid_email_is_found_and_said_without_an_address(monkeypatch, 
     assert "PAID EMAIL BOUNCED: welcome-1761200000-bbbb" in err and "@" not in err
     events["m2"] = "delivered"
     assert intake.bounce_alarm(now) is False
+
+
+def test_a_send_only_resend_key_is_found_in_one_request_and_said_once(
+        monkeypatch, capsys) -> None:
+    """Reproduced (pre-launch review): LAUNCH.md has the owner create the
+    Resend key with Sending access, which "can only send emails", so every
+    GET /emails/{id} was refused. check_bounces counted 30 errors, slept
+    about 16 s doing it, checked 0, and the run printed one stderr line and
+    exited 0 — a buyer with a mistyped address stayed invisible, the case the
+    check exists for. Now the first 401/403 stops the lookups and the run
+    says, once, as an OWNER line, which key is missing; the lookup prefers
+    RESEND_READ_KEY over the sending key."""
+    from run import delivery
+    now = datetime(2026, 10, 23, 15, tzinfo=timezone.utc)
+    recent = (now - timedelta(hours=2)).isoformat(timespec="seconds")
+    entries = [{"key": f"welcome-{i}-abcd", "provider": "resend",
+                "message_id": f"m{i}", "sent_at": recent} for i in range(5)]
+    calls: list[str] = []
+
+    def refused(message_id):
+        calls.append(message_id)
+        raise delivery.KeyCannotRead("HTTP 401 from Resend")
+    report = delivery.check_bounces(entries, now, api_key="re_x", lookup=refused, pause=0)
+    assert len(calls) == 1, "one refusal answers for every lookup"
+    assert report.key_cannot_read and report.checked == 0 and not report.paid
+    used: list[str] = []
+    monkeypatch.setattr(delivery, "resend_last_event",
+                        lambda message_id, key: used.append(key) or "delivered")
+    monkeypatch.setenv("RESEND_API_KEY", "re_send_only")
+    monkeypatch.setenv("RESEND_READ_KEY", "re_full")
+    delivery.check_bounces(entries[:1], now, pause=0)
+    assert used == ["re_full"]
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setattr(intake, "_sent_entries", lambda: entries)
+    real_check = delivery.check_bounces
+    monkeypatch.setattr(delivery, "check_bounces",
+                        lambda e, n: real_check(e, n, lookup=refused, pause=0))
+    capsys.readouterr()
+    assert intake.bounce_alarm(now) is False
+    out = capsys.readouterr().out
+    assert out.count("OWNER: bounces are not checked") == 1 and "RESEND_READ_KEY" in out
 
 
 def test_the_resend_lookup_never_echoes_the_key(monkeypatch) -> None:

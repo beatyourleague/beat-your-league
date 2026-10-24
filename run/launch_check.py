@@ -96,8 +96,9 @@ REQUIRED_SECRETS = ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "EMAIL_PROVIDER", 
 # what a buyer loses rather than only that a box is empty. UPDATE_SECRET keys
 # two things since Oct 2026: the roster-update confirmation codes AND each
 # League Pass payer's own seat link (run/updates seat token, contract C4), and
-# that link is built on SITE_URL — without either, a payer's welcome falls back
-# to the generic seat page and the claim needs the payer's address typed in.
+# that link is built on SITE_URL — without either, a payer's welcome has no
+# seat link to give and no seat can be claimed (contract C3: the generic seat
+# page that took the payer's typed address is closed).
 FEATURE_SECRETS = {
     "Taking money and knowing who paid": ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS"),
     "Sending any email": ("EMAIL_PROVIDER", "EMAIL_FROM", "LOG_SECRET", "RESEND_API_KEY",
@@ -447,6 +448,11 @@ def check_funnel_config() -> list[Gate]:
                        (landing.get("PLAYOFF_PASS_READY") == "true") == bool(join.get("STRIPE_LINK_PLAYOFF")),
                        f"landing PLAYOFF_PASS_READY={landing.get('PLAYOFF_PASS_READY')} but the join "
                        f"page's STRIPE_LINK_PLAYOFF is {'set' if join.get('STRIPE_LINK_PLAYOFF') else 'empty'}"))
+    gates.append(_gate("Funnel", "Landing and join page agree on whether free reports are open",
+                       landing.get("TRIAL_OPEN") == join.get("TRIAL_OPEN"),
+                       f"index TRIAL_OPEN={landing.get('TRIAL_OPEN')}, join "
+                       f"TRIAL_OPEN={join.get('TRIAL_OPEN')} — the button and the page it "
+                       f"opens would disagree"))
     gates.append(_gate("Funnel", "The free-report button only shows when requests can be received",
                        not (trial and not form),
                        "TRIAL_OPEN is on but FORM_ENDPOINT is empty: the button posts nowhere"))
@@ -1132,7 +1138,6 @@ JOIN_CONSTANTS = ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS
                   "FORM_ENDPOINT", "NOTIFY_LIST_ENDPOINT")
 STUB_PLAN = {"season": "season", "monthly": "monthly", "league_pass": "pass"}
 FLOW_EMAIL = "buyer.flow@example.com"
-FLOW_PAYER = "commish.flow@example.com"
 FLOW_VIA = "launch-check"
 FLOW_TOKEN = "0123456789abcdef0123"
 # (mode, which copy, query, what leaves the page, the plan a checkout ref carries)
@@ -1140,7 +1145,9 @@ FLOWS = (
     ("season", "open", f"?via={FLOW_VIA}", "checkout", "season"),
     ("monthly", "open", "?plan=monthly", "checkout", "monthly"),
     ("League Pass", "open", "?plan=pass", "checkout", "league_pass"),
-    ("seat (payer's address)", "open", "?pass=1", "seat", None),
+    # The generic seat route claims nothing (contract C3): it only says where
+    # the league's own link is, and nothing may leave the page.
+    ("seat (no link)", "open", "?pass=1", "none", None),
     ("seat (payer's link)", "open", f"?pass={FLOW_TOKEN}&s=half_ppr&n=10&t=sf", "seat", None),
     ("free report", "open", f"?try=1&via={FLOW_VIA}", "trial", None),
     # Every report links the update page WITH its subscription's settings
@@ -1174,6 +1181,12 @@ def join_copy(dest: Path, base: str, links_open: bool) -> list[str]:
                           flags=re.M)
         if n != 1:
             missing.append(name)
+    # The free report is completed as a buyer would once it is open: the
+    # page's own switch (the landing's twin) is on in the copy.
+    text, n = re.subn(r"^const TRIAL_OPEN = (true|false);", "const TRIAL_OPEN = true;", text,
+                      flags=re.M)
+    if n != 1:
+        missing.append("TRIAL_OPEN")
     page.write_text(text, encoding="utf-8")
     return missing
 
@@ -1202,6 +1215,15 @@ def audit_flow(mode: str, kind: str, plan: str | None, query: str, result: dict,
     problems: list[str] = []
     if result.get("error"):
         return [f"{mode}: {result['error']}"]
+    if kind == "none":
+        if result.get("handoff") or result.get("posted"):
+            problems.append(f"{mode}: something left the page")
+        want = seat_link_missing_words()
+        if not want or want not in str(result.get("note") or ""):
+            problems.append(f"{mode}: the page does not say where the league's seat link is")
+        if not result.get("mainHidden"):
+            problems.append(f"{mode}: the form is still shown")
+        return problems
     asked = urllib.parse.parse_qs(query.lstrip("?"))
 
     def check_ref(ref: str | None, want_plan: str | None) -> Any:
@@ -1268,14 +1290,24 @@ def audit_flow(mode: str, kind: str, plan: str | None, query: str, result: dict,
         if (decoded.scoring, decoded.league_size, tuple(decoded.slots)) != want:
             problems.append(f"{mode}: the link's settings were not carried")
     if kind == "seat":
-        if "pass_token" in row:
-            # The payer's own link (contract C4): the token is the payer, and
-            # the league's settings arrive prefilled from the link.
-            if row["pass_token"] != (asked.get("pass") or [None])[0]:
-                problems.append(f"{mode}: posted a different pass token")
-        elif row.get("covered_by") != FLOW_PAYER:
-            problems.append(f"{mode}: the commissioner's address is not the one typed")
+        # The payer's own link is the only seat route (contracts C3/C4): the
+        # token names the pass, and a typed address never travels.
+        if row.get("pass_token") != (asked.get("pass") or [None])[0]:
+            problems.append(f"{mode}: posted a different pass token")
+        if "covered_by" in row:
+            problems.append(f"{mode}: posted a typed payer address")
     return problems
+
+
+def seat_link_missing_words(text: str | None = None) -> str:
+    """What the join page tells a visitor who opened a seat page without
+    their league's link (``seatLinkMissingWords`` in site/join/index.html),
+    read from the page so the check and the page cannot drift."""
+    text = text if text is not None else (SITE / "join/index.html").read_text(encoding="utf-8")
+    match = re.search(r"function seatLinkMissingWords\(\)\s*\{\s*return\s+(.*?);", text, re.S)
+    if not match:
+        return ""
+    return "".join(re.findall(r'"((?:[^"\\]|\\.)*)"', match.group(1)))
 
 
 def audit_plan_switch(switched: dict | None, monthly_offered: bool = True) -> list[str]:
@@ -1325,9 +1357,10 @@ def check_join_flows() -> list[Gate]:
             .get("MONTHLY_OFFERED") != "false"
         flows = [f for f in FLOWS if offered or f[0] != "monthly"]
         jobs = [{"kind": "flow", "mode": mode, "path": f"{copy}/join/index.html{query}",
-                 "width": 390, "roster": roster_text, "email": FLOW_EMAIL, "payer": FLOW_PAYER,
-                 "planSwitch": mode == "season", "tick": FLOW_TICKS.get(mode, [])}
-                for mode, copy, query, _k, _p in flows]
+                 "width": 390, "roster": roster_text, "email": FLOW_EMAIL,
+                 "planSwitch": mode == "season", "tick": FLOW_TICKS.get(mode, []),
+                 **({"expect": "nothing"} if kind == "none" else {})}
+                for mode, copy, query, kind, _p in flows]
         with _serving(Path(tmp), port):
             results = run_browser(jobs, base)
     name = "Every join mode hands off a well-formed purchase or row"
@@ -1474,6 +1507,62 @@ def check_dns() -> list[Gate]:
             for t in txt), "a strict root SPF without the sender would fail its mail",
             "ok", fail="WARN"),
     ]
+
+
+def worker_status(endpoint: str, api_key: str) -> dict:
+    """The form Worker's own switches (GET ?status=1 with the read key,
+    infra/form-worker.js). Read-only: no row is listed or written."""
+    import urllib.request
+    joiner = "&" if "?" in endpoint else "?"
+    request = urllib.request.Request(f"{endpoint}{joiner}status=1", method="GET",
+                                     headers={"Authorization": f"Bearer {api_key}"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    if not isinstance(data, dict) or "trial_open" not in data:
+        raise ValueError("the Worker does not answer ?status=1 — re-paste infra/form-worker.js")
+    return data
+
+
+def check_worker_switches() -> list[Gate]:
+    """The site's TRIAL_OPEN and the Worker's must agree: the Worker refuses
+    every free-report row while its own variable is off, so a site that
+    offers free reports over a Worker that refuses them loses every request
+    (pre-launch review, SEC-06's second half)."""
+    name = "The form Worker takes free-report requests exactly when the site offers them"
+    site = js_constants((SITE / "index.html").read_text(encoding="utf-8")).get("TRIAL_OPEN") == "true"
+    endpoint = os.environ.get("FORM_ENDPOINT", "").strip()
+    key = os.environ.get("FORM_API_KEY", "").strip()
+    if not endpoint or not key:
+        if site:
+            return [Gate("Owner", name, "OWNER",
+                         "TRIAL_OPEN is on in the site — set the Worker's TRIAL_OPEN variable "
+                         "to true as well (LAUNCH.md step 5), then run this with FORM_ENDPOINT "
+                         "and FORM_API_KEY in the shell to confirm")]
+        return [Gate("Owner", name, "SKIP", "needs FORM_ENDPOINT and FORM_API_KEY in the shell")]
+    try:
+        worker = bool(worker_status(endpoint, key).get("trial_open"))
+    except Exception as exc:  # noqa: BLE001 — reported, never guessed
+        return [Gate("Owner", name, "WARN", f"could not read the Worker's switches: {exc}")]
+    if site and not worker:
+        return [Gate("Owner", name, "FAIL", "the site offers free reports and the Worker's "
+                     "TRIAL_OPEN is not \"true\": every request is refused (LAUNCH.md step 5)")]
+    if worker and not site:
+        return [Gate("Owner", name, "WARN", "the Worker takes free-report rows while the site's "
+                     "TRIAL_OPEN is off; nothing is served (run/trials.py) — unset it")]
+    return [Gate("Owner", name, "PASS", f"both {'on' if site else 'off'}")]
+
+
+def check_resend_read_key() -> list[Gate]:
+    """The bounce check (run/delivery.check_bounces) reads each sent email
+    back from Resend, which the sending key cannot do: without a Full access
+    RESEND_READ_KEY it says so once per run and checks nothing."""
+    name = "The bounce check has a Resend key that can read sent email"
+    if os.environ.get("RESEND_READ_KEY", "").strip():
+        return [Gate("Email", name, "PASS", "RESEND_READ_KEY is set in this shell")]
+    return [Gate("Email", name, "OWNER",
+                 "RESEND_READ_KEY is not in this shell — Resend's Sending access key can only "
+                 "send, so a bounced buyer address goes unseen. Create a Full access key and "
+                 "save it as the GitHub secret RESEND_READ_KEY (LAUNCH.md step 2)")]
 
 
 def check_live() -> list[Gate]:
@@ -2220,10 +2309,12 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("five league setups", check_product_battery),
         ("compliance text", check_compliance), ("every email's sender and way out",
                                                 check_email_senders),
-        ("owner secrets", check_secrets), ("economics", check_economics),
+        ("owner secrets", check_secrets), ("bounce check key", check_resend_read_key),
+        ("economics", check_economics),
     ]
     if not offline:
         steps += [("email DNS", check_dns), ("live site", check_live),
+                  ("form Worker switches", check_worker_switches),
                   ("Resend domain", check_resend_domain), ("Stripe public details",
                                                            check_stripe_account),
                   ("Stripe billing page", check_billing_portal),

@@ -393,6 +393,10 @@ Baltimore Ravens
       </div>
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <!-- Read back as typed (critique #1): checkout locks this address, so a
+           typo is a buyer who paid and whose every report goes nowhere. -->
+      <p class="terms-line" id="email-readback" aria-live="polite"></p>
+      <div class="note" id="email-suggest" role="alert" style="display:none"></div>
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The Rest-of-Season Pass is <b>$29, one
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
@@ -524,6 +528,12 @@ const FORM_ENDPOINT = "";
 // above); set both to the same URL. Separate constants on purpose: the seat
 // path must keep working even if the owner ever splits the backends.
 const NOTIFY_LIST_ENDPOINT = "";
+// The free first report (?try=1). The SAME switch as the landing's TRIAL_OPEN
+// and the form Worker's TRIAL_OPEN variable — the launch check holds the three
+// together. Off, the page says free reports aren't open before anyone types a
+// roster; the Worker refuses a free-report row while its own switch is off,
+// and this page once told every such visitor to check their address for typos.
+const TRIAL_OPEN = false;
 // The project inbox (Cloudflare Email Routing), never a personal address.
 const CONTACT_EMAIL = "hello@beatyourleague.com";
 // The League Pass is for sale only while its seats can be claimed. Seats
@@ -656,7 +666,9 @@ const UPDATE_MODE = !SEAT_MODE && (TOKEN_UPDATE || QUERY.has("update"));
 // subscriber with more than one team changes the one whose report they were
 // reading. Posted as ``replaces``; it picks a team, never authorises one — the
 // intake still mails only the address on that subscription.
-const UPDATE_ORIGIN = UPDATE_MODE && /^[0-9a-f]{10}$/.test(QUERY.get("o") || "")
+// 12 hex: run/updates.py origin_tag (ORIGIN_TAG_LENGTH). A 10-hex test here
+// dropped every report link's tag (pre-launch review APPSEC-5).
+const UPDATE_ORIGIN = UPDATE_MODE && /^[0-9a-f]{12}$/.test(QUERY.get("o") || "")
   ? QUERY.get("o") : "";
 // ?try=1 — the free first report (run/trials.py): this week's report for the
 // roster entered here, one per person per season, no card. Never a purchase.
@@ -709,6 +721,74 @@ function showError(id, message) {
 // Something that WORKED, in the done style (role=status, not alert).
 function showOk(message) {
   $("ok-email").textContent = message;
+}
+
+// Critique #1: the address goes to Stripe LOCKED (locked_prefilled_email), so
+// the buyer cannot fix a typo there, and "gmial.com" meant a paid pass whose
+// welcome and every report went to a dead mailbox. The page reads the address
+// back as it is typed and, for the commonest domain slips, asks once before
+// anything leaves: the suggestion is a button, never a silent rewrite.
+const DOMAIN_FIXES = {
+  "gmial.com": "gmail.com", "gmal.com": "gmail.com", "gmai.com": "gmail.com",
+  "gamil.com": "gmail.com", "gmaill.com": "gmail.com", "gnail.com": "gmail.com",
+  "gmail.co": "gmail.com", "gmail.cm": "gmail.com", "gmail.om": "gmail.com",
+  "gmail.con": "gmail.com", "gmail.comm": "gmail.com", "gmali.com": "gmail.com",
+  "yaho.com": "yahoo.com", "yahooo.com": "yahoo.com", "yhoo.com": "yahoo.com",
+  "yaoo.com": "yahoo.com", "yahoo.con": "yahoo.com", "yahoo.cm": "yahoo.com",
+  "hotmial.com": "hotmail.com", "hotmal.com": "hotmail.com", "hotmai.com": "hotmail.com",
+  "hotnail.com": "hotmail.com", "hotmail.co": "hotmail.com", "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com", "outllok.com": "outlook.com", "outlook.co": "outlook.com",
+  "outlook.con": "outlook.com", "iclod.com": "icloud.com", "icoud.com": "icloud.com",
+  "icloud.co": "icloud.com", "icloud.con": "icloud.com", "aol.co": "aol.com",
+  "aol.con": "aol.com", "comcast.com": "comcast.net", "live.co": "live.com",
+};
+function suggestEmail(email) {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "";
+  const domain = email.slice(at + 1).toLowerCase();
+  let fixed = DOMAIN_FIXES[domain] || "";
+  if (!fixed && /\.(con|cmo|ocm|vom|comm)$/.test(domain)) {
+    fixed = domain.replace(/\.(con|cmo|ocm|vom|comm)$/, ".com");
+  }
+  return fixed && fixed !== domain ? email.slice(0, at + 1) + fixed : "";
+}
+function drawReadback() {
+  const email = $("email").value.trim();
+  const paying = !SEAT_MODE && !UPDATE_MODE && !TRY_MODE;
+  $("email-readback").textContent = EMAIL_RE.test(email)
+    ? "Reports go to " + email + (paying ? " — checkout can't change it, so check it now." : ".")
+    : "";
+  const box = $("email-suggest");
+  if (state.suggested && state.suggested.typed !== email) {
+    state.suggested = null;
+    box.replaceChildren();
+    box.style.display = "none";
+  }
+}
+$("email").addEventListener("input", drawReadback);
+// -> true when the address looks like a slip and the reader has not yet been
+// asked about this exact spelling: the press only asks. A second press with
+// the same spelling goes ahead, because the address may really be that.
+function askAboutTypo(email) {
+  const fixed = suggestEmail(email);
+  if (!fixed || (state.suggested && state.suggested.typed === email)) return false;
+  state.suggested = { typed: email, fixed: fixed };
+  const box = $("email-suggest");
+  const use = document.createElement("button");
+  use.type = "button";
+  use.className = "retry";
+  use.textContent = "Use " + fixed;
+  use.addEventListener("click", () => {
+    $("email").value = fixed;
+    drawReadback();
+    $("email").focus();
+  });
+  box.replaceChildren(
+    document.createTextNode("Did you mean " + fixed + "? Your reports go to this address. "),
+    use,
+    document.createTextNode(" Or press the button below again to keep " + email + "."));
+  box.style.display = "block";
+  return true;
 }
 
 // Every stranger-supplied string reaches the DOM as a TEXT NODE. Never
@@ -1222,6 +1302,7 @@ $("form-email").addEventListener("submit", (event) => {
     showError("err-email", "That email doesn't look right.");
     return;
   }
+  if (askAboutTypo(email)) return;
   if (!state.ready) {
     showError("err-email", "Check your roster above first.");
     return;
@@ -1342,9 +1423,26 @@ function refusedBy(response) {
   return err;
 }
 function notSentWords(err) {
+  if (err && err.closed) return err.closed + " Nothing was saved.";
   return err && err.refused
     ? "We couldn't accept that address — check it for typos. Nothing was saved."
     : "That didn't send — check your connection and try again. Nothing was saved.";
+}
+// The Worker says WHY it refused a row (infra/form-worker.js answers JSON
+// {error}), so the page reads it rather than guessing from the status: a
+// 403 "free reports are not open" is not a typo in the visitor's address.
+const WORKER_CLOSED = {
+  "free reports are not open": "Free reports aren't open just yet — we're finishing setup.",
+};
+async function refusedFrom(response) {
+  const err = refusedBy(response);
+  try {
+    const said = await response.clone().json();
+    if (said && typeof said.error === "string" && WORKER_CLOSED[said.error]) {
+      err.closed = WORKER_CLOSED[said.error];
+    }
+  } catch (e) { /* not JSON: the status alone decides */ }
+  return err;
 }
 
 function submitSeat(email, ref) {
@@ -1426,7 +1524,7 @@ function submitUpdate(email, ref) {
 }
 
 function submitTrial(email, ref) {
-  if (!FORM_ENDPOINT) {
+  if (!FORM_ENDPOINT || !TRIAL_OPEN) {
     showError("err-email", "Free reports aren't open just yet — we're finishing " +
       "setup. Nothing was sent or saved.");
     return;
@@ -1439,8 +1537,8 @@ function submitTrial(email, ref) {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind: "trial", email: email, ref: ref, via: SOURCE }),
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
-  }).then((response) => {
-    if (!response.ok) throw refusedBy(response);
+  }).then(async (response) => {
+    if (!response.ok) throw await refusedFrom(response);
     $("form-email").style.display = "none";
     // A request, not a send: one free report per person per season, never to a
     // subscriber's address — the intake decides, so the page claims no more.
@@ -1812,7 +1910,7 @@ function drawTrial() {
     "wherever both players are playing, off the injury report and have enough " +
     "games on record (not on team defenses). One per person, no card.";
   setChips(["Free — no card", what[1], "One per person"]);
-  if (FORM_ENDPOINT && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
+  if (FORM_ENDPOINT && TRIAL_OPEN && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
     const note = $("closed-note");
     const a = document.createElement("a");
     const pre = TRIAL.when === "pre";
@@ -1837,7 +1935,7 @@ if (TRY_MODE) {
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
   $("terms-line").style.display = "none";
-  if (FORM_ENDPOINT) { $("closed-note").style.display = "none"; }
+  if (FORM_ENDPOINT && TRIAL_OPEN) { $("closed-note").style.display = "none"; }
   else { closedUpFront("Free reports"); }
   $("first-note").style.display = "none";
   $("trial-note").style.display = "list-item";

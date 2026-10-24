@@ -4640,8 +4640,9 @@ def test_the_privacy_policy_names_an_accountable_role_and_true_storage() -> None
     assert "the storage that automation carries between runs" in privacy
     section1 = privacy[privacy.find("1. What we collect"):privacy.find("2. What we never")]
     assert re.search(r"waitlist.{0,260}short code standing for that roster", section1, re.S)
-    assert re.search(r"pass code in your league's own link", section1)
-    assert "the email the pass was bought with" in section1
+    assert re.search(r"pass code\s+in your league's own seat link", section1)
+    # Contract C3: the typed buyer address is no longer collected for a seat.
+    assert "the email the pass was bought with" not in section1
     stripe = privacy[privacy.find("Stripe handles payment"):][:600]
     assert "channel tag" in stripe
     assert "sample roster's report" in privacy
@@ -4662,7 +4663,7 @@ def test_league_pass_copy_names_the_address_the_seat_page_asks_for() -> None:
     # Contract C3 (pre-launch review APPSEC-2): no surface asks a leaguemate
     # for the buyer's address at all any more — a seat is claimed only
     # through its pass's own link — so the phrase that once named it is gone.
-    for page in (LEAGUE_PASS, THANKS):
+    for page in (LEAGUE_PASS, THANKS, PRIVACY):
         text = prose(re.sub(r"<!--.*?-->", "", markup_only(page), flags=re.S))
         assert "the email the pass was bought with" not in text
         assert "join/?pass=1" not in text

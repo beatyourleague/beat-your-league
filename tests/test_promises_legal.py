@@ -19,6 +19,9 @@ SITE = ROOT / "site"
 # the words change; never edit an old one. The last pair must match the page.
 PRIVACY_VERSIONS = [
     ("2026-10-18", "25bc5d53a2db85c1"),
+    # Seats are matched only by the league's own seat link (contract C3): the
+    # typed buyer address is no longer collected (pre-launch review).
+    ("2026-10-24", "6c29bde141dbb134"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),

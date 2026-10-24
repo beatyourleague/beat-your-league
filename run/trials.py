@@ -107,6 +107,10 @@ TRIAL_MAX_AGE = timedelta(days=14)
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
 # then the watchdog says so separately.
 TUESDAY_RELEASE_HOUR = 20
+# The same on a Saturday (UTC) for the final check (saturday.yml, 16:17 UTC),
+# which mails only subscribers who must change something: free reports and
+# seat notes are unpaid, and must not spend the day's allowance before it.
+SATURDAY_RELEASE_HOUR = 20
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # run/rosters.py's rule (D14)
 
 
@@ -210,6 +214,18 @@ def held_for_tuesday(now: datetime, sent: set[str], season: str, week: int) -> b
     now = now.astimezone(timezone.utc)
     return (now.weekday() == 1 and now.hour < TUESDAY_RELEASE_HOUR
             and not tuesday_finished(sent, season, week))
+
+
+def held_for_subscribers(now: datetime, sent: set[str], season: str, week: int) -> bool:
+    """True while a paid run of today may still be mailing: Tuesday's reports
+    (``held_for_tuesday``) or Saturday's final check, until its run marker
+    (run/watchdog.run_key) is in the send log or SATURDAY_RELEASE_HOUR."""
+    from run.watchdog import SATURDAY, run_key
+    if held_for_tuesday(now, sent, season, week):
+        return True
+    now = now.astimezone(timezone.utc)
+    return (now.weekday() == 5 and now.hour < SATURDAY_RELEASE_HOUR
+            and run_key(SATURDAY, season, week) not in sent)
 
 
 def sent_today(entries, now: datetime) -> int:
@@ -372,15 +388,30 @@ def main(argv: list[str] | None = None) -> int:
               f"they go out with the next week's build.")
         return 0
     # Before launch there are no subscriber reports to go first.
-    if not prelaunch and held_for_tuesday(now, sent, season, week):
-        print(f"Free reports: {len(todo)} waiting — subscribers' Tuesday reports "
-              f"go out first (until that run finishes, or "
-              f"{TUESDAY_RELEASE_HOUR}:00 UTC).")
+    if not prelaunch and held_for_subscribers(now, sent, season, week):
+        which = ("Tuesday reports go" if now.astimezone(timezone.utc).weekday() == 1
+                 else "Saturday check goes")
+        print(f"Free reports: {len(todo)} waiting — subscribers' {which} out "
+              f"first (until that run finishes, or {TUESDAY_RELEASE_HOUR}:00 UTC).")
         return 0
-    room = TRIAL_DAILY_CAP - sent_today(sent_entries(), now)
-    if room <= 0:
+    # Two ceilings: the free reports' own daily cap, and the day's whole
+    # sending allowance less a headroom kept for paid mail (run/intake.py
+    # DAY_HEADROOM, EMAIL_DAILY_HEADROOM on a paid plan). Without the second,
+    # 40 free reports plus the day's seat notes left Saturday's final check,
+    # welcomes and first reports about 40 of the free tier's 100.
+    from run.intake import day_headroom, sent_on
+    entries = sent_entries()
+    own_room = TRIAL_DAILY_CAP - sent_today(entries, now)
+    if own_room <= 0:
         print(f"Free reports: {len(todo)} waiting — today's {TRIAL_DAILY_CAP} "
               f"have gone out; the rest go tomorrow.")
+        return 0
+    room = min(own_room, day_headroom() - sent_on(entries, now))
+    if room <= 0:
+        print(f"Free reports: {len(todo)} waiting — today's allowance for unpaid "
+              f"mail is spent (nothing optional once the day's sends reach "
+              f"{day_headroom()}, which keeps room for paid mail); the rest go "
+              f"tomorrow.")
         return 0
     limit = min(MAX_PER_RUN, room)
 

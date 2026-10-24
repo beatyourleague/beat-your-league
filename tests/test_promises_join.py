@@ -41,21 +41,28 @@ def test_a_refused_row_is_not_blamed_on_the_connection() -> None:
     assert got[0] == got[1] and "couldn't accept that address" in got[0]
     assert "check your connection" in got[2] and got[2] == got[3]
     code = _js_code(JOIN)
-    assert code.count("throw refusedBy(response)") == 4
+    # The free report reads the Worker's own reason first (refusedFrom wraps
+    # refusedBy): a 403 "free reports are not open" is not a typo.
+    assert (code.count("throw refusedBy(response)")
+            + code.count("throw await refusedFrom(response)")) == 4
     assert 'throw new Error("rejected")' not in code
 
 
 def test_an_update_from_a_report_names_its_subscription() -> None:
-    """D13: the update link's &o=<slug> is posted as ``replaces`` and the Worker
-    keeps it on an update_request (dropping a malformed one, never the row)."""
+    """D13: the update link's &o=<tag> is posted as ``replaces`` and the Worker
+    keeps it on an update_request (dropping a malformed one, never the row).
+    The tag is 12 hex (run/updates.py ORIGIN_TAG_LENGTH): this test once
+    pinned 10, the raw slug's length, and with it APPSEC-5 — every real
+    link's tag dropped."""
     assert 'QUERY.get("o")' in JOIN
     post = _js_function(JOIN, "submitUpdate")
     assert 'kind: "update_request", email: email, ref: ref, replaces: UPDATE_ORIGIN' in post
-    got = _node(SANITIZE + "\nconsole.log(JSON.stringify(['0123456789', 'nope'].map((r) =>"
-                " sanitize({kind: 'update_request', email: 'a@b.co', ref: 'abc', replaces: r}))));")
+    got = _node(SANITIZE + "\nconsole.log(JSON.stringify(['0123456789ab', '0123456789', 'nope']"
+                ".map((r) => sanitize({kind: 'update_request', email: 'a@b.co', ref: 'abc',"
+                " replaces: r}))));")
     assert got[0] == {"kind": "update_request", "email": "a@b.co", "ref": "abc",
-                      "replaces": "0123456789"}
-    assert got[1] == {"kind": "update_request", "email": "a@b.co", "ref": "abc"}
+                      "replaces": "0123456789ab"}
+    assert got[1] == got[2] == {"kind": "update_request", "email": "a@b.co", "ref": "abc"}
 
 
 PHASE = "\n".join(_js_function(JOIN, f) for f in

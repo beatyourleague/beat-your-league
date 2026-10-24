@@ -376,15 +376,26 @@ UNPAID_KEY_PREFIXES = ("trial-", "seat-unmatched-", "seat-full-", "seat-confirm-
                        "launch-", "run-")
 # A buyer's first contact — where a mistyped address shows up first.
 FIRST_CONTACT_PREFIXES = ("welcome-", "preseason-")
+# The key the lookup uses. Resend's "Sending access" key (the one that mails,
+# RESEND_API_KEY) "can only send emails": reading one back needs a Full access
+# key, so the lookup has a secret of its own and falls back to the sending key
+# only to find out, in one request, that it cannot (pre-launch review).
+BOUNCE_KEY_ENV = "RESEND_READ_KEY"
 BOUNCE_LOOKBACK_HOURS = 48
 BOUNCE_MAX_LOOKUPS = 30
 # Resend's default rate limit is 2 requests a second.
 BOUNCE_PAUSE_SECONDS = 0.55
 
 
+class KeyCannotRead(DeliveryError):
+    """The Resend key was refused for a read (HTTP 401/403): it is a sending
+    key. Every further lookup would be refused the same way."""
+
+
 def resend_last_event(message_id: str, api_key: str) -> str | None:
     """Resend's ``last_event`` for one message id, or None when it has none.
-    Raises DeliveryError (never echoing the key) when the lookup fails."""
+    Raises DeliveryError (never echoing the key) when the lookup fails, and
+    KeyCannotRead when the key itself is refused."""
     from urllib.parse import quote
     request = urllib.request.Request(
         f"{RESEND_EMAILS_API}/{quote(message_id, safe='')}", method="GET",
@@ -394,6 +405,8 @@ def resend_last_event(message_id: str, api_key: str) -> str | None:
         with urllib.request.urlopen(request, timeout=20) as response:
             data = json.loads(response.read().decode("utf-8") or "{}")
     except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            raise KeyCannotRead(f"HTTP {exc.code} from Resend") from None
         raise DeliveryError(f"HTTP {exc.code} from Resend") from None
     except (urllib.error.URLError, TimeoutError, ssl.SSLError) as exc:
         raise DeliveryError(f"could not reach Resend: "
@@ -446,6 +459,9 @@ class BounceReport:
     checked: int = 0
     errors: int = 0
     skipped: str = ""
+    # The key was refused for a read: nothing was checked, and nothing will be
+    # until the owner gives the lookup a key that can read (RESEND_READ_KEY).
+    key_cannot_read: bool = False
 
 
 def check_bounces(entries, now: datetime, api_key: str | None = None, *,
@@ -455,10 +471,12 @@ def check_bounces(entries, now: datetime, api_key: str | None = None, *,
     ``limit`` lookups. Never raises; never prints or returns an address."""
     import time
     report = BounceReport(paid=[], unpaid=[])
-    api_key = api_key if api_key is not None else os.environ.get("RESEND_API_KEY", "")
+    if api_key is None:
+        api_key = (os.environ.get(BOUNCE_KEY_ENV, "").strip()
+                   or os.environ.get("RESEND_API_KEY", "").strip())
     if lookup is None:
         if not api_key:
-            report.skipped = "RESEND_API_KEY is not set"
+            report.skipped = f"neither {BOUNCE_KEY_ENV} nor RESEND_API_KEY is set"
             return report
         lookup = lambda message_id: resend_last_event(message_id, api_key)  # noqa: E731
     for index, entry in enumerate(lookup_order(entries, now)[:limit]):
@@ -466,6 +484,12 @@ def check_bounces(entries, now: datetime, api_key: str | None = None, *,
             time.sleep(pause)
         try:
             event = lookup(str(entry["message_id"]))
+        except KeyCannotRead:
+            # One refusal answers for the rest: stop rather than spend the
+            # run's sleeps on 29 more of them.
+            report.errors += 1
+            report.key_cannot_read = True
+            break
         except DeliveryError:
             report.errors += 1
             continue

@@ -11,7 +11,10 @@
 //          and Cumulative Layout Shift, one fresh tab per run
 //   flow   the join page completed like a buyer: roster pasted and checked,
 //          email typed, button pressed — and the Stripe hand-off URL or the
-//          form row it produced captured exactly as it left the page
+//          form row it produced captured exactly as it left the page;
+//          with "expect": "nothing" (a mode with no form, e.g. a seat page
+//          opened without its league's link) it only reads what the page says
+//          and records that nothing left it
 //
 // Usage: node run/launch_browser.mjs <base-url> <chrome-path> <jobs.json>
 //   jobs.json: [{"path": "index.html", "widths": [390, 1280]},          // probe
@@ -19,7 +22,7 @@
 //               {"kind": "perf", "path": ..., "width": 390, "runs": 3},
 //               {"kind": "flow", "path": "open/join/index.html?plan=monthly",
 //                "width": 390, "mode": "monthly", "roster": "...", "email": "...",
-//                "payer": "...", "planSwitch": true, "tick": ["settings-ok"]}]
+//                "planSwitch": true, "tick": ["settings-ok"], "expect": "nothing"?}]
 // Prints one JSON array to stdout. No dependencies: Node's own WebSocket.
 
 import { spawn } from "node:child_process";
@@ -291,9 +294,29 @@ async function flowJob(port, job) {
   });
   const s = tab.s;
   const result = { kind: "flow", mode: job.mode, path: job.path, handoff: null, posted: [],
-                   ready: false, tally: "", switched: null, error: "", errors: tab.errors };
+                   ready: false, tally: "", switched: null, error: "", errors: tab.errors,
+                   note: "", mainHidden: false };
   try {
     await navigate(s, job.path);
+    if (job.expect === "nothing") {
+      // No form to complete: read what the page tells this visitor, press the
+      // button if one is still reachable, and record that nothing left.
+      await until(s, "document.readyState === 'complete'", 15000);
+      await sleep(800);
+      Object.assign(result, await evaluate(s, `(() => {
+        const note = document.getElementById("closed-note");
+        const main = document.getElementById("main");
+        const shown = (el) => !!el && getComputedStyle(el).display !== "none";
+        const button = document.getElementById("submit");
+        if (button && button.offsetParent !== null) button.click();
+        return { note: shown(note) ? note.textContent.trim() : "", mainHidden: !shown(main) };
+      })()`));
+      await sleep(1500);
+      result.handoff = handoff;
+      result.posted = posted.slice();
+      await tab.close();
+      return [result];
+    }
     if (!await until(s, "typeof state !== 'undefined' && !!state.directory", 15000)) {
       throw new Error("the player list never loaded");
     }
@@ -324,11 +347,6 @@ async function flowJob(port, job) {
       for (const id of ${JSON.stringify(job.tick || [])}) {
         const box = document.getElementById(id);
         if (box && !box.checked) box.click();
-      }
-      const field = document.getElementById("pass-field");
-      const payer = document.getElementById("pass-email");
-      if (payer && field && getComputedStyle(field).display !== "none") {
-        payer.value = ${JSON.stringify(job.payer || "")};
       }
       document.getElementById("submit").click();
     })()`);

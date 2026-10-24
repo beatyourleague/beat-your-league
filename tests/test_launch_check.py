@@ -332,11 +332,10 @@ def test_a_posted_row_is_checked_as_the_intake_reads_it() -> None:
                    {**good, "kind": "waitlist"}):
         assert lc.audit_flow("free report", "trial", None, "",
                              {"posted": [json.dumps(broken)]}, ROSTER, BASE), broken
-    seat = {"email": lc.FLOW_EMAIL, "covered_by": lc.FLOW_PAYER, "ref": _ref()}
-    assert lc.audit_flow("seat", "seat", None, "?pass=1", {"posted": [json.dumps(seat)]},
-                         ROSTER, BASE) == []
-    unpaid = {**seat, "covered_by": "x@example.com"}
-    assert lc.audit_flow("seat", "seat", None, "?pass=1", {"posted": [json.dumps(unpaid)]},
+    # Contract C3: a seat row naming its pass by a typed payer address is a
+    # failure wherever it comes from — the generic ?pass=1 page claims nothing.
+    typed = {"email": lc.FLOW_EMAIL, "covered_by": "commish@example.com", "ref": _ref()}
+    assert lc.audit_flow("seat", "seat", None, "?pass=1", {"posted": [json.dumps(typed)]},
                          ROSTER, BASE)
     # The closed checkout keeps an email; a ref it carries must still be sound.
     listed = {"kind": "waitlist", "email": lc.FLOW_EMAIL}
@@ -364,6 +363,27 @@ def test_a_seat_link_row_carries_its_token_and_the_links_settings() -> None:
     assert lc.audit_flow("seat link", "seat", None, query,
                          {"posted": [json.dumps({**row, "pass_token": "f" * 20})]},
                          set(ids), BASE)
+
+
+def test_the_generic_seat_page_must_say_where_the_link_is_and_send_nothing() -> None:
+    """Reproduced (pre-launch review): GATE-5 still completed `?pass=1` as a
+    seat claim with the payer's address typed in and required the row's
+    `covered_by` — the route contract C3 closed — so `make launch-check`
+    FAILed ("nothing left the page") on a deliberate change. The flow is now
+    "seat (no link)": nothing may leave the page, the form is hidden, and the
+    note says where the league's own link is, in the page's own words."""
+    words = lc.seat_link_missing_words()
+    assert words.startswith("Seats are claimed with your league's own seat link.")
+    right = {"note": words, "mainHidden": True, "posted": [], "handoff": None}
+    assert lc.audit_flow("seat (no link)", "none", None, "?pass=1", right, ROSTER, BASE) == []
+    for broken in ({**right, "posted": ['{"kind": "seat"}']}, {**right, "note": ""},
+                   {**right, "mainHidden": False}, {**right, "handoff": BASE + "/__stripe/x"}):
+        assert lc.audit_flow("seat (no link)", "none", None, "?pass=1", broken, ROSTER, BASE)
+    modes = {mode: kind for mode, _c, _q, kind, _p in lc.FLOWS}
+    assert modes.get("seat (no link)") == "none" and modes.get("seat (payer's link)") == "seat"
+    assert "seat (payer's address)" not in modes
+    browser = (lc.REPO / "run" / "launch_browser.mjs").read_text(encoding="utf-8")
+    assert "pass-email" not in browser and "pass-field" not in browser
 
 
 def test_a_report_update_link_must_post_the_settings_it_carried() -> None:

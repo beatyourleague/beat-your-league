@@ -28,6 +28,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -78,6 +79,10 @@ class PaidList:
     # when its deadline passes. A LOST dispute ends entitlement like a full
     # refund and is listed in ``refunded`` (pre-launch review, critique #2).
     disputes: tuple[tuple[str, str], ...] = ()
+    # Why a disputed charge's status could not be read (usually a cron key
+    # without Disputes: Read). Such a charge is listed as "unknown" and stays
+    # entitled: a missing permission never stops delivery.
+    dispute_errors: tuple[str, ...] = ()
 
     @property
     def disputes_needing_response(self) -> tuple[str, ...]:
@@ -204,10 +209,62 @@ DISPUTE_REVIEW = ("under_review", "warning_under_review")
 DISPUTE_CLOSED = ("won", "warning_closed", "prevented")
 
 
-def dispute_state(charge: Any) -> str | None:
+DISPUTES_API = "https://api.stripe.com/v1/disputes"
+# Worst first: when one charge carries several disputes (an inquiry, then the
+# chargeback), the one that asks most of us decides.
+_DISPUTE_RANK = (DISPUTE_LOST, *DISPUTE_ACTION, "unknown", *DISPUTE_REVIEW)
+
+
+class DisputeLookup:
+    """Stripe's dispute status for a DISPUTED charge, read with its own list
+    call (``GET /v1/disputes?charge=…``) and only for a charge whose
+    ``disputed`` flag is set — so an account with no chargebacks makes no
+    extra request at all.
+
+    Not an expansion: at the pinned API version (2024-06-20) a Charge has no
+    ``dispute`` property (stripe-node v13 removed it; v16, which is
+    2024-06-20, types only ``disputed: boolean``), so expanding
+    ``latest_charge.dispute`` failed the whole entitlement read — every
+    runner, every week (pre-launch review). A failed read here is recorded in
+    ``errors`` and answers None ("disputed, status unknown"), never an
+    exception: a missing Disputes permission must not stop delivery."""
+
+    def __init__(self, key: str) -> None:
+        self.key = key
+        self.errors: list[str] = []
+        self._seen: dict[str, str | None] = {}
+
+    def __call__(self, charge: Mapping[str, Any]) -> str | None:
+        charge_id, intent = charge.get("id"), charge.get("payment_intent")
+        if isinstance(charge_id, str) and re.fullmatch(r"(ch|py)_[A-Za-z0-9]+", charge_id):
+            param = ("charge", charge_id)
+        elif isinstance(intent, str) and re.fullmatch(r"pi_[A-Za-z0-9]+", intent):
+            param = ("payment_intent", intent)
+        else:
+            return None
+        if param[1] in self._seen:
+            return self._seen[param[1]]
+        url = f"{DISPUTES_API}?{urllib.parse.urlencode([param, ('limit', '10')])}"
+        try:
+            page = _stripe_get(url, self.key)
+        except SubscriptionError as exc:
+            self.errors.append(str(exc))
+            self._seen[param[1]] = None
+            return None
+        found = [str(d.get("status") or "") for d in (page.get("data") or [])
+                 if isinstance(d, dict)] if isinstance(page, dict) else []
+        open_ = [s for s in found if s not in DISPUTE_CLOSED]
+        status = (min(open_, key=lambda s: _DISPUTE_RANK.index(s)
+                      if s in _DISPUTE_RANK else _DISPUTE_RANK.index("unknown"))
+                  if open_ else ("won" if found else None))
+        self._seen[param[1]] = status
+        return status
+
+
+def dispute_state(charge: Any, lookup: "DisputeLookup | None" = None) -> str | None:
     """What a charge's dispute means: None (no dispute, or one closed in our
     favour), ``"lost"``, a status from DISPUTE_ACTION / DISPUTE_REVIEW, or
-    ``"unknown"`` — disputed, but the dispute was not expanded or carries a
+    ``"unknown"`` — disputed, but its dispute could not be read or carries a
     status this code does not know, which is an alarm rather than a guess.
 
     A lost chargeback is NOT a refund in Stripe's data: ``refunded`` stays
@@ -215,14 +272,9 @@ def dispute_state(charge: Any) -> str | None:
     returned False for one), so before this a buyer who charged back kept
     every report for the rest of the season. External input: anything
     unexpected is "unknown", never "fine"."""
-    if not isinstance(charge, dict):
+    if not isinstance(charge, dict) or charge.get("disputed") is not True:
         return None
-    dispute = charge.get("dispute")
-    if not charge.get("disputed") and not dispute:
-        return None
-    if not isinstance(dispute, dict):
-        return "unknown"
-    status = str(dispute.get("status") or "")
+    status = lookup(charge) if lookup is not None else None
     if status in DISPUTE_CLOSED:
         return None
     if status == DISPUTE_LOST or status in DISPUTE_ACTION or status in DISPUTE_REVIEW:
@@ -251,8 +303,6 @@ def fully_refunded(subscription: Mapping[str, Any]) -> bool:
         return False
     if charge.get("refunded") is True:
         return True                       # Stripe's own "fully refunded" flag
-    if dispute_state(charge) == DISPUTE_LOST:
-        return True                       # a lost chargeback: the money went back
     # Belt and braces: the flag is what Stripe sets, the arithmetic is what is
     # true. A charge refunded to the penny by several partial refunds is fully
     # refunded whatever the flag says.
@@ -298,13 +348,16 @@ def one_time_entitled_until(created: int, season_ends: Mapping[str, str]) -> "da
 def _one_time_purchases(key: str, now: "datetime | None" = None,
                         season_ends: Mapping[str, str] | None = None,
                         disputes: list | None = None,
+                        dispute_lookup: "DisputeLookup | None" = None,
                         ) -> tuple[set[str], set[str], list[str]]:
     """(entitled PaymentIntent ids, their emails, refunded ids) for one-time
     passes (Payment Links in payment mode — the 2026 rest-of-season passes).
 
     A charge whose dispute was LOST counts as refunded (its id joins the
     refunded list and it is not entitled); one still open stays entitled and
-    is appended to ``disputes`` as (id, status) when a list is given.
+    is appended to ``disputes`` as (id, status) when a list is given. A
+    disputed charge's status is read by ``dispute_lookup`` (one built from
+    ``key`` when none is given).
 
     A subscription answers "am I paid up" itself; a one-time payment never
     does, so entitlement is read off the paid Checkout Session: paid, not
@@ -321,10 +374,9 @@ def _one_time_purchases(key: str, now: "datetime | None" = None,
         except Exception:  # noqa: BLE001 — unknown season: the lookback decides
             season_ends = {}
     since = int(now.timestamp()) - ONE_TIME_LOOKBACK_DAYS * 86400
-    # Four levels is Stripe's expansion limit, and this is exactly four: the
-    # dispute's status rides in the same request.
+    lookup = dispute_lookup if dispute_lookup is not None else DisputeLookup(key)
     params = [("status", "complete"), ("limit", "100"), ("created[gte]", str(since)),
-              ("expand[]", "data.payment_intent.latest_charge.dispute")]
+              ("expand[]", "data.payment_intent.latest_charge")]
     ids: set[str] = set()
     emails: set[str] = set()
     refunded: list[str] = []
@@ -345,7 +397,7 @@ def _one_time_purchases(key: str, now: "datetime | None" = None,
             if not (isinstance(pi, str) and pi.startswith("pi_")):
                 continue
             charge = intent.get("latest_charge")
-            state = dispute_state(charge)
+            state = dispute_state(charge, lookup)
             if _charge_refunded(charge) or state == DISPUTE_LOST:
                 refunded.append(pi)
                 continue
@@ -388,16 +440,14 @@ def load_paid_from_stripe(api_key: str | None = None,
     subscription_ids: set[str] = set()
     refunded: list[str] = []
     disputes: list[tuple[str, str]] = []
+    lookup = DisputeLookup(key)
     for status in statuses:
         # A LIST of pairs, not a dict: `expand[]` has to repeat, and a dict can
         # only carry it once. RULE E1's expansion is the second one, answered in
         # the same request rather than one extra call per subscriber every week.
         params = [("status", status), ("limit", "100"),
                   ("expand[]", "data.customer"),
-                  ("expand[]", "data.latest_invoice.charge"),
-                  # ...and the charge's dispute, so a lost chargeback ends
-                  # entitlement like a refund (four levels: Stripe's limit).
-                  ("expand[]", "data.latest_invoice.charge.dispute")]
+                  ("expand[]", "data.latest_invoice.charge")]
         url = f"{STRIPE_API}?{urllib.parse.urlencode(params)}"
         while True:
             page = _stripe_get(url, key)
@@ -417,12 +467,14 @@ def load_paid_from_stripe(api_key: str | None = None,
                 # fully refunded subscriber must not reach `emails`,
                 # `customer_ids` OR `covered_leagues` — a League Pass payer who
                 # was refunded would otherwise keep eleven other people served.
-                if fully_refunded(subscription):
+                invoice = subscription.get("latest_invoice")
+                # A LOST chargeback ends entitlement like a full refund; its
+                # status is read only for a charge Stripe marks disputed.
+                state = dispute_state(invoice.get("charge")
+                                      if isinstance(invoice, dict) else None, lookup)
+                if fully_refunded(subscription) or state == DISPUTE_LOST:
                     refunded.append(str(subscription.get("id")))
                     continue
-                invoice = subscription.get("latest_invoice")
-                state = dispute_state(invoice.get("charge")
-                                      if isinstance(invoice, dict) else None)
                 if state is not None:
                     disputes.append((str(subscription.get("id")), state))
                 sub_id = subscription.get("id")
@@ -449,7 +501,8 @@ def load_paid_from_stripe(api_key: str | None = None,
                    f"&starting_after={urllib.parse.quote(str(last_id))}")
     # One-time passes: their PaymentIntent ids join the entitled set, so a row
     # or seat naming one is served exactly like a subscription (RULE E2).
-    once_ids, once_emails, once_refunded = _one_time_purchases(key, disputes=disputes)
+    once_ids, once_emails, once_refunded = _one_time_purchases(
+        key, disputes=disputes, dispute_lookup=lookup)
     subscription_ids |= once_ids
     emails |= once_emails
     refunded.extend(once_refunded)
@@ -459,7 +512,8 @@ def load_paid_from_stripe(api_key: str | None = None,
                     covered_leagues=frozenset(covered_leagues),
                     refunded=frozenset(refunded),
                     subscription_ids=frozenset(subscription_ids),
-                    disputes=tuple(sorted(set(disputes))))
+                    disputes=tuple(sorted(set(disputes))),
+                    dispute_errors=tuple(dict.fromkeys(lookup.errors)))
 
 
 def resolve_paid_list(csv_path: Path | None = None) -> PaidList:

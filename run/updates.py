@@ -89,7 +89,7 @@ SEAT_TOKEN_LENGTH = 20
 _SCORING_PARAMS = ("ppr", "half_ppr", "standard")
 
 
-def seat_token(payer_email: str, secret: str, pass_id: str = "") -> str:
+def seat_token(payer_email: str, secret: str, pass_id: str = "", nonce: str = "") -> str:
     """hmac_sha256(UPDATE_SECRET, b"seat:" + canonical(payer) [+ b"|" + pass])
     as hex, first 20. Canonical as the free report canonicalises a mailbox
     (run/trials), so a payer's `+tag` or Gmail dots never make two passes out
@@ -99,13 +99,20 @@ def seat_token(payer_email: str, secret: str, pass_id: str = "") -> str:
     address alone gave a buyer of two leagues' passes one token for both, so
     a leaguemate in both leagues lost a seat to a "roster change" and each
     pass counted the other league's seats. A pass with no identity (the
-    generic fallback) keeps the address-only token."""
+    generic fallback) keeps the address-only token.
+
+    ``nonce`` is the stamp of the pass's newest seat RESET
+    (run/seat_resets.py): a reset rotates the link, so every copy of the old
+    one stops matching. No reset, no nonce — every link already sent keeps
+    its code."""
     if not secret:
         raise ValueError("a seat token needs a secret")
     from run.trials import canonical_email
     message = b"seat:" + canonical_email(payer_email).encode("utf-8")
     if pass_id:
         message += b"|" + pass_id.encode("utf-8")
+    if nonce:
+        message += b"|reset:" + nonce.encode("utf-8")
     return hmac.new(secret.encode("utf-8"), message,
                     hashlib.sha256).hexdigest()[:SEAT_TOKEN_LENGTH]
 
@@ -154,17 +161,27 @@ def settings_params(roster) -> list[str]:
 
 
 def seat_url(site_url: str, secret: str, payer_email: str, roster,
-             pass_id: str = "") -> str | None:
+             pass_id: str = "", nonce: str | None = None) -> str | None:
     """The one link a pass payer shares: SITE_URL/join/?pass=<token>&s=&n=&t=
-    with the payer's own scoring, league size and lineup. None without a site
-    or a secret — then the welcome keeps the generic link and the email
-    instruction, rather than printing a link that cannot be matched.
-    ``pass_id`` is the pass's own identity (``seat_token``)."""
+    with the payer's own scoring, league size and lineup (``roster`` None:
+    the link carries no settings and the page asks for them). None without a
+    site or a secret — then the welcome says so rather than printing a link
+    that cannot be matched. ``pass_id`` is the pass's own identity, and
+    ``nonce`` its newest seat reset (``seat_token``; read from the committed
+    resets file when not given)."""
     site = (site_url or "").rstrip("/")
     if not site or not secret:
         return None
-    params = [f"pass={seat_token(payer_email, secret, pass_id)}"]
-    params += settings_params(roster)
+    if nonce is None:
+        from run.seat_resets import SeatResetError, reset_for
+        try:
+            nonce = reset_for(pass_id)
+        except SeatResetError:
+            # Which link is current cannot be told: print none rather than one
+            # a reset may have retired (the intake refuses on its own read).
+            return None
+    params = [f"pass={seat_token(payer_email, secret, pass_id, nonce)}"]
+    params += settings_params(roster) if roster is not None else []
     return f"{site}/join/?" + "&".join(params)
 
 
