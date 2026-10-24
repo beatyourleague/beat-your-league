@@ -224,6 +224,7 @@ show anyway.
 | GitHub, GitHub Actions, GH Pages, Cloudflare (DNS, email forwarding, the form Worker) | $0 | free tiers. Sleeper is no longer used (§0) |
 | Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
 | Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94. 2026's one-time passes carry no Billing fee: $1.87 on the $29 pass, $1.30 on the $19 and $4.15 on the $69, each kept on a refund. A dispute adds C$15 | no fixed cost |
+| Cloudflare Analytics Engine (the page counter, LAUNCH 5b) | $0 | free: 100,000 lines a day, kept three months. A counter past that drops lines, never bills — the forms do not share it (they are on KV). The risk-item decision is in §7 |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
 | Resend Pro | $20/mo | **trigger: past about 85 recipients on one day (subscribers + free reports).** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000. `make launch-check` counts it |
 | Sender mailbox | ≈US$10/mo | a rented mailbox or PO box for the postal address commercial email must carry (US and Canadian law) — never a home address |
@@ -921,6 +922,17 @@ impressions, likes, follower count.
   subscriber list and plans are cached only encrypted (`run/statebox.py`), with a durable
   encrypted backup; the site moves to Cloudflare Pages and the repo goes private in LAUNCH
   §11's order.
+- **The page counter's data store and read token (decided Oct 23 2026, ANALYTICS-01)** → a new
+  data store, the Analytics Engine dataset `byl_counts`, and a new credential,
+  `CF_ANALYTICS_TOKEN`. Decided, because each is built so that losing it costs nothing: the
+  store holds six short fields a line plus the country Cloudflare adds — no address, IP, cookie
+  or ID (`site/count.js`, privacy §3) — and Cloudflare deletes it after three months; lines
+  reach it only through the Worker's `/e`, which checks the origin and every field. The token is
+  **Account Analytics: Read** and nothing else (it can read these counts and change nothing),
+  lives only in the owner's own `.env`, is never a GitHub secret (`make stats` refuses to run in
+  CI, where a public job log would publish counts and sales), and expires after a year. Leaked,
+  it shows someone anonymous page counts. Off switch: empty `ENDPOINT` in `site/count.js`, and
+  the store simply stops growing.
 - **Scope creep** → nothing gets built that isn't in §3. New ideas go to IDEAS.md.
 
 ## 8. Definition of success

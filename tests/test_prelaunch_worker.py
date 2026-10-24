@@ -490,7 +490,7 @@ def test_the_privacy_page_no_longer_says_a_seat_is_matched_by_the_buyers_address
     text = " ".join(text.split())
     bullet = text[text.index("If you claim a League Pass seat"):][:400]
     assert "the email the pass was bought with" not in bullet and " either " not in bullet
-    assert "pass code in your league's own seat link" in bullet
+    assert "pass code in your league's own link" in bullet
 
 
 @needs_node

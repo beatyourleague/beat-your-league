@@ -1,8 +1,11 @@
 """`make stats` — the owner's view of demand, from data already stored.
 
-The site has no analytics by promise, so this is the only view of whether
-anyone is asking. It is the kind of output that gets pasted somewhere, so it
-prints counts and never an address.
+The site carries no third-party analytics by promise: its only counter is
+its own, cookieless one (site/count.js -> the form Worker's /e -> Cloudflare
+Analytics Engine; privacy section 3), and tests/test_site.py replaced the old
+tracker-name denylist with an allowlist of the origins a page may load from.
+So this is the owner's one view of whether anyone is asking. It is the kind of
+output that gets pasted somewhere, so it prints counts and never an address.
 """
 
 from __future__ import annotations
@@ -198,8 +201,11 @@ def test_payments_are_counted_from_the_price_and_the_windows(monkeypatch) -> Non
     fake = _FakeStripe()
     monkeypatch.setattr(subscriptions, "_stripe_get", fake)
     lines = stats.stripe_summary("rk_test_x", NOW)
+    # BIZ-08 (Oct 23 2026): passes lead (2026 sells one-time passes, and none
+    # of these sessions is one), and subscriptions are labelled as 2027's.
     assert lines == [
-        "  Active subscriptions: 4 — yearly at $39.00 2 (1 set to end), "
+        "  Passes sold, ever: none yet",
+        f"  {stats.SUBSCRIPTIONS_LABEL_ONE_TIME}: 4 — yearly at $39.00 2 (1 set to end), "
         "monthly at $14.99 1 (1 set to end), yearly at $99.00 1",
         "  Checkouts, last 7 days: 4 created — 1 complete, 2 expired, 1 still open",
         "  Refunds, last 30 days: 1",
@@ -235,7 +241,7 @@ def test_a_part_stripe_will_not_show_says_so_and_the_rest_still_prints(
     assert stats.main(["--registry", str(tmp_path / "none.json"),
                        "--now", NOW.isoformat()]) == 0
     out = capsys.readouterr().out
-    assert "Active subscriptions: 4" in out
+    assert f"{stats.SUBSCRIPTIONS_LABEL_ONE_TIME}: 4" in out
     assert ("Could not read refunds (Stripe returned HTTP 403. Check STRIPE_API_KEY "
             "is a valid secret key with read access — a restricted key needs Read "
             "on it).") in out

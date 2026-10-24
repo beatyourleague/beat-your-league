@@ -459,7 +459,7 @@ Baltimore Ravens
   <footer>
     We store the minimum: your email, your scoring settings and your roster. We never
     ask for a password, and we never connect to your league<span id="footer-checkout"> — checkout runs on Stripe's
-    own secure page, which also asks for your billing address</span>. Beat Your League —
+    own secure page, which also asks for your card's country and, where needed, its postal code</span>. Beat Your League —
     analysis, not betting picks. Must be 18+.<br>
     <a href="../terms.html">Terms &amp; refunds</a> &middot;
     <a href="../privacy.html">Privacy</a>
@@ -673,6 +673,10 @@ const UPDATE_ORIGIN = UPDATE_MODE && /^[0-9a-f]{12}$/.test(QUERY.get("o") || "")
 // ?try=1 — the free first report (run/trials.py): this week's report for the
 // roster entered here, one per person per season, no card. Never a purchase.
 const TRY_MODE = QUERY.get("try") === "1" && !UPDATE_MODE && !SEAT_MODE;
+// The page counter's key for this visit, from the flags this page runs on, so
+// a roster restored as a League Pass counts as the pass page (window.bylCount).
+window.bylPage = SEAT_MODE || UPDATE_MODE ? "other" : TRY_MODE ? "join-try"
+  : WANTS_PASS ? "join-pass" : "join";
 
 // The sidebar sells a purchase. A seat holder buys nothing and an update comes
 // from somebody already subscribed: neither may read refund terms or "your
@@ -939,6 +943,7 @@ $("resolve").addEventListener("click", () => {
     return;
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
+  if (window.bylCount) window.bylCount("roster", PLAN_LINK ? "open" : "closed");
   state.stale = false;
   draw();
 });
@@ -1349,6 +1354,9 @@ $("form-email").addEventListener("submit", (event) => {
   const otherLink = seasonOver() || WANTS_PASS ? ""
              : monthlyChosen ? seasonLink() : monthlyLink();
   if (!link) {
+    // A buy press with checkout closed. The open count is taken on the way
+    // out to Stripe below, once per real redirect, not once per press.
+    if (window.bylCount) window.bylCount("checkout", "closed");
     // Nothing is stored anywhere yet, so claiming a reservation would be a lie.
     // The email they typed is real intent, and with a list backend configured it
     // is kept WITH the checked roster (contract C6): the launch email links
@@ -1369,6 +1377,7 @@ $("form-email").addEventListener("submit", (event) => {
         // alert box and post another row on every press (launch audit F6).
         state.listed = true;
         state.listedRef = tagged;
+        if (window.bylCount) window.bylCount("waitlist", "closed");
         showOk("Checkout isn't open just yet — we kept your email and this roster. " +
           "The morning it opens you'll get one email, with a link that brings this " +
           "roster back ready to check out.");
@@ -1407,6 +1416,7 @@ $("form-email").addEventListener("submit", (event) => {
     // route is closed (contract C3). Their seat link comes by email.
     showSeatLink();
   }
+  if (window.bylCount) window.bylCount("checkout", "open");
   window.location.assign(
     link + (link.indexOf("?") === -1 ? "?" : "&") +
     "client_reference_id=" + encodeURIComponent(tagged) +
@@ -1539,6 +1549,7 @@ function submitTrial(email, ref) {
     signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
   }).then(async (response) => {
     if (!response.ok) throw await refusedFrom(response);
+    if (window.bylCount) window.bylCount("trial");
     $("form-email").style.display = "none";
     // A request, not a send: one free report per person per season, never to a
     // subscriber's address — the intake decides, so the page claims no more.
@@ -2215,5 +2226,6 @@ drawFirst();
   } catch (e) { /* the sentence true either way stays */ }
 })();
 </script>
+<script src="/count.js" defer></script>
 </body>
 </html>
