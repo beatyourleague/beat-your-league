@@ -65,7 +65,7 @@ def post(url: str, api_key: str, form: dict[str, str],
         detail = exc.read().decode("utf-8", "replace")[:200]
         raise SubscriptionError(
             f"Stripe returned HTTP {exc.code} {what}. The restricted key needs "
-            f"{needs}. Response: {detail}") from None
+            f"{needs}. Response: {detail}", status=exc.code) from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise SubscriptionError(f"could not reach Stripe: {exc}") from None
     except json.JSONDecodeError:
@@ -98,13 +98,26 @@ def customer_id(session: dict) -> str | None:
     return customer if isinstance(customer, str) and customer else None
 
 
-def parse_link_plans(raw: str) -> dict[str, str]:
-    """``s:plink_A,m:plink_B,p:plink_C`` -> {link_id: plan}.
+# STRIPE_PAYMENT_LINKS' own prefixes: the ref prefixes (run/refs.py — s, m,
+# p) plus "o", the $19 Playoff Pass (contract C4). A purchase through the o:
+# link is a SEASON row, entitled exactly like the $29 Rest-of-Season Pass; the
+# prefix exists so the intake can tell WHICH season link took the money. It
+# is deliberately NOT a ref prefix: the ref is the buyer's claim, built in the
+# browser, and the JS<->Python ref contract stays as it is. "m" stays legal
+# for 2027's monthly plan.
+PLAYOFF_LINK_PREFIX = "o"
+LINK_PREFIX_TO_PLAN = {**_PREFIX_TO_PLAN, PLAYOFF_LINK_PREFIX: _PREFIX_TO_PLAN["s"]}
+# The join page's PLAYOFF_FROM_WEEK (and run/economics.py's): the $19 pass is
+# sold once a buyer's first weekly report would be this week or later — that
+# is, from the first kickoff of the week BEFORE it (tests pin all three).
+PLAYOFF_FROM_WEEK = 13
 
-    This map is what makes the plan an authenticated fact instead of a claim.
-    A bare ``plink_X`` with no prefix is accepted as a filter with an unknown
-    plan, which is safe: it can never grant a League Pass.
-    """
+
+def parse_link_prefixes(raw: str) -> dict[str, str]:
+    """``s:plink_A,o:plink_B,p:plink_C`` -> {link_id: prefix} for every item
+    whose prefix the map knows (``LINK_PREFIX_TO_PLAN``); a bare ``plink_X``
+    maps to "" (a filter, plan unknown). An unknown prefix is left out, so a
+    purchase through that link is reported as unattributable, never guessed."""
     out: dict[str, str] = {}
     for item in raw.split(","):
         item = item.strip()
@@ -112,12 +125,75 @@ def parse_link_plans(raw: str) -> dict[str, str]:
             continue
         prefix, _, link = item.partition(":")
         if link:
-            plan = _PREFIX_TO_PLAN.get(prefix.strip())
-            if plan:
-                out[link.strip()] = plan
+            if prefix.strip() in LINK_PREFIX_TO_PLAN:
+                out[link.strip()] = prefix.strip()
         else:
             out[prefix] = ""          # filter only, plan unknown
     return out
+
+
+def parse_link_plans(raw: str) -> dict[str, str]:
+    """``s:plink_A,o:plink_B,p:plink_C`` -> {link_id: plan}.
+
+    This map is what makes the plan an authenticated fact instead of a claim.
+    A bare ``plink_X`` with no prefix is accepted as a filter with an unknown
+    plan, which is safe: it can never grant a League Pass. The $19 Playoff
+    Pass link (``o:``) is the season plan (contract C4); ``playoff_links``
+    says which link it was.
+    """
+    return {link: LINK_PREFIX_TO_PLAN.get(prefix, "")
+            for link, prefix in parse_link_prefixes(raw).items()}
+
+
+def playoff_links(raw: str) -> frozenset[str]:
+    """The link id(s) under ``o:`` — the $19 Playoff Pass (contract C4)."""
+    return frozenset(link for link, prefix in parse_link_prefixes(raw).items()
+                     if prefix == PLAYOFF_LINK_PREFIX)
+
+
+def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
+    """What is wrong with a STRIPE_PAYMENT_LINKS value, in words. Empty means
+    it is the 2026 shape: ``s:plink_…,o:plink_…,p:plink_…`` — the $29
+    Rest-of-Season Pass, the $19 Playoff Pass and the $69 League Pass, each
+    under its own prefix, each link once (``m:plink_…`` optional, for a
+    monthly plan). ``playoff=False`` when no Playoff Pass is sold.
+
+    The map is the whole of "which plan did this payment buy", and a mistake
+    in it fails quietly: an unknown prefix drops its link (every purchase
+    through it unattributable), one link under two prefixes keeps only the
+    last, and a $19 link filed under ``s:`` sells every report through Week 18
+    for $10 less with nothing reported (final review SEC-3 / OPS-1)."""
+    problems: list[str] = []
+    seen: dict[str, str] = {}
+    for item in (raw or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        prefix, _, link = (part.strip() for part in item.partition(":"))
+        if not link:
+            problems.append(f"{item[:24]!r} has no plan prefix (s:, o:, p:)")
+            continue
+        if prefix not in LINK_PREFIX_TO_PLAN:
+            problems.append(f"unknown prefix {prefix[:4]!r}: in {item[:24]!r} — "
+                            f"purchases through it would be unattributable")
+            continue
+        if not link.startswith("plink_"):
+            problems.append(f"{prefix}: {link[:16]!r} is not a payment link id (plink_…)")
+        if link in seen and seen[link] != prefix:
+            problems.append(f"{link[:16]} is listed as both {seen[link]}: and {prefix}:")
+        seen[link] = prefix
+    prefixes = list(seen.values())
+    wanted = ["s", "p"] + ([PLAYOFF_LINK_PREFIX] if playoff else [])
+    for prefix in wanted:
+        count = prefixes.count(prefix)
+        if count == 0:
+            problems.append(f"no {prefix}: link")
+        elif count > 1 and prefix != "s":
+            problems.append(f"{count} {prefix}: links — one each")
+    if prefixes.count("s") > 1:
+        problems.append(f"{prefixes.count('s')} s: links — the $19 Playoff Pass "
+                        f"goes under o:, so the intake can tell it from the $29 pass")
+    return problems
 
 
 def is_paid(session: dict) -> bool:

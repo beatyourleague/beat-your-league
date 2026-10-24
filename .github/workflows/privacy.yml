@@ -11,6 +11,14 @@
 #     LOG_SECRET=... .venv/bin/python -m run.privacy code their@address
 # The results go to the hello@ inbox only; the log carries counts.
 #
+# Every action needs the owner's approval code (run/approval.py, final review
+# SEC-2), made on the owner's own machine for the exact action and code:
+#     LOG_SECRET=... .venv/bin/python -m run.approval privacy delete <12-hex code>
+# The form Worker's dispatch token can start this workflow, and the 12-hex
+# code of anyone on the waitlist or sent a free report is readable in the
+# public send log — but the token cannot make the approval, so it cannot
+# erase a subscriber or read counts into this public log.
+#
 # Shares the daily intake's concurrency group, so it never runs beside the
 # hourly sweep that also saves the registry. Avoid Tuesday 12:00-17:00 UTC
 # (the weekly send saves it too); `show` afterwards confirms nothing is left.
@@ -26,6 +34,10 @@ on:
         default: show
       code:
         description: "The person's 12-hex keyed code (python -m run.privacy code <email>, locally) — never an address"
+        type: string
+        required: true
+      approval:
+        description: "The owner's code for this action and code (python -m run.approval privacy ACTION CODE, locally)"
         type: string
         required: true
 
@@ -58,6 +70,16 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      # Before anything is restored, opened or read: the owner's code for this
+      # exact action and person (SEC-2). Every action, `show` included — its
+      # counts land in this public log.
+      - name: Check the owner's approval
+        env:
+          ACTION: ${{ github.event.inputs.action }}
+          CODE: ${{ github.event.inputs.code }}
+          APPROVAL: ${{ github.event.inputs.approval }}
+          LOG_SECRET: ${{ secrets.LOG_SECRET }}
+        run: .venv/bin/python -m run.approval verify privacy "$APPROVAL" "$ACTION" "$CODE"
       - name: Restore subscriber registry (sealed)
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:

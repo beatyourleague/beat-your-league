@@ -1814,6 +1814,42 @@ def check_secrets() -> list[Gate]:
     return gates + log_secret_gate(names)
 
 
+def check_link_map() -> list[Gate]:
+    """The payment-link map (STRIPE_PAYMENT_LINKS) and the words above
+    Stripe's Pay button (infra/stripe_paylink_text.py).
+
+    The map decides which plan every payment bought, and its mistakes are
+    silent: the $19 Playoff Pass link filed under s: sold every report to
+    Week 18 for $10 less with nothing reported (SEC-3), and a map of
+    s:,s:,p: made the Pay-button script stop before it set any text, so no
+    2026 link carried the one-payment words, the refund term or the 18+ box
+    (OPS-1). The value is a GitHub secret, so it is read from this shell
+    when it is here; otherwise the owner checks it by hand."""
+    from infra.stripe_paylink_text import (MESSAGES, ONE_TIME, REFUND, SHAPE,
+                                           STRIPE_TEXT_LIMIT, TOS_MESSAGES)
+    from run.checkout import link_map_problems
+    gates = []
+    long = [plan for plan in MESSAGES
+            if max(len(MESSAGES[plan]), len(TOS_MESSAGES[plan])) > STRIPE_TEXT_LIMIT]
+    gates.append(_gate("Funnel", "The words above Stripe's Pay button fit and carry the refund term",
+                       not long and REFUND in ONE_TIME and REFUND in MESSAGES["league_pass"],
+                       (f"over Stripe's {STRIPE_TEXT_LIMIT} characters: {', '.join(long)}"
+                        if long else "the one-time text no longer carries the refund term")))
+    raw = os.environ.get("STRIPE_PAYMENT_LINKS", "").strip()
+    if not raw:
+        gates.append(Gate("Owner", "The payment-link map names each pass under its own prefix",
+                          "OWNER", f"STRIPE_PAYMENT_LINKS isn't in this shell — check the "
+                          f"GitHub secret is {SHAPE} (the $19 Playoff Pass under o:, "
+                          f"never s:), then run infra/stripe_paylink_text.py with it "
+                          f"(LAUNCH.md steps 1 and 3)"))
+        return gates
+    problems = link_map_problems(raw)
+    gates.append(_gate("Owner", "The payment-link map names each pass under its own prefix",
+                       not problems, "; ".join(problems) + f" — expected {SHAPE}",
+                       f"{SHAPE} (the $29, $19 and $69 links)", fail="OWNER"))
+    return gates
+
+
 def log_secret_gate(names: set[str] | None) -> list[Gate]:
     """D4: once checkout is open, no LOG_SECRET is a FAIL, not owner setup —
     every real send refuses without it (welcomes, reports, renewal notices),
@@ -2569,7 +2605,8 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("five league setups", check_product_battery),
         ("compliance text", check_compliance), ("every email's sender and way out",
                                                 check_email_senders),
-        ("owner secrets", check_secrets), ("bounce check key", check_resend_read_key),
+        ("owner secrets", check_secrets), ("payment-link map", check_link_map),
+        ("bounce check key", check_resend_read_key),
         ("economics", check_economics),
         ("security.txt", check_security_txt),
     ]

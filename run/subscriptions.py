@@ -51,7 +51,16 @@ _UNPAID_VALUES = {"false", "f", "no", "n", "0", "free", "none", "cancelled",
 
 
 class SubscriptionError(ValueError):
-    """The paid list cannot be trusted, so the run must not guess."""
+    """The paid list cannot be trusted, so the run must not guess.
+
+    ``status`` is Stripe's HTTP status when Stripe answered with one (None
+    for a network failure or an unreadable body): a 403 is a key missing a
+    permission, which a caller can name rather than retry (final review
+    OPS-5)."""
+
+    def __init__(self, message: str = "", status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 @dataclass(frozen=True)
@@ -192,7 +201,8 @@ def _stripe_get(url: str, api_key: str) -> dict:
         detail = exc.read().decode("utf-8", "replace")[:200]
         raise SubscriptionError(
             f"Stripe returned HTTP {exc.code}. Check STRIPE_API_KEY is a valid "
-            f"secret key with read access. Response: {detail}") from None
+            f"secret key with read access. Response: {detail}",
+            status=exc.code) from None
     except (urllib.error.URLError, TimeoutError) as exc:
         raise SubscriptionError(f"could not reach Stripe: {exc}") from None
     except json.JSONDecodeError:

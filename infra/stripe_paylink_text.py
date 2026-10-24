@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE,  # noqa: E402
                             TERMS_VERSION)
-from run.checkout import parse_link_plans  # noqa: E402
+from run.checkout import link_map_problems, parse_link_plans  # noqa: E402
 
 API = "https://api.stripe.com/v1/payment_links"
 
@@ -51,12 +51,17 @@ CANCEL = ("you can cancel any time from your billing page")
 # anniversary of the purchase. It said "each season", which no code enforces
 # and the terms contradict (launch audit, Oct 2026).
 # 2026 sells ONE-TIME passes (owner decision, Oct 18 2026): the season and
-# League Pass links are in payment mode, and the $19 Playoff Pass link maps to
-# the season plan too — so these words carry no price (Stripe shows the amount
-# beside them) and promise only what is true of all three: one payment.
+# League Pass links are in payment mode, and the $19 Playoff Pass link (o:)
+# carries the season plan's words too — so these carry no price (Stripe shows
+# the amount beside them) and promise only what is true of all three: one
+# payment, and the refund window terms.html §5 gives every plan (OPS-1: the
+# refund term sits beside every price, the Pay button included).
+ONE_TIME_COVERS = ("It covers every weekly report from today through the "
+                   "season's last")
+REFUND = ("Full refund, no questions, until your second weekly report's week "
+          "kicks off.")
 ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews and nothing more is "
-            "ever charged. It covers every weekly report from today through the "
-            "season's last.")
+            f"ever charged. {ONE_TIME_COVERS}. {REFUND}")
 MESSAGES = {
     "season": ONE_TIME,
     "monthly": (
@@ -64,9 +69,12 @@ MESSAGES = {
         f"its own after the season's last weekly report: your last charge is "
         f"the month that report falls in, and nothing is charged after it. "
         f"{CANCEL[0].upper()}{CANCEL[1:]}."),
-    "league_pass": (ONE_TIME[:-1] + ", for every manager in your league who "
-                    "claims a seat."),
+    "league_pass": ("One payment — no subscription, nothing to cancel. Nothing renews and "
+                    f"nothing more is ever charged. {ONE_TIME_COVERS}, for every manager "
+                    f"in your league who claims a seat. {REFUND}"),
 }
+# Stripe's limit on both custom_text messages (Payment Links API).
+STRIPE_TEXT_LIMIT = 1200
 
 # The box the buyer ticks. California's auto-renewal law wants affirmative
 # consent to the renewal terms and a record of it; Stripe records the tick on
@@ -116,22 +124,40 @@ def _call(url: str, key: str, form: dict | None = None) -> dict:
             f"  Response: {detail}\n")
 
 
+SHAPE = "s:plink_…,o:plink_…,p:plink_…"
+
+
+def targets(raw: str) -> list[tuple[str, str]]:
+    """(link, plan) for every link this script writes, in the map's order —
+    one entry per LINK, never per plan: the $29 and $19 passes are both the
+    season plan, and inverting the map to {plan: link} kept only one of them,
+    so the other never got its one-payment text, refund term or 18+ box
+    (final review OPS-1). Refuses (SystemExit, before any key is asked for)
+    unless the map is the 2026 shape (``SHAPE``; ``m:`` optional, for a
+    monthly plan). The check is run/checkout.link_map_problems, the same one
+    the launch check reads."""
+    problems = link_map_problems(raw)
+    if problems:
+        raise SystemExit(
+            "STRIPE_PAYMENT_LINKS is not the shape this script writes:\n  - "
+            + "\n  - ".join(problems)
+            + f"\nExpected {SHAPE} (the $29, $19 and $69 links; add m:plink_… only "
+              f"for a monthly plan). Nothing was changed.")
+    return [(link, plan) for link, plan in parse_link_plans(raw).items()
+            if plan in MESSAGES]
+
+
 def main() -> int:
     raw = os.environ.get("STRIPE_PAYMENT_LINKS", "").strip()
     if not raw:
         print("Paste your STRIPE_PAYMENT_LINKS value — the same string you put")
-        print("in the GitHub secret, e.g.  s:plink_A,m:plink_B,p:plink_C")
+        print(f"in the GitHub secret, e.g.  {SHAPE}")
         raw = input("> ").strip()
 
-    plans = parse_link_plans(raw)
-    by_plan = {plan: link for link, plan in plans.items() if plan}
-    missing = sorted(set(MESSAGES) - set(by_plan))
-    if missing:
-        raise SystemExit(
-            f"No payment link given for: {', '.join(missing)}.\n"
-            f"Expected all three, as s:plink_…,m:plink_…,p:plink_…")
+    links = targets(raw)
 
-    print("\nThis writes the renewal disclosure onto three Stripe payment links.")
+    print(f"\nThis writes the one-payment and refund text onto {len(links)} Stripe "
+          f"payment links.")
     print("Use the throwaway `setup-payment-link-text` key, not the cron key.")
     print()
     print("  >>> This is NOT your Mac password and NOT your Stripe login. <<<")
@@ -157,8 +183,7 @@ def main() -> int:
             "  Find the key: dashboard.stripe.com -> Developers -> API keys\n")
 
     print()
-    for plan in ("season", "monthly", "league_pass"):
-        link = by_plan[plan]
+    for link, plan in links:
         _call(f"{API}/{urllib.parse.quote(link)}", key, fields(plan))
         # Read it back rather than trusting the write: a 200 says Stripe
         # accepted the request, not that the field says what we meant.
@@ -173,7 +198,7 @@ def main() -> int:
         if not ok:
             raise SystemExit("\nStripe stored something other than what we sent.")
 
-    print("\nAll three set and verified.")
+    print(f"\nAll {len(links)} set and verified.")
     print("NOW DELETE the setup-payment-link-text key in Stripe:")
     print("  Developers -> API keys -> setup-payment-link-text -> delete")
     return 0
