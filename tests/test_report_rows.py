@@ -538,7 +538,7 @@ def test_rising_roles_is_styled_where_it_renders() -> None:
     the intro rendered as bare text."""
     report = _week()
     report["rising"] = [{"name": "Braelon Allen", "line": "Braelon Allen (NYJ, RB): "
-                         "22.0 touches a game over his last two, up from 8.0 before."}]
+                         "22.0 targets + carries a game over his last two, up from 8.0 before."}]
     pages = _surfaces(report)
     assert '<ul class="rising">' in pages["browser"]
     assert '<p class="risingintro">' in pages["browser"]

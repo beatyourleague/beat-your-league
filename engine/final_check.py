@@ -59,13 +59,19 @@ BACK = "back"            # a bench player is back and beats a starter
 WATCH = "watch"          # a starter is newly questionable: the plan if he sits
 REMINDER = "reminder"    # still questionable, as on Tuesday
 CLEARED = "cleared"      # questionable on Tuesday, off the report now
+# Out on Tuesday's (last week's) report with nobody else to start, and off the
+# final report now (pre-launch review F7). Tuesday told the reader "if he is
+# out again, that's a zero unless you add someone off waivers"; without this,
+# a Friday clearance sent nothing and the manager either burned a claim or
+# worried for nothing.
+UNBLOCKED = "unblocked"
 
 # The kinds that are worth an email on their own (RULE F3). A starter newly
 # QUESTIONABLE is not one: most questionable players play, and the proving run
 # (2025 weeks 4-8, twelve subscribers) mailed half of all Saturday emails for
 # questionable-only news that changed nothing. It rides along when a real
 # change sends the email anyway.
-TRIGGERS = frozenset({SWAP, NO_FILL, BACK})
+TRIGGERS = frozenset({SWAP, NO_FILL, BACK, UNBLOCKED})
 
 
 @dataclass(frozen=True)
@@ -479,8 +485,18 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
             changes.append(Change(
                 CLEARED, f"{name(pid)} is cleared — keep him at {slot}",
                 f"He was questionable on Tuesday and is off the injury report now."))
+        elif (was == "out" and pid in starters and current.designation is None
+              and current.final and not current.practice_squad):
+            # Tuesday seated him only because nobody else could start there,
+            # and said a zero was coming unless they added someone.
+            changes.append(Change(
+                UNBLOCKED, f"{name(pid)} is cleared — keep him at {slot}",
+                f"He was out on last week's injury report, so Tuesday's report "
+                f"said {slot} was a zero unless you added someone. He's off "
+                f"Friday's final report: no pickup needed."))
 
-    rank = {SWAP: 0, NO_FILL: 0, BACK: 1, WATCH: 2, REMINDER: 3, CLEARED: 4}
+    rank = {SWAP: 0, NO_FILL: 0, BACK: 1, WATCH: 2, REMINDER: 3, UNBLOCKED: 4,
+            CLEARED: 4}
     return sorted(changes, key=lambda c: rank[c.kind])
 
 

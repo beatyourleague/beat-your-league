@@ -60,9 +60,9 @@ def test_last_seasons_starters_are_left_out_and_the_roster_comes_first() -> None
     rows = rising.for_roster(pool, ["a"], ranks, names)
     assert [r["name"] for r in rows] == ["A", "C", "D", "E"]
     assert rows[0]["on_roster"] is True
-    assert rows[0]["line"] == ("A (SEA, RB), on your roster: 12.0 touches a game over "
+    assert rows[0]["line"] == ("A (SEA, RB), on your roster: 12.0 targets + carries a game over "
                                "his last two, up from 2.0 before.")
-    assert rows[1]["line"] == "C (SEA, RB): 12.0 touches a game over his last two, up from 2.0 before."
+    assert rows[1]["line"] == "C (SEA, RB): 12.0 targets + carries a game over his last two, up from 2.0 before."
     # A starter last season stays out even when he is yours.
     assert "B" not in [r["name"] for r in rising.for_roster(pool, ["b"], ranks, names)]
 
@@ -77,7 +77,7 @@ def test_a_rostered_teammate_at_his_position_is_named() -> None:
                             position={"hall": "RB", "wr": "WR"}.get)
     [row] = rising.for_roster(pool, ["wr", "hall"], {}, names,
                               teams={"hall": "NYJ", "wr": "NYJ"})
-    assert row["line"] == ("Braelon Allen (NYJ, RB): 22.0 touches a game over his last "
+    assert row["line"] == ("Braelon Allen (NYJ, RB): 22.0 targets + carries a game over his last "
                            "two, up from 8.0 in Weeks 1–3. Same team and position as "
                            "your Breece Hall.")
     [alone] = rising.for_roster(pool, ["wr"], {}, names, teams={"wr": "NYJ"})

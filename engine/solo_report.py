@@ -116,6 +116,7 @@ def build_solo_report(
     unconfirmed: Mapping[str, str] | None = None,
     shape_graded: bool = True,
     shape_gate: str | None = None,
+    rising: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One subscriber's week, from their roster and public data.
 
@@ -134,6 +135,9 @@ def build_solo_report(
     is part of (``hold_unconfirmed``, method §15 C9). ``shape_graded`` False
     (a lineup shape no preregistered arm has graded — contract C8) keeps every
     seat and projection and prints no odds (``hold_ungraded_shape``).
+    ``rising`` (player -> engine.rising candidate, league-wide, returns left
+    out) withholds the odds on any slot whose bench option is one of them and
+    keeps the seat (``hold_rising_alternatives``).
     """
     if not re.fullmatch(r"\d{4}", str(season.season)):
         raise WeekReportError(
@@ -188,6 +192,10 @@ def build_solo_report(
     # row's odds were figured against. Those odds are withheld, never redone.
     picks = hold_stale_alternatives(picks, team_week.players, model, week,
                                     availability, players)
+    # Pre-launch review F3: odds figured against a bench player whose role is
+    # growing ran high — stated 63.5%, landed 55.7% over 508 graded calls.
+    # Withheld, the seat kept; moving the seat needs its own preregistered arm.
+    rising_held = hold_rising_alternatives(picks, rising or {}, players)
     if not shape_graded:
         picks = hold_ungraded_shape(picks, shape_gate or SHAPE_GATE)
     # One number per call (recheck ENG-6/RQ2-03): rounded ONCE, to what the
@@ -381,13 +389,17 @@ def build_solo_report(
         # read as "they started nobody" and produce a full list of changes — or
         # worse, "nothing to change", which claims agreement with a lineup we
         # cannot see.
-        # The counter-intuitive calls lead: a benched starter-calibre player
-        # is the one line in the plan a subscriber could not have predicted,
-        # and the nine-name lineup below it is the part they could.
-        "checklist": notable + checklist(picks, None, [], players, stakes=None,
+        # Ordered by stakes (pre-launch review F6): a slot that scores zero
+        # unless the reader acts leads — it sat fifth, under three benchings
+        # and the lineup it was about. Then the counter-intuitive calls: a
+        # benched starter-calibre player is the one line a subscriber could
+        # not have predicted, and the lineup below it is the part they could.
+        "checklist": by_stakes(notable, checklist(picks, None, [], players, stakes=None,
                                          availability=availability,
                                          early_calls=early_calls,
                                          extra=(early_items + watch_items
+                                                + rising_hold_items(rising_held,
+                                                                    players)
                                                 + practice_squad_items(
                                                     picks, unconfirmed, players,
                                                     game_of)
@@ -400,7 +412,7 @@ def build_solo_report(
                                          late_news_skip=early_ids,
                                          late_news_when=decide_at.get,
                                          news=news, planned=planned,
-                                         unplanned=unplanned, standins=standins),
+                                         unplanned=unplanned, standins=standins)),
         "matchup": _matchup(spec, my_range, team_range_gate(picks, standins)),
         "lineup": [_slot(p, players, usage_lookup,
                          game=game_label(game_of(p.player_id)),
@@ -670,6 +682,83 @@ def hold_stale_alternatives(picks: Sequence[SlotPick], roster: Sequence[str],
             f"{STALE_ALTERNATIVE_GATE} ({players.name(top)} moved to the bench)")
         pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
     return list(picks)
+
+
+# Why a slot prints no odds when its bench option's role is growing (pre-launch
+# review F3, Oct 2026). Starts "held:" so the row reads "held"-shaped; the
+# bracket names who.
+RISING_GATE = "held: the bench option's role is growing"
+
+
+def hold_rising_alternatives(picks: Sequence[SlotPick],
+                             rising: Mapping[str, Mapping[str, Any]],
+                             players: PlayerIndex
+                             ) -> list[tuple[SlotPick, Mapping[str, Any]]]:
+    """Withhold the odds on any slot whose bench option is RISING
+    (``engine.rising.candidates``, league-wide, returns left out) and return
+    (pick, candidate) for each one held, for the game-plan line.
+
+    Measured with the shipped harness (arm AV + anchor + confirmed fallback,
+    recalibrated, 2015-2025, 10,098 graded calls), each side tagged by that
+    same definition: when the BENCH option was rising the printed number said
+    63.5% and the start won 55.7% (n=508) — in the 50-60% band the pick lost
+    more often than it won — while pairs with neither side rising were within
+    0.1 points. His projection is a trailing average that counts the games
+    before the new role as much as the recent ones, so it trails the role, and
+    a number figured against it flatters the starter. Seen live: "George
+    Pickens 57% vs Malik Nabers" in a report listing Nabers under Rising Roles.
+
+    Removes only, like ``hold_unconfirmed``: the seat and both projections
+    stand (moving a seat needs a preregistered arm), and the seeded disclosure
+    goes with the number it disclosed."""
+    held: list[tuple[SlotPick, Mapping[str, Any]]] = []
+    if not rising:
+        return held
+    for pick in picks:
+        cand = rising.get(pick.alternative_id or "")
+        if pick.confidence is None or cand is None:
+            continue
+        pick.confidence = None
+        pick.confidence_gate = f"{RISING_GATE} ({players.name(pick.alternative_id)})"
+        pick.flags = [f for f in pick.flags if f.get("kind") != "seeded"]
+        held.append((pick, cand))
+    return held
+
+
+def rising_hold_items(held: Sequence[tuple[SlotPick, Mapping[str, Any]]],
+                      players: PlayerIndex) -> list[dict[str, str]]:
+    """One game-plan line per rising bench player ``hold_rising_alternatives``
+    held odds against, naming every starter he was the comparison for: the
+    counted facts, never a number about this week, and never "your call" —
+    every slot is still decided (the starter starts on the projection)."""
+    from engine.rising import _weeks
+    from engine.week_report import _join_words
+    grouped: dict[str, list[SlotPick]] = {}
+    facts: dict[str, Mapping[str, Any]] = {}
+    for pick, cand in held:
+        grouped.setdefault(pick.alternative_id or "", []).append(pick)
+        facts[pick.alternative_id or ""] = cand
+    items: list[dict[str, str]] = []
+    for riser, picks in grouped.items():
+        cand = facts[riser]
+        name = players.name(riser)
+        starters = [players.name(p.player_id or "") for p in picks]
+        one = len(starters) == 1
+        before = cand.get("earlier_weeks") or []
+        when = f"in {_weeks(before)}" if before else "before"
+        items.append({
+            "action": (f"{_join_words(starters)} {'starts' if one else 'start'} — "
+                       f"no odds against {name} this week"),
+            "detail": (f"{name}, on your bench, is getting {cand['recent']:.1f} "
+                       f"targets + carries a game over his last two, up from "
+                       f"{cand['earlier']:.1f} {when}, and his projection still "
+                       f"counts those earlier games as much as the recent ones. So "
+                       f"{'that call carries' if one else 'those calls carry'} no "
+                       f"odds; the lineup stands."),
+            "deadline": "nothing to change",
+            "urgency": "done",
+        })
+    return items
 
 
 # Gates about the slot or the lineup, never about the bench player named on
@@ -2077,44 +2166,109 @@ DEFAULT_PLAYOFF_WEEKS = range(15, 18)
 _SLOT_WORDS = {"SUPER_FLEX": "SFLEX", "WRRB_FLEX": "W/R", "REC_FLEX": "W/T"}
 
 
-def byes_ahead_items(collisions: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+def byes_ahead_items(collisions: Sequence[Mapping[str, Any]],
+                     league_size: int = 12) -> list[dict[str, str]]:
     """The checklist item for the rest of the season: each week still ahead in
     which a bye leaves a starting slot nothing else on the roster can fill
     (engine.preseason.bye_collisions — the roster report's own check), and,
-    where there are any, players at that spot who play that week with their
-    points a game THIS SEASON (run.solo._bye_cover). Facts off the schedule and
-    the box scores: no projection and no %, so it carries nothing to grade.
-    Quiet when every bye ahead is covered.
+    where there are any, players for each emptied spot who play that week,
+    with their points a game THIS SEASON (run.solo.cover_for). Facts off the
+    schedule and the box scores: no projection and no %, so it carries nothing
+    to grade. Quiet when every bye ahead is covered.
+
+    One short bold line — the weeks and the spots — with who is on bye and the
+    options as its detail (pre-launch review F6/D13): the whole thing used to
+    be the action, a seven-to-nine-line all-bold block.
 
     This is the mid-season planning a Tuesday report can do that a single
     week's lineup can't: the cover for a Week-14 bye is a pickup or a trade
     made now, while the waiver wire still has one."""
     if not collisions:
         return []
-    parts, options = [], []
+    heads, who, options = [], [], []
     for i, hit in enumerate(collisions):
-        slots = _join_words([_SLOT_WORDS.get(slot, slot) for slot in hit["slots"]])
+        slots = _join_words([_SLOT_WORDS.get(slot, slot)
+                             for slot in _in_lineup_order(hit["slots"])])
         spot = "spot" if len(hit["slots"]) == 1 else "spots"
-        names = list(hit.get("short") or hit["players"])
-        why = f"{_join_words(names)} {'is' if len(names) == 1 else 'are'} on bye"
-        if hit.get("out"):
-            why += f"; {_join_words(list(hit['out']))} can't cover"
         playoff = (", a playoff week under ESPN's, Yahoo's and Sleeper's defaults"
                    if hit["week"] in DEFAULT_PLAYOFF_WEEKS else "")
-        lead = "leaves your" if i == 0 else "your"
-        parts.append(f"Week {hit['week']} {lead} {slots} {spot} empty ({why}{playoff})")
-        cover = hit.get("cover") or []
-        if cover:
-            options.append(f"Week {hit['week']} options who play that week, by points a game "
-                           f"this season: "
-                           + ", ".join(f"{c['name']} {c['per_game']:.1f}" for c in cover)
-                           + ".")
+        lead = f"leaves your {slots} {spot} empty" if i == 0 else f"your {slots} {spot}"
+        heads.append(f"Week {hit['week']} {lead}{playoff}")
+        names = list(hit.get("short") or hit["players"])
+        line = (f"Week {hit['week']}: {_join_words(names)} "
+                f"{'is' if len(names) == 1 else 'are'} on bye")
+        if hit.get("out"):
+            line += f"; {_join_words(list(hit['out']))} can't cover"
+        who.append(line + ".")
+        said = cover_parts(hit.get("cover") or [])
+        if said:
+            options.append(f"Week {hit['week']} — {said}.")
     first = collisions[0]["week"]
-    action = ("Byes ahead: " + "; ".join(parts) + ". Nobody else on your roster can start "
-              "there, so line up cover before then — a pickup or a trade.")
+    detail = (" ".join(who) + " Nobody else on your roster can start there, so line "
+              "up cover before then — a pickup or a trade.")
     if options:
-        action += " " + " ".join(options) + " Check who's free in your league."
-    return [{"action": action, "deadline": f"before Week {first}", "urgency": "deadline"}]
+        detail += (f" Options who play that week, {cover_basis(league_size)}: "
+                   + " ".join(options) + " Check who's free in your league.")
+    return [{"action": "Byes ahead: " + "; ".join(heads), "detail": detail,
+             "deadline": f"before Week {first}", "urgency": "deadline"}]
+
+
+def by_stakes(notable: Sequence[Mapping[str, Any]],
+              plan: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The game plan in order of stakes: every line about a slot that scores
+    zero unless the reader acts first (certain ones before the ones that wait
+    on news), then the notable calls, then the rest of the plan as built."""
+    zeros = [dict(item) for item in plan if item.get("zero")]
+    zeros.sort(key=lambda item: not item["zero"].get("certain"))
+    rest = [dict(item) for item in plan if not item.get("zero")]
+    return zeros + [dict(item) for item in notable] + rest
+
+
+# Lineup order, for naming emptied spots the way the lineup screen lists them.
+_SLOT_ORDER = ("QB", "RB", "WR", "TE", "FLEX", "WRRB_FLEX", "REC_FLEX",
+               "SUPER_FLEX", "K", "DEF")
+
+
+def _in_lineup_order(slots: Sequence[str]) -> list[str]:
+    return sorted(slots, key=lambda slot: (_SLOT_ORDER.index(slot)
+                                           if slot in _SLOT_ORDER else len(_SLOT_ORDER)))
+
+
+def cover_basis(league_size: int) -> str:
+    """How every cover list is chosen, said once where it is printed."""
+    return (f"by points a game this season, leaving out the top scorers a "
+            f"{league_size}-team league almost surely has rostered")
+
+
+def cover_parts(cover: Sequence[Mapping[str, Any]]) -> str | None:
+    """"QB, outside the top 12: A 17.1, B 16.0; K, outside the top 12: …" —
+    one list per emptied spot, in lineup order (run.solo.cover_for). None when
+    no spot has a name. A record, never a projection."""
+    if not any(entry.get("names") for entry in cover):
+        return None
+    order = {slot: i for i, slot in enumerate(
+        _in_lineup_order([entry["slot"] for entry in cover]))}
+    parts = []
+    for entry in sorted(cover, key=lambda e: order[e["slot"]]):
+        slot = _SLOT_WORDS.get(entry["slot"], entry["slot"])
+        names = entry.get("names") or []
+        parts.append(f"{slot}, {entry['cut']}: "
+                     + ", ".join(f"{c['name']} {c['per_game']:.1f}" for c in names)
+                     if names else
+                     f"{slot}: nobody {entry['cut']} with three games yet")
+    return "; ".join(parts)
+
+
+def cover_sentence(cover: Sequence[Mapping[str, Any]], when: str, league_size: int,
+                   *, after: str = "") -> str | None:
+    """The names under one emptied slot this week, as one sentence ending in
+    the check only the reader can make (we can't see their league). ``after``
+    narrows who in words (", kicking off no earlier than him")."""
+    parts = cover_parts(cover)
+    if parts is None:
+        return None
+    return (f"Options who play {when}{after}, {cover_basis(league_size)}: "
+            f"{parts}. Check who's free in your league.")
 
 
 def early_kickoff_items(player_ids: Sequence[str], players: PlayerIndex,

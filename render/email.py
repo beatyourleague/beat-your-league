@@ -28,6 +28,8 @@ from typing import Any, Mapping
 
 from render.sender import sender_line
 from render.report import cancel_html, cancel_lines, is_seat, stop_route
+from render.report import SATURDAY_LINE, SATURDAY_LINE_HEAD, saturday_line
+from render.report import regret_tossup, regret_verdict
 # The row and section bodies (launch review, Oct 2026), one implementation each.
 from render.report import (NO_PIVOTS, SLOT_DISPLAY, call_bits, form_phrase,
                            no_call_line, projection_note, row_marked)
@@ -93,7 +95,15 @@ BRICK_TINT = "#F7E3DE"
 TURF_TINT = "#DFF0E4"
 
 FONT = "Arial,Helvetica,sans-serif"
-DISPLAY = "'Arial Narrow',Arial,Helvetica,sans-serif"
+# The condensed display face, from fonts the reader's device already has —
+# an email may fetch nothing (tests/test_email_safety.py). Arial Narrow FIRST:
+# Outlook's Word engine ignores a stack whose first face is missing and falls
+# to Times, and Arial Narrow ships with Windows and macOS. Phones have neither,
+# and fell to plain Arial, which wrapped "WEEK 7 · YOUR / REPORT" at 390px
+# (pre-launch review D13): Apple's Helvetica Neue Condensed Bold and Avenir
+# Next Condensed, then Android's Roboto Condensed, read as Barlow Condensed does.
+DISPLAY = ("'Arial Narrow','HelveticaNeue-CondensedBold','Helvetica Neue Condensed',"
+           "'Avenir Next Condensed','Roboto Condensed',Arial,Helvetica,sans-serif")
 BASE = f"font-family:{FONT};font-size:14px;line-height:1.55;color:{NAVY};"
 SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
 
@@ -121,6 +131,36 @@ TRIAL_LAST_ASK_HEAD = "Want this next season?"
 TRIAL_LAST_ASK = ("Your lineup decided like this one, every Tuesday from Week 1, "
                   "plus a final check on Saturday when injury news changes it.")
 TRIAL_LAST_BUTTON = "Tell me when it opens"
+
+# The free report's price line, at the TOP (pre-launch review M5): the one ask
+# sat after the whole report with no price, so a reader who stopped at the
+# lineup never learned what it costs. 2026 sells one-time passes, whose terms
+# are short enough to sit beside the price — one payment, nothing renews, the
+# refund window — worded as the landing's price card words them. From the
+# week the join page may sell the $19 Playoff Pass instead (the landing's and
+# join page's PLAYOFF_FROM_WEEK) the line names no price: the email cannot see
+# whether that link is live, and a price the join page doesn't charge is
+# worse than none. Nothing in the season's last week: there is no next one.
+TRIAL_PLAYOFF_FROM_WEEK = 13
+TRIAL_REFUND = ("Full refund, no questions, until your second weekly report's "
+                "week kicks off. One per person.")
+
+
+def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:
+    """The free report's offer, said once near the top, or None in the
+    season's last week."""
+    meta = meta or {}
+    if _is_final_week(meta):
+        return None
+    from render.welcome import SEASON_PRICE
+    week = meta.get("week")
+    if isinstance(week, int) and week + 1 >= TRIAL_PLAYOFF_FROM_WEEK:
+        offer = ("Every Tuesday through your title game: one payment, nothing "
+                 "renews — the join page shows this week's price.")
+    else:
+        offer = (f"Every Tuesday through your title game: the {SEASON_PRICE} "
+                 f"Rest-of-Season Pass, one payment, nothing renews.")
+    return f"{offer} {TRIAL_REFUND}"
 
 
 def _is_final_week(meta: Mapping[str, Any] | None) -> bool:
@@ -282,7 +322,13 @@ def _header(meta: Mapping[str, Any], team: str | None = None,
             f'<tr><td style="padding:0 28px;">'
             f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
             f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
-            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(TRIAL_INTRO)}</div></td></tr>')
+            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(TRIAL_INTRO)}'
+            + (f'<br><br>{esc(trial_price_line(meta))}'
+               + (f' <a href="{esc(trial_join_url(meta))}" style="color:{NAVY};'
+                  f'font-weight:bold;">{esc(TRIAL_BUTTON)}</a>'
+                  if trial_join_url(meta) else "")
+               if trial_price_line(meta) else "")
+            + '</div></td></tr>')
     season_end = season_end_lines(meta)
     if season_end:
         banner += (
@@ -306,9 +352,14 @@ def _header(meta: Mapping[str, Any], team: str | None = None,
         f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
         f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
         f'Beat Your League</div>'
+        # "Week 7" alone on the big line and the report's name on its own
+        # beneath it: as one 32px line it wrapped mid-phrase on a phone.
         f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
-        f'letter-spacing:1px;text-transform:uppercase;'
-        f'color:{CARD};padding:6px 0 2px 0;">Week {esc(meta["week"])} · '
+        f'letter-spacing:1px;text-transform:uppercase;line-height:1.1;'
+        f'color:{CARD};padding:6px 0 0 0;">Week {esc(meta["week"])}</div>'
+        f'<div style="font-family:{DISPLAY};font-size:16px;font-weight:bold;'
+        f'letter-spacing:2.5px;text-transform:uppercase;white-space:nowrap;'
+        f'color:{CARD};padding:2px 0 6px 0;">'
         f'{"Your Report" if meta.get("solo") else "Rival Report"}</div>'
         + (f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
            f'color:{FLAG};padding:0 0 10px 0;">{esc(tagline)}</div>'
@@ -318,7 +369,8 @@ def _header(meta: Mapping[str, Any], team: str | None = None,
     )
 
 
-def _checklist(items: list[Mapping[str, Any]]) -> str:
+def _checklist(items: list[Mapping[str, Any]],
+               meta: Mapping[str, Any] | None = None) -> str:
     # A box to tick beside every item: the site promises "tick the boxes,
     # done in ninety seconds", so the file carries the boxes.
     rows = []
@@ -341,6 +393,10 @@ def _checklist(items: list[Mapping[str, Any]]) -> str:
             f'<table role="presentation" width="100%" cellpadding="0" '
             f'cellspacing="0" border="0">{"".join(rows)}</table>'
             f'</td></tr></table>')
+    standing = saturday_line(meta)
+    if standing:
+        body += (f'<p style="{SMALL}color:{NAVY};margin:10px 0 0 0;">'
+                 f'<b>{esc(SATURDAY_LINE_HEAD)}:</b> {esc(SATURDAY_LINE)}</p>')
     return _sec(1, "Your Game Plan", body)
 
 
@@ -599,9 +655,10 @@ def _regret(regret: Mapping[str, Any]) -> str:
         f'border-top:3px solid {NAVY};">'
         f'<div style="padding:14px 16px;">{label}'
         f'<div style="font-family:{FONT};font-size:18px;font-weight:bold;'
-        f'color:{NAVY};">Start {esc(regret["start_name"])} '
-        f'<span style="color:{SLATE};font-weight:normal;">over</span> '
-        f'{esc(regret["over_name"])}</div>'
+        f'color:{NAVY};">{esc(regret_verdict(regret)[0])} '
+        f'<span style="color:{SLATE};font-weight:normal;">'
+        f'{esc(regret_verdict(regret)[1])}</span> '
+        f'{esc(regret_verdict(regret)[2])}</div>'
         f'<div style="padding:12px 0 4px 0;">{_bar((confidence - 50) * 2, "100%", 10)}</div>'
         f'<div style="font-family:{DISPLAY};font-size:26px;font-weight:bold;'
         f'font-style:italic;color:{NAVY};padding:2px 0 6px 0;">{confidence}%</div>'
@@ -834,7 +891,12 @@ def text_summary(report: Mapping[str, Any]) -> str:
         "",
     ]
     if meta.get("trial"):
-        lines += [f"{TRIAL_HEAD.upper()}. {TRIAL_INTRO}", ""]
+        lines += [f"{TRIAL_HEAD.upper()}. {TRIAL_INTRO}"]
+        if trial_price_line(meta):
+            lines.append(trial_price_line(meta)
+                         + (f" {TRIAL_BUTTON}: {trial_join_url(meta)}"
+                            if trial_join_url(meta) else ""))
+        lines.append("")
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
@@ -842,6 +904,8 @@ def text_summary(report: Mapping[str, Any]) -> str:
         lines.append(f"  [ ] {item['action']}  ({item['deadline']})")
         if item.get("detail"):
             lines.append(f"      {item['detail']}")
+    if saturday_line(meta):
+        lines.append(f"  {saturday_line(meta)}")
     matchup = report["matchup"]
     head = "YOUR WEEK" if solo else "MATCHUP"
     if matchup.get("range_gate"):
@@ -960,9 +1024,10 @@ def text_summary(report: Mapping[str, Any]) -> str:
     if "gate" in regret:
         lines.append(f"THE WEEK'S CLOSEST CALL: {no_call_line(regret)}")
     else:
+        before, joiner, after = regret_verdict(regret)
         lines.append(
-            f"THE WEEK'S CLOSEST CALL: start {regret['start_name']} over "
-            f"{regret['over_name']} ({regret['confidence']:.0%})"
+            f"THE WEEK'S CLOSEST CALL: {before[:1].lower()}{before[1:]} {joiner} "
+            f"{after} ({regret['confidence']:.0%})"
             + (f" — {regret['label'].lower()}" if regret.get("label") else ""))
         for key in ("definition", "reason", "closer"):
             if regret.get(key):
@@ -1013,6 +1078,15 @@ def text_summary(report: Mapping[str, Any]) -> str:
               *([sender_line()] if sender_line() else [])]
     return "\n".join(lines) + "\n"
 
+def empty_spots(report: Mapping[str, Any]) -> int:
+    """How many starting spots score zero this week unless the reader acts — a
+    bye or a reserve list with nobody eligible behind him, or nobody rostered
+    there at all (the game plan's certain zero lines, engine.week_report)."""
+    return sum(len((item.get("zero") or {}).get("slots") or [])
+               for item in report.get("checklist") or []
+               if (item.get("zero") or {}).get("certain"))
+
+
 def solo_promise(report: Mapping[str, Any]) -> str:
     """What a solo report promises, in the subject and under the masthead.
 
@@ -1036,6 +1110,13 @@ def preheader_for(report: Mapping[str, Any]) -> str:
     if not meta.get("solo"):
         return (f'The file on {meta["rival_label"]}: your lineup, their fragile '
                 f'spots, and the one call that matters.')
+    # A spot that scores zero unless they act outranks any close call (pre-
+    # launch review F6): a bye week with four empty spots previewed as
+    # "Closest call: start Michael Wilson over Rachaad White, 55%".
+    hole = next((item for item in report.get("checklist") or []
+                 if (item.get("zero") or {}).get("certain")), None)
+    if hole is not None:
+        return f"{str(hole['action']).rstrip('.')}. Your whole lineup is inside."
     regret = report.get("regret") or {}
     if "gate" not in regret and regret.get("start_name") and \
             regret.get("over_name") and regret.get("confidence") is not None:
@@ -1046,9 +1127,7 @@ def preheader_for(report: Mapping[str, Any]) -> str:
         # A toss-up reads "either is fine" on the card and the row; the
         # preview said "start X over Y, 51%" — an instruction the report
         # itself declines to give.
-        from engine.solo_report import TOSSUP_PERCENT, TOSSUP_SENTENCE
-        if (_pct(regret["confidence"]) <= TOSSUP_PERCENT
-                or TOSSUP_SENTENCE in str(regret.get("reason") or "")):
+        if regret_tossup(regret):
             where = f" at {SLOT_DISPLAY.get(regret['slot'], regret['slot'])}" \
                 if regret.get("slot") else ""
             return (f"{label}: {regret['start_name']} or {regret['over_name']}"
@@ -1081,6 +1160,12 @@ def subject_for(report: Mapping[str, Any]) -> str:
         # with two teams got two identical subjects (panel review BE-I5).
         team = team_name(report)
         week = f"Week {meta['week']}" + (f" — {team}" if team else "")
+        # The subject leads with an empty spot when there is one (F6): it is
+        # the one thing in the report that costs points if left unread.
+        holes = empty_spots(report)
+        if holes:
+            spots = "an empty spot" if holes == 1 else f"{holes} empty spots"
+            return f"{week}: {spots} to fill before kickoff"
         return f"{week}: {solo_promise(report)}"
     if meta.get("rivalry_week"):
         return f"Week {meta['week']}: RIVALRY WEEK vs {meta['rival_label']}"
@@ -1374,7 +1459,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
         return [
             _header(meta, team, f"{team}: {promise}." if team
                     else f"{promise[:1].upper()}{promise[1:]}."),
-            _checklist(report["checklist"]),
+            _checklist(report["checklist"], meta),
             _your_week(report["matchup"], report.get("no_opponent")),
             _your_lineup(report),
             _regret(report["regret"]),
@@ -1384,7 +1469,7 @@ def _compose(report: Mapping[str, Any]) -> list[str]:
         ]
     return [
         _header(meta),
-        _checklist(report["checklist"]),
+        _checklist(report["checklist"], meta),
         _last_week(report.get("last_week")),
         _matchup(report["matchup"]),
         _rival_watch(report.get("rival_watch")),

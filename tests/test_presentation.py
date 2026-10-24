@@ -537,7 +537,9 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
     trial = _subscriber(trial=True)
     page = render_email(trial)
     url = "https://example.com/join/?via=trial"
-    assert page.count(f'href="{url}"') == 1
+    # Twice since pre-launch review M5: under the free-report header with the
+    # price and its terms, and as the button above the footer.
+    assert page.count(f'href="{url}"') == 2
     assert page.index(url) < page.index("Projections are analysis"), \
         "the ask sits below the fine print"
     assert "Get next Tuesday&#x27;s report" in page
@@ -546,7 +548,12 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
     assert text.index(url) < text.index("Projections are analysis")
     for doc in (html.unescape(page), text):
         assert "only email we'll send you unless you sign up" in doc
-        assert not re.search(r"\$\d", doc), "money is disclosed on the join page"
+        # M5: the price is named once, near the top, with its one-payment and
+        # refund terms beside it — and nowhere else.
+        assert re.findall(r"\$\d+", doc) == ["$29"]
+        assert ("the $29 Rest-of-Season Pass, one payment, nothing renews. Full "
+                "refund, no questions, until your second weekly report's week "
+                "kicks off. One per person." in doc)
     # No site, no button.
     monkeypatch.delenv("SITE_URL")
     assert "via=trial" not in render_email(trial) + text_summary(trial)

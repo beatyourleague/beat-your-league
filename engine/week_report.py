@@ -1352,6 +1352,9 @@ def checklist(
                           f"off waivers, or that slot scores zero.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # A certain zero (pre-launch review F6/P2): leads the plan, and
+                # run.solo names who could fill it this week.
+                "zero": {"slots": sorted(set(unfillable)), "certain": True},
             })
         # A SEATED player who cannot play. optimal_lineup puts him there
         # because nothing eligible remains, which is right — you must field
@@ -1384,6 +1387,7 @@ def checklist(
                           f"someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                "zero": {"slots": [p.slot for p in alone], "certain": True},
             })
         for names, group in _by_standins(certain, cover):
             one = len(names) == 1
@@ -1401,6 +1405,7 @@ def checklist(
                           + f" cleared, {zero} unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                "zero": {"slots": [p.slot for p in group], "certain": True},
             })
         alone = [p for p in doubtful if not cover.get(p.player_id or "")]
         if alone:
@@ -1414,6 +1419,10 @@ def checklist(
                           f"again, that's a zero unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                # He may still play: a pickup must kick off no earlier than
+                # him, so it can wait for his news (P2).
+                "zero": {"slots": [p.slot for p in alone],
+                         "wait_on": [p.player_id for p in alone if p.player_id]},
             })
         for names, group in _by_standins(doubtful, cover):
             one = len(names) == 1
@@ -1432,6 +1441,8 @@ def checklist(
                           + f" is, {zero} unless you add someone off waivers.",
                 "deadline": "before this week's first kickoff",
                 "urgency": "now",
+                "zero": {"slots": [p.slot for p in group],
+                         "wait_on": [p.player_id for p in group if p.player_id]},
             })
         # The late-news item used to live only below this return, so the solo
         # product — the one that ships — never printed it, while the landing

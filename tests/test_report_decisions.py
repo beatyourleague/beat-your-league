@@ -1009,11 +1009,14 @@ def sample10():
 
 
 def test_the_sample_names_its_closer_call_and_why_pollard_starts(sample10) -> None:
-    """The published 2024 week-10 sample: Robinson over Brown at 70% stays the
-    closest call WITH ODDS (the ledger records it, the landing quotes it), and
-    the FLEX row's dead heat is named with its reason."""
+    """The published 2024 week-10 sample: the closest call WITH ODDS, and the
+    FLEX row's dead heat named with its reason. Robinson over Brown at 70% was
+    that call until pre-launch review F3: Chase Brown's role was growing (24.0
+    targets + carries a game over Weeks 8-9, up from 11.9), so the odds
+    against him are withheld and Kittle over LaPorta at 72% — already printed
+    on the TE row — is the closest call left with odds."""
     regret = sample10["regret"]
-    assert (regret["start_name"], regret["over_name"]) == ("Bijan Robinson", "Chase Brown")
+    assert (regret["start_name"], regret["over_name"]) == ("George Kittle", "Sam LaPorta")
     assert regret["closer"] == ("Closer on points: Tony Pollard or Chase Brown at FLEX, "
                                 "10.3 vs 10.3 — no odds, because Tony Pollard was "
                                 "questionable in Week 9.")

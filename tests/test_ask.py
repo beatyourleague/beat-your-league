@@ -263,10 +263,12 @@ def test_nothing_is_published_for_a_week_whose_previous_week_is_unplayed(tmp_pat
     report — a number no subscriber is ever sent. Only the window a Tuesday
     report covers may publish."""
     processed = tmp_path / "processed"
-    code, out, _err = _run(_cache(tmp_path), processed, "Hank Benchman",
-                           "Bell Cow", publish=True, week=WEEK + 1)
-    assert "the report starts" in out, "the fixture made no call to refuse"
-    assert code == 1 and f"week {WEEK} isn't over" in out
+    code, out, err = _run(_cache(tmp_path), processed, "Hank Benchman",
+                          "Bell Cow", publish=True, week=WEEK + 1)
+    # Since pre-launch review F2 the week's data refuses to load at all: every
+    # game of the week projected from must be in (run.solo
+    # .assert_week_is_complete), so nothing is built, printed or recorded.
+    assert code != 0 and f"week {WEEK}'s box scores are not all in" in err
     assert not PERCENT.search(out) and not _rows(processed)
 
 
