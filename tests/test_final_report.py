@@ -626,3 +626,26 @@ def test_a_change_notice_gives_a_one_time_pass_the_stop_route_not_a_billing_page
                                     "https://beatyourleague.com")
     assert ONCE_STOP_BODY in message.text and "billing page" not in message.text
     assert message.unsubscribe and message.unsubscribe.startswith("mailto:")
+
+
+def test_the_note_names_no_reason_a_row_does_not_print() -> None:
+    """Reviewer (report), reproduced: an OUT defense's row prints a dash and
+    no "projection only" (PIPE-6), but the note under the lineup still said
+    "defenses get a projection only". The note's reasons come from the rows."""
+    from render.report import note_gates
+    out_def = {"slot": "DEF", "status": "out", "confidence_gate": "we don't put odds on defenses yet"}
+    live_def = {**out_def, "status": "active"}
+    bench = {"slot": "QB", "status": "active", "confidence_gate": "no bench QB"}
+    assert note_gates([out_def, bench]) == {"no bench QB"}
+    assert note_gates([live_def]) == {"we don't put odds on defenses yet"}
+
+
+def test_the_roster_report_way_out_follows_the_purchase() -> None:
+    """Reviewer (report): the intake passed only `seat` to preseason_message,
+    so its way out followed the site-wide SELLING_ONE_TIME flag rather than
+    the purchase; a sub_ subscription would have been told its pass ends on
+    its own. The call now passes one_time from the purchase id."""
+    import inspect
+    from run import intake
+    source = inspect.getsource(intake._send_first_files)
+    assert '{"one_time": (signup.subscription_id or "").startswith("pi_")}' in source

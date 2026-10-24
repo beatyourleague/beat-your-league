@@ -236,8 +236,8 @@ Confirmed or sharpened by the review, and bigger than its fixes:
   hourly intake still registers and welcomes a buyer (its sweep expands only the customer),
   prints one stderr note from the dispute check, and stays green — and the Tuesday send then
   reads no paid list and mails nobody. Make the intake exit 1 when the paid-list read is
-  refused with HTTP 403, naming the missing permission. LAUNCH step 3 now edits the key; this
-  would catch the next one.
+  refused with HTTP 403, naming the missing permission. **Built** (final review, Oct 24:
+  `dispute_alarm` exits 1 with "STRIPE KEY IS MISSING A PERMISSION").
 - **The launch check reads `www` once the host moves.** After section 11's move, a GET on
   `https://www.beatyourleague.com/join/` must answer 301 to the bare domain; served directly,
   every form post from it is refused by the Worker's origin check and the counter is silent.

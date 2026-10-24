@@ -20,7 +20,7 @@ surfaces can never drift apart. All data is escaped on the way in.
 
 from __future__ import annotations
 
-from render.report import buyer_slots
+from render.report import buyer_slots, note_gates
 
 import os
 import re
@@ -610,7 +610,7 @@ def _tape(report: Mapping[str, Any]) -> str:
     if as_set:
         note = _note(f'<b>{esc(AS_SET_HEAD)}</b> {esc(AS_SET_BODY)}')
     else:
-        gates = {s["confidence_gate"] for s in mine if s.get("confidence_gate")}
+        gates = note_gates(mine)
         if gates:
             head_text = (f'Why some slots say "{NO_CALL}":' if mixed
                          else f'{NO_CALL.capitalize()} on any slot this week:')
@@ -1000,8 +1000,7 @@ def text_summary(report: Mapping[str, Any]) -> str:
     # number has to arrive here — including the structural ones whose per-row
     # markers were dropped above. Printing them only in the all-gated case left
     # a mixed week's blank cells unexplained.
-    gates = sorted({s["confidence_gate"] for s in report["lineup"]
-                    if s.get("confidence_gate")})
+    gates = sorted(note_gates(report["lineup"]))
     if gates:
         shown_marker = any(
             s.get("confidence") is None and s.get("player_name")
@@ -1387,7 +1386,7 @@ def _your_lineup(report: Mapping[str, Any]) -> str:
             f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
             f'<td width="{_CALL_W}" style="{th}text-align:right;">Call</td></tr>')
     note = ""
-    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
+    gates = note_gates(slots)
     if gates:
         head_text = no_call_head(shown_marker and mixed, mixed)
         note = _note(f'<b>{esc(head_text)}</b> '

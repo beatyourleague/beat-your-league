@@ -773,3 +773,42 @@ def test_the_pay_button_refund_sentence_carries_its_limits() -> None:
     assert "one per person" in MESSAGES["season"] and "one per league" in MESSAGES["league_pass"]
     for plan in ("season", "league_pass"):
         assert "if the season ends first" in MESSAGES[plan]
+
+
+def test_clearing_acknowledges_a_session_still_in_the_sweep(
+        tmp_path, stripe, directory, monkeypatch, capsys) -> None:
+    """Reviewer (ops), reproduced: --clear-unresolved emptied the remembered
+    list, but a PLAYOFF-EARLY session still inside the sweep window came
+    straight back on the next run, so the box the runbook names did not clear
+    the alarm. Clearing now acknowledges the session; a NEW one still alarms."""
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", LINKS_2026)
+    monkeypatch.setattr(intake, "playoff_opens", lambda created, cache=None: OPENS)
+    stripe["sessions"] = [_playoff_session(datetime(2026, 10, 27, 15, tzinfo=timezone.utc))]
+    assert _run(tmp_path, "--no-mail") == 1
+    assert _run(tmp_path, "--no-mail", "--clear-unresolved") == 0
+    assert _run(tmp_path, "--no-mail") == 0, "the cleared session came straight back"
+    state = json.loads((tmp_path / intake.STATE_NAME).read_text())
+    assert state["acknowledged"] == ["cs_po"]
+
+
+def test_a_throttled_privacy_delete_is_retried_once(monkeypatch) -> None:
+    """Reviewer (ops): the /rows flood limit counts every request, so a
+    privacy deletion's back-to-back DELETEs met a 429 and were left for the
+    operator. One retry after the block lifts."""
+    import io
+    import urllib.error
+    from run import privacy
+    calls = []
+    class OK:
+        status = 204
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    def urlopen(request, timeout=20):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(request.full_url, 429, "Too Many", {}, io.BytesIO(b""))
+        return OK()
+    monkeypatch.setattr(privacy.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(privacy.time, "sleep", lambda s: None)
+    assert privacy.delete_worker_rows([{"_key": "k1"}], "https://forms.example/rows", "key") == (1, 0)
+    assert len(calls) == 2

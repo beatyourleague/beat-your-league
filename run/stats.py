@@ -834,8 +834,9 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> 
     try:
         registry = load_rosters(args.registry)
     except RosterRegistryError as exc:
-        registry_note = (f"No registry on this machine ({exc}). It lives in the "
-                         f"CI cache; pass --registry PATH to use a copy.")
+        registry_note = (f"No registry on this machine ({exc}). It lives sealed in "
+                         f"the CI cache; `make stats-registry` fetches and opens a "
+                         f"copy, then pass --registry PATH.")
     if registry is not None and rows is not None:
         conv = conversions(rows, [s.email for s in registry])
 

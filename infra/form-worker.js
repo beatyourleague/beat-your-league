@@ -29,10 +29,12 @@
  *   TRIAL_OPEN    = true                    (ONLY once the free report is
  *                                           switched on on the site; unset,
  *                                           a free-report request is refused)
- * Then FORM_ENDPOINT = the Worker URL, in both the page and the GitHub secret.
- * Also (owner, Cloudflare dashboard): one free rate-limiting rule on the
- * Worker's route for POST, a few a minute per IP, and the workers.dev route
- * switched OFF so the rule cannot be walked around.
+ * Then FORM_ENDPOINT = https://forms.beatyourleague.com/rows, in both the page
+ * and the GitHub secret (the custom domain, never workers.dev).
+ * Also (owner, Cloudflare dashboard): one free rate-limiting rule on URI Path
+ * /rows (the free plan matches the path only), 10 requests per 10 s per IP —
+ * it slows a flood, it does not stop one — and the workers.dev route
+ * switched OFF so the rule cannot be walked around (LAUNCH.md step 5).
  *
  * Abuse, and what bounds it (pre-launch review APPSEC-3, INFRA-03):
  * - A POST must come from the site (its Origin) or carry the read key (the

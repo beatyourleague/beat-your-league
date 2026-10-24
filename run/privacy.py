@@ -47,6 +47,8 @@ import json
 import os
 import re
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -259,11 +261,20 @@ def delete_worker_rows(rows: list[dict], endpoint: str, api_key: str) -> tuple[i
         request = urllib.request.Request(
             f"{endpoint}?{urllib.parse.urlencode({'key': key})}", method="DELETE",
             headers={"Authorization": f"Bearer {api_key}"})
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                deleted += int(200 <= response.status < 300)
-        except OSError:
-            continue
+        for attempt in (1, 2):
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    deleted += int(200 <= response.status < 300)
+                break
+            except urllib.error.HTTPError as exc:
+                # The /rows flood limit counts every request, so back-to-back
+                # deletes can meet a 429: wait out its 10-second block once.
+                if exc.code == 429 and attempt == 1:
+                    time.sleep(11)
+                    continue
+                break
+            except OSError:
+                break
     return deleted, len(rows) - deleted
 
 

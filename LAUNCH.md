@@ -60,8 +60,10 @@ Pass").
 **Can wait — none of these blocks the Week 8 send:** the Customer-portal settings and the
 monthly test-mode check (both 2027 only); Gmail's "Send mail as" (step 2.5); a CAA record
 (step 0); Do Not Track on your own browsers (step 5b.8); Google Search Console (step 7.1); the
-decisions in section 10; section 12's lawyer questions, which come before the first $69 sale,
-not before opening; and making the repo private (section 11, A2).
+decisions in section 10; and making the repo private (section 11, A2). **One choice you make
+now:** section 12's lawyer questions come before the first $69 League Pass sale. Either send
+the $69 link only if you accept section 12's risk for now, or hold it back (Claude leaves
+`STRIPE_LINK_PASS` empty, so the League Pass page says it opens soon) until the consult.
 
 ---
 
@@ -311,8 +313,8 @@ $20/month plan the week a Tuesday nears 85 (PLAN §2), then:
 1. **Edit the cron key.** Stripe → **Developers → API keys** → `github-actions-crons` → **⋯ →
    Edit** → add **Payment Intents: Read**, **Charges: Read** and **Disputes: Read** → **Save**.
    The key's value doesn't change, so nothing else does. It was made Sep 29 with three
-   permissions; without these three the hourly run still registers a buyer, but the Tuesday
-   send can't read who has paid and mails nobody. When you're done it holds exactly:
+   permissions; without these three the hourly run goes red with **STRIPE KEY IS MISSING A
+   PERMISSION**, and Tuesday's send couldn't read who has paid and would mail nobody. When you're done it holds exactly:
    Checkout Sessions **Read**, Payment Intents **Read** and Charges **Read** (a one-time pass
    is entitled while its payment isn't refunded), Disputes **Read** (a lost chargeback ends a
    purchase like a refund; without it a disputed payment shows as "status unknown" and the
@@ -444,9 +446,11 @@ nothing: every row is checked before it reaches the subscriber list.
    (the page counter uses `/e` on the same domain, step 5b).
    - **A flood limit (5 min, free):** Cloudflare → `beatyourleague.com` → **Security → WAF
      → Rate limiting rules → Create**: name `form rows`; when **URI Path** equals `/rows`
-     (the free plan matches on the path only); same IP, more than **2 requests per 10
-     seconds** (the free plan's only period); action **Block** for 10 seconds. A real visitor
-     posts once, and the hourly runs read once per step, well under it. It slows a flood; it
+     (the free plan matches on the path only); same IP, more than **10 requests per 10
+     seconds** (the free plan's only period); action **Block** for 10 seconds. The rule
+     counts every request to `/rows` (a browser's submit is two, and a privacy deletion sends
+     one per row), so 10 leaves room for real use; the free 1,000 writes a day are the real
+     bound. It slows a flood; it
      doesn't stop one. A stranger can still spend the day's 1,000 free writes; new form posts
      are then refused until the next day, while payments and reports carry on.
 6. **GitHub secrets** (https://github.com/beatyourleague/beat-your-league/settings/secrets/actions):
@@ -572,9 +576,10 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
      reach **60** the crons hold free reports and seat notes until the next day (step 2), so
      the rest is kept for buyers. The day is UTC's, which turns over at 8:00 PM ET (7:00 PM
      from Nov 1). Add the two preview counts and about two per buyer you expect that day (a
-     welcome and a first report each). If that reaches 60, send the waitlist after the day
-     turns that evening, or the next morning, rather than paying for a month of Pro; if one
-     list alone is over 60, give it a day of its own.
+     welcome and a first report each). Keep that under 60 on a day that is not a Tuesday or
+     Saturday: if it would pass 60, send the waitlist after the day turns that evening, or the
+     next morning. A list too big for that can't be split (the send refuses when more are
+     waiting than `MAX`), so it needs a month of Resend Pro and `EMAIL_DAILY_HEADROOM=1500`.
    - **Commit and push `data/processed/sent.jsonl`.** The crons read the committed copy; it
      is what stops a second send. Then delete `signups.csv`, **and delete the "Tell me when it
      opens" emails in Gmail** (and empty Gmail's Bin): the privacy policy says waitlist

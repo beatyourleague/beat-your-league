@@ -371,7 +371,10 @@ def week_at(season: str, purchased_at: str) -> int | None:
         if stamp.tzinfo is None:
             stamp = stamp.replace(tzinfo=timezone.utc)
         from run.solo import CACHE_DIR, current_week
-        # The cached schedule (the intake run refreshed it): no download.
+        # The cached schedule only: with no cached copy, fetch(live=False)
+        # would download it, a hidden network call per welcome (final review).
+        if not (CACHE_DIR / "games.csv").is_file():
+            return None
         return current_week(CACHE_DIR, str(season), stamp.date(), live=False)
     except Exception:               # no cache, no schedule, a bad clock
         return None

@@ -153,6 +153,7 @@ NOT_CONFIGURED = 2
 # relied on to last (final review). Both clear with daily-intake's
 # "clear_unresolved" dispatch box (run.intake --clear-unresolved), once handled.
 _REMEMBERED = ("PAID-UNATTRIBUTED", "PLAYOFF-EARLY")
+_SESSION_IN = re.compile(r"\bsession (cs_[A-Za-z0-9_]+)")
 
 
 class IntakeError(RuntimeError):
@@ -2364,7 +2365,8 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
             # A seat's roster report must carry the seat's stop route, not the
             # billing page a seat has no account on (render.preseason's
             # `seat`); only a seat passes the keyword.
-            extra = {"seat": True} if signup.plan == "seat" else {}
+            extra = ({"seat": True} if signup.plan == "seat" else
+                     {"one_time": (signup.subscription_id or "").startswith("pi_")})
             messages.append(preseason_message(
                 signup.email, signup.slug, report,
                 purchased_at=str(signup.seen_at or ""), **extra))
@@ -2653,6 +2655,18 @@ def main(argv: list[str] | None = None) -> int:
     # Unattributable payments PERSIST. The watermark moves past the session
     # within days, so a once-only message meant the third run forgot a customer
     # who is still being charged.
+    # --clear-unresolved ACKNOWLEDGES what it clears: the sessions behind it
+    # are recorded, so one still inside the sweep window does not come
+    # straight back on the next run (final review, ops). A new session alarms.
+    acknowledged = set(state.get("acknowledged") or [])
+    if args.clear_unresolved:
+        for problem in [*problems, *(state.get("unresolved") or [])]:
+            if str(problem).startswith(_REMEMBERED) and (found := _SESSION_IN.search(str(problem))):
+                acknowledged.add(found.group(1))
+    problems[:] = [p for p in problems
+                   if not (str(p).startswith(_REMEMBERED)
+                           and (found := _SESSION_IN.search(str(p)))
+                           and found.group(1) in acknowledged)]
     remembered = [] if args.clear_unresolved else list(state.get("unresolved") or [])
     for problem in problems:
         if problem.startswith(_REMEMBERED) and problem not in remembered:
@@ -3007,6 +3021,8 @@ def main(argv: list[str] | None = None) -> int:
     if isinstance(newest, int):
         state["watermark"] = newest
     state["unresolved"] = remembered
+    if acknowledged:
+        state["acknowledged"] = sorted(acknowledged)
     if key_rotated and seats.token_hits and secret:
         # A rotation without the old value kept (the right move when it
         # leaked): once a claim through a NEW link matches a pass, the new

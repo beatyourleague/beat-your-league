@@ -607,6 +607,23 @@ _GATE_PHRASES = (
 )
 
 
+# Gates whose row reads "projection only" (render.report.row_label).
+PROJECTION_ONLY_GATES = ("we don't put odds on defenses",
+                         "odds once this lineup shape is graded",
+                         "held: an input")
+
+
+def note_gates(slots) -> set[str]:
+    """The no-odds reasons the note under the lineup names: one per gate a
+    row actually prints. An OUT defense prints a dash and no "projection
+    only", so its gate gave the note a reason no row showed (final review
+    PIPE-6). Shared by both renderers' notes."""
+    return {s["confidence_gate"] for s in slots
+            if s.get("confidence_gate")
+            and not (str(s["confidence_gate"]).startswith(PROJECTION_ONLY_GATES)
+                     and s.get("status") == "out")}
+
+
 def gate_phrase(gate: str) -> str:
     """One engine gate reason, as the note under the lineup states it."""
     for prefix, phrase in _GATE_PHRASES:
@@ -641,9 +658,7 @@ def row_label(slot: Mapping[str, Any]) -> str:
     see = " · see if/then" if slot.get("if_then", True) else ""
     # C8: a shape-level reason is never about this row's players — "waiting
     # on" a bench player whose news decides nothing would be a false reason.
-    if gate.startswith(("we don't put odds on defenses",
-                        "odds once this lineup shape is graded",
-                        "held: an input")):
+    if gate.startswith(PROJECTION_ONLY_GATES):
         # A defense on bye (or otherwise certainly out) prints a dash where
         # the projection would be, so "projection only" named a projection
         # the row does not show (final review PIPE-6) — the row's OUT flag
@@ -1391,7 +1406,7 @@ def section_your_lineup(report: Mapping[str, Any]) -> str:
     head = ('<tr class="thead"><td></td><td>Your lineup</td>'
             '<td style="text-align:right">Proj</td><td>Call</td></tr>')
     note = ""
-    gates = {s["confidence_gate"] for s in slots if s.get("confidence_gate")}
+    gates = note_gates(slots)
     if gates:
         head_text = no_call_head(shown_marker and mixed, mixed)
         note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
@@ -1552,7 +1567,7 @@ def section_tape(report: Mapping[str, Any]) -> str:
         note = (f'<div class="benchnote"><b>{esc(AS_SET_HEAD)}</b> '
                 f'{esc(AS_SET_BODY)}</div>')
     else:
-        gates = {s["confidence_gate"] for s in mine if s.get("confidence_gate")}
+        gates = note_gates(mine)
         if gates:
             head_text = (f'Why some slots say "{NO_CALL}":' if mixed
                          else f'{NO_CALL.capitalize()} on any slot this week:')

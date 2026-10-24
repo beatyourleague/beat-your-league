@@ -1452,6 +1452,44 @@ adversarial reviewer per branch, a fix round, and one integration. Rules it left
   (LAUNCH §11: move to Cloudflare Pages, then private); a lawyer before the first $69 sale
   (LAUNCH §12); US/Canada-only terms (would need a TERMS_VERSION bump).
 
+**The final review (Oct 24 2026) — six lenses on the merged tree, 43 confirmed, all fixed.**
+Funnel, security, product, ops, copy and business reviewers each reproduced their findings and a
+skeptic re-ran every one; four fix branches and an integration followed. Rules it left:
+- **Contract C4, the Playoff Pass:** `STRIPE_PAYMENT_LINKS` is `s:<$29>,o:<$19>,p:<$69>` (`m:`
+  legal for 2027; two `s:` links fail the intake). An `o:` buyer is a season row
+  (`RosterSignup.playoff`; the welcome names "the Playoff Pass — $19"). A `o:` session created
+  before Week 12's first kickoff (from the schedule) is served and reported **PLAYOFF-EARLY**,
+  remembered like PAID-UNATTRIBUTED. daily-intake's `clear_unresolved` box runs
+  `--clear-unresolved`, which ACKNOWLEDGES the sessions it clears (`acknowledged` in
+  roster-sync-state.json), so one still in the sweep window doesn't come back. The $19 link
+  stays deactivated, with `STRIPE_LINK_PLAYOFF`/`PLAYOFF_PASS_READY` empty, until Wed Nov 25
+  2026 8:00 PM ET.
+- **Contract C5, shared wording:** the disclaimer is "Projections are analysis, not guarantees —
+  not betting picks." (no "staking"); the odds clause is "only where both players are playing,
+  off the injury report and have enough games on record (never on team defenses)", identical in
+  the entity sentence (PLAN §1, content/pitches.md, meta, og, JSON-LD); a refund's finality is
+  "a second purchase after a refund is final". terms.html still says "subscribe again" until its
+  words next change (a TERMS_VERSION bump).
+- **The Worker refuses lone UTF-16 surrogates** in every address (one anonymous POST stopped the
+  intake before the registry was written); `fetch_seats` also drops any row that won't encode
+  as UTF-8 and counts it. `kind:"update"` needs the read key (the operator's
+  `make roster-update` path). statebox refuses an iteration count above 2,000,000 before PBKDF2.
+- **privacy-request needs an approval code** (`make privacy-approval ACTION= CODE=`, LOG_SECRET).
+- **SEC-4:** the seat-links-dead alarm needs our own evidence of a rotation (`seat_key_check`, a
+  fingerprint of UPDATE_SECRET in roster-sync-state.json); after a rotation without the old value
+  kept, the first claim matching a pass under the new key makes it the baseline.
+- **A Stripe key missing a permission fails the intake loudly** ("STRIPE KEY IS MISSING A
+  PERMISSION", with Stripe's `rak_` names read from the whole 403 body).
+- **Every email's way out follows the purchase:** the roster report (the first email for anyone
+  buying between a week's first kickoff and Tuesday) and the change notice give a one-payment
+  pass the stop route, never a billing page; the free report says reply "stop".
+- **The roster report serves a mid-season buyer:** when their first weekly report lands, who
+  can't play right now, and this season's games, per game and last 3, beside last season's rank.
+- **The note under the lineup names only reasons a row prints** (`render.report.note_gates`).
+- **The weekend checklist is the top of LAUNCH.md** ("This weekend, in order"). The page counter
+  and the forms share `forms.beatyourleague.com` (`/e` and `/rows`); the free rate-limit rule
+  is URI Path `/rows`, 10 per 10 s.
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

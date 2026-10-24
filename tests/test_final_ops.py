@@ -236,7 +236,8 @@ def test_the_send_count_rule_is_the_codes_daily_hold() -> None:
     text = _flat(_launch())
     assert "about 80 minus" not in text
     morning = _flat(_section(_launch(), "6."))
-    assert f"reach **{intake.DAY_HEADROOM}**" in morning and "If that reaches 60" in morning
+    assert f"reach **{intake.DAY_HEADROOM}**" in morning and "if it would pass 60" in morning
+    assert "give it a day of its own" not in morning      # a send cannot be split
     resend = _flat(_section(_launch(), "2."))
     assert f"reach **{intake.DAY_HEADROOM}**" in resend
     assert "`EMAIL_DAILY_HEADROOM` = `1500`" in resend
