@@ -109,6 +109,7 @@ TURF_TINT = "#DFF0E4"
 CHIP_OK = "#E3F2E8"       # turf on this: 4.62:1
 CHIP_DUE = "#F9E6E1"      # brick on this: 4.72:1
 ON_NAVY = "#B9C2D0"       # text on navy: 9.31:1
+MUTED_ON_NAVY = "#8FA3BC" # the stamp on navy, as the web and the phone: 6.48:1
 LEAGUE_GOLD = "#F0B62A"   # only "League" in the lockup
 
 FONT = "Arial,Helvetica,sans-serif"
@@ -387,7 +388,7 @@ def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None
         f'<div style="font-family:{FONT};font-size:13px;line-height:1.45;color:{ON_NAVY};">'
         f'{meta_html}</div>'
         + (f'<div style="font-family:{FONT};font-size:12px;line-height:1.45;'
-           f'color:{ON_NAVY};padding-top:2px;">{esc(stamp)}</div>' if stamp else "")
+           f'color:{MUTED_ON_NAVY};padding-top:2px;">{esc(stamp)}</div>' if stamp else "")
         + '</td></tr>')
 
 
@@ -1494,8 +1495,9 @@ def _lineup_body(model: Mapping[str, Any]) -> str:
             f'<div style="padding:10px 0 4px 0;font-family:{FONT};color:{NAVY};">'
             f'<b style="font-family:{DISPLAY};font-size:28px;line-height:1;">'
             f'{esc(week["total"])}</b>'
-            f'<span style="font-size:11px;font-weight:bold;text-transform:uppercase;'
-            f'letter-spacing:1px;color:{SLATE};"> proj</span>&nbsp; '
+            # The same lowercase unit as "realistic range" beside it, as the
+            # web report and the landing's phone print it (contract C8).
+            f'<span style="font-size:12px;color:{SLATE};"> proj</span>&nbsp; '
             f'<b style="font-size:15px;color:{INK2};white-space:nowrap;">{esc(week["range"])}</b>'
             f'<span style="font-size:12px;color:{SLATE};"> {esc(week["range_label"])}</span></div>')
     elif model.get("gate"):

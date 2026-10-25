@@ -334,3 +334,13 @@ def test_the_storyline_still_starts_and_ends_on_the_opened_email() -> None:
         first = re.match(r"\s*0%[^{]*\{([^}]*)\}", body).group(1)
         last = re.search(r"100%\{([^}]*)\}\s*$", body).group(1)
         assert "transform:none" in first and "transform:none" in last, name
+
+
+def test_the_inbox_game_plan_is_drawn_as_the_email_draws_it() -> None:
+    """Integration truth check (Oct 25 2026): the landing's "Your Game Plan"
+    card tinted its move like card 01's "Set this lineup" box, while the
+    email, the web report and How it works draw the plan's moves as hairline
+    rows — only card 01's one task is tinted. The inbox card follows the
+    email."""
+    rule = re.search(r"\n  \.rows \.cbody \.task\{([^}]*)\}", CSS).group(1)
+    assert "background" not in rule and "border-top:1px solid #EEEAE1" in rule

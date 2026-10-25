@@ -381,3 +381,18 @@ def test_the_saturday_and_roster_emails_open_like_the_report() -> None:
     roster = email_html(roster_report())
     assert lockup in roster and "border-radius:12px" in roster
     assert not re.search(r"border-left:[34]px", check + roster)
+
+
+def test_the_email_week_line_and_stamp_look_like_the_phones(w10: dict) -> None:
+    """Integration truth check (Oct 25 2026), side by side at 390px: the
+    email printed its week unit as "PROJ" in letterspaced capitals beside a
+    lowercase "realistic range", and its stamp in the meta line's #B9C2D0,
+    while the web report and the landing's phone print "proj" lowercase like
+    its neighbour and the stamp muted (#8FA3BC). One report, one look."""
+    email = render_email(w10)
+    week = re.search(r'126\.1</b><span style="([^"]*)"> proj</span>', email)
+    assert week, "the week line's unit is not the plain lowercase 'proj'"
+    assert "uppercase" not in week.group(1) and "font-size:12px" in week.group(1)
+    stamp = anatomy.masthead(w10)["stamp"]
+    assert f'color:#8FA3BC;padding-top:2px;">{html.escape(stamp)}</div>' in email
+    assert ".mstamp{" in TEMPLATE and "color:#8FA3BC" in TEMPLATE.split(".mstamp{", 1)[1][:120]

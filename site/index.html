@@ -546,9 +546,11 @@
     font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;line-height:1.2;}
   .rows .card .eyebrow .n{color:var(--flag);font-variant-numeric:tabular-nums;}
   .rows .cbody{padding:16px;}
-  .rows .cbody .task{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:#FBF3D9;
-    border:1px solid #EBDDAE;border-radius:8px;}
-  .rows .cbody .task + .task{margin-top:8px;}
+  /* The game plan's moves are hairline rows, as the email and the web report
+     draw them; only card 01's one "Set this lineup" box is tinted. */
+  .rows .cbody .task{display:flex;gap:12px;align-items:flex-start;padding:12px 0;
+    border-top:1px solid #EEEAE1;}
+  .rows .cbody .task:first-child{border-top:0;padding-top:0;}
   .rows .cbody .task .box{flex:none;width:18px;height:18px;margin-top:2px;border:1.5px solid var(--navy);
     border-radius:4px;background:#fff;}
   .rows .cbody .tb{display:block;font-size:16px;line-height:1.4;color:var(--navy);}
