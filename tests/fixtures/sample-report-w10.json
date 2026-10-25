@@ -164,6 +164,7 @@
    "action": "Set this lineup",
    "deadline": "before this week's first kickoff",
    "detail": "QB Josh Allen · RB Saquon Barkley · RB Bijan Robinson · WR Amon-Ra St. Brown · WR Ja'Marr Chase · TE George Kittle · FLEX Tony Pollard · K Jake Bates · DEF Denver Broncos",
+   "kind": "set_lineup",
    "urgency": "now"
   },
   {
@@ -480,7 +481,7 @@
     "reason": "the subscriber's league is not read (PLAN §0), so no opponent lineup, fragility, waiver market, league hype or last-week result is computable"
    }
   ],
-  "generated_at": "2026-10-25T17:01:07+00:00",
+  "generated_at": "2026-10-25T17:56:26+00:00",
   "historical_demo": true,
   "last_week": 18,
   "league_id": "typed-ppr-12-2024",
