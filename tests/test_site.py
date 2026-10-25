@@ -3631,7 +3631,12 @@ def _funnel_pages() -> dict[str, str]:
             "this-week (live sample)": VIA_SCRIPT,
             # FUNNEL F5 / BE2-D1: the published samples carry it too
             # (render/sample.page), from the live sample's one script.
-            "sample-report": SAMPLE_REPORT, "sample-first-week": FIRST_WEEK_SAMPLE}
+            "sample-report": SAMPLE_REPORT, "sample-first-week": FIRST_WEEK_SAMPLE,
+            # The free bye-week planner (contract C7) and the four league-app
+            # pages (render/platforms.py, built with VIA_SCRIPT).
+            "byes": (SITE / "byes" / "index.html").read_text(encoding="utf-8"),
+            **{app: (SITE / app / "index.html").read_text(encoding="utf-8")
+               for app in ("espn", "yahoo", "sleeper", "cbs")}}
 
 
 def test_a_tag_survives_the_detour_through_the_sample_report(monkeypatch) -> None:
@@ -3717,6 +3722,10 @@ def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
         ("sample-report.html", "x", "sample-report.html?via=x"),
         ("../sample-report.html", "x", "../sample-report.html?via=x"),
         ("sample-first-week.html", "x", "sample-first-week.html?via=x"),
+        # The bye-week planner is a funnel page too (contract C7).
+        ("byes/", "x", "byes/?via=x"),
+        ("../byes/", "x", "../byes/?via=x"),
+        ("byes/index.html?ref=s4-abc", "x", "byes/index.html?ref=s4-abc&via=x"),
         # Not a page that reads it, not ours, or already tagged: untouched.
         ("terms.html#cancel", "x", "terms.html#cancel"),
         ("compare/index.html", "x", "compare/index.html"),
