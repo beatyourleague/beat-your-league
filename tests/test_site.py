@@ -4513,13 +4513,18 @@ def test_every_page_links_its_own_type_and_preloads_what_exists(name: str) -> No
     Times flash)."""
     page = (SITE / name).read_text(encoding="utf-8")
     prefix = "/" if name == "404.html" else "../" * name.count("/")
-    assert f'<link rel="stylesheet" href="{prefix}fonts/fonts.css">' in page
+    # The landing carries fonts.css's own rules inline instead (Oct 24 2026:
+    # the linked sheet was a render-blocking round trip that held the first
+    # paint); tests/test_polish_landing.py holds that copy to the file.
+    if name != "index.html":
+        assert f'<link rel="stylesheet" href="{prefix}fonts/fonts.css">' in page
     preloads = re.findall(r'<link rel="preload" href="([^"]+)" as="font" '
                           r'type="font/woff2" crossorigin>', page)
     assert 1 <= len(preloads) <= 2, f"{name} preloads {len(preloads)} faces"
     for href in preloads:
         assert (FONTS / href.rsplit("/", 1)[1]).is_file() and href.startswith(prefix + "fonts/")
-    assert not re.search(r"font-family:\s*'Barlow", _style(page).split("--sans:", 1)[1]), \
+    rules = re.sub(r"@font-face\{[^}]*\}", "", _style(page))
+    assert not re.search(r"font-family:\s*'Barlow", rules.split("--sans:", 1)[1]), \
         f"{name} sets Barlow without its fallback stack"
 
 
@@ -4554,18 +4559,30 @@ def test_the_hero_report_is_on_screen_from_the_first_frame() -> None:
     header with an EMPTY body (rows held at opacity 0), then an inbox for two
     seconds; the rows reached full opacity at ~2.6s — the page's proof arrived
     last. The hero card is no longer an animated card, nothing in the CSS can
-    hide the open email, and the motion is additive: the notification drops in
-    over the open report."""
+    hide the open email, and the motion is additive. Since Oct 24 2026 that
+    motion is the Tuesday storyline (lock screen, the email, the open report),
+    and it may not start until the decided report has held the screen for at
+    least three seconds: .story is added only inside start(), and start() is
+    reached only through a setTimeout of 3000ms or more, or the visitor's own
+    press of the play toggle. Its first frame is the decided report too."""
     hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
     card = re.search(r'<div class="([^"]*)" id="hero-card"', hero).group(1)
     assert "anim" not in card.split(), "the hero card is held back until it animates"
     css = _style(LANDING)
     assert not re.search(r"\.screen[^{]*#hero-card[^{]*\{[^}]*opacity:\s*0", css)
     assert ".opened" not in css and 'classList.remove("opened")' not in LANDING
-    arrive = _js_function(LANDING, "arrive")
-    assert 'notif.classList.add("go")' in arrive
+    story = _js_function(LANDING, "storyline")
+    assert story.count('classList.add("story")') == 1
+    start = story.split("const start = () => {")[1].split("\n  };")[0]
+    assert 'classList.add("story")' in start, ".story is added outside start()"
+    calls = re.findall(r"\bstart\(\)", story)
+    timed = re.findall(r"setTimeout\(\(\) => \{ wait = 0; start\(\); \}, (\d+)\)", story)
+    assert timed and all(int(ms) >= 3000 for ms in timed), timed
+    clicked = story.split('toggle.addEventListener("click"')[1].split("});")[0]
+    assert len(calls) == len(timed) + clicked.count("start()"), \
+        "start() is reached some other way than the dwell timer or the toggle"
     for gone in ("heroCard", "mailrow", "play("):
-        assert gone not in arrive, f"the arrival sequence still drives {gone}"
+        assert gone not in story, f"the storyline still drives {gone}"
 
 
 def test_the_status_bar_clears_the_island_at_every_phone_size() -> None:
@@ -4578,9 +4595,12 @@ def test_the_status_bar_clears_the_island_at_every_phone_size() -> None:
     island = re.search(r"\.island\{([^}]*)\}", css).group(1)
     width = re.search(r"width:(\d+)%", island)
     assert width, "the island is sized in pixels again"
-    bar = re.search(r"\.statusbar\{([^}]*)\}", css).group(1)
-    assert f"grid-template-columns:1fr {width.group(1)}% 1fr" in bar
-    assert re.search(r"\.statusbar \.icons\{[^}]*grid-column:3", css)
+    # The lock screen's status bar (Oct 24 2026 storyline) keeps the same
+    # three columns, so its icons clear the island too.
+    for name in ("statusbar", "lk-status"):
+        bar = re.search(r"\." + name + r"\{([^}]*)\}", css).group(1)
+        assert f"grid-template-columns:1fr {width.group(1)}% 1fr" in bar, name
+        assert re.search(r"\." + name + r" \.icons\{[^}]*grid-column:3", css), name
 
 
 def test_reduced_motion_never_glides_the_page() -> None:
