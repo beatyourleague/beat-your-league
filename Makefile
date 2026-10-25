@@ -5,7 +5,8 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
-        og brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes
+        og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
+        platforms
 
 week:
 	$(PY) -m run.week
@@ -260,6 +261,13 @@ sample:
 og:
 	$(PY) -m render.og
 
+# This week's share card (site/og/this-week-SSSS-wNN.png) from site/week.json's
+# recorded closest call, and this-week.html's preview tags pointed at it.
+# weekly.yml's secretless share-card job runs it every Tuesday; it refuses
+# (exit 0, the site's own card stays) for a toss-up or an unrecorded call.
+og-week:
+	$(PY) -m render.og --week
+
 # The two PNGs Stripe's branding settings take. Same mark as every page, so
 # there is no second drawing of the logo to drift from the first. Committed;
 # CI never renders one.
@@ -313,6 +321,12 @@ index:
 # Refuses to write a partial bye list. `--check` fails if either is stale.
 byes:
 	$(PY) -m render.bye_index --season $(SEASON)
+
+# The four league-app pages (site/espn|yahoo|sleeper|cbs/), generated from one
+# table. Re-run whenever CHECKOUT_OPEN flips or render.live_sample.VIA_SCRIPT
+# changes; `--check` (CI runs it) fails until then.
+platforms:
+	$(PY) -m render.platforms
 
 # Grade first, then draft: a Receipts post written before settlement is a
 # post about games that have not finished.

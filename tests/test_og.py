@@ -69,7 +69,14 @@ def test_every_public_page_carries_the_card(page: Path) -> None:
     """Including the generated ones. A page whose og:image is missing renders on
     X as a grey box with a domain in it, which reads as a link to be wary of."""
     text = page.read_text(encoding="utf-8")
-    assert f'<meta property="og:image" content="{OG_IMAGE}">' in text
+    # this-week.html may carry the week's own share card (G2, render.og --week,
+    # drawn by weekly.yml's share-card job): then that card must exist.
+    week = re.search(r'<meta property="og:image" content="https://beatyourleague\.com/og/'
+                     r'(this-week-\d{4}-w\d{2}\.png)">', text)
+    if page.name == "this-week.html" and week:
+        assert (SITE / "og" / week.group(1)).is_file(), week.group(1)
+    else:
+        assert f'<meta property="og:image" content="{OG_IMAGE}">' in text
     assert '<meta name="twitter:card" content="summary_large_image">' in text, (
         "summary crops a 1.91:1 card to a small square thumbnail, which throws "
         "away the file card that is the whole point of having an image")

@@ -66,3 +66,5 @@ jobs:
       # nobody produced. `--check` writes nothing and fails if it has drifted.
       - name: Check the published backtest page is not stale
         run: .venv/bin/python -m render.backtest_site --check
+      - name: Check the league-app pages are not stale
+        run: .venv/bin/python -m render.platforms --check

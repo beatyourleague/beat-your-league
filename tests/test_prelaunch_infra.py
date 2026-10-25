@@ -404,7 +404,8 @@ def test_checkout_never_leaves_the_push_token_behind() -> None:
             run = str(step["run"])
             assert helper in run, name
             assert run.index("credential.helper") < run.index("pull --rebase"), name
-    assert checkouts == len(_docs()) and pushers == 6
+    # weekly.yml's share-card job (G2) is a second checkout and pusher there.
+    assert checkouts == len(_docs()) + 1 and pushers == 7
 
 
 def test_subscriber_state_is_cached_and_uploaded_only_sealed() -> None:
@@ -513,7 +514,8 @@ def test_the_crons_install_only_the_hash_locked_runtime_set() -> None:
         assert "--require-hashes" in command, name
         lock = "requirements-dev.lock" if name == "test.yml" else "requirements.lock"
         assert f"-r {lock}" in command, (name, command)
-    assert installs == len(_docs()) - 1          # pages.yml installs nothing
+    # pages.yml installs nothing; weekly.yml's share-card job installs too.
+    assert installs == len(_docs())
 
 
 def test_the_crons_that_rebuild_a_page_commit_its_fresh_headers() -> None:

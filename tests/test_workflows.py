@@ -391,8 +391,14 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     assert hours[1] - hours[0] <= 8, \
         f"the retry is {hours[1] - hours[0]}h later — subscribers expect Tuesday"
     # And it must be the SAME job, so the retry cannot drift from the send.
-    assert text.count("runs-on:") == 1, \
+    # The one other job is the secretless share card (G2), which sends
+    # nothing: it draws a PNG after the send and commits only that.
+    yaml = pytest.importorskip("yaml")
+    jobs = yaml.safe_load(text)["jobs"]
+    assert list(jobs) == ["week", "share-card"] and text.count("runs-on:") == 2, \
         "the retry became a second job — one definition, or they will diverge"
+    assert "-m run.tuesday" not in str(jobs["share-card"]), \
+        "the share-card job must never send"
 
 
 def test_the_report_refuses_a_week_whose_box_scores_are_missing() -> None:

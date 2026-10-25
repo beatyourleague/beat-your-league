@@ -415,8 +415,9 @@ weekly report. Press Cancel on the test page and confirm "no further charges".
 
 It needs nothing from steps 1–4. One Cloudflare Worker (in the same account as the domain)
 switches on:
-- **The email list** on the homepage and join page. Until then the form opens the visitor's
-  own email app, or, on a computer without one, asks them to email hello@ by hand.
+- **The email list** on the homepage, the join page and the bye-week planner. Until then
+  the form opens the visitor's own email app, or, on a computer without one, asks them to
+  email hello@ by hand.
 - **League Pass seats**, and each payer's own seat link.
 - **"Roster changed?" in every report**, self-serve: the subscriber pastes the new roster, we
   email the address on the subscription a button to confirm, and the next report uses it.
@@ -466,7 +467,8 @@ nothing: every row is checked before it reaches the subscriber list.
    free-report step reads the forms with `LOG_SECRET`, so without it every run goes red.
    (`SITE_URL`, from step 3, builds the seat links.)
 7. **Tell me it's live.** I wire `https://forms.beatyourleague.com/rows` into the homepage
-   form and the join, confirm and League Pass pages, switch on the League Pass button and the
+   form, the bye-week planner (`site/byes/`, its `NOTIFY_LIST_ENDPOINT`) and the join,
+   confirm and League Pass pages, switch on the League Pass button and the
    FAQ's roster answer, and — once email sends (step 2) — the "Try it free" button
    (`TRIAL_OPEN`, on the homepage and the join page). **The day I tell you that button is on,
    set the Worker's own switch:** Worker → **Settings → Variables → Add** `TRIAL_OPEN` =
@@ -624,7 +626,9 @@ The order is PLAN §5.1's — subscribers per hour of your time.
    `make stats` shows what came from them. A revenue share is section 10's call.
 5. **Discords and group chats.** Ask a mod before mentioning the product. When someone asks
    what to use, paste this week's sample (`beatyourleague.com/this-week.html`) or the
-   pinned one (`/sample-report.html`) with one line of answer.
+   pinned one (`/sample-report.html`) with one line of answer. When someone asks about byes
+   or playoff weeks and the server allows links, the planner (`beatyourleague.com/byes/`) is
+   the link to share — it sells nothing.
 6. **X replies, about 20 minutes a day.** Answer real start/sit questions with the product's
    own facts:
    ```bash
