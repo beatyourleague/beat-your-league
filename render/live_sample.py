@@ -49,6 +49,18 @@ without recording.
 When the week cannot be built (a data outage, the offseason) the previous page
 stays up and this exits 0: a stale-but-labelled sample beats a cron failure
 that files an issue every week of the offseason.
+
+**The season clock carries the recorded closest call (contract C9, Oct 2026;
+the lead's specs call it C6, a label the waitlist ref already uses in code).**
+site/week.json gains ``closest`` — the week's closest call exactly as the
+ledger holds it, with the names as a manager says them — written ONLY by a
+build that recorded the week and only before its first kickoff, and computed
+from ``recorded_only`` so the % is the ledger's, never this build's. The
+landing's proof strip and the weekly share card (render/og.py --week) read it
+instead of retyping a number; absent means show nothing. It also gains
+``byes_left`` (any NFL bye still to come this season), so a page offering the
+free bye-week planner can stand down once there is nothing left to plan.
+Withholding only: no probability is made or moved here.
 """
 
 from __future__ import annotations
@@ -62,8 +74,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from engine.subscriber import RosterSpec
-from render.report import (JOIN_PROMISE, SAMPLE_CTA_CLOSED, TEMPLATE_PATH,
-                           before_counter, esc, render, sample_cta)
+from render.report import (JOIN_PROMISE, SAMPLE_CTA_CLOSED, TEMPLATE_PATH, _pct,
+                           before_counter, esc, regret_tossup, render, sample_cta)
 from render.sample import SLOTS
 from run.solo import CACHE_DIR, SeasonOver, SoloError, load_week_data, report_for
 
@@ -526,9 +538,136 @@ def next_report_day(cache_dir: Path, season: str, week: int) -> str | None:
     return _day(cache_dir, season, week)
 
 
+# --------------------------------------------------------------------- #
+# the recorded closest call, for the clock (contract C9)
+# --------------------------------------------------------------------- #
+
+# Exactly the keys the clock's ``closest`` carries. The landing's proof strip
+# reads start/over/slot/pct/start_proj/over_proj/label (the lead's contract);
+# the share card and the launch check read the rest.
+CLOSEST_KEYS = ("season", "week", "slot", "start", "over", "start_id", "over_id",
+                "start_short", "over_short", "pct", "proj", "start_proj", "over_proj",
+                "label", "tossup", "kickoff", "recorded")
+_PROJ_PAIR = re.compile(r"\s*(\d+(?:\.\d+)?)\s+vs\s+(\d+(?:\.\d+)?)\s*")
+
+
+def _utc_stamp(at: datetime) -> str:
+    return at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def closest_for_clock(report: Mapping[str, Any], teams: Mapping[str, str],
+                      starts: Mapping[str, datetime]) -> dict | None:
+    """The week's closest call as the season clock carries it, or None when
+    the report has none with odds (a gate, or a % ``recorded_only`` withheld).
+
+    Pass the report through ``recorded_only`` first: then the % is the
+    ledger's. Every value is the report's own, verbatim — the names, the
+    printed integer (render.report._pct, the card's own rounding), the
+    projection pair as the card's "proj" chip prints it — plus the pair
+    shortened the way run/drops.py asks it (``short_names``) and the earlier of
+    the two players' kickoffs (null unless both are known). ``teams`` maps a
+    player id to his team this week, ``starts`` a team to its kickoff."""
+    regret = report.get("regret") or {}
+    if "gate" in regret or regret.get("confidence") is None:
+        return None
+    meta = report["meta"]
+    start, over = str(regret["start_name"]), str(regret["over_name"])
+    start_id, over_id = str(regret["start_id"]), str(regret["over_id"])
+    from run.drops import short_names
+    start_short, over_short = short_names(start, over)
+    proj = next((str(d.get("value")) for d in regret.get("drivers") or []
+                 if d.get("label") == "proj" and d.get("value")), None)
+    pair = _PROJ_PAIR.fullmatch(proj) if proj else None
+    kicks = [starts.get(teams.get(pid, "")) for pid in (start_id, over_id)]
+    kickoff = _utc_stamp(min(kicks)) if all(kicks) else None
+    closest = {
+        "season": str(meta["season"]), "week": int(meta["week"]),
+        "slot": str(regret.get("slot") or ""),
+        "start": start, "over": over, "start_id": start_id, "over_id": over_id,
+        "start_short": start_short, "over_short": over_short,
+        "pct": _pct(float(regret["confidence"])),
+        "proj": proj,
+        "start_proj": pair.group(1) if pair else None,
+        "over_proj": pair.group(2) if pair else None,
+        "label": regret.get("label") or None,
+        "tossup": bool(regret_tossup(regret)),
+        "kickoff": kickoff, "recorded": True,
+    }
+    return closest
+
+
+def closest_from_clock(clock: Mapping[str, Any]) -> dict | None:
+    """The clock's closest call when a reader may use it, else None: present,
+    a dict with every key, ``recorded`` true at both levels, and naming the
+    clock's own season and week. Missing or malformed means absent — the
+    same rule the landing's strip and the share card apply."""
+    closest = clock.get("closest") if isinstance(clock, Mapping) else None
+    if not isinstance(closest, dict) or set(closest) != set(CLOSEST_KEYS):
+        return None
+    if clock.get("recorded") is not True or closest.get("recorded") is not True:
+        return None
+    if (str(closest.get("season")) != str(clock.get("season"))
+            or closest.get("week") != clock.get("week")
+            or not isinstance(closest.get("pct"), int)):
+        return None
+    return closest
+
+
+def closest_problems(clock: Mapping[str, Any], processed_dir: Path = PROCESSED_DIR) -> list[str]:
+    """What is wrong with the clock's closest call, for the launch check's
+    "This week's closest call is on the record" gate: [] when there is none or
+    when the ledger store this sample records into (typed-ppr-12-<season>)
+    holds that exact call — same season, week, slot, pick and alternative —
+    at a confidence that prints as the same integer. A closest call the
+    landing would quote with nothing on the record is a published
+    probability nothing grades."""
+    if "closest" not in clock:
+        return []
+    closest = clock.get("closest")
+    problems = []
+    if clock.get("recorded") is not True:
+        problems.append("week.json carries a closest call for a week it does not mark recorded")
+    if closest_from_clock({**clock, "recorded": True}) is None:
+        problems.append("week.json's closest call is malformed, unrecorded or names another week")
+        return problems
+    from engine.ledger import LedgerError, ledger_path, load_ledger
+    store = f"typed-ppr-12-{closest['season']}"
+    try:
+        held = load_ledger(ledger_path(Path(processed_dir), store))
+    except (LedgerError, OSError) as exc:
+        return problems + [f"the ledger store {store} could not be read ({exc})"]
+    match = [c for c in held
+             if str(c.season) == closest["season"] and int(c.week) == closest["week"]
+             and c.slot == closest["slot"] and c.pick_id == closest["start_id"]
+             and c.over_id == closest["over_id"]]
+    if not match:
+        problems.append(f"{store} holds no call {closest['start']} over {closest['over']} "
+                        f"({closest['slot']}, week {closest['week']})")
+    elif not any(_pct(c.confidence) == closest["pct"] for c in match):
+        problems.append(f"{store} holds {closest['start']} over {closest['over']} at "
+                        f"{_pct(match[0].confidence)}%, not the {closest['pct']}% week.json says")
+    return problems
+
+
+def byes_left_after(cache_dir: Path, season: str, week: int) -> bool | None:
+    """Is any NFL bye still to come after ``week``? None when the schedule
+    cannot say (the clock then omits ``byes_left`` and readers treat it as
+    unknown, never as "no byes left")."""
+    try:
+        from engine.preseason import bye_by_team
+        byes = bye_by_team(Path(cache_dir), str(season))
+    except Exception:  # noqa: BLE001 — unknown, not "none left"
+        return None
+    if not byes:
+        return None
+    return any(int(bye) > int(week) for bye in byes.values())
+
+
 def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
-                    after_kickoff: bool = False, phase: str = "season") -> None:
+                    after_kickoff: bool = False, phase: str = "season",
+                    closest: Mapping[str, Any] | None = None,
+                    byes_left: bool | None = None) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -547,11 +686,17 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     Each is written only when true, so an ordinary week's clock is unchanged.
 
     ``phase`` is "season" here: a week was built. The two offseason clocks are
-    written by ``write_clock`` (D9)."""
+    written by ``write_clock`` (D9).
+
+    ``closest`` (``closest_for_clock``) is written ONLY when this week is
+    recorded and the page was built before kickoff (contract C9): absent, the
+    landing's strip and the share card show nothing. ``byes_left`` is
+    written when known."""
     import json
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
                if slot.get("confidence") is not None)
+    keep_closest = recorded and not after_kickoff and closest is not None
     path.write_text(json.dumps({
         "season": meta["season"], "week": meta["week"],
         "last_week": meta.get("last_week"), "lands_on": lands_on,
@@ -564,6 +709,8 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         **({"recorded": True} if recorded else {}),
         **({"after_kickoff": True} if after_kickoff else {}),
         "phase": phase,
+        **({"closest": dict(closest)} if keep_closest else {}),
+        **({"byes_left": bool(byes_left)} if byes_left is not None else {}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
@@ -690,6 +837,9 @@ def restamp_last(page: str, *, season_over: bool = True) -> str:
     card = (f"This is the {season} season&#x27;s last report, for a sample roster. "
             + esc(NEXT_SEASON if season_over else JOIN_PROMISE))
     page = _CARD.sub(lambda m: m.group(1) + card + m.group(3), page, count=1)
+    if season_over:
+        # No bye is left to plan once the season is over (G6).
+        page = with_planner_line(page, False)
     return _with_share(page, title, desc)
 
 
@@ -707,6 +857,72 @@ def _with_share(page: str, title: str, desc: str) -> str:
 
 
 # --------------------------------------------------------------------- #
+# the free planner, offered where a visitor can't buy yet (G6)
+# --------------------------------------------------------------------- #
+
+# Contract C7: the planner lives at /byes/; a page at the site root links it
+# as "byes/". Every sample is at the root.
+PLANNER_HREF = "byes/"
+PLANNER_LINE_TEXT = "Free while you wait: check your roster's byes through Week 17"
+_PLANNER_LINE = re.compile(r'<p class="plannerline"[^>]*>.*?</p>', re.S)
+# The closing card (render.report.demo_band): its text, then its one button.
+_CTACARD = re.compile(r'(<div class="ctacard">.*?)(</div>)', re.S)
+
+
+def planner_line_html() -> str:
+    """One line under the closing card's button, in the card's own link
+    style (gold on navy, .ctacard a). Its own top margin, since the card's
+    paragraphs are spaced for a line ABOVE a button; the link is padded to a
+    24px target."""
+    return (f'<p class="plannerline" style="margin:14px auto 0;"><a href="{PLANNER_HREF}" '
+            f'style="display:inline-block;padding:3px 0;">{esc(PLANNER_LINE_TEXT)}</a></p>')
+
+
+def show_planner_line(byes_left: bool | None = None, phase: str | None = None) -> bool:
+    """While checkout is closed (render.report.checkout_open, the landing's
+    flag) a sample's only ask is "Tell me when it opens", so a visitor who
+    can't buy yet is offered the free planner — never once the pass can be
+    bought, never once the season is over, and never when the schedule says
+    no bye is left (``byes_left`` False; unknown keeps it)."""
+    from render import report as report_module
+    return (not report_module.checkout_open() and phase != "over"
+            and byes_left is not False)
+
+
+def with_planner_line(page: str, show: bool) -> str:
+    """``page`` with the planner line inside its closing card, after the
+    button, exactly once — or with none. Idempotent; a page with no closing
+    card is returned without one."""
+    page = _PLANNER_LINE.sub("", page)
+    if not show:
+        return page
+    return _CTACARD.sub(lambda m: m.group(1) + planner_line_html() + m.group(2),
+                        page, count=1)
+
+
+# The ?via= carry as a published page holds it (with_via_carry), so a restamp
+# can bring an older page's copy up to VIA_SCRIPT without a rebuild — the one
+# function every funnel page must hold character for character.
+_VIA_BLOCK = re.compile(r'<script>\n"use strict";\n// A cookie-free source tag \(\?via='
+                        r'<channel>\), carried onto the links below\.\n.*?</script>\n', re.S)
+
+
+def with_current_via(page: str) -> str:
+    """The page's tag-carry script swapped for today's VIA_SCRIPT (a page that
+    has none is left alone: adding one is a rebuild's job)."""
+    return _VIA_BLOCK.sub(lambda _m: VIA_SCRIPT, page, count=1)
+
+
+def clock_hints(path: Path | None = None) -> tuple[bool | None, str | None]:
+    """(byes_left, phase) from site/week.json, for a restamp: what the season
+    clock says TODAY, which is what a planner offer is about."""
+    clock = read_week_json(path or LIVE_OUT.with_name("week.json"))
+    byes = clock.get("byes_left")
+    return (byes if isinstance(byes, bool) else None,
+            str(clock["phase"]) if clock.get("phase") else None)
+
+
+# --------------------------------------------------------------------- #
 # a published page's chrome follows what the site sells today (D1, QA-01)
 # --------------------------------------------------------------------- #
 
@@ -721,12 +937,16 @@ _NEW_SOURCE = ("Aggregated and scored by us under the scoring you chose (full PP
                "half PPR or standard).")
 
 
-def restamp_chrome(page: str) -> str:
+def restamp_chrome(page: str, *, byes_left: bool | None = None,
+                   phase: str | None = None) -> str:
     """A published sample with today's chrome and nothing else moved: the
     site nav, both asks (sample_cta, which follows the landing's
     CHECKOUT_OPEN), the closing card's promise, and the footer's way out
     (render.report.stop_route — while the site sells one-time passes, the
-    one-payment stop route). No number, banner, stamp or row is touched.
+    one-payment stop route), the free planner's line under the closing
+    card's button while checkout is closed (G6; ``byes_left`` and ``phase``
+    are today's clock, ``clock_hints``), and the ?via= carry script as
+    VIA_SCRIPT holds it today. No number, banner, stamp or row is touched.
 
     Why it exists: the cron builds this page from whatever origin/main holds,
     and the Oct 20 build ran from code that predated the one-time passes —
@@ -760,6 +980,8 @@ def restamp_chrome(page: str) -> str:
                   page, count=1)
     page = re.sub(r"the lineup we(?:&#x27;|')d set, with odds on \d+ of its \d+ slots",
                   "every slot decided", page)
+    page = with_planner_line(page, show_planner_line(byes_left, phase) and not over)
+    page = with_current_via(page)
     # The page counter is chrome too (contract C1): a page built before it
     # existed is counted from its next restamp, not its next rebuild.
     return with_counter(page)
@@ -826,9 +1048,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.restamp is not None:
         template = TEMPLATE_PATH.read_text(encoding="utf-8")
+        byes_left, phase = clock_hints(args.out.with_name("week.json"))
         for path in args.restamp or [args.out]:
             before = path.read_text(encoding="utf-8")
-            after = restamp_style(restamp_chrome(before), template)
+            after = restamp_style(restamp_chrome(before, byes_left=byes_left, phase=phase),
+                                  template)
             path.write_text(after, encoding="utf-8")
             print(f"{path}: chrome {'restamped' if after != before else 'already current'}")
         return 0
@@ -920,6 +1144,8 @@ def main(argv: list[str] | None = None) -> int:
     page = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
     page = with_thin_week(with_week_meta(page, report),
                           report["meta"].get("thin_week_note"))
+    byes_left = byes_left_after(CACHE_DIR, str(meta["season"]), int(meta["week"]))
+    page = with_planner_line(page, show_planner_line(byes_left))
     if kicked_off or already:
         # Stamped with the moment the report says it was built (the banner's
         # own clock), so the page states one build time, not two.
@@ -937,8 +1163,14 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:  # noqa: BLE001 — no date means the page says nothing new
         lands_on = None
     first_kickoff = first.strftime("%Y-%m-%dT%H:%M:%SZ") if first else None
+    # The clock's closest call (C9): only from a recorded week before kickoff,
+    # and through recorded_only, so the % is the one the ledger holds.
+    closest = (closest_for_clock(recorded_only(copy.deepcopy(report), args.processed_dir),
+                                 context.get("teams") or {}, starts)
+               if recorded and not kicked_off else None)
     write_week_json(report, week_json, lands_on, first_kickoff,
-                    recorded=recorded, after_kickoff=kicked_off)
+                    recorded=recorded, after_kickoff=kicked_off,
+                    closest=closest, byes_left=byes_left)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")

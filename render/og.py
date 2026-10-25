@@ -18,8 +18,19 @@ Rendered by headless Chrome because the page is real HTML with the site's own
 type and palette, and because the alternatives all lose something: there is no
 image library in requirements.txt (adding Pillow to draw one PNG a year is a
 dependency we would carry forever), and X does not render SVG previews at all.
-The PNG is COMMITTED. GitHub Pages serves it as a static file, so CI never needs
-a browser — regeneration is a local, deliberate act, like `make sample`.
+The PNG is COMMITTED. GitHub Pages serves it as a static file, and site/og.png
+is regenerated locally and deliberately, like `make sample`.
+
+**A second card IS rendered in CI: this week's (G2, Oct 2026).** Every Tuesday
+post links this-week.html, and its preview was og.png, whose alt describes a
+2024 lineup. ``python -m render.og --week`` draws the week's recorded closest
+call (site/week.json ``closest``, contract C9) as that page's preview, at
+site/og/this-week-<season>-wNN.png, in the weekly workflow's ``share-card``
+job — a job with NO secrets, after the job that holds the registry has
+finished, using the runner image's own Chrome. It refuses (exit 0, nothing
+drawn, the page keeps og.png) unless the call is recorded at both levels, is
+not a toss-up, and the page's own closest-call card prints the same verdict,
+percentage and projection — so the card can only ever repeat the page.
 """
 
 from __future__ import annotations
@@ -465,12 +476,278 @@ def _shown(path: Path) -> str:
         return str(path)
 
 
+# --------------------------------------------------------------------- #
+# this week's card (G2): the recorded closest call, as this-week.html's preview
+# --------------------------------------------------------------------- #
+
+WEEK_DIR_NAME = "og"
+_WEEK_CARD = re.compile(r"^this-week-\d{4}-w\d{2}\.png$")
+# The section of this-week.html the card must match, by the heading the
+# report prints over it (render.report.section_regret).
+_CLOSEST_HEADS = ("The Week&#x27;s Closest Call", "The Week's Closest Call")
+
+
+def week_card_name(closest: dict) -> str:
+    return f"this-week-{closest['season']}-w{int(closest['week']):02d}.png"
+
+
+def week_card_url(closest: dict) -> str:
+    from render.report import SITE_ORIGIN
+    return f"{SITE_ORIGIN}/{WEEK_DIR_NAME}/{week_card_name(closest)}"
+
+
+def week_card_alt(closest: dict) -> str:
+    """The card's alt text, said as the card says it."""
+    return (f"Week {closest['week']}'s closest call with odds, for a sample roster: "
+            f"Start {closest['start']} over {closest['over']}, {closest['pct']}%.")
+
+
+def _closest_section(page: str) -> str | None:
+    for head in _CLOSEST_HEADS:
+        at = page.find(head)
+        if at >= 0:
+            end = page.find("</section>", at)
+            return page[at:end if end >= 0 else len(page)]
+    return None
+
+
+def week_card_problems(clock: dict, page: str) -> list[str]:
+    """Why this week's card may NOT be drawn ([] when it may): the clock must
+    carry a recorded closest call naming its own week (render.live_sample's
+    reader rule), not a toss-up (the card would say "start X" where the page
+    says "either is fine"), and this-week.html's own closest-call card must
+    print the same verdict, percentage and projection — escaped exactly as
+    the page escapes them. The card repeats the page or it is not drawn."""
+    from render.live_sample import closest_from_clock
+    closest = closest_from_clock(clock)
+    if closest is None:
+        return ["site/week.json carries no recorded closest call for its week"]
+    if closest.get("tossup") is not False:
+        return ["this week's closest call is a toss-up — the page says either is fine"]
+    section = _closest_section(page)
+    if section is None:
+        return ["this-week.html has no closest-call card"]
+    need = [f"Start {html.escape(closest['start'])} <span class=\"over\">over</span> "
+            f"{html.escape(closest['over'])}",
+            f'<div class="num">{closest["pct"]}%</div>']
+    if closest.get("proj"):
+        need.append(f"proj <b>{html.escape(str(closest['proj']))}</b>")
+    return [f"this-week.html's closest-call card does not print {figure!r}"
+            for figure in need if figure not in section]
+
+
+def _built_day(clock: dict) -> str | None:
+    """'Tue, Oct 20' — the day the page's report was built, in Eastern time."""
+    try:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        built = datetime.fromisoformat(str(clock.get("built_at")).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    local = built.astimezone(ZoneInfo("America/New_York")) if built.tzinfo else built
+    return f"{local:%a}, {local:%b} {local.day}"
+
+
+def _verdict_size(*lines: str) -> int:
+    """A font size at which the longer verdict line fits the card on one
+    line (Barlow Condensed 900 italic capitals run about half an em wide)."""
+    longest = max((len(line) for line in lines), default=1)
+    return max(40, min(88, int(1000 / (0.47 * longest))))
+
+
+def week_card_html(closest: dict, meta: dict) -> str:
+    """This week's card: the logo lockup, which week it is, the verdict, the
+    odds bar drawn from 50% beside the printed %, the projection chip when
+    the page prints one, and where it comes from. Text only — every value is
+    the clock's recorded call, escaped."""
+    from render.report import mark_svg
+    esc = html.escape
+    start = f"Start {closest['start']}"
+    over = str(closest["over"])
+    size = _verdict_size(start, f"over {over}")
+    pct = int(closest["pct"])
+    width = max(0, min(100, (pct - 50) * 2))
+    chip = (f'<span class="chip">proj <b>{esc(str(closest["proj"]))}</b></span>'
+            if closest.get("proj") else "")
+    built = _built_day(meta)
+    foot = ("The closest call with odds, for a sample roster"
+            + (f" · built {built}" if built else ""))
+    mark = mark_svg("ogw", "ogmark")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<style>{embedded_fonts()}</style>
+<style>
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  html,body{{width:{WIDTH}px;height:{HEIGHT}px;overflow:hidden;}}
+  body{{background:#05090F;color:#F6F4EE;font-family:'Barlow',Arial,sans-serif;
+    padding:44px 60px 40px;position:relative;display:flex;flex-direction:column;}}
+  body::before{{content:"";position:absolute;inset:0;
+    background:radial-gradient(1000px 560px at 80% 30%,rgba(242,194,48,.16),transparent 62%),
+               radial-gradient(760px 520px at 4% 100%,rgba(30,122,70,.18),transparent 68%);}}
+  .top,.card,.foot{{position:relative;}}
+  .top{{display:flex;align-items:center;justify-content:space-between;gap:24px;}}
+  .mark{{display:flex;align-items:center;gap:12px;}}
+  .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
+  .mark span{{font-family:'Barlow Condensed';font-weight:900;font-size:24px;
+    font-style:italic;letter-spacing:.01em;text-transform:uppercase;color:#F6F4EE;}}
+  .mark span .lg{{color:#F0B62A;}}
+  .kicker{{font-family:'Barlow Condensed';font-weight:800;font-size:19px;letter-spacing:.14em;
+    text-transform:uppercase;color:#F2C230;border:1.5px solid rgba(242,194,48,.55);
+    padding:8px 16px 7px;}}
+  .card{{margin:auto 0;background:#F6F4EE;color:#101E33;border:1px solid #D8D3C6;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.9),0 0 0 1px rgba(242,194,48,.22);}}
+  .head{{background:linear-gradient(180deg,#182A45,#101E33);color:#F6F4EE;padding:13px 30px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:18px;letter-spacing:.16em;
+    text-transform:uppercase;display:flex;justify-content:space-between;}}
+  .head span{{color:#F2C230;font-size:15px;letter-spacing:.12em;}}
+  .body{{padding:22px 30px 22px;}}
+  .verdict{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;
+    text-transform:uppercase;font-size:{size}px;line-height:.98;white-space:nowrap;}}
+  .verdict .over{{color:#5A6B80;font-size:.62em;letter-spacing:.02em;margin-right:.18em;}}
+  .conf{{display:flex;align-items:center;gap:26px;margin-top:14px;}}
+  .scale{{flex:1;}}
+  .bar{{height:18px;background:#EAE7DE;border:1px solid #D8D3C6;}}
+  .bar i{{display:block;height:100%;width:{width}%;
+    background:linear-gradient(90deg,#D9A81B,#F2C230);}}
+  /* The bar starts at 50%, as every bar in the report does: said on it, so a
+     reader in a timeline does not read a short bar as a weak call. */
+  .ticks{{display:flex;justify-content:space-between;margin-top:6px;font-size:14px;
+    font-weight:700;letter-spacing:.06em;color:#5A6B80;}}
+  .num{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:92px;
+    line-height:.9;font-variant-numeric:tabular-nums;}}
+  .chips{{margin-top:8px;min-height:34px;}}
+  .chip{{display:inline-block;font-size:17px;font-weight:800;letter-spacing:.07em;
+    text-transform:uppercase;color:#33445C;border:1px solid #D8D3C6;background:#fff;
+    padding:6px 12px;}}
+  .chip b{{color:#1E7A46;font-variant-numeric:tabular-nums;}}
+  .top{{margin-bottom:22px;}}
+  .foot{{margin-top:22px;display:flex;justify-content:space-between;align-items:baseline;
+    gap:24px;font-size:19px;color:#BCC9DB;font-weight:500;}}
+  .foot b{{font-family:'Barlow Condensed';font-weight:800;font-size:24px;letter-spacing:.06em;
+    color:#F2C230;}}
+</style></head>
+<body>
+  <div class="top">
+    <div class="mark">{mark}<span>Beat Your <span class="lg">League</span></span></div>
+    <div class="kicker">This week&#x27;s report · Week {int(closest['week'])} of {esc(str(closest['season']))}</div>
+  </div>
+  <div class="card">
+    <div class="head">The week&#x27;s closest call <span>{esc(str(closest.get('slot') or ''))}</span></div>
+    <div class="body">
+      <div class="verdict">{esc(start)}<br><span class="over">over</span>{esc(over)}</div>
+      <div class="conf"><div class="scale"><div class="bar"><i></i></div>
+        <div class="ticks"><span>50%</span><span>100%</span></div></div>
+        <div class="num">{pct}%</div></div>
+      <div class="chips">{chip}</div>
+    </div>
+  </div>
+  <div class="foot"><span>{esc(foot)}</span><b>beatyourleague.com</b></div>
+</body></html>
+"""
+
+
+def week_digest(card_html: str) -> str:
+    return hashlib.sha256(card_html.encode("utf-8")).hexdigest()
+
+
+_TAG = {"og:image": re.compile(r'<meta property="og:image" content="[^"]*">'),
+        "og:image:alt": re.compile(r'<meta property="og:image:alt" content="[^"]*">'),
+        "twitter:image": re.compile(r'<meta name="twitter:image" content="[^"]*">\n?')}
+
+
+def with_week_card(page: str, closest: dict | None) -> str:
+    """this-week.html's preview tags: the week's card (its absolute URL, its
+    alt, and a twitter:image beside them) or, with ``closest`` None, the
+    site's own card exactly as render.report.SOCIAL_IMAGE_TAGS states it."""
+    from render.report import OG_IMAGE, SOCIAL_IMAGE_TAGS
+    generic_alt = re.search(r'og:image:alt" content="([^"]*)"', SOCIAL_IMAGE_TAGS).group(1)
+    image = week_card_url(closest) if closest else OG_IMAGE
+    alt = html.escape(week_card_alt(closest), quote=True) if closest else generic_alt
+    page = _TAG["twitter:image"].sub("", page)
+    page = _TAG["og:image"].sub(lambda _m: f'<meta property="og:image" content="{image}">',
+                                page, count=1)
+    alt_tag = f'<meta property="og:image:alt" content="{alt}">'
+    twitter = f'\n<meta name="twitter:image" content="{image}">' if closest else ""
+    return _TAG["og:image:alt"].sub(lambda _m: alt_tag + twitter, page, count=1)
+
+
+def build_week_card(site: Path = SITE, chrome: str | None = None) -> tuple[str, str]:
+    """Draw this week's card and point this-week.html at it -> (outcome,
+    detail): "written", "current" (already drawn from the same source),
+    "refused" or "skipped" (no Chrome, or the render failed). Anything but a
+    card that matches the page leaves the page on the site's own card and no
+    week card on disk, so a stale week's card can never stand."""
+    import json
+    site = Path(site)
+    page_path = site / "this-week.html"
+    folder = site / WEEK_DIR_NAME
+    try:
+        clock = json.loads((site / "week.json").read_text(encoding="utf-8"))
+        page = page_path.read_text(encoding="utf-8")
+    except (OSError, ValueError) as exc:
+        return "refused", f"site/week.json or this-week.html unreadable ({exc})"
+    clock = clock if isinstance(clock, dict) else {}
+
+    def stand_down(outcome: str, detail: str) -> tuple[str, str]:
+        _clear_week_cards(folder, keep=None)
+        restored = with_week_card(page, None)
+        if restored != page:
+            page_path.write_text(restored, encoding="utf-8")
+        return outcome, detail
+
+    problems = week_card_problems(clock, page)
+    if problems:
+        return stand_down("refused", "; ".join(problems))
+    from render.live_sample import closest_from_clock
+    closest = closest_from_clock(clock)
+    card = week_card_html(closest, clock)
+    digest = week_digest(card)
+    out = folder / week_card_name(closest)
+    outcome = "current"
+    if not (out.is_file() and source_digest(out.read_bytes()) == digest):
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            render_png(card, out, WIDTH, HEIGHT, chrome=chrome)
+            out.write_bytes(stamp_source(out.read_bytes(), digest))
+        except OgError as exc:
+            out.unlink(missing_ok=True)
+            return stand_down("skipped", str(exc))
+        outcome = "written"
+    _clear_week_cards(folder, keep=out.name)
+    pointed = with_week_card(page, closest)
+    if pointed != page:
+        page_path.write_text(pointed, encoding="utf-8")
+    return outcome, f"{_shown(out)} · {week_card_alt(closest)}"
+
+
+def _clear_week_cards(folder: Path, keep: str | None) -> None:
+    """Delete every week card but ``keep``: only this week's may stand."""
+    if not folder.is_dir():
+        return
+    for old in folder.iterdir():
+        if _WEEK_CARD.match(old.name) and old.name != keep:
+            old.unlink()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(OUT))
     parser.add_argument("--check", action="store_true",
                         help="verify the committed card without rendering")
+    parser.add_argument("--week", action="store_true",
+                        help="draw this week's card for this-week.html from site/week.json")
+    parser.add_argument("--site", default=str(SITE), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+
+    if args.week:
+        # Never fails the run: a missing card means the page keeps og.png.
+        outcome, detail = build_week_card(Path(args.site))
+        if outcome in ("written", "current"):
+            print(f"this week's card: {outcome} — {detail}")
+        else:
+            print(f"::notice::this week's card was not drawn ({outcome}): {detail}. "
+                  f"this-week.html keeps the site's own card.")
+        return 0
 
     page = LANDING.read_text(encoding="utf-8")
     out = Path(args.out)

@@ -51,6 +51,15 @@ Rules, each because a post is the one place we speak without a report around it:
   workloads the report already prints — counts, no %.
 - **Nothing is posted for you.** Automated posting needs paid API access this
   project's budget does not include (CLAUDE.md, Phase 5); these are drafts.
+- **Two bye drafts, pure schedule fact** (G3, Oct 2026). Bye and playoff
+  questions peak mid-week and are the one topic a post can answer with no %,
+  nothing for Monday to grade and nothing near a bet: "NFL byes left" (every
+  team still to have one, by week, off the published schedule) and "Bye
+  check" (what the sample roster's own report found, ``byes_ahead``). Their
+  first reply is the free bye-week planner, which sells nothing — the link
+  Discords and no-links-in-replies rules tolerate best.
+- **Each week's link is its own URL** (``this-week.html?w=<week>``), so X
+  fetches a fresh preview card every week instead of last week's.
 """
 
 from __future__ import annotations
@@ -76,7 +85,9 @@ _SUFFIXES = frozenset({"jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"})
 _PARTICLES = frozenset({"st.", "st", "van", "von", "de", "del", "da", "la", "le"})
 
 
-def _surname(name: str) -> str:
+def surname(name: str) -> str:
+    """The word a manager calls a player by: "Harrison" for Marvin Harrison
+    Jr., "St. Brown" for Amon-Ra St. Brown."""
     parts = name.split()
     while len(parts) > 1 and parts[-1].lower() in _SUFFIXES:
         parts.pop()
@@ -85,11 +96,18 @@ def _surname(name: str) -> str:
     return parts[-1] if parts else name
 
 
-def _short_names(a: str, b: str) -> tuple[str, str]:
+def short_names(a: str, b: str) -> tuple[str, str]:
     """How a manager says the pair: surnames — unless that makes them the
-    same word (two St. Browns), when only the full names say which is which."""
-    short_a, short_b = _surname(a), _surname(b)
+    same word (two St. Browns), when only the full names say which is which.
+    ONE rule for every surface that shortens a pair: these drafts and the
+    season clock's closest call (render.live_sample.closest_for_clock), which
+    the landing and the weekly share card read."""
+    short_a, short_b = surname(a), surname(b)
     return (a, b) if short_a.lower() == short_b.lower() else (short_a, short_b)
+
+
+# The names these had before the season clock shared them.
+_surname, _short_names = surname, short_names
 
 
 def _listed(values: list[str]) -> str:
@@ -266,15 +284,122 @@ def _workload_post(report: Mapping[str, Any], week: int) -> str | None:
     return None
 
 
+# --------------------------------------------------------------------- #
+# the bye drafts (G3): schedule facts, no number to grade
+# --------------------------------------------------------------------- #
+
+# The free planner (contract C7: it lives at /byes/). Every bye draft's first
+# reply links it, never the sale.
+PLANNER_PATH = "byes/"
+# ESPN's, Yahoo's and Sleeper's default fantasy playoffs (the weeks
+# engine.solo_report.DEFAULT_PLAYOFF_WEEKS names), and the last week the
+# planner checks.
+PLAYOFF_WEEKS = range(15, 18)
+PLANNER_LAST_WEEK = 17
+PLAYOFFS_CLEAR = (" No byes in Weeks 15–17, the fantasy playoffs under "
+                  "ESPN's, Yahoo's and Sleeper's defaults.")
+# nflverse spells the Rams "LA"; the apps a manager reads (and the paste
+# reader's engine.roster.TEAM_ALIASES) spell them "LAR". A bare "LA" reads as
+# a city with two teams.
+_APP_CODES = {"LA": "LAR"}
+
+
+def _app_code(team: str) -> str:
+    return _APP_CODES.get(team, team)
+
+
+def _byes_left_post(byes: Mapping[str, int] | None, week: int) -> str | None:
+    """Every team still to have its bye after ``week``, by week, off the
+    published schedule (engine.preseason.bye_by_team). The playoff sentence
+    only when no team is off in Weeks 15–17 — and it is the first thing to
+    go when the post would not fit. None when no bye remains, or when even
+    the list alone is over the limit (never cut mid-list)."""
+    ahead: dict[int, list[str]] = {}
+    for team, bye in (byes or {}).items():
+        if isinstance(bye, int) and bye > int(week):
+            ahead.setdefault(bye, []).append(_app_code(str(team)))
+    if not ahead:
+        return None
+    listed = " · ".join(f"Week {w}: {', '.join(sorted(set(codes)))}"
+                        for w, codes in sorted(ahead.items()))
+    text = f"NFL byes left this season. {listed}."
+    if not any(w in PLAYOFF_WEEKS for w in ahead):
+        if len(text + PLAYOFFS_CLEAR) <= LIMIT:
+            return text + PLAYOFFS_CLEAR
+    return text if len(text) <= LIMIT else None
+
+
+# The slot words a manager reads (render.report.SLOT_DISPLAY's spellings).
+_SLOT_WORDS = {"SUPER_FLEX": "SFLEX", "WRRB_FLEX": "W/R", "REC_FLEX": "W/T"}
+
+
+def _bye_check_post(report: Mapping[str, Any],
+                    byes: Mapping[str, int] | None = None) -> str | None:
+    """What the sample roster's own report found about the byes ahead
+    (``byes_ahead``, live weeks only), through Week 17: the first week a bye
+    empties a starting spot, naming only the players on bye who play it.
+    "Every bye covered" is said only when the report's check demonstrably ran
+    — a live week (the report dates its box scores) with a readable schedule
+    that still has byes before Week 17 — because an absent list is also what
+    a week with no schedule looks like, and "covered" would then be a guess."""
+    week = int(report["meta"]["week"])
+    hits = [hit for hit in report.get("byes_ahead") or []
+            if int(hit.get("week") or 0) <= PLANNER_LAST_WEEK and hit.get("slots")]
+    head = "Bye check for the playoff push: our sample roster's report"
+    if hits:
+        hit = hits[0]
+        names = list(hit.get("short") or hit.get("players") or [])
+        if not names:
+            return None
+        who = _listed(names)
+        verb = "is" if len(names) == 1 else "are"
+        slots = list(dict.fromkeys(_SLOT_WORDS.get(s, s) for s in hit["slots"]))
+        if slots == ["K"]:
+            return (f"{head} flags Week {hit['week']}, when {who} {verb} on bye and "
+                    f"nobody else on the roster can kick.")
+        return (f"{head} flags Week {hit['week']}, when {who} {verb} on bye and "
+                f"nobody else on the roster can start at {_listed(slots)}.")
+    live = bool(report["meta"].get("box_scores_as_of"))
+    ahead = any(isinstance(b, int) and week < b <= PLANNER_LAST_WEEK
+                for b in (byes or {}).values())
+    if live and ahead:
+        return (f"{head} finds every bye from Week {week + 1} through "
+                f"{PLANNER_LAST_WEEK} covered.")
+    return None
+
+
+def planner_reply(url: str) -> str:
+    """The first reply under a bye draft: the free planner, which sells
+    nothing."""
+    return f"Check your own roster's byes through Week {PLANNER_LAST_WEEK}, free, no login: {url}"
+
+
+def sample_planner_url(site: str = SITE_ORIGIN) -> str:
+    """The planner opened on the sample roster (the same v4 roster code a
+    signup carries), so "check it yourself" starts from the roster the post
+    is about."""
+    from render.live_sample import LIVE_ROSTER
+    from render.sample import SLOTS
+    from run.refs import encode_roster
+    ref = encode_roster("season", "ppr", SLOTS, LIVE_ROSTER, 12)
+    return f"{site}/{PLANNER_PATH}?ref={ref}"
+
+
 # The card on this-week.html each post describes, by the heading the report
 # prints over it: the owner's screenshot to attach.
 CARDS = {"The closest call": "The Week's Closest Call",
          "The if/then": "If/Then for Gameday",
          "Rising roles": "Rising Roles",
          "Workloads": "The Lineup",
+         "Bye check": "Your Game Plan",
          "Thursday night": "The Lineup"}
+# A card on another page, by the heading that page prints over it, and the
+# page: "NFL byes left" is the planner's own bye table (contract C7).
+PAGE_CARDS = {"NFL byes left": ("Every {season} NFL bye week",
+                                f"the bye-week planner ({SITE_ORIGIN}/{PLANNER_PATH})")}
 # When a draft is meant to go up, if not Tuesday with the rest.
-WHEN = {"Thursday night": "Thursday, before his kickoff"}
+WHEN = {"Thursday night": "Thursday, before his kickoff",
+        "NFL byes left": "Wednesday"}
 
 
 def reply_text(url: str) -> str:
@@ -282,13 +407,20 @@ def reply_text(url: str) -> str:
     return f"The whole report, rebuilt every Tuesday for our sample roster: {url}"
 
 
+def _fits(draft: Mapping[str, str]) -> bool:
+    return (len(draft["text"]) <= LIMIT
+            and not any(w in draft["text"].lower() for w in BANNED))
+
+
 def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str, str]]:
-    """The week's candidate posts, in the order worth posting them. Each is the
-    post itself (``text``, no link), its first reply (``reply``, the link)
-    and the card to screenshot and attach (``card``); a draft meant for
-    another day says which (``when``)."""
+    """The week's candidate posts from the report, in the order worth posting
+    them. Each is the post itself (``text``, no link), its first reply
+    (``reply``, the link) and the card to screenshot and attach (``card``); a
+    draft meant for another day says which (``when``). The schedule's bye
+    drafts join them through ``with_bye_drafts``."""
     week = report["meta"]["week"]
-    url = f"{site}/this-week.html"
+    # Its own URL each week, so X fetches this week's card, not last week's.
+    url = f"{site}/this-week.html?w={week}"
     call = _call_post(report)
     rising = _rising_post(report, week)
     thursday = _thursday_post(report)
@@ -305,8 +437,46 @@ def drafts(report: Mapping[str, Any], site: str = SITE_ORIGIN) -> list[dict[str,
     if thursday:
         out.append({"name": "Thursday night", "text": thursday[0], "reply": reply_text(url),
                     "card": thursday[1], "when": WHEN["Thursday night"]})
-    return [d for d in out if len(d["text"]) <= LIMIT
-            and not any(w in d["text"].lower() for w in BANNED)]
+    return [d for d in out if _fits(d)]
+
+
+def bye_drafts(report: Mapping[str, Any], byes: Mapping[str, int] | None,
+               site: str = SITE_ORIGIN) -> list[dict[str, str]]:
+    """The two schedule drafts (G3): "NFL byes left" from the season's bye
+    table (team -> week, engine.preseason.bye_by_team) and "Bye check" from
+    the report's own ``byes_ahead``. Their first reply is the free planner;
+    neither carries a number to grade. No table, no "NFL byes left" and no
+    "every bye covered"."""
+    meta = report["meta"]
+    out = []
+    for name, text, link in (
+            ("NFL byes left", _byes_left_post(byes, meta["week"]),
+             lambda: f"{site}/{PLANNER_PATH}"),
+            ("Bye check", _bye_check_post(report, byes),
+             lambda: sample_planner_url(site))):
+        if not text:
+            continue
+        draft = {"name": name, "text": text, "reply": planner_reply(link())}
+        if name in PAGE_CARDS:
+            card, page = PAGE_CARDS[name]
+            draft.update(card=card.format(season=meta.get("season", "")), card_page=page)
+        else:
+            draft["card"] = CARDS[name]
+        if name in WHEN:
+            draft["when"] = WHEN[name]
+        out.append(draft)
+    return [d for d in out if _fits(d)]
+
+
+def with_bye_drafts(posts: list[dict[str, str]], report: Mapping[str, Any],
+                    byes: Mapping[str, int] | None,
+                    site: str = SITE_ORIGIN) -> list[dict[str, str]]:
+    """``posts`` with the bye drafts placed after the report's own call,
+    if/then and rising roles — before the facts-only fallback and the
+    Thursday post."""
+    lead = ("The closest call", "The if/then", "Rising roles")
+    at = max((i + 1 for i, post in enumerate(posts) if post["name"] in lead), default=0)
+    return posts[:at] + bye_drafts(report, byes, site) + posts[at:]
 
 
 def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
@@ -314,25 +484,39 @@ def render(report: Mapping[str, Any], posts: list[dict[str, str]]) -> str:
     lines = [f"# Week {meta['week']} posts — drafts, not posted",
              "",
              "Built from the live sample roster's report "
-             f"({SITE_ORIGIN}/this-week.html). Read before posting: each says "
-             "it's a sample roster, makes no promise about results and no "
-             "betting claim. Nothing here posts itself.", "",
+             f"({SITE_ORIGIN}/this-week.html) and the NFL schedule. Read before "
+             "posting: each post about the report says it's a sample roster, "
+             "none makes a promise about results or a betting claim. Nothing "
+             "here posts itself.", "",
              "How to post one: the post goes up with no link in it. Attach a "
              "phone screenshot of the card named under it, from this week's "
-             "page — the real report, never a mock-up. Then put the first "
-             "reply under your own post: that is where the link goes.", ""]
+             "page unless it names another — the real page, never a mock-up. "
+             "Then put the first reply under your own post: that is where the "
+             "link goes.", ""]
     if not posts:
         lines.append("_Nothing to draft this week: the sample report had no "
-                     "closest call, if/then, rising role, workload or Thursday "
-                     "starter to quote._")
+                     "closest call, if/then, rising role, bye, workload or "
+                     "Thursday starter to quote._")
     for i, post in enumerate(posts, 1):
         lines += [f"## {i}. {post['name']} ({len(post['text'])}/{LIMIT})", ""]
         if post.get("when"):
             lines += [f"Post it: {post['when']}.", ""]
+        page = f", from {post['card_page']}" if post.get("card_page") else ""
         lines += [post["text"], "",
-                  f"Attach: a screenshot of the \"{post['card']}\" card.", "",
+                  f"Attach: a screenshot of the \"{post['card']}\" card{page}.", "",
                   f"First reply: {post['reply']}", ""]
     return "\n".join(lines) + "\n"
+
+
+def _season_byes(season: str) -> dict[str, int] | None:
+    """team -> bye week off the cached schedule, or None when it cannot be
+    read (then no bye-table draft is made, never one built on a guess)."""
+    try:
+        from engine.preseason import bye_by_team
+        from run.solo import CACHE_DIR
+        return bye_by_team(CACHE_DIR, season) or None
+    except Exception:  # noqa: BLE001 — no table means no bye-table draft
+        return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -351,7 +535,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"this week's drafts were not rebuilt ({exc}); the previous file "
               f"stays.")
         return 0
-    posts = drafts(report)
+    posts = with_bye_drafts(drafts(report), report,
+                            _season_byes(str(report["meta"]["season"])))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(report, posts), encoding="utf-8")
     print(f"{len(posts)} draft(s) -> {args.out}")
