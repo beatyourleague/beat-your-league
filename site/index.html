@@ -88,6 +88,8 @@
     padding:12px 22px;border:none;transition:transform .15s ease;}
   .btn.gold{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  /* clip-path clips the focus ring too: the slant goes while the button has keyboard focus. */
+  .btn:focus-visible,.btn.gold:focus-visible{clip-path:none;}
   .btn.ghost{border:2px solid rgba(246,244,238,.4);color:var(--paper);padding:10px 20px;}
   /* Clickables only (D9): the gold button lifts and a sheen crosses it — its
      clip-path cuts any shadow, so the lift and the light are the depth — and
@@ -1491,6 +1493,7 @@
   <a href="how-it-works.html">How it works</a> ·
   <a href="sample-report.html">See a real report</a> ·
   <a href="league-pass.html">League Pass</a> ·
+  <a href="byes/">Free bye week planner</a> ·
   <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a> ·
   <a href="terms.html">Terms &amp; refunds</a> &middot;
     <a href="privacy.html">Privacy</a>

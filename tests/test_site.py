@@ -4425,7 +4425,7 @@ PRIVACY = (SITE / "privacy.html").read_text(encoding="utf-8")
 # generators below.
 _STATIC = ("index.html", "how-it-works.html", "league-pass.html", "thanks.html",
            "terms.html", "privacy.html", "404.html", "legal.html", "compare/index.html",
-           "confidence.html", "projections.html", "no-call.html")
+           "confidence.html", "projections.html", "no-call.html", "byes/index.html")
 _PAPER = ("how-it-works.html", "terms.html", "privacy.html", "thanks.html", "404.html")
 
 

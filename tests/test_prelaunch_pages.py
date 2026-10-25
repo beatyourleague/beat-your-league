@@ -65,6 +65,13 @@ NAV_PAGES = {
     "join/confirm.html": ("../", None, None),
     "projections.html": ("", None, None),
     "compare/index.html": ("../", None, None),
+    # The free bye-week planner (contract C7) and the league-app pages
+    # (render/platforms.py), one folder down.
+    "byes/index.html": ("../", None, None),
+    "espn/index.html": ("../", None, None),
+    "yahoo/index.html": ("../", None, None),
+    "sleeper/index.html": ("../", None, None),
+    "cbs/index.html": ("../", None, None),
 }
 
 

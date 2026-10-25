@@ -83,6 +83,8 @@
     text-decoration:none;color:var(--navy);padding:12px 24px;border:0;}
   .cta .btn.gold{background:linear-gradient(180deg,#FFDA5E 0%,var(--gold-bright) 55%,#D9A81B 100%);
     clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
+  /* clip-path clips the focus ring too: the slant goes while the button has keyboard focus. */
+  .btn:focus-visible,.cta .btn.gold:focus-visible{clip-path:none;}
   .cta .btn.ghost{background:none;border:2px solid var(--navy);padding:10px 22px;}
   /* The masthead a retired study carries (critique #4): this page measures
      the 2018 Sleeper-era model, which no report is built on, and its
