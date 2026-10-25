@@ -388,6 +388,12 @@
      that resets play-state, so these carry .js to outrank it (0,4,0). */
   .js .hero.offscreen .phone-float,.js .hero.offscreen .phone-floor,.hero.offscreen .phonewrap::before,
   .js .hero.still .phone-float,.js .hero.still .phone-floor,.hero.still .phonewrap::before{animation-play-state:paused;}
+  /* One motion at a time (final visual review): while the story plays on the
+     screen, the float, the floor and the glow hold still; they resume when it
+     rests. Four loops on four periods read as busy beside the story. */
+  .js .hero:has(.phone.story:not(.paused)) .phone-float,
+  .js .hero:has(.phone.story:not(.paused)) .phone-floor,
+  .hero:has(.phone.story:not(.paused)) .phonewrap::before{animation-play-state:paused;}
   .realrow{display:flex;align-items:center;justify-content:center;gap:10px;max-width:320px;}
   /* A spacer the toggle's width on the other side keeps the caption centred
      under the phone; both are in the layout from the first paint, so the

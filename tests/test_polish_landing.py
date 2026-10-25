@@ -692,3 +692,14 @@ def test_the_landing_inlines_fonts_css_rule_for_rule() -> None:
     assert head.count('rel="preload"') == 2 and "barlow-condensed-900i.woff2" in head
     for url in re.findall(r"url\(fonts/([^)]+)\)", "".join(got)):
         assert (SITE / "fonts" / url).is_file(), url
+
+
+def test_the_phone_holds_still_while_its_story_plays() -> None:
+    """Final visual review: four loops ran at once around the hero (a 6 s
+    float, a 6 s floor shadow, a 7 s glow and the 16 s story), which read as
+    busy beside Apple's one-motion-at-a-time restraint. While the story plays,
+    the float, the floor and the glow are held; they resume when it rests."""
+    page = LANDING
+    for target in (".phone-float", ".phone-floor"):
+        assert f".js .hero:has(.phone.story:not(.paused)) {target}" in page
+    assert ".hero:has(.phone.story:not(.paused)) .phonewrap::before{animation-play-state:paused;}" in page
