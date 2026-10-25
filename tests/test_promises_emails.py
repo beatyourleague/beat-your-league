@@ -22,7 +22,7 @@ from render.preseason import FORM_BASIS, bye_none, text_summary as pre_text
 from render.renewal import Renewal, renewal_day, renewal_message
 from render.roster_update import LEDE, PREHEADER
 from render.seat_claim import CONFIRM_LEDE, FULL_CHECK
-from render.welcome import (NEXT_TUESDAY, REFUND_TERMS, REFUND_TERMS_LEAGUE,
+from render.welcome import (NEXT_TUESDAY, NEXT_TUESDAY_LIVE, REFUND_TERMS, REFUND_TERMS_LEAGUE,
                             duplicate_line, welcome_message)
 
 NOW = datetime(2026, 10, 17, 16, 5, tzinfo=timezone.utc)
@@ -71,9 +71,11 @@ def test_an_offseason_welcome_promises_no_report_today() -> None:
 
 def test_the_tuesday_row_says_what_a_report_is() -> None:
     """EMAILS-90: ninety seconds was the game plan; odds start in Week 4
-    (Week 2 for the measured setup)."""
+    (Week 2 for the measured setup). Since the card stack (contract C1) the
+    lineup is the first card, so the minute is setting it."""
     assert "ninety" not in NEXT_TUESDAY.lower()
-    assert "game plan at the top takes about a minute" in NEXT_TUESDAY
+    assert "Your lineup comes first, and setting it takes about a minute." in NEXT_TUESDAY
+    assert "game plan at the top" not in NEXT_TUESDAY + NEXT_TUESDAY_LIVE
     assert "from Week 4" in NEXT_TUESDAY and "Week 2" in NEXT_TUESDAY
 
 

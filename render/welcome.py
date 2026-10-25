@@ -313,15 +313,16 @@ NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
                 "your scoring, with odds on the close calls from Week 4 (Week 2 "
                 "for a 12-team PPR standard lineup), and any bye still ahead — "
                 "playoff weeks included — that leaves a spot nobody on your "
-                "roster can fill. The game plan at the top takes about a minute.")
+                "roster can fill. Your lineup comes first, and setting it takes "
+                "about a minute.")
 # From Week 4 on, odds already print in every setup, so "odds ... from Week 4"
 # told a Week-8 buyer about a start that is behind them (final review,
 # business #6). The pre-Week-4 promise above stays exactly as it was.
 NEXT_TUESDAY_LIVE = ("The week's report: the lineup we'd set for your roster "
                      "under your scoring, with odds on the close calls, and any "
                      "bye still ahead — playoff weeks included — that leaves a "
-                     "spot nobody on your roster can fill. The game plan at the "
-                     "top takes about a minute.")
+                     "spot nobody on your roster can fill. Your lineup comes "
+                     "first, and setting it takes about a minute.")
 ODDS_EVERYWHERE_FROM = 4
 NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")

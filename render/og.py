@@ -568,13 +568,18 @@ def week_card_problems(clock: dict, page: str) -> list[str]:
     section = _closest_section(page)
     if section is None:
         return ["this-week.html has no closest-call card"]
-    need = [f"Start {html.escape(closest['start'])} <span class=\"over\">over</span> "
-            f"{html.escape(closest['over'])}",
-            f'<div class="num">{closest["pct"]}%</div>']
+    # Each figure as the card prints it: the card stack (contract C3) prints
+    # the percentage as <b class="cpct">; a page built before it, which a
+    # --restamp leaves in its own markup until Tuesday's rebuild, as
+    # <div class="num">. Either is the page's own number.
+    need = [(f"Start {html.escape(closest['start'])} <span class=\"over\">over</span> "
+             f"{html.escape(closest['over'])}",),
+            (f'<b class="cpct">{closest["pct"]}%</b>',
+             f'<div class="num">{closest["pct"]}%</div>')]
     if closest.get("proj"):
-        need.append(f"proj <b>{html.escape(str(closest['proj']))}</b>")
-    return [f"this-week.html's closest-call card does not print {figure!r}"
-            for figure in need if figure not in section]
+        need.append((f"proj <b>{html.escape(str(closest['proj']))}</b>",))
+    return [f"this-week.html's closest-call card does not print {forms[0]!r}"
+            for forms in need if not any(f in section for f in forms)]
 
 
 def _built_day(clock: dict) -> str | None:
