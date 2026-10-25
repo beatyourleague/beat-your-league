@@ -52,29 +52,55 @@ def test_the_hero_phone_names_no_week_number() -> None:
     assert "2024" in tag and "Week 10" in _flat(tag), "the sample's week left its caption"
 
 
-def test_the_notification_is_solid_and_only_moves_under_the_status_bar() -> None:
-    """D2, reproduced in CDP frames at 300 and 1200 ms (1440 wide): the
-    notification was rgba(…,.96) and faded in and out over the inbox row, so
-    "Beat Your League / Week 10: your lineup, decided" showed through it — two
-    lines of text on top of each other — and it crossed the status bar's
-    "8:04" on the way in. It is opaque now, the status bar is an opaque layer
-    above it, and it is at full opacity on every frame where it can be seen."""
-    notif = re.search(r"\.notif\{([^}]*)\}", CSS).group(1)
-    background = re.search(r"background:([^;]+);", notif).group(1)
+def _keyframes(name: str) -> list[tuple[float, str]]:
+    """(stop as a fraction, declarations) for one @keyframes block, every
+    stop of a comma list on its own, in time order."""
+    body = re.search(r"@keyframes " + re.escape(name) + r"\{(.*?\})\s*\}", CSS, re.S).group(1)
+    stops = []
+    for at, decl in re.findall(r"([\d.%,\s]+|from|to)\{([^}]*)\}", body):
+        for one in at.split(","):
+            one = one.strip()
+            value = {"from": 0.0, "to": 1.0}.get(one)
+            stops.append((float(one.rstrip("%")) / 100 if value is None else value,
+                          decl.replace(" ", "")))
+    return sorted(stops)
+
+
+def test_the_notification_is_solid_and_only_shows_on_the_lock_screen() -> None:
+    """D2, carried into the Oct 24 2026 storyline. The old banner was
+    rgba(…,.96) and faded in over the inbox row, so two lines of text sat on
+    top of each other for half a second. The notification now lives on the
+    lock screen, which covers the whole report while it shows: the card is a
+    solid colour, it sits inside .lock, the layers stack status bar < lock <
+    black < island, the card is opaque only while the lock is, and the lock's
+    own text has faded out by the time the lock itself starts to go — so
+    text never crosses text on the way back to the report."""
+    note = re.search(r"\.lnote\{([^}]*)\}", CSS).group(1)
+    background = re.search(r"background:([^;]+);", note).group(1)
     assert re.fullmatch(r"#[0-9A-Fa-f]{6}", background), f"translucent again: {background}"
-    bar = re.search(r"\.statusbar\{([^}]*)\}", CSS).group(1)
-    assert "position:relative" in bar and re.search(r"background:#[0-9A-Fa-f]{6}", bar)
-    z_bar = int(re.search(r"z-index:(\d+)", bar).group(1))
-    z_notif = int(re.search(r"z-index:(\d+)", notif).group(1))
-    assert z_bar > z_notif, "the notification slides over the status bar"
-    # The block ends at its first "}}" (the last stop's brace, then its own).
-    frames = re.search(r"@keyframes notif\{(.*?\})\}", CSS, re.S).group(1)
-    stops = re.findall(r"([\d%,]+)\{([^}]*)\}", frames)
-    assert len(stops) >= 3, f"read {len(stops)} keyframe stops — the guard went blind"
-    for at, body in stops:
-        if at == "100%":
-            continue                  # out of sight behind the status bar
-        assert "opacity:1" in body, f"the notification fades at {at}: {body}"
+    lock = HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
+    assert 'class="lnote"' in lock, "the notification left the lock screen"
+    assert "Your lineup, decided. Closest call with odds: Kittle over LaPorta, 72%." \
+        in _flat(lock)
+
+    def z(rule: str) -> int:
+        block = re.search(rule + r"\{([^}]*)\}", CSS).group(1)
+        return int(re.search(r"z-index:(\d+)", block).group(1))
+    # Each layer's own rule, at the start of a line (".lock,.lk-dark{" sets
+    # neither z-index).
+    assert z(r"\n  \.statusbar") < z(r"\n  \.lock") < z(r"\n  \.lk-dark") < z(r"\n  \.island")
+    # The lock is fully up from its first opaque stop to its last; the card's
+    # opaque stops all fall inside that stretch.
+    lock_up = [t for t, d in _keyframes("st-lock") if "opacity:1" in d]
+    note_up = [t for t, d in _keyframes("st-note") if "opacity:1" in d]
+    lock_fade = max(lock_up)
+    # The card's 100% stop keeps opacity:1 under a lock that has gone by then
+    # (the rest state); its visible stretch is every opaque stop before that.
+    shown = [t for t in note_up if t < 1]
+    assert shown and min(lock_up) <= min(shown) and max(shown) <= lock_fade, (lock_up, note_up)
+    # The lock's text has gone before the lock starts to fade.
+    fg_gone = min(t for t, d in _keyframes("st-fg") if "opacity:0" in d)
+    assert fg_gone <= lock_fade, "the lock's text is still up when the lock fades"
 
 
 def test_the_phone_screen_runs_on_with_the_samples_own_rows() -> None:
@@ -84,7 +110,7 @@ def test_the_phone_screen_runs_on_with_the_samples_own_rows() -> None:
     above it quoted 70%. The screen now continues into the report's next
     section, Rising Roles, quoted verbatim from the published sample, and the
     bar carries the sample's own 70% — drawn from 50% as the report draws it."""
-    peek = HERO.split('id="hero-peek"')[1].split('<div class="homebar"')[0]
+    peek = HERO.split('id="hero-peek"')[1].split('<div class="lock"')[0]
     flat_sample = _flat(SAMPLE_REPORT)
     for item in re.findall(r"<li>(.*?)</li>", peek, re.S):
         assert _flat(item).strip() in flat_sample, f"not the sample's words: {_flat(item)}"
@@ -464,29 +490,30 @@ def test_the_sticky_bar_hides_while_the_pricing_cards_button_is_on_screen() -> N
     assert 'id="season-cta"' in BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]
 
 
-def test_the_parked_notification_hides_its_shadow_too() -> None:
-    """Review (low), reproduced in CDP at 1440 with the card frozen where the
-    keyframes park it: at translateY(-130%) the 83px card hid behind the 48px
-    status bar but its shadow (0 12px 30px -10px) reached below it — up to 33
-    of 255 levels darker than the page at rest just under the bar, for a
-    fraction of a second on every play. At -175% the card's bottom sits at
-    46 - 0.75 x 83 = -16px and the frozen frame differs from rest by at most
-    3 levels (noise). Every parked stop — the resting rule, 0%, 99% and 100%
-    — sits at the same -175%; the card still never fades where it can be
-    seen."""
-    rest = re.search(r"\.notif\{([^}]*)\}", CSS).group(1)
-    frames = re.search(r"@keyframes notif\{(.*?\})\}", CSS, re.S).group(1)
-    parked = re.findall(r"translateY\((-?\d+)%\)", rest + frames)
-    assert len(parked) == 4, f"read {len(parked)} parked positions — the guard went blind"
-    top = int(re.search(r"top:(\d+)px", rest).group(1))
-    shadow = re.search(r"box-shadow:0 (\d+)px (\d+)px (-?\d+)px", rest).groups()
-    reach = sum(int(v) for v in shadow)            # offset + blur + spread below the card
-    bar = int(re.search(r"\.statusbar\{[^}]*?height:(\d+)px", CSS).group(1))
-    for pct in parked:
-        # The shortest card this can hold (two lines, measured 83px) must
-        # park with its shadow above the status bar's lower edge.
-        bottom = top + 83 * (1 + int(pct) / 100)
-        assert bottom + reach <= bar, f"translateY({pct}%) leaves the shadow below the bar"
+def test_every_storyline_layer_starts_and_ends_on_the_decided_report() -> None:
+    """Replaces the parked-banner shadow test (Oct 24 2026): the banner is
+    gone, and the storyline's promise is stronger — every layer's 0% and 100%
+    stops ARE the resting page, so a pause, the loop's wrap, the end of the
+    third loop (the class comes off at an iteration boundary) and a page whose
+    script never runs all show the same decided report. The lock and the black
+    are invisible at rest; everything drawn on the report is at full opacity
+    and untransformed; the lock's text layer is gone by the end."""
+    hidden_at_rest = ("st-dark", "st-lock")
+    on_report = ("st-view", "st-bar", "st-flip", "st-if", "st-rise")
+    names = re.findall(r"@keyframes (st-[\w-]+)\{", CSS)
+    assert {"st-dark", "st-lock", "st-fg", "st-note", "st-tap", "st-pad", *on_report} <= set(names)
+    for name in names:
+        stops = _keyframes(name)
+        assert stops[0][0] == 0 and stops[-1][0] == 1, f"{name} has no 0% or 100% stop"
+        for t, decl in (stops[0], stops[-1]):
+            if name in hidden_at_rest:
+                assert "opacity:0" in decl, f"{name} is visible at {t:.0%}"
+            elif name in on_report:
+                assert "transform:none" in decl and "opacity:0" not in decl, (name, t, decl)
+    assert "opacity:0" in _keyframes("st-fg")[-1][1]
+    # Without .story the layers themselves are invisible.
+    assert re.search(r"\.lock,\.lk-dark\{[^}]*opacity:0", CSS)
+    assert re.search(r"\.lk-tap\{[^}]*opacity:0", CSS)
 
 
 def test_the_phone_nav_has_room_at_320() -> None:
