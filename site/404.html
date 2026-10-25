@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
-    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
+    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#E2DDD0;--rule:#EEEAE1;--dusk:#BCC9DB;}
   *{margin:0;padding:0;box-sizing:border-box;}
   .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
   .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
@@ -43,58 +43,55 @@
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
-  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
-  .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
-    box-shadow:0 2px 18px rgba(16,30,51,.10);}
-  header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  .headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  /* Full-bleed paper (contract C2 of the truth pass): a flat navy band, then
+     the page itself on the paper, edge to edge at every width — no sheet on a
+     desk, no frame, no double rules. */
+  body{background:var(--paper);font-family:var(--sans);color:var(--navy);padding:0;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy);color:var(--paper);}
+  header .wrap{padding-top:32px;padding-bottom:48px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,4.6vw,48px);line-height:1;
+    text-transform:uppercase;margin-top:40px;text-wrap:balance;}
+  header p{margin-top:14px;font-size:18px;color:var(--dusk);line-height:1.5;max-width:640px;}
   /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
      and cancellation instructions a nervous buyer came here to read. */
-  main a,p a,li a{color:var(--brick);text-decoration:underline;
-    text-underline-offset:2px;text-decoration-thickness:1px;}
-  main a:hover,p a:hover,li a:hover{color:var(--navy);}
-  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;}
-  header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
-  main{padding:10px 28px 34px;}
-  .done{display:flex;align-items:center;gap:16px;margin-top:18px;}
-  .done h1{margin-top:0;}
-  .check{width:52px;height:52px;flex:none;}
-  .check circle{fill:none;stroke:var(--flag);stroke-width:3;stroke-dasharray:152;
-    stroke-dashoffset:152;animation:draw .6s ease-out .15s forwards;}
-  .check path{fill:none;stroke:var(--flag);stroke-width:4;stroke-linecap:round;
-    stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;
-    animation:draw .35s ease-out .7s forwards;}
-  @keyframes draw{to{stroke-dashoffset:0;}}
-  @media (prefers-reduced-motion: reduce){.check circle,.check path{animation:none;stroke-dashoffset:0;}}
-  .steps{list-style:none;margin:18px 0 6px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .steps li{margin:0;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--flag);
-    padding:12px 14px;font-size:13.5px;line-height:1.5;}
-  .steps li b{display:block;font-family:var(--display);font-weight:800;font-size:15px;
-    letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;}
-  @media (max-width:600px){.steps{grid-template-columns:1fr;}}
-  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
-    margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
-  p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
+  main a,p a,li a{color:var(--navy);text-decoration:underline;text-underline-offset:3px;
+    text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);}
+  main a:hover,p a:hover,li a:hover{color:var(--brick);}
+  main{padding:8px 0 72px;}
+  /* Sections: a slate number, then the heading — no rule between them. */
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(28px,3.6vw,40px);line-height:1.05;
+    text-transform:uppercase;color:var(--navy);margin:48px 0 12px;text-wrap:balance;}
+  h2 .n{display:block;font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--slate);
+    margin-bottom:6px;}
+  p,li{font-size:16px;line-height:1.6;color:var(--ink2);margin:10px 0;}
   ul{margin-left:20px;}
   b{color:var(--navy);}
-  .note{background:var(--card);border-left:5px solid var(--flag);padding:12px 14px;margin:14px 0;
-    font-size:14px;line-height:1.6;}
-  footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
-    border-top:3px double var(--line);}
-  /* Contract C2: one primary (.btn.gold), one secondary (.btn.ghost) — the
-     landing's own two buttons, not a third gold rectangle (launch review D3). */
-  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
-  .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
-    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
-    padding:12px 22px;border:0;line-height:1.2;}
-  .btn.gold{color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,#D9A81B);
-    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
-  .btn.ghost{background:transparent;color:var(--navy);border:2px solid var(--navy);padding:10px 20px;}
+  /* A notice: the report's tint for something to read first. */
+  .note{margin:24px 0;padding:14px 16px;background:#FBF3D9;border:1px solid #EBDDAE;border-radius:12px;
+    font-size:15px;line-height:1.55;color:var(--ink2);}
+  footer{border-top:1px solid var(--line);}
+  footer .wrap{padding-top:24px;padding-bottom:40px;font-size:12px;line-height:1.6;color:var(--slate);}
+  footer a{color:var(--navy);text-decoration:underline;text-underline-offset:3px;}
+  /* Contract C7: the site's one button — a flat rounded rectangle. One
+     primary (.btn.gold), one secondary (.btn.ghost). */
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;
+    border:0;border-radius:8px;font-family:var(--display);font-weight:800;font-size:16px;line-height:1;
+    letter-spacing:.06em;text-transform:uppercase;text-decoration:none;cursor:pointer;text-align:center;}
+  .btn.gold{color:var(--navy);background:var(--flag);}
+  .btn.gold:hover{background:#FFD24A;}
+  .btn.ghost{background:transparent;color:var(--navy);border:1.5px solid var(--navy);}
   main a.btn,main a.btn:hover{color:var(--navy);text-decoration:none;}
-  .btn:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
   [hidden]{display:none!important;}
-  /* A phone shows the page, not a sheet on a desk (launch review D15). */
-  @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
+  @media (max-width:600px){
+    .wrap{padding:0 16px;}
+    header .wrap{padding-top:24px;padding-bottom:32px;}
+    header h1{margin-top:32px;}
+    header p{font-size:16px;}
+  }
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:32px 0 4px;}
+  @media (max-width:600px){.cta .btn{width:100%;min-height:52px;}}
   /* A miss, said with a little character: the ball fumbles once and the
      headline settles (transform only; this page's own sheet, nowhere else). */
   .sitebar .brand svg.mark{animation:wobble .7s var(--ease-out) .3s 1 both;}
@@ -106,38 +103,27 @@
      (tests/test_polish_pages.py compares them), and last in the sheet, so a
      page's own older rule of the same weight never wins. Motion is transform
      and opacity only; site/motion.js adds .motion, and without it (no script,
-     reduced motion) nothing here hides anything. */
+     reduced motion) nothing here hides anything. One depth (contract C7): the
+     paper shadow, on paper only. One press: a flat button lifts 1px and
+     settles — no slant, no gradient, no sheen, no drop shadow. */
   :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
     --elev-1:0 1px 2px rgba(16,30,51,.06);
-    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
-    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
-  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
-  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+    --elev-2:0 1px 2px rgba(16,30,51,.06),0 8px 24px -12px rgba(16,30,51,.18);}
   .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
   /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
   main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
     outline-offset:2px;border-radius:2px;}
-  /* A clip-path clips the outline too: a slanted gold button showed NO ring
-     when focused, so it squares off while it holds keyboard focus. */
+  /* A clip-path clips the outline too, so a slanted button left anywhere
+     squares off while it holds keyboard focus. */
   .btn.gold:focus-visible{clip-path:none;}
-  /* The outline survives forced colours; the gold halo is decoration. */
+  /* A field in focus: its border turns navy and a soft navy ring rises; the
+     transparent outline is what forced colours draws. */
   input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
-    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+    outline:2px solid transparent;outline-offset:2px;border-color:var(--navy);
+    box-shadow:0 0 0 3px rgba(16,30,51,.15);}
   .btn,button{transition:transform .18s var(--ease-out);}
-  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-1px);}
   .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
-  /* A sheen across the primary only, on hover: one gold action at a time. */
-  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
-  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
-  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
-  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
-    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
-    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
-    transform:translateX(-130%) skewX(-14deg);}
-  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
-  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
-  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
-    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
   /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
      h1 or the first paragraph, and never the words a reader is waiting for. */
   .motion [data-reveal]:not([data-reveal="group"]):not(.in),
@@ -153,8 +139,6 @@
      frame at once, so the page is complete at rest. */
   @media (prefers-reduced-motion:reduce){
     .btn,button,.opts label{transition:none!important;transform:none!important;}
-    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
-    .sharebtn::after{display:none;}
     *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
       animation-iteration-count:1!important;}
   }
@@ -163,13 +147,15 @@
 <meta name="robots" content="noindex">
 </head>
 <body>
-<div class="sheet">
-  <header>
+<header>
+  <div class="wrap">
     <div class="sitebar"><a class="brand" href="/"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="/how-it-works.html">How it works</a><a href="/sample-report.html">See a real report</a><a class="hidesm" href="/index.html#pricing">Pricing</a></nav></div>
     <h1>That page isn't here.</h1>
     <p>The link may be old or mistyped. Try one of these.</p>
-  </header>
-  <main>
+  </div>
+</header>
+<main>
+  <div class="wrap">
     <div class="cta">
       <a class="btn gold" href="/">Back to the front page</a>
       <a class="btn ghost" href="/how-it-works.html">How it works</a>
@@ -180,10 +166,10 @@
       <a class="btn ghost" href="/sample-report.html" data-pinned-week>See a real report</a>
       <a class="btn ghost" href="/this-week.html" data-live-week hidden>This week's report</a>
     </div>
-    <p style="margin-top:22px">Something that should be here? Write to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
-  </main>
-  <footer><b>Beat Your League</b> — analysis, not betting picks. Not affiliated with the NFL.</footer>
-</div>
+    <p style="margin-top:24px">Something that should be here? Write to <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a>.</p>
+  </div>
+</main>
+<footer><div class="wrap"><b>Beat Your League</b> — analysis, not betting picks. Not affiliated with the NFL.</div></footer>
 <script>
 "use strict";
 // The season clock (week.json): no phase means a week was built; a last week

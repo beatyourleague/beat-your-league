@@ -283,9 +283,12 @@ def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
     submit = _js_function(JOIN, "submitSeat")
     assert '$("done-head").textContent = "Next: confirm your seat from your inbox.";' in submit
     assert "Your seat request is in" not in JOIN
-    for fn in ("firstChipText", "drawFirst"):
-        assert "matched" not in _js_function(JOIN, fn), fn
-    assert "A report the day it's confirmed" in _js_function(JOIN, "firstChipText")
+    # The header chips went in the truth pass (the button already says what
+    # is open); the sidebar line still times a seat's report from its
+    # confirmation, never a match.
+    draw = _js_function(JOIN, "drawFirst")
+    assert "matched" not in draw
+    assert 'SEAT_MODE ? "the day your seat is confirmed" : "the day you join"' in draw
 
 
 def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> None:
@@ -334,9 +337,12 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
 
 
 def test_cancellation_is_promised_and_never_obstructed() -> None:
-    """Subscribers must be told they can leave, in plain words."""
-    assert re.search(r"cancel yourself any time|cancel any time", JOIN, re.I), \
+    """Subscribers must be told they can leave, in plain words. (Read as a
+    reader meets it: the monthly terms say "Cancel yourself any time" across a
+    JS string join, now that the header chip that also said it is gone.)"""
+    assert re.search(r"cancel yourself any time|cancel any time", JOIN_PROSE, re.I), \
         "join page must tell subscribers they can cancel themselves"
+    assert re.search(r"nothing to cancel", JOIN_PROSE, re.I), "the one-payment pass says so"
     # 2026's one-time passes have nothing to cancel, and the card says so.
     assert re.search(r"cancel any time|nothing to cancel", LANDING, re.I)
     # No copy anywhere that gates leaving behind contacting us.
@@ -2235,13 +2241,16 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     """A seat holder must never read a price for something their commissioner
     already paid; a pass or monthly buyer must never read the season price.
     The static header stays the season default — the rewrites are JS, so we
-    pin their presence and their key phrases."""
-    assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
-    assert "League Pass seat — nothing to pay" in JOIN
+    pin their presence and their key phrases. (The header chips that repeated
+    the pitch were removed in the truth pass: the pitch carries the price with
+    its terms, and the button says what is open.)"""
+    assert 'id="header-pitch"' in JOIN and 'id="header-chips"' not in JOIN
+    seat = prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1].split("} else if (WANTS_MONTHLY)")[0])
+    assert "Nothing to pay." in seat and not re.search(r"\$\d", seat), "a seat reads a price"
     assert "already paid" not in prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1]
                                        .split("} else if (WANTS_MONTHLY)")[0])
     assert "every manager in your league" in prose(JOIN) and "claims their seat" in prose(JOIN)
-    assert f"${MONTHLY_PRICE} / month" in JOIN
+    assert f"${MONTHLY_PRICE} a month" in prose(_js_function(JOIN, "monthlyPlan"))
     # The pass buyer is told, on the way to Stripe, where the seat link will
     # come from: the welcome email, which carries a link naming THIS pass
     # (contract C4). The page itself no longer hands out the generic ?pass=1
@@ -2970,10 +2979,10 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     charges."""
     pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
     assert "header-pitch" in pass_branch and "$69" in pass_branch
-    # The chips are drawn by setChips (one builder for every mode, so the
-    # first-report chip follows the season clock — PC-02).
-    assert 'setChips(["$69 / league · rest of season"' in pass_branch
-    assert '$("header-chips")' in _js_function(JOIN, "setChips")
+    # The header chips are gone (truth pass): the price lives in the pitch,
+    # beside its terms, so no stale chip can name another mode's price.
+    assert "setChips" not in JOIN and 'id="header-chips"' not in JOIN
+    assert "$69 for your whole league, rest of season — one payment" in prose(pass_branch)
     # Monthly is a function since Oct 9 2026, because the buyer can now switch
     # to it on the page as well as arrive with ?plan=monthly.
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
@@ -3826,8 +3835,11 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     in the red alert box, and each further press posted another row (two
     recorded). Now the label and the action come from one decision
     (closedAction): "switch" switches, "list" keeps the email once and then
-    stops, "none" looks switched off."""
-    fns = _js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
+    stops, "none" looks switched off — and names the plan that is not open
+    yet (closedChipText, the words the header chip carried until the truth
+    pass removed the chips)."""
+    fns = (_js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
+           + _js_function(JOIN, "closedChipText"))
     states = [  # notify, pass, own plan open, monthly chosen, other plan's link
         ("https://f", False, "", False, "https://buy.stripe.com/m"),
         ("", False, "", True, "https://buy.stripe.com/s"),
@@ -3839,7 +3851,8 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     ]
     import json as _json
     got = _node(
-        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n" + fns +
+        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
+        "const FIRST = null, SEAT_MODE = false;\n" + fns +
         "\nconsole.log(JSON.stringify(" + _json.dumps(states) + ".map(([n, p, o, m, other]) => {"
         " NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o; monthlyChosen = m;"
         " const a = closedAction(other); return [a, closedLabel(a)]; })));")
@@ -3847,7 +3860,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
         ["switch", "Switch to monthly — open now"],
         ["switch", "Switch to the season pass — open now"],
         ["list", "Email me when checkout opens"],
-        ["none", "Checkout opens soon"],
+        ["none", "Rest-of-Season Pass opens soon"],
         ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
         ["list", "Email me when checkout opens"],
         ["none", "League Pass opens soon"],
@@ -4178,9 +4191,11 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     2027" — for a purchase nobody could make that day (the same in
     ?plan=monthly, ?plan=pass and seat mode with no backend). The chip, the
     sidebar, the first-note and the renewal date all ask canStartToday()
-    first; run under node for every mode."""
-    for fn in ("firstChipText", "renewalDate"):
+    first; run under node for every mode. (The chip itself went in the truth
+    pass; a closed plan's name now labels its button, closedChipText.)"""
+    for fn in ("renewalDate",):
         assert "canStartToday()" in _js_function(JOIN, fn), fn
+    assert "header-chips" not in JOIN and "firstChipText" not in JOIN
     draw = _js_function(JOIN, "drawFirst")
     assert draw.index("if (!canStartToday()) {") < draw.index('FIRST.when === "before"')
     assert "once checkout opens" in prose(draw)
@@ -4191,7 +4206,7 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     assert "drawFirst();" in _js_function(JOIN, "monthlyPlan")
     assert re.search(r"\ndrawShapeNote\(\);\nfillRenewalDates\(\);\ndrawFirst\(\);\n", JOIN)
     src = "\n".join(_js_function(JOIN, f) for f in
-                    ("canStartToday", "closedChipText", "firstChipText", "renewalDate",
+                    ("canStartToday", "closedChipText", "renewalDate",
                      "renewsOn", "monthlyLink", "seasonLink")) + (
         "\nvar MONTHLY_PAUSED = false; var MONTHLY_OFFERED = true;"
         " var PLAYOFF_ACTIVE = false; var STRIPE_LINK_PLAYOFF = \"\";")
@@ -4211,12 +4226,12 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
         "  globalThis.monthlyChosen = c[2]; globalThis.STRIPE_LINK_SEASON = c[3];\n"
         "  globalThis.STRIPE_LINK_MONTHLY = c[4]; globalThis.PASS_LINK = c[5];\n"
         "  globalThis.FORM_ENDPOINT = c[6];\n"
-        "  out.push([firstChipText(), renewalDate() ? 'dated' : '']);\n}\n"
+        "  out.push([canStartToday() ? 'open' : closedChipText(),"
+        " renewalDate() ? 'dated' : '']);\n}\n"
         "console.log(JSON.stringify(out));")
     assert got == [["Rest-of-Season Pass opens soon", ""], ["Monthly opens soon", ""],
                    ["League Pass opens soon", ""], ["Seats open soon", ""],
-                   ["Weekly reports from Tue, Oct 20", "dated"],
-                   ["Weekly reports from Tue, Oct 20", "dated"]]
+                   ["open", "dated"], ["open", "dated"]]
 
 
 def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
@@ -4395,8 +4410,11 @@ def test_a_seat_confirmation_says_seat_on_the_confirm_page() -> None:
 
 
 def test_the_chips_are_a_thumb_tall_on_touch() -> None:
-    """I10: the first controls in the funnel measured 35px on touch."""
-    assert "@media (pointer:coarse){.opts label{min-height:44px;" in JOIN
+    """I10: the first controls in the funnel measured 35px on touch. Since the
+    truth pass every option is 44px tall at every pointer (contract C7's one
+    option shape), not only on touch."""
+    rule = re.search(r"\n  \.opts label\{([^}]*)\}", _style(JOIN)).group(1)
+    assert "min-height:44px" in rule and "border-radius:8px" in rule
 
 
 @pytest.mark.parametrize("page,name", [(JOIN, "join"), (CONFIRM, "confirm")])

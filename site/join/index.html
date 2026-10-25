@@ -33,9 +33,10 @@
   :root{
     --display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;
     --sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
-    --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
-    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
-    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6; --flag-tint:#FBF3D9;
+    --navy:#101E33; --paper:#F6F4EE; --card:#FFFFFF;
+    --turf:#1E7A46; --turf-tint:#E3F2E8; --flag:#F2C230; --brick:#B3402F;
+    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#E2DDD0; --rule:#EEEAE1;
+    --field:#C9C3B4; --opt:#D8D3C6; --flag-tint:#FBF3D9; --dusk:#BCC9DB;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
@@ -52,183 +53,147 @@
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
-  body{background:#E7E4DA;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;color:var(--navy);
-    padding:14px 8px 44px;-webkit-font-smoothing:antialiased;}
-  .page{max-width:560px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
-    box-shadow:0 2px 18px rgba(16,30,51,.10);}
-  header{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
-    padding:24px;}
-  header h1{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:38px;line-height:.95;
-    text-transform:uppercase;margin-top:8px;}
-  header p{margin-top:10px;font-size:14px;color:#C9D4E2;line-height:1.5;}
-  section{padding:20px 24px 24px;border-top:3px double var(--line);}
-  .eyebrow{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:14px;
-    letter-spacing:.24em;text-transform:uppercase;color:var(--slate);margin-bottom:12px;}
-  input[type=text], input[type=email]{width:100%;padding:12px 14px;font:inherit;font-size:16px;
-    border:2px solid var(--navy);background:var(--card);}
-  /* Contract C2: one primary style, the site's gold — "Check my roster" was
-     the one green CTA on the site (launch review D3). */
-  button{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:16px;
-    letter-spacing:.1em;text-transform:uppercase;padding:12px 22px;margin-top:10px;
-    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));color:var(--navy);
-    border:none;cursor:pointer;}
+  /* Full-bleed paper (contract C2 of the truth pass): a flat navy band with
+     the headline, then the steps as paper cards beside the navy sidebar —
+     no sheet on a desk, no frame, no double rules. */
+  body{background:var(--paper);font-family:var(--sans);color:var(--navy);padding:0;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy);color:var(--paper);}
+  header .wrap{padding-top:32px;padding-bottom:48px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,4.6vw,48px);line-height:1;
+    text-transform:uppercase;margin-top:40px;text-wrap:balance;}
+  header p{margin-top:14px;font-size:18px;color:var(--dusk);line-height:1.5;max-width:640px;}
+  header p b{color:#FFFFFF;}
+  .shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,340px);gap:32px;align-items:start;
+    padding-top:32px;padding-bottom:72px;}
+  #main{display:grid;gap:16px;min-width:0;}
+  /* Each step is a paper card. */
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:24px;
+    box-shadow:var(--elev-2);}
+  .eyebrow{font-family:var(--display);font-weight:800;font-size:20px;line-height:1.1;
+    letter-spacing:.01em;text-transform:uppercase;color:var(--navy);margin-bottom:8px;}
+  input[type=text], input[type=email]{width:100%;min-height:48px;padding:0 14px;font:inherit;font-size:16px;
+    color:var(--navy);border:1px solid var(--field);border-radius:8px;background:var(--card);}
+  /* Contract C7: one primary style, the site's gold, flat — "Check my roster"
+     was the one green CTA on the site (launch review D3). */
+  button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;
+    font-family:var(--display);font-weight:800;font-size:16px;line-height:1;letter-spacing:.06em;
+    text-transform:uppercase;padding:0 22px;margin-top:12px;background:var(--flag);color:var(--navy);
+    border:none;border-radius:8px;cursor:pointer;}
+  button:hover:not(:disabled){background:#FFD24A;}
   button:disabled{background:var(--slate);color:#fff;cursor:default;}
   button:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
   .cards{display:grid;gap:8px;margin-top:6px;}
   .cardbtn{display:block;width:100%;text-align:left;background:var(--card);
-    border:1px solid var(--line);padding:12px 14px;margin:0;color:var(--navy);
-    font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
-  .cardbtn small{display:block;font-weight:500;color:var(--slate);font-size:12.5px;margin-top:2px;}
-  .cardbtn{transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;}
-  .cardbtn:hover{border-color:var(--turf);transform:translateY(-2px);
-    box-shadow:0 6px 14px rgba(16,30,51,.12);}
-  .cardbtn.rival:hover{border-color:var(--brick);}
-  button{transition:transform .15s ease, background .15s ease;}
-  button:hover:not(:disabled):not(.cardbtn){transform:translateY(-2px);}
-  @media (prefers-reduced-motion: reduce){
-    .cardbtn,button{transition:none !important;transform:none !important;}
-  }
+    border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin:0;color:var(--navy);
+    font-family:var(--sans);text-transform:none;letter-spacing:0;font-weight:700;font-size:15px;}
+  .cardbtn small{display:block;font-weight:500;color:var(--slate);font-size:13px;margin-top:2px;}
+  .cardbtn:hover{border-color:var(--navy);background:var(--card);}
   /* Visible whenever it holds text — showError() only sets textContent, so the
      empty state is the hidden state. A fixed display:none here once made every
      error on this page invisible, including "checkout isn't open". */
-  .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
-    font-size:13.5px;color:#7A2C1F;}
+  .err{margin-top:12px;padding:12px 14px;background:var(--brick-tint);border:1px solid #E7BDB3;
+    border-radius:8px;font-size:14px;line-height:1.5;color:#7A2C1F;}
   .err:empty{display:none;}
   /* A done message is not an alert. "We kept your email" in the red box read
      as a failure (launch audit F6); it gets the green the done block uses. */
-  .ok{margin-top:10px;padding:10px 12px;background:var(--turf-tint);border-left:4px solid var(--turf);
-    font-size:13.5px;line-height:1.5;color:#14502E;}
+  .ok{margin-top:12px;padding:12px 14px;background:var(--turf-tint);border:1px solid #BFDCC8;
+    border-radius:8px;font-size:14px;line-height:1.5;color:#14502E;}
   .ok:empty{display:none;}
-  .scout{background:var(--card);border:2px solid var(--navy);padding:16px 18px;margin-top:6px;}
-  .scout .lead{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:21px;
-    text-transform:uppercase;line-height:1.12;}
-  .scout .big{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:46px;color:var(--brick);
+  .scout{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:6px;}
+  .scout .lead{font-family:var(--display);font-weight:800;font-size:21px;text-transform:uppercase;line-height:1.12;}
+  .scout .big{font-family:var(--display);font-weight:800;font-size:46px;color:var(--brick);
     line-height:1;margin:10px 0 0;font-variant-numeric:tabular-nums;}
-  .scout .big small{display:block;font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-size:13px;font-weight:700;
-    color:var(--slate);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
+  .scout .big small{display:block;font-family:var(--sans);font-size:13px;font-weight:700;
+    color:var(--slate);text-transform:uppercase;letter-spacing:.08em;margin-top:4px;}
   .scout ul{margin:12px 0 0 18px;font-size:14px;line-height:1.65;color:var(--ink2);}
-  .scout .cite{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);
+  .scout .cite{margin-top:12px;padding-top:10px;border-top:1px solid var(--rule);
     font-size:12px;color:var(--slate);line-height:1.55;}
   .scout .kicker{margin-top:10px;font-size:14.5px;line-height:1.55;font-weight:600;}
-  .beta-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
-  .beta-chips span{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-    border:1px solid rgba(246,244,238,.35);color:#F2C230;padding:4px 9px;border-radius:2px;}
-  .note{margin-top:12px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+  .note{margin-top:4px;font-size:14px;color:var(--slate);line-height:1.55;}
+  /* A seat page opened without its league's link: the band's notice moves
+     into <main> and the form goes (seatLinkMissingWords), so it reads as a card. */
+  #main > .note{margin:0;padding:18px 20px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;font-size:16px;color:var(--ink2);box-shadow:var(--elev-2);}
   /* The renewal terms, in sight of the button that leads to payment. They used
      to live only in the post-submit block, which the paid flow never shows. */
-  .terms-line{margin:14px 0 10px;font-size:13px;color:var(--ink2);line-height:1.55;}
-  .addwrap{position:relative;margin-bottom:10px;}
-  .suggest{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--card);
-    border:1px solid var(--navy);border-top:0;box-shadow:0 14px 30px rgba(16,30,51,.18);}
+  .terms-line{margin:14px 0 10px;font-size:14px;color:var(--ink2);line-height:1.55;}
+  .addwrap{position:relative;margin:16px 0 10px;}
+  .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;background:var(--card);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;}
   .suggest:empty{display:none;}
-  .sugrow{display:block;width:100%;text-align:left;background:none;border:none;
-    border-bottom:1px solid var(--line);padding:10px 12px;margin:0;cursor:pointer;
-    font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;font-size:15px;color:var(--navy);text-transform:none;
+  .sugrow{display:flex;flex-direction:column;justify-content:center;width:100%;min-height:44px;
+    text-align:left;background:none;border:none;border-radius:0;
+    border-bottom:1px solid var(--rule);padding:8px 14px;margin:0;cursor:pointer;
+    font-family:var(--sans);font-size:15px;line-height:1.3;color:var(--navy);text-transform:none;
     letter-spacing:0;font-weight:600;}
   .sugrow:last-child{border-bottom:0;}
-  .sugrow:hover,.sugrow:focus{background:var(--turf-tint);}
+  .sugrow:hover:not(:disabled),.sugrow:focus{background:#F2F0E8;transform:none;}
   .sugrow small{color:var(--slate);font-weight:500;}
-  .done{background:var(--turf-tint);border:1px solid var(--turf);padding:14px 16px;margin-top:8px;
-    font-size:14px;line-height:1.6;display:none;}
-  .done > b{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:18px;
+  .done{background:var(--turf-tint);border:1px solid #BFDCC8;border-radius:12px;padding:16px 18px;margin-top:12px;
+    font-size:15px;line-height:1.6;display:none;}
+  .done > b{font-family:var(--display);font-weight:800;font-size:18px;
     text-transform:uppercase;letter-spacing:.06em;color:var(--turf);}
   .done ol{margin:8px 0 0 18px;}
   .done li{margin-top:6px;}
   /* A confirmation with one item showing (free report, seat, update) is a
      sentence, not a list: a lone "1." sat in front of it (panel R5). */
   .done ol.single{list-style:none;margin-left:0;}
-  .settings-ok{display:flex;gap:9px;align-items:flex-start;margin-top:14px;padding:11px 12px;
-    background:#fff;border:1.5px solid var(--navy);font-size:13.5px;font-weight:700;
+  .settings-ok{display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:12px 14px;
+    background:#fff;border:1px solid var(--opt);border-radius:8px;font-size:14px;font-weight:700;
     line-height:1.45;cursor:pointer;}
-  .settings-ok input{margin:0;width:24px;height:24px;flex:none;}
+  .settings-ok input{margin:0;width:24px;height:24px;flex:none;accent-color:var(--navy);}
   .settings-ok:has(input:checked){border-color:var(--turf);background:var(--turf-tint);}
   .hidden{display:none;}
   .checkmail[hidden],.checkmail [hidden]{display:none!important;}
-  footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
-    border-top:3px double var(--line);}
+  footer{border-top:1px solid var(--line);}
+  footer .wrap{padding-top:24px;padding-bottom:40px;font-size:12px;line-height:1.6;color:var(--slate);}
   /* Default browser blue is the only blue in the brand, and it lands on the
      terms link directly under the email field. */
-  footer a,.note a{color:var(--navy);text-decoration:underline;text-underline-offset:2px;}
+  footer a,.note a{color:var(--navy);text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);}
   footer a:hover,.note a:hover{color:var(--brick);}
 
   /* The resolved roster. One row per player, and a row that could not be
      resolved is visibly UNFINISHED rather than quietly missing — intake cannot
      complete with a hole in it (RULE R3). */
-  .rows{margin:14px 0 0;border:1px solid var(--line);background:#fff;}
-  .row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
-    padding:9px 12px;border-top:1px solid #EDEAE1;font-size:14px;}
+  .rows{margin:14px 0 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;
+    padding:9px 12px;border-top:1px solid var(--rule);font-size:15px;}
   .row:first-child{border-top:none;}
   .row.bad{background:#FCF3F1;}
   .row .who{font-weight:700;}
   .row .meta{font-size:12px;color:var(--slate);font-weight:600;}
-  .row .why{font-size:12.5px;color:var(--brick);font-weight:600;}
+  .row .why{font-size:13px;color:var(--brick);font-weight:600;}
   .row .fix{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
-  .row .fix button{font-size:12px;padding:5px 9px;background:#fff;
-    border:1px solid var(--line);color:var(--ink);font-weight:700;cursor:pointer;}
-  .row .fix button:hover{border-color:var(--navy);}
+  .row .fix button{min-height:44px;font-size:13px;padding:0 12px;margin:0;background:#fff;
+    border:1px solid var(--opt);color:var(--navy);font-weight:700;cursor:pointer;}
+  .row .fix button:hover{border-color:var(--navy);background:#fff;}
   /* A row offering a choice lists it under the name: in a side column the
      buttons took their full width and squeezed the name to a word per line. */
-  .row{grid-template-columns:minmax(0,1fr) auto;}
   .row.choose{grid-template-columns:1fr;}
   .row.choose .fix{justify-content:flex-start;}
   /* Removing a row is a quiet × (launch review D14): fifteen outlined
      REMOVE boxes were the loudest thing on a checked roster. Always
-     visible — a hover-only control is one a thumb never finds — and a 32px
-     target; the aria-label names the player. */
-  .row .fix button.drop{width:32px;height:32px;min-width:32px;padding:0;border:0;
-    background:transparent;color:var(--slate);font-family:'Barlow','Barlow Fallback',-apple-system,sans-serif;
+     visible — a hover-only control is one a thumb never finds — and a 44px
+     tall target; the aria-label names the player. */
+  .row .fix button.drop{width:40px;height:44px;min-width:40px;padding:0;border:0;border-radius:8px;
+    background:transparent;color:var(--slate);font-family:var(--sans);
     font-size:22px;font-weight:500;line-height:1;letter-spacing:0;text-transform:none;
     display:inline-flex;align-items:center;justify-content:center;}
   .row .fix button.drop:hover,.row .fix button.drop:focus-visible{color:var(--brick);
     background:var(--brick-tint);transform:none;}
   .twin{font-size:12px;color:#8A6A10;font-weight:600;}
-  .tally{margin-top:10px;font-size:13px;color:var(--slate);font-weight:600;}
+  .tally{margin-top:12px;font-size:14px;color:var(--slate);font-weight:600;}
   .tally.bad{color:var(--brick);}
   .tally.warn{color:var(--brick);font-weight:600;}
-  .opts{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 0;}
-  .opts label{font-size:13px;font-weight:700;border:1px solid var(--line);
-    padding:7px 11px;cursor:pointer;background:#fff;}
-  .opts input{margin-right:6px;}
-  textarea{width:100%;min-height:150px;padding:11px 12px;border:1px solid var(--line);
-    font:inherit;font-size:14px;line-height:1.5;background:#fff;resize:vertical;}
-
-  /* ------------------------------------------------ Sep 29 2026 polish
-     The page stays paper-light on purpose (the dark landing sells, the paper
-     product delivers); what changes is that it reads as a finished product:
-     a progress bar, real toggles, a sidebar that keeps the reason to buy in
-     view, and reassurance beside the button that takes the money. */
-  body{background:radial-gradient(900px 500px at 50% -10%,#F3EFE3,transparent 70%),#E7E4DA;
-    padding:22px 12px 56px;}
-  .shell{max-width:980px;margin:0 auto;display:grid;
-    grid-template-columns:minmax(0,600px) minmax(0,330px);gap:28px;align-items:start;
-    justify-content:center;}
-  .page{max-width:none;margin:0;border-radius:0;overflow:hidden;
-    box-shadow:0 30px 60px -30px rgba(16,30,51,.35),0 2px 10px rgba(16,30,51,.06);}
-  header h1{font-size:42px;margin-top:14px;}
-  .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:18px;}
-  .progress span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-    color:rgba(246,244,238,.5);padding-top:8px;border-top:3px solid rgba(246,244,238,.18);}
-  /* The 3px border is the dim track; a step FILLS it from the left when it
-     is reached (step 2 once the roster box holds text, step 3 once the email
-     step opens) rather than recolouring in place. */
-  .progress span{position:relative;}
-  .progress span::before{content:"";position:absolute;left:0;right:0;top:-3px;height:3px;
-    background:var(--flag);transform:scaleX(0);transform-origin:0 50%;
-    transition:transform .5s var(--ease-out);}
-  .progress .on{color:var(--flag);}
-  body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
-  body:has(#step-email:not(.hidden)) .progress .s2,
-  body:has(#step-email:not(.hidden)) .progress .s3{color:var(--flag);}
-  .progress .on::before,
-  body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before,
-  body:has(#step-email:not(.hidden)) .progress .s2::before,
-  body:has(#step-email:not(.hidden)) .progress .s3::before{transform:none;}
-  section{padding:24px 26px 26px;border-top:1px solid var(--line);}
-  .eyebrow{color:var(--navy);font-size:15px;letter-spacing:.18em;}
-  .opts{gap:6px;margin-top:10px;}
-  .opts label{position:relative;border-radius:999px;padding:8px 14px;font-size:13.5px;
-    border:1.5px solid var(--line);
-    transition:background .15s,border-color .15s,color .15s,transform .12s var(--ease-out);}
+  /* Contract C7's one option shape: 44px tall, 8px corners, navy when chosen. */
+  .opts{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0;}
+  .opts label{position:relative;display:inline-flex;align-items:center;min-height:44px;padding:0 14px;
+    font-size:15px;font-weight:600;line-height:1.2;color:var(--navy);background:#fff;cursor:pointer;
+    border:1px solid var(--opt);border-radius:8px;
+    transition:transform .12s var(--ease-out);}
   .opts label:hover{border-color:var(--navy);}
   /* A chip answers the press, and the one just chosen settles in. Scoped to
      :focus-within, so the chips checked by default do not pop at load. */
@@ -236,142 +201,160 @@
   .opts:focus-within label:has(input:checked){animation:chipin .26s var(--ease-pop);}
   @keyframes chipin{from{transform:scale(.92);}}
   .opts input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}
-  .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:#fff;}
+  .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:var(--paper);}
   /* Navy, the page's one focus ring: gold on paper measured under 2:1. */
   .opts label:has(input:focus-visible){outline:3px solid var(--navy);outline-offset:2px;}
-  /* The first controls in the funnel, tapped by a thumb: 44px tall on touch
-     (I10 measured them at 35). */
-  @media (pointer:coarse){.opts label{min-height:44px;display:inline-flex;align-items:center;}}
+  textarea{width:100%;min-height:160px;padding:12px 14px;border:1px solid var(--field);border-radius:8px;
+    font:inherit;font-size:16px;line-height:1.5;color:var(--navy);background:#fff;resize:vertical;}
   /* A field's label stays on screen once the field is typed in (LP-D6): the
      placeholder alone vanished, and the seat form's two addresses swapped. */
   label.optlabel{display:block;}
-  .optlabel + input{margin-top:6px;}
-  /* The platform name on a lineup chip. Its own margin, because on touch the
-     chip is a flex box and the space before it collapses. */
-  .optsub{font-weight:600;text-transform:none;letter-spacing:0;color:var(--slate);
+  .optlabel + input{margin-top:8px;}
+  /* The platform name on a lineup chip, a quieter second voice. */
+  .optsub{font-size:13px;font-weight:600;text-transform:none;letter-spacing:0;opacity:.75;
     margin-left:.3em;}
-  .opts label:has(input:checked) .optsub{color:#C9D4E2;}
-  #player-search{border-radius:3px;}
-  textarea{border-radius:3px;}
-  #resolve,#submit{width:100%;padding:15px 22px;font-size:17px;border-radius:0;
-    box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
-  .optlabel{margin:16px 0 0;font-size:12px;font-weight:800;letter-spacing:.12em;
-    text-transform:uppercase;color:var(--ink2);}
-  .optlabel + .opts{margin-top:6px;}
+  .optlabel{margin:20px 0 0;font-family:var(--display);font-size:13px;font-weight:700;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--slate);}
+  .optlabel + .opts{margin-top:8px;}
   #opt-plan{margin-bottom:6px;}
   #lbl-plan{margin-top:0;}
+  #resolve,#submit{width:100%;min-height:52px;font-size:17px;}
   /* The closed state of the checkout button: a real button in the site's
      secondary style (contract C2), still pressable so it can say what to do
      instead — never the dashed box that read as a wireframe (D4). */
-  #submit.is-closed{background:var(--card);color:var(--navy);border:2px solid var(--navy);
-    box-shadow:none;}
-  #submit.is-closed:hover{transform:none;}
+  #submit.is-closed{background:var(--card);color:var(--navy);border:1.5px solid var(--navy);}
+  #submit.is-closed:hover{transform:none;background:var(--card);}
   /* Pressed and done (the launch list kept the email): it stops posting rows. */
   #submit:disabled{background:var(--turf-tint);color:var(--turf);border:1.5px solid var(--turf);
-    box-shadow:none;transform:none;}
-  .retry{margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
-    font-size:14px;padding:9px 14px;}
+    transform:none;}
+  .retry{min-height:44px;margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
+    font-size:14px;padding:0 16px;}
+  .retry:hover:not(:disabled){background:var(--card);}
   /* The address, read back before checkout (critique #1). */
-  .checkmail{margin-top:12px;padding:12px 14px;background:var(--card);border:2px solid var(--navy);
-    font-size:14px;line-height:1.5;}
+  .checkmail{margin-top:12px;padding:14px 16px;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;font-size:15px;line-height:1.5;}
   .checkmail p{margin:0;}
   .checkmail p + p{margin-top:6px;}
   .checkmail b{overflow-wrap:anywhere;}
-  .checkmail .checkbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .checkmail .checkbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
   .checkmail .checkbtns button{margin-top:0;}
-  .checkmail button.alt{background:var(--card);color:var(--navy);border:2px solid var(--navy);
-    padding:10px 18px;}
+  .checkmail button.alt{background:var(--card);color:var(--navy);border:1.5px solid var(--navy);}
   /* A button naming an address shows it as typed, never in capitals. */
   .checkmail button.addr{text-transform:none;letter-spacing:.01em;
     font-family:var(--sans);font-weight:700;font-size:15px;}
-  .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;
-    font-size:12.5px;color:var(--slate);font-weight:600;}
+  .secure{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:12px;
+    font-size:13px;color:var(--slate);font-weight:600;}
   .secure svg{width:12px;height:14px;flex:none;}
-  /* sidebar */
-  .side{position:sticky;top:22px;background:linear-gradient(180deg,#182A45,var(--navy));
-    color:var(--paper);border-radius:0;padding:22px 22px 20px;
-    box-shadow:0 30px 60px -30px rgba(16,30,51,.5);}
-  .side h2{font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:22px;letter-spacing:.04em;
-    text-transform:uppercase;color:var(--flag);}
-  .side ul{list-style:none;margin-top:12px;display:grid;gap:11px;}
-  .side li{display:grid;grid-template-columns:18px 1fr;gap:9px;font-size:14px;line-height:1.5;
-    color:#DCE3EC;}
-  .side li::before{content:"";width:14px;height:14px;margin-top:3px;border-radius:50%;
+  /* The sidebar: a navy card, no smear under it. */
+  .side{position:sticky;top:24px;background:var(--navy);color:var(--paper);border-radius:16px;
+    padding:24px;}
+  .side h2{font-family:var(--display);font-weight:800;font-size:22px;line-height:1.1;letter-spacing:.01em;
+    text-transform:uppercase;color:#FFFFFF;}
+  .side ul{list-style:none;margin-top:14px;display:grid;gap:12px;}
+  .side li{display:grid;grid-template-columns:18px 1fr;gap:10px;font-size:15px;line-height:1.5;
+    color:#B9C2D0;}
+  .side li::before{content:"";width:16px;height:16px;margin-top:3px;border-radius:50%;
     background:var(--flag) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.5 7.2 6 9.6l4.6-5' fill='none' stroke='%23101E33' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;}
   .side li b{color:#fff;}
-  .side .proof{margin-top:18px;padding-top:16px;border-top:1px solid rgba(246,244,238,.14);
-    font-size:13.5px;line-height:1.5;color:#C9D4E2;}
+  .side .proof{margin-top:20px;padding-top:18px;border-top:1px solid rgba(246,244,238,.14);
+    font-size:14px;line-height:1.55;color:#B9C2D0;}
   /* Uppercase like every display head on the site (D14). */
-  .side .proof b{display:block;font-family:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;font-weight:800;font-size:30px;
-    color:var(--flag);line-height:1;margin-bottom:6px;text-transform:uppercase;letter-spacing:.02em;}
-  .side a{color:var(--flag);}
-  .side .trust{margin-top:16px;padding-top:14px;border-top:1px solid rgba(246,244,238,.14);
-    display:grid;gap:6px;font-size:13px;color:#C9D4E2;}
+  .side .proof b{display:block;font-family:var(--display);font-weight:800;font-size:28px;
+    color:#FFFFFF;line-height:1;margin-bottom:6px;text-transform:uppercase;letter-spacing:.01em;}
+  .side a{color:#FFFFFF;text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:rgba(255,255,255,.45);}
+  .side a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  .side .trust{margin-top:18px;padding-top:16px;border-top:1px solid rgba(246,244,238,.14);
+    display:grid;gap:8px;font-size:13px;line-height:1.5;color:#8FA3BC;}
   .side .trust span{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:start;}
   .side .trust span::before{content:"";width:12px;height:12px;margin-top:3px;
-    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4 6 10.2l5-6' fill='none' stroke='%23F2C230' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;}
-  header .note{color:#F6F4EE;background:rgba(242,194,48,.1);border-left:3px solid var(--flag);
-    padding:10px 12px;font-size:13px;}
-  header .note a{color:var(--flag);}
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4 6 10.2l5-6' fill='none' stroke='%238FA3BC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;}
+  /* Checkout isn't open: a dark notice in the band, above step 1. */
+  header #closed-note{margin-top:20px;max-width:640px;padding:14px 16px;font-size:15px;line-height:1.55;
+    color:#F6F4EE;background:rgba(246,244,238,.06);border:1px solid rgba(242,194,48,.35);
+    border-radius:12px;}
+  header #closed-note a{color:#FFFFFF;text-decoration-color:rgba(255,255,255,.45);}
+  header a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
+  /* The step bar: three 3px tracks, gold where reached. */
+  .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:24px;max-width:640px;}
+  .progress span{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:#8FA3BC;padding-top:10px;position:relative;}
+  /* The 3px track is dim; a step FILLS it from the left when it is reached
+     (step 2 once the roster box holds text, step 3 once the email step
+     opens) rather than recolouring in place. */
+  .progress span::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:2px;
+    background:rgba(246,244,238,.18);}
+  .progress span::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;z-index:1;
+    border-radius:2px;background:var(--flag);transform:scaleX(0);transform-origin:0 50%;
+    transition:transform .5s var(--ease-out);}
+  .progress .on{color:#FFFFFF;}
+  body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
+  body:has(#step-email:not(.hidden)) .progress .s2,
+  body:has(#step-email:not(.hidden)) .progress .s3{color:#FFFFFF;}
+  .progress .on::before,
+  body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before,
+  body:has(#step-email:not(.hidden)) .progress .s2::before,
+  body:has(#step-email:not(.hidden)) .progress .s3::before{transform:none;}
   @media (max-width:960px){
-    .shell{grid-template-columns:minmax(0,600px);}
+    .shell{grid-template-columns:minmax(0,1fr);max-width:688px;}
     .side{position:static;box-shadow:none;}
   }
-  @media (max-width:480px){
-    body{padding:0 0 40px;}
-    .page,.side{border-radius:0;}
-    header h1{font-size:36px;}
-    section{padding:22px 18px 24px;}
+  @media (max-width:600px){
+    .wrap{padding:0 16px;}
+    header .wrap{padding-top:24px;padding-bottom:32px;}
+    header h1{margin-top:32px;}
+    .shell{padding-top:16px;padding-bottom:48px;gap:16px;}
+    section{padding:20px 16px;}
+    header p{font-size:16px;}
   }
 
-  /* ------------------------------------------------ Oct 24 2026 polish
-     The roster check is the moment the page first understands the buyer.
+  /* The roster check is the moment the page first understands the buyer.
      Two columns from 360px wide: fifteen full-width rows were ~915px and
      pushed step 3 a screen down even at 1440. Rows that need work are drawn
      first and span the width above the pairs; names wrap, never truncate. */
-  #rows .rows{display:grid;gap:1px;background:#EDEAE1;}
-  #rows .row{border-top:0;background:#fff;padding:8px 8px 8px 12px;}
+  #rows .rows{display:grid;gap:1px;background:var(--rule);}
+  #rows .row{border-top:0;background:#fff;padding:6px 6px 6px 12px;}
   #rows .row.bad{background:#FCF3F1;}
   @media (min-width:360px){
     #rows .rows{grid-template-columns:repeat(2,minmax(0,1fr));}
     #rows .row.choose,#rows .row.bad{grid-column:1 / -1;}
     #rows .rows.odd::after{content:"";background:#fff;}
   }
-  #rows .row .who{font-size:14px;line-height:1.25;}
-  #rows .row .meta{font-size:11.5px;letter-spacing:.04em;}
+  #rows .row .who{font-size:15px;line-height:1.25;}
+  #rows .row .meta{font-size:12px;letter-spacing:.06em;}
   /* Only a real "Check my roster" cascades (.fresh, set for 900ms); a
      remove or a pick redraws without moving. */
   #rows.fresh .row{animation:rowin .34s var(--ease-out) both;
     animation-delay:min(calc(var(--i,0) * 24ms),360ms);}
   @keyframes rowin{from{opacity:0;transform:translateY(6px);}}
   .tally.good:not(:empty){display:flex;align-items:center;gap:8px;color:var(--turf);font-weight:700;
-    font-size:13.5px;}
+    font-size:14px;}
   .tally.good:not(:empty)::before,.ok:not(:empty)::before{content:"";width:20px;height:20px;flex:none;
     border-radius:50%;background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.3 4.6-5' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
     animation:okpop .42s var(--ease-pop) both;}
   .ok:not(:empty){display:flex;gap:9px;align-items:flex-start;}
   .ok:not(:empty)::before{width:18px;height:18px;background-size:12px;margin-top:1px;}
   /* One primary at a time: once the roster checks out, the next step owns
-     the gold. An inset ring, not a border, so the button does not grow. */
-  #resolve.is-done{background:var(--card);color:var(--navy);box-shadow:inset 0 0 0 2px var(--navy);}
+     the gold. A secondary now, the flat outline (contract C7). */
+  #resolve.is-done{background:var(--card);color:var(--navy);border:1.5px solid var(--navy);}
   #step-email:not(.hidden){animation:stepin .45s var(--ease-out) both;}
   @keyframes stepin{from{opacity:0;transform:translateY(10px);}}
   /* "Checkout isn't open" is information, not a failure: a calm notice, not
      the brick error box. role=alert and the focus stay (showError). */
-  .err[data-tone="info"]{background:var(--card);border-left-color:var(--navy);color:var(--ink2);
+  .err[data-tone="info"]{background:var(--card);border-color:var(--line);color:var(--ink2);
     box-shadow:var(--elev-1);}
   .err[data-tone="info"]::before{content:"";display:inline-block;width:8px;height:8px;
     margin-right:8px;border-radius:50%;background:var(--flag);vertical-align:1px;}
   .err:not(:empty),.ok:not(:empty){animation:msgin .28s var(--ease-out);}
   /* The address read back before Stripe locks it. */
   .checkmail:not([hidden]){animation:stepin .3s var(--ease-out) both;}
-  #check-address{background:var(--flag-tint);padding:1px 6px;border-radius:3px;
+  #check-address{background:var(--flag-tint);padding:1px 6px;border-radius:4px;
     -webkit-box-decoration-break:clone;box-decoration-break:clone;}
-  .checkmail button.alt:hover{background:#F1EEE6;}
+  .checkmail button.alt:hover{background:#F2F0E8;}
   .suggest:not(:empty){animation:dropin .16s var(--ease-out);}
   @keyframes dropin{from{opacity:0;transform:translateY(-4px);}}
   .sugrow:focus-visible{outline:2px solid var(--navy);outline-offset:-2px;}
-  /* Room for the field's focus halo: the note's last line sat on its border. */
+  /* Room for the field's focus ring: the note's last line sat on its border. */
   #step-roster > .note{margin-bottom:10px;}
   @media (prefers-reduced-motion:reduce){
     #rows.fresh .row,.tally.good::before,.ok::before,#step-email,.checkmail,.err,.ok,.suggest,
@@ -383,38 +366,27 @@
      (tests/test_polish_pages.py compares them), and last in the sheet, so a
      page's own older rule of the same weight never wins. Motion is transform
      and opacity only; site/motion.js adds .motion, and without it (no script,
-     reduced motion) nothing here hides anything. */
+     reduced motion) nothing here hides anything. One depth (contract C7): the
+     paper shadow, on paper only. One press: a flat button lifts 1px and
+     settles — no slant, no gradient, no sheen, no drop shadow. */
   :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
     --elev-1:0 1px 2px rgba(16,30,51,.06);
-    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
-    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
-  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
-  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+    --elev-2:0 1px 2px rgba(16,30,51,.06),0 8px 24px -12px rgba(16,30,51,.18);}
   .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
   /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
   main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
     outline-offset:2px;border-radius:2px;}
-  /* A clip-path clips the outline too: a slanted gold button showed NO ring
-     when focused, so it squares off while it holds keyboard focus. */
+  /* A clip-path clips the outline too, so a slanted button left anywhere
+     squares off while it holds keyboard focus. */
   .btn.gold:focus-visible{clip-path:none;}
-  /* The outline survives forced colours; the gold halo is decoration. */
+  /* A field in focus: its border turns navy and a soft navy ring rises; the
+     transparent outline is what forced colours draws. */
   input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
-    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+    outline:2px solid transparent;outline-offset:2px;border-color:var(--navy);
+    box-shadow:0 0 0 3px rgba(16,30,51,.15);}
   .btn,button{transition:transform .18s var(--ease-out);}
-  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-1px);}
   .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
-  /* A sheen across the primary only, on hover: one gold action at a time. */
-  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
-  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
-  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
-  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
-    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
-    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
-    transform:translateX(-130%) skewX(-14deg);}
-  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
-  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
-  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
-    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
   /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
      h1 or the first paragraph, and never the words a reader is waiting for. */
   .motion [data-reveal]:not([data-reveal="group"]):not(.in),
@@ -430,8 +402,6 @@
      frame at once, so the page is complete at rest. */
   @media (prefers-reduced-motion:reduce){
     .btn,button,.opts label{transition:none!important;transform:none!important;}
-    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
-    .sharebtn::after{display:none;}
     *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
       animation-iteration-count:1!important;}
   }
@@ -439,9 +409,8 @@
 </style>
 </head>
 <body>
-<div class="shell">
-<div class="page">
-  <header>
+<header>
+  <div class="wrap">
     <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="../how-it-works.html">How it works</a><a href="../sample-report.html">See a real report</a><a class="hidesm" href="../index.html#pricing">Pricing</a></nav></div>
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
@@ -453,12 +422,11 @@
     yet. You're welcome to set up now: once you check your roster it stays in this
     page's address, so a bookmark brings it back. Leave your email on the
     <a href="../index.html#watch-form">front page</a> and we'll send exactly one message when it opens.</div>
-    <div class="beta-chips" id="header-chips">
-      <span>$29 · rest of season</span><span>One payment, nothing renews</span><span class="first-chip">A report the day you join</span>
-    </div>
-  </header>
+  </div>
+</header>
+<div class="wrap shell">
 
-  <main id="main">
+<main id="main">
   <section id="step-league">
     <div class="eyebrow">1 · Your league's settings</div>
     <div class="note" id="seat-settings" style="display:none"></div>
@@ -628,17 +596,7 @@ Baltimore Ravens
       </ol>
     </div>
   </section>
-  </main>
-
-  <footer>
-    We store the minimum: your email, your scoring settings and your roster. We never
-    ask for a password, and we never connect to your league<span id="footer-checkout"> — checkout runs on Stripe's
-    own secure page, which also asks for your card's country and, where needed, its postal code</span>. Beat Your League —
-    analysis, not betting picks. Must be 18+.<br>
-    <a href="../terms.html">Terms &amp; refunds</a> &middot;
-    <a href="../privacy.html">Privacy</a>
-  </footer>
-</div>
+</main>
 <aside class="side">
   <h2>What lands in your inbox</h2>
   <ul>
@@ -660,6 +618,16 @@ Baltimore Ravens
   </div>
 </aside>
 </div>
+<footer>
+  <div class="wrap">
+    We store the minimum: your email, your scoring settings and your roster. We never
+    ask for a password, and we never connect to your league<span id="footer-checkout"> — checkout runs on Stripe's
+    own secure page, which also asks for your card's country and, where needed, its postal code</span>. Beat Your League —
+    analysis, not betting picks. Must be 18+.<br>
+    <a href="../terms.html">Terms &amp; refunds</a> &middot;
+    <a href="../privacy.html">Privacy</a>
+  </div>
+</footer>
 <script src="roster.js?v=632c4eddea"></script>
 <!-- DOMAIN_FIXES and suggestedEmail, shared with the landing's waitlist (FUN-5). -->
 <script src="/email-check.js?v=2e2f372017"></script>
@@ -1832,7 +1800,6 @@ function showSeatLink() {
 // The page learns which from site/week.json — written from the NFL schedule by
 // the Tuesday build, never typed — and until it can tell, it says the sentence
 // that is true either way.
-const FIRST_CHIP = {};                    // marks the chip that names it
 let FIRST = null;                          // null | {when, tuesday}
 // Monthly is paused before the season (week.json phase "preseason"): each
 // month bills in advance, so a May buyer would pay for months with no weekly
@@ -1922,30 +1889,15 @@ function canStartToday() {
   if (SEAT_MODE) return Boolean(FORM_ENDPOINT);
   return Boolean(WANTS_PASS ? PASS_LINK : monthlyChosen ? monthlyLink() : seasonLink());
 }
+// The closed plan's own name — the words a header chip used to carry, on the
+// button now (closedLabel), which already says what pressing it does.
 function closedChipText() {
   if (FIRST && FIRST.when === "over") return "Back next season";
   if (SEAT_MODE) return "Seats open soon";
   if (WANTS_PASS) return "League Pass opens soon";
   return monthlyChosen ? "Monthly opens soon" : "Rest-of-Season Pass opens soon";
 }
-function firstChipText() {
-  if (!canStartToday()) return closedChipText();
-  if (FIRST && FIRST.when === "before") return "This week's report today";
-  if (FIRST && FIRST.when === "after") return "Weekly reports from " + FIRST.tuesday;
-  return SEAT_MODE ? "A report the day it's confirmed" : "A report the day you join";
-}
-function setChips(list) {
-  $("header-chips").replaceChildren();
-  list.forEach((text) => {
-    const chip = document.createElement("span");
-    if (text === FIRST_CHIP) chip.className = "first-chip";
-    chip.textContent = text === FIRST_CHIP ? firstChipText() : text;
-    $("header-chips").appendChild(chip);
-  });
-}
 function drawFirst() {
-  document.querySelectorAll("#header-chips .first-chip")
-    .forEach((chip) => { chip.textContent = firstChipText(); });
   const side = $("side-first"), note = document.querySelector("#first-note .first-when");
   const b = (words) => { const el = document.createElement("b"); el.textContent = words; return el; };
   const t = (words) => document.createTextNode(words);
@@ -1989,11 +1941,11 @@ function fillRenewalDates() {
   });
 }
 
-// The static markup IS the season pass: its pitch, chips, terms and button.
+// The static markup IS the season pass: its pitch, terms and button.
 // Kept as node copies (never markup strings) so switching back restores it
 // exactly, including the bold price in the pitch.
 const SEASON_STATE = {};
-["header-pitch", "header-chips", "terms-line", "renew-note"].forEach((id) => {
+["header-pitch", "terms-line", "renew-note"].forEach((id) => {
   SEASON_STATE[id] = [...$(id).childNodes].map((n) => n.cloneNode(true));
 });
 const SEASON_SUBMIT = $("submit").textContent;
@@ -2044,7 +1996,7 @@ function closedLabel(action) {
     return "Switch to " + (monthlyChosen ? "the season pass" : "monthly") + " — open now";
   }
   if (action === "list") return "Email me when checkout opens";
-  return WANTS_PASS ? "League Pass opens soon" : "Checkout opens soon";
+  return closedChipText();
 }
 // The note at the top, pointing only at something that exists: the form below
 // when it is connected, the plan that is open, or the front page's capture
@@ -2124,7 +2076,6 @@ function monthlyPlan() {
     "on record (never on team defenses), and the byes ahead flagged while there's time " +
     "to cover them. $14.99 a month, and billing stops on its own after the season's " +
     "last weekly report.";
-  setChips(["$14.99 / month", "Cancel any time", FIRST_CHIP]);
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops on its own after the season's last " +
     "weekly report: your last charge is the month that report falls in. Cancel " +
@@ -2147,7 +2098,7 @@ function seasonPlan() {
   noteClosedFor(seasonLink(), monthlyLink());
 }
 
-// The free report's pitch, chip and (when it can't be served) closed note,
+// The free report's pitch and (when it can't be served) closed note,
 // from TRIAL. Without a clock it names "your next weekly report", which is
 // true whichever side of kickoff the request lands (JOIN-113/115).
 function trialClosedWords() {
@@ -2169,7 +2120,6 @@ function drawTrial() {
   $("header-pitch").textContent =
     "Free: " + what[0] + " — every slot decided for your roster, every close " +
     "call explained, an if/then for late news. One per person, no card.";
-  setChips(["Free — no card", what[1], "One per person"]);
   if (FORM_ENDPOINT && TRIAL_OPEN && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
     const note = $("closed-note");
     const a = document.createElement("a");
@@ -2206,7 +2156,6 @@ if (TRY_MODE) {
     "stands now — trades, pickups, drops — and your next report is built from " +
     "both. Nothing to pay. Enter the address your reports go to and we'll email " +
     "it a button to confirm the change.";
-  setChips(["Roster update", "Nothing to pay", "Confirmed by email"]);
   $("lbl-email").textContent = "The address your reports go to";
   $("submit").textContent = "Update my roster";
   nothingToPay("3 · Confirm");
@@ -2233,7 +2182,6 @@ if (TRY_MODE) {
   // A matched seat is sent its first report the day it is confirmed, by the
   // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
   // promise before seats had a first email.
-  setChips(["League Pass seat — nothing to pay", "Your own report", FIRST_CHIP]);
   $("submit").textContent = "Claim my seat";
   nothingToPay("3 · Claim");
   $("lbl-email").textContent = "Your email — your reports go here";
@@ -2265,7 +2213,6 @@ if (TRY_MODE) {
     // its one main landmark (a hidden <main> left it with none).
     for (const child of $("main").children) child.style.display = "none";
     $("main").prepend(note);
-    $("header-chips").style.display = "none";
     const progress = document.querySelector(".progress");
     if (progress) progress.style.display = "none";
   }
@@ -2282,7 +2229,6 @@ if (TRY_MODE) {
     "claims their seat from it once, with their own roster. $69 for your whole league, rest " +
     "of season — one payment, nothing renews, and a full refund until your second " +
     "weekly report's week kicks off.";
-  setChips(["$69 / league · rest of season", "A seat for every manager", FIRST_CHIP]);
   $("lbl-email").textContent = "Your email — your own report and the receipt go here";
   // The pass is $99, and the renewal disclosure must name the amount that
   // actually renews — the season-pass sentence would be a wrong disclosure —
@@ -2459,7 +2405,6 @@ drawFirst();
             " to your title game, decided for your roster and in your inbox every " +
             "Tuesday. $19 for the Playoff Pass — one payment, no subscription, and a " +
             "full refund until your second weekly report's week kicks off.";
-          setChips(["$19 · Playoff Pass", "One payment, nothing renews", FIRST_CHIP]);
           drawFirst();
         }
         if (w && w.phase === "preseason" && STRIPE_LINK_MONTHLY && !SEAT_MODE && !WANTS_PASS) {

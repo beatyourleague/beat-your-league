@@ -80,7 +80,9 @@ def test_one_shared_block_gives_every_paper_page_the_same_depth_focus_and_press(
     hover lift (1px, 2px), no press state and default focus rings — a funnel
     assembled rather than designed. One block, pasted identically, last in each
     sheet so a page's older rule of the same weight cannot win; a drifted copy
-    fails here (mutation: change one page's --elev-2)."""
+    fails here (mutation: change one page's --elev-2). Truth pass (contract
+    C7): one paper shadow, a 1px lift on hover, and no sheen — the flat button
+    has nothing sweeping across it."""
     blocks = {name: _block(_page(name)) for name in PAPER}
     first = blocks[PAPER[0]]
     for name, block in blocks.items():
@@ -89,20 +91,23 @@ def test_one_shared_block_gives_every_paper_page_the_same_depth_focus_and_press(
         assert page.count(BLOCK_START) == 1, name
         assert page.index(BLOCK_END) + len(BLOCK_END) == page.index("</style>"), \
             f"{name}: the shared block must close the sheet"
-    for token in ("--elev-1:", "--elev-2:", "--elev-3:", "--ease-out:", "--ease-pop:"):
+    for token in ("--elev-1:", "--elev-2:", "--ease-out:", "--ease-pop:"):
         assert token in first
+    assert ("--elev-2:0 1px 2px rgba(16,30,51,.06),0 8px 24px -12px rgba(16,30,51,.18);"
+            in first), "not contract C7's paper shadow"
     assert ".btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985)" in first
-    assert ".btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}" in first
+    assert ".btn:hover,button:hover:not(:disabled){transform:translateY(-1px);}" in first
+    assert "skewX" not in first and ".btn.gold::after" not in first, \
+        "the shared block still sweeps a sheen"
 
 
 def test_a_phone_still_shows_the_paper_edge_to_edge() -> None:
-    """D15 holds: the shared sheet shadow applies from 481px only, so the
-    pages' own phone rule (no border, no shadow at 480 and under) is never
-    overridden by a later rule of the same weight."""
+    """D15 holds, at every width now (truth pass, contract C2): the shared
+    block draws no sheet and no sheet shadow at all, so no page can be put
+    back on a desk by a later rule of the same weight."""
     block = _block(_page("thanks.html"))
-    assert "@media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}" in block
-    assert not re.search(r"(?<![\w-])\.sheet\{[^}]*box-shadow", block.replace(
-        "@media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}", ""))
+    assert ".sheet" not in block and ".page," not in block and "--elev-3" not in block
+    assert not re.search(r"(?<![\w-])\.(?:sheet|page|report)\{[^}]*box-shadow", block)
 
 
 def test_motion_js_is_versioned_and_loaded_only_where_a_block_reveals() -> None:
@@ -228,8 +233,10 @@ def test_a_reveal_never_holds_a_headline_the_largest_paint_or_the_words() -> Non
         for tag, attrs in re.findall(r"<(\w+)([^>]*\bdata-reveal\b[^>]*)>", page):
             assert tag in ("div", "aside"), f"{name}: data-reveal on <{tag}>"
             assert not re.search(r'class="[^"]*\b(?:terms|lede|note)\b', attrs), (name, attrs)
+    # The cell around each generated card (the truth pass: the card itself is
+    # render/phone.py's, injected whole between its hiw-* markers).
     how = re.findall(r'<div class="([^"]+)"[^>]*\bdata-reveal\b', _page("how-it-works.html"))
-    assert how and set(how) == {"filecard"}, how
+    assert how and set(how) == {"annocard"}, how
 
 
 # --------------------------------------------------------------------- #
@@ -264,13 +271,19 @@ def test_reduced_motion_lands_every_animation_on_its_last_frame() -> None:
     rest: no press or lift, no sheen, and every animation (entrances, the
     burst, the busy dots, the cascade) collapsed to its final frame — checked
     in Chrome by media emulation as well (the checked roster complete at frame
-    0, the thank-you page and the League Pass page static)."""
+    0, the thank-you page and the League Pass page static). The buttons carry
+    no sheen at all since the truth pass (contract C7); the one sheen left,
+    the League Pass headline's slab, is hidden under reduced motion."""
     for name in OWNED:
-        reduced = "".join(_media(_style(_page(name)), "(prefers-reduced-motion:reduce)"))
+        css = _style(_page(name))
+        reduced = "".join(_media(css, "(prefers-reduced-motion:reduce)"))
         assert "animation-duration:.01ms!important" in reduced, name
         assert "animation-iteration-count:1!important" in reduced, name
         assert "transform:none!important" in reduced, name
-        assert "::after" in reduced and "display:none" in reduced, f"{name}: the sheen runs"
+        for sheen in re.findall(r"([^{}]+::after)\{[^}]*skewX", css):
+            assert "display:none" in reduced and sheen.strip().split(",")[0] in reduced, \
+                f"{name}: the sheen runs ({sheen.strip()})"
+        assert not re.search(r"\.btn[^{}]*::after\{[^}]*skewX", css), f"{name}: a button sheen"
 
 
 def test_a_slanted_gold_button_shows_its_focus_ring() -> None:
@@ -312,9 +325,10 @@ def test_the_progress_bar_fills_instead_of_recolouring() -> None:
     """JOIN-SETTINGS: the 3-step bar recoloured in place. The border is now the
     dim track and each step FILLS it from the left (transform), on the same
     three conditions that light it: step 2 once the roster box holds text,
-    step 3 once the email step opens."""
-    assert ".progress .on{color:var(--flag);}" in JOIN_CSS
-    assert "transform:scaleX(0);transform-origin:0 50%;" in JOIN_CSS
+    step 3 once the email step opens. Gold is the FILL only (contract C6,
+    truth pass): a reached step's label turns white, its 3px track gold."""
+    assert ".progress .on{color:#FFFFFF;}" in JOIN_CSS
+    assert "background:var(--flag);transform:scaleX(0);transform-origin:0 50%;" in JOIN_CSS
     fill = JOIN_CSS.split("  .progress .on::before,", 1)[1].split("{transform:none;}", 1)[0]
     for when in ("body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before",
                  "body:has(#step-email:not(.hidden)) .progress .s2::before",
@@ -350,8 +364,9 @@ def test_the_roster_check_reads_back_in_two_columns_and_marks_itself_done() -> N
     assert draw.index('classList.toggle("odd"') < draw.index("list.appendChild(wrap);")
     assert 'tally.className = "tally" + (problem ? " bad" : empty.length ? " warn" : " good");' in draw
     assert '$("resolve").classList.toggle("is-done", state.ready);' in draw
-    assert "#resolve.is-done{background:var(--card);" in JOIN_CSS
-    assert "#resolve:not(.is-done)::after" in JOIN_CSS, "the sheen must leave a done button"
+    # The done check steps down to the flat secondary (contract C7).
+    assert ("#resolve.is-done{background:var(--card);color:var(--navy);"
+            "border:1.5px solid var(--navy);}") in JOIN_CSS
     edit = JOIN.split('$("roster-text").addEventListener("input", () => {', 1)[1].split("});", 1)[0]
     assert '$("resolve").classList.remove("is-done");' in edit, \
         "an edited roster must hand the gold back to the check"
@@ -387,7 +402,10 @@ def test_checkout_not_open_is_a_notice_and_a_failed_send_is_still_an_error() -> 
     assert all("isn't open just yet" in re.sub(r'"\s*\+\s*"', "", c) for c in info)
     failed = closed.split(".catch((err) => {", 1)[1].split("});", 1)[0]
     assert "showError(" in failed and '"info"' not in failed
-    assert '.err[data-tone="info"]{background:var(--card);border-left-color:var(--navy);' in JOIN_CSS
+    # A calm card, not a brick alert — and no side bar (contract C7).
+    assert '.err[data-tone="info"]{background:var(--card);border-color:var(--line);' in JOIN_CSS
+    err = re.search(r"\n  \.err\{([^}]*)\}", JOIN_CSS).group(1)
+    assert "border:1px solid" in err and "border-left" not in err
 
 
 def test_the_read_back_and_the_list_arrive_rather_than_appear() -> None:
@@ -400,7 +418,9 @@ def test_the_read_back_and_the_list_arrive_rather_than_appear() -> None:
                  ".sugrow:focus-visible{outline:2px solid var(--navy);outline-offset:-2px;}",
                  "#step-roster > .note{margin-bottom:10px;}", "--flag-tint:#FBF3D9;"):
         assert rule in JOIN_CSS, rule
-    assert "#check-yes" in _block(JOIN)
+    # "Yes, continue to checkout" is the read-back's one primary: the gold
+    # button rule, never the .alt outline beside it.
+    assert '<button type="button" id="check-yes">' in JOIN
 
 
 # --------------------------------------------------------------------- #

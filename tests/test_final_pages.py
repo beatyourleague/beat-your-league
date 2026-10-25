@@ -552,17 +552,27 @@ def test_how_it_works_draws_the_report_in_the_reports_colours() -> None:
     """Funnel improvement: How it works drew the lineup's odds bars green and
     both deadline labels red, while every report (and the landing) draws the
     bar gold with a navy numeral, "before this week's first kickoff" green and
-    "gameday morning" red — exactly as the published sample does."""
-    assert re.search(r"\.cbar i\{[^}]*linear-gradient\(90deg,var\(--flag-deep\),var\(--flag\)\)", HOW)
-    assert re.search(r"\.frow \.pct\{[^}]*color:var\(--navy\)", HOW)
-    assert ".task small.ok{color:var(--turf);}" in HOW
-    assert "<small class=\"ok\">before this week's first kickoff</small>" in HOW
-    assert "<small>gameday morning</small>" in HOW
+    "gameday morning" red — exactly as the published sample does.
+
+    Truth pass (contract C6): the bars are FLAT gold (no gold gradient
+    anywhere), the numeral navy, and a deadline is a chip — "ok" turf on its
+    tint where it is met, "due" brick on its tint where it is not — the same
+    chip class beside the same deadline as the sample report prints it."""
+    css = "\n".join(re.findall(r"<style>(.*?)</style>", HOW, re.S))
+    assert re.search(r"\n  \.fbar i\{[^}]*background:var\(--flag\);", css)
+    assert re.search(r"\n  \.cmeter \.cbar i\{[^}]*background:var\(--flag\);", css)
+    assert not re.search(r"gradient\([^)]*(?:--flag|F2C230|D9A81B)", css, re.I)
+    assert re.search(r"\n  \.fpct\{[^}]*color:var\(--navy\)", css)
+    assert ".chip.ok{color:#1E7A46;background:#E3F2E8;}" in css
+    assert ".chip.due{color:#B3402F;background:#F9E6E1;}" in css
+    chip = r'class="chip {}">before this week(?:&#x27;|\')s first kickoff</span>'
+    assert re.search(chip.format("ok"), HOW)
+    assert '<span class="chip due">gameday morning</span>' in HOW
     sample = (SITE / "sample-report.html").read_text(encoding="utf-8")
     # The tag is not the point (the checklist moved from divs to spans inside a
     # label, REPORT-CHROME, Oct 24 2026); the class beside each deadline is.
-    assert "class=\"dl ok\">before this week&#x27;s first kickoff</" in sample
-    assert "class=\"dl\">gameday morning</" in sample
+    assert re.search(chip.format("ok"), sample)
+    assert 'class="chip due">gameday morning</' in sample
 
 
 def test_how_it_works_lists_each_reason_a_row_has_no_odds() -> None:
