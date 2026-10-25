@@ -433,3 +433,55 @@ jobs:
             gh issue create --title "$TITLE" --body "$body" --label bug \
               || gh issue create --title "$TITLE" --body "$body" || true
           fi
+
+  # This week's share image (render/og.py --week): the recorded closest call
+  # in site/week.json (contract C9), drawn as the preview X shows for
+  # this-week.html, the page every Tuesday post links. Its OWN job, after the
+  # one above: no secrets at all and no registry on disk, because it runs a
+  # browser — the runner image's preinstalled Chrome (render.og.find_chrome
+  # lists google-chrome) — on a page built from third-party data.
+  #
+  # It checks out the branch tip, so it starts from the persist push above.
+  # A refusal (no recorded closest call, a toss-up, a figure the page does not
+  # print) or a missing browser is a ::notice:: and exit 0: the page simply
+  # keeps the site's own card, and an older week's card is deleted. pages.yml
+  # redeploys when this workflow completes, this job included.
+  share-card:
+    needs: week
+    if: always() && needs.week.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # commit the card and the page's preview tags
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Install pinned dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
+      - name: Draw this week's share card
+        run: .venv/bin/python -m render.og --week
+      # Only the card and the page's preview tags: nothing else in this job
+      # is ever committed.
+      - name: Persist the card
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
+          # An empty folder still matches the pathspec; a missing one would
+          # fail the add on a week with no card.
+          mkdir -p site/og
+          git add -A site/og site/this-week.html
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Weekly run: this week's share card"
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
+          git push
