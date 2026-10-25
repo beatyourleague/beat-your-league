@@ -375,7 +375,10 @@ def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None
     report open the same way. ``meta_html`` is escaped by the caller."""
     right = (f'<td align="right" valign="middle" style="padding-left:12px;">'
              f'<div style="font-family:{DISPLAY};font-size:12px;font-weight:bold;'
-             f'letter-spacing:1px;text-transform:uppercase;white-space:nowrap;'
+             # No nowrap: with a wide fallback font (DejaVu on Linux and
+             # some Androids) lockup + label on one line made every email
+             # 325px wide on a 320px phone (CI, Oct 25 2026). The label wraps.
+             f'letter-spacing:1px;text-transform:uppercase;line-height:1.2;'
              f'color:{ON_NAVY};">{esc(label)}</div></td>' if label else "")
     return (
         f'<tr><td style="background:{NAVY};border-radius:12px;padding:18px;">'
@@ -1517,8 +1520,8 @@ def _lineup_body(model: Mapping[str, Any]) -> str:
         th = (f'font-family:{FONT};font-size:11px;font-weight:bold;letter-spacing:1px;'
               f'text-transform:uppercase;color:{SLATE};padding:8px 0 4px 0;')
         rows.append(
-            f'<tr><td width="40"></td><td></td>'
-            f'<td width="40" align="right" style="{th}">Proj</td>'
+            f'<tr><td width="34"></td><td></td>'
+            f'<td width="38" align="right" style="{th}">Proj</td>'
             + (f'<td colspan="2" align="right" style="{th}">Odds</td>'
                if cols == 5 else "") + '</tr>')
     for row in model["rows"]:
@@ -1526,7 +1529,7 @@ def _lineup_body(model: Mapping[str, Any]) -> str:
         below = "1px" if label else "9px"
         rows.append(_rule(cols))
         cells = [
-            f'<td width="40" valign="top" style="font-family:{FONT};font-size:11px;'
+            f'<td width="34" valign="top" style="font-family:{FONT};font-size:11px;'
             f'font-weight:bold;letter-spacing:1px;color:{SLATE};padding:11px 0 {below} 0;">'
             f'{esc(row["slot"])}</td>',
             f'<td valign="top" style="font-family:{FONT};font-size:15px;font-weight:bold;'
@@ -1534,19 +1537,19 @@ def _lineup_body(model: Mapping[str, Any]) -> str:
         ]
         if cols >= 3:
             cells.append(
-                f'<td width="40" align="right" valign="top" style="font-family:{FONT};'
+                f'<td width="38" align="right" valign="top" style="font-family:{FONT};'
                 f'font-size:14px;color:{INK2};padding:10px 0 {below} 0;">'
                 f'{esc(row["proj"] or "—")}</td>')
         if cols == 5:
             if row.get("pct") is not None:
-                cells.append(f'<td width="40" valign="top" style="padding:16px 0 0 8px;">'
+                cells.append(f'<td width="34" valign="top" style="padding:16px 0 0 6px;">'
                              f'{_bar(row["bar"], "100%")}</td>'
                              f'<td width="40" align="right" valign="top" style="font-family:'
-                             f'Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;'
+                             f'Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;'
                              f'color:{NAVY};'
                              f'padding:8px 0 9px 0;white-space:nowrap;">{row["pct"]}%</td>')
             else:
-                cells.append('<td width="40"></td><td width="40"></td>')
+                cells.append('<td width="34"></td><td width="40"></td>')
         rows.append(f'<tr>{"".join(cells)}</tr>')
         if label:
             if row.get("tone") == "basis":

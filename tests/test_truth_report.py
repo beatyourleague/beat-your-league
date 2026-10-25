@@ -396,3 +396,51 @@ def test_the_email_week_line_and_stamp_look_like_the_phones(w10: dict) -> None:
     stamp = anatomy.masthead(w10)["stamp"]
     assert f'color:#8FA3BC;padding-top:2px;">{html.escape(stamp)}</div>' in email
     assert ".mstamp{" in TEMPLATE and "color:#8FA3BC" in TEMPLATE.split(".mstamp{", 1)[1][:120]
+
+
+def test_every_email_fits_a_320_phone_with_a_wide_fallback_font(tmp_path, w10) -> None:
+    """CI, Oct 25 2026: on GitHub's Linux runner the Week 10 email measured
+    325px on a 320px phone and passed on a Mac. The email's faces (Arial,
+    Arial Narrow) are missing there and on some Androids, and the wide
+    fallback (DejaVu Sans) made the masthead's lockup plus its nowrap label
+    one row too wide. Verdana has DejaVu's widths and ships with macOS, so
+    forcing it here reproduces the phone that fails, on any machine."""
+    import json
+    import os
+    import shutil
+    import subprocess
+    from datetime import datetime, timezone
+
+    from engine.final_check import Change
+    from render.final_check import render_final_check
+    from render.preseason import email_html
+    from test_preseason import _report as roster_report
+    chrome = os.environ.get("CHROME_PATH") or (CHROME if Path(CHROME).exists()
+                                               else shutil.which("google-chrome"))
+    node = shutil.which("node")
+    if not chrome or not node:
+        pytest.skip("needs Chrome and node")
+    pages = {
+        "w10.html": render_email(w10),
+        "w1.html": render_email(_subscriber(1)),
+        "saturday.html": render_final_check(
+            {"week": 10, "players": {}},
+            [Change("swap", "Start Sam LaPorta at FLEX", "Tony Pollard is out (foot).")],
+            datetime(2024, 11, 9, 16, tzinfo=timezone.utc)),
+        "roster.html": email_html(roster_report()),
+    }
+    for name, page in pages.items():
+        wide = re.sub(r"font-family:[^;\"]+", "font-family:'Verdana','DejaVu Sans'", page)
+        (tmp_path / name).write_text(wide, encoding="utf-8")
+    jobs = tmp_path / "jobs.json"
+    jobs.write_text(json.dumps([{"path": name, "widths": [320], "settle": 300}
+                                for name in pages]))
+    run = subprocess.run([node, str(REPO / "run" / "launch_browser.mjs"),
+                          tmp_path.as_uri(), chrome, str(jobs)],
+                         capture_output=True, text=True, timeout=240)
+    results = json.loads(run.stdout or "[]")
+    if not results or any("fatal" in r for r in results):
+        pytest.skip(f"Chrome could not run here: {run.stderr[-300:]}")
+    for result in results:
+        assert result["innerWidth"] == 320 and result["scrollWidth"] <= 320, \
+            (result["path"], result["innerWidth"], result["scrollWidth"])
