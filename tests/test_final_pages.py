@@ -553,8 +553,10 @@ def test_how_it_works_draws_the_report_in_the_reports_colours() -> None:
     assert "<small class=\"ok\">before this week's first kickoff</small>" in HOW
     assert "<small>gameday morning</small>" in HOW
     sample = (SITE / "sample-report.html").read_text(encoding="utf-8")
-    assert "<div class=\"dl ok\">before this week&#x27;s first kickoff</div>" in sample
-    assert "<div class=\"dl\">gameday morning</div>" in sample
+    # The tag is not the point (the checklist moved from divs to spans inside a
+    # label, REPORT-CHROME, Oct 24 2026); the class beside each deadline is.
+    assert "class=\"dl ok\">before this week&#x27;s first kickoff</" in sample
+    assert "class=\"dl\">gameday morning</" in sample
 
 
 def test_how_it_works_lists_each_reason_a_row_has_no_odds() -> None:

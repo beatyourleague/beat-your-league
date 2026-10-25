@@ -91,11 +91,10 @@
   /* Contract C2: one primary (.btn.gold), one secondary (.btn.ghost). */
   .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
-    padding:12px 22px;border:0;line-height:1.2;transition:transform .15s ease;}
+    padding:12px 22px;border:0;line-height:1.2;}
   .btn.gold{color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
   .btn.ghost{background:transparent;color:var(--navy);border:2px solid var(--navy);padding:10px 20px;}
-  .btn:hover{transform:translateY(-1px);}
   main a.btn,main a.btn:hover{color:var(--navy);text-decoration:none;}
   @media (prefers-reduced-motion: reduce){.btn{transition:none;transform:none!important;}}
   .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
@@ -108,8 +107,7 @@
     align-items:start;margin:16px 0 8px;}
   .anno .terms{margin:0;}
   .anno .terms dt:first-child{margin-top:0;}
-  .filecard{background:var(--card);border:1px solid var(--line);
-    box-shadow:0 12px 26px -20px rgba(16,30,51,.55);}
+  .filecard{background:var(--card);border:1px solid var(--line);box-shadow:var(--elev-2);}
   .filehead{background:var(--navy);color:var(--paper);font-family:var(--display);font-weight:800;
     font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;padding:8px 14px;}
   .frow{display:grid;grid-template-columns:40px minmax(0,1fr) 38px 86px;gap:8px;align-items:center;
@@ -155,6 +153,77 @@
   [hidden]{display:none!important;}
   /* A phone shows the page, not a sheet on a desk (launch review D15). */
   @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
+  /* The odds bars fill as they come up into view, the way a reader meets
+     them in the report: empty as a bar crosses the bottom edge, full by the
+     time it is 12% of the way up the screen, so a bar being read matches its
+     figure. Where a browser has no view timeline (or motion is reduced) they
+     are simply full. Only the reveal moves: the width is the published figure. */
+  @media screen and (prefers-reduced-motion:no-preference){
+    @supports (animation-timeline: view()){
+      .cbar{view-timeline:--fillbar block;}
+      .cbar i{transform-origin:0 50%;animation:cfill linear both;animation-timeline:--fillbar;
+        animation-range:entry 0% cover 12%;}
+      @keyframes cfill{from{transform:scaleX(0);}to{transform:none;}}
+    }
+  }
+  /* ---- paper pages: one depth, one focus ring, one button feel ----
+     Identical on join/, join/confirm, how-it-works, thanks, 404 and compare/
+     (tests/test_polish_pages.py compares them), and last in the sheet, so a
+     page's own older rule of the same weight never wins. Motion is transform
+     and opacity only; site/motion.js adds .motion, and without it (no script,
+     reduced motion) nothing here hides anything. */
+  :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
+    --elev-1:0 1px 2px rgba(16,30,51,.06);
+    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
+    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
+  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
+  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+  .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
+  /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
+  main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
+    outline-offset:2px;border-radius:2px;}
+  /* A clip-path clips the outline too: a slanted gold button showed NO ring
+     when focused, so it squares off while it holds keyboard focus. */
+  .btn.gold:focus-visible{clip-path:none;}
+  /* The outline survives forced colours; the gold halo is decoration. */
+  input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
+    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+  .btn,button{transition:transform .18s var(--ease-out);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
+  /* A sheen across the primary only, on hover: one gold action at a time. */
+  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
+  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
+  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
+  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
+    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+    transform:translateX(-130%) skewX(-14deg);}
+  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
+  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
+  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
+    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
+  /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
+     h1 or the first paragraph, and never the words a reader is waiting for. */
+  .motion [data-reveal]:not([data-reveal="group"]):not(.in),
+  .motion [data-reveal="group"]:not(.in) > *{opacity:0;transform:translateY(14px);}
+  .motion [data-reveal]:not([data-reveal="group"]),.motion [data-reveal="group"] > *{
+    transition:opacity .5s var(--ease-out) var(--d,0s),transform .65s var(--ease-out) var(--d,0s);}
+  /* Page-load entrances move, never fade: the largest paint is never held. */
+  @keyframes rise-t{from{transform:translateY(10px);}}
+  @keyframes msgin{from{opacity:0;transform:translateY(-4px);}}
+  @keyframes okpop{from{opacity:0;transform:scale(.4);}}
+  @media print{.motion [data-reveal],.motion [data-reveal] > *{opacity:1!important;transform:none!important;}}
+  /* Reduced motion: nothing moves, and every animation lands on its last
+     frame at once, so the page is complete at rest. */
+  @media (prefers-reduced-motion:reduce){
+    .btn,button,.opts label{transition:none!important;transform:none!important;}
+    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
+    .sharebtn::after{display:none;}
+    *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
+      animation-iteration-count:1!important;}
+  }
+  /* ---- end of the shared paper block ---- */
 </style>
 </head>
 <body>
@@ -189,7 +258,7 @@
     <!-- Each card is the published sample's own rows (site/sample-report.html,
          2024 Week 10), beside the entries that explain them. -->
     <div class="anno">
-      <div class="filecard" data-real="2024-w10">
+      <div class="filecard" data-real="2024-w10" data-reveal>
         <div class="filehead">Your game plan</div>
         <div class="task"><span class="box" aria-hidden="true"></span><span><b>Bench Sam LaPorta — Tony Pollard starts at FLEX</b>Sam LaPorta projects 9.5, Tony Pollard 10.3.<small class="ok">before this week's first kickoff</small></span></div>
         <div class="task"><span class="box" aria-hidden="true"></span><span><b>Sunday morning: check Tony Pollard's status</b>Your if/then below already has the answer either way.<small>gameday morning</small></span></div>
@@ -200,7 +269,7 @@
       </dl>
     </div>
     <div class="anno">
-      <div class="filecard" data-real="2024-w10">
+      <div class="filecard" data-real="2024-w10" data-reveal>
         <div class="filehead">Your lineup · 2024 Week 10</div>
         <div class="frow"><span class="slot">WR</span><span><b>Amon-Ra St. Brown</b><small>+7.6 over Courtland Sutton on your bench</small></span><span class="proj">16.9</span><span class="call"><span class="pct">80%</span><span class="cbar"><i style="width:60%"></i></span></span></div>
         <div class="frow"><span class="slot">WR</span><span><b>Ja'Marr Chase</b><small>+6.7 over Courtland Sutton on your bench</small></span><span class="proj">16.0</span><span class="call"><span class="pct">73%</span><span class="cbar"><i style="width:46%"></i></span></span></div>
@@ -243,7 +312,7 @@
       </dl>
     </div>
     <div class="anno">
-      <div class="filecard" data-real="2024-w10">
+      <div class="filecard" data-real="2024-w10" data-reveal>
         <div class="filehead">Your week</div>
         <div class="total"><span><span class="big">126.1</span><small>proj</small></span><span><span class="range">94 – 158</span><small>realistic range</small></span></div>
       </div><!--/card-->
@@ -256,7 +325,7 @@
       </dl>
     </div>
     <div class="anno">
-      <div class="filecard" data-real="2024-w10">
+      <div class="filecard" data-real="2024-w10" data-reveal>
         <div class="filehead">If/then for gameday</div>
         <div class="pivot"><div class="if">If Tony Pollard (FLEX) is ruled out</div>Move Sam LaPorta into FLEX (projects 9.5).</div>
       </div><!--/card-->
@@ -431,6 +500,7 @@ function weekPhase(w) {
   } catch (e) { /* the pinned sample stays */ }
 })();
 </script>
+<script src="/motion.js?v=172057d003" defer></script>
 <script src="/count.js" defer></script>
 </body>
 </html>

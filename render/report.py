@@ -1098,15 +1098,20 @@ def _generated_stamp(meta: Mapping[str, Any]) -> str:
 
 def section_checklist(items: list[Mapping[str, Any]],
                       meta: Mapping[str, Any] | None = None) -> str:
+    # Every surface promises a checklist you tick, so in the browser each task
+    # IS one: a label around a real checkbox, named by the task's own words.
+    # Spans, not divs — a label holds phrasing content only. Nothing is stored:
+    # a tick lasts until the page reloads (privacy §3, nothing kept on the
+    # device). The email draws its own boxes (render/email.py tick_box).
     tasks = []
     for item in items:
         klass = "dl ok" if item.get("urgency") in ("now", "done") else "dl"
         tasks.append(
-            f'<div class="task"><div class="box"></div><div>'
-            f'<div class="do">{esc(item["action"])}</div>'
-            + (f'<div class="why">{esc(item["detail"])}</div>'
+            f'<label class="task"><input type="checkbox" class="box"><span class="tbody">'
+            f'<span class="do">{esc(item["action"])}</span>'
+            + (f'<span class="why">{esc(item["detail"])}</span>'
                if item.get("detail") else "")
-            + f'<div class="{klass}">{esc(item["deadline"])}</div></div></div>'
+            + f'<span class="{klass}">{esc(item["deadline"])}</span></span></label>'
         )
     standing = ""
     if saturday_line(meta):
