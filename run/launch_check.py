@@ -68,7 +68,11 @@ CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 # selling rules: no grading figures, no banned words, the product is a report.
 SELLING = ("index.html", "join/index.html", "league-pass.html", "how-it-works.html",
            "thanks.html", "sample-report.html", "sample-first-week.html",
-           "this-week.html")
+           "this-week.html",
+           # The free bye-week planner (contract C7) hands a roster to join/,
+           # and the four league-app pages (render/platforms.py) sell it too.
+           "byes/index.html", "espn/index.html", "yahoo/index.html",
+           "sleeper/index.html", "cbs/index.html")
 # Every page whose browser behaviour matters, at phone and desktop width.
 BROWSER_PAGES = (
     ("index.html", (360, 390, 1280)), ("join/index.html", (390, 1280)),
@@ -79,6 +83,7 @@ BROWSER_PAGES = (
     ("sample-report.html", (390, 1280)), ("this-week.html", (390,)),
     ("thanks.html", (390,)), ("terms.html", (390,)), ("privacy.html", (390,)),
     ("compare/index.html", (390,)), ("404.html", (390,)),
+    ("byes/index.html", (320, 390, 1280)), ("espn/index.html", (320, 390)),
 )
 BANNED = r"\b(calibrated|tested|proven|accurate)\b"
 BETTING = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager|bookmaker)\b"
@@ -494,10 +499,23 @@ def check_funnel_config() -> list[Gate]:
         gates.append(Gate("Funnel", "League Pass seats, roster updates and free reports can be received",
                           "PASS", form))
     confirm = js_constants((SITE / "join/confirm.html").read_text(encoding="utf-8"))
+    planner = js_constants((SITE / "byes/index.html").read_text(encoding="utf-8"))
     endpoints = {k: v for k, v in (("index WAITLIST_ENDPOINT", landing.get("WAITLIST_ENDPOINT", "")),
                                    ("join FORM_ENDPOINT", form),
                                    ("join NOTIFY_LIST_ENDPOINT", join.get("NOTIFY_LIST_ENDPOINT", "")),
-                                   ("confirm FORM_ENDPOINT", confirm.get("FORM_ENDPOINT", ""))) if v}
+                                   ("confirm FORM_ENDPOINT", confirm.get("FORM_ENDPOINT", "")),
+                                   ("planner NOTIFY_LIST_ENDPOINT",
+                                    planner.get("NOTIFY_LIST_ENDPOINT", ""))) if v}
+    # The free bye-week planner (site/byes/) shows a gold "Get the weekly
+    # report" link when checkout can complete and a free-report link when
+    # free reports are open: flags left behind on launch morning would send a
+    # visitor to a closed checkout, or hide the open one.
+    gates.append(_gate("Funnel", "The planner's checkout and free-report flags match the landing's",
+                       planner.get("CHECKOUT_CAN_COMPLETE") == landing.get("CHECKOUT_CAN_COMPLETE")
+                       and planner.get("TRIAL_OPEN") == landing.get("TRIAL_OPEN"),
+                       f"byes/ CHECKOUT_CAN_COMPLETE={planner.get('CHECKOUT_CAN_COMPLETE')}, "
+                       f"TRIAL_OPEN={planner.get('TRIAL_OPEN')}; landing "
+                       f"{landing.get('CHECKOUT_CAN_COMPLETE')}/{landing.get('TRIAL_OPEN')}"))
     gates.append(_gate("Funnel", "Every page posts to the same form Worker",
                        len(set(endpoints.values())) <= 1,
                        "; ".join(f"{k}={v}" for k, v in endpoints.items()),
@@ -566,7 +584,7 @@ def check_week_json() -> list[Gate]:
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
                  + (" — stale until the next Tuesday build (the hero shows its static sentence)"
                     if stale else "")),
-            recorded_odds_gate(w)]
+            recorded_odds_gate(w), closest_gate(w)]
 
 
 def _instant(stamp: Any) -> datetime | None:
@@ -600,6 +618,25 @@ def recorded_odds_gate(week: dict) -> Gate:
         return Gate("Site", name, "FAIL", "; ".join(problems))
     return Gate("Site", name, "PASS",
                 f"{odds} % on the page, all on the record" if odds else "no % on the page")
+
+
+def closest_gate(week: dict, processed_dir: Path | None = None) -> Gate:
+    """C6: the landing's live-call line and the weekly share card quote
+    week.json's ``closest`` as real, recorded output. render.live_sample
+    writes it only from the recorded odds, before kickoff; this checks the
+    published file against the ledger itself (closest_problems), so a hand
+    edit or a stale clock can never put a % on the landing that nothing
+    grades. An absent field is fine — the line simply does not show."""
+    from render.live_sample import PROCESSED_DIR, closest_problems
+    name = "This week's closest call is on the record"
+    if "closest" not in week:
+        return Gate("Site", name, "PASS", "no closest call on the season clock")
+    problems = closest_problems(week, processed_dir or PROCESSED_DIR)
+    if problems:
+        return Gate("Site", name, "FAIL", "; ".join(problems))
+    c = week["closest"]
+    return Gate("Site", name, "PASS",
+                f"{c['start']} over {c['over']}, {c['pct']}%, week {c['week']} — on the record")
 
 
 def ledger_rows(processed_dir: Path, season: str) -> tuple[int, int, list[str]]:
@@ -1453,7 +1490,11 @@ def axe_core_path() -> Path | None:
 # Every page a buyer sells themselves on, and every join mode.
 A11Y_PAGES = SELLING + ("join/index.html?plan=monthly", "join/index.html?plan=pass",
                         "join/index.html?pass=1", "join/index.html?try=1",
-                        "join/index.html?update=1", "join/confirm.html")
+                        "join/index.html?update=1", "join/confirm.html",
+                        # The planner with a roster restored and checked (the
+                        # sample's own roster, the bye-check draft's link).
+                        "byes/index.html?ref=s4-pcQRRWWTFKD16-AJPKAIfsAJiAAJBtAJ9QAJh4AJ0KAJBj"
+                        "AJiYAJvvAJGNAJKpAHcqAHVtAHmg_yxg")
 
 
 def check_accessibility() -> list[Gate]:

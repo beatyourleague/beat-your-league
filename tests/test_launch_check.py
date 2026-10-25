@@ -783,3 +783,50 @@ def test_a_non_report_email_wider_than_a_phone_fails(monkeypatch) -> None:
     [gate] = lc.check_email_widths()
     assert gate.status == "FAIL" and "seat pass full" in gate.detail, gate
     assert "this week's sample" not in gate.detail
+
+
+# --------------------------------------------------------------------- #
+# the free bye-week planner (contract C7) and the clock's closest call (C6)
+# --------------------------------------------------------------------- #
+
+def test_a_planner_left_behind_on_launch_morning_fails(site) -> None:
+    """The planner shows the gold "Get the weekly report" link on its own
+    CHECKOUT_CAN_COMPLETE and a free-report link on its own TRIAL_OPEN; flags
+    flipped on the landing and not on the planner (or the reverse) would send
+    a visitor to a closed checkout, or hide the open one. A planner endpoint
+    that is not the Worker the other pages post to fails too."""
+    gates = lc.check_funnel_config()
+    assert _status(gates, "planner's checkout and free-report flags") == "PASS"
+    planner = site / "byes" / "index.html"
+    text = planner.read_text()
+    planner.write_text(text.replace("const CHECKOUT_CAN_COMPLETE = false;",
+                                    "const CHECKOUT_CAN_COMPLETE = true;"))
+    assert _status(lc.check_funnel_config(), "planner's checkout and free-report flags") == "FAIL"
+    planner.write_text(text.replace('const NOTIFY_LIST_ENDPOINT = "";',
+                                    'const NOTIFY_LIST_ENDPOINT = "https://elsewhere.example/rows";'))
+    join = site / "join" / "index.html"
+    join.write_text(join.read_text().replace('const FORM_ENDPOINT = "";',
+                                             'const FORM_ENDPOINT = "https://forms.example/rows";'))
+    assert _status(lc.check_funnel_config(), "same form Worker") == "FAIL"
+
+
+def test_the_planner_and_league_app_pages_are_held_to_the_selling_rules() -> None:
+    """Both sell (the planner hands a roster to join/, the app pages link
+    it), so the copy, accessibility and speed gates read them; the planner
+    with a restored roster is an accessibility page of its own."""
+    for page in ("byes/index.html", "espn/index.html", "yahoo/index.html",
+                 "sleeper/index.html", "cbs/index.html"):
+        assert page in lc.SELLING and page in lc.A11Y_PAGES
+    assert any(p.startswith("byes/index.html?ref=") for p in lc.A11Y_PAGES)
+    assert ("byes/index.html", (320, 390, 1280)) in lc.BROWSER_PAGES
+
+
+def test_a_closest_call_the_ledger_does_not_hold_fails() -> None:
+    """C6: the landing quotes week.json's closest call as recorded output, so
+    the gate reads the ledger itself — absent is fine, unrecorded fails."""
+    assert lc.closest_gate({"week": 8}).status == "PASS"
+    bad = {"season": "2026", "week": 8, "recorded": False,
+           "closest": {"season": "2026", "week": 8, "slot": "WR", "start": "A", "over": "B",
+                       "pct": 61, "recorded": True}}
+    assert lc.closest_gate(bad).status == "FAIL"
+    assert "closest_gate(w)" in __import__("inspect").getsource(lc.check_week_json)
