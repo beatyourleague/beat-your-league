@@ -115,6 +115,12 @@ OFFER_PLAYOFF = ("The Playoff Pass is {price}, one payment: nothing renews and "
 # one once a buyer's first weekly report would be this week or later — and
 # only while its payment link is on the page.
 PLAYOFF_FROM_WEEK = 13
+# One line for a commissioner (G4), between the offer and the link — only when
+# the join page can sell the League Pass (its seats need the form Worker), and
+# never a second email. It names no price, so it owes no price disclosure; the
+# page it links carries the pass's own terms beside its price.
+LEAGUE_PASS_LINE = ("Running the league? One payment covers every manager's own report "
+                    "for the rest of the season: {url}")
 
 # What the body must NOT promise, and why — this list is a test, not a comment:
 # the waiver market needs a league transaction log we no longer read, the rival
@@ -291,6 +297,27 @@ def _playoff_link_live() -> bool:
     return bool(found and found.group(1).strip())
 
 
+def _league_pass_live() -> bool:
+    """Can the join page sell the League Pass? Both its seat backend
+    (FORM_ENDPOINT) and its payment link (STRIPE_LINK_PASS) must be set: the
+    email may point a commissioner only at a pass the checkout can take."""
+    page = REPO_ROOT / "site" / "join" / "index.html"
+    try:
+        text = page.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    found = [re.search(rf'^const {name} = "([^"]*)";', text, re.M)
+             for name in ("FORM_ENDPOINT", "STRIPE_LINK_PASS")]
+    return all(f and f.group(1).strip() for f in found)
+
+
+def _league_pass_url(signup_url: str) -> str:
+    """The League Pass page on the same site as the signup link."""
+    from render.report import SITE_ORIGIN
+    base = signup_url.split("/join/")[0] if "/join/" in signup_url else SITE_ORIGIN
+    return base + "/league-pass.html"
+
+
 def _clock() -> dict:
     from render.live_sample import read_week_json
     return read_week_json(REPO_ROOT / "site" / "week.json")
@@ -315,8 +342,10 @@ def compose(url: str, sender: str, clock: dict | None = None,
         preview = (f"It's open, in time for Week {week}. Paste your roster; your "
                    f"first report usually lands within the hour.")
     import textwrap
-    body = BODY.format(opening=opening, offer=textwrap.fill(offer, 78),
-                       url=url, sender=sender)
+    offer = textwrap.fill(offer, 78)
+    if _league_pass_live():
+        offer += "\n\n" + textwrap.fill(LEAGUE_PASS_LINE.format(url=_league_pass_url(url)), 78)
+    body = BODY.format(opening=opening, offer=offer, url=url, sender=sender)
     return subject, body, preview
 
 
@@ -394,7 +423,19 @@ def _html(body: str, url: str, *, saved: bool, sender: str,
     saved_html = (f"{para}{esc(SAVED_LINE)}</p>"
                   if saved and SAVED_LINE in after else "")
     rest = [part for part in after if part != SAVED_LINE]
-    body_html = "".join(f"{para}{esc(part)}</p>" for part in before)
+    lead = LEAGUE_PASS_LINE.split(":", 1)[0]
+
+    def linked(part: str) -> str:
+        # The commissioner line's League Pass address is a link in the HTML
+        # half, like the button; the text half keeps it printed.
+        text = esc(part)
+        if part.startswith(lead):
+            found = re.search(r"https://\S+/league-pass\.html", part)
+            if found:
+                href = esc(found.group(0))
+                text = text.replace(href, f'<a href="{href}" style="color:{NAVY};">{href}</a>')
+        return text
+    body_html = "".join(f"{para}{linked(part)}</p>" for part in before)
     tail_html = "".join(f'<p style="{SMALL}margin:0 0 6px 0;">{esc(part)}</p>'
                         for part in rest)
     button = (

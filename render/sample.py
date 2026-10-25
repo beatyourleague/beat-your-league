@@ -89,9 +89,15 @@ def page(report: dict) -> str:
     The landing's "See a real report" is the most natural path to buying, and
     a channel tag stopped at the sample — its "Get this for your team" links
     had no carry, so the purchase was counted nowhere (FUNNEL F5, BE2-D1).
-    One script, from the live sample, so the copies cannot drift."""
-    from render.live_sample import with_via_carry
-    return with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")))
+    One script, from the live sample, so the copies cannot drift.
+
+    While checkout is closed it also carries the free bye-week planner's line
+    in its closing card (G6), by the live sample's own rule and from today's
+    season clock — so `make sample` keeps what `--restamp` adds."""
+    from render.live_sample import (clock_hints, show_planner_line, with_planner_line,
+                                    with_via_carry)
+    page = with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")))
+    return with_planner_line(page, show_planner_line(*clock_hints()))
 
 
 def main(argv: list[str] | None = None) -> int:

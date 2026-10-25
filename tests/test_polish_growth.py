@@ -465,12 +465,12 @@ def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:
 
 # The canonical kit: integrator_notes carries these verbatim. It goes after
 # the "Ask the league first" block, before "What you do after paying".
-KIT_MARKUP = """  <!-- Before checkout opens (G4): two things a commissioner can send the group
-       chat today. Neither needs an email or a login, neither names a price, and
+KIT_MARKUP = """  <!-- The commissioner kit (G4): two things a commissioner can send the group
+       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price, and
        ?via=league-chat lets `make stats` count what the kit brought. The bye
        line hides once week.json says no bye is left or the season is over. -->
-  <div class="steps ask kit" id="kit">
-    <h3>Before checkout opens: something free for the league</h3>
+  <div class="steps ask kit" id="kit" data-reveal>
+    <h3>Something free for the league</h3>
     <p class="kit-lead">Two things you can send the group chat today. Neither needs an email or a login.</p>
     <div class="kit-item" id="kit-byes-block">
       <div class="chatline">

@@ -129,6 +129,9 @@
     text-transform:uppercase;color:var(--navy);border:0;cursor:pointer;padding:12px 18px;
     background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));}
   .ask .chatline{margin-top:10px;}
+  /* The commissioner kit (G4): the ask's own chatline and share button. */
+  .kit-lead{margin-top:6px;font-size:14px;line-height:1.55;color:var(--dusk2);}
+  .kit-item + .kit-item{margin-top:18px;}
   /* The commissioner's questions, the landing's FAQ style on this page. */
   .faq details{border-bottom:1px solid rgba(246,244,238,.12);}
   .faq details:first-child{border-top:1px solid rgba(246,244,238,.12);}
@@ -360,6 +363,29 @@
     <p class="chatline-msg" id="ask-msg" role="status"></p>
   </div>
 
+  <!-- The commissioner kit (G4): two things a commissioner can send the group
+       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price, and
+       ?via=league-chat lets `make stats` count what the kit brought. The bye
+       line hides once week.json says no bye is left or the season is over. -->
+  <div class="steps ask kit" id="kit" data-reveal>
+    <h3>Something free for the league</h3>
+    <p class="kit-lead">Two things you can send the group chat today. Neither needs an email or a login.</p>
+    <div class="kit-item" id="kit-byes-block">
+      <div class="chatline">
+        <p id="kit-byes">Bye check for the playoff push, free, no login: paste your roster and it shows every week through 17 where a bye leaves a starting spot empty. https://beatyourleague.com/byes/?via=league-chat</p>
+      </div>
+      <button type="button" class="sharebtn" data-share-from="kit-byes" data-share-status="kit-byes-msg" aria-describedby="kit-byes">Send this to the group chat</button>
+      <p class="chatline-msg" id="kit-byes-msg" role="status"></p>
+    </div>
+    <div class="kit-item" id="kit-sample-block">
+      <div class="chatline">
+        <p id="kit-sample">This is the report each of us would get every Tuesday, built from our own roster: https://beatyourleague.com/sample-report.html?via=league-chat</p>
+      </div>
+      <button type="button" class="sharebtn" data-share-from="kit-sample" data-share-status="kit-sample-msg" aria-describedby="kit-sample">Send this to the group chat</button>
+      <p class="chatline-msg" id="kit-sample-msg" role="status"></p>
+    </div>
+  </div>
+
   <div class="steps" data-reveal>
     <h3>What you do after paying</h3>
     <ol>
@@ -528,6 +554,15 @@ if (ask) {
               document.getElementById("ask-msg"));
   });
 }
+// The commissioner kit (G4): each line goes to the group chat through the
+// page's one shareLine.
+document.querySelectorAll("[data-share-from]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const line = document.getElementById(button.getAttribute("data-share-from"));
+    const status = document.getElementById(button.getAttribute("data-share-status"));
+    if (line && status) shareLine(line.textContent.replace(/\s+/g, " ").trim(), line, status);
+  });
+});
 // One tap to the group chat: the phone's own share sheet where the browser
 // has one (the chat is an app on that phone), a clipboard copy otherwise, and
 // failing both the line is selected for a copy by hand. A cancelled share
@@ -562,6 +597,9 @@ if (window.fetch) {
   fetch("week.json", { cache: "no-cache" })
     .then((r) => (r.ok ? r.json() : null))
     .then((w) => {
+      // No bye left to plan, or the season is over: the kit's bye line goes (G4).
+      const kitByes = document.getElementById("kit-byes-block");
+      if (kitByes && w && (w.byes_left === false || w.phase === "over")) kitByes.hidden = true;
       if (!w || !Number.isInteger(w.week) || (w.phase && w.phase !== "season")) return;
       const kicked = w.first_kickoff && new Date() >= new Date(w.first_kickoff);
       const compare = document.getElementById("lp-compare");
