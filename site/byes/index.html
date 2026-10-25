@@ -385,11 +385,12 @@ Baltimore Ravens
   </section>
 
   <section class="cta" id="cta">
-    <h2>Want this checked every Tuesday — with your whole lineup set?</h2>
-    <p class="lead">The weekly report flags every bye still ahead and decides every slot:
+    <h2>Want this checked every Tuesday&nbsp;— with your whole lineup set?</h2>
+    <p class="lead">The weekly report checks every bye still ahead and decides every slot:
     every close call explained, an if/then for late news.<span id="cta-closed"> Checkout
     isn't open yet.</span></p>
     <div class="needs-js">
+      <div id="cta-settings" hidden>
       <div class="optlabel" id="lbl-scoring">Your league's scoring</div>
       <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
         <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
@@ -403,12 +404,13 @@ Baltimore Ravens
         <label><input type="radio" name="size" value="12" checked>12 teams</label>
         <label><input type="radio" name="size" value="14">14 teams</label>
       </div>
+      </div>
       <!-- The static page is the CLOSED state: the email capture. The open
            state (CHECKOUT_CAN_COMPLETE) is built by the script. -->
       <form id="cta-form" class="mailrow" novalidate>
         <input type="email" id="cta-email" placeholder="you@example.com" autocomplete="email"
                aria-label="Your email">
-        <button type="submit" id="cta-button">Keep my roster — email me when it opens</button>
+        <button type="submit" id="cta-button">Tell me when it opens</button>
         <p class="note">One email when signups open, nothing else. Unsubscribe any time.</p>
       </form>
       <p class="ctanote" id="cta-note" role="status"></p>
@@ -449,7 +451,7 @@ Baltimore Ravens
 </footer>
 </div>
 <script src="../join/roster.js?v=632c4eddea"></script>
-<script src="byes.js?v=150e570e57"></script>
+<script src="byes.js?v=401f29c643"></script>
 <!-- DOMAIN_FIXES and suggestedEmail, the join page's and the landing's own (FUN-5). -->
 <script src="/email-check.js?v=2e2f372017"></script>
 <script>
@@ -714,6 +716,7 @@ $("roster-text").addEventListener("input", () => {
   if (!state.matches.length) return;
   state.stale = true;
   state.ready = false;
+  forgetRef();
   showPlan(null);
   const tally = $("tally");
   tally.className = "tally bad";
@@ -754,6 +757,7 @@ function draw(focusAt, pressed) {
   confirm.style.display = "none";
   if (!state.matches.length) {
     state.ready = false;
+    forgetRef();
     showPlan(null);
     tally.className = "tally bad";
     tally.textContent = pressed ? "Paste or add at least one player." : "";
@@ -895,6 +899,7 @@ function draw(focusAt, pressed) {
     list.appendChild(fold);
   }
   if (problem) {
+    forgetRef();
     showPlan(null);
   } else {
     showPlan(B.describe(rosterRows(), lineupSlots(), state.byes, today()));
@@ -932,8 +937,10 @@ function showPlan(plan) {
   $("waiting").hidden = Boolean(plan);
   const summary = $("summary");
   summary.textContent = plan ? plan.summary : "";
+  // A spot empty every week (plan.thinSlots) is never shown as good news.
   summary.className = "summary" + (!plan ? "" : plan.kind !== "plan" ? " bad"
-    : plan.holes.length ? " bad" : " good") + (fresh ? " reveal" : "");
+    : plan.holes.length || (plan.thinSlots || []).length ? " bad" : " good")
+    + (fresh ? " reveal" : "");
   $("thin").textContent = plan && plan.thin ? plan.thin : "";
   const weeks = $("weeks");
   weeks.replaceChildren();
@@ -995,6 +1002,15 @@ function keepInAddress() {
   drawCta();
 }
 
+// A roster that changed, or now needs a look, is no longer the one a link may
+// carry: the open state's links fall back to the bare join page (the waitlist
+// row already sends a ref only when the list is ready). The address keeps the
+// last clean check, so a reload still brings that one back.
+function forgetRef() {
+  state.ref = "";
+  drawCta();
+}
+
 // The roster a ?ref= carried, back on the list by id (never re-read from
 // names), then checked once without a press.
 function restoreRoster() {
@@ -1030,6 +1046,13 @@ function drawCta() {
     $("cta-note").textContent = "";
     $("cta-note").className = "ctanote";
   }
+  // The button promises a kept roster only when one really rides the row: a
+  // list endpoint to keep it, and a checked, clean roster on screen. Otherwise
+  // it is the site's closed CTA, word for word.
+  $("cta-button").textContent = NOTIFY_LIST_ENDPOINT && state.ready
+    ? "Keep my roster for launch" : "Tell me when it opens";
+  // Scoring and size only shape the ref, so they ask nothing until there is one.
+  $("cta-settings").hidden = !state.ready;
   if (!CHECKOUT_CAN_COMPLETE) return;
   const ref = state.ref ? encodeURIComponent(state.ref) : "";
   $("cta-go").setAttribute("href", carryVia("../join/index.html" + (ref ? "?ref=" + ref : ""), VIA));
@@ -1129,20 +1152,25 @@ $("cta-form").addEventListener("submit", async (event) => {
 // has one (the chat is an app on that phone), a clipboard copy otherwise, and
 // failing both the line is selected for a copy by hand. A cancelled share
 // sheet is the visitor changing their mind, not an error. The same function,
-// character for character, is on thanks.html (tests/test_site.py).
+// character for character, is on league-pass.html (tests/test_polish_tool.py).
 function shareLine(text, line, status) {
+  // data-ok marks a done copy (a check, and the line flashes gold); every
+  // other outcome clears it. Cleared first, so a second copy flashes again.
+  status.dataset.ok = "";
   const byHand = () => {
     window.getSelection().selectAllChildren(line);
+    status.dataset.ok = "";
     status.textContent = "The message is selected — copy it and paste it in the group chat.";
   };
   const copyIt = () => {
     if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
     navigator.clipboard.writeText(text).then(
-      () => { status.textContent = "Copied — paste it in the group chat."; }, byHand);
+      () => { status.dataset.ok = "1"; status.textContent = "Copied — paste it in the group chat."; },
+      byHand);
   };
   if (!navigator.share) return copyIt();
   navigator.share({ text: text }).then(
-    () => { status.textContent = ""; },
+    () => { status.dataset.ok = ""; status.textContent = ""; },
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
 // What is shared names weeks and spots only: never a player, never the ref.

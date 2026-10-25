@@ -28,7 +28,14 @@ wrong bye is worse than none — it sends somebody looking for a problem that is
 not there — so it FAILS CLOSED: a schedule that gives fewer than 32 teams a
 bye, a season with no weeks, or a season that is not players.json's season
 refuses to write, and last week's dated file stays up. The reserve list is
-dated on the page ("as of …", from ``generated``), so a stale file says so.
+dated on the page ("as of …") from ``reserve_as_of`` — when the players
+release was last DOWNLOADED, read off the cached file itself — never from
+``generated``: on an nflverse outage the cron falls back to the cached copy,
+and a days-old list must not be labelled as today's (principle 3).
+
+The season in the page's title, description and no-script line is rewritten
+with the table (``with_season``), so a September rollover can never publish
+next season's byes under last season's year.
 
 RULE N1 rides in the asset (``attribution``) and in the table's source line.
 """
@@ -38,6 +45,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -88,11 +96,16 @@ def build(season: str, raw_dir: Path, directory_payload: Mapping[str, Any],
     for team, week in by_team.items():
         idle.setdefault(int(week), []).append(str(team))
     ids = {row[1] for row in directory_payload.get("players") or []}
-    out = roster_out(Path(raw_dir) / "players.csv")
+    players_csv = Path(raw_dir) / "players.csv"
+    out = roster_out(players_csv)
     return {
         "season": season,
         "generated": generated_at or datetime.now(timezone.utc)
                      .replace(microsecond=0).isoformat(),
+        # When the reserve list was fetched: the cached file's own write time,
+        # which an outage's fallback leaves at its real (older) date.
+        "reserve_as_of": datetime.fromtimestamp(players_csv.stat().st_mtime, timezone.utc)
+                         .replace(microsecond=0).isoformat(),
         # RULE N1: the licence term travels with the data it licenses.
         "attribution": ATTRIBUTION,
         "last_week": max(weeks),
@@ -171,6 +184,25 @@ def with_table(page: str, block: str) -> str:
     return f"{head}{START}\n{block}\n{END}{tail}"
 
 
+# The page's other mentions of the season, outside the marked table. Each must
+# appear exactly once: a page that no longer carries one is a template change
+# this generator has not been taught, and it refuses rather than guessing.
+_SEASON_SPOTS = (
+    re.compile(r"(<title>Fantasy football bye week planner \()\d{4}(\))"),
+    re.compile(r"(Every )\d{4}( bye, by week\.)"),
+    re.compile(r"(Every )\d{4}( bye week is listed below\.)"),
+)
+
+
+def with_season(page: str, season: str) -> str:
+    """``page`` with its title, description and no-script line naming ``season``."""
+    for pattern in _SEASON_SPOTS:
+        if len(pattern.findall(page)) != 1:
+            raise ByeIndexError(f"the planner page needs exactly one {pattern.pattern!r}")
+        page = pattern.sub(lambda m: f"{m.group(1)}{int(season)}{m.group(2)}", page)
+    return page
+
+
 def table_in(page: str) -> str:
     """The block currently between the markers."""
     return page.split(START, 1)[1].split(END, 1)[0].strip("\n")
@@ -205,7 +237,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = build(args.season, args.raw, directory)
         validate(payload, directory)
         page = args.page.read_text(encoding="utf-8")
-        new_page = with_table(page, table_html(payload, directory))
+        new_page = with_season(with_table(page, table_html(payload, directory)),
+                               payload["season"])
     except (ByeIndexError, NflverseError, OSError, ValueError, KeyError) as exc:
         print(f"refusing to write the bye planner's data: {exc} — last week's file stays",
               file=sys.stderr)
@@ -217,7 +250,9 @@ def main(argv: list[str] | None = None) -> int:
             current = json.loads(args.output.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             current = None
-        drop = lambda d: {k: v for k, v in (d or {}).items() if k != "generated"}  # noqa: E731
+        # Both stamps move with every fetch, never with the facts.
+        drop = lambda d: {k: v for k, v in (d or {}).items()  # noqa: E731
+                          if k not in ("generated", "reserve_as_of")}
         if current is None or drop(current) != drop(payload):
             stale.append(_display(args.output))
         if new_page != page:

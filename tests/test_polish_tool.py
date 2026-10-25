@@ -620,6 +620,15 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
     document.getElementById("form-roster").fire("submit");
     for (let i = 0; i < 3; i++) await tick();
   }
+  // What the CTA said after the check, then an edit to the box (stale).
+  const ctaChecked = { button: document.getElementById("cta-button").textContent,
+    settingsHidden: document.getElementById("cta-settings").hidden,
+    go: document.getElementById("cta-go").getAttribute("href") };
+  if (cfg.edit !== null && cfg.edit !== undefined) {
+    document.getElementById("roster-text").value = cfg.edit;
+    document.getElementById("roster-text").fire("input");
+    for (let i = 0; i < 3; i++) await tick();
+  }
   const text = (id) => document.getElementById(id).textContent;
   const weeks = document.getElementById("weeks").children.map((li) => li.textContent);
   const rows = document.getElementById("rows").querySelectorAll(".row").map((r) => r.textContent);
@@ -628,20 +637,37 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
     head: text("byes-head"), asOf: text("as-of"), footnote: text("footnote"),
     playoffNone: text("playoff-none"), check: document.getElementById("check").disabled,
     share: !document.getElementById("share").hidden,
+    summaryClass: document.getElementById("summary").className, ctaChecked,
+    ctaButton: document.getElementById("cta-button").textContent,
+    ctaSettingsHidden: document.getElementById("cta-settings").hidden,
+    ctaGo: document.getElementById("cta-go").getAttribute("href"),
     retry: document.getElementById("retry-load").style.display }));
 })();
 """
 
 
 def _run_page(tmp_path: Path, search: str = "", paste: str | None = None, fail: bool = False,
-              byes: dict | None = None, today: str = TODAY) -> dict:
+              byes: dict | None = None, today: str = TODAY, consts: dict | None = None,
+              edit: str | None = None) -> dict:
+    """``consts``: the page with those top-level constants set (the launch
+    flip: an endpoint, an open checkout). ``edit``: text typed over the box
+    after the check, so the list on screen goes stale."""
     byes_path = BYES_JSON
     if byes is not None:
         byes_path = tmp_path / "byes-variant.json"
         byes_path.write_text(json.dumps(byes), encoding="utf-8")
-    cfg = {"page": str(PAGE_PATH), "players": str(PLAYERS_JSON), "byes": str(byes_path),
+    page_path = PAGE_PATH
+    if consts:
+        page = PAGE
+        for name, value in consts.items():
+            page, n = re.subn(rf"^const {name} = .+?;$", f"const {name} = {value};", page,
+                              count=1, flags=re.M)
+            assert n == 1, name
+        page_path = tmp_path / "page-variant.html"
+        page_path.write_text(page, encoding="utf-8")
+    cfg = {"page": str(page_path), "players": str(PLAYERS_JSON), "byes": str(byes_path),
            "roster": str(ROSTER_JS), "byesJs": str(BYES_JS), "email": str(EMAIL_JS),
-           "search": search, "paste": paste, "fail": fail, "today": today}
+           "search": search, "paste": paste, "fail": fail, "today": today, "edit": edit}
     (tmp_path / "cfg.json").write_text(json.dumps(cfg), encoding="utf-8")
     stub = tmp_path / "dom-stub.js"
     stub.write_text(DOM_STUB, encoding="utf-8")
@@ -739,6 +765,124 @@ def test_no_byes_left_still_lists_the_weeks(tmp_path) -> None:
     assert out["summary"] == ("No NFL team has a bye from Week 7 through Week 17 — nothing "
                               "to plan around.")
     assert len(out["weeks"]) == 11
+
+
+def _player_id(name: str) -> str:
+    [pid] = [row[1] for row in _directory()["players"] if row[0] == name]
+    return pid
+
+
+THIN_ROSTER = ["Brock Purdy", "Lamar Jackson", "Quinshon Judkins", "Tyjae Spears", "Devin Neal",
+               "Amon-Ra St. Brown", "Zay Flowers", "Rome Odunze", "Khalil Shakir",
+               "Rashid Shaheed", "Chris Boswell", "Brandon Aubrey", "Kansas City Chiefs",
+               "Bryson Nesbit"]
+
+
+@needs_node
+def test_a_spot_the_reserve_list_empties_every_week_is_never_good_news(tmp_path) -> None:
+    """Planner review, reproduced: with the roster's only TE on injured
+    reserve and no bye leaving a hole, the summary read "No week from 7
+    through 17 leaves a starting spot empty. Every bye on your roster is
+    covered." in green — directly above a red line saying the TE spot is empty
+    every week — and "Copy my result" broadcast it. The summary is scoped to
+    byes now, names the spot, and is never styled good; and a covered week
+    with ONE player on bye no longer says "Each of them"."""
+    byes = _byes()
+    byes["out"] = dict(byes.get("out") or {}, **{_player_id("Bryson Nesbit"): "on injured reserve"})
+    out = _run_page(tmp_path, paste="\n".join(THIN_ROSTER) + "\n", byes=byes)
+    assert out["thin"].startswith("Every week, byes or not: nobody can start at TE")
+    if out["summary"].startswith("No bye"):
+        assert out["summary"] == ("No bye from Week 7 through Week 17 empties another spot — "
+                                  "but your TE spot is empty every week, byes or not.")
+    assert "TE spot is empty every week" in out["summary"]
+    assert "good" not in out["summaryClass"].split() and "bad" in out["summaryClass"].split()
+    covered = [w for w in out["weeks"] if "Covered" in w]
+    assert covered
+    for week in covered:
+        names = week.split("On bye: ")[1].split(".")[0]
+        single = " and " not in names and ", " not in names
+        assert week.endswith("That bye opens no new empty spot." if single
+                             else "Those byes open no new empty spot."), week
+
+
+@needs_node
+def test_a_list_that_starts_in_the_playoffs_says_no_byes_once(tmp_path) -> None:
+    """Planner review: from Week 15 on, the summary "No NFL team has a bye
+    from Week 15 through Week 17 — nothing to plan around." was repeated by
+    the fine print "No NFL team has a bye in Weeks 15–17." It is said once."""
+    out = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, today="2026-12-15")
+    assert out["summary"] == ("No NFL team has a bye from Week 15 through Week 17 — nothing "
+                              "to plan around.")
+    assert out["playoffNone"] == ""
+    assert out["footnote"].startswith("*Under ESPN's")
+
+
+@needs_node
+def test_the_closed_button_promises_a_kept_roster_only_when_one_is_kept(tmp_path) -> None:
+    """Planner review, reproduced: the closed button always read "Keep my
+    roster — email me when it opens", while with no list endpoint (today's
+    configuration, join/'s too) the fallback email carries only the address
+    and the note after it says "Your roster isn't saved with us" — and with no
+    roster checked nothing is kept at all. It is the site's "Tell me when it
+    opens" unless an endpoint is set AND a clean roster is on screen; the
+    scoring and size questions, which shape only the kept roster, wait for it."""
+    closed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF)
+    assert closed["ctaChecked"]["button"] == "Tell me when it opens"
+    assert closed["ctaChecked"]["settingsHidden"] is False
+    fresh = _run_page(tmp_path, paste="")
+    assert fresh["ctaButton"] == "Tell me when it opens" and fresh["ctaSettingsHidden"] is True
+    listed = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, edit="Josh Allen\n",
+                       consts={"NOTIFY_LIST_ENDPOINT": '"https://forms.beatyourleague.com/rows"'})
+    assert listed["ctaChecked"]["button"] == "Keep my roster for launch"
+    assert listed["ctaButton"] == "Tell me when it opens", "an edited roster is not the kept one"
+    assert listed["ctaSettingsHidden"] is True
+
+
+@needs_node
+def test_the_open_states_link_never_carries_a_roster_the_visitor_changed(tmp_path) -> None:
+    """Planner review, reproduced (latent until checkout opens): state.ref was
+    never cleared, so after the box was edited the gold "Get the weekly report
+    for this roster" link still carried the last clean roster, and join/
+    restored a roster the visitor had just changed. A stale or unready list
+    sends the link back to the bare join page."""
+    out = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, edit="Josh Allen\nBijan Robinson\n",
+                    consts={"CHECKOUT_CAN_COMPLETE": "true"})
+    assert out["ctaChecked"]["go"] == "../join/index.html?ref=" + SAMPLE_REF
+    assert out["ctaGo"] == "../join/index.html"
+
+
+@needs_node
+def test_the_reserve_list_is_dated_from_its_own_download(tmp_path) -> None:
+    """Planner review: the page dated the reserve list from "generated" (the
+    moment the file was written), so a cron that fell back to a days-old
+    cached players release during an nflverse outage labelled it as today's.
+    It reads reserve_as_of, the players file's own write time."""
+    byes = dict(_byes(), generated="2026-10-24T14:00:00+00:00",
+                reserve_as_of="2026-10-20T14:00:00+00:00")
+    out = _run_page(tmp_path, search="?ref=" + SAMPLE_REF, byes=byes)
+    assert out["asOf"].startswith("Reserve-list status as of Tue, Oct 20 ")
+
+
+def test_the_season_in_the_title_and_noscript_line_follows_the_data() -> None:
+    """Planner review: the generator rewrote only the table, so after the
+    September rollover the cron would have published 2027 byes under a page
+    titled 2026. The title, description and no-script line follow the
+    season, and a page missing one of them refuses rather than guessing."""
+    from render import bye_index
+    page = bye_index.with_season(PAGE, "2027")
+    assert "<title>Fantasy football bye week planner (2027):" in page
+    assert "Every 2027 bye, by week." in page and "Every 2027 bye week is listed below." in page
+    assert "2026" not in page.split("<!-- byes:start -->")[0].replace("2026-", "")
+    assert bye_index.with_season(PAGE, "2026") == PAGE
+    with pytest.raises(bye_index.ByeIndexError):
+        bye_index.with_season(PAGE.replace("bye week is listed below", "byes are below"), "2027")
+
+
+def test_the_data_carries_the_reserve_lists_own_date() -> None:
+    """reserve_as_of is in the committed file and never later than it was
+    written."""
+    data = _byes()
+    assert data["reserve_as_of"] <= data["generated"]
 
 
 # --------------------------------------------------------------------- #

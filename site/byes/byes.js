@@ -266,11 +266,13 @@
       }
       if (idle.length) {
         // With a thin spot on the roster "each spot" would include one that is
-        // empty every week anyway; the bye itself opens nothing new.
+        // empty every week anyway; the bye itself opens nothing new. One
+        // player on bye is one spot (a team defense is not a "him").
+        const one = idle.length === 1;
         return Object.assign(base, { kind: "covered", chip: "Covered",
           detail: "On bye: " + joinWords(idle) + ". " + (thin.length
-            ? "Each of them can be covered from your roster."
-            : "Someone else on your roster can start in each spot.") });
+            ? (one ? "That bye opens no new empty spot." : "Those byes open no new empty spot.")
+            : "Someone else on your roster can start in " + (one ? "that spot." : "each spot.")) });
       }
       return Object.assign(base, { kind: "idle", chip: "",
         detail: "Nobody on your roster is on bye." });
@@ -278,14 +280,25 @@
     const anyByes = weeks.some((w) => (byeTeams.get(w) || []).length);
     const ahead = roster.some((r) => r.bye !== null && r.bye >= from && r.bye <= through);
     const holeWeeks = hits.map((h) => h.week);
+    // A spot the reserve list leaves empty EVERY week (thin) is not a bye
+    // problem, and a summary that says no week leaves a spot empty while one
+    // is empty all season is false — so with a thin spot the good news is
+    // scoped to byes and names the spot, and the page never styles it green.
+    const thinClause = thin.length
+      ? " — but your " + slotWords(thin) + (thin.length === 1 ? " spot is" : " spots are") +
+        " empty every week, byes or not."
+      : "";
     let summary;
     if (!anyByes) {
       summary = "No NFL team has a bye from Week " + from + " through Week " + through +
-        " — nothing to plan around.";
+        (thinClause || " — nothing to plan around.");
     } else if (holeWeeks.length) {
       const n = holeWeeks.length;
       summary = n + (n === 1 ? " week leaves" : " weeks leave") + " a starting spot empty: " +
         weekList(holeWeeks) + ".";
+    } else if (thin.length) {
+      summary = "No bye from Week " + from + " through Week " + through + " empties " +
+        "another spot" + thinClause;
     } else {
       summary = "No week from " + from + " through " + through + " leaves a starting " +
         "spot empty. " + (ahead ? "Every bye on your roster is covered."
@@ -294,14 +307,20 @@
     const playoffsShown = weeks.some((w) => PLAYOFF_WEEKS.indexOf(w) >= 0);
     const playoffByes = PLAYOFF_WEEKS.some((w) => (byeTeams.get(w) || []).length);
     const thinNames = outNames(roster, thin, new Set());
-    const asOf = etDay(byes.generated);
+    // The reserve list is dated from the players release's own download
+    // (reserve_as_of), never from when the file was written: on an nflverse
+    // outage the cron falls back to a cached copy, and "as of today" would
+    // then be a false date (principle 3).
+    const asOf = etDay(byes.reserve_as_of || byes.generated);
     return {
-      kind: "plan", season, from, through, holes: holeWeeks, summary,
+      kind: "plan", season, from, through, holes: holeWeeks, thinSlots: thin, summary,
       head: "3 · Your byes, Week " + from + " to Week " + through,
       thin: thin.length ? "Every week, byes or not: nobody can start at " + slotWords(thin) +
         (thinNames.length ? " — " + joinWords(thinNames) + " can't play." : ".") : "",
       weeks: rows,
-      playoffNone: playoffsShown && !playoffByes ? "No NFL team has a bye in Weeks 15–17." : "",
+      // Not when the summary already says it (a list that starts in Week 15).
+      playoffNone: playoffsShown && !playoffByes && anyByes
+        ? "No NFL team has a bye in Weeks 15–17." : "",
       footnote: playoffsShown ? FOOTNOTE : "",
       asOf: "Reserve-list status as of " + (asOf || "the latest update") + " (nflverse): a " +
         "player on injured reserve, the PUP or non-football injury list, suspended or " +
