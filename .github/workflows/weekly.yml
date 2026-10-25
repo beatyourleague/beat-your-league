@@ -168,6 +168,11 @@ jobs:
       # signup, weeks later, surfacing only as a BLOCKED line in the intake log.
       # The season is derived rather than hardcoded: the Makefile's SEASON goes
       # stale every September.
+      # The bye planner's data (site/join/byes.json, and the season table on
+      # site/byes/) is refreshed beside it, from the same directory. It refuses
+      # to write a partial bye list, and a refusal is a warning, not a red run:
+      # last week's dated file is right about every bye and says how old its
+      # reserve list is.
       - name: Refresh the published player directory
         id: directory
         run: |
@@ -176,6 +181,7 @@ jobs:
             print(current_season(Path('data/raw/nflverse')))")
           echo "season=$SEASON" >> "$GITHUB_OUTPUT"
           .venv/bin/python -m render.player_index --season "$SEASON"
+          .venv/bin/python -m render.bye_index --season "$SEASON" || echo "::warning::bye planner data not refreshed; last week's stays"
       # Turn payments into the registry BEFORE building anything. With
       # STRIPE_API_KEY unset this exits 1 and changes nothing, so enabling it is
       # a secret, not a deploy.
@@ -354,7 +360,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
-          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md
+          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md site/join/byes.json site/byes/index.html
           [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
           git diff --cached --quiet && echo "nothing to persist" && exit 0
           git commit -m "Weekly run: ledger, send log, player directory"

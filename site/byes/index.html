@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fantasy football bye week planner (2026): check your roster through Week 17 — Beat Your League</title>
+<link rel="canonical" href="https://beatyourleague.com/byes/">
+<meta name="description" content="Free: paste your fantasy roster from ESPN, Yahoo, Sleeper or CBS and see every week through Week 17 where NFL byes leave a starting spot empty. Every 2026 bye, by week. No login.">
+<meta property="og:title" content="Free bye week planner — your roster, through Week 17">
+<meta property="og:description" content="Paste your roster, no login. See every week where a bye leaves a starting spot empty, fantasy playoff weeks included.">
+<meta name="twitter:description" content="Paste your roster, no login. See every week where a bye leaves a starting spot empty, fantasy playoff weeks included.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://beatyourleague.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Beat Your League lineup report: four roster slots, three with a percentage, one marked questionable.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<!-- Paper page, like join/: light native controls and the navy header's
+     colour in the phone's browser bar. -->
+<meta name="theme-color" content="#101E33">
+<meta name="color-scheme" content="light">
+<link rel="preload" href="../fonts/barlow-condensed-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="../fonts/fonts.css">
+<!-- Without JavaScript the planner cannot run, so its controls are not drawn
+     at all (never a box that does nothing), and the page is one column so the
+     season's table really is "below". A <noscript> rule rather than a class
+     the script adds: the scripts load last, and a class added then would
+     flash the note and shift the page on every visit. -->
+<noscript><style>.needs-js{display:none!important;}.shell{grid-template-columns:minmax(0,600px)!important;}</style></noscript>
+<style>
+  :root{
+    --display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;
+    --sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
+    --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
+    --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
+    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
+  body{background:radial-gradient(900px 500px at 50% -10%,#F3EFE3,transparent 70%),#E7E4DA;
+    font-family:var(--sans);color:var(--navy);padding:22px 12px 56px;
+    -webkit-font-smoothing:antialiased;}
+  .shell{max-width:980px;margin:0 auto;display:grid;
+    grid-template-columns:minmax(0,600px) minmax(0,330px);gap:28px;align-items:start;
+    justify-content:center;}
+  .page{background:var(--paper);border:1px solid var(--line);overflow:hidden;
+    box-shadow:0 30px 60px -30px rgba(16,30,51,.35),0 2px 10px rgba(16,30,51,.06);}
+  header{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
+    padding:24px 24px 26px;}
+  .kicker{display:inline-block;margin-top:20px;font-size:11.5px;font-weight:800;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--flag);
+    border:1px solid rgba(242,194,48,.45);padding:5px 10px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:44px;line-height:.95;
+    text-transform:uppercase;margin-top:12px;}
+  header .sub{margin-top:12px;font-size:15px;color:#DCE3EC;line-height:1.55;max-width:52ch;}
+  .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:18px;}
+  .progress span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+    color:rgba(246,244,238,.62);padding-top:8px;border-top:3px solid rgba(246,244,238,.18);}
+  .progress .on,
+  body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
+  body:has(#weeks li) .progress .s2,
+  body:has(#weeks li) .progress .s3{color:var(--flag);border-top-color:var(--flag);}
+  .nojs{margin:0;padding:16px 24px;font-size:14.5px;line-height:1.55;background:#FFF6D9;
+    border-bottom:1px solid var(--line);}
+  section{padding:24px 26px 26px;border-top:1px solid var(--line);}
+  .eyebrow{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--navy);margin-bottom:10px;}
+  .note{margin-top:8px;font-size:13px;color:var(--slate);line-height:1.5;}
+  .note a{color:var(--navy);text-decoration:underline;text-underline-offset:2px;}
+
+  /* join/'s controls, copied rule for rule (one look across the funnel). */
+  input[type=text], input[type=email]{width:100%;padding:12px 14px;font:inherit;font-size:16px;
+    border:2px solid var(--navy);background:var(--card);border-radius:3px;}
+  button{font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:.1em;
+    text-transform:uppercase;padding:12px 22px;margin-top:10px;
+    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));color:var(--navy);
+    border:none;cursor:pointer;transition:transform .15s ease, background .15s ease;}
+  button:disabled{background:var(--slate);color:#fff;cursor:default;}
+  button:hover:not(:disabled){transform:translateY(-2px);}
+  button:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
+  .optlabel{display:block;margin:16px 0 0;font-size:12px;font-weight:800;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink2);}
+  .opts{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 0;}
+  .opts label{position:relative;border-radius:999px;padding:8px 14px;font-size:13.5px;font-weight:700;
+    border:1.5px solid var(--line);cursor:pointer;background:#fff;
+    transition:background .15s,border-color .15s,color .15s;}
+  .opts label:hover{border-color:var(--navy);}
+  .opts input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}
+  .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:#fff;}
+  .opts label:has(input:focus-visible){outline:3px solid var(--flag);outline-offset:2px;}
+  @media (pointer:coarse){.opts label{min-height:44px;display:inline-flex;align-items:center;}}
+  .optsub{font-weight:600;text-transform:none;letter-spacing:0;color:var(--slate);margin-left:.3em;}
+  .opts label:has(input:checked) .optsub{color:#C9D4E2;}
+  .addwrap{position:relative;margin:12px 0 10px;}
+  .suggest{position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--card);
+    border:1px solid var(--navy);border-top:0;box-shadow:0 14px 30px rgba(16,30,51,.18);}
+  .suggest:empty{display:none;}
+  .sugrow{display:block;width:100%;text-align:left;background:none;border:none;
+    border-bottom:1px solid var(--line);padding:10px 12px;margin:0;cursor:pointer;
+    font-family:var(--sans);font-size:15px;color:var(--navy);text-transform:none;
+    letter-spacing:0;font-weight:600;}
+  .sugrow:last-child{border-bottom:0;}
+  .sugrow:hover,.sugrow:focus{background:var(--turf-tint);transform:none;}
+  textarea{width:100%;min-height:150px;padding:11px 12px;border:1px solid var(--line);
+    font:inherit;font-size:14px;line-height:1.5;background:#fff;resize:vertical;border-radius:3px;}
+  #check{width:100%;padding:15px 22px;font-size:17px;box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
+  #check:disabled{box-shadow:none;}
+  .err{margin-top:10px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
+    font-size:13.5px;color:#7A2C1F;}
+  .err:empty{display:none;}
+  .retry{margin-top:8px;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
+    font-size:14px;padding:9px 14px;}
+  .tally{margin-top:10px;font-size:13px;color:var(--slate);font-weight:600;}
+  .tally:empty{display:none;}
+  .tally.bad{color:var(--brick);}
+  .rows{margin:14px 0 0;border:1px solid var(--line);background:#fff;}
+  .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;
+    padding:9px 12px;border-top:1px solid #EDEAE1;font-size:14px;}
+  .row:first-child{border-top:none;}
+  .row.bad{background:#FCF3F1;}
+  .row.choose{grid-template-columns:1fr;}
+  .row.choose .fix{justify-content:flex-start;}
+  .row .who{font-weight:700;}
+  .row .meta{font-size:12px;color:var(--slate);font-weight:600;}
+  .row .meta.out{color:var(--brick);}
+  .row .why{font-size:12.5px;color:var(--brick);font-weight:600;}
+  .row .fix{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+  .row .fix button{font-size:12px;padding:5px 9px;margin:0;background:#fff;letter-spacing:.04em;
+    border:1px solid var(--line);color:var(--navy);font-weight:700;cursor:pointer;}
+  .row .fix button:hover{border-color:var(--navy);}
+  .row .fix button.drop{width:32px;height:32px;min-width:32px;padding:0;border:0;
+    background:transparent;color:var(--slate);font-family:var(--sans);
+    font-size:22px;font-weight:500;line-height:1;letter-spacing:0;text-transform:none;
+    display:inline-flex;align-items:center;justify-content:center;}
+  .row .fix button.drop:hover,.row .fix button.drop:focus-visible{color:var(--brick);
+    background:var(--brick-tint);transform:none;}
+  .twin{font-size:12px;color:#8A6A10;font-weight:600;}
+  .tally a{color:var(--navy);text-decoration:underline;text-underline-offset:2px;margin-left:4px;}
+  /* A clean list folds away under the count, so the weeks sit right under
+     the button; one that needs a look, or carries a twin, stays open. */
+  .readlist{margin-top:8px;}
+  .readlist summary{display:inline-flex;align-items:center;gap:7px;min-height:32px;cursor:pointer;
+    font-size:13.5px;font-weight:700;color:var(--navy);list-style:none;}
+  .readlist summary::-webkit-details-marker{display:none;}
+  .readlist summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;
+    border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s ease;}
+  .readlist[open] summary::before{transform:rotate(45deg);}
+  .readlist summary:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
+  .readlist .rows{margin-top:6px;}
+
+  /* ------------------------------------------------ the weeks */
+  .waiting{font-size:14px;color:var(--slate);line-height:1.55;}
+  .summary{font-family:var(--display);font-weight:800;font-size:25px;line-height:1.08;
+    color:var(--navy);outline:none;text-wrap:balance;}
+  .summary.bad{color:var(--brick);}
+  .summary.good{color:#14502E;}
+  .summary:empty{display:none;}
+  .thin{margin-top:12px;padding:10px 12px;background:var(--brick-tint);border-left:4px solid var(--brick);
+    font-size:13.5px;line-height:1.5;color:#7A2C1F;}
+  .thin:empty{display:none;}
+  .weeks{list-style:none;margin:16px 0 0;border:1px solid var(--line);background:#fff;}
+  .weeks:empty{display:none;}
+  .wk{display:grid;grid-template-columns:64px minmax(0,1fr);gap:2px 14px;align-items:start;
+    padding:13px 14px 13px 12px;border-top:1px solid #EDEAE1;}
+  .wk:first-child{border-top:0;}
+  .wk .n{position:relative;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--slate);line-height:1.05;}
+  .wk .n b{display:block;font-size:34px;letter-spacing:0;color:var(--navy);line-height:.9;
+    margin-top:1px;font-variant-numeric:tabular-nums;}
+  .wk .n .now{display:block;margin-top:5px;font-size:11px;letter-spacing:.06em;color:var(--turf);}
+  .wk .n .sep{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    white-space:nowrap;}
+  /* The weeks arrive in order, once, when an answer first appears: opacity
+     and transform only, nothing loops, and none of it under reduced motion. */
+  @keyframes wkin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .weeks.reveal .wk{animation:wkin .34s cubic-bezier(.2,.7,.2,1) both;
+    animation-delay:calc(var(--i, 0) * 32ms);}
+  .summary.reveal{animation:wkin .3s ease both;}
+  .wk .top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;min-height:24px;}
+  .chip{display:inline-block;font-size:11.5px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;padding:4px 9px;border-radius:999px;line-height:1.2;}
+  .chip.bad{background:var(--brick);color:#fff;}
+  .chip.ok{background:var(--turf-tint);color:#14502E;}
+  .tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.04em;
+    color:#7A5C0C;border:1px solid #E2C46A;background:#FFF8E1;padding:3px 8px;border-radius:999px;
+    line-height:1.2;}
+  .wk .detail{margin-top:5px;font-size:13.5px;color:var(--ink2);line-height:1.5;}
+  .wk.empty{background:#FCF3F1;box-shadow:inset 4px 0 0 var(--brick);}
+  .wk.empty .n b{color:var(--brick);}
+  .wk.idle{padding-top:10px;padding-bottom:10px;}
+  .wk.idle .n b{font-size:24px;color:var(--slate);}
+  .wk.idle .detail{margin-top:0;color:var(--slate);}
+  .wk.idle .top:empty{display:none;}
+  .wk.playoff:not(.empty){background:#FFFCF2;}
+  .fine{margin-top:10px;font-size:12.5px;color:var(--slate);line-height:1.5;}
+  .fine:empty{display:none;}
+  .share{margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);}
+  .share .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .share button{margin-top:0;background:var(--card);color:var(--navy);border:1.5px solid var(--navy);
+    font-size:14px;padding:10px 14px;}
+  .shareline{margin-top:10px;padding:10px 12px;background:#fff;border:1px solid var(--line);
+    font-size:13.5px;line-height:1.5;overflow-wrap:anywhere;}
+  .sharemsg{margin-top:6px;font-size:12.5px;color:var(--turf);font-weight:600;}
+  .sharemsg:empty{display:none;}
+  [hidden]{display:none!important;}
+
+  /* ------------------------------------------------ the weekly report */
+  .cta{background:#fff;border-top:3px solid var(--navy);}
+  .cta h2{font-family:var(--display);font-weight:800;font-size:27px;line-height:1.02;
+    text-transform:uppercase;text-wrap:balance;}
+  .cta .lead{margin-top:10px;font-size:14.5px;color:var(--ink2);line-height:1.55;}
+  .cta form{margin-top:4px;}
+  .cta .mailrow{margin-top:16px;}
+  .cta #cta-button{width:100%;padding:15px 18px;font-size:16px;
+    box-shadow:0 10px 22px -12px rgba(16,30,51,.6);}
+  .cta #cta-button:disabled{background:var(--turf-tint);color:#14502E;border:1.5px solid var(--turf);
+    box-shadow:none;transform:none;}
+  .ctanote{margin-top:10px;font-size:13.5px;line-height:1.5;color:var(--ink2);}
+  .ctanote:empty{display:none;}
+  .ctanote.ok{padding:10px 12px;background:var(--turf-tint);border-left:4px solid var(--turf);color:#14502E;}
+  .ctanote .fixmail{font:inherit;font-weight:700;color:var(--navy);background:none;
+    border:0;border-bottom:1px solid currentColor;padding:2px 0;margin:0 2px;cursor:pointer;
+    min-height:24px;text-transform:none;letter-spacing:0;}
+  .ctanote .fixmail:hover{transform:none;color:var(--brick);}
+  .golink{display:block;margin-top:16px;text-align:center;text-decoration:none;
+    font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.1em;
+    text-transform:uppercase;padding:15px 18px;color:var(--navy);
+    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
+    box-shadow:0 10px 22px -12px rgba(16,30,51,.6);transition:transform .15s ease;}
+  a.golink:hover{transform:translateY(-2px);}
+  .ghostlink{display:block;margin-top:8px;text-align:center;font-weight:700;font-size:14.5px;
+    color:var(--navy);text-decoration:underline;text-underline-offset:2px;padding:8px;}
+  .golink:focus-visible,.ghostlink:focus-visible,.textlink:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
+  .textlink{display:inline-block;margin-top:14px;font-size:14px;font-weight:700;color:var(--navy);
+    text-decoration:underline;text-underline-offset:3px;padding:4px 0;}
+  .textlink:hover,.ghostlink:hover{color:var(--brick);}
+  /* Under both columns: on a phone it comes after the season's table, so the
+     page still ends on its footer. */
+  .sitefoot{grid-column:1/-1;background:var(--paper);border:1px solid var(--line);
+    padding:16px 24px 20px;font-size:12px;color:var(--slate);line-height:1.6;}
+  .sitefoot a{color:var(--navy);text-decoration:underline;text-underline-offset:2px;}
+  .sitefoot a:hover{color:var(--brick);}
+
+  /* ------------------------------------------------ every bye, by week */
+  .side{background:linear-gradient(180deg,var(--navy2),var(--navy));color:var(--paper);
+    padding:22px 22px 20px;box-shadow:0 30px 60px -30px rgba(16,30,51,.5);}
+  .side h2{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.04em;
+    line-height:1.05;text-transform:uppercase;color:var(--flag);}
+  .byetable{list-style:none;margin-top:14px;display:grid;gap:0;}
+  .byetable li{padding:9px 0;border-top:1px solid rgba(246,244,238,.14);font-size:13.5px;
+    line-height:1.45;color:#DCE3EC;}
+  .byetable li:first-child{border-top:0;padding-top:2px;}
+  .byetable b{font-family:var(--display);font-weight:800;font-size:14px;
+    letter-spacing:.1em;text-transform:uppercase;color:#fff;}
+  .side p{margin-top:12px;font-size:13px;line-height:1.5;color:#C9D4E2;}
+  .side p.src{margin-top:10px;font-size:12px;color:#AEBBCC;}
+
+  @media (max-width:960px){
+    .shell{grid-template-columns:minmax(0,600px);}
+    .side{box-shadow:none;}
+  }
+  @media (max-width:480px){
+    body{padding:0 0 40px;}
+    .shell{gap:0;}
+    .page{border-left:0;border-right:0;}
+    header{padding:20px 18px 22px;}
+    header h1{font-size:38px;}
+    section{padding:22px 18px 24px;}
+    .nojs{padding:14px 18px;}
+    .wk{grid-template-columns:52px minmax(0,1fr);gap:2px 10px;padding:12px 12px 12px 10px;}
+    .wk .n b{font-size:30px;}
+    .summary{font-size:23px;}
+    .cta h2{font-size:24px;}
+    .cta #cta-button,.golink{font-size:15px;letter-spacing:.05em;padding:14px 12px;}
+    .sitefoot{padding:16px 18px 24px;border-left:0;border-right:0;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{transition:none !important;animation:none !important;}
+    button:hover:not(:disabled),a.golink:hover{transform:none;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+<div class="page">
+  <header>
+    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="../how-it-works.html">How it works</a><a href="../sample-report.html">See a real report</a><a class="hidesm" href="../index.html#pricing">Pricing</a></nav></div>
+    <div class="kicker">Free · no login · no email needed</div>
+    <h1>Bye week planner</h1>
+    <p class="sub">Paste your roster from ESPN, Yahoo, Sleeper or CBS. See every week from
+    now through Week 17 where a bye leaves a starting spot empty — fantasy playoff weeks
+    included.</p>
+    <div class="progress needs-js" aria-hidden="true"><span class="s1 on">1 · Lineup</span><span class="s2">2 · Roster</span><span class="s3">3 · Byes</span></div>
+  </header>
+  <noscript><p class="nojs">The planner needs JavaScript. Every 2026 bye week is listed below.</p></noscript>
+
+  <main id="main">
+  <section id="step-lineup" class="needs-js">
+    <div class="eyebrow">1 · Your starting lineup</div>
+    <div class="note">A bye only matters when nobody else on your roster can start in that
+    spot, so this is all we need.</div>
+    <!-- join/'s lineup questions, same names and values, so a roster checked
+         here restores on join/ (and back) through the one ref (contract C6). -->
+    <div class="optlabel" id="lbl-template">Starting lineup</div>
+    <div class="opts" id="opt-template" role="radiogroup" aria-labelledby="lbl-template">
+      <label><input type="radio" name="template" value="std" checked>Standard <span class="optsub">· ESPN's and Yahoo's default</span></label>
+      <label><input type="radio" name="template" value="flex2">Two FLEX <span class="optsub">· Sleeper's default</span></label>
+      <label><input type="radio" name="template" value="wr3">Three WR</label>
+      <label><input type="radio" name="template" value="sf">Superflex</label>
+    </div>
+    <div class="optlabel" id="lbl-kicker">Kicker</div>
+    <div class="opts" id="opt-kicker" role="radiogroup" aria-labelledby="lbl-kicker">
+      <label><input type="radio" name="kicker" value="yes" checked>Starts a K</label>
+      <label><input type="radio" name="kicker" value="no">No K</label>
+    </div>
+    <div class="optlabel" id="lbl-defense">Team defense</div>
+    <div class="opts" id="opt-defense" role="radiogroup" aria-labelledby="lbl-defense">
+      <label><input type="radio" name="defense" value="yes" checked>Starts a DEF</label>
+      <label><input type="radio" name="defense" value="no">No DEF</label>
+    </div>
+    <div class="note" id="shape-note" aria-live="polite">Your lineup: QB, 2 RB, 2 WR, TE, FLEX, K and DEF.</div>
+  </section>
+
+  <section id="step-roster" class="needs-js">
+    <div class="eyebrow">2 · Your roster</div>
+    <div class="note">Type a name and tap to add it, or paste your whole roster straight from
+    ESPN, Yahoo, Sleeper or CBS. Extra text like positions and bye weeks is fine.</div>
+    <form id="form-roster" novalidate>
+      <div class="addwrap">
+        <input type="text" id="player-search" autocomplete="off"
+               placeholder="Add a player — start typing a name"
+               aria-label="Add a player by name">
+        <div class="suggest" id="suggest" role="group" aria-label="Matching players"></div>
+      </div>
+    <textarea id="roster-text" spellcheck="false" aria-label="Your roster" placeholder="Josh Allen
+Bijan Robinson
+Ja'Marr Chase
+Baltimore Ravens
+..."></textarea>
+    <button id="check" type="submit" disabled>Check my byes</button>
+    </form>
+    <div class="err" id="err-roster" role="alert"></div>
+    <button type="button" id="retry-load" class="retry" style="display:none">Try again</button>
+    <div class="tally" id="tally" role="status" aria-live="polite" tabindex="-1"></div>
+    <button type="button" id="defenses-ok" class="retry" style="display:none"></button>
+    <div id="rows"></div>
+  </section>
+
+  <section id="step-byes" class="needs-js">
+    <div class="eyebrow" id="byes-head">3 · Your byes</div>
+    <p class="waiting" id="waiting">Check your roster to see every week from now through Week 17.</p>
+    <p class="summary" id="summary" role="status" aria-live="polite" tabindex="-1"></p>
+    <p class="thin" id="thin"></p>
+    <ol class="weeks" id="weeks" aria-label="Weeks"></ol>
+    <p class="fine" id="playoff-none"></p>
+    <p class="fine" id="footnote"></p>
+    <p class="fine" id="as-of"></p>
+    <div class="share" id="share" hidden>
+      <div class="btns">
+        <button type="button" id="share-planner">Share the planner</button>
+        <button type="button" id="share-result">Copy my result</button>
+      </div>
+      <p class="shareline" id="share-text" hidden></p>
+      <p class="sharemsg" id="share-msg" role="status"></p>
+    </div>
+  </section>
+
+  <section class="cta" id="cta">
+    <h2>Want this checked every Tuesday — with your whole lineup set?</h2>
+    <p class="lead">The weekly report flags every bye still ahead and decides every slot:
+    every close call explained, an if/then for late news.<span id="cta-closed"> Checkout
+    isn't open yet.</span></p>
+    <div class="needs-js">
+      <div class="optlabel" id="lbl-scoring">Your league's scoring</div>
+      <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
+        <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
+        <label><input type="radio" name="scoring" value="half_ppr">Half PPR</label>
+        <label><input type="radio" name="scoring" value="standard">Standard</label>
+      </div>
+      <div class="optlabel" id="lbl-size">League size</div>
+      <div class="opts" id="opt-size" role="radiogroup" aria-labelledby="lbl-size">
+        <label><input type="radio" name="size" value="8">8 teams</label>
+        <label><input type="radio" name="size" value="10">10 teams</label>
+        <label><input type="radio" name="size" value="12" checked>12 teams</label>
+        <label><input type="radio" name="size" value="14">14 teams</label>
+      </div>
+      <!-- The static page is the CLOSED state: the email capture. The open
+           state (CHECKOUT_CAN_COMPLETE) is built by the script. -->
+      <form id="cta-form" class="mailrow" novalidate>
+        <input type="email" id="cta-email" placeholder="you@example.com" autocomplete="email"
+               aria-label="Your email">
+        <button type="submit" id="cta-button">Keep my roster — email me when it opens</button>
+        <p class="note">One email when signups open, nothing else. Unsubscribe any time.</p>
+      </form>
+      <p class="ctanote" id="cta-note" role="status"></p>
+      <a class="golink" id="cta-go" href="../join/index.html" hidden>Get the weekly report for this roster</a>
+      <a class="ghostlink" id="cta-try" href="../join/index.html?try=1" hidden>Or get one free report on it</a>
+    </div>
+    <a class="textlink" href="../sample-report.html">See a real report</a>
+  </section>
+  </main>
+
+</div>
+<aside class="side" aria-labelledby="every-bye">
+<!-- byes:start -->
+<h2 id="every-bye">Every 2026 NFL bye week</h2>
+<ul class="byetable">
+<li><b>Week 5</b> — Carolina Panthers, Kansas City Chiefs</li>
+<li><b>Week 6</b> — Cincinnati Bengals, Detroit Lions, Miami Dolphins, Minnesota Vikings</li>
+<li><b>Week 7</b> — Buffalo Bills, Jacksonville Jaguars, Los Angeles Chargers, Washington Commanders</li>
+<li><b>Week 8</b> — Houston Texans, New Orleans Saints, New York Giants, San Francisco 49ers</li>
+<li><b>Week 9</b> — Pittsburgh Steelers, Tennessee Titans</li>
+<li><b>Week 10</b> — Chicago Bears, Denver Broncos, Philadelphia Eagles, Tampa Bay Buccaneers</li>
+<li><b>Week 11</b> — Atlanta Falcons, Cleveland Browns, Green Bay Packers, Los Angeles Rams, New England Patriots, Seattle Seahawks</li>
+<li><b>Week 13</b> — Baltimore Ravens, Indianapolis Colts, Las Vegas Raiders, New York Jets</li>
+<li><b>Week 14</b> — Arizona Cardinals, Dallas Cowboys</li>
+</ul>
+<p>No byes in Weeks 1–4, 12 and 15–18.</p>
+<p class="src">Schedule: nflverse (nflverse-data), CC-BY-4.0.</p>
+<!-- byes:end -->
+</aside>
+<footer class="sitefoot">
+    The roster you type here is checked in your browser and isn't sent to us unless you
+    leave your email. Not affiliated with the NFL, ESPN, Yahoo, Sleeper or CBS.
+    Beat Your League — analysis, not betting picks. NFL data: nflverse (nflverse-data),
+    CC-BY-4.0.<br>
+    <a href="../terms.html">Terms &amp; refunds</a> &middot;
+    <a href="../privacy.html">Privacy</a> &middot;
+    <a href="../index.html">Back to the main page</a>
+</footer>
+</div>
+<script src="../join/roster.js?v=632c4eddea"></script>
+<script src="byes.js?v=150e570e57"></script>
+<!-- DOMAIN_FIXES and suggestedEmail, the join page's and the landing's own (FUN-5). -->
+<script src="/email-check.js?v=2e2f372017"></script>
+<script>
+"use strict";
+// The free bye-week planner. The rule is byes.js (the twin of
+// engine.preseason.bye_collisions, which the weekly report's "Byes ahead"
+// runs); names are read by roster.js, the same resolver join/ uses. This file
+// is the flow around them, and it keeps join/'s two rules:
+//   RULE R3 — nothing is guessed. A line that needs a look blocks the check;
+//   the visitor picks, because a guessed player is a wrong week.
+//   Nothing is DROPPED. A line we cannot read is shown back verbatim, as a
+//   text node.
+// Facts only: the schedule's byes and today's reserve list. No projection, no
+// percentage. The roster never leaves this browser unless the visitor leaves
+// an email (then it rides the waitlist row, contract C6).
+
+// The launch list: kind "waitlist" to the form Worker, like join/'s own
+// (tests/test_polish_tool.py pins it equal to join's NOTIFY_LIST_ENDPOINT).
+const NOTIFY_LIST_ENDPOINT = "";
+// The landing's two flags, pinned equal to them by test: whether a purchase
+// can finish, and whether the free first report is open.
+const CHECKOUT_CAN_COMPLETE = false;
+const TRIAL_OPEN = false;
+// The project inbox (Cloudflare Email Routing), never a personal address.
+const CONTACT_EMAIL = "hello@beatyourleague.com";
+const PLANNER_URL = "https://beatyourleague.com/byes/";
+
+const QUERY = new URLSearchParams(location.search);
+// A cookie-free source tag: a link posted somewhere can carry ?via=<channel>,
+// and the tag rides along in the form row so `make stats` can count signups by
+// channel. Nothing is stored in the browser; the Worker keeps only
+// ^[a-z0-9-]{1,24}$ and drops anything else without refusing the row.
+const VIA = (new URLSearchParams(location.search).get("via") || "")
+  .toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 24) || undefined;
+// The tag rides every link into the funnel pages that read it (launch audit
+// F2): each page takes it from its OWN address only, so a tag that stopped at
+// the page it was posted to was counted nowhere. URL only, never stored. The
+// same function, character for character, is on every funnel page and in the
+// live sample (tests/test_site.py compares them and runs it under node).
+function carryVia(href, via) {
+  if (!via || !/^[a-z0-9-]{1,24}$/.test(via) || !href) return href;
+  const cut = href.indexOf("#");
+  const base = cut < 0 ? href : href.slice(0, cut);
+  const hash = cut < 0 ? "" : href.slice(cut);
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
+  return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
+}
+// ?ref=<ref> — a roster checked here before, coming back: this page's own
+// address bookmarked, or the launch email's link. Decoded by roster.js, the
+// twin of what decodes it on Tuesday; anything unreadable is an ordinary
+// visit, never a half-restored roster.
+const RESTORED = (() => {
+  try { return QUERY.get("ref") ? R.decodeRoster(QUERY.get("ref")) : null; }
+  catch (err) { return null; }
+})();
+// The channel rides on the ref itself (contract C5): this visit's own tag,
+// else the one the restored roster was saved with.
+const SOURCE = VIA || (RESTORED && RESTORED.via) || undefined;
+
+const $ = (id) => document.getElementById(id);
+// One address rule on every side (D14): run/rosters.py _EMAIL_RE, the form
+// Worker's EMAIL (with its 254-character cap), join/ and this page.
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// ``stale``: the box was typed in since the list on screen was read from it.
+// ``ready``: the list on screen is clean and was checked. ``plan``: what the
+// weeks section shows. ``listed``: the launch list has this visit's row.
+const state = { directory: null, players: null, byes: null, loading: false, failed: false,
+                matches: [], stale: false, ready: false, defensesOk: null, plan: null,
+                ref: "", listed: false, listedRef: "", keptEmail: "", listOpen: false };
+
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function radio(name) {
+  const picked = document.querySelector(`input[name="${name}"]:checked`);
+  return picked ? picked.value : null;
+}
+function shapeChoice() {
+  const base = radio("template") in R.SHAPE_BASES ? radio("template") : "std";
+  return { base, kicker: radio("kicker") !== "no", defense: radio("defense") !== "no" };
+}
+function lineupSlots() {
+  const s = shapeChoice();
+  return R.shapeSlots(s.base, s.kicker, s.defense);
+}
+function leagueSize() { return Number(radio("size")) || 12; }
+function setRadio(name, value) {
+  const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if (input) input.checked = true;
+  return Boolean(input);
+}
+function applyShape(shape) {
+  if (!shape) return false;
+  return setRadio("template", shape.base) && setRadio("kicker", shape.kicker ? "yes" : "no")
+    && setRadio("defense", shape.defense ? "yes" : "no");
+}
+
+// Lineup words for the note: "QB, 2 RB, 2 WR, TE, 2 FLEX, K and DEF".
+function lineupWords(slots) {
+  const names = { SUPER_FLEX: "superflex" };
+  const parts = [];
+  slots.forEach((slot, i) => {
+    if (i && slots[i - 1] === slot) return;
+    let n = 1;
+    while (slots[i + n] === slot) n++;
+    parts.push((n > 1 ? n + " " : "") + (names[slot] || slot));
+  });
+  return parts.length > 1 ? parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1]
+                          : parts.join("");
+}
+function drawShapeNote() {
+  let text = "Your lineup: " + lineupWords(lineupSlots()) + ".";
+  if (shapeChoice().base === "sf") text += " The superflex spot can take a quarterback.";
+  $("shape-note").textContent = text;
+}
+
+function showError(message) { $("err-roster").textContent = message; }
+
+// Every stranger-supplied string reaches the DOM as a TEXT NODE, never as
+// markup: the roster box is arbitrary typed input and a name is not HTML.
+function textCell(className, text) {
+  const node = document.createElement("div");
+  node.className = className;
+  node.textContent = text;
+  return node;
+}
+
+// ---- the player list and this season's byes ------------------------------
+// Both or neither: a roster read against one season's byes with another
+// season's players would plan weeks for teams that are not theirs.
+function loadFailedMessage() {
+  return "We couldn't load the player list and bye weeks just now." +
+    ($("roster-text").value.trim() ? " Your roster is still here." : "");
+}
+function getJson(url) {
+  return fetch(url, { signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined) })
+    .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+}
+function loadFiles() {
+  if (state.loading || state.directory) return;
+  state.loading = true;
+  state.failed = false;
+  $("retry-load").style.display = "none";
+  showError("");
+  Promise.all([getJson("../join/players.json"), getJson("../join/byes.json")])
+    .then(([players, byes]) => {
+      if (!byes || !Array.isArray(byes.weeks) || !byes.weeks.length ||
+          String(players.season) !== String(byes.season)) throw new Error("not one season");
+      state.directory = R.buildDirectory(players);
+      state.byes = byes;
+      showError("");
+      const over = B.describe([], lineupSlots(), byes, today());
+      if (over.kind === "over") {
+        // The season's byes are behind us: nothing to check. The table stays.
+        showPlan(over);
+        return;
+      }
+      $("check").disabled = false;
+      restoreRoster();
+    })
+    .catch(() => {
+      if (state.directory) return;          // an earlier attempt already won
+      state.failed = true;
+      showError(loadFailedMessage());
+      $("retry-load").style.display = "block";
+    })
+    .finally(() => { state.loading = false; });
+}
+$("retry-load").addEventListener("click", loadFiles);
+
+// ---- type-to-add, join/'s own --------------------------------------------
+const searchBox = $("player-search");
+const suggestBox = $("suggest");
+
+function suggestions(query) {
+  return R.suggestPlayers(state.directory, query, 8);
+}
+
+function addPlayer(player) {
+  const box = $("roster-text");
+  // A checked, unedited list gains ONE row — the player tapped, which is the
+  // answer, not a name to look up — and only a list that was never checked,
+  // or was typed over since, is read from the box afresh (launch audit F7).
+  const keep = state.matches.length > 0 && !state.stale;
+  box.value = (box.value.trim() ? box.value.trim() + "\n" : "") + player.name + "\n";
+  searchBox.value = "";
+  suggestBox.replaceChildren();
+  state.matches = keep ? R.addPick(state.directory, state.matches, player)
+                       : R.resolveAll(state.directory, box.value);
+  state.stale = false;
+  draw();
+}
+
+function renderSuggestions() {
+  suggestBox.replaceChildren();
+  for (const player of suggestions(searchBox.value)) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "sugrow";
+    row.textContent = player.name + "  ·  " + player.position
+      + (player.team ? "  ·  " + player.team : "");
+    row.addEventListener("click", () => addPlayer(player));
+    suggestBox.appendChild(row);
+  }
+}
+// The list is drawn OVER the paste box and the button, so it closes on
+// Escape, when focus leaves the field for anything but the list, and on a
+// press anywhere outside it (FUNNEL F2) — join/'s handling, unchanged.
+const addWrap = searchBox ? searchBox.closest(".addwrap") : null;
+let pressInList = false;
+function closeSuggestions() { suggestBox.replaceChildren(); }
+if (addWrap) {
+  document.addEventListener("pointerdown", (event) => {
+    pressInList = suggestBox.contains(event.target);
+    if (!addWrap.contains(event.target)) closeSuggestions();
+  });
+  document.addEventListener("keydown", () => { pressInList = false; }, true);
+  addWrap.addEventListener("focusout", (event) => {
+    if (pressInList || addWrap.contains(event.relatedTarget)) return;
+    closeSuggestions();
+  });
+  addWrap.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !suggestBox.childElementCount) return;
+    event.preventDefault();
+    searchBox.focus();
+    closeSuggestions();
+  });
+  searchBox.addEventListener("focus", () => {
+    if (!suggestBox.childElementCount) renderSuggestions();
+  });
+}
+if (searchBox) {
+  searchBox.addEventListener("input", renderSuggestions);
+  searchBox.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      // Only a pick that can't be the wrong player (launch audit PC-09).
+      const pick = R.enterPick(suggestions(searchBox.value), searchBox.value);
+      if (pick) addPlayer(pick);
+    }
+  });
+}
+
+// ---- the check ------------------------------------------------------------
+$("form-roster").addEventListener("submit", (event) => {
+  event.preventDefault();
+  showError("");
+  if (!state.directory) {
+    showError(state.failed ? loadFailedMessage() : "Still loading the player list — one moment.");
+    if (state.failed) $("retry-load").style.display = "block";
+    return;
+  }
+  state.matches = R.resolveAll(state.directory, $("roster-text").value);
+  if (window.bylCount) window.bylCount("roster");
+  state.stale = false;
+  draw(undefined, true);
+});
+
+// An edit after the check makes the list on screen stale: the weeks below
+// would describe a roster that is no longer in the box (RULE R3).
+$("roster-text").addEventListener("input", () => {
+  if (!state.matches.length) return;
+  state.stale = true;
+  state.ready = false;
+  showPlan(null);
+  const tally = $("tally");
+  tally.className = "tally bad";
+  tally.textContent = 'Your roster changed — hit "Check my byes" again.';
+});
+
+// Why a row is not on the roster yet, in the buyer's words. Part of a name
+// ("Hurts", "Allen") is offered as a choice, even when one player fits —
+// RULE R3, nothing is guessed — and "we don't have anybody by that name" is
+// gone: it was said beside a typeahead that listed him (FUNNEL F9, BE2-D2),
+// and a misspelling is somebody we may well have.
+function whyUnread(match) {
+  if (match.reason === "partial") {
+    return match.candidates.length === 1 ? "did you mean him? Tap his name to add him"
+      : "that's part of more than one player's name — pick one, or type the full name";
+  }
+  if (match.reason === "ambiguous") return "more than one player goes by that name — pick one";
+  if (match.reason === "gone") {
+    return "not in this season's player list any more — remove it, and add whoever replaced him";
+  }
+  return "we couldn't find that name — check the spelling, or find him with “Add a player” above";
+}
+
+// The rows the rule reads: byes.js builds them the way run.solo._byes_ahead
+// does, from each player's current team and today's reserve list.
+function rosterRows() {
+  return B.rosterRows(state.matches.map((m) => m.player), state.byes);
+}
+
+// join/'s list, drawn the same way, with each row's bye beside it.
+// ``focusAt``: after a remove or a choice, focus goes to the row now at that
+// position. ``pressed``: the visitor asked, so the answer gets focus.
+function draw(focusAt, pressed) {
+  const list = $("rows");
+  list.replaceChildren();
+  const tally = $("tally");
+  const confirm = $("defenses-ok");
+  confirm.style.display = "none";
+  if (!state.matches.length) {
+    state.ready = false;
+    showPlan(null);
+    tally.className = "tally bad";
+    tally.textContent = pressed ? "Paste or add at least one player." : "";
+    return;
+  }
+  const from = B.currentWeek(state.byes, today());
+  const wrap = document.createElement("div");
+  wrap.className = "rows";
+  const seen = new Map();
+  const dupOf = state.matches.map((match, index) => {
+    if (!match.player) return undefined;
+    const first = seen.get(match.player.id);
+    if (first === undefined) seen.set(match.player.id, index);
+    return first;
+  });
+  const needsWork = (i) => !state.matches[i].player || dupOf[i] !== undefined;
+  const order = state.matches.map((_, i) => i)
+    .sort((a, b) => (needsWork(b) - needsWork(a)) || (a - b));
+  order.forEach((index, position) => {
+    const match = state.matches[index];
+    const row = document.createElement("div");
+    row.className = "row" + (match.player ? "" : " bad");
+    const left = document.createElement("div");
+    if (match.player) {
+      left.appendChild(textCell("who", match.player.name));
+      const [facts] = B.rosterRows([match.player], state.byes);
+      left.appendChild(textCell("meta" + (facts.out_today ? " out" : ""),
+                                B.rowMeta(match.player, facts, from)));
+      (match.twins || []).forEach((twin) => {
+        left.appendChild(textCell("twin", "not " + twin.name + "? tap to swap"));
+      });
+      if (dupOf[index] !== undefined) {
+        row.className = "row bad";
+        left.appendChild(textCell("why",
+          match.player.name + " is already on your roster — remove one"));
+      }
+    } else {
+      // Shown back verbatim — never dropped.
+      left.appendChild(textCell("who", match.typed));
+      left.appendChild(textCell("why", whyUnread(match)));
+    }
+    row.appendChild(left);
+
+    const fix = document.createElement("div");
+    fix.className = "fix";
+    const options = match.player ? (match.twins || []) : match.candidates;
+    if (options.length) row.classList.add("choose");
+    options.forEach((option) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = option.name + " (" + option.position +
+        (option.team ? " " + option.team : "") + ")";
+      button.addEventListener("click", () => {
+        state.matches[index] = { typed: match.typed, player: option,
+                                 candidates: [], twins: [] };
+        draw(position);
+      });
+      fix.appendChild(button);
+    });
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "drop";
+    drop.textContent = "×";
+    drop.title = "Remove";
+    drop.setAttribute("aria-label", "Remove " + (match.player ? match.player.name : match.typed));
+    drop.addEventListener("click", () => {
+      // His own line leaves the box too, but only when the box then reads
+      // back as exactly the rows left on screen (join/'s FUN-4 rule).
+      const box = $("roster-text");
+      const rest = state.matches.filter((_, i) => i !== index).map((m) => m.typed);
+      const lines = box.value.split(/\r?\n/);
+      const at = lines.findIndex((line) => {
+        const text = line.trim();
+        return Boolean(text) && (text === match.typed ||
+          R.resolveAll(state.directory, text).some((m) => m.typed === match.typed));
+      });
+      if (at >= 0) {
+        const edited = lines.slice(0, at).concat(lines.slice(at + 1)).join("\n");
+        const again = R.resolveAll(state.directory, edited).map((m) => m.typed);
+        if (JSON.stringify(again) === JSON.stringify(rest)) box.value = edited;
+      }
+      state.matches.splice(index, 1);
+      draw(position);
+    });
+    fix.appendChild(drop);
+    row.appendChild(fix);
+    wrap.appendChild(row);
+  });
+
+  const ids = state.matches.filter((m) => m.player).map((m) => m.player.id);
+  const unresolved = state.matches.length - ids.length;
+  const duplicated = ids.length - new Set(ids).size;
+  const defenses = state.matches.filter((m) => m.player && m.player.position === "DEF").length;
+  let problem = "";
+  if (unresolved || duplicated) {
+    const n = unresolved + duplicated;
+    problem = n + (n === 1 ? " name needs" : " names need") +
+      " a look before we can check your byes.";
+  } else if (defenses > 2 && state.defensesOk !== defenses) {
+    // join/'s BE-D1: a table copy's team and opponent columns once became
+    // eleven defenses — here they would cover every DEF bye that isn't.
+    problem = defenses + " team defenses on this list — did some come from a " +
+      "team or opponent column? Remove the ones you don't own.";
+    confirm.textContent = "All " + defenses + " are mine";
+    confirm.style.display = "block";
+  } else if (ids.length < lineupSlots().length) {
+    // join/'s words while a roster is still being added name by name: a
+    // count is the honest answer until every starting spot could be filled.
+    const slots = lineupSlots().length;
+    problem = "Your lineup has " + slots + " starting spots and you've " +
+      "listed " + ids.length + (ids.length === 1 ? " player" : " players") +
+      ". Add the rest.";
+  } else if (ids.length > R.MAX_ROSTER) {
+    problem = "That's " + ids.length + " players — we can take up to " +
+      R.MAX_ROSTER + ". Trim it to your active roster (drop IR and taxi stashes).";
+  }
+  state.ready = !problem;
+  tally.className = "tally" + (problem ? " bad" : "");
+  if (problem) {
+    tally.textContent = problem;
+  } else {
+    tally.replaceChildren(document.createTextNode(ids.length +
+      (ids.length === 1 ? " player" : " players") + " read."));
+    const jump = el("a", "", "See your byes");
+    jump.setAttribute("href", "#step-byes");
+    tally.appendChild(jump);
+  }
+  // A clean list folds under its count, so the answer sits right under the
+  // button; a list that needs a look, or shows a twin to check, stays open.
+  const twins = state.matches.some((m) => m.player && (m.twins || []).length);
+  if (problem || twins) {
+    list.appendChild(wrap);
+  } else {
+    const fold = el("details", "readlist");
+    fold.open = state.listOpen;
+    fold.addEventListener("toggle", () => { state.listOpen = fold.open; });
+    fold.appendChild(el("summary", "", "Show the list, with each player's bye week"));
+    fold.appendChild(wrap);
+    list.appendChild(fold);
+  }
+  if (problem) {
+    showPlan(null);
+  } else {
+    showPlan(B.describe(rosterRows(), lineupSlots(), state.byes, today()));
+    keepInAddress();
+    if (pressed) $("summary").focus();
+  }
+  if (Number.isInteger(focusAt)) {
+    const rows = list.querySelectorAll(".row");
+    const target = rows[Math.min(focusAt, rows.length - 1)];
+    const control = target && target.querySelector("button");
+    (control || tally).focus();
+  }
+}
+
+$("defenses-ok").addEventListener("click", () => {
+  state.defensesOk = state.matches.filter((m) => m.player && m.player.position === "DEF").length;
+  draw();
+  $("tally").focus();
+});
+
+// ---- the weeks -------------------------------------------------------------
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function showPlan(plan) {
+  // The weeks arrive in order only when an answer first appears, never on
+  // every redraw (a setting changed, a player removed).
+  const fresh = Boolean(plan) && !state.plan;
+  state.plan = plan;
+  $("byes-head").textContent = plan && plan.head ? plan.head : "3 · Your byes";
+  $("waiting").hidden = Boolean(plan);
+  const summary = $("summary");
+  summary.textContent = plan ? plan.summary : "";
+  summary.className = "summary" + (!plan ? "" : plan.kind !== "plan" ? " bad"
+    : plan.holes.length ? " bad" : " good") + (fresh ? " reveal" : "");
+  $("thin").textContent = plan && plan.thin ? plan.thin : "";
+  const weeks = $("weeks");
+  weeks.replaceChildren();
+  weeks.className = "weeks" + (fresh ? " reveal" : "");
+  (plan && plan.kind === "plan" ? plan.weeks : []).forEach((w, i) => {
+    const item = el("li", "wk " + w.kind + (w.playoff ? " playoff" : ""));
+    item.style.setProperty("--i", String(i));
+    const n = el("div", "n");
+    n.appendChild(document.createTextNode("Week "));
+    n.appendChild(el("b", "", String(w.week)));
+    if (w.now) {
+      // "Week 7 · this week" to a reader; the dot is dropped from sight only,
+      // where the label sits under the number.
+      const now = el("span", "now");
+      now.appendChild(el("span", "sep", " · "));
+      now.appendChild(document.createTextNode("this week"));
+      n.appendChild(now);
+    }
+    item.appendChild(n);
+    const body = el("div", "body");
+    const top = el("div", "top");
+    if (w.chip) top.appendChild(el("span", "chip " + (w.kind === "empty" ? "bad" : "ok"), w.chip));
+    if (w.tag) top.appendChild(el("span", "tag", w.tag));
+    if (top.childElementCount) body.appendChild(top);
+    body.appendChild(el("p", "detail", w.detail));
+    item.appendChild(body);
+    weeks.appendChild(item);
+  });
+  const shown = plan && plan.kind === "plan";
+  $("playoff-none").textContent = shown ? plan.playoffNone : "";
+  $("footnote").textContent = shown ? plan.footnote : "";
+  $("as-of").textContent = shown ? plan.asOf : "";
+  $("share").hidden = !shown;
+  $("share-text").hidden = true;
+  $("share-msg").textContent = "";
+}
+
+// ---- the address -----------------------------------------------------------
+// A clean check is kept in this page's own address (?ref=), so a bookmark or a
+// reload brings it back, and the launch email's link can too. The ref is the
+// one join/ would use for this roster (contract C6) and carries no email.
+function currentRef() {
+  return R.withVia(R.encodeRoster("season", radio("scoring") || "ppr", lineupSlots(),
+                                  state.matches.map((m) => m.player.id), leagueSize()),
+                   SOURCE);
+}
+function keepInAddress() {
+  if (!state.ready) return;
+  try {
+    state.ref = currentRef();
+  } catch (err) {
+    state.ref = "";
+  }
+  if (state.ref && window.history && history.replaceState) {
+    const params = new URLSearchParams(location.search);
+    params.set("ref", state.ref);
+    history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
+  }
+  drawCta();
+}
+
+// The roster a ?ref= carried, back on the list by id (never re-read from
+// names), then checked once without a press.
+function restoreRoster() {
+  if (!RESTORED || !state.directory || state.matches.length) return;
+  state.matches = RESTORED.playerIds.map((id) => {
+    const player = state.directory.byId.get(id);
+    return player ? { typed: player.name, player, candidates: [], twins: [] }
+                  : { typed: "A player from your saved roster", player: null,
+                      candidates: [], reason: "gone" };
+  });
+  $("roster-text").value = state.matches.filter((m) => m.player)
+    .map((m) => m.player.name).join("\n") + "\n";
+  state.stale = false;
+  draw();
+}
+
+$("step-lineup").addEventListener("change", () => {
+  drawShapeNote();
+  if (state.matches.length && !state.stale) draw();
+});
+$("cta").addEventListener("change", () => {
+  if (state.ready) keepInAddress();
+});
+
+// ---- the weekly report -----------------------------------------------------
+// Closed (the static page): the email capture. Open: one link into join/
+// carrying this roster, which join/ restores ready to check out.
+function drawCta() {
+  if (state.listed && state.ref !== state.listedRef) {
+    // Another roster or setting is another row (run/waitlist keeps the newest).
+    state.listed = false;
+    $("cta-button").disabled = false;
+    $("cta-note").textContent = "";
+    $("cta-note").className = "ctanote";
+  }
+  if (!CHECKOUT_CAN_COMPLETE) return;
+  const ref = state.ref ? encodeURIComponent(state.ref) : "";
+  $("cta-go").setAttribute("href", carryVia("../join/index.html" + (ref ? "?ref=" + ref : ""), VIA));
+  $("cta-try").setAttribute("href",
+    carryVia("../join/index.html?try=1" + (ref ? "&ref=" + ref : ""), VIA));
+}
+if (CHECKOUT_CAN_COMPLETE) {
+  $("cta-form").hidden = true;
+  $("cta-closed").remove();
+  $("cta-go").hidden = false;
+  if (TRIAL_OPEN) $("cta-try").hidden = false;
+  drawCta();
+}
+
+$("cta-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const note = $("cta-note");
+  note.className = "ctanote";
+  const email = $("cta-email").value.trim();
+  if (!EMAIL_RE.test(email) || email.length > 254) {
+    note.textContent = "That email doesn't look right.";
+    return;
+  }
+  // A likely typo in the domain is asked about once, before anything is sent
+  // (FUN-5) — the landing's capture, word for word: a question, never a silent
+  // change; pressing again keeps what was typed.
+  const fix = typeof suggestedEmail === "function" ? suggestedEmail(email) : "";
+  if (fix && state.keptEmail !== email) {
+    state.keptEmail = email;
+    note.replaceChildren(document.createTextNode("Did you mean " + fix + "? "));
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "fixmail";
+    use.textContent = "Use " + fix;
+    use.addEventListener("click", () => {
+      $("cta-email").value = fix;
+      state.keptEmail = fix;
+      const form = $("cta-form");
+      form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(
+        new Event("submit", { cancelable: true }));
+    });
+    note.appendChild(use);
+    note.appendChild(document.createTextNode(" Or press the button again to keep what you typed."));
+    return;
+  }
+  if (state.listed) return;
+  // The roster rides only when it is the one on screen, checked and clean.
+  let ref = "";
+  if (state.ready) {
+    try { ref = currentRef(); } catch (err) { ref = ""; }
+  }
+  if (NOTIFY_LIST_ENDPOINT) {
+    const button = $("cta-button");
+    button.disabled = true;                 // a second press mid-flight is a second row
+    try {
+      const row = { kind: "waitlist", email: email, via: SOURCE };
+      if (ref) row.ref = ref;
+      const res = await fetch(NOTIFY_LIST_ENDPOINT, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(row),
+        signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined),
+      });
+      if (!res.ok) {
+        const err = new Error(String(res.status));
+        err.refused = res.status >= 400 && res.status < 500;
+        throw err;
+      }
+      state.listed = true;
+      state.listedRef = ref;
+      if (window.bylCount) window.bylCount("waitlist", "closed");
+      note.className = "ctanote ok";
+      note.textContent = ref
+        ? "Checkout isn't open just yet — we kept your email and this roster. " +
+          "The morning it opens you'll get one email, with a link that brings this " +
+          "roster back ready to check out."
+        : "You're on the list. One email when signups open, nothing else.";
+    } catch (err) {
+      button.disabled = false;
+      note.textContent = err && err.refused
+        ? "We couldn't accept that address — check it for typos. Nothing was recorded."
+        : "That didn't send — check your connection and try again. Nothing was recorded.";
+    }
+    return;
+  }
+  // No list yet: the landing's own fallback, a pre-filled email to the inbox.
+  note.textContent = "Opening a pre-filled email — send it and you're on the " +
+    "list. Nothing opened? Email " + CONTACT_EMAIL + " with the subject " +
+    "“Tell me when it opens”." + (ref ? " Your roster isn't saved with us, but " +
+    "it's kept in this page's address — bookmark it and it comes back." : "");
+  window.location.href = "mailto:" + CONTACT_EMAIL +
+    "?subject=" + encodeURIComponent("Tell me when it opens") +
+    "&body=" + encodeURIComponent("Email me when signups open: " + email + "\n");
+});
+
+// ---- pass it on ------------------------------------------------------------
+// One tap to the group chat: the phone's own share sheet where the browser
+// has one (the chat is an app on that phone), a clipboard copy otherwise, and
+// failing both the line is selected for a copy by hand. A cancelled share
+// sheet is the visitor changing their mind, not an error. The same function,
+// character for character, is on thanks.html (tests/test_site.py).
+function shareLine(text, line, status) {
+  const byHand = () => {
+    window.getSelection().selectAllChildren(line);
+    status.textContent = "The message is selected — copy it and paste it in the group chat.";
+  };
+  const copyIt = () => {
+    if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
+    navigator.clipboard.writeText(text).then(
+      () => { status.textContent = "Copied — paste it in the group chat."; }, byHand);
+  };
+  if (!navigator.share) return copyIt();
+  navigator.share({ text: text }).then(
+    () => { status.textContent = ""; },
+    (err) => { if (!err || err.name !== "AbortError") copyIt(); });
+}
+// What is shared names weeks and spots only: never a player, never the ref.
+function share(text) {
+  const line = $("share-text");
+  line.textContent = text;
+  line.hidden = false;
+  shareLine(text, line, $("share-msg"));
+}
+$("share-planner").addEventListener("click", () => {
+  share("Free bye check through Week 17 — paste your roster, no login: " + PLANNER_URL);
+});
+$("share-result").addEventListener("click", () => {
+  if (!state.plan || state.plan.kind !== "plan") return;
+  share(state.plan.summary + " Checked free at beatyourleague.com/byes/");
+});
+
+// ---- start -----------------------------------------------------------------
+if (RESTORED) {
+  setRadio("scoring", RESTORED.scoring);
+  setRadio("size", String(RESTORED.leagueSize));
+  applyShape(R.shapeOfSlots(RESTORED.slots));
+}
+drawShapeNote();
+loadFiles();
+// AFTER every href this script writes (the open state's links).
+if (VIA) {
+  document.querySelectorAll("a[href]").forEach((a) => {
+    a.setAttribute("href", carryVia(a.getAttribute("href"), VIA));
+  });
+}
+</script>
+<script src="/count.js" defer></script>
+</body>
+</html>
