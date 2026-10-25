@@ -41,7 +41,7 @@
     -webkit-font-smoothing:antialiased;
   }
   .report{max-width:680px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
-    box-shadow:0 2px 18px rgba(16,30,51,.10);}
+    box-shadow:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
   /* On a phone the sheet frame is 16px of grey and a border around the whole
      report: the paper runs edge to edge instead, as on thanks.html and
      how-it-works.html (funnel review D15). */
@@ -77,13 +77,31 @@
   /* ================= 30-second game plan ================= */
   .plan{margin-top:16px;display:grid;gap:10px;}
   .task{display:grid;grid-template-columns:26px 1fr;gap:12px;align-items:start;
-    background:var(--card);border:1px solid var(--line);padding:13px 14px;}
+    background:var(--card);border:1px solid var(--line);padding:13px 14px;
+    box-shadow:0 1px 2px rgba(16,30,51,.06);cursor:pointer;}
   .task .box{width:20px;height:20px;border:2.5px solid var(--navy);margin-top:1px;background:#fff;}
+  .task .do,.task .why,.task .dl{display:block;}
   .task .do{font-weight:700;font-size:15px;line-height:1.35;}
   .task .why{font-size:13px;line-height:1.45;color:var(--ink2);margin-top:3px;}
   .task .dl{margin-top:3px;font-size:12.5px;font-weight:700;letter-spacing:.05em;
     text-transform:uppercase;color:var(--brick);}
   .task .dl.ok{color:var(--turf);}
+  /* The game plan ticks for real in a browser: each task is a label around
+     a checkbox (render.report.section_checklist). Nothing is stored, so a
+     tick lasts until the page reloads. The email draws its own boxes. */
+  /* 24px, the smallest target a thumb is promised (WCAG 2.5.8); the label
+     around it makes the whole card the target anyway. */
+  .task .box{-webkit-appearance:none;appearance:none;width:24px;height:24px;margin:-1px 0 0;
+    display:grid;place-content:center;cursor:pointer;}
+  .task .box::after{content:"";width:12px;height:7px;margin-top:-3px;border:solid #fff;
+    border-width:0 0 2.5px 2.5px;transform:rotate(-45deg) scale(0);
+    transition:transform .22s cubic-bezier(.34,1.56,.64,1);}
+  .task .box:checked{background:var(--turf);border-color:var(--turf);}
+  .task .box:checked::after{transform:rotate(-45deg) scale(1);}
+  .task:has(.box:checked){background:#FBFAF6;}
+  .task:has(.box:checked) .do{text-decoration:line-through;text-decoration-thickness:2px;
+    text-decoration-color:rgba(16,30,51,.45);color:var(--slate);}
+  .task .box:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}
 
   /* ================= matchup ================= */
   .board{display:flex;align-items:flex-end;justify-content:space-between;margin-top:18px;gap:8px;}
@@ -302,7 +320,8 @@
   .srow .why{font-size:14.5px;color:var(--ink2);line-height:1.55;margin-top:2px;}
 
   /* ================= regret ================= */
-  .call{margin-top:16px;background:var(--card);border:2px solid var(--navy);padding:18px 18px 16px;}
+  .call{margin-top:16px;background:var(--card);border:2px solid var(--navy);padding:18px 18px 16px;
+    box-shadow:0 1px 2px rgba(16,30,51,.06);}
   .call .verdict{font-family:var(--display);font-weight:800;font-size:27px;
     text-transform:uppercase;line-height:1.05;}
   .call .verdict .over{color:var(--slate);font-size:19px;}
@@ -337,7 +356,7 @@
   /* ================= pivot plan ================= */
   .pivots{margin-top:16px;display:grid;gap:12px;}
   .pivot{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--navy);
-    padding:14px 16px;}
+    padding:14px 16px;box-shadow:0 1px 2px rgba(16,30,51,.06);}
   .pivot .if{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
     color:var(--slate);}
   .pivot .cond{font-weight:700;font-size:15px;margin-top:3px;}
@@ -401,6 +420,24 @@
   .ctacard a:not(.btn){color:var(--flag);font-weight:700;}
   .headcta a:focus-visible,.ctacard a:focus-visible{
     outline:3px solid var(--flag);outline-offset:2px;}
+  /* The site CTA's feel: a lift on hover, a press, a sheen across the gold.
+     A clip-path clips the outline too, so a focused button squares off. */
+  .headcta .btn,.ctacard .btn{position:relative;overflow:hidden;
+    transition:transform .18s cubic-bezier(.22,1,.36,1);}
+  .headcta .btn:hover,.ctacard .btn:hover{transform:translateY(-2px);}
+  .headcta .btn:active,.ctacard .btn:active{transform:translateY(1px) scale(.985);
+    transition-duration:.06s;}
+  .headcta .btn::after,.ctacard .btn::after{content:"";position:absolute;inset:0 auto 0 0;
+    width:45%;pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+    transform:translateX(-130%) skewX(-14deg);}
+  .headcta .btn:hover::after,.ctacard .btn:hover::after{transform:translateX(260%) skewX(-14deg);
+    transition:transform .75s cubic-bezier(.22,1,.36,1);}
+  .btn:focus-visible{clip-path:none;}
+  /* Links in the report's body on paper: the navy ring. On navy, the gold. */
+  section a:focus-visible,footer a:focus-visible,.notice a:focus-visible{
+    outline:3px solid var(--navy);outline-offset:2px;}
+  .ledger a:focus-visible{outline-color:var(--flag);}
   footer{padding:18px 24px 26px;font-size:12px;color:var(--slate);line-height:1.6;
     border-top:3px double var(--line);}
   footer b{color:var(--navy);}
@@ -414,6 +451,33 @@
     section{padding:20px 14px 24px;}
     .bug{padding:20px 16px 18px;}
     .notice{padding:10px 14px;}
+  }
+  /* The odds bars fill as they come up into view: empty as a bar crosses
+     the bottom edge, full by the time it is 12% of the way up the screen,
+     and full everywhere above that, so a bar a reader is looking at matches
+     its figure. The timeline is named on the bar's track: the fill sits inside
+     .cbar's overflow:hidden, a scroll container of its own, so an anonymous
+     view() there never advances. A bar in view at load is already full;
+     without view timelines (or with reduced motion) every bar is simply
+     drawn. The width is the published figure: only the reveal moves. */
+  @media screen and (prefers-reduced-motion:no-preference){
+    @supports (animation-timeline: view()){
+      .tcall .cbar,.conf .bar{view-timeline:--fillbar block;}
+      .tcall .cbar i,.conf .bar i{transform-origin:0 50%;animation:cfill linear both;
+        animation-timeline:--fillbar;animation-range:entry 0% cover 12%;}
+      @keyframes cfill{from{transform:scaleX(0);}to{transform:none;}}
+    }
+  }
+  @media (prefers-reduced-motion:reduce){
+    .task .box::after,.headcta .btn,.ctacard .btn{transition:none;}
+    .headcta .btn,.ctacard .btn{transform:none!important;}
+    .headcta .btn::after,.ctacard .btn::after{display:none;}
+  }
+  /* A printed game plan keeps its boxes, ticked or not. */
+  @media print{
+    .task .box{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .task .box:checked{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .headcta .btn::after,.ctacard .btn::after{display:none;}
   }
 </style>
 </head>

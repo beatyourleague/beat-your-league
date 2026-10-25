@@ -90,11 +90,11 @@
   /* Contract C2: one primary (.btn.gold). */
   .btn{display:inline-block;font-family:var(--display);font-weight:800;
     font-size:18px;letter-spacing:.12em;text-transform:uppercase;text-decoration:none;
-    padding:15px 28px;border:0;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease;}
+    padding:15px 28px;border:0;cursor:pointer;}
   .btn.gold{background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
     color:var(--navy);clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
     box-shadow:0 10px 24px -14px rgba(0,0,0,.9);}
-  .btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
+  .btn:hover{box-shadow:0 14px 28px -14px rgba(0,0,0,.9);}
   @media (prefers-reduced-motion: reduce){.btn{transition:none;transform:none!important;}}
   .steps{margin-top:22px;background:rgba(255,255,255,.035);border:1px solid var(--gold-edge);padding:18px 20px;}
   .steps h3{font-family:var(--display);font-weight:800;font-size:19px;text-transform:uppercase;letter-spacing:.04em;}
@@ -149,6 +149,76 @@
     font-size:12.5px;color:#7C8DA5;line-height:1.7;}
   footer a{color:var(--flag);}
   @media (max-width:640px){.grid{grid-template-columns:1fr;}}
+  /* ---- one feel with the paper pages (PAGES-FOUNDATION), on a dark ground ----
+     The same easing, press and sheen; deeper shadows for a dark page; the
+     focus ring stays this page's gold, which is what reads on navy. */
+  :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
+    --elev-1:0 1px 2px rgba(0,0,0,.35);
+    --elev-2:0 1px 2px rgba(0,0,0,.3),0 10px 24px -14px rgba(0,0,0,.75);
+    --elev-3:0 2px 10px rgba(0,0,0,.3),0 30px 60px -30px rgba(0,0,0,.9);}
+  .btn,.sharebtn,.chatline button{transition:transform .18s var(--ease-out),box-shadow .18s var(--ease-out);}
+  .btn:hover,.sharebtn:hover,.chatline button:hover{transform:translateY(-2px);}
+  .btn:active,.sharebtn:active,.chatline button:active{transform:translateY(1px) scale(.985);
+    transition-duration:.06s;}
+  .btn.gold,.sharebtn{position:relative;overflow:hidden;}
+  .btn.gold::after,.sharebtn::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;
+    pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+    transform:translateX(-130%) skewX(-14deg);}
+  .btn.gold:hover::after,.sharebtn:hover::after{transform:translateX(260%) skewX(-14deg);
+    transition:transform .75s var(--ease-out);}
+  /* A clip-path clips the outline: the slanted button showed no ring at all
+     when focused, so it squares off while it holds keyboard focus. On the
+     white price card the ring is navy (gold on white is under 2:1). */
+  .btn.gold:focus-visible{clip-path:none;}
+  .price a:focus-visible{outline-color:var(--navy);}
+  /* The headline's gold slab catches the light once; the h1 never moves. */
+  h1 em{position:relative;overflow:hidden;}
+  h1 em::after{content:"";position:absolute;inset:0 auto 0 0;width:40%;pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.6),rgba(255,255,255,0));
+    transform:translateX(-140%) skewX(-14deg);animation:slabsheen 1.1s var(--ease-out) .4s 1 both;}
+  @keyframes slabsheen{to{transform:translateX(320%) skewX(-14deg);}}
+  /* Below-the-fold blocks rise in once (site/motion.js), as on the paper pages. */
+  .motion [data-reveal]:not([data-reveal="group"]):not(.in),
+  .motion [data-reveal="group"]:not(.in) > *{opacity:0;transform:translateY(14px);}
+  .motion [data-reveal]:not([data-reveal="group"]),.motion [data-reveal="group"] > *{
+    transition:opacity .5s var(--ease-out) var(--d,0s),transform .65s var(--ease-out) var(--d,0s);}
+  /* The price card's checks pop in one after another once it is in view;
+     the $69 itself never moves. */
+  .motion .price.in li::before{animation:okpop .4s var(--ease-pop) both;}
+  .price li:nth-child(1)::before{animation-delay:.2s;}
+  .price li:nth-child(2)::before{animation-delay:.26s;}
+  .price li:nth-child(3)::before{animation-delay:.32s;}
+  .price li:nth-child(4)::before{animation-delay:.38s;}
+  .price li:nth-child(5)::before{animation-delay:.44s;}
+  .price li:nth-child(6)::before{animation-delay:.5s;}
+  @keyframes okpop{from{opacity:0;transform:scale(.4);}}
+  /* A copy says so: the status line arrives, a check beside "Copied", and
+     the line's border goes gold for a moment (opacity only). */
+  @keyframes msgin{from{opacity:0;transform:translateY(-4px);}}
+  .chatline-msg:not(:empty){animation:msgin .3s var(--ease-out);}
+  .chatline-msg[data-ok="1"]::before{content:"";display:inline-block;width:14px;height:14px;
+    margin-right:6px;vertical-align:-2px;border-radius:50%;
+    background:var(--flag) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.3 4.6-5' fill='none' stroke='%23101E33' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/11px no-repeat;
+    animation:okpop .4s var(--ease-pop) both;}
+  .ask .chatline{position:relative;}
+  .ask .chatline::after{content:"";position:absolute;inset:-1px;border:1px solid var(--flag);
+    opacity:0;pointer-events:none;}
+  .ask:has(.chatline-msg[data-ok="1"]) .chatline::after{animation:chatok .9s var(--ease-out) both;}
+  @keyframes chatok{0%,55%{opacity:1;}100%{opacity:0;}}
+  /* An answer opens with a little settle; the +/– turns as it changes. */
+  .faq details[open] .a{animation:faqin .32s var(--ease-out);}
+  @keyframes faqin{from{opacity:0;transform:translateY(-4px);}}
+  .faq summary::after{transition:transform .25s var(--ease-out);}
+  .faq details[open] summary::after{transform:rotate(180deg);}
+  @media print{.motion [data-reveal],.motion [data-reveal] > *{opacity:1!important;transform:none!important;}
+    h1 em::after{display:none;}}
+  @media (prefers-reduced-motion:reduce){
+    .btn,.sharebtn,.chatline button,.faq summary::after{transition:none!important;transform:none!important;}
+    .btn.gold::after,.sharebtn::after,h1 em::after{display:none;}
+    *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
+      animation-iteration-count:1!important;}
+  }
 </style>
 <script type="application/ld+json">
 {
@@ -235,7 +305,7 @@
   <main id="main">
 
   <h2>Why one manager buys it for twelve</h2>
-  <div class="grid">
+  <div class="grid" data-reveal="group">
     <div class="box"><h3>It levels the field</h3>
       <p>One manager buying an edge is an arms race. Everyone having the same tool is just a
       better league — and it kills the "he only won because he pays for stuff" argument
@@ -253,7 +323,7 @@
       from the pot.</p></div>
   </div>
 
-  <div class="price">
+  <div class="price" data-reveal>
     <div class="tag">League Pass · rest of season</div>
     <div class="amt">$69 <small>for the whole league</small></div>
     <p style="font-size:13px;color:var(--slate);margin:6px 0 0;">All prices in US dollars.</p>
@@ -279,7 +349,7 @@
        spending shared dues usually checks with the league first, and the only
        line this page offered was "I got us the League Pass", false until paid.
        This one is a question, true at any time, and carries no seat link. -->
-  <div class="steps ask">
+  <div class="steps ask" data-reveal>
     <h3>Ask the league first</h3>
     <div class="chatline">
       <p id="ask-text">Should we take the League Pass from Beat Your League out of the
@@ -290,7 +360,7 @@
     <p class="chatline-msg" id="ask-msg" role="status"></p>
   </div>
 
-  <div class="steps">
+  <div class="steps" data-reveal>
     <h3>What you do after paying</h3>
     <ol>
       <li><b>Pay once, on Stripe.</b> Your own roster goes in at the same time, so your report
@@ -366,7 +436,7 @@
   not lopsided. A league full of good information still crowns exactly one champion; that
   part is up to you.</p>
 
-  <div class="closer">
+  <div class="closer" data-reveal>
     <h2>Every manager, their own report.</h2>
     <p>$69 for the whole league, for the rest of the season: one payment, nothing renews,
     and a no-questions refund until your second weekly report's week kicks off — one per
@@ -463,18 +533,23 @@ if (ask) {
 // sheet is the visitor changing their mind, not an error. The same function,
 // character for character, is on thanks.html (tests/test_site.py).
 function shareLine(text, line, status) {
+  // data-ok marks a done copy (a check, and the line flashes gold); every
+  // other outcome clears it. Cleared first, so a second copy flashes again.
+  status.dataset.ok = "";
   const byHand = () => {
     window.getSelection().selectAllChildren(line);
+    status.dataset.ok = "";
     status.textContent = "The message is selected — copy it and paste it in the group chat.";
   };
   const copyIt = () => {
     if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
     navigator.clipboard.writeText(text).then(
-      () => { status.textContent = "Copied — paste it in the group chat."; }, byHand);
+      () => { status.dataset.ok = "1"; status.textContent = "Copied — paste it in the group chat."; },
+      byHand);
   };
   if (!navigator.share) return copyIt();
   navigator.share({ text: text }).then(
-    () => { status.textContent = ""; },
+    () => { status.dataset.ok = ""; status.textContent = ""; },
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
 // From Week 13 the individual pass on sale may be the $19 Playoff Pass, and a
@@ -500,6 +575,7 @@ if (VIA) {
   });
 }
 </script>
+<script src="/motion.js?v=172057d003" defer></script>
 <script src="/count.js" defer></script>
 </body>
 </html>

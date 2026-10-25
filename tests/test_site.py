@@ -4317,8 +4317,9 @@ def _run_confirm_page(search: str, endpoint: str) -> dict:
                         f"const FORM_ENDPOINT = {_json.dumps(endpoint)};")
     return _node(
         "const els = {}; const el = (id) => els[id] || (els[id] = {id, textContent: '',"
-        " className: '', disabled: false, handlers: {}, addEventListener(t, f) {"
-        " this.handlers[t] = f; }});\n"
+        " className: '', disabled: false, handlers: {}, attrs: {}, addEventListener(t, f) {"
+        " this.handlers[t] = f; }, setAttribute(n, v) { this.attrs[n] = String(v); },"
+        " removeAttribute(n) { delete this.attrs[n]; }});\n"
         "el('head').textContent = 'Confirm your roster'; el('go').textContent ="
         " 'Yes, use my new roster';\n"
         "globalThis.document = { title: 'Beat Your League — Confirm your roster',"
@@ -4857,7 +4858,7 @@ def test_league_pass_offers_a_true_ask_before_the_purchase() -> None:
     league first, and the only line on offer was "I got us the League Pass" —
     false until paid. The ask is a question, true at any time, shareable at
     once, and carries no seat link (that goes out only after payment)."""
-    ask = LEAGUE_PASS.split('<div class="steps ask">')[1].split("\n  </div>")[0]
+    ask = LEAGUE_PASS.split('<div class="steps ask" data-reveal>')[1].split("\n  </div>")[0]
     line = prose(re.search(r'<p id="ask-text">(.*?)</p>', ask, re.S).group(1))
     # Late October: out of the pot, not "this year's dues" (launch review M11).
     assert line.startswith("Should we take the League Pass")

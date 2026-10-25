@@ -106,6 +106,85 @@
   @media (max-width:700px){.nextsteps{grid-template-columns:1fr;}}
   /* A phone shows the page, not a sheet on a desk (launch review D15). */
   @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
+  /* The first screen after money changes hands is a win: the check draws,
+     then a gold ring bursts off it once; the headline and the three steps
+     rise into place (transform only, so nothing waits to be painted). */
+  .done{position:relative;}
+  .done::before{content:"";position:absolute;left:0;top:50%;width:52px;height:52px;margin-top:-26px;
+    border-radius:50%;border:2px solid var(--flag);opacity:0;pointer-events:none;
+    animation:burst .7s var(--ease-out) .95s 1 both;}
+  @keyframes burst{0%{opacity:.75;transform:scale(.8);}100%{opacity:0;transform:scale(1.75);}}
+  .done h1{animation:rise-t .5s var(--ease-out) .2s both;}
+  .steps li{animation:rise-t .55s var(--ease-out) both;box-shadow:var(--elev-1);}
+  .steps li:nth-child(2){animation-delay:.08s;}
+  .steps li:nth-child(3){animation-delay:.16s;}
+  .nextcard p.msg:not(:empty){animation:msgin .3s var(--ease-out);}
+  .nextcard p.msg[data-ok="1"]::before{content:"";display:inline-block;width:14px;height:14px;
+    margin-right:6px;vertical-align:-2px;border-radius:50%;
+    background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.3 4.6-5' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/11px no-repeat;
+    animation:okpop .4s var(--ease-pop) both;}
+  @media (prefers-reduced-motion:reduce){
+    .done::before{animation:none;opacity:0;}
+    .done h1,.steps li,.nextcard p.msg,.nextcard p.msg::before{animation:none;}
+  }
+  /* ---- paper pages: one depth, one focus ring, one button feel ----
+     Identical on join/, join/confirm, how-it-works, thanks, 404 and compare/
+     (tests/test_polish_pages.py compares them), and last in the sheet, so a
+     page's own older rule of the same weight never wins. Motion is transform
+     and opacity only; site/motion.js adds .motion, and without it (no script,
+     reduced motion) nothing here hides anything. */
+  :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
+    --elev-1:0 1px 2px rgba(16,30,51,.06);
+    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
+    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
+  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
+  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+  .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
+  /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
+  main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
+    outline-offset:2px;border-radius:2px;}
+  /* A clip-path clips the outline too: a slanted gold button showed NO ring
+     when focused, so it squares off while it holds keyboard focus. */
+  .btn.gold:focus-visible{clip-path:none;}
+  /* The outline survives forced colours; the gold halo is decoration. */
+  input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
+    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+  .btn,button{transition:transform .18s var(--ease-out);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
+  /* A sheen across the primary only, on hover: one gold action at a time. */
+  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
+  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
+  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
+  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
+    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+    transform:translateX(-130%) skewX(-14deg);}
+  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
+  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
+  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
+    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
+  /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
+     h1 or the first paragraph, and never the words a reader is waiting for. */
+  .motion [data-reveal]:not([data-reveal="group"]):not(.in),
+  .motion [data-reveal="group"]:not(.in) > *{opacity:0;transform:translateY(14px);}
+  .motion [data-reveal]:not([data-reveal="group"]),.motion [data-reveal="group"] > *{
+    transition:opacity .5s var(--ease-out) var(--d,0s),transform .65s var(--ease-out) var(--d,0s);}
+  /* Page-load entrances move, never fade: the largest paint is never held. */
+  @keyframes rise-t{from{transform:translateY(10px);}}
+  @keyframes msgin{from{opacity:0;transform:translateY(-4px);}}
+  @keyframes okpop{from{opacity:0;transform:scale(.4);}}
+  @media print{.motion [data-reveal],.motion [data-reveal] > *{opacity:1!important;transform:none!important;}}
+  /* Reduced motion: nothing moves, and every animation lands on its last
+     frame at once, so the page is complete at rest. */
+  @media (prefers-reduced-motion:reduce){
+    .btn,button,.opts label{transition:none!important;transform:none!important;}
+    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
+    .sharebtn::after{display:none;}
+    *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
+      animation-iteration-count:1!important;}
+  }
+  /* ---- end of the shared paper block ---- */
 </style>
 <meta name="robots" content="noindex">
 </head>
@@ -155,7 +234,7 @@
     <!-- Hidden on the League Pass view (?plan=pass), whose one job is the
          seat link above, and once the season is over. The sender is
          LAUNCH.md's EMAIL_FROM (tests/test_prelaunch_pages.py). -->
-    <div class="nextsteps" id="next-steps">
+    <div class="nextsteps" id="next-steps" data-reveal="group">
       <div class="nextcard"><b>Keep it out of spam</b>
         <p>Reports come from <b>reports@beatyourleague.com</b>. Add it to your contacts and
         Tuesday's report lands in your inbox.</p></div>
@@ -232,18 +311,20 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 // words are the League Pass's — "paste it in the group chat" — and the group
 // chat is the buyer's own league, whose managers they are playing.
 function shareWithFriend(text, line, status) {
+  // data-ok marks a done copy (a check beside it); every other outcome clears it.
   const byHand = () => {
     window.getSelection().selectAllChildren(line);
+    status.dataset.ok = "";
     status.textContent = "The message is selected — copy it and send it to them.";
   };
   const copyIt = () => {
     if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
     navigator.clipboard.writeText(text).then(
-      () => { status.textContent = "Copied — send it to them."; }, byHand);
+      () => { status.dataset.ok = "1"; status.textContent = "Copied — send it to them."; }, byHand);
   };
   if (!navigator.share) return copyIt();
   navigator.share({ text: text }).then(
-    () => { status.textContent = ""; },
+    () => { status.dataset.ok = ""; status.textContent = ""; },
     (err) => { if (!err || err.name !== "AbortError") copyIt(); });
 }
 document.getElementById("friend-share").addEventListener("click", () => {
@@ -289,6 +370,7 @@ document.getElementById("friend-share").addEventListener("click", () => {
   rather than legalese; it is not legal advice, and it does not limit any right you have under
   consumer law where you live.</footer>
 </div>
+<script src="/motion.js?v=172057d003" defer></script>
 <script src="/count.js" defer></script>
 </body>
 </html>

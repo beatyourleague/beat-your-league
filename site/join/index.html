@@ -35,7 +35,7 @@
     --sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;
     --navy:#101E33; --navy2:#182A45; --paper:#F6F4EE; --card:#FFFFFF;
     --turf:#1E7A46; --turf-tint:#DFF0E4; --flag:#F2C230; --flag-deep:#D9A81B; --brick:#B3402F;
-    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6;
+    --brick-tint:#F7E3DE; --slate:#5A6B80; --ink2:#33445C; --line:#D8D3C6; --flag-tint:#FBF3D9;
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
@@ -141,6 +141,7 @@
     background:#fff;border:1.5px solid var(--navy);font-size:13.5px;font-weight:700;
     line-height:1.45;cursor:pointer;}
   .settings-ok input{margin:0;width:24px;height:24px;flex:none;}
+  .settings-ok:has(input:checked){border-color:var(--turf);background:var(--turf-tint);}
   .hidden{display:none;}
   .checkmail[hidden],.checkmail [hidden]{display:none!important;}
   footer{padding:16px 24px 24px;font-size:12px;color:var(--slate);line-height:1.6;
@@ -207,19 +208,37 @@
   .progress{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:18px;}
   .progress span{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
     color:rgba(246,244,238,.5);padding-top:8px;border-top:3px solid rgba(246,244,238,.18);}
-  .progress .on{color:var(--flag);border-top-color:var(--flag);}
+  /* The 3px border is the dim track; a step FILLS it from the left when it
+     is reached (step 2 once the roster box holds text, step 3 once the email
+     step opens) rather than recolouring in place. */
+  .progress span{position:relative;}
+  .progress span::before{content:"";position:absolute;left:0;right:0;top:-3px;height:3px;
+    background:var(--flag);transform:scaleX(0);transform-origin:0 50%;
+    transition:transform .5s var(--ease-out);}
+  .progress .on{color:var(--flag);}
   body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
   body:has(#step-email:not(.hidden)) .progress .s2,
-  body:has(#step-email:not(.hidden)) .progress .s3{color:var(--flag);border-top-color:var(--flag);}
+  body:has(#step-email:not(.hidden)) .progress .s3{color:var(--flag);}
+  .progress .on::before,
+  body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before,
+  body:has(#step-email:not(.hidden)) .progress .s2::before,
+  body:has(#step-email:not(.hidden)) .progress .s3::before{transform:none;}
   section{padding:24px 26px 26px;border-top:1px solid var(--line);}
   .eyebrow{color:var(--navy);font-size:15px;letter-spacing:.18em;}
   .opts{gap:6px;margin-top:10px;}
   .opts label{position:relative;border-radius:999px;padding:8px 14px;font-size:13.5px;
-    border:1.5px solid var(--line);transition:background .15s,border-color .15s,color .15s;}
+    border:1.5px solid var(--line);
+    transition:background .15s,border-color .15s,color .15s,transform .12s var(--ease-out);}
   .opts label:hover{border-color:var(--navy);}
+  /* A chip answers the press, and the one just chosen settles in. Scoped to
+     :focus-within, so the chips checked by default do not pop at load. */
+  .opts label:active{transform:scale(.96);}
+  .opts:focus-within label:has(input:checked){animation:chipin .26s var(--ease-pop);}
+  @keyframes chipin{from{transform:scale(.92);}}
   .opts input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}
   .opts label:has(input:checked){background:var(--navy);border-color:var(--navy);color:#fff;}
-  .opts label:has(input:focus-visible){outline:3px solid var(--flag);outline-offset:2px;}
+  /* Navy, the page's one focus ring: gold on paper measured under 2:1. */
+  .opts label:has(input:focus-visible){outline:3px solid var(--navy);outline-offset:2px;}
   /* The first controls in the funnel, tapped by a thumb: 44px tall on touch
      (I10 measured them at 35). */
   @media (pointer:coarse){.opts label{min-height:44px;display:inline-flex;align-items:center;}}
@@ -304,6 +323,119 @@
     header h1{font-size:36px;}
     section{padding:22px 18px 24px;}
   }
+
+  /* ------------------------------------------------ Oct 24 2026 polish
+     The roster check is the moment the page first understands the buyer.
+     Two columns from 360px wide: fifteen full-width rows were ~915px and
+     pushed step 3 a screen down even at 1440. Rows that need work are drawn
+     first and span the width above the pairs; names wrap, never truncate. */
+  #rows .rows{display:grid;gap:1px;background:#EDEAE1;}
+  #rows .row{border-top:0;background:#fff;padding:8px 8px 8px 12px;}
+  #rows .row.bad{background:#FCF3F1;}
+  @media (min-width:360px){
+    #rows .rows{grid-template-columns:repeat(2,minmax(0,1fr));}
+    #rows .row.choose,#rows .row.bad{grid-column:1 / -1;}
+    #rows .rows.odd::after{content:"";background:#fff;}
+  }
+  #rows .row .who{font-size:14px;line-height:1.25;}
+  #rows .row .meta{font-size:11.5px;letter-spacing:.04em;}
+  /* Only a real "Check my roster" cascades (.fresh, set for 900ms); a
+     remove or a pick redraws without moving. */
+  #rows.fresh .row{animation:rowin .34s var(--ease-out) both;
+    animation-delay:min(calc(var(--i,0) * 24ms),360ms);}
+  @keyframes rowin{from{opacity:0;transform:translateY(6px);}}
+  .tally.good:not(:empty){display:flex;align-items:center;gap:8px;color:var(--turf);font-weight:700;
+    font-size:13.5px;}
+  .tally.good:not(:empty)::before,.ok:not(:empty)::before{content:"";width:20px;height:20px;flex:none;
+    border-radius:50%;background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.6 7.3l2.3 2.3 4.6-5' fill='none' stroke='%23fff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+    animation:okpop .42s var(--ease-pop) both;}
+  .ok:not(:empty){display:flex;gap:9px;align-items:flex-start;}
+  .ok:not(:empty)::before{width:18px;height:18px;background-size:12px;margin-top:1px;}
+  /* One primary at a time: once the roster checks out, the next step owns
+     the gold. An inset ring, not a border, so the button does not grow. */
+  #resolve.is-done{background:var(--card);color:var(--navy);box-shadow:inset 0 0 0 2px var(--navy);}
+  #step-email:not(.hidden){animation:stepin .45s var(--ease-out) both;}
+  @keyframes stepin{from{opacity:0;transform:translateY(10px);}}
+  /* "Checkout isn't open" is information, not a failure: a calm notice, not
+     the brick error box. role=alert and the focus stay (showError). */
+  .err[data-tone="info"]{background:var(--card);border-left-color:var(--navy);color:var(--ink2);
+    box-shadow:var(--elev-1);}
+  .err[data-tone="info"]::before{content:"";display:inline-block;width:8px;height:8px;
+    margin-right:8px;border-radius:50%;background:var(--flag);vertical-align:1px;}
+  .err:not(:empty),.ok:not(:empty){animation:msgin .28s var(--ease-out);}
+  /* The address read back before Stripe locks it. */
+  .checkmail:not([hidden]){animation:stepin .3s var(--ease-out) both;}
+  #check-address{background:var(--flag-tint);padding:1px 6px;border-radius:3px;
+    -webkit-box-decoration-break:clone;box-decoration-break:clone;}
+  .checkmail button.alt:hover{background:#F1EEE6;}
+  .suggest:not(:empty){animation:dropin .16s var(--ease-out);}
+  @keyframes dropin{from{opacity:0;transform:translateY(-4px);}}
+  .sugrow:focus-visible{outline:2px solid var(--navy);outline-offset:-2px;}
+  /* Room for the field's focus halo: the note's last line sat on its border. */
+  #step-roster > .note{margin-bottom:10px;}
+  @media (prefers-reduced-motion:reduce){
+    #rows.fresh .row,.tally.good::before,.ok::before,#step-email,.checkmail,.err,.ok,.suggest,
+    .opts label{animation:none!important;}
+    .progress span::before{transition:none;}
+  }
+  /* ---- paper pages: one depth, one focus ring, one button feel ----
+     Identical on join/, join/confirm, how-it-works, thanks, 404 and compare/
+     (tests/test_polish_pages.py compares them), and last in the sheet, so a
+     page's own older rule of the same weight never wins. Motion is transform
+     and opacity only; site/motion.js adds .motion, and without it (no script,
+     reduced motion) nothing here hides anything. */
+  :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
+    --elev-1:0 1px 2px rgba(16,30,51,.06);
+    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
+    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
+  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
+  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+  .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
+  /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
+  main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
+    outline-offset:2px;border-radius:2px;}
+  /* A clip-path clips the outline too: a slanted gold button showed NO ring
+     when focused, so it squares off while it holds keyboard focus. */
+  .btn.gold:focus-visible{clip-path:none;}
+  /* The outline survives forced colours; the gold halo is decoration. */
+  input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
+    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+  .btn,button{transition:transform .18s var(--ease-out);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
+  /* A sheen across the primary only, on hover: one gold action at a time. */
+  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
+  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
+  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
+  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
+    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
+    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
+    transform:translateX(-130%) skewX(-14deg);}
+  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
+  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
+  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
+    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
+  /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
+     h1 or the first paragraph, and never the words a reader is waiting for. */
+  .motion [data-reveal]:not([data-reveal="group"]):not(.in),
+  .motion [data-reveal="group"]:not(.in) > *{opacity:0;transform:translateY(14px);}
+  .motion [data-reveal]:not([data-reveal="group"]),.motion [data-reveal="group"] > *{
+    transition:opacity .5s var(--ease-out) var(--d,0s),transform .65s var(--ease-out) var(--d,0s);}
+  /* Page-load entrances move, never fade: the largest paint is never held. */
+  @keyframes rise-t{from{transform:translateY(10px);}}
+  @keyframes msgin{from{opacity:0;transform:translateY(-4px);}}
+  @keyframes okpop{from{opacity:0;transform:scale(.4);}}
+  @media print{.motion [data-reveal],.motion [data-reveal] > *{opacity:1!important;transform:none!important;}}
+  /* Reduced motion: nothing moves, and every animation lands on its last
+     frame at once, so the page is complete at rest. */
+  @media (prefers-reduced-motion:reduce){
+    .btn,button,.opts label{transition:none!important;transform:none!important;}
+    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
+    .sharebtn::after{display:none;}
+    *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
+      animation-iteration-count:1!important;}
+  }
+  /* ---- end of the shared paper block ---- */
 </style>
 </head>
 <body>
@@ -761,8 +893,11 @@ function template() {
 // subscriber got a 12-team report and a 12-team ledger bucket regardless of
 // what they picked. Found Aug 24 2026 by running the intake path for real.
 function leagueSize() { return Number(radio("size")) || 12; }
-function showError(id, message) {
+// ``tone`` "info" draws a not-open message as a calm notice rather than the
+// brick error box: it is information, and a set-up roster is not a failure.
+function showError(id, message, tone) {
   $(id).textContent = message;
+  $(id).dataset.tone = tone || "";
   // A refusal at submit is announced (role=alert) and focused, so neither a
   // screen reader nor a phone user is left on a button that did nothing.
   if (message && id === "err-email") $(id).focus({ preventScroll: false });
@@ -922,6 +1057,10 @@ $("resolve").addEventListener("click", () => {
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
   if (window.bylCount) window.bylCount("roster", PLAN_LINK ? "open" : "closed");
   state.stale = false;
+  // Only a real check cascades the rows in; a later remove or pick redraws still.
+  const rows = $("rows");
+  rows.classList.add("fresh");
+  setTimeout(() => rows.classList.remove("fresh"), 900);
   draw();
 });
 
@@ -932,6 +1071,7 @@ $("resolve").addEventListener("click", () => {
 // input event — it re-checks itself on the next line.)
 $("roster-text").addEventListener("input", () => {
   closeEmailCheck();
+  $("resolve").classList.remove("is-done");
   if (!state.matches.length) return;
   state.stale = true;
   state.ready = false;
@@ -987,6 +1127,7 @@ function draw(focusAt) {
     const match = state.matches[index];
     const row = document.createElement("div");
     row.className = "row" + (match.player ? "" : " bad");
+    row.style.setProperty("--i", position);
     const left = document.createElement("div");
     if (match.player) {
       left.appendChild(textCell("who", match.player.name));
@@ -1065,6 +1206,8 @@ function draw(focusAt) {
     row.appendChild(fix);
     wrap.appendChild(row);
   });
+  // An odd count of paired rows leaves one empty cell; it is filled white.
+  wrap.classList.toggle("odd", wrap.querySelectorAll(".row:not(.bad):not(.choose)").length % 2 === 1);
   list.appendChild(wrap);
 
   const slots = template();
@@ -1109,7 +1252,7 @@ function draw(focusAt) {
   state.ready = !problem;
   const empty = problem ? [] : emptySpots(slots,
     state.matches.filter((m) => m.player).map((m) => m.player.position));
-  tally.className = "tally" + (problem ? " bad" : empty.length ? " warn" : "");
+  tally.className = "tally" + (problem ? " bad" : empty.length ? " warn" : " good");
   if (problem) {
     tally.textContent = problem;
   } else if (empty.length) {
@@ -1123,6 +1266,7 @@ function draw(focusAt) {
     tally.textContent = ids.length + " players read, " + slots.length + " starting spots. Looks right.";
   }
   $("step-email").classList.toggle("hidden", !state.ready);
+  $("resolve").classList.toggle("is-done", state.ready);
   keepInAddress();
   relistIfChanged();
   if (Number.isInteger(focusAt)) {
@@ -1399,20 +1543,20 @@ $("form-email").addEventListener("submit", (event) => {
     if (seasonOver()) {
       showError("err-email", "Checkout isn't open just yet: the season's over, and it " +
         "opens again for next season. Your roster isn't saved with us — leave your " +
-        "email on the front page for one message when it opens.");
+        "email on the front page for one message when it opens.", "info");
       return;
     }
     if (WANTS_PASS && OWN_PLAN_HREF) {
       showError("err-email", "The League Pass isn't open just yet — nothing was " +
         "charged, and your roster isn't saved with us (it's kept in this page's " +
         "address). A plan for your own team is open now: the link is at the top " +
-        "of this page.");
+        "of this page.", "info");
       return;
     }
     showError("err-email", (WANTS_PASS ? "The League Pass" : "Checkout") +
       " isn't open just yet. Your roster isn't saved with us, but it's kept in " +
       "this page's address — bookmark it and it comes back. Leave your email on " +
-      "the front page for one message the morning checkout opens.");
+      "the front page for one message the morning checkout opens.", "info");
     return;
   }
   // Stripe locks the address, so it is read back once before the page leaves:

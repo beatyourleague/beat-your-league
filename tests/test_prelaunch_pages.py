@@ -293,7 +293,7 @@ def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one(
         assert re.match(r'<a class="btn gold" href="index\.html#watch-form">Tell\s+me when it opens</a>',
                         slot)
     main = LEAGUE_PASS.split('<main id="main">')[1].split("</main>")[0]
-    closer = main.rsplit('<div class="closer">', 1)[1]
+    closer = main.rsplit('<div class="closer" data-reveal>', 1)[1]
     assert main.rstrip().endswith("</div>") and "data-lp-cta" in closer
     words = prose(re.sub(r"<[^>]+>", " ", closer))
     assert "$69" in words and "one payment, nothing renews" in words and "refund" in words
@@ -495,7 +495,7 @@ def test_how_it_works_pictures_the_report_with_the_samples_own_rows() -> None:
     the real component, every figure on those cards is one the published
     sample prints (the landing's own guard, on this page — mutation: change
     16.9 to 17.9), and each odds bar starts at 50% as the report draws it."""
-    cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+">(.*?)<!--/card-->', HOW, re.S)
+    cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+"[^>]*>(.*?)<!--/card-->', HOW, re.S)
     assert len(cards) >= 4, "How it works lost its pictures of the report"
     flat_sample = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", SAMPLE_REPORT)))
     for card in cards:
@@ -556,7 +556,7 @@ def test_the_thank_you_page_gives_a_buyer_their_next_steps() -> None:
     OWN league's, whose managers the card steers away from. The friend card
     has its own share, which says "send it to them"; its hide on the pass
     view sits outside the seat block (contract C3: the WORKER's)."""
-    block = THANKS.split('<div class="nextsteps" id="next-steps">')[1].split("\n    </div>")[0]
+    block = THANKS.split('<div class="nextsteps" id="next-steps" data-reveal="group">')[1].split("\n    </div>")[0]
     launch = (ROOT / "LAUNCH.md").read_text(encoding="utf-8")
     sender = re.search(r"`EMAIL_FROM` \| `Beat Your League <([^>]+)>`", launch).group(1)
     assert f"<b>{sender}</b>" in block
