@@ -132,19 +132,25 @@ def demo_report() -> dict:
     return json.loads(DEMO_REPORT.read_text(encoding="utf-8"))
 
 
-def pytest_terminal_summary(terminalreporter) -> None:
-    """In CI, name each failure on the run's summary page. GitHub hides job
-    logs behind a sign-in even on a public repo, so a red run used to say
-    only "exit code 1" (Oct 25 2026). Test names and the first lines of each
-    assertion only; this job holds no secrets."""
-    target = os.environ.get("GITHUB_STEP_SUMMARY")
-    failed = terminalreporter.stats.get("failed", []) + terminalreporter.stats.get("error", [])
-    if not target or not failed:
+
+def _annotate(text: str) -> str:
+    """A GitHub workflow-command message: one line, % and newlines escaped."""
+    return text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")[:900]
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus) -> None:
+    """In CI, name each failure as a GitHub annotation. Job logs AND step
+    summaries sit behind a sign-in even on a public repo; annotations do not,
+    so a red run used to say only "exit code 1" (Oct 25 2026). Test names and
+    the first assertion lines only; this job holds no secrets."""
+    if not os.environ.get("GITHUB_ACTIONS"):
         return
-    lines = ["### Failing tests", ""]
-    for report in failed[:20]:
+    stats = terminalreporter.stats
+    failed = stats.get("failed", []) + stats.get("error", [])
+    for report in failed[:10]:
         text = str(getattr(report, "longreprtext", "") or "")
-        tail = [ln for ln in text.splitlines() if ln.startswith("E ")][:6]
-        lines += [f"- `{report.nodeid}`", "", "```", *tail, "```", ""]
-    with open(target, "a", encoding="utf-8") as out:
-        out.write("\n".join(lines) + "\n")
+        tail = [ln for ln in text.splitlines() if ln.startswith("E ")][:4] or text.splitlines()[-3:]
+        print(f"::error title={_annotate(report.nodeid)}::{_annotate(chr(10).join(tail))}")
+    if exitstatus:
+        counts = {k: len(v) for k, v in stats.items() if k in ("passed", "failed", "error", "skipped")}
+        print(f"::error title=pytest exit status {int(exitstatus)}::{_annotate(str(counts))}")
