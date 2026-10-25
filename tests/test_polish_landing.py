@@ -683,7 +683,11 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
                    "the way to your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     method = _flat(BODY.split('<div class="method">')[1].split("</section>")[0])
-    assert "Your scoring, your league's size, the lineup your league starts." in method
+    # The cards contrast a ranking with the report (Oct 25 2026: the
+    # weakest answer was "why pay when rankings are free"); each proves it
+    # with a line of the real sample.
+    assert "Yours: your roster, your scoring, your lineup." in method
+    assert method.count("Real sample:") == 3 and method.count("A ranking:") == 3
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     qa = {q: _flat(a) for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>",
                                              faq, re.S)}

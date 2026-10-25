@@ -233,6 +233,31 @@ def alerts(report: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [item(i, early) for i in report.get("checklist") or [] if is_certain_zero(i)]
 
 
+CHECKED_HEAD = "Checked for you:"
+
+
+def checked_line(report: Mapping[str, Any]) -> str | None:
+    """What this report checked for this roster, in counts the report itself
+    holds (Oct 25 2026: the weakest answer to "why pay when rankings are
+    free" was that the work was invisible). Facts only: the roster it read,
+    the slots it filled, the kickoffs it timed, the injury report it read
+    and, on a live week, the byes ahead. Never a claim about the outcome."""
+    rows = list(_lineup(report))
+    bench = list(report.get("bench") or [])
+    if not rows:
+        return None
+    players = sum(1 for r in rows if r.get("player_name")) + \
+        sum(1 for b in bench if b.get("name") or b.get("player_name"))
+    parts = [f"{players} players", f"{len(rows)} slots", "every kickoff time"]
+    found = re.search(r"the week (\d+) injury report",
+                      str((report.get("meta") or {}).get("availability_as_of") or ""))
+    if found:
+        parts.append(f"the Week {found.group(1)} injury report")
+    if not (report.get("meta") or {}).get("historical_demo"):
+        parts.append("the byes still ahead")
+    return ", ".join(parts[:-1]) + " and " + parts[-1] + "."
+
+
 def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
     """Card 01: every starter, decided — his projection, the odds where they
     are earned, the week's total and range, and one box to tick."""
@@ -290,6 +315,9 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
     if week:
         legend.append({"head": f"{rr.RANGE_LABEL.capitalize()}:",
                        "text": rr.RANGE_DEFINITION})
+    checked = checked_line(report)
+    if checked:
+        legend.append({"head": CHECKED_HEAD, "text": checked})
     return {
         "title": TITLES["lineup"] if projected else OPENING_TITLE,
         "week": week,

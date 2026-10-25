@@ -1052,6 +1052,9 @@ def _solo_text(report: Mapping[str, Any]) -> str:
             ", and the bar starts at 50% (a toss-up)", ""))
     if lineup["week"]:
         lines.append(f"  {RANGE_LABEL.capitalize()}: {RANGE_DEFINITION}")
+    checked = anatomy.checked_line(report)
+    if checked:
+        lines.append(f"  {anatomy.CHECKED_HEAD} {checked}")
     # 02 — the closest call.
     lines += ["", *_closest_text(report.get("regret") or {})]
     # 03 — what to do and by when.
