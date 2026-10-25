@@ -130,3 +130,21 @@ def demo_report() -> dict:
     if not DEMO_REPORT.is_file():
         pytest.skip("demo report not built — run `make demo`")
     return json.loads(DEMO_REPORT.read_text(encoding="utf-8"))
+
+
+def pytest_terminal_summary(terminalreporter) -> None:
+    """In CI, name each failure on the run's summary page. GitHub hides job
+    logs behind a sign-in even on a public repo, so a red run used to say
+    only "exit code 1" (Oct 25 2026). Test names and the first lines of each
+    assertion only; this job holds no secrets."""
+    target = os.environ.get("GITHUB_STEP_SUMMARY")
+    failed = terminalreporter.stats.get("failed", []) + terminalreporter.stats.get("error", [])
+    if not target or not failed:
+        return
+    lines = ["### Failing tests", ""]
+    for report in failed[:20]:
+        text = str(getattr(report, "longreprtext", "") or "")
+        tail = [ln for ln in text.splitlines() if ln.startswith("E ")][:6]
+        lines += [f"- `{report.nodeid}`", "", "```", *tail, "```", ""]
+    with open(target, "a", encoding="utf-8") as out:
+        out.write("\n".join(lines) + "\n")
