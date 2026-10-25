@@ -25,7 +25,9 @@ PRIVACY_VERSIONS = [
     # Then, before it was ever published (final review): the front page's
     # waitlist step counted (FUN-11), the retired session-storage convenience
     # removed (COPY-5), and five public records named, not three (COPY-6).
-    ("2026-10-24", "3a9d5c355be2fc6b"),
+    # And, still before it was published: the free bye-week planner (what it
+    # keeps in its own address, its waitlist row and its two counted steps).
+    ("2026-10-25", "9b76a92788b6df6f"),
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),

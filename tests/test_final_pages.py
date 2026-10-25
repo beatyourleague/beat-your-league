@@ -286,9 +286,15 @@ def test_privacy_names_every_place_a_step_is_counted() -> None:
     owner rule is that the policy says exactly what is collected."""
     calls = re.findall(r'window\.bylCount\("(\w+)"', LANDING)
     assert calls == ["waitlist"], calls
+    # The free bye-week planner counts two steps of its own: a roster checked
+    # and a waitlist row saved — and §3 names it for both.
+    planner = (SITE / "byes" / "index.html").read_text(encoding="utf-8")
+    assert sorted(set(re.findall(r'window\.bylCount\("(\w+)"', planner))) == ["roster", "waitlist"]
     body = _visible(PRIVACY)
     section3 = body[body.index("3. Cookies, analytics"):body.index("4. Who else")]
-    assert "joins the waitlist (on the front page or the signup page)" in section3
+    assert ("joins the waitlist (on the front page, the signup page or the bye-week planner)"
+            in section3)
+    assert "checks a roster on the signup page or the bye-week planner" in section3
 
 
 def test_privacy_describes_no_storage_the_site_does_not_do() -> None:
