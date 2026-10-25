@@ -71,7 +71,7 @@ def test_lineups_sizes_and_tagline() -> None:
 def test_receipts_odds_and_bar_words_describe_the_report() -> None:
     """LANDING-7/17/33/35/52/79/96/106 and D3/D11/D12."""
     assert "outscores your best bench player at that spot" in TEXT
-    assert "The bar starts at 50%, a toss-up." in LANDING   # D12: drawn from 50%
+    assert "the bar starts at 50% (a toss-up)" in TEXT   # D12: drawn from 50%
     for gone in ("lists last week's calls", "Decided calls, with odds",
                  "for your roster, with the odds.", "with the odds and the reason",
                  "scored to your league's settings", "the one player whose news"):

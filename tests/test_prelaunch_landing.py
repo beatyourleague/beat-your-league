@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from pathlib import Path
 
 from test_site import (LANDING, SAMPLE_REPORT, _js_function, _node, _style, markup_only,
                        prose)
@@ -17,6 +18,21 @@ from test_site import (LANDING, SAMPLE_REPORT, _js_function, _node, _style, mark
 CSS = _style(LANDING)
 BODY = re.sub(r"<!--.*?-->", "", markup_only(LANDING), flags=re.S)
 HERO = BODY.split('<header class="hero">')[1].split("</header>")[0]
+SCREEN = HERO.split('<div class="screen"')[1].split('<p class="realtag">')[0]
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sample-report-w10.json"
+
+
+def _sample() -> dict:
+    """The pinned sample report the phone is generated from (make sample)."""
+    return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def _lock_text() -> tuple[str, str]:
+    """The notification's subject and preview, as the phone prints them."""
+    lock = HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
+    subject = re.search(r'<span class="lsub">(.*?)</span>', lock, re.S).group(1)
+    preview = re.search(r'<span class="lpre">(.*?)</span>', lock, re.S).group(1)
+    return html.unescape(subject), html.unescape(preview)
 
 
 def _flat(page: str) -> str:
@@ -38,18 +54,33 @@ def _block(css: str, query: str) -> str:
 # the hero phone (D2, M4)
 # --------------------------------------------------------------------- #
 
-def test_the_hero_phone_names_no_week_number() -> None:
+def test_the_phones_week_is_the_archived_sample() -> None:
     """M4 / D2, reproduced at 390 and 1440 with today's week.json: the season
     clock read "Week 8's report lands Tuesday" directly above a phone whose
     notification and inbox row both said "Week 10: your lineup, decided" — the
-    pinned 2024 sample's week, presented as this Tuesday's email. The phone
-    says what the email does; the caption under it names the 2024 week."""
-    screen = HERO.split('<div class="screen">')[1].split('<p class="realtag">')[0]
-    assert not re.search(r"\bWeek \d+", _flat(screen)), "the phone names a week again"
-    assert "Your lineup, decided. Closest call with odds: Kittle over LaPorta, 72%." \
-        in _flat(screen)
+    pinned 2024 sample's week, presented as this Tuesday's email. The phone is
+    now a faithful copy of that email (contract C11), so its "Week 10" stays —
+    and says what it is: the masthead's stamp names the 2024 season archive,
+    the caption under the phone names 2024, and on a phone the button row
+    sits between the clock and the phone, so the two weeks never read as one
+    line."""
+    masthead = SCREEN.split('<div class="mh">')[1].split('<section class="card"')[0]
+    assert "Week 10" in _flat(masthead)
+    stamp = _flat(re.search(r'<div class="mh-stamp">(.*?)</div>', masthead, re.S).group(1))
+    assert "2024 season archive" in stamp, stamp
     tag = HERO.split('<p class="realtag">')[1].split("</p>")[0]
     assert "2024" in tag and "Week 10" in _flat(tag), "the sample's week left its caption"
+    phones = CSS.split("@media (max-width:880px){\n")[1]
+    order = {name: int(re.search(r"\.hero \." + name + r"\{order:(\d+)", phones).group(1))
+             for name in ("heroline", "cta-row", "phonewrap", "livepill", "livecall")}
+    assert order["heroline"] < order["cta-row"] < order["phonewrap"], order
+    assert order["phonewrap"] < order["livepill"] and order["phonewrap"] < order["livecall"], order
+    # Open, the buy row moves up to the form's place and the clock goes with
+    # it, still above the row (equal orders keep source order: the clock's
+    # line comes first in the markup).
+    assert ".hero.can-buy .heroline{order:5;}" in phones
+    assert ".hero.can-buy .cta-row{order:5;}" in phones
+    assert HERO.index('<p class="heroline">') < HERO.index('<div class="cta-row">')
 
 
 def _keyframes(name: str) -> list[tuple[float, str]]:
@@ -75,13 +106,14 @@ def test_the_notification_is_solid_and_only_shows_on_the_lock_screen() -> None:
     black < island, the card is opaque only while the lock is, and the lock's
     own text has faded out by the time the lock itself starts to go — so
     text never crosses text on the way back to the report."""
+    from render.email import preheader_for, subject_for
     note = re.search(r"\.lnote\{([^}]*)\}", CSS).group(1)
     background = re.search(r"background:([^;]+);", note).group(1)
     assert re.fullmatch(r"#[0-9A-Fa-f]{6}", background), f"translucent again: {background}"
     lock = HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
     assert 'class="lnote"' in lock, "the notification left the lock screen"
-    assert "Your lineup, decided. Closest call with odds: Kittle over LaPorta, 72%." \
-        in _flat(lock)
+    # Contract C11: the notification IS the email's own subject and preview.
+    assert _lock_text() == (subject_for(_sample()), preheader_for(_sample()))
 
     def z(rule: str) -> int:
         block = re.search(rule + r"\{([^}]*)\}", CSS).group(1)
@@ -105,41 +137,44 @@ def test_the_notification_is_solid_and_only_shows_on_the_lock_screen() -> None:
 
 def test_the_phone_screen_runs_on_with_the_samples_own_rows() -> None:
     """D2: below the if/then the screen was 110px of empty cream above the
-    home bar (measured: the peek's last child ended at y=690, the screen at
-    800), and the closest-call bar carried no figure while the notification
-    above it quoted 70%. The screen now continues into the report's next
-    section, Rising Roles, quoted verbatim from the published sample, and the
-    bar carries the sample's own 70% — drawn from 50% as the report draws it."""
-    peek = HERO.split('id="hero-peek"')[1].split('<div class="lock"')[0]
+    home bar, and the closest-call bar carried no figure while the
+    notification above it quoted 70%. The screen is now the email itself, cut
+    by the bottom edge as a real inbox cuts it (the paper runs on under the
+    crop): its masthead, card 01 whole and card 02 through its drivers line,
+    every figure the sample's own, the bar carrying its number."""
     flat_sample = _flat(SAMPLE_REPORT)
-    for item in re.findall(r"<li>(.*?)</li>", peek, re.S):
-        assert _flat(item).strip() in flat_sample, f"not the sample's words: {_flat(item)}"
-    figures = set(re.findall(r"\d+\.\d+", _flat(peek))) | set(re.findall(r"\d+%", _flat(peek)))
-    assert {"72%", "24.0", "11.9", "9.5"} <= figures
+    lineup = SCREEN.split('data-sec="lineup"')[1].split("</section>")[0]
+    closest = SCREEN.split('data-sec="closest"')[1].split("</section>")[0]
+    assert len(re.findall(r'<div class="frow"', lineup)) == 9, "card 01 lost a slot"
+    assert '<p class="drivers">' in closest, "card 02 is cut above its drivers line"
+    figures = set(re.findall(r"\d+\.\d+", _flat(SCREEN))) | set(re.findall(r"\d+%", _flat(SCREEN)))
+    assert {"72%", "126.1", "14.1", "9.5"} <= figures
     for figure in figures:
         assert figure in flat_sample, f"the hero phone cites {figure!r}, which the sample lacks"
-    assert "Rising Roles" in flat_sample and "Rising roles" in _flat(peek)
-    assert re.search(r'class="flippct">72%</span>', peek), "the bar lost its number"
+    assert re.search(r'<b class="cpct">72%</b>', closest), "the bar lost its number"
+    assert re.search(r"\n  \.mailview\{[^}]*padding-bottom:\d", CSS), \
+        "the paper stops at the crop again"
 
 
 def test_every_closest_call_bar_on_the_landing_is_drawn_from_fifty() -> None:
     """D12, measured: the landing's closest-call card filled its bar to 70%
     (a 0-100 tug-of-war with a midline) while the report and the email draw
     the same 70% as 40% of a bar that starts at 50%. Every bar beside a
-    percentage on the page is (p - 50) x 2 wide now, and the midline is gone."""
-    pairs = re.findall(r'<div class="flipbar"><span class="a"(?: data-w="(\d+)")? '
-                       r'style="width:(\d+)%"></span></div><span class="flippct">(\d+)%</span>',
-                       BODY)
-    assert len(pairs) == 2, "the hero peek and the card below both carry a closest call"
-    for data_w, width, pct in pairs:
-        want = (int(pct) - 50) * 2
-        assert int(width) == want and (not data_w or int(data_w) == want), (width, pct)
-    assert ".flipbar::after" not in CSS, "the 0-100 midline is back"
-    assert "The bar starts at 50%, a toss-up." in BODY
-    # The motion starts the bar from empty, not from a midline that is gone.
-    assert 'bar.closest(".flipbar") ? "50%"' not in LANDING
-    for row in re.findall(r'<span class="fbar"><i style="width:(\d+)%"></i></span>'
-                          r'<span class="fpct">(\d+)%</span>', BODY):
+    percentage on the page is render.report.bar_from_even(pct) wide — (p − 50)
+    × 2, from the PRINTED % (contract C9) — and the midline is gone. One
+    closest call on the page: the phone's card 02 (the page never shows 72%
+    Kittle-over-LaPorta in two cards)."""
+    pairs = re.findall(r'<span class="cbar"><i style="width:(\d+)%"></i></span>'
+                       r'<b class="cpct">(\d+)%</b>', BODY)
+    assert len(pairs) == 1, "the closest call is on the page once, in the phone"
+    for width, pct in pairs:
+        assert int(width) == (int(pct) - 50) * 2, (width, pct)
+    assert ".cbar::after" not in CSS and ".flipbar" not in CSS, "the 0-100 midline is back"
+    assert "the bar starts at 50% (a toss-up)" in _flat(BODY)
+    rows = re.findall(r'<span class="fbar"><i style="width:(\d+)%"></i></span>'
+                      r'<span class="fpct">(\d+)%</span>', BODY)
+    assert len(rows) >= 3, "the phone's lineup lost its odds rows"
+    for row in rows:
         assert int(row[0]) == (int(row[1]) - 50) * 2, row
 
 
@@ -359,60 +394,66 @@ def test_the_faq_answers_the_free_rankings_objection_with_facts_only() -> None:
 # --------------------------------------------------------------------- #
 
 def test_nothing_that_cannot_be_clicked_moves_on_hover() -> None:
-    """D9 / contract C2: the method cards (the only rounded cards on the
-    site, 14px) lifted 5px with a gold glow, the pricing card glowed and the
-    week strip tinted on hover — none of them is a link, so each promised a
-    click that did nothing. Square cards, no hover state."""
-    for sel in (r"\.method article", r"\.plan(?:\.founder)?", r"\.timeline li"):
+    """D9 / contract C2: the method cards lifted 5px with a gold glow, the
+    pricing card glowed and the week strip tinted on hover — none of them is
+    a link, so each promised a click that did nothing. No hover state on any
+    of them; only the three read-first tiles, which ARE links, answer the
+    cursor. Contract C7 reshaped the cards (one dark card, 16px radius, a 1px
+    hairline, no side or top bars), so the old 3px gold top rule is gone."""
+    for sel in (r"\.method article", r"\.plan(?:\.founder)?", r"\.timeline li",
+                r"\.dcard", r"\.lpcard"):
         assert not re.search(sel + r":hover", CSS), f"{sel} still reacts to hover"
-    method = re.search(r"\n  \.method article\{([^}]*)\}", CSS).group(1)
-    assert "border-radius" not in method and "border-top:3px solid var(--flag)" in method
+    dcard = re.search(r"\n  \.dcard\{([^}]*)\}", CSS).group(1)
+    assert "border-radius:16px" in dcard and "border:1px solid" in dcard
+    for article in re.findall(r"<article([^>]*)>", BODY.split('<div class="method">')[1]):
+        assert 'class="dcard"' in article
+    assert not re.search(r"border-(?:top|left):[34]px", CSS), "a 3-4px side bar is back"
+    assert re.search(r"\n  \.reads a:hover\{", CSS), "the read-first links lost their hover"
 
 
-def test_the_roster_icon_is_not_the_menu_glyph() -> None:
-    """D11: "Your exact roster" was drawn with M4 6h16M4 12h16M4 18h10 —
-    three horizontal lines, the universal hamburger-menu icon. It is a
-    clipboard with a check, every path inside the 64-unit draw-in dash."""
-    cred = BODY.split('<div class="cred">')[1].split("</div>\n</section>")[0]
-    roster = cred.split("<b>Your exact roster</b>")[0].rsplit("<svg", 1)[1]
-    assert "M4 6h16M4 12h16" not in roster and "<rect" in roster and "M9 14l2 2 4-4" in roster
+
 
 
 def test_section_heads_follow_one_rule() -> None:
     """D16: two headings ended in a period and five did not, and two were
     slanted with no pattern. Section heads are upright with no period; only
-    the slogans (pricing, closer) are slanted, with one. The kicker and the
-    closer's line balance rather than orphaning a word at 390."""
+    the slogans (pricing, closer) end with one — and since contract C7 they
+    are upright too (italic survives only in the hero slab and the lockup).
+    The kicker fits one line at a phone's width (13px, .08em: measured at 320
+    and 390), so no dot strands at a line's end."""
+    slogans = {"Take it through your title game.", "Your lineup, decided every Tuesday."}
     for attrs, text in re.findall(r"<h2([^>]*)>(.*?)</h2>", BODY, re.S):
         words = _flat(text).strip()
-        if "slant" in attrs:
+        assert "slant" not in attrs, f"a slanted head is back: {words}"
+        if words in slogans:
             assert words.endswith("."), words
         else:
             assert not words.endswith("."), f"a section head ends in a period: {words}"
-    assert re.search(r"\.kicker\{[^}]*text-wrap:balance", CSS)
+    h2 = re.search(r"\n  h2\{([^}]*)\}", CSS).group(1)
+    assert "italic" not in h2 and "h2.slant" not in CSS
+    kicker = re.search(r"\n  \.kicker\{([^}]*)\}", CSS).group(1)
+    assert "font-size:13px" in kicker and "letter-spacing:.08em" in kicker
     assert ('<div class="kicker"><span>Fantasy football</span><span class="ksep">&nbsp;· </span>'
             '<span>the playoff push</span></div>') in BODY
-    # LOOK-8: below one line's width the kicker breaks at the dot and drops
-    # it, never stranding "·" at the end of the first line.
-    assert ("@media (max-width:480px){.hero .kicker .ksep{display:none;}\n"
-            "    .hero .kicker span:last-child{display:block;}}") in CSS
-    # ...and the phone's if/then balances rather than ending on "OUT" alone.
-    assert ".screen .pivot .if,.screen .pivot p.then{text-wrap:balance;}" in CSS
-    # LOOK-4: each credential's two rows sit at the top of a stretched cell
-    # (stretched, the spare height opened a 14px gap under the heading).
-    assert re.search(r"\n  \.cred div\{[^}]*align-content:start", CSS)
 
 
 def test_no_headline_is_used_twice_and_the_note_does_not_repeat_its_card() -> None:
     """D17: "Odds only when earned" was both the credibility strip's third
     item and method card 03, and "The close one, called" repeated its card's
     "Start Bijan Robinson over Chase Brown — 70%, proj 15.1 vs 10.3" verbatim
-    beside it (directly above it on a phone)."""
-    strip = re.findall(r"<b>([^<]+)</b>", BODY.split('<div class="cred">')[1].split("</section>")[0])
-    cards = re.findall(r"<h3>([^<]+)</h3>", BODY.split('<div class="method">')[1].split("</section>")[0])
-    assert not set(strip) & set(cards), set(strip) & set(cards)
-    note = _flat(BODY.split("<b>The close one, called</b>")[1].split("</div>")[0])
-    assert "72%" not in note and "14.1" not in note
+    beside it (directly above it on a phone). No head on the page repeats
+    another, and no inbox note repeats a figure from the card beside it."""
+    heads = (re.findall(r"<h3>([^<]+)</h3>", BODY)
+             + re.findall(r'<div class="note"><b>([^<]+)</b>', BODY)
+             + [re.sub(r"<small>.*", "", b) for b in
+                re.findall(r"<b>(\w+<small>[^<]+)</small></b>",
+                           BODY.split('<ol class="timeline">')[1].split("</ol>")[0])])
+    assert len(heads) == len(set(heads)) >= 9, heads
+    rows = BODY.split('<div class="rows">')[1].split('<p class="realfoot">')[0]
+    cards = " ".join(re.findall(r'<div class="filecard[^>]*>(.*?)<!--/card-->', rows, re.S))
+    figures = set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(cards)))
+    for note in re.findall(r'<div class="note">(.*?)</div>', rows, re.S):
+        assert not set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(note))) & figures, _flat(note)
 
 
 def test_the_title_names_the_category_a_searcher_types() -> None:
@@ -507,11 +548,14 @@ def test_every_storyline_layer_starts_and_ends_on_the_decided_report() -> None:
     third loop (the class comes off at an iteration boundary) and a page whose
     script never runs all show the same decided report. The lock and the black
     are invisible at rest; everything drawn on the report is at full opacity
-    and untransformed; the lock's text layer is gone by the end."""
+    and untransformed; the lock's text layer is gone by the end. Since the
+    phone became the generated email (contract C11) the report layers are the
+    scroll, card 01's bars and card 02's bar; the old peek layers are gone."""
     hidden_at_rest = ("st-dark", "st-lock")
-    on_report = ("st-view", "st-bar", "st-flip", "st-if", "st-rise")
+    on_report = ("st-view", "st-bar", "st-call")
     names = re.findall(r"@keyframes (st-[\w-]+)\{", CSS)
     assert {"st-dark", "st-lock", "st-fg", "st-note", "st-tap", "st-pad", *on_report} <= set(names)
+    assert not {"st-flip", "st-if", "st-rise"} & set(names), "a retired peek layer is back"
     for name in names:
         stops = _keyframes(name)
         assert stops[0][0] == 0 and stops[-1][0] == 1, f"{name} has no 0% or 100% stop"
@@ -560,21 +604,23 @@ def test_a_printout_shows_every_section_and_every_bar() -> None:
     holding the section heads, the real-report rows, pricing, the FAQ and the
     closer printed as blank navy (.reveal is opacity:0 until a scroll that a
     printout never makes, with no failsafe), and the report cards' bars
-    printed empty (the motion zeroes them). After: a print rule shows
-    everything the script holds back and drops the fixed bars, beforeprint
-    sets every bar to its figure, and the rise observer has a failsafe — one
-    that only distrusts an observer that never reported, so sections still
-    rise as they are scrolled to (measured: 7 pages, none blank, bars full)."""
+    printed empty (the motion zeroed them). The page's report cards are now
+    generated and drawn at rest — no script zeroes a bar outside the phone's
+    storyline, which print stops — so the print rule shows everything the
+    script holds back, stops the phone's animation and drops the fixed bars,
+    and the rise observer keeps its failsafe (one that only distrusts an
+    observer that never reported, so sections still rise as they are
+    scrolled to)."""
     printed = _block(CSS, "@media print")
-    for held in (".js .reveal", ".js .stagger > *", ".js .anim .frow", "[data-n]"):
+    for held in (".js .reveal", ".js .stagger > *", ".phone .screen *"):
         assert held in printed, f"{held} can still print invisible"
     assert "opacity:1!important" in printed and ".stickybar" in printed
+    assert "animation:none!important" in printed
+    assert ".anim" not in CSS and "data-w=" not in BODY, "a script-zeroed bar is back"
     rise = LANDING.split("const rise = new IntersectionObserver")[1].split("\n}\n")[0]
     assert "heard = true" in rise
     assert re.search(r"setTimeout\(\(\) => \{ if \(!heard\) parts\.forEach\(\(el\) => "
                      r"el\.classList\.add\(\"shown\"\)\); \}, 6000\)", rise)
-    handler = LANDING.split('window.addEventListener("beforeprint"')[1].split("\n});")[0]
-    assert "bar.dataset.w" in handler and 'classList.add("in")' in handler
 
 
 def test_a_phone_has_a_route_to_the_price() -> None:

@@ -363,7 +363,7 @@ def test_the_launch_waitlist_states_exactly_what_it_will_send() -> None:
         "the waitlist promises a one-click unsubscribe nothing provides"
     assert re.search(r"no card", LANDING, re.I)
     # The volume promise is the part that must not go missing.
-    assert re.search(r"exactly one message|one email when signups open",
+    assert re.search(r"exactly one message|one email when (?:signups|checkout) open",
                      LANDING_PROSE, re.I), \
         "the waitlist must state how many emails it will send"
 
@@ -2547,13 +2547,17 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
     anchored on the old markup) and passed while checking nothing. So: the
     guard sweeps every `.filecard`, requires that it found the cards it
     expects to exist, and pins every figure — integers and decimals — to the
-    published sample."""
+    published sample. Since the phone and the inbox cards became GENERATED
+    (contract C11, render/phone.py) the guard sweeps the generated markup:
+    the phone's card and the three that follow it, and a kickoff time counts
+    as a figure (the Thursday item quotes one and nothing else)."""
     import html as _html
     # Re-anchored Sep 29 2026: the redesign states "Real file" once, not on
     # every card, so the cards carry a data marker and a closing comment.
-    cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+">(.*?)<!--/card-->',
+    # Oct 25 2026: the phone's card carries an id before its marker.
+    cards = re.findall(r'<div class="filecard[^"]*"[^>]*\bdata-real="[^"]+"[^>]*>(.*?)<!--/card-->',
                        LANDING, re.S)
-    assert len(cards) >= 3, (
+    assert len(cards) >= 4, (
         "the landing lost its Real-output cards, or the markup moved and this "
         "guard went blind again — re-anchor it, never delete it")
     flat_sample = _html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
@@ -2565,6 +2569,7 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
         figures |= {m for m in re.findall(r"\d+%", body)}
         figures |= {m for m in re.findall(r"\d+ targets \([\d.]+ a game\)", body)}
         figures |= {m for m in re.findall(r"last \d games", body)}
+        figures |= {m for m in re.findall(r"\d{1,2}:\d\d [AP]M ET", body)}
         assert figures, "a Real-output card with no figures is not this guard's card"
         for figure in sorted(figures):
             assert figure in flat_sample or figure in SAMPLE_REPORT, (
@@ -2599,7 +2604,7 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
         # spans a whole row — never into the next player's.
         assert re.search(rf"{re.escape(name)}.{{0,420}}?{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"
-        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))
+        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", _html.unescape(flat(LANDING)))
 
 
 def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
@@ -3092,9 +3097,14 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     # tighten and a name wraps rather than truncating. Measured at 360-430px.
     assert re.search(r"\.phone\{[^}]*max-width:320px", LANDING), \
         "the phone frame lost its cap — re-measure the hero card's columns"
-    assert "@media (max-width:430px)" in LANDING, "the hero card's narrow treatment is gone"
-    compact = LANDING.split("@media (max-width:430px)")[1].split("\n  }")[0]
-    assert ".frow{" in compact, "the hero card's columns no longer tighten on a phone"
+    # Oct 25 2026 (contract C8): every size inside the phone's email is in
+    # cqw, so the columns tighten with the phone at EVERY width (measured at
+    # 266 and 300px screens: all nine names on one line) instead of at one
+    # breakpoint, and the name column is the one that may shrink.
+    grid = re.search(r"\.screen \.ghead,\.screen \.frow\{[^}]*grid-template-columns:([^;]+);",
+                     LANDING)
+    assert grid and "cqw" in grid.group(1) and "minmax(0,1fr)" in grid.group(1), \
+        "the hero card's columns no longer scale with the phone"
     # Launch review D5, measured in Chrome: the wrap rule lived only in that
     # 430px block, so from 431px to 880px — where the phone is 286px wide —
     # "Amon-Ra St. Brown" truncated to "Amon-Ra St. …" (scrollWidth 117 >
@@ -3105,14 +3115,12 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     assert re.search(r"\.screen \.fname\{white-space:normal;overflow:visible", base), \
         "names truncate again inside the phone at some width — the one card " \
         "whose job is to be believed"
+    assert "text-overflow:ellipsis" not in re.search(r"\.screen \.fname\{([^}]*)\}", base).group(1)
 
-    # Grid children must be allowed to shrink, or nowrap text forces the row
-    # wider than the viewport again.
-    assert re.search(r"\.urow > \*\{min-width:0;\}", LANDING), \
-        "grid items can grow past their column again (min-width:auto)"
-    ucount = re.search(r"\.ucount\{([^}]*)\}", LANDING).group(1)
-    assert "nowrap" not in ucount, \
-        ".ucount is nowrap again — that is what pushed the page sideways"
+    # The usage widget (.urow/.ucount, whose nowrap pushed the page sideways)
+    # went with "Who's getting the ball"; its counts now live in the
+    # generated Slot by Slot card, whose lines wrap.
+    assert ".ucount" not in LANDING and ".urow" not in LANDING
 
 
 def test_the_policy_discloses_the_address_stripe_now_collects() -> None:
@@ -4637,15 +4645,17 @@ def test_reduced_motion_never_glides_the_page() -> None:
 
 def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at() -> None:
     """Panel review BE-I11: on a phone the tick label "TOSS-UP" sat right above
-    "70%" and read as one phrase. The tick's meaning is a legend line under the
-    figure, and the card says what the call IS (PC-03): the closest call that
-    carries odds on that roster, not a coin flip."""
+    "70%" and read as one phrase. The tick's meaning is a legend line, and the
+    card says what the call IS (PC-03): the closest call that carries odds on
+    that roster, not a coin flip. Since contract C11 the page's one closest
+    call is the phone's card 02 — the report's own, with its own label — and
+    the legend is card 01's, which says the bar starts at 50%."""
     assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
+    closest = LANDING.split('data-sec="closest"')[1].split("</section>")[0]
+    assert len(re.findall(r'class="cpct"', closest)) == 1, "the card prints one numeral"
+    assert '<p class="clabel">Closest call with odds</p>' in closest
     # Pre-launch review D12: the bar is drawn from 50%, as the report draws it.
-    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
-    assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
-    note = prose(LANDING).split("The close one, called")[1][:300]
-    assert "The week's closest call with odds on this roster, decided:" in note
+    assert "and the bar starts at 50% (a toss-up)." in prose(LANDING)
     assert "go back and forth" not in prose(LANDING)
 
 
@@ -4659,9 +4669,18 @@ def test_the_closest_call_is_named_with_the_reports_own_label() -> None:
     from engine import solo_report
     import inspect
     assert '"Closest call with odds"' in inspect.getsource(solo_report)
-    landing = prose(markup_only(LANDING))
-    assert "closest call with odds on this roster" in landing
-    assert "Closest call with odds: Kittle over LaPorta, 72%." in landing
+    import html as _html
+    import json as _json
+    from render.email import preheader_for
+    landing = _html.unescape(prose(markup_only(LANDING)))
+    assert '<p class="clabel">Closest call with odds</p>' in landing
+    # The phone's notification is the email's own preview (contract C11),
+    # which names the call in the report's words.
+    fixture = _json.loads((SITE.parent / "tests" / "fixtures" / "sample-report-w10.json")
+                          .read_text(encoding="utf-8"))
+    preview = preheader_for(fixture)
+    assert preview.startswith("Closest call with odds: start George Kittle over Sam LaPorta, 72%.")
+    assert f'<span class="lpre">{preview}</span>' in landing
     assert "The week's closest call on this roster" not in landing
     how = prose(HOW)
     assert "<dt>The week's closest call with odds</dt>" in how
