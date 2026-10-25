@@ -1038,8 +1038,17 @@ def restamp_style(page: str, template: str) -> str:
     """The page's <style> swapped for the template's current design, so the
     restamped nav is drawn with the CSS it was written for. The page's own
     style is the template's extract plus the mark rules (render.report.render),
-    so this changes presentation only."""
+    so this changes presentation only.
+
+    Only onto a page built in the card markup the style is written for
+    (contract C3, Oct 2026). A page built before it — this week's page until
+    Tuesday's cron rebuilds it — keeps the style it was drawn with: the new
+    sheet has none of the old page's rules (the tape's columns, the sheet
+    frame), and a rebuild to fix the look would move numbers (a forced rebuild
+    after kickoff drops odds). Idempotent on both."""
     from render.report import MARK_CSS, extract_design
+    if 'class="card"' not in page:
+        return page
     style, _links = extract_design(template)
     return re.sub(r"<style>.*?</style>", lambda _m: f"<style>{style + MARK_CSS}</style>",
                   page, count=1, flags=re.S)

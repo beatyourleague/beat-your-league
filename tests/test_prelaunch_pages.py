@@ -631,9 +631,11 @@ def test_the_drafted_posts_carry_no_link_and_name_the_card_to_attach() -> None:
     for post in posts:
         assert "http" not in post["text"] and "this-week.html" in post["reply"]
         assert post["card"] in drops.CARDS.values()
-    source = (ROOT / "render" / "report.py").read_text(encoding="utf-8")
+    # The report's card titles live in one place now (render.anatomy.TITLES,
+    # contract C1), the one every surface prints.
+    from render.anatomy import TITLES
     for heading in drops.CARDS.values():
-        assert f'_section("{heading}"' in source or f'RISING_HEAD = "{heading}"' in source, heading
+        assert heading in TITLES.values(), heading
     page = drops.render(_report(), posts)
     assert page.count("First reply: ") == len(posts) == page.count("Attach: a screenshot of")
     assert "that is where the link goes" in page

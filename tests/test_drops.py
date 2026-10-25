@@ -329,7 +329,7 @@ def test_a_thursday_starter_gets_a_thursday_post_with_his_if_then() -> None:
     plain = drops.drafts(_report(lineup=lineup, pivots=[tuesday]))
     [post] = [p for p in plain if p["name"] == "Thursday night"]
     assert post["text"].endswith("Our sample roster's Tuesday report flags it: check his "
-                                 "status before then.") and post["card"] == "The Lineup"
+                                 "status before then.") and post["card"] == "Your Game Plan"
     assert "Post it: Thursday, before his kickoff." in drops.render(_report(), plain)
     sunday = [dict(row, game="vs NE · Sun 1:00 PM ET") for row in lineup]
     assert "Thursday night" not in [p["name"] for p in drops.drafts(_report(lineup=sunday))]

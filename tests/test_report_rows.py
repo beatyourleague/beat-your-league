@@ -473,24 +473,32 @@ def test_usage_is_shortened_without_dropping_a_fact() -> None:
 
 
 def _lineup_table(email: str) -> str:
-    """The lineup's player rows, header excluded."""
-    start = email.index(">Call</td></tr>")
-    return email[start:email.index("</table>", start)]
+    """Card 01's glance table — the lineup's rows, the card head excluded
+    (re-anchored on the card markers, contract C3, Oct 2026)."""
+    card = email[email.index("<!--sec:lineup-->"):email.index("<!--sec:", email.index(
+        "<!--sec:lineup-->") + 1)]
+    body = card.split("</table></td></tr>", 1)[1]      # past the navy head
+    return body
 
 
 def test_no_sentence_sits_in_a_column_that_cannot_wrap() -> None:
     """The reproduction: "start · waiting on Rashid Shaheed" in a nowrap call
     cell pushed the 2026 week-6 email to 413px on a 390px phone and squeezed
-    the player column so rows ran four to eight lines."""
+    the player column so rows ran four to eight lines. Card 01's narrow
+    columns carry only figures: no nowrap cell holds more than 6 characters,
+    a % cell holds only the %, and a row's reason is a line of its own under
+    the name, never a column."""
     report = _week(designations={WR1: "Questionable"},
                    listed={WR1: ("questionable", "foot")})
     table = _lineup_table(render_email(report))
     for cell in re.findall(r'<td[^>]*white-space:nowrap[^>]*>(.*?)</td>', table, re.S):
         visible = _flat(cell).strip()
         assert len(visible) <= 6, f"a nowrap cell carries text: {visible!r}"
-    for cell in re.findall(r'<td width="60"[^>]*>(.*?)</td>', table, re.S):
-        assert re.fullmatch(r"(\d+%)?", _flat(cell).strip()), \
-            f"the call column carries a sentence: {_flat(cell).strip()!r}"
+    for cell in re.findall(r'<td width="40"[^>]*>(.*?)</td>', table, re.S):
+        visible = _flat(cell).strip()
+        if "%" in visible:
+            assert re.fullmatch(r"\d+%", visible), f"a % cell carries words: {visible!r}"
+        assert len(visible) <= 6, f"a narrow column carries a sentence: {visible!r}"
 
 
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"

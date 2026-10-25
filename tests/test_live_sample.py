@@ -270,8 +270,9 @@ NOW = datetime(2026, 10, 17, 0, 3, tzinfo=timezone.utc)
 
 
 def _odds(page: str) -> list[int]:
-    """The percentages the lineup's call column prints."""
-    return [int(n) for n in re.findall(r"<b>(\d+)%</b>", page)]
+    """The percentages the lineup prints — card 01's odds column (contract C3;
+    it was the call column's <b>NN%</b>)."""
+    return [int(n) for n in re.findall(r'<span class="fpct">(\d+)%</span>', page)]
 
 
 def test_a_week_is_recorded_once_by_its_first_build_before_kickoff(

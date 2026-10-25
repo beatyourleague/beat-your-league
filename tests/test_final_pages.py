@@ -561,8 +561,16 @@ def test_how_it_works_draws_the_report_in_the_reports_colours() -> None:
     sample = (SITE / "sample-report.html").read_text(encoding="utf-8")
     # The tag is not the point (the checklist moved from divs to spans inside a
     # label, REPORT-CHROME, Oct 24 2026); the class beside each deadline is.
-    assert "class=\"dl ok\">before this week&#x27;s first kickoff</" in sample
-    assert "class=\"dl\">gameday morning</" in sample
+    # Since the card stack (contract C6) the deadline is a chip: .chip.ok turf,
+    # .chip.due brick. Until `make sample` regenerates the page, the published
+    # sample still carries the older .dl classes.
+    assert ("class=\"chip ok\">before this week&#x27;s first kickoff</" in sample
+            or "class=\"dl ok\">before this week&#x27;s first kickoff</" in sample)
+    assert ("class=\"chip due\">gameday morning</" in sample
+            or "class=\"dl\">gameday morning</" in sample)
+    from render.report import TEMPLATE_PATH, extract_design
+    css = extract_design(TEMPLATE_PATH.read_text(encoding="utf-8"))[0]
+    assert ".chip.ok{color:var(--turf);" in css and ".chip.due{color:var(--brick);" in css
 
 
 def test_how_it_works_lists_each_reason_a_row_has_no_odds() -> None:

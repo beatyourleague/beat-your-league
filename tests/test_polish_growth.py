@@ -71,7 +71,8 @@ def test_a_recorded_first_build_puts_the_ledgers_closest_call_on_the_clock(
     assert (closest["start_id"], closest["over_id"], closest["slot"]) == (
         held["pick_id"], held["over_id"], held["slot"])
     page = out.read_text(encoding="utf-8")
-    assert f'<div class="num">{closest["pct"]}%</div>' in page
+    # Card 02's % (contract C3: <b class="cpct">, was <div class="num">).
+    assert f'<b class="cpct">{closest["pct"]}%</b>' in page
     before, joiner, after = regret_verdict(regret)
     assert f'{live.esc(before)} <span class="over">{joiner}</span> {live.esc(after)}' in page
     assert closest["tossup"] is (joiner == "or")
