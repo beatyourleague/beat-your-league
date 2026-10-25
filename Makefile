@@ -5,7 +5,7 @@ RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
         intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
-        og brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample
+        og brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes
 
 week:
 	$(PY) -m run.week
@@ -306,6 +306,13 @@ preseason:
 # the committed asset has drifted, which is what CI runs.
 index:
 	$(PY) -m render.player_index --season $(SEASON)
+	$(PY) -m render.bye_index --season $(SEASON)
+
+# The free bye planner's data (site/join/byes.json) and the season's bye table
+# on site/byes/: this season's byes, when each week ends, today's reserve list.
+# Refuses to write a partial bye list. `--check` fails if either is stale.
+byes:
+	$(PY) -m render.bye_index --season $(SEASON)
 
 # Grade first, then draft: a Receipts post written before settlement is a
 # post about games that have not finished.
