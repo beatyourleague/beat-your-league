@@ -236,7 +236,10 @@ def test_the_welcome_wears_the_weekly_emails_masthead_and_a_preview_line() -> No
     for plan in ("season", "monthly", "league_pass", "seat"):
         html = _msg(plan).html
         assert f"background:{NAVY};" in html.split("You&#x27;re in.")[0], plan
-        assert "letter-spacing:4px;text-transform:uppercase" in html, plan
+        # The weekly email's masthead (render.email.masthead_html, contract
+        # A10): the lockup, "League" in the logo's gold.
+        assert 'Beat Your <span style="color:#F0B62A;">League</span>' in \
+            html.split("You&#x27;re in.")[0], plan
         assert "&#847;&zwnj;&nbsp;" in html and "mso-hide:all" in html, plan
         # What happens next, row by row, as the thanks page lists it.
         assert "Every Tuesday" in html and "Saturday, if needed" in html, plan
@@ -306,7 +309,8 @@ def test_a_pass_payer_is_handed_the_leagues_own_seat_link_first() -> None:
                           "2026", seat_link=SEAT_LINK)
     html_seat = SEAT_LINK.replace("&", "&amp;")
     assert f'href="{html_seat}"' in msg.html, "the seat link is not tappable"
-    order = [msg.html.index(f">{title}</div>") for title in
+    # Each block is a card now (render.email._card): its title in the head cell.
+    order = [msg.html.index(f">{title}</td>") for title in
              ("Send your league this", "What happens next", "The terms, in writing")]
     assert order == sorted(order), "the share block is not first"
     for doc in (msg.text, msg.html.replace("&amp;", "&")):

@@ -790,8 +790,10 @@ def test_the_only_quarterback_says_so_in_a_week_with_odds() -> None:
     assert any(s.get("confidence") is not None for s in report["lineup"])
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     page = render(report, template)
-    qb = re.search(r'<td class="tslot">QB</td>.*?<td class="tcall">(.*?)</td>', page, re.S)
-    assert "no bench QB" in qb.group(1)
+    # The QB's glance row in card 01 (contract C3): its reason, where its %
+    # would be.
+    qb = re.search(r'<span class="fslot">QB</span>.*?</div>', page, re.S)
+    assert '<span class="fnc">no bench QB</span>' in qb.group(0)
     assert "QB     Quinn Only" in text_summary(report) and "no bench QB" in text_summary(report)
 
 
@@ -953,7 +955,13 @@ def test_mid_season_an_out_starters_usage_is_not_printed_as_his_call() -> None:
                       if x.startswith("  RB ") and "Ira Reserve" in x]
         return row_line
     assert "targets" not in line(), line()
-    report["meta"]["lineup_as_set"] = True          # week 1: the basis prints
+    # Week 1: the basis prints. Week 1 is the week no row has a projection
+    # (render.anatomy, contract C2) — and a starter whose OUT flag is known
+    # shows the flag first even then, so the week-1 case is a clean row.
+    report["meta"]["lineup_as_set"] = True
+    for slot in report["lineup"]:
+        slot["projected"] = None
+    row["flags"] = []
     assert line().endswith("23 carries")
 
 
@@ -973,15 +981,31 @@ def test_the_superflex_row_lines_up_in_plain_text() -> None:
 def test_the_emailed_odds_span_the_name_and_its_details() -> None:
     """D7: in the email the call cell (the % and its bar) sat in the name row
     only, so that row grew and opened a gap between a player's name and his
-    kickoff on exactly the rows that carry odds."""
+    kickoff on exactly the rows that carry odds. Moved with card 01 (contract
+    C5, Oct 2026): an odds row is ONE row — slot, name, projection, bar, % —
+    with no second line under it to open a gap; the kickoff and the rest are
+    Slot by Slot's, one fact a line."""
     roster = {QB1: ("Quinn Starter", "QB", "KC"), RB1: ("Rory Runner", "RB", "KC"),
               WR1: ("Wade Wideout", "WR", "KC"), TE1: ("Tate Tightend", "TE", "KC"),
               WR2: ("Wes Slotman", "WR", "KC"), WR3: ("Will Deepman", "WR", "KC")}
     report = _report(roster, yards={WR1: 90, WR2: 80, WR3: 40})
     email = render_email(report)
-    calls = re.findall(r'<td width="60"([^>]*)>(.*?)</td>', email, re.S)
-    with_odds = [attrs for attrs, body in calls if re.search(r"\d+%", body)]
-    assert with_odds and all('rowspan="2"' in attrs for attrs in with_odds)
+    card = email[email.index("<!--sec:lineup-->"):email.index("<!--sec:closest-->")]
+    # Each slot's row runs from one hairline to the next.
+    slots = card.split('background:#EEEAE1;">&nbsp;</td></tr>')[1:]
+    with_odds = [s for s in report["lineup"] if s.get("confidence") is not None]
+    assert with_odds
+    for slot in with_odds:
+        [row] = [r for r in slots if f">{slot['player_name']}</td>" in r]
+        pct = re.search(r">(\d+)%</td></tr>", row)
+        assert pct, "the % is not on its player's own row"
+        after = row[pct.end():]
+        # Next comes the hairline before the next slot, or the table's end —
+        # never a sub-row (render.email._lineup_body: "<tr><td></td><td
+        # colspan=…>" carries a row's reason when no % prints).
+        assert not after.startswith("<tr><td></td>"), \
+            "a second line opens under an odds row"
+        assert after.startswith(('<tr><td colspan="5" style="height:1px', "</table>"))
 
 
 def test_every_call_below_is_said_only_in_a_week_with_calls() -> None:

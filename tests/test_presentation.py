@@ -394,14 +394,18 @@ def _contrast(fg: str, bg: str) -> float:
 
 def test_the_bench_header_passes_contrast() -> None:
     """Reproduction (D9): .benchtape .thead td was slate #5A6B80 on #E9E6DC,
-    4.37:1 — under the 4.5:1 a 12px bold label needs."""
+    4.37:1 — under the 4.5:1 a 12px bold label needs. The bench header is
+    now Slot by Slot's "On your bench" subhead (.bhead) on the white card
+    (contract C3); every label colour the cards use holds 4.5:1 there."""
     css = rr.extract_design(TEMPLATE)[0]
     root = _rule(css, ":root")
     colours = dict(re.findall(r"--([\w-]+):\s*(#[0-9A-Fa-f]{6})", root))
-    rule = _rule(css, ".benchtape .thead td")
-    fg = re.search(r"color:\s*var\(--([\w-]+)\)", rule).group(1)
-    bg = re.search(r"background:\s*(#[0-9A-Fa-f]{6})", rule).group(1)
-    assert _contrast(colours[fg], bg) >= 4.5, (colours[fg], bg)
+    card = re.search(r"background:\s*var\(--([\w-]+)\)", _rule(css, ".card")).group(1)
+    for selector in (".bhead", ".fslot", ".ghead span", ".fnc", ".tsub", ".tgame"):
+        rule = _rule(css, selector)
+        fg = re.search(r"color:\s*var\(--([\w-]+)\)", rule).group(1)
+        assert _contrast(colours[fg], colours[card]) >= 4.5, (selector, colours[fg])
+    assert ".benchtape" not in css, "a rule for markup nothing emits"
 
 
 def test_report_meta_type_is_at_least_12px_on_a_phone() -> None:
@@ -429,21 +433,22 @@ def test_the_call_column_holds_its_longest_word_on_a_phone() -> None:
     desktop widths are unchanged. The <col> widths ride inline, which is why
     the phone rule must be !important; the five-column Tape is untouched."""
     css = rr.extract_design(TEMPLATE)[0]
-    phone = css.split("@media (max-width:420px){", 1)[1].split("\n  }", 1)[0]
-    widths = dict(re.findall(r"\.tape col:nth-child\((\d)\):(?:nth-last-child\(\d\)|last-child)"
-                             r"\{width:(\d+)% !important;\}", phone))
-    assert widths == {"1": "10", "2": "48", "3": "14", "4": "28"}, widths
-    assert sum(int(w) for w in widths.values()) == 100
-    # Each selector names its column by position from BOTH ends, so it can
-    # only ever match a four-column group.
-    for n, last in (("1", "nth-last-child(4)"), ("2", "nth-last-child(3)"),
-                    ("3", "nth-last-child(2)"), ("4", "last-child")):
-        assert f".tape col:nth-child({n}):{last}{{" in phone, n
-    assert ".tcall{overflow-wrap:anywhere;}" in phone
-    four = re.findall(r'width:(\d+)%', rr.LINEUP_COLS)
-    assert len(four) == 4 and rr.TAPE_COLS.count("<col>") == 5
-    # The call column on a 360px phone (a 314px table): room for its 74px word.
-    assert 314 * int(widths["4"]) / 100 - 10 >= 74
+    # Moved (contract C3, Oct 2026): no column carries a sentence any more.
+    # A row's reason ("questionable · see if/then") is a second line under the
+    # name, spanning from the name column to the row's end, so it wraps in the
+    # row's width instead of crossing a border; Slot by Slot is three columns
+    # whose only wordy one is the fluid detail cell, so no phone override
+    # (and no !important) is needed.
+    assert re.search(r"\.fnc\{grid-column:2 / -1;", css), "the reason is not a full line"
+    assert "!important;}" not in css.split("@media (max-width:520px){", 1)[1].split("\n  }", 1)[0]
+    three = re.findall(r'width:(\d+)%', rr.LINEUP_COLS)
+    assert three == ["10", "76", "14"] and rr.TAPE_COLS.count("<col>") == 5
+    # The name column at 390 (a 328px card body): room for "Christian
+    # McCaffrey", 140px in Barlow 700 at 16px, beside proj, bar and odds.
+    five = re.search(r"\.glance\.g5 \.frow,\.glance\.g5 \.ghead\{grid-template-columns:"
+                     r"(\d+)px minmax\(0,1fr\) (\d+)px (\d+)px (\d+)px;\}", css)
+    gap = int(re.search(r"\.frow,\.ghead\{display:grid;column-gap:(\d+)px;", css).group(1))
+    assert 328 - sum(int(w) for w in five.groups()) - 4 * gap >= 141
 
 
 def test_a_generated_page_declares_its_colour_scheme_and_bar_colour() -> None:

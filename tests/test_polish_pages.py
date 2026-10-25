@@ -283,7 +283,11 @@ def test_a_slanted_gold_button_shows_its_focus_ring() -> None:
         css = _style(_page(name))
         if "clip-path:polygon" in css:
             assert ".btn.gold:focus-visible{clip-path:none;}" in css, name
-    assert ".btn:focus-visible{clip-path:none;}" in TEMPLATE
+    # The report template's button is the site's flat rectangle now (contract
+    # C7): nothing clips it, and its keyboard focus draws a navy ring.
+    if "clip-path:polygon" in TEMPLATE:
+        assert ".btn:focus-visible{clip-path:none;}" in TEMPLATE
+    assert ".btn:focus-visible{outline:3px solid var(--navy);outline-offset:2px;}" in TEMPLATE
 
 
 def test_focus_on_paper_is_navy_never_gold() -> None:
@@ -598,14 +602,20 @@ def test_the_checkbox_draws_in_the_templates_own_style_at_a_thumbs_size() -> Non
 
 
 def test_the_report_has_one_depth_and_the_ctas_feel_like_the_sites() -> None:
-    """REPORT-CHROME: the sheet takes the paper pages' elevation, the cards a
-    hairline one, and the samples' gold CTA lifts, presses and catches the
-    sheen like the site's; its phone rule (edge to edge, no shadow) holds."""
+    """REPORT-CHROME: one depth. Moved with the card stack (contract C7, Oct
+    2026): the page is paper edge to edge at every width (no framed sheet on
+    a grey desk), each CARD takes the paper pages' elevation, nothing inside
+    a card casts a shadow of its own, and the samples' gold CTA is the site's
+    flat button — it lifts on hover, with no sheen and no clip."""
     css = _style(TEMPLATE)
-    assert re.search(r"\.report\{[^}]*box-shadow:0 2px 10px rgba\(16,30,51,\.06\),"
-                     r"0 30px 60px -30px rgba\(16,30,51,\.35\);\}", css)
-    assert ".report{border:0;box-shadow:none;}}" in css
-    for card in (".task{", ".call{", ".pivot{"):
-        rule = css.split("\n  " + card, 1)[1].split("}", 1)[0]
-        assert "box-shadow:0 1px 2px rgba(16,30,51,.06)" in rule, card
-    assert ".headcta .btn:hover::after,.ctacard .btn:hover::after{" in css
+    assert re.search(r"body\{background:var\(--paper\);", css)
+    assert not re.search(r"\.report\{[^}]*(box-shadow|border:)", css)
+    card = re.search(r"\n  \.card\{([^}]*)\}", css).group(1)
+    assert ("box-shadow:0 1px 2px rgba(16,30,51,.06),0 8px 24px -12px rgba(16,30,51,.18)"
+            in card) and "border-radius:12px" in card and "border:1px solid" in card
+    for inner in (".task{", ".pivot{", ".frow,.ghead{"):
+        rule = css.split("\n  " + inner, 1)[1].split("}", 1)[0]
+        assert "box-shadow" not in rule, inner
+    assert re.search(r"\.btn:hover\{background:#FFD24A;transform:translateY\(-1px\);\}", css)
+    assert "::after{content" not in css.split(".btn{", 1)[1].split("@media print", 1)[0]
+    assert "clip-path:polygon" not in css

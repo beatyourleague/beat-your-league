@@ -831,8 +831,10 @@ def test_section_numbers_are_contiguous_on_every_surface(tmp_path: Path) -> None
     def markers(html_out: str) -> list[str]:
         return re.findall(r'<span class="n">(\d+)</span>', html_out)
 
+    # The email's number sits in its card's navy head (render.email._card).
     for got in (markers(render(report, _template())),
-                re.findall(r'>(\d\d)</span> ·', render_email(report))):
+                re.findall(r'color:#F2C230;white-space:nowrap;padding-left:12px;">(\d\d)</td>',
+                           render_email(report))):
         assert got, "the numbered sections vanished"
         assert got == [f"{i:02d}" for i in range(1, len(got) + 1)], got
 

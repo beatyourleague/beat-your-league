@@ -16,8 +16,10 @@ from typing import Any, Mapping
 
 from engine.final_check import (BACK, CLEARED, NO_FILL, REMINDER, SWAP,
                                 UNBLOCKED, WATCH, Change)
-from render.email import (tick_box, BASE, CARD, DISPLAY, FLAG, FLAG_TINT, FONT, LINE,
-                          NAVY, PAPER, SLATE, SMALL, TURF, TURF_TINT, _sec)
+from render.email import (FACT, NAVY, PAPER, SMALL, _items_table, _sec,
+                          masthead_html)
+# Re-exported for callers that drew their own box from here.
+from render.email import tick_box  # noqa: F401
 from render.report import (EMAIL_META, preheader_html, NFLVERSE_LINE,
                            NO_BETTING_LINE, cancel_html, cancel_lines, esc,
                            sender_html)
@@ -86,57 +88,40 @@ def _groups(changes: list[Change]) -> list[tuple[str, list[Change]]]:
             if any(c.kind in kinds for c in changes)]
 
 
-def _items(items: list[Change], tint: str, rule_colour: str, box: bool) -> str:
-    rows = []
-    for i, item in enumerate(items):
-        rule = f"border-top:1px solid {LINE};" if i else ""
-        tick = (f'<td style="padding:10px 12px 10px 0;vertical-align:top;'
-                f'width:18px;{rule}">{tick_box()}</td>' if box else "")
-        rows.append(
-            f'<tr>{tick}<td style="{BASE}padding:10px 0;{rule}">'
-            f'<b>{esc(item.action)}</b><br>'
-            f'<span style="{SMALL}color:{NAVY};">{esc(item.detail)}</span>'
-            f'</td></tr>')
-    return (f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0" style="background:{tint};'
-            f'border-left:4px solid {rule_colour};"><tr><td style="padding:4px 14px;">'
-            f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{"".join(rows)}</table></td></tr></table>')
+# The change's kind as its chip (contract A7): what kind of change it is, in
+# the buyer's words — the item's own sentence still says what to do.
+CHIPS = {SWAP: "swap", NO_FILL: "no cover", BACK: "back in", WATCH: "newly questionable",
+         REMINDER: "still questionable", CLEARED: "cleared", UNBLOCKED: "cleared"}
+
+
+def _model(change: Change, key: str) -> dict[str, Any]:
+    """One change, in the plan-item anatomy the Tuesday report uses
+    (render.anatomy.item): the action bold, why beneath, the kind as a chip.
+    Only a change to make carries a box."""
+    return {"head": change.action, "rest": "", "detail": change.detail or None,
+            "deadline": CHIPS.get(change.kind, ""),
+            "tone": "ok" if key == "good" else "due", "box": key == "act"}
 
 
 @buyer_slots
 def render_final_check(plan: Mapping[str, Any], changes: list[Change],
                        at: datetime, seat: bool = False) -> str:
     """``seat``: a League Pass seat holder, who has no billing to cancel, so
-    the footer gives a stop route instead (render.report.cancel_html)."""
+    the footer gives a stop route instead (render.report.cancel_html).
+
+    The Tuesday report's shell (contract A7): the same navy masthead — "Final
+    check" at its right, the week big, what this is beneath — and each group
+    a card of plan items, on paper."""
     week = esc(plan["week"])
-    header = (
-        f'<tr><td style="background:{NAVY};padding:24px 28px;'
-        f'border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
-        f'Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:30px;font-weight:bold;'
-        f'letter-spacing:1px;text-transform:uppercase;color:{CARD};'
-        f'padding:6px 0 2px 0;">Week {week} · Final Check</div>'
-        f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
-        f'color:{FLAG};padding:0 0 8px 0;">{esc(PREHEADER)}</div>'
-        f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
-        f'{esc(checked_line(at))}</div></td></tr>')
-    sections = []
-    for key, items in _groups(changes):
-        if key == "act":
-            body = _items(items, FLAG_TINT, FLAG, box=True)
-        elif key == "watch":
-            body = _items(items, PAPER, LINE, box=False)
-        else:
-            body = _items(items, TURF_TINT, TURF, box=False)
-        sections.append(_sec(0, HEADS[key], body))
+    header = masthead_html(
+        "Final check", f"Week {plan['week']}",
+        f'<b style="color:#FFFFFF;">{esc(PREHEADER)}</b>', checked_line(at))
+    sections = [_sec(0, HEADS[key], _items_table([_model(c, key) for c in items]), key)
+                for key, items in _groups(changes)]
     footer = (
-        f'<tr><td style="padding:18px 28px 0 28px;"><p style="{BASE}margin:0;">'
+        f'<tr><td style="padding:12px 4px 0 4px;"><p style="{FACT}margin:0;">'
         f'{esc(STANDS)}</p></td></tr>'
-        f'<tr><td style="padding:12px;"></td></tr>'
-        f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;">'
+        f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — injury '
         f'designations from each team\'s official report, as published.<br>'
         f'{esc(NO_BETTING_LINE)}<br>{esc(NFLVERSE_LINE)}<br>'
@@ -153,9 +138,9 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
         f'{preheader_html(PREHEADER)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;">'
+        f'style="padding:12px 8px 24px;">'
         f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
-        f'border="0" style="max-width:600px;width:100%;background:{CARD};">'
+        f'border="0" style="max-width:600px;width:100%;background:{PAPER};">'
         f'{header}{"".join(sections)}{footer}</table></td></tr></table>\n'
         f'</body>\n</html>\n')
 

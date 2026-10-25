@@ -333,25 +333,28 @@ def _record_cell(row: Mapping[str, Any]) -> str:
             f'{record["games"]}</span>')
 
 
+def _rows(rows: list[tuple[str, str, list[str]]], cols: str = "") -> str:
+    """Slot, then the name and its facts one a line (the weekly report's
+    Slot by Slot anatomy, render.report._slots_body)."""
+    body = "".join(
+        f'<tr><td class="tslot">{esc(slot)}</td><td class="tdet">'
+        f'<b class="tname">{name}</b>'
+        + "".join(f'<span class="tsub">{line}</span>' for line in lines if line)
+        + '</td></tr>' for slot, name, lines in rows)
+    cols = cols or '<col style="width:14%"><col style="width:86%">'
+    return f'<table class="tape"><colgroup>{cols}</colgroup>{body}</table>'
+
+
 def section_byes(report: Mapping[str, Any]) -> str:
     collisions = report["collisions"]
     if not collisions:
-        body = f'<p class="withheldline">{esc(bye_none(report["meta"]))}</p>'
+        body = f'<p class="fact">{esc(bye_none(report["meta"]))}</p>'
     else:
-        items = []
-        for hit in collisions:
-            slots = ", ".join(hit["slots"])
-            who = ", ".join(bye_names(hit))
-            note = out_note(hit)
-            items.append(
-                f'<tr class="trow"><td class="tslot">W{esc(hit["week"])}</td>'
-                f'<td class="tside you"><span class="tname">'
-                f'No one to start at {esc(slots)}</span>'
-                f'<span class="tsub">on bye: {esc(who)}'
-                + (f' · {esc(note)}' if note else "") + '</span></td></tr>')
-        body = (f'<table class="tape"><colgroup><col style="width:14%">'
-                f'<col style="width:86%"></colgroup>{"".join(items)}</table>')
-    body += f'<div class="withheld">{esc(bye_basis(report["meta"]))}</div>'
+        body = _rows([(f'W{hit["week"]}', f'No one to start at {esc(", ".join(hit["slots"]))}',
+                       [f'on bye: {esc(", ".join(bye_names(hit)))}'
+                        + (f' · {esc(out_note(hit))}' if out_note(hit) else "")])
+                      for hit in collisions])
+    body += f'<p class="tnote">{esc(bye_basis(report["meta"]))}</p>'
     return _pre_section(BYE_HEAD, body)
 
 
@@ -359,14 +362,10 @@ def section_cant_play(report: Mapping[str, Any]) -> str:
     out = report.get("cant_play") or []
     if not out:
         return ""
-    rows = "".join(
-        f'<tr class="trow"><td class="tslot">{esc(e.get("position") or "")}</td>'
-        f'<td class="tside you"><span class="tname">{esc(e["name"])}</span>'
-        f'<span class="tsub">{esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b))}'
-        f'</span></td></tr>' for e in out)
-    body = (f'<table class="tape"><colgroup><col style="width:14%">'
-            f'<col style="width:86%"></colgroup>{rows}</table>'
-            f'<div class="withheld">{esc(CANT_PLAY_BASIS)}</div>')
+    body = (_rows([(e.get("position") or "", esc(e["name"]),
+                    [esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b))])
+                   for e in out])
+            + f'<p class="tnote">{esc(CANT_PLAY_BASIS)}</p>')
     return _pre_section(CANT_PLAY_HEAD, body)
 
 
@@ -374,68 +373,65 @@ def section_thin(report: Mapping[str, Any]) -> str:
     thin = report["thin"]
     if not thin:
         return ""
-    rows = []
-    for spot in thin:
-        rows.append(
-            f'<tr class="trow"><td class="tslot">{esc(spot["slot"])}</td>'
-            f'<td class="tside you"><span class="tname">'
-            f'{esc(", ".join(spot["players"]) or "nobody")}</span>'
-            f'<span class="tsub">'
-            f'{esc(spot["have"])} on the roster, {esc(spot["start"])} starting'
-            + (f' · {esc(out_note(spot))}' if out_note(spot) else "")
-            + '</span></td></tr>')
-    body = (f'<table class="tape"><colgroup><col style="width:14%">'
-            f'<col style="width:86%"></colgroup>{"".join(rows)}</table>'
-            f'<div class="withheld">{esc(THIN_BASIS)}</div>')
+    body = (_rows([(spot["slot"], esc(", ".join(spot["players"]) or "nobody"),
+                    [f'{esc(spot["have"])} on the roster, {esc(spot["start"])} starting'
+                     + (f' · {esc(out_note(spot))}' if out_note(spot) else "")])
+                   for spot in thin])
+            + f'<p class="tnote">{esc(THIN_BASIS)}</p>')
     return _pre_section(THIN_HEAD, body)
 
 
 def section_form(report: Mapping[str, Any]) -> str:
+    """The roster, one player a row: the slot, his name and last season's
+    rank, then his team and bye, this season's record and last season's —
+    the plain-text half's anatomy, so no column holds a sentence."""
     meta = report["meta"]
     current = bool(meta.get("through_week"))
     rows = []
     for row in report["roster"]:
         bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
-        team = row.get("team") or "—"
+        record = row.get("record")
+        rank = rank_phrase(row) if record else ""
         now = season_line(row, meta["season"]) if current else ""
-        rows.append(
-            f'<tr class="trow"><td class="tslot">{esc(row["position"])}</td>'
-            f'<td class="tside you"><span class="tname">{esc(row["name"])}</span>'
-            f'<span class="tsub">{esc(team)} · {esc(bye)}</span>'
-            + (f'<span class="tsub">{_unbroken(now)}</span>' if now else "")
-            + f'</td><td class="tcall">{_record_cell(row)}</td></tr>')
-    head = ('<tr class="thead"><td></td><td>Your roster'
-            + (f' · {esc(SEASON_HEAD.lower())}' if current else "")
-            + '</td><td style="text-align:right">Last season</td></tr>')
-    cols = ('<col style="width:11%"><col style="width:59%">'
-            '<col style="width:30%">')
-    body = (f'<table class="tape"><colgroup>{cols}</colgroup>'
-            f'{head}{"".join(rows)}</table>'
-            f'<div class="withheld">{esc(form_basis(meta))}</div>')
+        prior = (f'{record["per_game"]} a game over {record["games"]}' if record
+                 else (row.get("no_record_reason") or NO_RECORD))
+        name = esc(row["name"]) + (f' <span class="trankr">{esc(rank)}</span>'
+                                   if rank else "")
+        rows.append((row["position"], name,
+                     [f'{esc(row.get("team") or "—")} · {esc(bye)}',
+                      _unbroken(now).replace("<br>", " · ") if now else "",
+                      esc(f"{prior_label(meta)}: {prior}")]))
+    body = _rows(rows) + f'<p class="tnote">{esc(form_basis(meta))}</p>'
     return _pre_section(form_head(meta), body)
 
 
 def _pre_section(title: str, body: str) -> str:
-    return (f'<section><div class="eyebrow"><span class="tag">{esc(title)}</span>'
-            f'<span class="n">{SECTION_MARK}</span></div>{body}</section>')
+    """One card, the weekly report's shell (render.report.card_html)."""
+    return (f'<section class="card"><div class="eyebrow"><span class="tag">{esc(title)}'
+            f'</span><span class="n">{SECTION_MARK}</span></div>'
+            f'<div class="cbody">{body}</div></section>')
+
+
+FIRST_REPORT_HEAD = "Your first weekly report"
 
 
 def _header(meta: Mapping[str, Any]) -> str:
+    """The weekly report's masthead card, then the first card: when the first
+    weekly report lands, and what this one is."""
     scoring = scoring_name(meta)
+    title = INSEASON_TITLE if in_season(meta) else PRESEASON_TITLE
+    lede = next_report_line(meta)
+    first = ((f'<p class="lede"><b>{esc(lede)}</b></p>' if lede else "")
+             + f'<p class="fact">{esc(opener(meta))}</p>')
     return (
-        f'<header class="bug"><div class="brand">{mark_svg()}'
-        f'<span>Beat Your League</span></div>'
-        f'<h1>{esc(meta["season"])} · '
-        f'{esc(INSEASON_TITLE if in_season(meta) else PRESEASON_TITLE)}'
-        f'</h1>'
-        f'<div class="sub">{esc(meta.get("label") or "Your Team")} · '
-        f'{esc(scoring)} · {esc(len(meta.get("slots") or []))} starting spots'
-        f' &nbsp;—&nbsp; built {esc(_stamp())}</div></header>'
-        f'<section>'
-        + (f'<p class="read" style="margin-bottom:10px;">'
-           f'<b>{esc(next_report_line(meta))}</b></p>'
-           if next_report_line(meta) else "")
-        + f'<p class="read">{esc(opener(meta))}</p></section>'
+        f'<header class="top"><div class="col"><div class="masthead">'
+        f'<div class="brand">{mark_svg()}<span>Beat Your <span class="lg">League</span>'
+        f'</span></div>'
+        f'<h1>{esc(meta["season"])} · {esc(title)}</h1>'
+        f'<p class="mmeta"><b>{esc(meta.get("label") or "Your Team")}</b> · '
+        f'{esc(scoring)} · {esc(len(meta.get("slots") or []))} starting spots</p>'
+        f'<p class="mstamp">Built {esc(_stamp())}</p></div></div></header>'
+        + _pre_section(FIRST_REPORT_HEAD, first)
     )
 
 
@@ -615,92 +611,86 @@ def email_html(report: Mapping[str, Any]) -> str:
     Gmail strips <style> on forward, so mailing the browser-grade file ships
     soup; run/batch.py learned that the hard way and a test pins it for the
     weekly report. Same palette, same words, a dialect every client renders.
+
+    The weekly report's shell (contract A8): its navy masthead, then one card
+    per section on paper. A roster row follows the plain-text half's anatomy —
+    slot, name and last season's rank on one line, then the team and bye, this
+    season's record and last season's, one fact a line — so no column holds a
+    sentence (three columns of figures wrapped every one at 390px).
     """
-    from render.email import (BASE, CARD, DISPLAY, FLAG, LINE, NAVY, PAPER,
-                              SLATE, SMALL, TURF)
+    from render.email import (FACT, INK2, NAVY, PAPER, SLATE, SMALL, TURF,
+                              _rule, _sec, masthead_html)
 
     meta = report["meta"]
     title = file_title(report)
-    cell = f'{BASE}padding:8px 10px;border-bottom:1px solid {LINE};'
-    slot_cell = (f'{SMALL}padding:8px 10px;border-bottom:1px solid {LINE};'
-                 f'font-weight:bold;white-space:nowrap;')
+    slot_td = (f'font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:bold;'
+               f'letter-spacing:1px;color:{SLATE};')
 
-    def block(heading: str, rows_html: str, basis: str) -> str:
-        return (
-            f'<tr><td style="padding:22px 26px 0 26px;">'
-            f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-            f'letter-spacing:2.5px;text-transform:uppercase;color:{NAVY};'
-            f'border-bottom:2px solid {NAVY};padding-bottom:6px;">{esc(heading)}'
-            f'</div></td></tr>'
-            f'<tr><td style="padding:10px 26px 0 26px;">'
-            f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{rows_html}</table>'
-            f'<div style="{BASE}font-size:13px;background:{PAPER};'
-            f'border-left:3px solid {LINE};padding:10px 12px;margin:10px 0 0 0;">'
-            f'{esc(basis)}</div></td></tr>')
+    def table(rows: list[str], cols: int) -> str:
+        body = "".join((_rule(cols) if i else "") + row for i, row in enumerate(rows))
+        return (f'<table role="presentation" width="100%" cellpadding="0" '
+                f'cellspacing="0" border="0">{body}</table>')
+
+    def row(slot: str, head_html: str, sub_html: str = "") -> str:
+        return (f'<tr><td width="44" valign="top" style="{slot_td}padding:11px 0 9px 0;">'
+                f'{esc(slot)}</td><td valign="top" style="{FACT}padding:9px 0;">'
+                f'<b style="font-size:15px;color:{NAVY};">{head_html}</b>'
+                + (f'<br>{sub_html}' if sub_html else "") + '</td></tr>')
+
+    def card(heading: str, body: str, basis: str = "") -> str:
+        return _sec(0, heading, body + (f'<p style="{FACT}margin:10px 0 0 0;">'
+                                        f'{esc(basis)}</p>' if basis else ""))
+
+    lede = next_report_line(meta)
+    first = ((f'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;'
+              f'font-weight:bold;line-height:1.4;color:{NAVY};margin:10px 0 0 0;">'
+              f'{esc(lede)}</p>' if lede else "")
+             + f'<p style="{FACT}font-size:14px;margin:8px 0 0 0;">{esc(opener(meta))}</p>')
+
+    cant = [row(e.get("position") or "", esc(e["name"]),
+                esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b)))
+            for e in report.get("cant_play") or []]
 
     if report["collisions"]:
-        bye_rows = "".join(
-            f'<tr><td style="{slot_cell}">W{esc(hit["week"])}</td>'
-            f'<td style="{cell}"><b>No one to start at '
-            f'{esc(", ".join(hit["slots"]))}</b><br>'
-            f'<span style="{SMALL}">on bye: {esc(", ".join(bye_names(hit)))}'
-            + (f' · {esc(out_note(hit))}' if out_note(hit) else "")
-            + '</span></td></tr>'
-            for hit in report["collisions"])
+        byes = [row(f'W{hit["week"]}',
+                    f'No one to start at {esc(", ".join(hit["slots"]))}',
+                    f'on bye: {esc(", ".join(bye_names(hit)))}'
+                    + (f' · {esc(out_note(hit))}' if out_note(hit) else ""))
+                for hit in report["collisions"]]
+        bye_body = table(byes, 2)
     else:
-        bye_rows = (f'<tr><td style="{cell}">{esc(bye_none(meta))}</td></tr>')
+        bye_body = f'<p style="{FACT}font-size:14px;margin:10px 0 0 0;">{esc(bye_none(meta))}</p>'
 
-    thin_rows = "".join(
-        f'<tr><td style="{slot_cell}">{esc(spot["slot"])}</td>'
-        f'<td style="{cell}"><b>{esc(", ".join(spot["players"]) or "nobody")}</b>'
-        f'<br><span style="{SMALL}">{esc(spot["have"])} on the roster, '
-        f'{esc(spot["start"])} starting'
-        + (f' · {esc(out_note(spot))}' if out_note(spot) else "")
-        + '</span></td></tr>'
-        for spot in report["thin"])
+    thin = [row(spot["slot"], esc(", ".join(spot["players"]) or "nobody"),
+                f'{esc(spot["have"])} on the roster, {esc(spot["start"])} starting'
+                + (f' · {esc(out_note(spot))}' if out_note(spot) else ""))
+            for spot in report["thin"]]
 
     current = bool(meta.get("through_week"))
-    cant_rows = "".join(
-        f'<tr><td style="{slot_cell}">{esc(e.get("position") or "")}</td>'
-        f'<td style="{cell}"><b>{esc(e["name"])}</b><br>'
-        f'<span style="{SMALL}">'
-        f'{esc(" · ".join(b for b in (e.get("team"), e.get("why")) if b))}'
-        f'</span></td></tr>'
-        for e in report.get("cant_play") or [])
-    form_rows = ""
-    if current:
-        form_rows += (f'<tr><td style="{SMALL}padding:0 10px 6px 10px;"></td>'
-                      f'<td style="{SMALL}padding:0 10px 6px 10px;">Your roster · '
-                      f'{esc(SEASON_HEAD.lower())}</td>'
-                      f'<td style="{SMALL}padding:0 10px 6px 10px;text-align:right;">'
-                      f'Last season</td></tr>')
-    for row in report["roster"]:
-        record = row.get("record")
-        rank = rank_phrase(row)
-        # The rank over its rate, each unbroken but the cell free to wrap
-        # between them: as one nowrap line ("QB2 of 39 23.7 a game over 16")
-        # it pushed the email 9px past a 390px phone and squeezed every name
-        # onto three lines (Oct 2026, GATE-2).
-        last = ((f'<b style="color:{TURF};white-space:nowrap;">{esc(rank)}</b><br>'
-                 if rank else "")
-                + f'<span style="{SMALL}white-space:nowrap;">{record["per_game"]} '
-                f'a game over {record["games"]}</span>'
-                if record else
-                f'<span style="{SMALL}">'
-                f'{esc(row.get("no_record_reason") or NO_RECORD)}</span>')
-        bye = f'bye W{row["bye"]}' if row.get("bye") else "no bye listed"
-        now = season_line(row, meta["season"]) if current else ""
-        form_rows += (
-            f'<tr><td style="{slot_cell}">{esc(row["position"])}</td>'
-            f'<td style="{cell}"><b>{esc(row["name"])}</b><br>'
-            f'<span style="{SMALL}">{esc(row.get("team") or "—")} · {esc(bye)}'
-            f'</span>'
-            + (f'<br><span style="{SMALL}color:{NAVY};">{_unbroken(now)}</span>'
-               if now else "")
-            + f'</td>'
-            f'<td style="{cell}text-align:right;">{last}</td>'
-            f'</tr>')
+    roster = []
+    for entry in report["roster"]:
+        record = entry.get("record")
+        rank = rank_phrase(entry) if record else ""
+        bye = f'bye W{entry["bye"]}' if entry.get("bye") else "no bye listed"
+        prior = (f'{record["per_game"]} a game over\u00a0{record["games"]}' if record
+                 else (entry.get("no_record_reason") or NO_RECORD))
+        now = season_line(entry, meta["season"]) if current else ""
+        glue = lambda line: re.sub(r"\b(over|last) (\d)", "\\1\u00a0\\2", line)
+        lines = [esc(f'{entry.get("team") or "—"} · {bye}')]
+        if now:
+            lines.append(f'<span style="color:{NAVY};">{esc(glue(now))}</span>')
+        lines.append(esc(f"{prior_label(meta)}: {prior}"))
+        roster.append(
+            f'<tr><td width="44" valign="top" style="{slot_td}padding:11px 0 0 0;">'
+            f'{esc(entry["position"])}</td>'
+            f'<td valign="top" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;'
+            f'font-weight:bold;line-height:1.35;color:{NAVY};padding:9px 8px 0 0;">'
+            f'{esc(entry["name"])}</td>'
+            f'<td align="right" valign="top" style="font-family:Arial,Helvetica,sans-serif;'
+            f'font-size:13px;font-weight:bold;color:{TURF};white-space:nowrap;'
+            f'padding:10px 0 0 0;">{esc(rank)}</td></tr>'
+            f'<tr><td></td><td colspan="2" style="{FACT}padding:2px 0 9px 0;">'
+            f'{"<br>".join(lines)}</td></tr>')
 
     href, label = cancel_destination()
     cancel = (f' <a href="{esc(href)}" style="color:{NAVY};">{esc(label)}</a>.'
@@ -708,43 +698,42 @@ def email_html(report: Mapping[str, Any]) -> str:
     route = way_out(meta)
     exit_html = (cancel_html(seat=route) if route else
                  f'<b>{esc(CANCEL_HEAD)}</b> {esc(CANCEL_BODY)}{cancel}')
-    lede = next_report_line(meta)
     scoring = scoring_name(meta)
+    head = masthead_html(
+        "", title,
+        f'{esc(meta["season"])} season · <b style="color:#FFFFFF;">'
+        f'{esc(meta.get("label") or "Your Team")}</b> · {esc(scoring)}',
+        big_size=26)
     return (
         f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         f'{EMAIL_META}<title>{esc(title)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{PAPER};"><tr><td align="center">'
-        f'<table role="presentation" width="640" cellpadding="0" cellspacing="0" '
-        f'border="0" style="max-width:640px;width:100%;background:{CARD};">'
-        f'<tr><td style="background:{NAVY};padding:24px 26px;'
-        f'border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:12px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
-        f'Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:30px;font-weight:bold;'
-        f'letter-spacing:1px;text-transform:uppercase;color:{CARD};'
-        f'padding:6px 0 8px 0;">{esc(meta["season"])} · {esc(title)}</div>'
-        f'<div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;'
-        f'color:#B9C2D0;">{esc(meta.get("label") or "Your Team")} · {esc(scoring)}'
-        f'</div></td></tr>'
-        + (f'<tr><td style="{BASE}font-size:17px;font-weight:bold;color:{NAVY};'
-           f'padding:20px 26px 0 26px;">{esc(lede)}</td></tr>' if lede else "")
-        + f'<tr><td style="{BASE}padding:20px 26px 0 26px;">'
-        f'{esc(opener(meta))}'
-        f'</td></tr>'
-        + (block(CANT_PLAY_HEAD, cant_rows, CANT_PLAY_BASIS) if cant_rows else "")
-        + block(BYE_HEAD, bye_rows, bye_basis(meta))
-        + (block(THIN_HEAD, thin_rows, THIN_BASIS) if thin_rows else "")
-        + block(form_head(meta), form_rows, form_basis(meta))
-        + f'<tr><td style="background:{PAPER};padding:20px 26px 26px 26px;">'
+        f'border="0" style="background:{PAPER};"><tr><td align="center" '
+        f'style="padding:12px 8px 24px;">'
+        f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
+        f'border="0" style="max-width:600px;width:100%;background:{PAPER};">'
+        + head
+        + card(FIRST_REPORT_HEAD, first)
+        + (card(CANT_PLAY_HEAD, table(cant, 2), CANT_PLAY_BASIS) if cant else "")
+        + card(BYE_HEAD, bye_body, bye_basis(meta))
+        + (card(THIN_HEAD, table(thin, 2), THIN_BASIS) if thin else "")
+        + card(form_head(meta), _roster_table(roster), form_basis(meta))
+        + f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(WEEKLY_PROMISE)}<br>{esc(NO_BETTING_LINE)}<br>'
         f'{esc(NFLVERSE_LINE)}<br>{sender_html()}{exit_html}</p></td></tr>'
         f'</table></td></tr></table></body></html>'
     )
+
+
+def _roster_table(rows: list[str]) -> str:
+    """The roster's rows, a hairline between players (render.email._rule)."""
+    from render.email import _rule
+    body = "".join((_rule(3) if i else "") + r for i, r in enumerate(rows))
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0">{body}</table>')
 
 
 def _season_first_kickoff(season: str, cache_dir: Path | None = None) -> datetime | None:

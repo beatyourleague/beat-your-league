@@ -1630,9 +1630,13 @@ def test_bid_advice_never_exceeds_what_the_reader_can_pay() -> None:
 
 
 def test_sample_report_explains_what_to_do_with_it() -> None:
-    """The buyer's decisive question is 'what do I actually do on Tuesday?'"""
-    assert re.search(r"30-second game plan", SAMPLE_REPORT, re.I)
-    assert re.search(r"set (the|your|this) lineup", SAMPLE_REPORT, re.I)
+    """The buyer's decisive question is 'what do I actually do on Tuesday?'
+    The sample answers it with its game plan card and the lineup's own box
+    to tick. (This once matched "30-second game plan" — a CSS comment in the
+    page's style, not anything a reader sees.)"""
+    shown = re.sub(r"<style\b.*?</style>|<[^>]+>", " ", SAMPLE_REPORT, flags=re.S)
+    assert re.search(r"Your Game Plan", shown, re.I)
+    assert re.search(r"set (the|your|this) lineup", shown, re.I)
 
 
 # --------------------------------------------------------------------- #
