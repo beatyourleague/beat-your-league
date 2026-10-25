@@ -240,25 +240,64 @@ def test_a_post_quotes_only_odds_on_the_record(tmp_path, monkeypatch) -> None:
     import render.live_sample as live
     from engine.ledger import extract_published_calls, ledger_path, record_calls
 
-    monkeypatch.setattr(live, "build", lambda *a, **k: _report())
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
     out = tmp_path / "this-week.md"
-    assert drops.main(["--out", str(out), "--processed-dir", str(tmp_path / "empty")]) == 0
+    empty = tmp_path / "empty"
+    live.write_published_report(_report(), empty)
+    assert drops.main(["--out", str(out), "--processed-dir", str(empty)]) == 0
     text = out.read_text(encoding="utf-8")
     assert "%" not in text, "a draft quoted odds the ledger does not hold"
     assert "Rising roles" in text, "withholding the odds must not empty the page"
 
     ledger = tmp_path / "ledger-dir"
     record_calls(ledger_path(ledger, "typed-ppr-12-2026"), extract_published_calls(_report()))
+    live.write_published_report(_report(), ledger)
     drops.main(["--out", str(out), "--processed-dir", str(ledger)])
     assert "55% to outscore Odunze" in out.read_text(encoding="utf-8")
 
 
+def test_the_drafts_come_from_the_published_page_or_not_at_all(tmp_path, monkeypatch) -> None:
+    """CRON-1, reproduced on Sun Oct 25 (Week 7 underway): `python -m
+    run.drops` built the report a second time — the page kept its recorded
+    first build, but the rebuild had moved (FLEX 0.608 against the ledger's
+    0.61), so the flagship closest-call post was withheld, and it still
+    drafted "Thursday night … Post it: Thursday" three days after that game.
+    The drafts now read only the report this run's page was rendered from:
+    none published in this run (a retry that kept the page) or a week that
+    has kicked off leaves the previous file exactly as it was, and no second
+    build is ever made."""
+    import render.live_sample as live
+
+    def no_second_build(*_a, **_k):
+        raise AssertionError("run.drops built the report a second time")
+    monkeypatch.setattr(live, "build", no_second_build)
+    out = tmp_path / "this-week.md"
+    out.write_text("last run's drafts\n", encoding="utf-8")
+    processed = tmp_path / "processed"
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    assert drops.main(["--out", str(out), "--processed-dir", str(processed)]) == 0
+    assert out.read_text(encoding="utf-8") == "last run's drafts\n"
+    (processed).mkdir()
+    (processed / live.PUBLISHED_REPORT_NAME).write_text("{not json", encoding="utf-8")
+    assert drops.main(["--out", str(out), "--processed-dir", str(processed)]) == 0
+    assert out.read_text(encoding="utf-8") == "last run's drafts\n"
+    live.write_published_report(_report(), processed)
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: True)
+    assert drops.main(["--out", str(out), "--processed-dir", str(processed)]) == 0
+    assert out.read_text(encoding="utf-8") == "last run's drafts\n"
+    monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
+    assert drops.main(["--out", str(out), "--processed-dir", str(processed)]) == 0
+    assert "Rising roles" in out.read_text(encoding="utf-8")
+
+
 def test_the_drafter_withholds_before_it_drafts() -> None:
     """The order is the rule: recorded_only runs on the report BEFORE drafts()
-    sees it, so no template can reach an unrecorded number."""
+    sees it, so no template can reach an unrecorded number — and that report
+    is the published page's own (CRON-1), never a build of its own."""
     src = (ROOT / "run" / "drops.py").read_text(encoding="utf-8")
     body = src.split("def main", 1)[1]
-    assert "recorded_only(build()" in body
+    assert "report = recorded_only(published, processed)" in body
+    assert "build(" not in body
     assert body.index("recorded_only(") < body.index("drafts(report)")
 
 

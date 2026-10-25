@@ -206,6 +206,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # SEC-1: no hook or fsmonitor command an earlier step left in .git (or
+          # in any git config file) runs beside the token: config given on the
+          # command line outranks them all, for every git call below.
+          git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'

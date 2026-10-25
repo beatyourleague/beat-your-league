@@ -3726,6 +3726,13 @@ def test_the_channel_tag_rides_every_link_into_the_funnel() -> None:
         ("byes/", "x", "byes/?via=x"),
         ("../byes/", "x", "../byes/?via=x"),
         ("byes/index.html?ref=s4-abc", "x", "byes/index.html?ref=s4-abc&via=x"),
+        # The league-app pages read it and carry it on (T6: how-it-works and
+        # the apps' own "Other league apps" links dropped it).
+        ("espn/", "x", "espn/?via=x"),
+        ("../yahoo/", "x", "../yahoo/?via=x"),
+        ("../sleeper/index.html", "x", "../sleeper/index.html?via=x"),
+        ("cbs/", "x", "cbs/?via=x"),
+        ("espnx/", "x", "espnx/"),
         # Not a page that reads it, not ours, or already tagged: untouched.
         ("terms.html#cancel", "x", "terms.html#cancel"),
         ("compare/index.html", "x", "compare/index.html"),

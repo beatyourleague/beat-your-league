@@ -298,17 +298,25 @@ def _playoff_link_live() -> bool:
 
 
 def _league_pass_live() -> bool:
-    """Can the join page sell the League Pass? Both its seat backend
-    (FORM_ENDPOINT) and its payment link (STRIPE_LINK_PASS) must be set: the
-    email may point a commissioner only at a pass the checkout can take."""
-    page = REPO_ROOT / "site" / "join" / "index.html"
+    """Can the League Pass be bought from the page the line links? The join
+    page's seat backend (FORM_ENDPOINT) and payment link (STRIPE_LINK_PASS)
+    must be set, AND league-pass.html — the page the line actually links —
+    must build its Buy button (its own CHECKOUT_OPEN and SEATS_OPEN both
+    true): WL-1, the line once went out pointing at a page that said the
+    pass was not open. The email may point a commissioner only at a pass
+    the page in front of them can take."""
+    site = REPO_ROOT / "site"
     try:
-        text = page.read_text(encoding="utf-8")
+        join = (site / "join" / "index.html").read_text(encoding="utf-8")
+        page = (site / "league-pass.html").read_text(encoding="utf-8")
     except OSError:
         return False
-    found = [re.search(rf'^const {name} = "([^"]*)";', text, re.M)
+    found = [re.search(rf'^const {name} = "([^"]*)";', join, re.M)
              for name in ("FORM_ENDPOINT", "STRIPE_LINK_PASS")]
-    return all(f and f.group(1).strip() for f in found)
+    flags = [re.search(rf"^const {name} = (true|false);", page, re.M)
+             for name in ("CHECKOUT_OPEN", "SEATS_OPEN")]
+    return (all(f and f.group(1).strip() for f in found)
+            and all(f and f.group(1) == "true" for f in flags))
 
 
 def _league_pass_url(signup_url: str) -> str:

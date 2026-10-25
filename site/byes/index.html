@@ -200,6 +200,7 @@
     text-transform:uppercase;padding:4px 9px;border-radius:999px;line-height:1.2;}
   .chip.bad{background:var(--brick);color:#fff;}
   .chip.ok{background:var(--turf-tint);color:#14502E;}
+  .chip.plain{background:#ECE8DD;color:var(--ink2);}
   .tag{display:inline-block;font-size:11.5px;font-weight:700;letter-spacing:.04em;
     color:#7A5C0C;border:1px solid #E2C46A;background:#FFF8E1;padding:3px 8px;border-radius:999px;
     line-height:1.2;}
@@ -414,7 +415,7 @@ Baltimore Ravens
         <p class="note">One email when signups open, nothing else. Unsubscribe any time.</p>
       </form>
       <p class="ctanote" id="cta-note" role="status"></p>
-      <a class="golink" id="cta-go" href="../join/index.html" hidden>Get the weekly report for this roster</a>
+      <a class="golink" id="cta-go" href="../join/index.html" hidden>Get the weekly report</a>
       <a class="ghostlink" id="cta-try" href="../join/index.html?try=1" hidden>Or get one free report on it</a>
     </div>
     <a class="textlink" href="../sample-report.html">See a real report</a>
@@ -451,7 +452,7 @@ Baltimore Ravens
 </footer>
 </div>
 <script src="../join/roster.js?v=632c4eddea"></script>
-<script src="byes.js?v=401f29c643"></script>
+<script src="byes.js?v=6659b2280e"></script>
 <!-- DOMAIN_FIXES and suggestedEmail, the join page's and the landing's own (FUN-5). -->
 <script src="/email-check.js?v=2e2f372017"></script>
 <script>
@@ -496,7 +497,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
@@ -962,7 +963,7 @@ function showPlan(plan) {
     item.appendChild(n);
     const body = el("div", "body");
     const top = el("div", "top");
-    if (w.chip) top.appendChild(el("span", "chip " + (w.kind === "empty" ? "bad" : "ok"), w.chip));
+    if (w.chip) top.appendChild(el("span", "chip " + (w.kind === "empty" ? "bad" : w.tone || "ok"), w.chip));
     if (w.tag) top.appendChild(el("span", "tag", w.tag));
     if (top.childElementCount) body.appendChild(top);
     body.appendChild(el("p", "detail", w.detail));
@@ -1055,6 +1056,8 @@ function drawCta() {
   $("cta-settings").hidden = !state.ready;
   if (!CHECKOUT_CAN_COMPLETE) return;
   const ref = state.ref ? encodeURIComponent(state.ref) : "";
+  // "This roster" only once a clean check has put one in the link (T7).
+  $("cta-go").textContent = ref ? "Get the weekly report for this roster" : "Get the weekly report";
   $("cta-go").setAttribute("href", carryVia("../join/index.html" + (ref ? "?ref=" + ref : ""), VIA));
   $("cta-try").setAttribute("href",
     carryVia("../join/index.html?try=1" + (ref ? "&ref=" + ref : ""), VIA));

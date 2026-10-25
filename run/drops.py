@@ -34,6 +34,11 @@ Rules, each because a post is the one place we speak without a report around it:
   sides now get the SAME measure: last games' points when the report prints
   them for both, else their counted usage when both have it, else the
   projection the report prints on both rows.
+- **From the page, never a second build** (CRON-1). The drafts read the
+  report this run's live-sample page was rendered from
+  (``render.live_sample.published_report``); a run that kept the page
+  (the 16:17 retry, a late backup) leaves the drafts written with it, and
+  after the week's first kickoff nothing is drafted at all.
 - **Only a % that is on the record** (G04). A % posted in public is a
   published probability, so the drafts are built from the live sample with
   every odds NOT in the public ledger at the same value withheld
@@ -309,14 +314,17 @@ def _app_code(team: str) -> str:
 
 
 def _byes_left_post(byes: Mapping[str, int] | None, week: int) -> str | None:
-    """Every team still to have its bye after ``week``, by week, off the
-    published schedule (engine.preseason.bye_by_team). The playoff sentence
+    """Every team still to have its bye this week or later, by week, off the
+    published schedule (engine.preseason.bye_by_team). This week's own teams
+    are in it: the draft is posted on the week's Wednesday, before they sit
+    out that Sunday, and leaving them off implied their bye was already
+    behind them (C7-1). The playoff sentence
     only when no team is off in Weeks 15–17 — and it is the first thing to
     go when the post would not fit. None when no bye remains, or when even
     the list alone is over the limit (never cut mid-list)."""
     ahead: dict[int, list[str]] = {}
     for team, bye in (byes or {}).items():
-        if isinstance(bye, int) and bye > int(week):
+        if isinstance(bye, int) and bye >= int(week):
             ahead.setdefault(bye, []).append(_app_code(str(team)))
     if not ahead:
         return None
@@ -526,11 +534,31 @@ def main(argv: list[str] | None = None) -> int:
                         help="where the public ledger lives (default: data/processed)")
     args = parser.parse_args(argv)
     try:
-        from render.live_sample import PROCESSED_DIR, build, recorded_only
+        from render.live_sample import (CACHE_DIR, PROCESSED_DIR, published_report,
+                                        recorded_only)
+        from run.solo import week_has_kicked_off
+        processed = args.processed_dir or PROCESSED_DIR
+        # Drafted from the report THIS run's page was published from, never a
+        # second build (CRON-1): on the 16:17 retry, a late backup or a hand
+        # re-run the page keeps its first build, and a fresh build had moved
+        # — the recorded closest call withheld, a projection 0.1 off the
+        # page's. No page published in this run: the drafts written with the
+        # page stand.
+        published = published_report(processed)
+        if published is None:
+            print("this week's drafts were not rebuilt: this run published no sample "
+                  "page, so the drafts written with the published page stay.")
+            return 0
+        meta = published["meta"]
+        if week_has_kicked_off(CACHE_DIR, str(meta["season"]), int(meta["week"])):
+            print(f"this week's drafts were not rebuilt: week {meta['week']} has kicked "
+                  f"off, and a draft now would be about games underway; the previous "
+                  f"file stays.")
+            return 0
         # Every % the ledger does not hold at the same value is withheld
         # before a single post is drafted (G04): the posts are public, so a
         # number in one must be a number Monday's grading will settle.
-        report = recorded_only(build(), args.processed_dir or PROCESSED_DIR)
+        report = recorded_only(published, processed)
     except Exception as exc:  # noqa: BLE001 — keep last week's drafts
         print(f"this week's drafts were not rebuilt ({exc}); the previous file "
               f"stays.")

@@ -180,8 +180,87 @@ def test_the_storyline_runs_on_one_clock_with_transform_and_opacity_only() -> No
     # touch tilt runs on .phone and must keep following the scroll).
     assert ".phone.paused .screen *{animation-play-state:paused!important;}" in CSS
     assert not re.search(r"\.phone\.paused\s*\{", CSS)
-    assert ".hero.offscreen .phone-float,.hero.offscreen .phone-floor," \
-           ".hero.offscreen .phonewrap::before{animation-play-state:paused;}" in CSS
+    for target in (".phone-float", ".phone-floor", ".phonewrap::before"):
+        for state in ("offscreen", "still"):
+            _assert_pause_wins(target, state)
+
+
+def _specificity(selector: str) -> tuple[int, int, int]:
+    """(ids, classes + attributes + pseudo-classes, elements + pseudo-elements)
+    of one compound selector chain — enough for the plain selectors the
+    landing writes (no :is/:not/:where)."""
+    sel = selector.strip()
+    pseudo_el = len(re.findall(r"::[\w-]+", sel))
+    sel = re.sub(r"::[\w-]+", "", sel)
+    ids = len(re.findall(r"#[\w-]+", sel))
+    classes = len(re.findall(r"\.[\w-]+|\[[^\]]*\]|(?<!:):[\w-]+", sel))
+    elements = len(re.findall(r"(?:^|[\s>+~])([a-zA-Z][\w-]*)", sel))
+    return ids, classes, elements + pseudo_el
+
+
+def _assert_pause_wins(target: str, state: str) -> None:
+    """LOOK-1: the paused rule must win the cascade over the rule that binds
+    the animation, or `animation:` (a shorthand, which resets play-state to
+    running) silently undoes it — the float and the floor kept bobbing with
+    the hero offscreen while a grep for the pause rule passed. Higher
+    specificity, or equal and later in the sheet."""
+    css = re.sub(r"/\*.*?\*/", "", CSS, flags=re.S)
+    rules = [(m.start(), m.group(1).strip(), m.group(2))
+             for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", css)]
+
+    def hits(selectors: str) -> list[str]:
+        return [part.strip() for part in selectors.split(",")
+                if part.strip().endswith(target) and not part.strip().startswith("@")]
+
+    binds = [(at, sel) for at, sels, body in rules
+             if re.search(r"(?:^|;)\s*animation:\s*(?!none)[\w-]+ \d", body)
+             for sel in hits(sels)]
+    pauses = [(at, sel) for at, sels, body in rules if "animation-play-state:paused" in body
+              for sel in hits(sels) if f".{state}" in sel]
+    assert binds, f"nothing binds an animation on {target}"
+    assert pauses, f"no .{state} rule pauses {target}"
+    for b_at, b_sel in binds:
+        assert any(_specificity(p_sel) > _specificity(b_sel)
+                   or (_specificity(p_sel) == _specificity(b_sel) and p_at > b_at)
+                   for p_at, p_sel in pauses), (target, state, b_sel, pauses)
+
+
+def test_the_pause_toggle_holds_the_float_the_floor_and_the_glow_too() -> None:
+    """LOOK-2: the hero's pause stopped only the screen's storyline; the
+    phone kept floating, its floor kept breathing and the glow kept
+    pulsing, so the control did not do what its label says. Pressed, it
+    marks the hero `.still` (and those three hold, by a rule that wins the
+    cascade); pressed again, it clears it and plays. The story ending on
+    its own after three loops is not the visitor's pause: the button keeps
+    offering one for the float that goes on."""
+    story = _js_function(LANDING, "storyline")
+    clicked = story.split('toggle.addEventListener("click"')[1].split("});")[0]
+    assert 'hero.classList.remove("still")' in clicked and "stop(true)" in clicked
+    stop = story.split("const stop = (byVisitor) => {")[1].split("\n  };")[0]
+    held = stop.split("if (byVisitor) {")[1].split("}")[0]
+    assert 'hero.classList.add("still")' in held and "pressed(true)" in held and "held = true" in held
+    assert "if (++cycles >= 3) stop();" in story
+    for target in (".phone-float", ".phone-floor", ".phonewrap::before"):
+        _assert_pause_wins(target, "still")
+
+
+def test_the_scroll_beat_softens_its_edge_and_skips_a_beat_that_shows_nothing() -> None:
+    """LOOK-3: while the story scrolls the email up, it slid under the opaque
+    status bar and was cut flat (half a row under 9:41, a half-disc avatar).
+    A 16px fade under the bar shows only during that beat (opacity only,
+    invisible at rest), and a beat under 60px — every desktop size, where
+    the whole of Rising roles already fits — is skipped with the fade."""
+    edge = _rule(".statusbar::after")
+    assert "top:100%" in edge and "opacity:0" in edge and "pointer-events:none" in edge
+    assert ".phone.story .statusbar::after{animation:st-edge 16s linear infinite;}" in CSS
+    assert ".phone.story.flat .statusbar::after{animation:none;}" in CSS
+    view = _keyframes()["st-view"]
+    assert "58.1%,85%{transform:translateY(var(--scroll" in view
+    assert _keyframes()["st-edge"] == "0%,52.5%{opacity:0}58.1%,85%{opacity:1}90%,100%{opacity:0}"
+    start = _js_function(LANDING, "storyline").split("const start = () => {")[1].split("\n  };")[0]
+    assert "const flat = px < 60;" in start
+    assert 'setProperty("--scroll", (flat ? 0 : -px) + "px")' in start
+    assert 'heroPhone.classList.toggle("flat", flat)' in start
 
 
 def test_no_motion_on_the_landing_touches_a_layout_property() -> None:
@@ -235,8 +314,8 @@ def test_the_storyline_has_a_stop_and_it_moves_nothing_when_it_appears() -> None
     assert "width:32px" in _rule(".storytoggle") and "width:32px" in _rule(".realrow::before")
     story = _js_function(LANDING, "storyline")
     clicked = story.split('toggle.addEventListener("click"')[1].split("});")[0]
-    assert "stop()" in clicked and "start()" in clicked
-    stop = story.split("const stop = () => {")[1].split("\n  };")[0]
+    assert "stop(true)" in clicked and "start()" in clicked
+    stop = story.split("const stop = (byVisitor) => {")[1].split("\n  };")[0]
     assert 'classList.remove("story")' in stop and "pressed(true)" in stop
     assert 'setAttribute("aria-label"' not in story
     for block in (REDUCED, PRINT):
@@ -319,7 +398,8 @@ def test_the_shine_the_icons_and_the_progress_bar_run_on_the_compositor() -> Non
     timeline = CSS.split("@supports (animation-timeline: scroll()){")[1].split("\n  }")[0]
     # The shorthand resets animation-timeline, so the timeline comes after it.
     assert ".scrollbar{animation:progress linear both;animation-timeline:scroll(root);}" in timeline
-    guard = 'if (progress && !(window.CSS && CSS.supports && CSS.supports("animation-timeline: scroll()")))'
+    guard = ('if (progress && !reduced && !(window.CSS && CSS.supports && '
+             'CSS.supports("animation-timeline: scroll()")))')
     assert guard in SCRIPT
 
 
@@ -356,8 +436,8 @@ def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> No
 def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
     """LAND-MOTION-SECTIONS item 12: every animated selector this pass added
     is neutralised under prefers-reduced-motion (the page is complete at
-    rest, measured in Chrome: nothing but the scroll-linked progress bar
-    runs) and in print."""
+    rest, measured in Chrome: nothing runs, the scroll-linked progress bar
+    included) and in print."""
     for selector in (".heroline .clock", ".livepill .dot::after", ".timeline::after", ".stamp50",
                      ".faq details[open] .a", ".watchnote.ok::before", ".watchform::after",
                      ".js .proofline.reveal::before", ".js .method.stagger article::before",
@@ -369,6 +449,11 @@ def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
                      ".btn.gold::after", "h1 em::after", ".timeline::after"):
         assert selector in PRINT, f"{selector} can print mid-motion"
     assert "!reduced && !form.classList.contains(\"called\")" in SCRIPT
+    # LOOK-7: the progress bar was the one thing left moving under reduced
+    # motion (scroll-linked, but motion all the same): not drawn there, and
+    # the per-frame fallback never starts.
+    assert ".scrollbar{display:none!important;}" in REDUCED
+    assert 'if (progress && !reduced && !(window.CSS' in SCRIPT
 
 
 def test_the_headline_sheen_never_moves_the_headline() -> None:
@@ -446,8 +531,8 @@ function run(w) {
 }
 const soon = new Date(Date.now() + 2 * 864e5).toISOString().replace(/\.\d+Z$/, "Z");
 const past = new Date(Date.now() - 3600e3).toISOString().replace(/\.\d+Z$/, "Z");
-const call = { start: "Odunze", over: "Shaheed", slot: "WR", pct: 61, start_proj: 11.4,
-               over_proj: 9.8, label: "Closest call with odds" };
+const call = { start: "Odunze", over: "Shaheed", slot: "WR", pct: 61, start_proj: "11.4",
+               over_proj: "9.8", label: "Closest call with odds", tossup: false };
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, odds: 3, phase: "season",
   first_kickoff: soon, recorded: true, closest: call };
@@ -470,7 +555,10 @@ def test_the_live_call_shows_only_a_recorded_call_before_kickoff() -> None:
     (week.json "closest"), only in a season week that build recorded, only
     until the week's first kickoff (when the call is about a game underway),
     never for a toss-up (52% or less, or under half a point: the report says
-    "either is fine" there), and always as text. Run under node against the
+    "either is fine" there — C6-1: the writer prints the projections as
+    strings, "10.4", so a numbers-only check never fired; the writer's own
+    `tossup` now decides first and a missing one fails closed, as
+    render/og.py's does), and always as text. Run under node against the
     page's own season-clock script: one good week shows exactly the
     recorded words and figure and schedules its own removal at kickoff;
     every other case leaves the line hidden. A player's name never breaks
@@ -483,7 +571,12 @@ def test_the_live_call_shows_only_a_recorded_call_before_kickoff() -> None:
       { ...base, recorded: false },
       { ...base, closest: undefined },
       { ...base, closest: { ...call, pct: 52 } },
+      { ...base, closest: { ...call, start_proj: "11.2", over_proj: "10.8" } },
       { ...base, closest: { ...call, start_proj: 11.2, over_proj: 10.8 } },
+      { ...base, closest: { ...call, pct: 55, start_proj: "10.4", over_proj: "10.0", tossup: true } },
+      { ...base, closest: { ...call, tossup: true } },
+      { ...base, closest: { ...call, tossup: undefined } },
+      { ...base, closest: { ...call, tossup: "false" } },
       { ...base, closest: { ...call, pct: 61.5 } },
       { ...base, closest: { ...call, start: 7 } },
       { ...base, odds: 2 },

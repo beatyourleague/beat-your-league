@@ -283,6 +283,23 @@ def test_no_green_call_to_action_and_no_dashed_placeholder() -> None:
     assert ".soon" not in LEAGUE_PASS and "dashed #C9C3B4" not in lp_css
 
 
+def test_the_league_pass_share_buttons_are_secondaries_not_three_more_golds() -> None:
+    """LOOK-5, reproduced at 1440 and 390: the three "Send this to the group
+    chat" buttons wore .btn.gold's gradient and sheen as full-width slabs,
+    two to a desktop screen and three to a phone's, outweighing the page's
+    one real ask (contract C2: one primary, one secondary). They are the
+    ghost now — no fill, a light border, gold only on hover — and the copy
+    boxes above them are solid, not the dashed wireframe style C2 retired."""
+    css = _style(LEAGUE_PASS)
+    share = re.search(r"\n  \.sharebtn\{([^}]*)\}", css).group(1)
+    assert "background:transparent" in share and "gradient" not in share
+    assert "border:2px solid rgba(246,244,238,.4)" in share and "color:var(--paper)" in share
+    assert not re.search(r"\.sharebtn(?::hover)?::after", css), "the share button still carries the sheen"
+    assert re.search(r"\n  \.sharebtn:hover\{border-color:var\(--flag\);\}", css)
+    chat = re.search(r"\n  \.chatline\{([^}]*)\}", css).group(1)
+    assert "dashed" not in chat and "border:1px solid var(--gold-edge)" in chat
+
+
 def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one() -> None:
     """D18, reproduced at 1440: the page ended on "Fair play" and the footer
     with no closing action, its one ask was the dashed box, and the group-chat
@@ -324,6 +341,15 @@ def test_page_buttons_are_the_two_c2_styles(name: str) -> None:
     assert buttons and set(buttons) <= {"btn gold", "btn ghost"}, buttons
     assert 'style="background:none' not in page
     assert not re.search(r'href="(?:\.\./)?index\.html">What it costs', page)
+    # LOOK-9: a closing block holds one primary and at most one secondary
+    # (How it works stacked gold, ghost and a second ghost, "Pricing"); the
+    # rest are text links. The live-week pair swaps one ghost for the other.
+    # The 404 is exempt: it is a page of routes back in, not an ask.
+    if name == "404.html":
+        return
+    for block in re.findall(r'<div class="cta">(.*?)</div>', page, re.S):
+        shown = re.findall(r'<a class="(btn [^"]*)"(?![^>]*\bhidden\b)[^>]*>', block)
+        assert shown.count("btn gold") <= 1 and shown.count("btn ghost") <= 1, (name, shown)
 
 
 def test_the_confirm_button_is_the_sites_primary() -> None:

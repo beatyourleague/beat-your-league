@@ -16,8 +16,8 @@ does not carry, all of them FACTS, none a projection:
   week is being played by run.solo.current_week's own rule — the first week
   whose regular window has not closed — and starts its list there;
 - **today's reserve list** (engine.availability.roster_out, ROSTER_OUT only):
-  a player on injured reserve, the PUP or non-football injury list, suspended
-  or released is not cover, exactly as WeekData.roster_out makes him not cover
+  a player on injured reserve, the PUP or non-football injury list, suspended,
+  exempt or released is not cover, exactly as WeekData.roster_out makes him not cover
   in the weekly report's "Byes ahead". Never LIVE_ONLY_OUT or PRACTICE_SQUAD:
   those are report-layer withholding rules, and run.solo._byes_ahead does not
   count them either, so adding them here would make the two surfaces tell one

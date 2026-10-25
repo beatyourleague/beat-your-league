@@ -408,6 +408,62 @@ def test_checkout_never_leaves_the_push_token_behind() -> None:
     assert checkouts == len(_docs()) + 1 and pushers == 7
 
 
+GIT_WRAPPER = ('git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false '
+               '"$@"; }')
+
+
+def test_no_hook_an_earlier_step_left_runs_beside_the_push_token(tmp_path) -> None:
+    """SEC-1, reproduced locally as two steps: step A (no token, the share-card
+    job's pip packages and Chrome, or any venv step) writes .git/hooks/
+    pre-commit and a core.fsmonitor command; step B, the persist step's exact
+    script, runs `git add` and `git commit` with GH_TOKEN in its environment
+    — and the hook ran, reading the token ("GH_TOKEN visible: yes"). INFRA-07's
+    "no third-party code beside a token" held per step, not per job. Every
+    pushing step now first wraps git so config given on the command line
+    (outranking .git/config and every other config file) runs no hook and no
+    fsmonitor, for every git call it makes — and the script, run against a
+    planted hook and fsmonitor, leaks nothing. (Residual, recorded: an
+    earlier step can still reach the job's later steps through $GITHUB_ENV,
+    $GITHUB_PATH or other .git/config keys; the full fix is a commit job that
+    installs and runs nothing.)"""
+    import subprocess
+    pushers = []
+    for name, job_name, _j, _i, step in _all_steps():
+        if PUSH not in _command(step):
+            continue
+        lines = [line.strip() for line in _command(step).splitlines() if line.strip()]
+        assert lines[0] == GIT_WRAPPER, (name, job_name, step.get("name"))
+        pushers.append((name, step))
+    assert len(pushers) == 7
+    if shutil.which("git") is None or shutil.which("bash") is None:
+        pytest.skip("git or bash is not installed")
+    # Step B, as weekly.yml's share-card job runs it, up to the network calls.
+    [(_n, card)] = [(n, s) for n, s in pushers if "site/og" in _command(s)]
+    script = "\n".join(line for line in str(card["run"]).splitlines()
+                       if not re.search(r"git (?:pull|push)\b", line))
+    work = tmp_path / "work"
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "HOME": str(tmp_path)}
+    subprocess.run(["git", "init", "-q", str(work)], check=True, env=env)
+    (work / "site").mkdir()
+    (work / "site" / "this-week.html").write_text("page", encoding="utf-8")
+    leak = tmp_path / "leak.txt"
+    hook = work / ".git" / "hooks" / "pre-commit"
+    hook.write_text(f'#!/bin/sh\necho "hook: $GH_TOKEN" >> "{leak}"\n', encoding="utf-8")
+    hook.chmod(0o755)
+    subprocess.run(["git", "-C", str(work), "config", "core.fsmonitor",
+                    f'sh -c \'echo "fsmonitor: $GH_TOKEN" >> "{leak}"\''], check=True, env=env)
+    (work / "site" / "og").mkdir()
+    (work / "site" / "og" / "card.png").write_bytes(b"png")
+    done = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                          cwd=work, capture_output=True, text=True,
+                          env={**env, "GH_TOKEN": "ghs_dummy_token_123", "GITHUB_REF_NAME": "main"})
+    assert done.returncode == 0, done.stderr
+    log = subprocess.run(["git", "-C", str(work), "log", "--oneline"], capture_output=True,
+                         text=True, env=env).stdout
+    assert "share card" in log, "the script did not commit, so it proved nothing"
+    assert not leak.exists() or "ghs_dummy" not in leak.read_text(), leak.read_text()
+
+
 def test_subscriber_state_is_cached_and_uploaded_only_sealed() -> None:
     """INFRA-02: data/registry and data/plans were cached in plain text. Now
     no cache or artifact step names either directory; the only state paths

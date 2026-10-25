@@ -98,6 +98,10 @@
   main a.btn,main a.btn:hover{color:var(--navy);text-decoration:none;}
   @media (prefers-reduced-motion: reduce){.btn{transition:none;transform:none!important;}}
   .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
+  /* One primary, one secondary (contract C2); anything else beside them is a
+     text link, as on the landing's cta-row, so the block reads as one ask
+     rather than a list of choices (LOOK-9). */
+  .cta .textlink{align-self:center;padding:10px 2px;font-size:15px;font-weight:700;}
   .headcta{margin-top:16px;}
   /* The report itself, beside the words that explain it (launch review D8):
      rows copied from the published 2024 Week 10 sample, every figure pinned
@@ -255,7 +259,7 @@
     </ul>
     <p>Bringing your roster over from an app? See what a copy from <a href="espn/">ESPN</a>,
     <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a> or <a href="cbs/">CBS</a> looks
-    like, and the lineup to pick for each.</p>
+    like, and, where the app has one, its default lineup.</p>
 
     <h2 id="read"><span class="n">02</span>Reading your report</h2>
     <!-- Each card is the published sample's own rows (site/sample-report.html,
@@ -414,7 +418,7 @@
       <a class="btn gold" href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a>
       <a class="btn ghost" href="sample-report.html" data-pinned-week>See a real report</a>
       <a class="btn ghost" href="this-week.html" data-live-week hidden>See this week's report</a>
-      <a class="btn ghost" href="index.html#pricing">Pricing</a>
+      <a class="textlink" href="index.html#pricing">Pricing</a>
     </div>
 </main>
   <footer><b>Beat Your League</b> — analysis, not betting picks. Projections are analysis, not
@@ -436,7 +440,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }

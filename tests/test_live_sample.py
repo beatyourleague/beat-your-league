@@ -75,6 +75,66 @@ def test_the_odds_the_page_prints_are_recorded_where_a_subscribers_would_be(
     assert code == 0 and len(_ledger(processed)) == expected, "recorded twice"
 
 
+def test_a_first_build_prints_only_the_odds_the_record_holds(
+        tmp_path, monkeypatch, week) -> None:
+    """G04-1, reproduced with the committed ledger and no week.json: the store
+    already held this week's call ids at other odds (written by another
+    writer — a subscriber's report in the same store, or a lost clock), so
+    record() added 0 rows (record_calls keeps the first row per id), and the
+    page still printed this build's 84% and 75% beside a ledger holding 83%
+    and 81%, with week.json saying recorded. The page now prints through the
+    record: it withholds what the ledger holds at another value, adds and
+    moves nothing, and the clock counts only what is printed."""
+    import copy
+    report = week()
+    other = copy.deepcopy(report)
+    for slot in other["lineup"]:
+        if slot.get("confidence") is not None:
+            slot["confidence"] = round(min(0.97, slot["confidence"] + 0.04), 3)
+    if (other.get("regret") or {}).get("confidence") is not None:
+        other["regret"]["confidence"] = round(min(0.97, other["regret"]["confidence"] + 0.04), 3)
+    processed = tmp_path / "processed"
+    assert live.record(other, processed) > 0
+    before = _ledger(processed)
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    assert code == 0 and out.is_file()
+    assert _ledger(processed) == before, "the record moved"
+    page = out.read_text(encoding="utf-8")
+    built = {round(s["confidence"] * 100) for s in report["lineup"]
+             if s.get("confidence") is not None}
+    held = {round(r["confidence"] * 100) for r in before}
+    for pct in built - held:
+        assert f">{pct}%<" not in page, f"{pct}% printed with {sorted(held)} on the record"
+    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
+    assert clock["recorded"] is True and clock["odds"] == 0 and "closest" not in clock
+    # And a build whose odds ARE the record keeps every one of them.
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    code, out2, processed2 = _run(fresh, monkeypatch, kicked_off=False)
+    printed = json.loads((out2.parent / "week.json").read_text(encoding="utf-8"))["odds"]
+    odds = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
+    assert code == 0 and printed == odds == len(_ledger(processed2))
+
+
+def test_the_published_report_is_saved_for_the_drafts_only_with_its_page(
+        tmp_path, monkeypatch, week) -> None:
+    """CRON-1: the drafts are written from the report the page was rendered
+    from. A build that publishes saves exactly that report beside the ledger;
+    a run that keeps the page (already recorded) or a week underway saves
+    none, so run/drops.py keeps the drafts written with the published page."""
+    code, out, processed = _run(tmp_path, monkeypatch, kicked_off=False)
+    saved = live.published_report(processed)
+    assert code == 0 and saved is not None
+    assert saved["meta"]["week"] == week()["meta"]["week"]
+    odds = sum(1 for s in saved["lineup"] if s.get("confidence") is not None)
+    assert json.loads((out.parent / "week.json").read_text(encoding="utf-8"))["odds"] == odds
+    (processed / live.PUBLISHED_REPORT_NAME).unlink()
+    code, _, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    assert code == 0 and live.published_report(processed) is None, "a kept page saved a report"
+    code, _, _ = _run(tmp_path, monkeypatch, kicked_off=True, extra=("--force",))
+    assert code == 0 and live.published_report(processed) is None, "a week underway saved one"
+
+
 def test_a_week_that_has_kicked_off_is_not_rebuilt_and_force_records_nothing(
         tmp_path, monkeypatch, week) -> None:
     """A rebuild after Thursday night's kickoff would print "predictions" about
@@ -107,8 +167,8 @@ def test_odds_that_cannot_be_recorded_are_never_published(tmp_path, monkeypatch,
 
 
 def test_a_post_may_quote_only_a_recorded_number(tmp_path, week) -> None:
-    """The drafted X posts (run/drops.py) build the sample again and quote its
-    closest call. recorded_only() withholds every % that is not in the ledger
+    """The drafted X posts (run/drops.py) quote the published page's closest
+    call (CRON-1: its own report, never a second build). recorded_only() withholds every % that is not in the ledger
     at the same value — a rebuild after the record was made, or a week never
     recorded — and never adds or moves one."""
     report = week()

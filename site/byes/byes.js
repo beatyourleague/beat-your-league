@@ -267,9 +267,12 @@
       if (idle.length) {
         // With a thin spot on the roster "each spot" would include one that is
         // empty every week anyway; the bye itself opens nothing new. One
-        // player on bye is one spot (a team defense is not a "him").
+        // player on bye is one spot (a team defense is not a "him"). Nor is
+        // that week "Covered" in green under a red every-week hole (T1): its
+        // chip says only that the byes open no new gap, in a neutral tone.
         const one = idle.length === 1;
-        return Object.assign(base, { kind: "covered", chip: "Covered",
+        return Object.assign(base, { kind: "covered", chip: thin.length ? "No new gap" : "Covered",
+          tone: thin.length ? "plain" : "ok",
           detail: "On bye: " + joinWords(idle) + ". " + (thin.length
             ? (one ? "That bye opens no new empty spot." : "Those byes open no new empty spot.")
             : "Someone else on your roster can start in " + (one ? "that spot." : "each spot.")) });
@@ -323,8 +326,8 @@
         ? "No NFL team has a bye in Weeks 15–17." : "",
       footnote: playoffsShown ? FOOTNOTE : "",
       asOf: "Reserve-list status as of " + (asOf || "the latest update") + " (nflverse): a " +
-        "player on injured reserve, the PUP or non-football injury list, suspended or " +
-        "released isn't counted as cover.",
+        "player on injured reserve, the PUP or non-football injury list, suspended, " +
+        "exempt or released isn't counted as cover.",
     };
   }
 

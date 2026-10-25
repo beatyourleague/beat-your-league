@@ -111,7 +111,7 @@
   .see a{color:var(--turf);font-weight:700;}
   .chatline-head{margin-top:14px;font-size:14px;font-weight:700;color:var(--paper);}
   .chatline{display:flex;gap:10px;align-items:flex-start;margin-top:6px;
-    background:rgba(255,255,255,.05);border:1px dashed var(--gold-edge);padding:10px 12px;}
+    background:rgba(255,255,255,.05);border:1px solid var(--gold-edge);padding:10px 12px;}
   .chatline p{margin:0;font-size:14px;line-height:1.55;flex:1;min-width:0;}
   .chatline button{flex:none;font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.08em;text-transform:uppercase;background:var(--flag);color:var(--navy);
@@ -123,11 +123,14 @@
   .chatline-msg{margin:6px 0 0;font-size:13.5px;color:var(--flag);}
   .chatline-msg:empty{display:none;}
   /* One big tap: the phone's own share sheet where there is one (the group
-     chat is an app on that phone), a copy everywhere else (LP-I5, LP-I9). */
+     chat is an app on that phone), a copy everywhere else (LP-I5, LP-I9).
+     A secondary (contract C2: the ghost), never a second gold: three gold
+     slabs here outweighed the page's one real ask (LOOK-5). */
   .sharebtn{display:block;width:100%;max-width:420px;margin-top:10px;min-height:48px;
     font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--navy);border:0;cursor:pointer;padding:12px 18px;
-    background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));}
+    text-transform:uppercase;color:var(--paper);cursor:pointer;padding:10px 18px;
+    background:transparent;border:2px solid rgba(246,244,238,.4);}
+  .sharebtn:hover{border-color:var(--flag);}
   .ask .chatline{margin-top:10px;}
   /* The commissioner kit (G4): the ask's own chatline and share button. */
   .kit-lead{margin-top:6px;font-size:14px;line-height:1.55;color:var(--dusk2);}
@@ -163,12 +166,12 @@
   .btn:hover,.sharebtn:hover,.chatline button:hover{transform:translateY(-2px);}
   .btn:active,.sharebtn:active,.chatline button:active{transform:translateY(1px) scale(.985);
     transition-duration:.06s;}
-  .btn.gold,.sharebtn{position:relative;overflow:hidden;}
-  .btn.gold::after,.sharebtn::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;
+  .btn.gold{position:relative;overflow:hidden;}
+  .btn.gold::after{content:"";position:absolute;inset:0 auto 0 0;width:45%;
     pointer-events:none;
     background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
     transform:translateX(-130%) skewX(-14deg);}
-  .btn.gold:hover::after,.sharebtn:hover::after{transform:translateX(260%) skewX(-14deg);
+  .btn.gold:hover::after{transform:translateX(260%) skewX(-14deg);
     transition:transform .75s var(--ease-out);}
   /* A clip-path clips the outline: the slanted button showed no ring at all
      when focused, so it squares off while it holds keyboard focus. On the
@@ -218,7 +221,7 @@
     h1 em::after{display:none;}}
   @media (prefers-reduced-motion:reduce){
     .btn,.sharebtn,.chatline button,.faq summary::after{transition:none!important;transform:none!important;}
-    .btn.gold::after,.sharebtn::after,h1 em::after{display:none;}
+    .btn.gold::after,h1 em::after{display:none;}
     *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
       animation-iteration-count:1!important;}
   }
@@ -364,12 +367,13 @@
   </div>
 
   <!-- The commissioner kit (G4): two things a commissioner can send the group
-       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price, and
+       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price
+       (and the lead names no count: from Week 14 the bye line hides and one is left), and
        ?via=league-chat lets `make stats` count what the kit brought. The bye
        line hides once week.json says no bye is left or the season is over. -->
   <div class="steps ask kit" id="kit" data-reveal>
     <h3>Something free for the league</h3>
-    <p class="kit-lead">Two things you can send the group chat today. Neither needs an email or a login.</p>
+    <p class="kit-lead">Free to send the group chat today. Nothing here needs an email or a login.</p>
     <div class="kit-item" id="kit-byes-block">
       <div class="chatline">
         <p id="kit-byes">Bye check for the playoff push, free, no login: paste your roster and it shows every week through 17 where a bye leaves a starting spot empty. https://beatyourleague.com/byes/?via=league-chat</p>
@@ -506,7 +510,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }

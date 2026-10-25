@@ -390,7 +390,17 @@ def test_section_heads_follow_one_rule() -> None:
         else:
             assert not words.endswith("."), f"a section head ends in a period: {words}"
     assert re.search(r"\.kicker\{[^}]*text-wrap:balance", CSS)
-    assert "Fantasy football&nbsp;· the playoff push" in BODY
+    assert ('<div class="kicker"><span>Fantasy football</span><span class="ksep">&nbsp;· </span>'
+            '<span>the playoff push</span></div>') in BODY
+    # LOOK-8: below one line's width the kicker breaks at the dot and drops
+    # it, never stranding "·" at the end of the first line.
+    assert ("@media (max-width:480px){.hero .kicker .ksep{display:none;}\n"
+            "    .hero .kicker span:last-child{display:block;}}") in CSS
+    # ...and the phone's if/then balances rather than ending on "OUT" alone.
+    assert ".screen .pivot .if,.screen .pivot p.then{text-wrap:balance;}" in CSS
+    # LOOK-4: each credential's two rows sit at the top of a stretched cell
+    # (stretched, the spare height opened a 14px gap under the heading).
+    assert re.search(r"\n  \.cred div\{[^}]*align-content:start", CSS)
 
 
 def test_no_headline_is_used_twice_and_the_note_does_not_repeat_its_card() -> None:

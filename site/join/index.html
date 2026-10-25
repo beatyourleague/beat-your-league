@@ -752,7 +752,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
@@ -2412,6 +2412,11 @@ if (RESTORED) {
       told.join(" · ") + ". Not right? Change them below.";
     $("seat-settings").style.display = "block";
   }
+} else if (!UPDATE_MODE) {
+  // A link from a league-app page names that app's default lineup (?t=): it
+  // is preselected, in plain view, and changed like any other choice (T5:
+  // Sleeper's page said Two FLEX and its links opened this page on Standard).
+  settingsFromLink();
 }
 if (UPDATE_MODE) prefillUpdateSettings();
 drawShapeNote();

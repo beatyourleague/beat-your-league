@@ -104,6 +104,11 @@
     padding:58px 0 30px;}
   .kicker{font-family:var(--display);font-weight:800;font-size:14px;
     letter-spacing:.3em;text-transform:uppercase;color:var(--flag);text-wrap:balance;}
+  /* Too narrow for one line (it wraps below ~425px), the hero's kicker
+     breaks at the dot and drops it, rather than stranding "·" at the end
+     of the first line. */
+  @media (max-width:480px){.hero .kicker .ksep{display:none;}
+    .hero .kicker span:last-child{display:block;}}
   h1{font-family:var(--display);font-weight:900;font-style:italic;
     font-size:clamp(52px,7.4vw,92px);line-height:.92;text-transform:uppercase;
     margin:14px 0 16px;text-shadow:0 20px 46px rgba(0,0,0,.45);text-wrap:balance;}
@@ -245,6 +250,11 @@
   .statusbar{display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;
     padding:15px 4px 0;height:48px;font-size:14px;font-weight:700;color:#000;
     letter-spacing:-.01em;position:relative;z-index:4;background:#F2F0EA;}
+  /* A soft edge under the bar, drawn only while the storyline scrolls the
+     email under it (iOS softens that edge too): the half-row sliced flat
+     under 9:41 read as a cut. Opacity only, and invisible at rest. */
+  .statusbar::after{content:"";position:absolute;left:0;right:0;top:100%;height:16px;
+    pointer-events:none;background:linear-gradient(#F2F0EA,rgba(242,240,234,0));opacity:0;}
   .statusbar > span:first-child{justify-self:center;}
   .statusbar svg{height:11px;width:auto;display:block;}
   .statusbar .icons{grid-column:3;justify-self:center;display:flex;gap:5px;align-items:center;}
@@ -285,6 +295,9 @@
   .peek .flippct{font-size:17px;}
   .peek .filehead + .pivot{padding:10px 12px;}
   .peek .pivot p.then{padding:0;margin-top:4px;font-size:12.5px;font-weight:600;color:var(--ink2);}
+  /* Balanced, so neither line ends on a lone word ("RULED" / "OUT",
+     "(projects" / "9.5).") on the 286px phone. */
+  .screen .pivot .if,.screen .pivot p.then{text-wrap:balance;}
   /* The report's next section, so the screen runs on into the report rather
      than ending in 110px of blank paper above the home bar (review D2). */
   .peek .rise{list-style:none;padding:8px 12px 10px;}
@@ -361,6 +374,8 @@
   .phone.story .lk-tap{animation:st-tap 16s linear infinite;}
   .phone.story .lk-pad i{animation:st-pad 16s linear infinite;}
   .phone.story .mailview{animation:st-view 16s linear infinite;}
+  .phone.story .statusbar::after{animation:st-edge 16s linear infinite;}
+  .phone.story.flat .statusbar::after{animation:none;}
   .phone.story .screen .fbar i{transform-origin:0 50%;animation:st-bar 16s linear infinite both;}
   .phone.story .screen .frow:nth-child(2) .fbar i{animation-delay:.12s;}
   .phone.story .screen .frow:nth-child(3) .fbar i{animation-delay:.24s;}
@@ -368,7 +383,11 @@
   .phone.story .pk-if{animation:st-if 16s linear infinite;}
   .phone.story .pk-rise{animation:st-rise 16s linear infinite;}
   .phone.paused .screen *{animation-play-state:paused!important;}
-  .hero.offscreen .phone-float,.hero.offscreen .phone-floor,.hero.offscreen .phonewrap::before{animation-play-state:paused;}
+  /* Offscreen, or held by the visitor's pause, the hardware holds too: the
+     float and the floor are bound by `.js .hero …` (0,3,0) with a shorthand
+     that resets play-state, so these carry .js to outrank it (0,4,0). */
+  .js .hero.offscreen .phone-float,.js .hero.offscreen .phone-floor,.hero.offscreen .phonewrap::before,
+  .js .hero.still .phone-float,.js .hero.still .phone-floor,.hero.still .phonewrap::before{animation-play-state:paused;}
   .realrow{display:flex;align-items:center;justify-content:center;gap:10px;max-width:320px;}
   /* A spacer the toggle's width on the other side keeps the caption centred
      under the phone; both are in the layout from the first paint, so the
@@ -410,6 +429,7 @@
     39.7%,52.5%{transform:none;animation-timing-function:cubic-bezier(.25,1,.5,1)}
     58.1%,85%{transform:translateY(var(--scroll,-64px));animation-timing-function:cubic-bezier(.65,0,.35,1)}
     90%,100%{transform:none}}
+  @keyframes st-edge{0%,52.5%{opacity:0}58.1%,85%{opacity:1}90%,100%{opacity:0}}
   @keyframes st-bar{0%,4.6%{transform:none}4.7%,40%{transform:scaleX(0);
       animation-timing-function:cubic-bezier(.22,1,.36,1)}44.4%,100%{transform:none}}
   @keyframes st-flip{0%,4.6%{transform:none}4.7%,43.1%{transform:scaleX(0);
@@ -664,7 +684,7 @@
   .cred{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;
     margin-top:48px;padding:22px 0;border-top:1px solid var(--gold-edge);
     border-bottom:1px solid var(--gold-edge);}
-  .cred div{display:grid;grid-template-columns:28px 1fr;gap:4px 10px;align-items:start;}
+  .cred div{display:grid;grid-template-columns:28px 1fr;gap:4px 10px;align-items:start;align-content:start;}
   .cred svg{width:24px;height:24px;color:var(--flag);grid-row:span 2;margin-top:2px;}
   .cred b{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:.04em;
     text-transform:uppercase;color:#fff;}
@@ -903,6 +923,7 @@
       transition:none!important;}
     .livecall{transition:none!important;}
     .storytoggle,.realrow::before{display:none!important;}
+    .scrollbar{display:none!important;}
   }
   /* Printed or saved as PDF, nothing waits for a scroll that never comes: the
      revealed sections printed as blank navy pages (QA-06, Chrome
@@ -1128,7 +1149,7 @@
 <main id="main">
 <header class="hero">
   <div>
-    <div class="kicker">Fantasy football&nbsp;· the playoff push</div>
+    <div class="kicker"><span>Fantasy football</span><span class="ksep">&nbsp;· </span><span>the playoff push</span></div>
     <h1>Know who <em><span>to start.</span></em></h1>
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
@@ -1556,7 +1577,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
@@ -1989,14 +2010,18 @@ function storyline() {
     heroPhone.classList.toggle("paused", !inView || document.hidden);
     if (hero) hero.classList.toggle("offscreen", !inView);
   };
-  // aria-pressed is "not playing"; the label names the control, not its state.
+  // aria-pressed is "held by the visitor"; the label names the control, not
+  // its state. Held, the float, the floor and the glow hold too (.still): a
+  // pause that left the phone bobbing did not do what its label says. The
+  // story ending on its own after three loops is not a pause, so the button
+  // still offers one for the float that keeps going.
   const pressed = (on) => { if (toggle) toggle.setAttribute("aria-pressed", String(on)); };
-  const stop = () => {
+  const stop = (byVisitor) => {
     if (wait) { clearTimeout(wait); wait = 0; }
     heroPhone.classList.remove("story");
     started = false;
     cycles = 0;
-    pressed(true);
+    if (byVisitor) { held = true; if (hero) hero.classList.add("still"); pressed(true); }
   };
   const start = () => {
     // How far the screen scrolls to bring Rising roles up: measured once,
@@ -2004,7 +2029,13 @@ function storyline() {
     if (screen && last) {
       const over = last.getBoundingClientRect().bottom - screen.getBoundingClientRect().bottom + 30;
       const cap = screen.clientHeight * 0.3;
-      heroPhone.style.setProperty("--scroll", -Math.round(Math.max(0, Math.min(over, cap))) + "px");
+      const px = Math.round(Math.max(0, Math.min(over, cap)));
+      // Under 60px the beat brings nothing new into view (on a desktop the
+      // whole of Rising roles already fits): it read as a jiggle whose only
+      // visible effect was the header sliding under the bar, so it is skipped.
+      const flat = px < 60;
+      heroPhone.style.setProperty("--scroll", (flat ? 0 : -px) + "px");
+      heroPhone.classList.toggle("flat", flat);
     }
     started = true;
     cycles = 0;
@@ -2020,7 +2051,7 @@ function storyline() {
     if (++cycles >= 3) stop();
   });
   if (toggle) toggle.addEventListener("click", () => {
-    if (started) { held = true; stop(); } else { held = false; start(); }
+    if (held) { held = false; if (hero) hero.classList.remove("still"); start(); } else stop(true);
   });
   new IntersectionObserver((entries) => {
     inView = entries.some((e) => e.isIntersecting);
@@ -2163,7 +2194,7 @@ if (!reduced && "IntersectionObserver" in window) {
 // the browser runs scroll-driven animations the CSS draws it off the main
 // thread; elsewhere, one transform per frame here, never a layout property.
 const progress = document.querySelector(".scrollbar");
-if (progress && !(window.CSS && CSS.supports && CSS.supports("animation-timeline: scroll()"))) {
+if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animation-timeline: scroll()"))) {
   let ticking = false;
   const draw = () => {
     const max = document.documentElement.scrollHeight - window.innerHeight;
@@ -2248,17 +2279,22 @@ if (!reduced) {
           // recorded build and only until the week's first kickoff, never
           // for a toss-up (52% or less, or under half a point: the report
           // says "either is fine" there), and never as anything but text.
+          // The writer's own `tossup` decides first, failing closed when it
+          // is missing (render/og.py's rule); the projections are the card's
+          // printed strings ("10.4"), so they are read as numbers to check.
           const call = w.closest;
           const live = document.getElementById("live-call");
           const kickoff = Date.parse(w.first_kickoff || "");
           const tenth = (v) => Math.round(v * 10) / 10;
+          const num = (v) => (typeof v === "string" && v.trim() ? Number(v) : v);
           if (live && call && typeof call === "object" && w.recorded === true &&
               !w.after_kickoff && !isNaN(kickoff) && Date.now() < kickoff &&
+              call.tossup === false &&
               Number.isInteger(call.pct) && call.pct > 52 && call.pct < 100 &&
               typeof call.start === "string" && call.start.trim() &&
               typeof call.over === "string" && call.over.trim() &&
-              !(Number.isFinite(call.start_proj) && Number.isFinite(call.over_proj) &&
-                Math.abs(tenth(call.start_proj) - tenth(call.over_proj)) < 0.5)) {
+              !(Number.isFinite(num(call.start_proj)) && Number.isFinite(num(call.over_proj)) &&
+                Math.abs(tenth(num(call.start_proj)) - tenth(num(call.over_proj))) < 0.5)) {
             const lead = typeof call.label === "string" && /^Closest call/.test(call.label)
               ? call.label : "Closest call with odds";
             const pct = document.createElement("b");

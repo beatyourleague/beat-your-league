@@ -290,7 +290,10 @@ jobs:
         run: .venv/bin/python -m render.live_sample
       # The same report, as posts ready to paste (run/drops.py): one file,
       # overwritten each Tuesday, so the owner reads a single page on a phone.
-      # Drafts only — nothing posts itself.
+      # Drafts only — nothing posts itself. Written from the report the page
+      # above was rendered from in THIS run, never a second build (CRON-1): a
+      # run that kept the page (the 16:17 retry, a late backup) and any run
+      # after the week's first kickoff leave the drafts written with it.
       - name: Draft this week's public posts
         if: always()
         run: .venv/bin/python -m run.drops
@@ -357,6 +360,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # SEC-1: no hook or fsmonitor command an earlier step left in .git (or
+          # in any git config file) runs beside the token: config given on the
+          # command line outranks them all, for every git call below.
+          git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
@@ -474,6 +481,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # SEC-1: no hook or fsmonitor command an earlier step left in .git (or
+          # in any git config file) runs beside the token: config given on the
+          # command line outranks them all, for every git call below.
+          git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'

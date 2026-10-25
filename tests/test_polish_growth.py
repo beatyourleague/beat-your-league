@@ -162,13 +162,16 @@ def test_the_clocks_short_names_are_the_drafts_short_names(week) -> None:  # noq
 
 def test_byes_left_reads_the_cached_schedule() -> None:
     """(e) On the 2026 schedule the last byes are in Week 14: some remain
-    after Week 7, none after Week 15. Unreadable means unknown (None), never
+    from Week 7, and from Week 14 itself — its Tuesday build is days before
+    ARI and DAL sit out that Sunday (T3: it said none, and hid the planner a
+    week early) — none from Week 15. Unreadable means unknown (None), never
     "none left"."""
     if not (CACHE / "games.csv").is_file():
         pytest.skip("nflverse schedule not cached")
-    assert live.byes_left_after(CACHE, "2026", 7) is True
-    assert live.byes_left_after(CACHE, "2026", 15) is False
-    assert live.byes_left_after(Path("/nonexistent"), "2026", 7) is None
+    assert live.byes_left_from(CACHE, "2026", 7) is True
+    assert {w: live.byes_left_from(CACHE, "2026", w) for w in (12, 13, 14, 15)} == {
+        12: True, 13: True, 14: True, 15: False}
+    assert live.byes_left_from(Path("/nonexistent"), "2026", 7) is None
 
 
 def test_the_launch_check_finds_a_closest_call_that_is_not_on_the_record(
@@ -190,6 +193,11 @@ def test_the_launch_check_finds_a_closest_call_that_is_not_on_the_record(
                                  processed)
     assert live.closest_problems({**clock, "closest": {**closest, "over_id": "00-9"}},
                                  processed)
+    # C6-2: the landing quotes the names, so the right ids under the wrong
+    # names are not on the record either.
+    for wrong in ({"start": "Ja'Marr Chase"}, {"over": "Tee Higgins"}):
+        found = live.closest_problems({**clock, "closest": {**closest, **wrong}}, processed)
+        assert found and "records that call as" in found[0], (wrong, found)
     assert live.closest_problems({k: v for k, v in clock.items() if k != "closest"},
                                  processed) == []
 
@@ -360,10 +368,13 @@ def _bye_report(**over) -> dict:
 
 
 def test_the_byes_left_draft_lists_every_team_still_to_have_one() -> None:
-    """Each team with a bye after the week, once, by week, the Rams as the
-    apps spell them (LAR, never a bare LA); the playoff sentence only when no
-    team is off in Weeks 15-17."""
-    text = drops._byes_left_post(BYES_2026, 7)
+    """Each team with a bye this week or later, once, by week, the Rams as
+    the apps spell them (LAR, never a bare LA); the playoff sentence only
+    when no team is off in Weeks 15-17, and the first thing to go when the
+    post would not fit. The week's own teams are listed (C7-1: drafted for
+    the week's Wednesday, Week 8's post left HOU, NO, NYG and SF off, as if
+    their bye of Nov 1 were already behind them)."""
+    text = drops._byes_left_post(BYES_2026, 8)
     assert text == ("NFL byes left this season. Week 8: HOU, NO, NYG, SF · Week 9: PIT, TEN · "
                     "Week 10: CHI, DEN, PHI, TB · Week 11: ATL, CLE, GB, LAR, NE, SEA · "
                     "Week 13: BAL, IND, LV, NYJ · Week 14: ARI, DAL. No byes in Weeks 15–17, "
@@ -371,11 +382,16 @@ def test_the_byes_left_draft_lists_every_team_still_to_have_one() -> None:
     assert len(text) <= drops.LIMIT
     listed = re.findall(r"\b[A-Z]{2,3}\b", text.split(". No byes")[0])
     teams = [t for t in listed if t not in ("NFL",)]
-    assert sorted(teams) == sorted(drops._app_code(t) for t, w in BYES_2026.items() if w > 7)
+    assert sorted(teams) == sorted(drops._app_code(t) for t, w in BYES_2026.items() if w >= 8)
     assert len(teams) == len(set(teams)) and not re.search(r"\bLA\b", text)
+    seven = drops._byes_left_post(BYES_2026, 7)
+    assert seven.startswith("NFL byes left this season. Week 7: BUF, JAX, LAC, WAS · Week 8: ")
+    assert seven.endswith("Week 14: ARI, DAL.") and len(seven) <= drops.LIMIT
     playoff = {**BYES_2026, "DAL": 16}
-    assert "No byes in Weeks 15" not in drops._byes_left_post(playoff, 7)
-    assert drops._byes_left_post(BYES_2026, 14) is None
+    assert "No byes in Weeks 15" not in drops._byes_left_post(playoff, 8)
+    assert drops._byes_left_post(BYES_2026, 14) == "NFL byes left this season. Week 14: ARI, DAL." \
+        " No byes in Weeks 15–17, the fantasy playoffs under ESPN's, Yahoo's and Sleeper's defaults."
+    assert drops._byes_left_post(BYES_2026, 15) is None
     assert drops._byes_left_post(None, 7) is None
     # Over the limit: the sentence goes first, then the post.
     crowded = {f"T{i:02d}": 8 + i % 6 for i in range(40)}
@@ -466,12 +482,13 @@ def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:
 # The canonical kit: integrator_notes carries these verbatim. It goes after
 # the "Ask the league first" block, before "What you do after paying".
 KIT_MARKUP = """  <!-- The commissioner kit (G4): two things a commissioner can send the group
-       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price, and
+       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price
+       (and the lead names no count: from Week 14 the bye line hides and one is left), and
        ?via=league-chat lets `make stats` count what the kit brought. The bye
        line hides once week.json says no bye is left or the season is over. -->
   <div class="steps ask kit" id="kit" data-reveal>
     <h3>Something free for the league</h3>
-    <p class="kit-lead">Two things you can send the group chat today. Neither needs an email or a login.</p>
+    <p class="kit-lead">Free to send the group chat today. Nothing here needs an email or a login.</p>
     <div class="kit-item" id="kit-byes-block">
       <div class="chatline">
         <p id="kit-byes">Bye check for the playoff push, free, no login: paste your roster and it shows every week through 17 where a bye leaves a starting spot empty. https://beatyourleague.com/byes/?via=league-chat</p>
@@ -530,6 +547,10 @@ def test_the_kit_lines_sell_nothing_and_say_where_they_came_from() -> None:
         assert not re.search(r"\b(calibrated|tested|proven|accurate|file|bet|odds)\b", low)
     assert lines[0].split(" https://")[1].startswith("beatyourleague.com/byes/")
     assert lines[1].split(" https://")[1].startswith("beatyourleague.com/sample-report.html")
+    # T2: the bye line hides from Week 14 on (KIT_HIDE_JS), so a lead that
+    # counted its items ("Two things…") promised two above one.
+    lead = re.search(r'<p class="kit-lead">(.*?)</p>', KIT_MARKUP).group(1)
+    assert not re.search(r"\b(two|both|neither|one)\b", lead.lower()), lead
     buttons = re.findall(r"<button[^>]*>", KIT_MARKUP)
     assert len(buttons) == 2 and all("data-share-from" in b and "data-share-status" in b
                                      for b in buttons)
@@ -613,10 +634,41 @@ def test_the_launch_email_names_the_league_pass_only_when_it_can_be_bought(monke
     page = (SITE / "join" / "index.html").read_text(encoding="utf-8")
     both = (re.search(r'^const FORM_ENDPOINT = "([^"]*)";', page, re.M).group(1).strip()
             and re.search(r'^const STRIPE_LINK_PASS = "([^"]*)";', page, re.M).group(1).strip())
+    lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
+    sells = all(re.search(rf"^const {n} = true;", lp, re.M) for n in ("CHECKOUT_OPEN", "SEATS_OPEN"))
     monkeypatch.undo()
-    assert waitlist._league_pass_live() == bool(both)
+    assert waitlist._league_pass_live() == bool(both and sells)
     for claim in waitlist.FORBIDDEN_CLAIMS:
         assert claim not in waitlist.LEAGUE_PASS_LINE.lower()
+
+
+def test_the_league_pass_line_waits_for_the_page_it_links(tmp_path, monkeypatch) -> None:
+    """WL-1, reproduced: with the join page's FORM_ENDPOINT and
+    STRIPE_LINK_PASS set and league-pass.html still at CHECKOUT_OPEN=false /
+    SEATS_OPEN=false (the launch check flags the mismatch, nothing stopped a
+    send), the one launch email said "One payment covers every manager's own
+    report…" and linked a page with no Buy button. The line needs the page
+    it links to build one too."""
+    from run import waitlist
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    join = re.sub(r'^const FORM_ENDPOINT = "[^"]*";',
+                  'const FORM_ENDPOINT = "https://forms.beatyourleague.com/rows";', join,
+                  count=1, flags=re.M)
+    join = re.sub(r'^const STRIPE_LINK_PASS = "[^"]*";',
+                  'const STRIPE_LINK_PASS = "https://buy.stripe.com/test_x";', join,
+                  count=1, flags=re.M)
+    lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
+    (tmp_path / "site" / "join").mkdir(parents=True)
+    (tmp_path / "site" / "join" / "index.html").write_text(join, encoding="utf-8")
+    monkeypatch.setattr(waitlist, "REPO_ROOT", tmp_path)
+    for checkout, seats, live in (("false", "false", False), ("true", "false", False),
+                                  ("false", "true", False), ("true", "true", True)):
+        page = re.sub(r"^const CHECKOUT_OPEN = (?:true|false);", f"const CHECKOUT_OPEN = {checkout};",
+                      lp, count=1, flags=re.M)
+        page = re.sub(r"^const SEATS_OPEN = (?:true|false);", f"const SEATS_OPEN = {seats};",
+                      page, count=1, flags=re.M)
+        (tmp_path / "site" / "league-pass.html").write_text(page, encoding="utf-8")
+        assert waitlist._league_pass_live() is live, (checkout, seats)
 
 
 # --------------------------------------------------------------------- #
@@ -688,10 +740,42 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert page.count('href="../byes/"') == 2 and "bye-week-planner" not in page
     assert f"Not affiliated with {name}." in visible
     assert live.esc(platform.lineup) in page and live.esc(platform.paste) in page
-    assert re.search(r'<a class="btn gold" href="\.\./(?:index\.html#watch-form|join/index\.html)">',
-                     page)
+    assert re.search(r'<a class="btn gold" href="\.\./(?:index\.html#watch-form|'
+                     r'join/index\.html(?:\?t=[a-z0-9-]+)?)">', page)
+    # T4: step 2's "roster box" is a link to it (join/ checks a roster with
+    # checkout closed too), on the app's default lineup (T5).
+    assert f'<a href="{platforms.join_href(platform)}">the roster box</a>' in page
+    # T8: "a ESPN copy", and a planner link about a roster the page holds.
+    assert f"Part of a copy from {name}, shown the way the roster box reads it." in page
+    assert "check your roster&#x27;s byes" in page and "this roster" not in visible
     assert _js_function(page, "carryVia") == _js_function(live.VIA_SCRIPT, "carryVia")
     assert page.rstrip().endswith('<script src="/count.js" defer></script>\n</body>\n</html>'.strip())
+
+
+def test_an_apps_links_into_join_open_on_its_default_lineup(monkeypatch) -> None:
+    """T5: Sleeper's page says its default lineup is Two FLEX, and its links
+    into join/ were bare, while join's buy mode never read ?t= — so a
+    Sleeper manager who kept join's defaults got Standard-lineup reports.
+    Each app with a default carries the join page's own code for it (open
+    state and the roster-box link alike), the codes are join's own, and
+    join/ preselects them outside a seat, an update or a restored roster."""
+    from render import report as rr
+    monkeypatch.setattr(rr, "checkout_open", lambda landing=None: True)
+    by = {p.slug: p for p in platforms.PLATFORMS}
+    want = {"espn": "?t=std", "yahoo": "?t=std", "sleeper": "?t=flex2", "cbs": ""}
+    for slug, query in want.items():
+        page = platforms.page(by[slug])
+        assert page.count(f'<a class="btn gold" href="../join/index.html{query}">') == 2, slug
+        assert f'<a href="../join/index.html{query}">the roster box</a>' in page, slug
+    roster_js = (SITE / "join" / "roster.js").read_text(encoding="utf-8")
+    bases = re.search(r"const SHAPE_BASES = \{(.*?)\};", roster_js, re.S).group(1)
+    assert set(platforms.SHAPE_CODES.values()) == set(re.findall(r"^\s*(\w+):", bases, re.M))
+    assert set(platforms.SHAPE_CODES) == {name for name, _ in platforms.SHAPES}
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    flow = join.split("if (RESTORED) {\n  setRadio(\"scoring\"", 1)[1].split(
+        "if (UPDATE_MODE) prefillUpdateSettings();", 1)[0]
+    assert re.search(r"\} else if \(SEAT_MODE\) \{.*\} else if \(!UPDATE_MODE\) \{[^}]*"
+                     r"settingsFromLink\(\);\s*\}\s*$", flow, re.S), flow
 
 
 def test_no_two_pages_differ_only_by_the_name() -> None:

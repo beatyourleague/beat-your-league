@@ -67,6 +67,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import json
 import re
 import sys
 from datetime import date, datetime, time, timedelta, timezone
@@ -136,7 +137,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }
@@ -310,6 +311,11 @@ AFTER_KICKOFF_PIVOTS = ("No if/then on this rebuild: it was built after this "
 # its closest call printed a % the record does not hold (OPS-R3).
 REBUILT_CLOSEST = ("This week's closest call isn't shown on this rebuild: its "
                    "odds weren't the ones this week's first build recorded.")
+# A first build whose calls another writer already put on the record at other
+# odds (a subscriber's report in the same store, a lost week.json): record()
+# keeps the first row per call id, so this build's % is not the one held.
+UNRECORDED_CLOSEST = ("This week's closest call isn't shown: its odds aren't the "
+                      "ones on the public record for this week.")
 
 
 def hold_closest(report: dict, sentence: str) -> dict:
@@ -617,10 +623,12 @@ def closest_problems(clock: Mapping[str, Any], processed_dir: Path = PROCESSED_D
     """What is wrong with the clock's closest call, for the launch check's
     "This week's closest call is on the record" gate: [] when there is none or
     when the ledger store this sample records into (typed-ppr-12-<season>)
-    holds that exact call — same season, week, slot, pick and alternative —
-    at a confidence that prints as the same integer. A closest call the
-    landing would quote with nothing on the record is a published
-    probability nothing grades."""
+    holds that exact call — same season, week, slot, pick and alternative,
+    under the same names — at a confidence that prints as the same integer.
+    A closest call the landing would quote with nothing on the record is a
+    published probability nothing grades; and the landing quotes the NAMES,
+    so a clock with the right ids under the wrong names (C6-2: "Ja'Marr Chase
+    over Tee Higgins" passed as "on the record") is not on it either."""
     if "closest" not in clock:
         return []
     closest = clock.get("closest")
@@ -643,14 +651,53 @@ def closest_problems(clock: Mapping[str, Any], processed_dir: Path = PROCESSED_D
     if not match:
         problems.append(f"{store} holds no call {closest['start']} over {closest['over']} "
                         f"({closest['slot']}, week {closest['week']})")
+    elif not any(c.pick_name == closest["start"] and c.over_name == closest["over"]
+                 for c in match):
+        problems.append(f"{store} records that call as {match[0].pick_name} over "
+                        f"{match[0].over_name}, not the {closest['start']} over "
+                        f"{closest['over']} week.json says")
     elif not any(_pct(c.confidence) == closest["pct"] for c in match):
         problems.append(f"{store} holds {closest['start']} over {closest['over']} at "
                         f"{_pct(match[0].confidence)}%, not the {closest['pct']}% week.json says")
     return problems
 
 
-def byes_left_after(cache_dir: Path, season: str, week: int) -> bool | None:
-    """Is any NFL bye still to come after ``week``? None when the schedule
+# The report the live page was rendered from, beside the ledger it records
+# into (CRON-1). Local to the runner — data/processed/* is ignored except the
+# record itself — so a later run of the week that keeps the page finds none.
+PUBLISHED_REPORT_NAME = "live-sample-report.json"
+
+
+def write_published_report(report: Mapping[str, Any], processed_dir: Path) -> Path:
+    """Save the report this run's page was rendered from, for run/drops.py:
+    the Tuesday drafts are written from the page's own report, never from a
+    second build whose odds, projections or if/thens may have moved since."""
+    path = Path(processed_dir) / PUBLISHED_REPORT_NAME
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def published_report(processed_dir: Path) -> dict | None:
+    """The report the page was published from in this run, or None (none was
+    published, or the file is unreadable — never a rebuild in its place)."""
+    path = Path(processed_dir) / PUBLISHED_REPORT_NAME
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    meta = report.get("meta") if isinstance(report, dict) else None
+    if not isinstance(meta, dict) or "season" not in meta or "week" not in meta:
+        return None
+    return report
+
+
+def byes_left_from(cache_dir: Path, season: str, week: int) -> bool | None:
+    """Is any NFL bye still to come in ``week`` or after it? The clock is
+    written on the week's Tuesday, days before that week's own byes are
+    played, and the planner lists that week as "this week" — so a week-14
+    build where ARI and DAL are still off that Sunday has byes left (it said
+    none, and hid every planner offer a week early). None when the schedule
     cannot say (the clock then omits ``byes_left`` and readers treat it as
     unknown, never as "no byes left")."""
     try:
@@ -660,7 +707,7 @@ def byes_left_after(cache_dir: Path, season: str, week: int) -> bool | None:
         return None
     if not byes:
         return None
-    return any(int(bye) > int(week) for bye in byes.values())
+    return any(int(bye) >= int(week) for bye in byes.values())
 
 
 def write_week_json(report: dict, path: Path, lands_on: str | None = None,
@@ -1141,10 +1188,22 @@ def main(argv: list[str] | None = None) -> int:
         recorded = True
         print(f"recorded the sample's odds on the public ledger: {added} new "
               f"row(s) in {meta['league_id']}")
+        # Printed through the record, never past it (G04-1): record_calls keeps
+        # the FIRST row per call id, so a call another writer already holds at
+        # other odds adds nothing, and this build's % would print beside a
+        # week.json saying "recorded". Only withholds: a first build keeps
+        # every % it just wrote.
+        odds = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
+        report = hold_closest(recorded_only(report, args.processed_dir), UNRECORDED_CLOSEST)
+        if sum(1 for s in report["lineup"] if s.get("confidence") is not None) != odds:
+            report["meta"]["thin_week_note"] = thin_week_line(
+                report, context.get("missing") or [])
+            print("withheld: some of this build's odds are on the record at other "
+                  "values; the page prints only the recorded ones")
     page = render(report, TEMPLATE_PATH.read_text(encoding="utf-8"))
     page = with_thin_week(with_week_meta(page, report),
                           report["meta"].get("thin_week_note"))
-    byes_left = byes_left_after(CACHE_DIR, str(meta["season"]), int(meta["week"]))
+    byes_left = byes_left_from(CACHE_DIR, str(meta["season"]), int(meta["week"]))
     page = with_planner_line(page, show_planner_line(byes_left))
     if kicked_off or already:
         # Stamped with the moment the report says it was built (the banner's
@@ -1157,6 +1216,9 @@ def main(argv: list[str] | None = None) -> int:
         page = with_thin_week(page, after_kickoff_line(report, built, first)
                               if kicked_off else rebuilt_line(report, built))
     args.out.write_text(with_via_carry(page), encoding="utf-8")
+    if not kicked_off:
+        # The drafts are written from this, the page's own report (CRON-1).
+        write_published_report(report, args.processed_dir)
     try:
         lands_on = next_report_day(CACHE_DIR, report["meta"]["season"],
                                    report["meta"]["week"])

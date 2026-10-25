@@ -622,6 +622,7 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
   }
   // What the CTA said after the check, then an edit to the box (stale).
   const ctaChecked = { button: document.getElementById("cta-button").textContent,
+    goText: document.getElementById("cta-go").textContent,
     settingsHidden: document.getElementById("cta-settings").hidden,
     go: document.getElementById("cta-go").getAttribute("href") };
   if (cfg.edit !== null && cfg.edit !== undefined) {
@@ -631,8 +632,10 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
   }
   const text = (id) => document.getElementById(id).textContent;
   const weeks = document.getElementById("weeks").children.map((li) => li.textContent);
+  const chips = document.getElementById("weeks").children.map((li) =>
+    li.querySelectorAll(".chip").map((c) => c.className));
   const rows = document.getElementById("rows").querySelectorAll(".row").map((r) => r.textContent);
-  console.log(JSON.stringify({ said, weeks, rows, lastUrl,
+  console.log(JSON.stringify({ said, weeks, chips, rows, lastUrl,
     summary: text("summary"), tally: text("tally"), err: text("err-roster"), thin: text("thin"),
     head: text("byes-head"), asOf: text("as-of"), footnote: text("footnote"),
     playoffNone: text("playoff-none"), check: document.getElementById("check").disabled,
@@ -641,6 +644,7 @@ const tick = () => new Promise((r) => setTimeout(r, 20));
     ctaButton: document.getElementById("cta-button").textContent,
     ctaSettingsHidden: document.getElementById("cta-settings").hidden,
     ctaGo: document.getElementById("cta-go").getAttribute("href"),
+    ctaGoText: document.getElementById("cta-go").textContent,
     retry: document.getElementById("retry-load").style.display }));
 })();
 """
@@ -696,6 +700,9 @@ def test_the_sample_roster_renders_the_acceptance_case_and_nothing_but_facts(tmp
     empty = [w for w in out["weeks"] if "empty" in w]
     assert empty == ["Week 9K spot emptyOn bye: Chris Boswell. Nobody else on your roster "
                      "can start there."]
+    # With no spot empty every week, a covered week is good news, in green.
+    green = [w for w, c in zip(out["weeks"], out["chips"]) if c == ["chip ok"]]
+    assert green and all("Covered" in w for w in green)
     assert out["weeks"][8] == "Week 15Fantasy playoffs*Nobody on your roster is on bye."
     assert out["weeks"][10] == "Week 17Title game*Nobody on your roster is on bye."
     ir = [r for r in out["rows"] if "injured reserve" in r]
@@ -704,6 +711,12 @@ def test_the_sample_roster_renders_the_acceptance_case_and_nothing_but_facts(tmp
     assert out["playoffNone"] == "No NFL team has a bye in Weeks 15–17."
     assert out["footnote"].startswith("*Under ESPN's, Yahoo's and Sleeper's default settings")
     assert out["asOf"].startswith("Reserve-list status as of ")
+    # T9: the note names every status the data counts out (ROSTER_OUT), the
+    # exempt list included — one player held it when it was found missing.
+    from engine.availability import ROSTER_OUT
+    for reason in set(ROSTER_OUT.values()):
+        word = re.sub(r"^on (the )?| list$", "", reason)
+        assert word in out["asOf"], (reason, out["asOf"])
     assert out["share"] and not out["check"]
     # The address keeps the roster (the same ref, no email).
     assert out["lastUrl"] == "/byes/?ref=" + SAMPLE_REF
@@ -786,7 +799,11 @@ def test_a_spot_the_reserve_list_empties_every_week_is_never_good_news(tmp_path)
     covered." in green — directly above a red line saying the TE spot is empty
     every week — and "Copy my result" broadcast it. The summary is scoped to
     byes now, names the spot, and is never styled good; and a covered week
-    with ONE player on bye no longer says "Each of them"."""
+    with ONE player on bye no longer says "Each of them". Nor does any week
+    under that red line wear the green "Covered" chip (T1, reproduced with
+    the K on injured reserve: Week 8 read "COVERED · On bye: Brock Purdy and
+    Graham Gano" while the K spot was empty that week like every week): its
+    chip says "No new gap", in a neutral tone."""
     byes = _byes()
     byes["out"] = dict(byes.get("out") or {}, **{_player_id("Bryson Nesbit"): "on injured reserve"})
     out = _run_page(tmp_path, paste="\n".join(THIN_ROSTER) + "\n", byes=byes)
@@ -796,8 +813,13 @@ def test_a_spot_the_reserve_list_empties_every_week_is_never_good_news(tmp_path)
                                   "but your TE spot is empty every week, byes or not.")
     assert "TE spot is empty every week" in out["summary"]
     assert "good" not in out["summaryClass"].split() and "bad" in out["summaryClass"].split()
-    covered = [w for w in out["weeks"] if "Covered" in w]
+    assert not [w for w in out["weeks"] if "Covered" in w]
+    covered = [w for w in out["weeks"] if "No new gap" in w]
     assert covered
+    for week, chips in zip(out["weeks"], out["chips"]):
+        assert all("ok" not in c.split() for c in chips), (week, chips)
+        if "No new gap" in week:
+            assert chips == ["chip plain"], chips
     for week in covered:
         names = week.split("On bye: ")[1].split(".")[0]
         single = " and " not in names and ", " not in names
@@ -849,6 +871,11 @@ def test_the_open_states_link_never_carries_a_roster_the_visitor_changed(tmp_pat
                     consts={"CHECKOUT_CAN_COMPLETE": "true"})
     assert out["ctaChecked"]["go"] == "../join/index.html?ref=" + SAMPLE_REF
     assert out["ctaGo"] == "../join/index.html"
+    # T7: the link says "this roster" only while it carries one.
+    assert out["ctaChecked"]["goText"] == "Get the weekly report for this roster"
+    assert out["ctaGoText"] == "Get the weekly report"
+    bare = _run_page(tmp_path, consts={"CHECKOUT_CAN_COMPLETE": "true"})
+    assert bare["ctaGo"] == "../join/index.html" and bare["ctaGoText"] == "Get the weekly report"
 
 
 @needs_node

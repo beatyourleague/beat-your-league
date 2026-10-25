@@ -128,11 +128,16 @@ DOES = ("every slot decided for that roster",
         "every bye ahead checked through the playoffs")
 DOESNT = ("It doesn't connect to {name} or set your lineup there — you make the moves. "
           "Roster changed? Update it from the link in any report, or reply with it.")
-PLANNER_LINK = "Free: check this roster's byes through Week 17"
+PLANNER_LINK = "Free: check your roster's byes through Week 17"
 # The join page's own words for what is scored (site/join/index.html).
 SETTINGS_LINE = ("Full PPR, half PPR or standard scoring, in a league of 8, 10, 12 or 14 "
                  "teams.")
 # The join page's lineup choices, in the order it offers them.
+# The join page's own codes for them (site/join/roster.js shapeCode, with a K
+# and a DEF), so a link from an app's page opens join/ on that app's default
+# lineup (?t=, read by join's settingsFromLink) — T5: Sleeper said Two FLEX
+# and its links opened join/ on Standard.
+SHAPE_CODES = {"Standard": "std", "Two FLEX": "flex2", "Three WR": "wr3", "Superflex": "sf"}
 SHAPES = (("Standard", "QB · 2 RB · 2 WR · TE · FLEX · K · DEF"),
           ("Two FLEX", "QB · 2 RB · 2 WR · TE · 2 FLEX · K · DEF"),
           ("Three WR", "QB · 2 RB · 3 WR · TE · FLEX · K · DEF"),
@@ -244,11 +249,31 @@ def path_for(platform: Platform, site: Path = SITE) -> Path:
     return Path(site) / platform.slug / "index.html"
 
 
-def _ask() -> str:
+def join_href(platform: Platform) -> str:
+    """join/, one folder down, on this app's default lineup when it has one."""
+    code = SHAPE_CODES.get(platform.shape)
+    return "../join/index.html" + (f"?t={code}" if code else "")
+
+
+def _ask(platform: Platform) -> str:
     """The site's one ask, as the samples make it (render.report.sample_cta:
     closed, "Tell me when it opens" to the landing's capture; open, the join
-    page), one folder down."""
-    return sample_cta().replace('href="', 'href="../', 1)
+    page, here on this app's default lineup), one folder down."""
+    cta = sample_cta().replace('href="', 'href="../', 1)
+    return cta.replace('href="../join/index.html"', f'href="{join_href(platform)}"', 1)
+
+
+def _step(platform: Platform, i: int, step: str) -> str:
+    """One how-to step, escaped; step 2's "the roster box" links to it (T4:
+    the steps described a box the page never linked, so a reader following
+    them had nowhere to paste — join/ checks a roster with checkout closed
+    too, and keeps it with the waitlist email)."""
+    text = esc(step.format(name=platform.name, lineup=platform.lineup))
+    if i == 1:
+        assert "the roster box" in text
+        text = text.replace("the roster box",
+                            f'<a href="{esc(join_href(platform))}">the roster box</a>', 1)
+    return text
 
 
 def _shapes(platform: Platform) -> str:
@@ -264,8 +289,7 @@ def page(platform: Platform) -> str:
     name = platform.name
     title = TITLE.format(name=name)
     desc = DESCRIPTION.format(name=name)
-    steps = "".join(f"<li>{esc(step.format(name=name, lineup=platform.lineup))}</li>"
-                    for step in STEPS)
+    steps = "".join(f"<li>{_step(platform, i, step)}</li>" for i, step in enumerate(STEPS))
     raw = esc("\n".join(platform.example))
     reads = "".join(f"<li>{_TICK}{esc(n)}</li>" for n in platform.reads)
     does = "".join(f"<li>{esc(item)}</li>" for item in DOES)
@@ -302,7 +326,7 @@ def page(platform: Platform) -> str:
     <h1>{esc(H1.format(name=name))}</h1>
     <p>Paste the roster you already have on {esc(name)} — no login, nothing to connect.
     Every Tuesday a report built from it sets your lineup for your scoring.</p>
-    <div class="cta">{_ask()}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
+    <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
   </header>
   <main id="main">
     <h2><span class="n">01</span>Bring your {esc(name)} roster over</h2>
@@ -315,7 +339,7 @@ def page(platform: Platform) -> str:
       <div class="parrow">{_ARROW}</div>
       <div class="pcol"><div class="phead">Read as</div><ul class="pread">{reads}</ul></div>
     </div>
-    <p class="pnote">Part of a {esc(name)} copy, shown the way the roster box reads it.</p>
+    <p class="pnote">Part of a copy from {esc(name)}, shown the way the roster box reads it.</p>
 
     <h2><span class="n">02</span>What the report does with it</h2>
     <p>{esc(DOES_LEAD)}</p>
@@ -324,7 +348,7 @@ def page(platform: Platform) -> str:
     <h2><span class="n">03</span>What it doesn't do</h2>
     <p class="note">{esc(DOESNT.format(name=name))}</p>
 
-    <div class="cta">{_ask()}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
+    <div class="cta">{_ask(platform)}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
     <p class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></p>
     <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
     <p class="apps">Other league apps: {others}</p>
