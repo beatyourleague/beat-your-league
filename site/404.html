@@ -201,7 +201,10 @@ function weekPhase(w) {
         if (!w) return;
         const clock = weekPhase(w);
         if (!(clock.phase === "season" && clock.current)) return;
-        if (!(Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call)) return;
+        // cards: the page is in the report's current card layout (written
+        // by the Tuesday build); an older page waits for its rebuild.
+        if (!(Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call &&
+              w.cards === true)) return;
         document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
         document.querySelectorAll("[data-pinned-week]").forEach((el) => { el.hidden = true; });
       })

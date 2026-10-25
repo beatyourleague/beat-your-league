@@ -139,6 +139,19 @@ def test_the_headline_is_the_landing_pages_own() -> None:
     assert og.headline(LANDING) == "Know who to start."
 
 
+def test_the_card_names_the_season_and_week_it_shows() -> None:
+    """Review BUYER-7: the card every page shares labelled 2024 Week 10 odds
+    only "Real output", so posted on X in 2026 it read as this week's odds on
+    current players. It now says the season and week, read from the hero
+    card's own data-real marker, and refuses to build without one."""
+    year, week = re.search(r'<div class="filecard"[^>]*data-real="(\d{4})-w(\d+)"',
+                           LANDING).groups()
+    page = og.build_html(LANDING)
+    assert f"Real report · {year}, Week {int(week)}" in page and "Real output" not in page
+    with pytest.raises(og.OgError):
+        og.real_label(LANDING.replace("data-real=", "data-x="))
+
+
 def test_the_built_page_carries_every_row_and_no_stray_markup() -> None:
     """The card shows the phone's odds rows and its first flagged row
     (og_rows) — the decided lineup at a glance, the honesty included."""

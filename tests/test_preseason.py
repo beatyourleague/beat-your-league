@@ -533,3 +533,35 @@ def test_a_week_one_buyer_is_never_told_the_season_is_weeks_away(monkeypatch) ->
     assert "first_kickoff" not in report["meta"]
     later = _report(season_started=True, from_week=9)
     assert pre.opener(later["meta"]) == pre.IN_SEASON_OPENER
+
+
+def test_the_first_card_promises_a_first_report_only_when_it_dates_one() -> None:
+    """Review F6: the card headed "Your first weekly report" always rendered,
+    and with no certain next report (pre-season, or a week the schedule
+    cannot date) it sat over the opener alone, which says nothing about a
+    first weekly report. It is headed by what it holds now. Review F5: the
+    email had no padded preview, so the inbox ran the masthead's words into
+    the preview; it previews the day the first weekly report lands, or the
+    opener. Mutation: always use FIRST_REPORT_HEAD and the first assertion
+    fails; drop the preheader and the last one does."""
+    import copy
+
+    from render.preseason import (ABOUT_HEAD, FIRST_REPORT_HEAD, email_html, opener,
+                                  render)
+    from render.report import TEMPLATE_PATH
+
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    undated = _report()
+    undated["meta"].pop("next_report", None)
+    for page in (email_html(undated), render(undated, template)):
+        assert FIRST_REPORT_HEAD not in page and ABOUT_HEAD in page
+    dated = copy.deepcopy(undated)
+    dated["meta"]["next_report"] = {"week": 8, "lands_on": "2026-10-27"}
+    lede = "Your Week 8 report lands Tuesday, Oct 27."
+    for page in (email_html(dated), render(dated, template)):
+        assert FIRST_REPORT_HEAD in page and ABOUT_HEAD not in page and lede in page
+    import html as html_lib
+    preview = lambda page: html_lib.unescape(
+        re.search(r"mso-hide:all;[^>]*>(.*?)&#847;", page).group(1))
+    assert preview(email_html(dated)) == lede
+    assert preview(email_html(undated)) == opener(undated["meta"])

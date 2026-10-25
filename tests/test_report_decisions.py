@@ -403,7 +403,7 @@ def test_odds_against_a_practice_squad_player_are_withheld_not_moved() -> None:
     assert te["confidence"] is None and te["player_name"] == "Travis Starter"
     assert te["confidence_gate"] == ("not confirmed to play (Zach Squad: on the "
                                      "practice squad)")
-    assert row_label(te) == "Zach Squad on practice squad"
+    assert row_label(te) == "Zach Squad (bench) on practice squad"
     assert _published(after) < _published(before), "only the practice-squad pair goes"
     assert _bench(after, "Zach Squad")["note"] == ("on the practice squad — not "
                                                   "confirmed to play")
@@ -642,7 +642,7 @@ def test_the_bench_player_a_row_waits_on_has_his_designation_printed() -> None:
                      designations={RB2: "Questionable"},
                      listed={RB2: ("questionable", "knee")})
     row = _row(report, "Jon Starter")
-    assert row_label(row) == "start · Rhett Bench was questionable"
+    assert row_label(row) == "start · Rhett Bench (bench) was questionable"
     note = _bench(report, "Rhett Bench")["note"]
     assert note == "Questionable in Week 4 (knee) — played, 6.0"
     for name, page in _surfaces(report).items():
@@ -1050,3 +1050,67 @@ def test_the_sample_names_its_closer_call_and_why_pollard_starts(sample10) -> No
                                  "LaPorta as a fallback if he sits.")
     allen = next(s for s in sample10["lineup"] if s["player_name"] == "Josh Allen")
     assert allen["usage"].startswith("last 4 games: ") and "pass attempts" in allen["usage"]
+
+
+def test_a_questionable_starter_leads_his_row_when_his_bench_option_is_held() -> None:
+    """Review SLEEK-2, reproduced on the live Week 7 build: Quinshon Judkins
+    (questionable) read only "De'Von Achane can't play", in red, because the
+    row's words came from the bench option's gate while its colour came from
+    the starter's own flag — the colour accused the row, the words named
+    somebody else, and the starter's own status was nowhere on card 01. The
+    row now leads with his status; a confirmed starter's row about a held
+    bench player stays muted. Words only: no odds, projection or seat moves.
+    Mutation: drop the prefix and the first assertion fails."""
+    from render import anatomy
+
+    held = {"slot": "RB", "player_name": "Quinshon Judkins", "status": "questionable",
+            "projected": 9.1, "confidence": None,
+            "confidence_gate": "bench option not cleared (De'Von Achane: on injured reserve)",
+            "bench_held": {"name": "De'Von Achane", "kind": "roster",
+                           "text": "on injured reserve"},
+            "flags": [{"kind": "questionable", "text": "Questionable in Week 6 (ankle)"}]}
+    fine = {**held, "player_name": "Tyjae Spears", "status": "active", "flags": []}
+    called = {"slot": "WR", "player_name": "Amon-Ra St. Brown", "status": "active",
+              "projected": 16.9, "confidence": 0.8, "flags": []}
+    rows = anatomy.lineup({"meta": {"solo": True},
+                           "lineup": [held, fine, called]})["rows"]
+    assert (rows[0]["label"], rows[0]["tone"]) == (
+        "questionable · De'Von Achane (bench) can't play", "flag")
+    assert (rows[1]["label"], rows[1]["tone"]) == (
+        "De'Von Achane (bench) can't play", "muted")
+    assert (rows[0]["proj"], rows[0]["pct"], rows[2]["pct"]) == ("9.1", None, 80)
+
+
+def test_one_deadline_prints_in_one_colour() -> None:
+    """Review SLEEK-8, on the pinned sample: card 01's "Set this lineup"
+    chip read "before this week's first kickoff" in green while card 03's
+    "Thursday night: Ja'Marr Chase kicks off at 8:15 PM ET — set your lineup
+    before then" read "before Thursday's kickoff" in red — the same moment in
+    two colours, on the landing one above the other. When a starter kicks off
+    before Sunday's main slot, the week's first kickoff is a deadline still
+    to meet and every chip naming it prints as due. Presentation only: no
+    words, odds or seats move. Mutation: drop ``early`` from item() and the
+    first assertion fails."""
+    import copy
+    import json
+    from pathlib import Path
+
+    from render import anatomy
+
+    sample = json.loads((Path(__file__).resolve().parent / "fixtures"
+                         / "sample-report-w10.json").read_text(encoding="utf-8"))
+    assert anatomy.early_week(sample)
+    assert anatomy.lineup(sample)["task"]["tone"] == "due"
+    first = [i for i in anatomy.plan(sample)["items"]
+             if i["deadline"] == anatomy.FIRST_KICKOFF]
+    assert first and all(i["tone"] == "due" for i in first)
+    # A week where nobody kicks off early keeps the green "in hand" chip.
+    calm = copy.deepcopy(sample)
+    calm["checklist"] = [i for i in calm["checklist"]
+                         if not str(i.get("deadline", "")).startswith("before Thursday")]
+    assert not anatomy.early_week(calm)
+    assert anatomy.lineup(calm)["task"]["tone"] == "ok"
+    # An MNF elevation check is not an early game.
+    calm["checklist"].append({"action": "Check X has been elevated",
+                              "deadline": "before Monday's kickoff", "urgency": "deadline"})
+    assert not anatomy.early_week(calm)

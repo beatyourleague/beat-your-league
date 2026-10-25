@@ -124,6 +124,28 @@
     tr.free td:first-child{background:#FBF9F3;}
     th:first-child{background:var(--navy);}
   }
+  /* A phone: each product is a card with its column names written in. Even
+     with the sticky names, 780px of table in a 346px window left two columns
+     off-screen and every row ~170px tall, mostly empty (review SLEEK-9). */
+  @media (max-width:600px){
+    .tablewrap{overflow:visible;border:0;background:none;}
+    table{min-width:0;}
+    table,tbody,tr,td{display:block;}
+    tr:first-child{display:none;}
+    tr{margin-top:12px;background:var(--card);border:2px solid var(--navy);}
+    tr.us{background:var(--turf-tint);border-color:var(--turf);}
+    tr.free{background:#FBF9F3;}
+    td,td:first-child,tr.us td,tr.free td{position:static;width:auto;min-width:0;
+      box-shadow:none;background:none;border-top:1px solid #EDEAE1;padding:10px 14px;}
+    td:first-child,tr.us td:first-child,tr.free td:first-child{border-top:0;
+      white-space:normal;font-size:16px;padding-top:12px;}
+    td:nth-child(n+2)::before{display:block;margin-bottom:3px;font-family:var(--display);
+      font-weight:700;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+      color:var(--slate);}
+    td:nth-child(2)::before{content:"Price";}
+    td:nth-child(3)::before{content:"Best at";}
+    td:nth-child(4)::before{content:"Falls short";}
+  }
   /* ---- paper pages: one depth, one focus ring, one button feel ----
      Identical on join/, join/confirm, how-it-works, thanks, 404 and compare/
      (tests/test_polish_pages.py compares them), and last in the sheet, so a
@@ -187,7 +209,7 @@
 
   <!-- A region that scrolls sideways must take keyboard focus, or a keyboard
        user cannot reach its right-hand columns (axe, Oct 2026). -->
-  <div class="tablewrap" tabindex="0" role="region" aria-label="Prices compared, scrolls sideways">
+  <div class="tablewrap" tabindex="0" role="region" aria-label="Prices compared">
   <table>
     <tr><th>Product</th><th>Price</th><th>Best at</th><th>Falls short</th></tr>
 

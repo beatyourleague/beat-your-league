@@ -1588,9 +1588,13 @@ def test_league_pass_makes_no_win_promise() -> None:
 def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     """People buy a habit, not a document. The page must say what the week
     actually looks like: when it arrives, how long it takes, what you do."""
-    assert re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
+    # "About a minute" to set the lineup, as How it works and every welcome
+    # email say (review F8: the landing said "Ninety seconds" for the same
+    # Tuesday act, a figure EMAILS-90 had retired as the game plan's).
+    assert re.search(r"set it in about a minute", LANDING_PROSE, re.I)
+    assert not re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
     assert re.search(r"tuesday morning", LANDING_PROSE, re.I)
-    assert re.search(r"tick the boxes|three-box checklist", LANDING_PROSE, re.I)
+    assert re.search(r"tick off the game plan", LANDING_PROSE, re.I)
 
 
 def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
@@ -4733,8 +4737,9 @@ def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
 
 
 def _live_week_gate(page: str) -> bool:
-    return "w.odds >= 3 && w.closest_call" in page and \
-        'querySelectorAll("[data-live-week]")' in page
+    # And the page is in the card layout the phone shows (review BUYER-1).
+    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true", page) \
+        is not None and 'querySelectorAll("[data-live-week]")' in page
 
 
 @pytest.mark.parametrize("name", ("index.html", "how-it-works.html", "404.html"))
@@ -5000,9 +5005,7 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
 def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     """Launch review I4: both cards said "Leave your email above" while, at
     390px, the form sat ~3,000px above them. The prompt is a link to the form
-    now, and every #watch-form link puts the cursor in the field. The open
-    state's finance rewrite keeps the League Pass link by its href, because the
-    closed line's FIRST link is now the capture link it retires."""
+    now, and every #watch-form link puts the cursor in the field."""
     # Pre-launch review D4: the closed card's control is a real gold button
     # into the form, not a dashed box holding a link.
     for cta in ("season-cta",):
@@ -5012,7 +5015,11 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     assert "closest('a[href=\"#watch-form\"]')" in handler
     assert "field.focus({ preventScroll: true })" in handler
     assert "form.hidden" in handler, "a hidden form must not swallow the click"
-    assert "finance.querySelector('a[href=\"league-pass.html\"]')" in LANDING
+    # Review BUYER-4: the finance line no longer pitches the League Pass (its
+    # own section follows), so the open state writes it whole and shows it.
+    finance = LANDING.split('const finance = document.getElementById("finance-note");')[1]
+    finance = finance.split("\n    }")[0]
+    assert "finance.hidden = false;" in finance and "league-pass" not in finance
 
 
 # thanks.html is reached by paying, so its nav offers no Pricing (launch

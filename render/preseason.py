@@ -28,7 +28,7 @@ from render.report import (EMAIL_META, BRAND_LINE, CANCEL_BODY, CANCEL_HEAD, FAV
                            SECTION_MARK, SELLING_ONE_TIME, TEMPLATE_PATH,
                            cancel_destination, esc,
                            extract_design, font_preloads, landmarks, mark_svg,
-                           number_sections, sender_html, cancel_html,
+                           number_sections, preheader_html, sender_html, cancel_html,
                            cancel_lines, stop_route, unsubscribe_target)
 from render.sender import sender_line
 
@@ -413,6 +413,16 @@ def _pre_section(title: str, body: str) -> str:
 
 
 FIRST_REPORT_HEAD = "Your first weekly report"
+# Without a certain next report (pre-season, or a week the schedule cannot
+# date) the card holds the opener alone, which is about this report, so its
+# heading says that rather than promising a date it does not give.
+ABOUT_HEAD = "What this report is"
+
+
+def first_head(lede: str) -> str:
+    """The first card's heading: the first weekly report when the card names
+    the day it lands, otherwise what this report is."""
+    return FIRST_REPORT_HEAD if lede else ABOUT_HEAD
 
 
 def _header(meta: Mapping[str, Any]) -> str:
@@ -431,7 +441,7 @@ def _header(meta: Mapping[str, Any]) -> str:
         f'<p class="mmeta"><b>{esc(meta.get("label") or "Your Team")}</b> · '
         f'{esc(scoring)} · {esc(len(meta.get("slots") or []))} starting spots</p>'
         f'<p class="mstamp">Built {esc(_stamp())}</p></div></div></header>'
-        + _pre_section(FIRST_REPORT_HEAD, first)
+        + _pre_section(first_head(lede), first)
     )
 
 
@@ -709,13 +719,16 @@ def email_html(report: Mapping[str, Any]) -> str:
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
         f'{EMAIL_META}<title>{esc(title)}</title></head>'
         f'<body style="margin:0;padding:0;background:{PAPER};">'
-        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        # The inbox preview: the day the first weekly report lands, or the
+        # opener — never the masthead's words run together (review F5).
+        + preheader_html(lede or opener(meta))
+        + f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
         f'style="padding:12px 8px 24px;">'
         f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
         f'border="0" style="max-width:600px;width:100%;background:{PAPER};">'
         + head
-        + card(FIRST_REPORT_HEAD, first)
+        + card(first_head(lede), first)
         + (card(CANT_PLAY_HEAD, table(cant, 2), CANT_PLAY_BASIS) if cant else "")
         + card(BYE_HEAD, bye_body, bye_basis(meta))
         + (card(THIN_HEAD, table(thin, 2), THIN_BASIS) if thin else "")

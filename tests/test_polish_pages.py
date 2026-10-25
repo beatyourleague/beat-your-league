@@ -575,6 +575,17 @@ def test_the_comparison_table_keeps_its_names_and_says_it_scrolls() -> None:
     assert "th:first-child{background:var(--navy);}" in sticky
     assert re.search(r"\.tablewrap\{[^}]*no-repeat local,[^}]*no-repeat scroll,", css)
     assert '<div class="pick" data-reveal="group">' in _page("compare/index.html")
+    # Review SLEEK-9, measured at 390: even with the names stuck, 780px of
+    # table in a 346px window left two of four columns off-screen and every
+    # row ~170px tall. At 600px and under each product is a card, its
+    # column names written in.
+    phone = "".join(_media(css, "(max-width:600px)"))
+    assert "table,tbody,tr,td{display:block;}" in phone and "table{min-width:0;}" in phone
+    assert "tr:first-child{display:none;}" in phone
+    for n, label in ((2, "Price"), (3, "Best at"), (4, "Falls short")):
+        assert f'td:nth-child({n})::before{{content:"{label}";}}' in phone
+    header = re.search(r"<tr>(<th>.*?)</tr>", _page("compare/index.html")).group(1)
+    assert re.findall(r"<th>([^<]+)</th>", header)[1:] == ["Price", "Best at", "Falls short"]
 
 
 # --------------------------------------------------------------------- #

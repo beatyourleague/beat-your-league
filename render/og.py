@@ -148,6 +148,19 @@ def _lineup_card(page: str) -> str:
     return card[lineup:close if close > 0 else len(card)]
 
 
+def real_label(page: str) -> str:
+    """"Real report · 2024, Week 10": the season and week of the hero's file
+    card, read from its data-real marker (render.phone.real_tag) and said the
+    way the landing's caption says it. The card read only "Real output", so
+    posted on X in 2026 it passed 2024 odds off as this week's (review
+    BUYER-7). No marker, no card: the year is never guessed."""
+    found = re.search(r'<div class="filecard"[^>]*data-real="(\d{4})-w(\d{1,2})"', page)
+    if not found:
+        raise OgError("the hero file card names no season and week (data-real) — "
+                      "refusing to draw a card that cannot say which week it shows")
+    return f"Real report · {found.group(1)}, Week {int(found.group(2))}"
+
+
 def hero_rows(page: str) -> list[dict[str, str]]:
     """The hero phone's lineup rows, exactly as the landing page states them.
 
@@ -334,7 +347,7 @@ def build_html(page: str) -> str:
   </div>
   <div class="right">
     <div class="filecard">
-      <div class="filehead">Your lineup, decided <span>Real output</span></div>
+      <div class="filehead">Your lineup, decided <span>{html.escape(real_label(page))}</span></div>
       <div class="fbody">
         {rows}
       </div>

@@ -291,7 +291,7 @@ def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:
     q = "availability in doubt (designated Questionable)"
     assert row_label({"confidence_gate": q, "status": "active",
                       "alternative_name": "Tony Pollard"}) \
-        == "start · Tony Pollard was questionable"
+        == "start · Tony Pollard (bench) was questionable"
     assert row_label({"confidence_gate": q, "status": "questionable",
                       "alternative_name": "Tony Pollard"}) \
         == "questionable · see if/then"

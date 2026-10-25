@@ -52,6 +52,23 @@ OPENING_TITLE = "Your Opening Lineup"
 # reason. Never at ". ": "Amon-Ra St. Brown" would break.
 SPLIT_OVER = 80
 NOTHING_TO_CHANGE = "nothing to change"
+FIRST_KICKOFF = "before this week's first kickoff"
+# A starter's game before Sunday's main slot gets its own plan item, dated
+# (engine.solo_report.early_game_items): "before Thursday's kickoff", or
+# "before Sunday's 9:30 AM ET kickoff" for London.
+_EARLY = re.compile(r"^before (?:(?:Wednesday|Thursday|Friday|Saturday)'s"
+                    r"|Sunday's \d{1,2}:\d\d [AP]M ET) kickoff$")
+
+
+def early_week(report: Mapping[str, Any]) -> bool:
+    """Does a starter kick off before Sunday's main slot? Then the week's first
+    kickoff is that early too, so "before this week's first kickoff" is the
+    same moment the early game's own item prints as due — one moment, one
+    colour (review SLEEK-8: the lineup's chip read green on card 01 while
+    "Thursday night: … set your lineup before then" read red on card 03,
+    both Thursday 8:15 PM ET)."""
+    return any(e.get("urgency") == "deadline" and _EARLY.match(str(e.get("deadline") or ""))
+               for e in report.get("checklist") or [])
 
 
 # --------------------------------------------------------------------- #
@@ -96,13 +113,15 @@ def _fmt(value: Any) -> str | None:
 # the pieces every card is built from
 # --------------------------------------------------------------------- #
 
-def item(entry: Mapping[str, Any]) -> dict[str, Any]:
+def item(entry: Mapping[str, Any], early: bool = False) -> dict[str, Any]:
     """One checklist item: {head, rest, detail, deadline, tone, box}.
 
     ``tone`` is "ok" for a deadline already in hand (the web's .dl.ok, turf)
     and "due" for one still to meet (brick). ``box`` is False for an item
     with nothing to do ("nothing to change"): a box to tick beside it would
-    ask for an action the item says is not needed."""
+    ask for an action the item says is not needed. ``early`` (``early_week``):
+    a starter kicks off before Sunday's main slot, so the week's first kickoff
+    is a deadline still to meet and prints as one."""
     action = str(entry.get("action") or "")
     head, rest = action, ""
     if len(action) > SPLIT_OVER and " — " in action:
@@ -114,7 +133,8 @@ def item(entry: Mapping[str, Any]) -> dict[str, Any]:
         "rest": rest,
         "detail": entry.get("detail") or None,
         "deadline": deadline,
-        "tone": "ok" if entry.get("urgency") in ("now", "done") else "due",
+        "tone": ("due" if early and deadline == FIRST_KICKOFF else
+                 "ok" if entry.get("urgency") in ("now", "done") else "due"),
         "box": deadline != NOTHING_TO_CHANGE,
     }
 
@@ -209,7 +229,8 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
 def alerts(report: Mapping[str, Any]) -> list[dict[str, Any]]:
     """The checklist items that leave a spot empty for certain: they lead the
     report, above the lineup, in the alert tint. Still tasks to tick."""
-    return [item(i) for i in report.get("checklist") or [] if is_certain_zero(i)]
+    early = early_week(report)
+    return [item(i, early) for i in report.get("checklist") or [] if is_certain_zero(i)]
 
 
 def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
@@ -239,6 +260,15 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
         elif conf is None and slot.get("player_name") and rr.row_marked(slot, mixed):
             label = rr.row_label(slot) or None
             alarming = any(f.get("kind") != "seeded" for f in slot.get("flags") or [])
+            # The starter's own doubt leads his row (review SLEEK-2): a
+            # questionable starter whose bench option is held read only
+            # "De'Von Achane can't play", in red, so the colour accused the
+            # row while the words named somebody else, and his own status
+            # was nowhere on the card. Card 05 and the plain-text half print
+            # the flag itself.
+            own = any(f.get("kind") == "questionable" for f in slot.get("flags") or [])
+            if own and label and not label.startswith(("questionable", "status open")):
+                label = f"questionable · {label}"
             tone = "flag" if alarming else "muted"
         elif not projected and slot.get("usage"):
             label, tone = str(slot["usage"]), "basis"
@@ -252,7 +282,8 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
             "label": label,
             "tone": tone if label else None,
         })
-    task = next((item(i) for i in report.get("checklist") or [] if is_set_lineup(i)), None)
+    task = next((item(i, early_week(report)) for i in report.get("checklist") or []
+                 if is_set_lineup(i)), None)
     legend: list[dict[str, Any]] = []
     if mixed:
         legend.append({"head": None, "text": rr.ODDS_DEFINITION})
@@ -297,7 +328,8 @@ def closest(report: Mapping[str, Any]) -> dict[str, Any]:
 def plan(report: Mapping[str, Any]) -> dict[str, Any]:
     """Card 03: what to do and by when — every checklist item except the
     lineup itself (card 01 carries it) and the certain zeros (the alerts)."""
-    items = [item(i) for i in report.get("checklist") or []
+    early = early_week(report)
+    items = [item(i, early) for i in report.get("checklist") or []
              if not is_set_lineup(i) and not is_certain_zero(i)]
     return {"title": TITLES["plan"], "items": items,
             "saturday": rr.SATURDAY_LINE if rr.saturday_line(report.get("meta")) else None}

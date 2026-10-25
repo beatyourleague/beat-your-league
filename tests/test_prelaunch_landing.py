@@ -213,20 +213,25 @@ function run(w) {
     hidden: els["this-week-link"].hidden, label: els["this-week-label"].textContent }), 50));
 }
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
-  built_at: "2026-10-20T17:15:45+00:00", closest_call: true,
+  built_at: "2026-10-20T17:15:45+00:00", closest_call: true, cards: true,
   first_kickoff: "2999-01-01T00:15:00Z" };
 // One at a time: each run swaps the globals the page script reads.
 (async () => {
   const out = [];
   for (const w of [{ ...base, odds: 3 }, { ...base, odds: 2 },
-                   { ...base, odds: 3, built_at: "garbage" }]) out.push(await run(w));
+                   { ...base, odds: 3, built_at: "garbage" },
+                   { ...base, odds: 3, cards: undefined },
+                   { ...base, odds: 3, cards: "true" }]) out.push(await run(w));
   console.log(JSON.stringify(out));
 })();
 """.replace("IIFE", iife)
-    shown, held, undated = _node(harness)
+    shown, held, undated, old_layout, loose = _node(harness)
     assert shown == {"hidden": False, "label": "Week 7's real report, built Tue, Oct 20"}
     assert held == {"hidden": True, "label": "This week's real report"}
     assert undated == {"hidden": False, "label": "Week 7's real report"}
+    # Review BUYER-1: a page built before the card stack (no `cards` on its
+    # clock, as the Oct 20 build wrote it) is not offered beside the phone.
+    assert old_layout == loose == {"hidden": True, "label": "This week's real report"}
 
 
 # --------------------------------------------------------------------- #
@@ -296,8 +301,14 @@ def test_the_closed_pricing_card_is_a_real_button_not_a_placeholder() -> None:
     assert 'class="soon"' not in BODY and "dashed" not in re.search(
         r"\.plan[^{]*\{[^}]*\}", CSS).group(0)
     assert not re.search(r"\.plan [^{]*\{[^}]*dashed", CSS)
-    finance = BODY.split('id="finance-note">')[1].split("</p>")[0]
-    assert "Checkout opens soon" not in finance and 'href="league-pass.html"' in finance
+    finance = BODY.split('id="finance-note"')[1].split("</p>")[0]
+    assert "Checkout opens soon" not in finance
+    # The League Pass is pitched once, by its own section right below the
+    # pricing (review BUYER-4/SLEEK-6: "Running the league? One payment can
+    # cover every team" sat directly above "Run the league? One payment
+    # covers every manager"), and the open state does not bring it back.
+    assert 'href="league-pass.html"' not in finance and "Running the league" not in LANDING
+    assert 'href="league-pass.html"' in BODY.split('<section class="leaguepass">')[1]
 
 
 def test_the_card_uses_the_sites_check_bullets() -> None:

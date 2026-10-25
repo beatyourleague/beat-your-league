@@ -344,3 +344,106 @@ def test_the_inbox_game_plan_is_drawn_as_the_email_draws_it() -> None:
     email."""
     rule = re.search(r"\n  \.rows \.cbody \.task\{([^}]*)\}", CSS).group(1)
     assert "background" not in rule and "border-top:1px solid #EEEAE1" in rule
+
+
+# --------------------------------------------------------------------- #
+# the fixer's pass (Oct 25 2026): the phone is the inbox, crisply
+# --------------------------------------------------------------------- #
+
+def _rule_body(css: str, selector: str) -> str:
+    found = re.search(r"(?:^|\n)\s*" + re.escape(selector) + r"\{([^}]*)\}", css)
+    assert found, selector
+    return found.group(1)
+
+
+def test_the_touch_tilt_is_two_dimensional() -> None:
+    """Review F1, measured at 390 with DPR 3: the scroll tilt was a 3D turn
+    (perspective rotateX), and once the storyline added its own transformed
+    layers Chrome rastered the whole screen at 1x — "19.8" read as "13.8",
+    "proj 14.1 vs 9.5" as "9.6", for all three loops. 2D keyframes keep the
+    screen at the device's resolution. Mutation: put a rotateX back and this
+    fails."""
+    frames = re.search(r"@keyframes tiltscroll\{(.*?)\}\}", CSS, re.S).group(1)
+    assert not re.search(r"perspective|rotate[XYZ3]|translate3d|matrix3d", frames), frames
+    assert "translateY(" in frames
+
+
+def test_the_pointer_tilt_holds_flat_while_the_story_plays() -> None:
+    """Review F1, the desktop half: the pointer's perspective turn rastered the
+    playing screen at 1x on a 2x display. While the story plays the phone
+    holds flat, like the float does (one motion at a time)."""
+    tilt = LANDING.split("// The tilt, for a mouse")[1].split("})();")[0]
+    assert 'const playing = () => heroPhone.classList.contains("story");' in tilt
+    move = tilt.split('hero.addEventListener("pointermove"')[1]
+    assert move.index("if (playing()) { aim(0, 0); return; }") < move.index("aim(Math.max")
+    assert 'heroPhone.addEventListener("animationstart"' in tilt
+
+
+def test_the_lock_status_bar_never_zooms_over_the_emails() -> None:
+    """Review F2: the lock's status icons sat inside the layer that scales
+    1.08 as it fades, over the email's own status bar, so for a beat the
+    phone showed two rows of signal, wifi and battery, offset. The wallpaper
+    and the lock's text zoom; the lock itself only fades, so its white icons
+    cross-fade in place over the black ones, as a real phone's do."""
+    lock = re.search(r"@keyframes st-lock\{(.*?)\}\}", CSS, re.S).group(1)
+    assert "transform" not in lock and "opacity" in lock
+    assert ".phone.story .lock::before{animation:st-zoom" in CSS
+    assert re.search(r"\.phone\.story \.lk-fg\{animation:st-fg [^}]*st-zoom", CSS)
+    assert "background" in _rule_body(CSS, ".lock::before")
+    assert "background" not in _rule_body(CSS, ".lock")
+    # Paused (offscreen, hidden tab) the zooming wallpaper pauses with the rest.
+    assert ".phone.paused .screen *::before" in CSS
+    # The status bar is not inside the zooming foreground.
+    lock_html = BODY.split('<div class="lock">')[1].split('<div class="lk-dark">')[0]
+    assert lock_html.index('class="lk-status"') < lock_html.index('class="lk-fg"')
+
+
+def test_the_phone_sets_the_email_in_the_emails_own_type() -> None:
+    """Reviews F3/SLEEK-5: the phone drew the report in the site's Barlow, a
+    face no inbox can show (an email carries no web font), so the hero showed
+    a typeface no subscriber sees. The phone's report uses render/email.py's
+    own stacks: FONT for the body, DISPLAY for the week, the card heads, the
+    week's total and the closest call's figure — the elements the email
+    itself sets in DISPLAY."""
+    from render.email import DISPLAY, FONT
+    squash = lambda value: re.sub(r"\s+", "", value).replace('"', "'")
+    assert re.search(r"\.screen \.filecard\{font-family:" + re.escape(FONT) + ";", CSS)
+    display = re.search(r"\.screen \.filecard :is\(([^)]*)\)\{\s*font-family:([^;]*);", CSS)
+    assert display, "the phone's display elements lost the email's DISPLAY stack"
+    assert squash(display.group(2)) == squash(DISPLAY)
+    assert set(display.group(1).split(",")) == {".mh-brand", ".mh-label", ".mh-week",
+                                                ".eyebrow", ".wkn", ".cpct"}
+    body = re.search(r"\.screen \.filecard :is\(\.fslot,\.fpct\)\{font-family:([^;]*);", CSS)
+    assert body and squash(body.group(1)) == squash(FONT)
+
+
+def test_the_inbox_slot_card_is_drawn_as_the_report_draws_it() -> None:
+    """Review SLEEK-4: the landing's hand copy of Slot by Slot's lines had
+    drifted from the report template — the projection regular and grey where
+    the web report, How it works and the email print it bold navy, and the
+    lines 14px against 13px everywhere else. Each line's size, weight and
+    colour now match the template's own rule."""
+    template = (ROOT / "rival-report-template.html").read_text(encoding="utf-8")
+    tcss = _style(template)
+
+    def props(body: str) -> dict:
+        out = dict(re.findall(r"(font-size|font-weight|color):([^;]+);", body))
+        out.setdefault("font-weight", "400")
+        return out
+    for name in ("tgame", "tsub", "tflag", "tcall", "tproj", "tname"):
+        mine = props(_rule_body(CSS, f".rows .cbody .{name}"))
+        theirs = props(_rule_body(tcss, f".{name}"))
+        assert mine == theirs, (name, mine, theirs)
+
+
+def test_setting_the_lineup_takes_the_same_minute_everywhere() -> None:
+    """Reviews F8/BUYER-5: the landing said "Ninety seconds" and the join page
+    "about ninety seconds" for the act How it works and every welcome email
+    call "about a minute" (EMAILS-90 retired the ninety seconds as the game
+    plan's, not the lineup's)."""
+    join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+    how = (SITE / "how-it-works.html").read_text(encoding="utf-8")
+    for name, page in (("landing", LANDING), ("join", join), ("how it works", how)):
+        assert not re.search(r"ninety seconds|90 seconds", page, re.I), name
+    assert "set it in about a minute" in LANDING
+    assert "Your lineup set in <b>about a minute</b>" in join

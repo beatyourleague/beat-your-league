@@ -121,9 +121,11 @@ def test_every_email_declares_it_is_light_only_and_has_a_padded_preview(emails) 
         assert '<meta name="color-scheme" content="light only">' in html, name
         assert '<meta name="supported-color-schemes" content="light only">' in html, name
         assert "<title>" in html and 'lang="en"' in html, name
-    for name in ("report", "final check", "roster confirmation", "welcome season",
-                 "welcome seat", "renewal notice"):
-        assert "&#847;&zwnj;&nbsp;" in emails[name] and "mso-hide:all" in emails[name], name
+    # Every one of them (review F5): the roster report — the first email for
+    # a buyer who pays between a week's kickoff and Tuesday — had none, and
+    # its preview ran the masthead's words together.
+    for name, html in emails.items():
+        assert "&#847;&zwnj;&nbsp;" in html and "mso-hide:all" in html, name
 
 
 def test_the_checklist_box_is_a_table_not_a_sized_div(emails) -> None:

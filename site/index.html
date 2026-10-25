@@ -263,6 +263,18 @@
     text-overflow:ellipsis;line-height:1.3;}
   .mailrow time{font-size:3.5cqw;color:var(--slate);align-self:start;padding-top:.5cqw;}
   .screen .filecard{margin:2.33cqw 2.67cqw;flex:none;}
+  /* The phone's own chrome (status bar, mail row, lock screen) in the
+     device's system face, as the phone draws it; the clock keeps its own. */
+  .screen :is(.statusbar,.mailrow,.mailrow .av,.lock){
+    font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}
+  /* The email's own type, as every inbox draws it (render/email.py FONT and
+     DISPLAY): an email can carry no web font, so the phone shows the report in
+     Arial and the condensed system stack, never the site's Barlow. */
+  .screen .filecard{font-family:Arial,Helvetica,sans-serif;}
+  .screen .filecard :is(.mh-brand,.mh-label,.mh-week,.eyebrow,.wkn,.cpct){
+    font-family:'Arial Narrow','HelveticaNeue-CondensedBold','Helvetica Neue Condensed',
+      'Avenir Next Condensed','Roboto Condensed',Arial,Helvetica,sans-serif;font-weight:700;}
+  .screen .filecard :is(.fslot,.fpct){font-family:Arial,Helvetica,sans-serif;font-weight:700;}
   /* The masthead, the email's own four lines. */
   .mh{background:var(--navy);color:#B9C2D0;border-radius:3.33cqw;padding:3.33cqw 4cqw 3.67cqw;}
   .mh-top{display:flex;justify-content:space-between;align-items:baseline;gap:2cqw;}
@@ -353,13 +365,18 @@
   .mailview{display:flex;flex-direction:column;flex:none;transform-origin:50% 78%;
     padding-bottom:12cqw;}
   .lock,.lk-dark{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;}
-  .lock{z-index:6;color:#fff;overflow:hidden;
+  .lock{z-index:6;color:#fff;overflow:hidden;}
+  /* The wallpaper is its own layer, so the wake and unlock zoom move it and
+     the lock's text, never the status bar: through the unlock the lock's
+     white icons fade out exactly over the email's black ones, as a real
+     phone's status bar stays put (review F2: two rows of icons, offset). */
+  .lock::before{content:"";position:absolute;inset:0;
     background:
       radial-gradient(120% 62% at 85% 4%,rgba(242,194,48,.30),transparent 62%),
       radial-gradient(90% 50% at 8% 92%,rgba(46,169,104,.32),transparent 64%),
       linear-gradient(172deg,#1A3354 0%,#0C1930 52%,#05090F 100%);}
   .lk-dark{z-index:8;background:#000;}
-  .lk-status{display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;height:48px;padding:15px 4px 0;}
+  .lk-status{position:relative;display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;height:48px;padding:15px 4px 0;}
   .lk-status .icons{grid-column:3;justify-self:center;display:flex;gap:5px;align-items:center;}
   .lk-status svg{height:11px;width:auto;display:block;fill:#fff;}
   .lk-fg{position:absolute;inset:0;}
@@ -405,7 +422,8 @@
 
   .phone.story .lk-dark{animation:st-dark 16s linear infinite;}
   .phone.story .lock{animation:st-lock 16s linear infinite;}
-  .phone.story .lk-fg{animation:st-fg 16s linear infinite;}
+  .phone.story .lock::before{animation:st-zoom 16s linear infinite;}
+  .phone.story .lk-fg{animation:st-fg 16s linear infinite,st-zoom 16s linear infinite;}
   .phone.story .lnote{animation:st-note 16s linear infinite;}
   .phone.story .lk-tap{animation:st-tap 16s linear infinite;}
   .phone.story .lk-pad i{animation:st-pad 16s linear infinite;}
@@ -418,6 +436,7 @@
     animation:st-bar 16s linear infinite both;animation-delay:var(--bd,0s);}
   .phone.story [data-sec=closest] .cbar i{transform-origin:0 50%;animation:st-call 16s linear infinite both;}
   .phone.paused .screen *{animation-play-state:paused!important;}
+  .phone.paused .screen *::before,.phone.paused .screen *::after{animation-play-state:paused!important;}
   /* Offscreen, or held by the visitor's pause, the hardware holds too: the
      float and the floor are bound by `.js .hero …` (0,3,0) with a shorthand
      that resets play-state, so these carry .js to outrank it (0,4,0). */
@@ -449,11 +468,13 @@
      closest call · 8.90–9.60s its bar draws · 13.60s back to the top · 16s wrap. */
   @keyframes st-dark{0%,2.5%{opacity:0;animation-timing-function:cubic-bezier(.4,0,1,1)}
     4.7%,6.6%{opacity:1;animation-timing-function:cubic-bezier(0,0,.2,1)}9.7%,100%{opacity:0}}
-  @keyframes st-lock{0%,4.6%{opacity:0;transform:scale(1.06)}
-    4.7%{opacity:1;transform:scale(1.06);animation-timing-function:cubic-bezier(.2,.8,.2,1)}
-    9.7%{opacity:1;transform:none}
-    36.9%{opacity:1;transform:none;animation-timing-function:cubic-bezier(.4,0,.2,1)}
-    39.7%,100%{opacity:0;transform:scale(1.08)}}
+  @keyframes st-lock{0%,4.6%{opacity:0}4.7%,9.7%{opacity:1}
+    36.9%{opacity:1;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+    39.7%,100%{opacity:0}}
+  @keyframes st-zoom{0%,4.7%{transform:scale(1.06);animation-timing-function:cubic-bezier(.2,.8,.2,1)}
+    9.7%{transform:none}
+    36.9%{transform:none;animation-timing-function:cubic-bezier(.4,0,.2,1)}
+    39.7%,100%{transform:scale(1.08)}}
   @keyframes st-fg{0%,35.6%{opacity:1;animation-timing-function:cubic-bezier(.4,0,1,1)}36.9%,100%{opacity:0}}
   @keyframes st-note{0%,14.7%{opacity:0;transform:translateY(-16px) scale(.96);
       animation-timing-function:cubic-bezier(.2,.9,.3,1.15)}
@@ -481,15 +502,18 @@
   .js .hero .phone-float{animation:float 6s ease-in-out 2.2s infinite alternate;}
   .js .hero .phone-floor{animation:floor 6s ease-in-out 2.2s infinite alternate;}
   @keyframes floor{from{transform:none;opacity:1}to{transform:scaleX(.9);opacity:.72}}
-  /* Phones: the tilt follows the scroll, on the compositor where the browser
-     can (scroll-driven animation); elsewhere the phone simply stays square. */
+  /* Phones: the phone rises with the scroll, on the compositor where the
+     browser can (scroll-driven animation); elsewhere it simply stays square.
+     2D only: a perspective tilt here made Chrome raster the whole screen at
+     1x once the story's own layers were added, so the report's figures went
+     soft at 3x ("19.8" read as "13.8") for all three loops. */
   @media (hover:none),(pointer:coarse){
     @supports (animation-timeline: view()){
       .js .hero .phone{animation:tiltscroll linear both;animation-timeline:view();
         animation-range:entry 0% exit 60%;}
-      @keyframes tiltscroll{from{transform:perspective(1400px) rotateX(14deg) scale(.96)}
-        45%{transform:perspective(1400px) rotateX(0deg)}
-        to{transform:perspective(1400px) rotateX(-6deg)}}
+      @keyframes tiltscroll{from{transform:translateY(14px) scale(.96)}
+        45%{transform:none}
+        to{transform:translateY(-6px)}}
     }
   }
   /* phone:css:end */
@@ -498,6 +522,7 @@
   .realtag{font-size:13px;color:var(--dusk);text-align:center;
     max-width:320px;text-wrap:balance;}
   .realtag b{color:var(--flag);font-weight:700;}
+  .realtag .nw{white-space:nowrap;}
   /* Its link is the hero's route to a full report on a phone: a real
      target, not 17px of inline text (WCAG 2.5.8). */
   .realtag a{display:inline-block;padding:4px 0;color:var(--flag);}
@@ -572,11 +597,15 @@
     color:var(--slate);padding-top:4px!important;}
   .rows .cbody .tdet > *{display:block;}
   .rows .cbody .tname{font-size:16px;font-weight:700;color:var(--navy);}
-  .rows .cbody .tgame,.rows .cbody .tsub{font-size:14px;line-height:1.45;color:var(--ink2);}
-  .rows .cbody .tflag{font-size:14px;font-weight:700;color:var(--brick);}
-  .rows .cbody .tcall{margin-top:2px;font-size:14px;font-weight:700;color:var(--navy);}
-  .rows .cbody .tproj{width:48px;text-align:right;font-size:15px;font-variant-numeric:tabular-nums;
-    color:var(--ink2);}
+  /* Slot by Slot's lines as the report draws them (rival-report-template.html:
+     13px, the game in navy, the projection bold navy) — the hand copy had
+     drifted to 14px and a regular grey projection (review SLEEK-4). */
+  .rows .cbody .tgame{font-size:13px;line-height:1.45;color:var(--navy);}
+  .rows .cbody .tsub{font-size:13px;line-height:1.45;color:var(--ink2);}
+  .rows .cbody .tflag{font-size:13px;line-height:1.45;font-weight:700;color:var(--brick);}
+  .rows .cbody .tcall{margin-top:2px;font-size:13px;line-height:1.45;font-weight:700;color:var(--navy);}
+  .rows .cbody .tproj{width:48px;text-align:right;font-size:15px;font-weight:700;
+    font-variant-numeric:tabular-nums;color:var(--navy);}
 
   /* ------------------------------------------------ sections */
   :root{--gap-section:96px;}
@@ -651,13 +680,17 @@
   .method h3{margin:6px 0 0;}
 
   /* ------------------------------------------------ read a real one first */
-  .reads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:32px;}
+  /* As many equal columns as there are tiles showing: this week's tile waits
+     for a current page in the card layout, the planner for byes still ahead,
+     and a hidden tile left a hole mid-row (and 140px of blank on a phone).
+     The section is far below the fold when the season clock loads, so its late
+     tile moves nothing in view. */
+  .reads{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:16px;
+    margin-top:32px;}
   .reads a{text-decoration:none;color:inherit;transition:border-color var(--t-hover) ease,
     transform var(--t-hover) var(--ease-out);}
   .reads a:hover{border-color:rgba(242,194,48,.55);transform:translateY(-1px);}
   .reads b.dt::after{content:"\00a0→";color:var(--flag);}
-  /* This week's tile keeps its room until the Tuesday build says it may show. */
-  .reads [data-live-week][hidden]{display:block!important;visibility:hidden;}
   [data-planner][hidden]{display:none!important;}
 
   /* ------------------------------------------------ pricing */
@@ -870,14 +903,19 @@
     .hero .livepill{order:10;justify-self:start;}
     .hero .livecall{order:11;}
     .hero .phone{max-width:286px;}
-    .hero .phone-float,.hero .realrow{max-width:286px;}
-    .hero .realtag{max-width:286px;}
+    .hero .phone-float{max-width:286px;}
+    /* The caption row is centred under the phone but may run wider than it:
+       held to the phone's 286px, the pause toggle and its spacer left the
+       caption 202px and it broke mid-phrase ("2024, / Week 10") while the
+       story played (review SLEEK-7). */
+    .hero .realrow{max-width:100%;}
     /* A tablet keeps its nav and the CTA, in the short label: at 768px the
        nav used to show the logo alone (launch review I14). */
     nav .btn .long{display:none;}
     nav .btn .short{display:inline;}
     .proofline{grid-template-columns:1fr;gap:8px;}
     .timeline,.method,.reads{grid-template-columns:1fr;}
+    .reads{grid-auto-flow:row;}
     .faqgrid{grid-template-columns:1fr;gap:16px;}
     .stickybar{display:block;}
     footer{padding-bottom:96px;}
@@ -1049,7 +1087,7 @@
     <h1>Know who <em><span>to start.</span></em></h1>
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
-    <p class="sub">Every Tuesday, one email sets your lineup for your exact roster — all
+    <p class="sub">Every Tuesday, one email decides your lineup for your exact roster — all
     the way to your title game.</p>
     <!-- While checkout is closed, the one action a visitor can complete lives
          right here: one email, no card. The paid CTA unhides the day
@@ -1103,7 +1141,7 @@
       class="hw hw-cam" aria-hidden="true"></span>
       <div class="screen" aria-hidden="true">
 <!-- phone:start -->
-<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Rebuilt Oct 25, 2026 from the 2024 season archive</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">no bench QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">start · Chase Brown rising</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">start · Chase Brown rising</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">no bench K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip ok">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="lk-dark"></div><div class="glass"><i></i></div><div class="homebar"></div>
+<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Rebuilt Oct 25, 2026 from the 2024 season archive</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">no bench QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">start · Chase Brown (bench) rising</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">start · Chase Brown (bench) rising</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">no bench K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="lk-dark"></div><div class="glass"><i></i></div><div class="homebar"></div>
 <!-- phone:end -->
       </div>
     </div>
@@ -1113,7 +1151,7 @@
          report has its own link. The toggle stops and restarts the phone's
          storyline (WCAG 2.2.2); it shows once that plays. -->
     <div class="realrow">
-    <p class="realtag"><b>Real report</b> · 2024, Week 10 ·
+    <p class="realtag"><b>Real report</b> · <span class="nw">2024, Week 10</span> ·
     <a href="sample-report.html">read it all</a></p>
     <button type="button" class="storytoggle" id="story-toggle" aria-pressed="false" aria-label="Pause the phone animation"><svg class="pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="2.8" height="9" rx=".8"/><rect x="7.2" y="1.5" width="2.8" height="9" rx=".8"/></svg><svg class="play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.4 6z"/></svg></button>
     </div>
@@ -1132,11 +1170,11 @@
 <section>
   <h2>Your week, handled</h2>
   <ol class="timeline">
-    <li class="dcard"><b>Tuesday<small>Your report</small></b><p>Your lineup, decided. Tick the boxes on a short
-      checklist: the calls, whose news to watch, any bye ahead. Ninety seconds.</p></li>
+    <li class="dcard"><b>Tuesday<small>Your report</small></b><p>Your lineup, decided: set it in about a minute. Then
+      tick off the game plan: whose news to watch, any bye ahead.</p></li>
     <li class="dcard"><b>Saturday<small>Only if news</small></b><p>Friday's injury report changed your
       lineup? A short note with the swap. No news, no email.</p></li>
-    <li class="dcard"><b>Sunday<small>Kickoff</small></b><p>Your lineup's already set. Watch the
+    <li class="dcard"><b>Sunday<small>Kickoff</small></b><p>You set it Tuesday. Watch the
       games.</p></li>
   </ol>
 </section>
@@ -1153,8 +1191,8 @@
 <div class="filecard" data-real="2024-w10"><section class="card" data-sec="ifthen"><div class="eyebrow"><span class="tag">If/Then for Gameday</span><span class="n">04</span></div><div class="cbody"><div class="pivot"><p class="if">If Tony Pollard (FLEX) is ruled out</p><p class="then">Move Sam LaPorta into FLEX (projects 9.5).</p><p class="rest">Chase Brown (10.3) plays Thursday, before Tony Pollard&#x27;s status is known.</p></div></div></section></div><!--/card-->
 <div class="filecard" data-real="2024-w10"><section class="card" data-sec="slots"><div class="eyebrow"><span class="tag">Slot by Slot</span><span class="n">05</span></div><div class="cbody"><table class="tape"><colgroup><col style="width:10%"><col style="width:76%"><col style="width:14%"></colgroup><tr><td class="tslot">WR</td><td class="tdet"><b class="tname">Amon-Ra St. Brown</b><span class="tgame">@ HOU · Sun 8:20 PM ET</span><span class="tcall">+7.6 over Courtland Sutton on your bench</span><span class="tsub">2024: 16.8 a game · last 3: 25.2, 8.7, 18.6</span><span class="tsub">last 4: 5.2 targets a game</span></td><td class="tproj">16.9</td></tr></table></div></section></div><!--/card-->
 <!-- inbox:end -->
-    <div class="note"><b>What to do, and by when</b><p>Every move for the week, each with
-      its deadline.</p></div>
+    <div class="note"><b>What to do, and by when</b><p>Each move comes with its
+      deadline.</p></div>
     <div class="note"><b>Late news, planned for</b><p>A questionable starter comes with
       his backup plan. Ruled out on Friday? Saturday's check tells you the swap.</p></div>
     <div class="note"><b>The why behind every slot</b><p>His game, his recent form and,
@@ -1170,9 +1208,10 @@
     <article class="dcard"><div class="n">01</div><h3>Your roster, your rules</h3><p>Rankings are one
       list for everybody. Yours starts from your roster. Your scoring, your league's size, the
       lineup your league starts.</p></article>
-    <article class="dcard"><div class="n">02</div><h3>Decided against your bench</h3><p>A percentage
-      prints only where both players are playing, off the injury report and have enough games on
-      record (never on team defenses).</p></article>
+    <article class="dcard"><div class="n">02</div><h3>Decided against your bench</h3><p>The % is the
+      chance your starter outscores your best bench player at that spot, printed only where both
+      players are playing, off the injury report and have enough games on record (never on team
+      defenses).</p></article>
     <article class="dcard"><div class="n">03</div><h3>Sunday, already planned</h3><p>Questionable
       starters get an if/then, Saturday's check catches Friday's news, and every report checks
       the byes ahead, playoffs included.</p></article>
@@ -1222,8 +1261,9 @@
     </div>
   </div>
   <p class="finance" id="currency-note">All prices in US dollars. Secure checkout on Stripe — we never see your card.</p>
-  <p class="finance" id="finance-note">Running the league?
-  <a href="league-pass.html">One payment can cover every team</a>.</p>
+  <!-- Filled when checkout opens. The League Pass is the section right
+       below; this line used to pitch it too (review BUYER-4). -->
+  <p class="finance" id="finance-note" hidden></p>
 </section>
 
 <section class="leaguepass">
@@ -1244,7 +1284,7 @@
     <div class="faq">
       <details>
         <summary>How is this different from free rankings?</summary>
-        <div class="a">Rankings sort players for everyone. Your report sets your lineup from your roster and scoring, names the bench player and the points gap on every close call, gives questionable starters an if/then and checks byes through the playoffs. Saturday emails only if Friday's injury report changes your lineup.</div>
+        <div class="a">Rankings sort players for everyone. Your report decides your lineup from your roster and scoring, names the bench player and the points gap on every close call, gives questionable starters an if/then and checks byes through the playoffs. Saturday emails only if Friday's injury report changes your lineup.</div>
       </details>
       <details>
         <summary>Does it work with my league?</summary>
@@ -1327,7 +1367,7 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings sort players for everyone. Your report sets your lineup from your roster and scoring, names the bench player and the points gap on every close call, gives questionable starters an if/then and checks byes through the playoffs. Saturday emails only if Friday's injury report changes your lineup."}},
+        {"@type": "Question", "name": "How is this different from free rankings?", "acceptedAnswer": {"@type": "Answer", "text": "Rankings sort players for everyone. Your report decides your lineup from your roster and scoring, names the bench player and the points gap on every close call, gives questionable starters an if/then and checks byes through the playoffs. Saturday emails only if Friday's injury report changes your lineup."}},
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes: ESPN, Yahoo, Sleeper, CBS or any app. Paste your roster, no login. Full PPR, half-PPR or standard (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
         {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes — it's built for the playoff push. Your first report usually lands within the hour, every report checks the byes still ahead (playoff weeks included), and Saturday's check catches Friday's injury news."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after."}},
@@ -1659,17 +1699,11 @@ if (CHECKOUT_OPEN) {
     }
     const finance = document.getElementById("finance-note");
     if (finance) {
-      // By its href: the line's FIRST link is the closed state's "leave your
-      // email", which this rewrite retires.
-      const passLink = finance.querySelector('a[href="league-pass.html"]');
+      // The League Pass has its own section right below, so this line no
+      // longer pitches it a second time (review BUYER-4).
       finance.textContent = "Payment runs on Stripe's own page — your roster " +
-        "and scoring ride into checkout with you. One payment, nothing renews. " +
-        "Running the league? ";
-      if (passLink) {
-        passLink.textContent = "One payment can cover every team";
-        finance.appendChild(passLink);
-        finance.appendChild(document.createTextNode("."));
-      }
+        "and scoring ride into checkout with you. One payment, nothing renews.";
+      finance.hidden = false;
     }
   } else {
     // FUN-7: the buy buttons are live (CHECKOUT_OPEN) while the capture stays
@@ -1874,8 +1908,14 @@ storyline();
   hero.addEventListener("pointerenter", measure, { passive: true });
   window.addEventListener("resize", measure, { passive: true });
   window.addEventListener("scroll", () => { box = null; }, { passive: true });
+  // While the story plays the phone holds flat, like the float: a 3D turn
+  // rasterizes the playing screen at 1x and the report's figures go soft.
+  const playing = () => heroPhone.classList.contains("story");
+  heroPhone.addEventListener("animationstart", () => { if (playing()) aim(0, 0); },
+    { passive: true });
   hero.addEventListener("pointermove", (e) => {
     if (e.pointerType !== "mouse") return;
+    if (playing()) { aim(0, 0); return; }
     if (!box) measure();
     const nx = (e.clientX - (box.left + box.width / 2)) / (box.width * 1.8);
     const ny = (e.clientY - (box.top + box.height / 2)) / (box.height * 1.1);
@@ -1993,11 +2033,14 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           return;
         }
         // EVERY link to this week's live report waits for the same rule — at
-        // least three odds and a closest call, in a week still current — or it
-        // stays on the pinned sample. A failed build or the offseason leaves an
-        // old week.json behind, and it must not be called "this week's".
+        // least three odds and a closest call, in a week still current, on a
+        // page built in the report's current card layout (`cards`, written by
+        // the Tuesday build) — or it stays on the pinned sample. A failed
+        // build or the offseason leaves an old week.json behind, and it must
+        // not be called "this week's"; a page from before the card stack must
+        // not be offered beside a phone that shows the cards (review BUYER-1).
         if (phase === "season" && fresh && Number.isInteger(w.odds) &&
-            w.odds >= 3 && w.closest_call) {
+            w.odds >= 3 && w.closest_call && w.cards === true) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
           // The hero's link names the week and the day the page was built, so
           // it is plainly this week's report and not the 2024 sample above it.

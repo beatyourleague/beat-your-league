@@ -110,7 +110,7 @@ PLATFORMS = (
 
 TITLE = "{name} fantasy football start/sit report for your roster — Beat Your League"
 DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login: every Tuesday a "
-               "report sets your lineup — every slot decided, close calls explained, byes "
+               "report decides your lineup — every slot decided, close calls explained, byes "
                "checked through Week 17.")
 H1 = "Your {name} roster, decided every Tuesday"
 STEPS = (
@@ -348,7 +348,7 @@ def page(platform: Platform) -> str:
     <p class="kicker">For {esc(name)} leagues</p>
     <h1>{esc(H1.format(name=name))}</h1>
     <p>Paste the roster you already have on {esc(name)} — no login, nothing to connect.
-    Every Tuesday a report built from it sets your lineup for your scoring.</p>
+    Every Tuesday a report built from it decides your lineup for your scoring.</p>
     <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
   </div>
 </header>

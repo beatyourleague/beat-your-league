@@ -121,10 +121,13 @@ def test_the_float_lives_on_its_own_wrapper_so_the_tilt_can_own_the_phone() -> N
     assert not re.search(r"\.phone \*\s*\{[^}]*transform", CSS), "a rule un-centres the island"
     for selector in (".island", ".homebar"):
         assert "translateX(-50%)" in _rule(selector)
-    # At 880px and below the phone is 286px, and so is everything centred
-    # with it, or the phone sits left inside a 320px float.
+    # At 880px and below the phone is 286px, and so is its float, or the
+    # phone sits left inside a 320px float. The caption row under it stays
+    # centred but may run wider (review SLEEK-7: held to 286px, the toggle
+    # and its spacer broke the caption mid-phrase at 390).
     narrow = _blocks("@media (max-width:880px)")
-    assert ".hero .phone-float,.hero .realrow{max-width:286px;}" in narrow
+    assert ".hero .phone-float{max-width:286px;}" in narrow
+    assert ".hero .realrow{max-width:100%;}" in narrow
 
 
 def test_the_status_bar_time_is_after_the_tuesday_send() -> None:
@@ -555,7 +558,7 @@ const call = { start: "Odunze", over: "Shaheed", slot: "WR", pct: 61, start_proj
                over_proj: "9.8", label: "Closest call with odds", tossup: false };
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, odds: 3, phase: "season",
-  first_kickoff: soon, recorded: true, closest: call };
+  first_kickoff: soon, recorded: true, closest: call, cards: true };
 const cases = CASES;
 (async () => {
   const out = [];
@@ -674,7 +677,9 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     data; the footer no longer dates every visual to 2024 (the hero's 2026
     line is labelled as this week's)."""
     sub = _flat(re.search(r'<p class="sub">(.*?)</p>', HERO, re.S).group(1))
-    assert sub == ("Every Tuesday, one email sets your lineup for your exact roster — all "
+    # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
+    # their own app, and "sets your lineup" read as automation.
+    assert sub == ("Every Tuesday, one email decides your lineup for your exact roster — all "
                    "the way to your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     method = _flat(BODY.split('<div class="method">')[1].split("</section>")[0])

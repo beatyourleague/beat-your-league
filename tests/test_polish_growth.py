@@ -733,7 +733,7 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert "$" not in visible and not re.search(r"better than|more accurate|grade", visible, re.I)
     assert f"<title>{name} fantasy football start/sit report for your roster — Beat Your League</title>" in page
     assert (f'<meta name="description" content="Copy your {name} fantasy roster and paste it, no '
-            f"login: every Tuesday a report sets your lineup — every slot decided, close calls "
+            f"login: every Tuesday a report decides your lineup — every slot decided, close calls "
             f'explained, byes checked through Week 17.">') in page
     assert f"<h1>Your {name} roster, decided every Tuesday</h1>" in page
     assert f'<link rel="canonical" href="https://beatyourleague.com/{slug}/">' in page

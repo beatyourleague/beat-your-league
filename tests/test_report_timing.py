@@ -513,7 +513,7 @@ def test_a_bench_player_who_is_out_is_named_not_denied() -> None:
                      designations={QB2: "Out"}, listed={QB2: ("out", "ankle")})
     row = _row(report, "Quinn Starter")
     assert row["confidence_gate"].startswith("bench option not cleared")
-    assert row_label(row) == "Quade Backup not cleared yet"
+    assert row_label(row) == "Quade Backup (bench) not cleared yet"
     assert "Quade Backup" not in gate_list({row["confidence_gate"]}), \
         "the note names nobody; the row does"
     assert gate_list({row["confidence_gate"]}) == \

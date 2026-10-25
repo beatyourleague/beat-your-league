@@ -661,6 +661,11 @@ def row_label(slot: Mapping[str, Any]) -> str:
     gate = slot.get("confidence_gate") or ""
     alt = slot.get("alternative_name")
     starter_ok = slot.get("status") == "active"
+    # A bench player named on a starter's row is marked as the bench player:
+    # "Saquon Barkley — start · Chase Brown rising" read as an instruction to
+    # start Chase Brown, against the player named in the same row (review
+    # BUYER-3). Words only: no seat, odds or gate moves.
+    bench = lambda name: f"{name} (bench)"
     # Only a row whose player the if/then actually names may send the reader
     # there (launch audit R7). Reports built before the field existed, and the
     # league product, keep the old wording.
@@ -685,17 +690,19 @@ def row_label(slot: Mapping[str, Any]) -> str:
         return "odds after 3 games"
     if gate.startswith("bench option not cleared"):
         held = slot.get("bench_held") or {}
-        name = held.get("name") or "your bench player"
+        name = bench(held["name"]) if held.get("name") else "your bench player"
         return {"bye": f"{name} on bye", "roster": f"{name} can't play"}.get(
             held.get("kind"), f"{name} not cleared yet")
     if gate.startswith("not confirmed to play"):
         # Method §15 C9: "not confirmed to play (Zach Ertz: on the practice
         # squad)" — the row names who.
         who = gate[len("not confirmed to play"):].strip(" ()").split(":")[0]
+        if who and alt and who == alt:
+            who = bench(who)
         return f"{who} on practice squad" if who else "practice squad"
     if gate.startswith("held: the bench option's role is growing"):
         # The starter starts either way; the row says who the odds wait on.
-        return f"start · {alt} rising" if alt else "held this week"
+        return f"start · {bench(alt)} rising" if alt else "held this week"
     if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):
@@ -709,8 +716,8 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # review RQ-18), and never said WHY (BE-D3) — the plain fact is last
         # week's designation, dated, and the bench row prints it in full.
         if gate.startswith("availability in doubt"):
-            return f"start · {alt} was questionable"
-        return f"start · {alt} not confirmed"
+            return f"start · {bench(alt)} was questionable"
+        return f"start · {bench(alt)} not confirmed"
     if gate.startswith("availability in doubt"):
         return f"questionable{see}"
     return f"status open{see}"

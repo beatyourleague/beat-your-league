@@ -351,7 +351,11 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     step = _flat(LANDING.split("<h3>Decided against your bench</h3>")[1].split("</article>")[0])
     assert meta == product["description"]
     assert "the odds " + GATE_CLAUSE in meta
-    assert "A percentage prints " + GATE_CLAUSE + "." in step
+    # Review BUYER-2: the step defines the % in the report's own words
+    # (render.report.ODDS_DEFINITION) before it says where it prints — the
+    # landing's only readable definition of its one number.
+    assert ("The % is the chance your starter outscores your best bench player at that "
+            "spot, printed " + GATE_CLAUSE + ".") in step
     assert "the odds " + GATE_CLAUSE in _flat(_js_function(JOIN, "monthlyPlan"))
     for name in ("index.html", "join/index.html", "how-it-works.html", "thanks.html",
                  "league-pass.html"):
@@ -504,7 +508,7 @@ setTimeout(() => console.log(JSON.stringify({ closed,
 
 
 WEEK7 = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-27",
-         "built_at": "2026-10-20T17:15:45+00:00", "odds": 3, "closest_call": True,
+         "built_at": "2026-10-20T17:15:45+00:00", "odds": 3, "closest_call": True, "cards": True,
          "first_kickoff": "2026-10-23T00:15:00Z", "recorded": True}
 
 
@@ -575,14 +579,19 @@ def test_how_it_works_draws_the_report_in_the_reports_colours() -> None:
     assert ".chip.ok{color:#1E7A46;background:#E3F2E8;}" in css
     assert ".chip.due{color:#B3402F;background:#F9E6E1;}" in css
     chip = r'class="chip {}">before this week(?:&#x27;|\')s first kickoff</span>'
-    assert re.search(chip.format("ok"), HOW)
+    # Review SLEEK-8: the sample's week has a Thursday-night starter, so its
+    # first kickoff is a deadline still to meet and prints due, in the same
+    # colour as "before Thursday's kickoff" (one moment, one colour);
+    # render.anatomy.early_week decides, and a calm week keeps "ok".
+    assert re.search(chip.format("due"), HOW)
     assert '<span class="chip due">gameday morning</span>' in HOW
     sample = (SITE / "sample-report.html").read_text(encoding="utf-8")
     # The tag is not the point (the checklist moved from divs to spans inside a
     # label, REPORT-CHROME, Oct 24 2026); the class beside each deadline is.
     # Since the card stack (contract C6) the deadline is a chip: .chip.ok turf,
     # .chip.due brick, in the sample and in the template that draws it.
-    assert re.search(chip.format("ok"), sample)
+    assert re.search(chip.format("due"), sample) and not re.search(chip.format("ok"), sample)
+    assert 'class="chip due">before Thursday' in sample
     assert 'class="chip due">gameday morning</' in sample
     from render.report import TEMPLATE_PATH, extract_design
     tcss = extract_design(TEMPLATE_PATH.read_text(encoding="utf-8"))[0]
