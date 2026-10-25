@@ -69,34 +69,49 @@ concurrency:
   group: weekly-report
   cancel-in-progress: false
 
-# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+# Nothing by default; each job below asks for exactly what it uses (INFRA-14).
 permissions: {}
 
+# Five jobs, and the split is the point (SEC-1, Oct 25 2026). `week` and
+# `share-card` run pip-installed packages, and the card a browser, on pages
+# built from third-party data. Every step of a job shares one runner and one
+# checkout, so anything such a step leaves behind — a git hook, a filter
+# driver or credential helper in a config file, BASH_ENV or LD_PRELOAD through
+# $GITHUB_ENV, a fake git first on $GITHUB_PATH — runs in a later step of the
+# same job. A push token in that later step was a push token for whatever ran
+# first, on the branch that serves the payment pages. So neither of those jobs
+# can push: each uploads the files it is allowed to change as an artifact,
+# and a commit job (`commit-record`, `commit-card`) that installs and runs
+# nothing checks that artifact, lays it on the commit the first job started
+# from, and pushes it. `file-issue` raises the failure issue for the first two.
 jobs:
   week:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write   # commit the record (ledger, send log, player directory) back
-      issues: write     # raise an issue when a run fails, so it is never silent
+      contents: read    # the checkout; commit-record pushes what this job wrote
       actions: read     # the sealed registry's and plans' backups, when the cache is gone
+    outputs:
+      # The commit this job started from, as the checkout action itself
+      # reports it — fixed before any step of ours runs, so nothing later in
+      # the job can change it. commit-record lays the record on this commit
+      # and rebases, exactly as this job's own push used to.
+      base: ${{ steps.checkout.outputs.commit }}
     steps:
-      # fetch-depth: 0 because this job COMMITS BACK. The default is a
-      # shallow clone, and `git pull --rebase` against a shallow history
-      # can fail — which would break the persist step whose whole job is
-      # keeping the record safe.
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
       # out the send log as it was when it was QUEUED — before the run ahead
       # of it pushed — and mail everything that run just mailed. (A double
       # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
+      # The concurrency group holds the WHOLE run, commit-record included, so
+      # the run behind this one starts from this one's push.
       #
-      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
-      # push token kept out of .git/config until the persist step (INFRA-07).
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and no
+      # token left in .git/config (INFRA-07) — this job has none that can push.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        id: checkout
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -349,30 +364,40 @@ jobs:
       - name: Refresh the security headers
         if: always()
         run: .venv/bin/python -m render.headers
-      # Persist what cannot be rebuilt. `always()` so a failed send still records
-      # who WAS mailed — the alternative is double-sending them on the retry.
-      # Rebase before pushing: Monday's run commits too.
-      #
-      # The only step handed a token that can push: the credential helper reads
-      # it from this step's environment, so .git/config never holds it.
-      - name: Persist the record
+      # What cannot be rebuilt, handed to commit-record — which pushes it from a
+      # runner nothing here has touched. `always()` so a failed send still
+      # records who WAS mailed: the alternative is double-sending them on the
+      # retry. Every file git would commit at the record's paths, as this job
+      # left them (ignored files such as the ledger's .lock are not; git's own
+      # files never are), at the same paths under one folder, so the
+      # artifact's layout never depends on which of them exist.
+      - name: Hand the record to its commit job
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          # SEC-1: no hook or fsmonitor command an earlier step left in .git (or
-          # in any git config file) runs beside the token: config given on the
-          # command line outranks them all, for every git call below.
-          git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
-          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md site/join/byes.json site/byes/index.html
-          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
-          git diff --cached --quiet && echo "nothing to persist" && exit 0
-          git commit -m "Weekly run: ledger, send log, player directory"
-          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
-          git push
+          set -euo pipefail
+          stage="$RUNNER_TEMP/record"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          git ls-files -z --cached --others --exclude-standard -- \
+              data/processed/ledger data/processed/sent.jsonl site/join/players.json \
+              site/this-week.html site/week.json site/_headers content/this-week.md \
+              site/join/byes.json site/byes/index.html |
+            while IFS= read -r -d '' path; do
+              case "/$path" in */.git*) continue ;; esac
+              [ -f "$path" ] && [ ! -L "$path" ] || continue
+              mkdir -p "$stage/$(dirname "$path")"
+              cp "$path" "$stage/$path"
+            done
+      # overwrite: a re-run of this job replaces the record its first attempt
+      # left, rather than failing on the name and persisting nothing.
+      - name: Upload the record
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: weekly-record
+          path: ${{ runner.temp }}/record/
+          if-no-files-found: error
+          overwrite: true
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -388,10 +413,10 @@ jobs:
             !reports/subscribers/
             !reports/outbox/
             data/processed/ledger/
-            # sent.jsonl is committed by the persist step, but that push is its
-            # ONLY copy — and if the push fails after a successful send, the
-            # next run has no record of who was mailed and sends to everyone
-            # again. In the artifact it is at least recoverable by hand.
+            # sent.jsonl is committed by commit-record, but that push is its
+            # ONLY other copy — and if the push fails after a successful send,
+            # the next run has no record of who was mailed and sends to
+            # everyone again. In this artifact it is recoverable by hand.
             data/processed/sent.jsonl
           if-no-files-found: error
       # AFTER delivery, not before. A blocked signup is somebody who paid and is
@@ -409,15 +434,134 @@ jobs:
           echo "UPDATE_SECRET). Reports were still built and sent for everyone"
           echo "already in the registry. See the intake step's log."
           exit 1
-      # A silent failure costs a paying subscriber their Tuesday and nobody
-      # finds out until they complain.
-      # ONE open issue per kind of failure: a later failure comments on the
-      # open one instead of opening another (before launch these crons filed
-      # 16 near-identical issues, which teaches exactly the wrong habit). The
-      # title carries no date for that reason; each comment does. Listed, not
-      # searched: the search index can lag a fresh issue by minutes.
+
+  # The record, pushed from a runner that installs nothing and runs nothing
+  # but git and the shell's own tools (SEC-1). It reads only the artifact the
+  # week job uploaded, and three rules hold before anything is pushed:
+  #   - the artifact holds plain files at the record's own paths and nothing
+  #     else: no other path, no link, nothing of git's own. A week job that
+  #     ran something hostile can still write a bad ledger row or a bad page —
+  #     those files are its output — but never a workflow, the join page's
+  #     payment links, or anything else outside this list;
+  #   - the files are laid on the commit the week job STARTED from, then
+  #     rebased, exactly as the week job's own push used to be: if the hourly
+  #     intake or Monday pushed in between, its sent.jsonl and ledger lines
+  #     are merged (merge=union, .gitattributes), never overwritten by this
+  #     run's older copy;
+  #   - nothing is ever deleted. A partial artifact can fail to add a line,
+  #     never drop one, which is the safe direction for a send log.
+  #
+  # `if: always()`, as the persist step it replaces had: a failed or
+  # cancelled send still records who WAS mailed — the alternative is
+  # double-sending them on the retry.
+  commit-record:
+    needs: week
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the record; nothing else
+    steps:
+      # fetch-depth: 0: the week job's starting commit is checked against this
+      # branch's history, and `git pull --rebase` against a shallow history
+      # can fail — which would break the step whose whole job is keeping the
+      # record safe.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Outside the checkout: nothing in it reaches the work tree until the
+      # check below has passed it.
+      - name: Download the record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: weekly-record
+          path: ${{ runner.temp }}/record
+      - name: Check the record and lay it on the week job's commit
+        env:
+          BASE: ${{ needs.week.outputs.base }}
+        run: |
+          set -euo pipefail
+          record="$RUNNER_TEMP/record"
+          # The week job's starting commit must be on this branch: rebasing
+          # from anywhere else would push whatever lies between it and here.
+          if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
+            echo "::error::the week job's starting commit is not on this branch; nothing was persisted"
+            exit 1
+          fi
+          odd=$(find "$record" -mindepth 1 ! -type f ! -type d -print -quit)
+          if [ -n "$odd" ]; then
+            echo "::error::the record holds something that is not a plain file; nothing was persisted"
+            exit 1
+          fi
+          files=()
+          while IFS= read -r -d '' file; do
+            path=${file#"$record"/}
+            case "/$path" in
+              */.git*) bad=1 ;;
+              /data/processed/ledger/*) bad= ;;
+              /data/processed/sent.jsonl | /site/join/players.json | /site/this-week.html) bad= ;;
+              /site/week.json | /site/_headers | /content/this-week.md) bad= ;;
+              /site/join/byes.json | /site/byes/index.html) bad= ;;
+              *) bad=1 ;;
+            esac
+            if [ -n "$bad" ]; then
+              printf '::error::the record holds %q, which this job never commits; nothing was persisted\n' "$path"
+              exit 1
+            fi
+            files+=("$path")
+          done < <(find "$record" -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::the record is empty; nothing was persisted"
+            exit 1
+          fi
+          git reset -q --hard "$BASE"
+          for path in "${files[@]}"; do
+            mkdir -p "$(dirname "$path")"
+            cp "$record/$path" "$path"
+          done
+          echo "${#files[@]} file(s) laid on $BASE"
+      # The only step handed a token that can push: the credential helper
+      # reads it from this step's environment, so .git/config never holds it.
+      # Rebase before pushing: Monday's run and the hourly intake commit too.
+      - name: Persist the record
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # SEC-1: no hook or fsmonitor command runs beside the token: config
+          # given on the command line outranks every config file, for every
+          # git call below. Nothing ran before this in this job to leave one;
+          # every pushing step in every workflow starts this way regardless.
+          git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
+          git add -A data/processed/ledger site/join/players.json site/this-week.html site/week.json site/_headers content/this-week.md site/join/byes.json site/byes/index.html
+          [ -f data/processed/sent.jsonl ] && git add data/processed/sent.jsonl || true
+          git diff --cached --quiet && echo "nothing to persist" && exit 0
+          git commit -m "Weekly run: ledger, send log, player directory"
+          git pull --rebase --autostash origin "$GITHUB_REF_NAME"
+          git push
+
+  # A silent failure costs a paying subscriber their Tuesday and nobody
+  # finds out until they complain. Its own job, after commit-record, so a
+  # record that never reached the branch raises the same issue as a send that
+  # failed: either can mean somebody is mailed twice or not at all.
+  # ONE open issue per kind of failure: a later failure comments on the
+  # open one instead of opening another (before launch these crons filed
+  # 16 near-identical issues, which teaches exactly the wrong habit). The
+  # title carries no date for that reason; each comment does. Listed, not
+  # searched: the search index can lag a fresh issue by minutes.
+  file-issue:
+    needs: [week, commit-record]
+    if: always() && (needs.week.result == 'failure' || needs.commit-record.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write     # raise an issue when a run fails, so it is never silent
+    steps:
       - name: Raise an issue if the run failed
-        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -431,7 +575,11 @@ jobs:
           CACHE_KEY set and unchanged (the open and seal steps), any BLOCKED line
           in the intake log (a paid roster naming a player the directory does not
           have), email provider credentials, then whether
-          data/processed/sent.jsonl shows a partial send."
+          data/processed/sent.jsonl shows a partial send. If commit-record is the
+          job that failed, the reports went out but the record never reached the
+          branch: before the next run, use Re-run failed jobs (commit-record pushes
+          the same record again) or commit this run's weekly-record artifact by
+          hand, or the next run mails everyone again."
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then
@@ -444,27 +592,33 @@ jobs:
   # This week's share image (render/og.py --week): the recorded closest call
   # in site/week.json (contract C9), drawn as the preview X shows for
   # this-week.html, the page every Tuesday post links. Its OWN job, after the
-  # one above: no secrets at all and no registry on disk, because it runs a
-  # browser — the runner image's preinstalled Chrome (render.og.find_chrome
-  # lists google-chrome) — on a page built from third-party data.
+  # record is pushed: no secrets at all and no registry on disk, because it
+  # runs a browser — the runner image's preinstalled Chrome
+  # (render.og.find_chrome lists google-chrome) — on a page built from
+  # third-party data. And no token that can push: it uploads the card folder
+  # and the page, and commit-card pushes them.
   #
-  # It checks out the branch tip, so it starts from the persist push above.
+  # It checks out the branch tip, so it starts from commit-record's push.
   # A refusal (no recorded closest call, a toss-up, a figure the page does not
   # print) or a missing browser is a ::notice:: and exit 0: the page simply
   # keeps the site's own card, and an older week's card is deleted. pages.yml
-  # redeploys when this workflow completes, this job included.
+  # redeploys when this workflow completes, commit-card included.
   share-card:
-    needs: week
-    if: always() && needs.week.result != 'cancelled'
+    needs: [week, commit-record]
+    if: always() && needs.week.result != 'cancelled' && needs.commit-record.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write   # commit the card and the page's preview tags
+      contents: read    # the checkout; commit-card pushes the card
+    outputs:
+      # As the week job's: the checkout's own report, fixed before any step
+      # of ours runs.
+      base: ${{ steps.checkout.outputs.commit }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        id: checkout
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -475,15 +629,101 @@ jobs:
           .venv/bin/pip install --disable-pip-version-check --require-hashes -r requirements.lock
       - name: Draw this week's share card
         run: .venv/bin/python -m render.og --week
-      # Only the card and the page's preview tags: nothing else in this job
-      # is ever committed.
+      # The card folder as the draw left it (an older week's card deleted, at
+      # most this week's in it) and the page whose preview tags point at it.
+      # Only those: nothing else this job touches is ever committed.
+      - name: Hand the card to its commit job
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/card"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          git ls-files -z --cached --others --exclude-standard -- site/og site/this-week.html |
+            while IFS= read -r -d '' path; do
+              case "/$path" in */.git*) continue ;; esac
+              [ -f "$path" ] && [ ! -L "$path" ] || continue
+              mkdir -p "$stage/$(dirname "$path")"
+              cp "$path" "$stage/$path"
+            done
+      - name: Upload the card
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: share-card
+          path: ${{ runner.temp }}/card/
+          if-no-files-found: error
+          overwrite: true
+
+  # The card, pushed the way commit-record pushes the record: from a runner
+  # that installs and runs nothing, once the artifact is shown to hold only
+  # the page and this week's card, laid on the commit share-card started from
+  # and rebased. The card folder is REPLACED by the artifact's, which is how
+  # an older week's card leaves the site (`git add -A site/og` in the job
+  # that drew it did the same).
+  commit-card:
+    needs: share-card
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the card and the page's preview tags; nothing else
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download the card
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: share-card
+          path: ${{ runner.temp }}/card
+      - name: Check the card and lay it on the share-card job's commit
+        env:
+          BASE: ${{ needs.share-card.outputs.base }}
+        run: |
+          set -euo pipefail
+          card="$RUNNER_TEMP/card"
+          if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
+            echo "::error::the share-card job's starting commit is not on this branch; nothing was persisted"
+            exit 1
+          fi
+          odd=$(find "$card" -mindepth 1 ! -type f ! -type d -print -quit)
+          if [ -n "$odd" ]; then
+            echo "::error::the card artifact holds something that is not a plain file; nothing was persisted"
+            exit 1
+          fi
+          files=()
+          while IFS= read -r -d '' file; do
+            path=${file#"$card"/}
+            case "/$path" in
+              */.git*) bad=1 ;;
+              /site/this-week.html) bad= ;;
+              /site/og/this-week-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png) bad= ;;
+              *) bad=1 ;;
+            esac
+            if [ -n "$bad" ]; then
+              printf '::error::the card artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
+              exit 1
+            fi
+            files+=("$path")
+          done < <(find "$card" -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::the card artifact is empty; nothing was persisted"
+            exit 1
+          fi
+          git reset -q --hard "$BASE"
+          rm -rf site/og
+          for path in "${files[@]}"; do
+            mkdir -p "$(dirname "$path")"
+            cp "$card/$path" "$path"
+          done
+          echo "${#files[@]} file(s) laid on $BASE"
       - name: Persist the card
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # SEC-1: no hook or fsmonitor command an earlier step left in .git (or
-          # in any git config file) runs beside the token: config given on the
-          # command line outranks them all, for every git call below.
+          # SEC-1: no hook or fsmonitor command runs beside the token: config
+          # given on the command line outranks every config file, for every
+          # git call below.
           git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false "$@"; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -328,23 +328,40 @@ def test_the_card_renders_at_the_size_every_platform_crops_to(tmp_path) -> None:
 
 def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     """The card job runs a browser on a page built from third-party data, so
-    it is its own job: after the week job, never cancelled with it, no
-    secrets and no sealed registry anywhere in it, contents:write only, and
-    its commit adds the card folder and the page — nothing else."""
+    it is its own job: after the record is pushed, never cancelled with the
+    week, no secrets and no sealed registry anywhere in it — and since SEC-1
+    (Oct 25 2026) no token that can push either. It is contents: read and
+    uploads the card folder and the page; commit-card, which installs and
+    runs nothing, pushes exactly those, and only after a successful draw."""
     yaml = pytest.importorskip("yaml")
     text = (REPO / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
-    job = yaml.safe_load(text)["jobs"]["share-card"]
-    raw = text.split("\n  share-card:", 1)[1]
+    jobs = yaml.safe_load(text)["jobs"]
+    assert list(jobs)[-2:] == ["share-card", "commit-card"]
+    job, commit = jobs["share-card"], jobs["commit-card"]
+    raw = text.split("\n  share-card:", 1)[1]           # both jobs, comments included
     assert "secrets." not in raw and "statebox" not in raw and "data/sealed" not in raw
-    assert job["needs"] == "week" and job["if"] == "always() && needs.week.result != 'cancelled'"
-    assert job["permissions"] == {"contents": "write"}
+    assert job["needs"] == ["week", "commit-record"]
+    assert job["if"] == ("always() && needs.week.result != 'cancelled' "
+                         "&& needs.commit-record.result != 'cancelled'")
+    assert job["permissions"] == {"contents": "read"}
     runs = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert ".venv/bin/python -m render.og --week" in runs
-    adds = [line.strip() for line in re.findall(r"^\s*git add .*$", runs, re.M)]
-    assert adds == ["git add -A site/og site/this-week.html"]
+    assert "git push" not in runs and "GH_TOKEN" not in str(job)
+    assert ("git ls-files -z --cached --others --exclude-standard -- site/og site/this-week.html"
+            in runs)
+    upload = next(s for s in job["steps"] if "upload-artifact" in str(s.get("uses", "")))
+    assert upload["with"]["name"] == "share-card"
+    assert upload["with"]["path"] == "${{ runner.temp }}/card/"
     checkout = job["steps"][0]
     assert checkout["with"]["persist-credentials"] is False
     assert checkout["with"]["ref"] == "${{ github.ref_name }}"
+    assert checkout["id"] == "checkout"
+    assert job["outputs"]["base"] == "${{ steps.checkout.outputs.commit }}"
+    assert commit["needs"] == "share-card" and "if" not in commit
+    assert commit["permissions"] == {"contents": "write"}
+    commit_runs = "\n".join(str(s.get("run", "")) for s in commit["steps"])
+    adds = [line.strip() for line in re.findall(r"^\s*git add .*$", commit_runs, re.M)]
+    assert adds == ["git add -A site/og site/this-week.html"]
 
 
 # --------------------------------------------------------------------- #

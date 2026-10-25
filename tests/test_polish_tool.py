@@ -1107,16 +1107,20 @@ def test_the_tuesday_cron_refreshes_and_commits_the_planners_data() -> None:
     """Beside players.json, in the same step and after it (the reserve list
     is cut to that directory); a refusal warns rather than failing the run,
     because last week's dated file is still right about every bye; and the
-    persist step commits both files the generator writes."""
+    persist step commits both files the generator writes — handed over by
+    the week job and pushed by commit-record (SEC-1)."""
     yaml = pytest.importorskip("yaml", reason="pyyaml not installed")
     doc = yaml.safe_load((REPO / ".github" / "workflows" / "weekly.yml").read_text())
-    steps = list(doc["jobs"].values())[0]["steps"]
+    steps = doc["jobs"]["week"]["steps"]
     step = next(s for s in steps if s.get("name") == "Refresh the published player directory")
     run = step["run"]
     assert run.index("render.player_index") < run.index("render.bye_index")
     line = next(l for l in run.splitlines() if "render.bye_index" in l)
     assert '--season "$SEASON"' in line and "|| echo \"::warning::" in line
-    persist = next(s for s in steps if s.get("name") == "Persist the record")["run"]
+    hand_off = next(s for s in steps if s.get("name") == "Hand the record to its commit job")["run"]
+    assert "site/join/byes.json" in hand_off and "site/byes/index.html" in hand_off
+    commit = doc["jobs"]["commit-record"]["steps"]
+    persist = next(s for s in commit if s.get("name") == "Persist the record")["run"]
     add = next(l for l in persist.splitlines() if l.strip().startswith("git add -A"))
     assert "site/join/byes.json" in add and "site/byes/index.html" in add
 

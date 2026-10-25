@@ -1490,6 +1490,28 @@ skeptic re-ran every one; four fix branches and an integration followed. Rules i
   and the forms share `forms.beatyourleague.com` (`/e` and `/rows`); the free rate-limit rule
   is URI Path `/rows`, 10 per 10 s.
 
+**The push token never shares a job with installed code — weekly.yml (SEC-1, Oct 25 2026).**
+Every step of a job shares one runner and one checkout, so a step that runs pip packages or
+Chrome reaches a later step through what it leaves behind: a git hook or config key (filter
+driver, credential.helper, include.path, http.proxy), `$GITHUB_ENV` (BASH_ENV, LD_PRELOAD),
+`$GITHUB_PATH` (a fake git). A push token in that later step was a push token on the branch
+that serves the payment pages. weekly.yml's `week` and `share-card` jobs are now
+`contents: read` and push nothing: each copies the files git would commit at its own paths
+(`git ls-files --cached --others --exclude-standard`) into `$RUNNER_TEMP` and uploads them.
+`commit-record` / `commit-card` (contents: write only; a checkout, the artifact download, git
+and the shell, nothing installed) refuse an artifact holding anything but plain files at those
+paths, lay it on the commit the first job's checkout reported (`outputs.base`, which must be
+on the branch), and rebase, so a push in between (the hourly intake, Monday) is union-merged
+and never overwritten. The record is never deleted from, so a partial artifact can't drop a
+send-log line. commit-record keeps the old persist step's `if: always()`; `file-issue` raises
+"Weekly run failed" for either job. Still open: the other five pushers (daily, monday,
+saturday, privacy, notice) push from jobs that run venv Python and have only the interim git
+wrapper (`core.hooksPath=/dev/null`, `core.fsmonitor=false`, first line of every pushing
+step). Residual: the week job still writes the record's contents, so a compromised build can
+put a bad row or page at those paths (never at another path), and the hand-off puts an upload
+and a second runner between the send and the push of sent.jsonl (the weekly-reports artifact
+keeps a copy; "Re-run failed jobs" on commit-record pushes the same record again).
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

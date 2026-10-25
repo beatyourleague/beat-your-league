@@ -404,8 +404,9 @@ def test_checkout_never_leaves_the_push_token_behind() -> None:
             run = str(step["run"])
             assert helper in run, name
             assert run.index("credential.helper") < run.index("pull --rebase"), name
-    # weekly.yml's share-card job (G2) is a second checkout and pusher there.
-    assert checkouts == len(_docs()) + 1 and pushers == 7
+    # weekly.yml checks out four times (week, commit-record, share-card,
+    # commit-card) and pushes twice, both from its commit jobs (SEC-1).
+    assert checkouts == len(_docs()) + 3 and pushers == 7
 
 
 GIT_WRAPPER = ('git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false '
@@ -422,10 +423,11 @@ def test_no_hook_an_earlier_step_left_runs_beside_the_push_token(tmp_path) -> No
     pushing step now first wraps git so config given on the command line
     (outranking .git/config and every other config file) runs no hook and no
     fsmonitor, for every git call it makes — and the script, run against a
-    planted hook and fsmonitor, leaks nothing. (Residual, recorded: an
-    earlier step can still reach the job's later steps through $GITHUB_ENV,
-    $GITHUB_PATH or other .git/config keys; the full fix is a commit job that
-    installs and runs nothing.)"""
+    planted hook and fsmonitor, leaks nothing. (The wrapper closes hooks and
+    fsmonitor only: an earlier step can still reach a later one through
+    $GITHUB_ENV, $GITHUB_PATH or other config keys. weekly.yml has the full
+    fix — its pushes come from commit jobs that install and run nothing,
+    pinned below; the other five pushers have the wrapper alone.)"""
     import subprocess
     pushers = []
     for name, job_name, _j, _i, step in _all_steps():
@@ -437,7 +439,7 @@ def test_no_hook_an_earlier_step_left_runs_beside_the_push_token(tmp_path) -> No
     assert len(pushers) == 7
     if shutil.which("git") is None or shutil.which("bash") is None:
         pytest.skip("git or bash is not installed")
-    # Step B, as weekly.yml's share-card job runs it, up to the network calls.
+    # Step B, as weekly.yml's commit-card job runs it, up to the network calls.
     [(_n, card)] = [(n, s) for n, s in pushers if "site/og" in _command(s)]
     script = "\n".join(line for line in str(card["run"]).splitlines()
                        if not re.search(r"git (?:pull|push)\b", line))
@@ -462,6 +464,350 @@ def test_no_hook_an_earlier_step_left_runs_beside_the_push_token(tmp_path) -> No
                          text=True, env=env).stdout
     assert "share card" in log, "the script did not commit, so it proved nothing"
     assert not leak.exists() or "ghs_dummy" not in leak.read_text(), leak.read_text()
+
+
+# --------------------------------------------------------------------- #
+# SEC-1, the full fix: weekly.yml pushes only from jobs that run nothing
+# --------------------------------------------------------------------- #
+
+# commit job -> (the job whose files it pushes, its artifact, the folder under
+# $RUNNER_TEMP both sides use).
+COMMIT_JOBS = {"commit-record": ("week", "weekly-record", "record"),
+               "commit-card": ("share-card", "share-card", "card")}
+# Nothing a commit job runs may be installed or interpreted: git and the
+# shell's own tools only.
+_RUNS_SOMETHING = re.compile(r"\b(?:python\d*|pip\d*|node|npm|npx|make|curl|wget|gh|source|"
+                             r"bash|sh|eval|exec|perl|ruby)\b|\.venv|\./")
+
+
+def _shell(step: dict) -> str:
+    """A step's script without its comment lines (a `#` inside a line, as in
+    `${#files[@]}`, is shell, not a comment)."""
+    return "\n".join(line for line in str(step.get("run", "")).splitlines()
+                     if not line.strip().startswith("#"))
+
+
+def _weekly_step(job: str, name: str) -> dict:
+    return next(s for s in _docs()["weekly.yml"]["jobs"][job]["steps"] if s.get("name") == name)
+
+
+def test_weekly_pushes_only_from_jobs_that_install_and_run_nothing() -> None:
+    """SEC-1 (Oct 25 2026): the share-card job ran pip-installed packages and
+    Chrome on a page built from third-party data, then handed GH_TOKEN —
+    contents: write on main, the branch that serves the payment pages — to a
+    step of the SAME job, and the week job's persist step had the same shape.
+    The wrapper above closes hooks and fsmonitor; an earlier step could still
+    reach the push through $GITHUB_ENV (BASH_ENV, LD_PRELOAD), $GITHUB_PATH (a
+    fake git), or a filter driver, credential.helper, include.path or
+    http.proxy in a git config file. Now the jobs that run anything installed
+    hold contents: read and push nothing, and the only jobs with contents:
+    write are the two commit jobs: a fresh checkout, a download of the other
+    job's artifact, and git and the shell — no setup action, no package, no
+    interpreter. The starting commit they lay the artifact on is the checkout
+    action's own output, fixed before any step of the other job runs."""
+    jobs = _docs()["weekly.yml"]["jobs"]
+    writers = sorted(n for n, j in jobs.items() if j["permissions"].get("contents") == "write")
+    assert writers == sorted(COMMIT_JOBS)
+    for name, (builder, artifact, folder) in COMMIT_JOBS.items():
+        job, source = jobs[name], jobs[builder]
+        assert job["needs"] == builder and job["permissions"] == {"contents": "write"}
+        uses = [str(s["uses"]).split("@")[0] for s in job["steps"] if "uses" in s]
+        assert uses == ["actions/checkout", "actions/download-artifact"], (name, uses)
+        checkout, download, check, persist = job["steps"]
+        assert checkout["with"] == {"ref": "${{ github.ref_name }}", "fetch-depth": 0,
+                                    "persist-credentials": False}
+        assert download["with"] == {"name": artifact, "path": f"${{{{ runner.temp }}}}/{folder}"}
+        assert check.get("env") == {"BASE": f"${{{{ needs.{builder}.outputs.base }}}}"}
+        assert persist.get("env") == {"GH_TOKEN": "${{ github.token }}"}
+        assert "if" not in check and "if" not in persist
+        for step in (check, persist):
+            found = _RUNS_SOMETHING.search(_shell(step))
+            assert not found, (name, step.get("name"), found and found.group(0))
+        # The other side: it pushes nothing, holds no push token, and hands
+        # over the commit it started from as the checkout reported it.
+        assert source["permissions"].get("contents") == "read"
+        assert PUSH not in "\n".join(_command(s) for s in source["steps"]), builder
+        assert source["outputs"] == {"base": "${{ steps.checkout.outputs.commit }}"}
+        assert source["steps"][0].get("id") == "checkout"
+        assert "actions/checkout" in source["steps"][0]["uses"]
+        [upload] = [s for s in source["steps"]
+                    if "upload-artifact" in str(s.get("uses", "")) and s["with"]["name"] == artifact]
+        assert upload["with"]["path"] == f"${{{{ runner.temp }}}}/{folder}/"
+        assert upload["with"]["if-no-files-found"] == "error"
+        assert upload["with"]["overwrite"] is True        # a re-run replaces, never fails
+    # The record keeps the persist step's `if: always()`: a failed or
+    # cancelled send still records who WAS mailed. The card keeps its
+    # persist step's success-only gate.
+    assert jobs["commit-record"]["if"] == "always()" and "if" not in jobs["commit-card"]
+    assert _weekly_step("week", "Hand the record to its commit job")["if"] == "always()"
+    assert _weekly_step("week", "Upload the record")["if"] == "always()"
+
+
+def _pathspecs(hand_off: str) -> list[str]:
+    spec = hand_off.split("--exclude-standard --", 1)[1].split("|", 1)[0]
+    return spec.replace("\\", " ").split()
+
+
+def _added(persist: str) -> set[str]:
+    paths: set[str] = set()
+    for line in persist.splitlines():
+        match = re.search(r"git add (?:-A )?(.+?)(?: \|\| true)?$", line.strip())
+        if match:
+            paths |= set(match.group(1).split())
+    return paths
+
+
+def test_the_hand_off_the_check_and_the_commit_name_the_same_paths() -> None:
+    """Three lists in two jobs that must agree: what the week job stages,
+    what commit-record accepts, and what it adds. A path staged but refused
+    fails the push (and loses the send log with it); a path accepted but not
+    staged is never persisted. Each staged path is accepted by the check's
+    own `case` (exactly, or as a folder), and is exactly what the persist step
+    adds — the send log on its own guarded line, as before."""
+    for builder, hand_off_name, commit, check_name, persist_name in (
+            ("week", "Hand the record to its commit job", "commit-record",
+             "Check the record and lay it on the week job's commit", "Persist the record"),
+            ("share-card", "Hand the card to its commit job", "commit-card",
+             "Check the card and lay it on the share-card job's commit", "Persist the card")):
+        staged = _pathspecs(str(_weekly_step(builder, hand_off_name)["run"]))
+        check = str(_weekly_step(commit, check_name)["run"])
+        patterns = {p.strip() for arm in re.findall(r"^\s*(/[^)]*)\) bad= ;;$", check, re.M)
+                    for p in arm.split("|")}
+        assert patterns, commit
+        for path in staged:
+            assert f"/{path}" in patterns or f"/{path}/*" in patterns \
+                or any(p.startswith(f"/{path}/") for p in patterns), (commit, path)
+        assert _added(str(_weekly_step(commit, persist_name)["run"])) == set(staged), commit
+    record = _pathspecs(str(_weekly_step("week", "Hand the record to its commit job")["run"]))
+    assert {"data/processed/ledger", "data/processed/sent.jsonl"} <= set(record)
+
+
+# The record's files on a fresh repo, as the branch holds them.
+_RECORD = {"data/processed/ledger/typed-ppr-12-2026/calls.jsonl": '{"call_id": "a"}\n',
+           "data/processed/sent.jsonl": '{"key": "2026-w07-seed"}\n',
+           "site/this-week.html": "<p>week 7</p>\n", "site/week.json": '{"week": 7}\n',
+           "site/_headers": "/*\n", "content/this-week.md": "drafts\n",
+           "site/join/players.json": "[]\n", "site/join/byes.json": "{}\n",
+           "site/byes/index.html": "<p>byes</p>\n",
+           # Beside the record, and never the record's to change.
+           "site/index.html": "<p>landing</p>\n", "site/join/index.html": "<p>join</p>\n",
+           ".github/workflows/weekly.yml": "name: weekly-report\n",
+           "site/og/this-week-2026-w07.png": "png 7"}
+
+
+class _Repos:
+    """A bare remote (the branch on GitHub) and the clones each job makes."""
+
+    def __init__(self, root: Path) -> None:
+        import subprocess
+        self.root, self.run = root, subprocess.run
+        self.env = {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+                    "HOME": str(root), "GIT_CONFIG_NOSYSTEM": "1"}
+        self.git("init", "-q", "--bare", "-b", "main", str(root / "remote.git"))
+        seed = self.clone("seed")
+        self.git("symbolic-ref", "HEAD", "refs/heads/main", cwd=seed)
+        for name in (".gitignore", ".gitattributes"):
+            shutil.copy(REPO / name, seed / name)
+        self.write(seed, _RECORD)
+        self.commit(seed, "seed")
+
+    def git(self, *args: str, cwd: Path | None = None) -> str:
+        done = self.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+                        cwd=cwd, env=self.env, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        return done.stdout.strip()
+
+    def clone(self, name: str) -> Path:
+        self.git("clone", "-q", str(self.root / "remote.git"), str(self.root / name))
+        return self.root / name
+
+    @staticmethod
+    def write(repo: Path, files: dict[str, str]) -> None:
+        for path, text in files.items():
+            (repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (repo / path).write_text(text, encoding="utf-8")
+
+    def commit(self, repo: Path, message: str) -> str:
+        self.git("add", "-A", cwd=repo)
+        self.git("commit", "-q", "-m", message, cwd=repo)
+        self.git("push", "-q", "origin", "main", cwd=repo)
+        return self.git("rev-parse", "HEAD", cwd=repo)
+
+    def script(self, step: dict, cwd: Path, **env: str):
+        """A step's `run:` as the runner runs it (`bash -e`), no git identity
+        but what the script sets itself."""
+        return self.run(["bash", "--noprofile", "--norc", "-e", "-c", str(step["run"])],
+                        cwd=cwd, capture_output=True, text=True,
+                        env={**self.env, "GITHUB_REF_NAME": "main", **env})
+
+    def shown(self, path: str, ref: str = "main") -> str | None:
+        done = self.run(["git", "show", f"{ref}:{path}"], cwd=self.root / "remote.git",
+                        env=self.env, capture_output=True, text=True)
+        return done.stdout if done.returncode == 0 else None
+
+
+needs_git_and_bash = pytest.mark.skipif(shutil.which("git") is None or shutil.which("bash") is None,
+                                        reason="git or bash is not installed")
+
+
+@needs_git_and_bash
+def test_the_record_survives_a_push_between_the_send_and_its_commit(tmp_path) -> None:
+    """The reason the record could move at all: sent.jsonl is the only thing
+    that stops the next run mailing everyone again, and it is now pushed by
+    another job, minutes later, from another checkout. Run end to end with
+    the workflow's own scripts against a local remote: the week job sends
+    (appends to the send log and the ledger, rebuilds the page) and also
+    touches files outside the record and leaves a hook behind; the hourly
+    intake pushes ITS send-log line in between; commit-record checks out the
+    new tip, lays the record on the week job's starting commit and rebases.
+    Both runs' send-log lines survive (merge=union, as when the week job
+    pushed itself), the ledger's lock file and everything outside the record
+    stay behind, and the hook never runs."""
+    repos = _Repos(tmp_path)
+    week = repos.clone("week")
+    base = repos.git("rev-parse", "HEAD", cwd=week)
+    with (week / "data/processed/sent.jsonl").open("a", encoding="utf-8") as log:
+        log.write('{"key": "2026-w08-week"}\n')
+    repos.write(week, {
+        "data/processed/ledger/typed-ppr-12-2026/calls.jsonl": '{"call_id": "a"}\n{"call_id": "b"}\n',
+        "data/processed/ledger/typed-ppr-12-sf-2026/calls.jsonl": '{"call_id": "c"}\n',
+        "data/processed/ledger/typed-ppr-12-2026/calls.jsonl.lock": "",
+        "site/this-week.html": "<p>week 8</p>\n",
+        # What a hostile step in the week job might also write.
+        "site/join/index.html": '<a href="https://pay.example.net">Pay</a>\n',
+        ".github/workflows/weekly.yml": "name: something else\n",
+        "site/join/evil.js": "steal()\n"})
+    leak = tmp_path / "leak.txt"
+    hook = week / ".git" / "hooks" / "pre-commit"
+    hook.write_text(f'#!/bin/sh\necho "$GH_TOKEN" >> "{leak}"\n', encoding="utf-8")
+    hook.chmod(0o755)
+    runner = tmp_path / "runner-week"
+    runner.mkdir()
+    done = repos.script(_weekly_step("week", "Hand the record to its commit job"), week,
+                        RUNNER_TEMP=str(runner))
+    assert done.returncode == 0, done.stderr
+    staged = sorted(p.relative_to(runner / "record").as_posix()
+                    for p in (runner / "record").rglob("*") if p.is_file())
+    assert "data/processed/sent.jsonl" in staged and "site/this-week.html" in staged
+    assert not any(p.endswith(".lock") or p.startswith((".github", "site/join/index", "site/join/evil"))
+                   or "/.git" in f"/{p}" for p in staged), staged
+
+    daily = repos.clone("daily")                       # the hourly intake, in between
+    with (daily / "data/processed/sent.jsonl").open("a", encoding="utf-8") as log:
+        log.write('{"key": "welcome-2026-10-25-daily"}\n')
+    tip = repos.commit(daily, "Daily run: send log")
+
+    commit = repos.clone("commit")
+    for name in ("Check the record and lay it on the week job's commit", "Persist the record"):
+        done = repos.script(_weekly_step("commit-record", name), commit, RUNNER_TEMP=str(runner),
+                            BASE=base, GH_TOKEN="ghs_dummy_token_123")
+        assert done.returncode == 0, (name, done.stdout, done.stderr)
+    sent = repos.shown("data/processed/sent.jsonl")
+    for line in ("2026-w07-seed", "welcome-2026-10-25-daily", "2026-w08-week"):
+        assert line in sent, sent
+    assert repos.shown("data/processed/ledger/typed-ppr-12-2026/calls.jsonl").count("call_id") == 2
+    assert repos.shown("data/processed/ledger/typed-ppr-12-sf-2026/calls.jsonl")
+    assert repos.shown("site/this-week.html") == "<p>week 8</p>\n"
+    for path in ("site/join/index.html", ".github/workflows/weekly.yml"):
+        assert repos.shown(path) == _RECORD[path], path
+    assert repos.shown("site/join/evil.js") is None
+    assert repos.shown("data/processed/ledger/typed-ppr-12-2026/calls.jsonl.lock") is None
+    changed = repos.git("diff", "--name-only", tip, "main", cwd=tmp_path / "remote.git").split()
+    assert sorted(changed) == ["data/processed/ledger/typed-ppr-12-2026/calls.jsonl",
+                               "data/processed/ledger/typed-ppr-12-sf-2026/calls.jsonl",
+                               "data/processed/sent.jsonl", "site/this-week.html"]
+    assert not leak.exists()
+
+
+@needs_git_and_bash
+def test_the_card_commit_replaces_the_card_folder_and_nothing_else(tmp_path) -> None:
+    """The card's pair, end to end: the draw deleted last week's card and
+    wrote this week's; commit-card makes the folder exactly that, beside the
+    page, and nothing else share-card touched reaches the branch."""
+    repos = _Repos(tmp_path)
+    card = repos.clone("card")
+    base = repos.git("rev-parse", "HEAD", cwd=card)
+    (card / "site/og/this-week-2026-w07.png").unlink()
+    repos.write(card, {"site/og/this-week-2026-w08.png": "png 8",
+                       "site/this-week.html": '<meta property="og:image" content="w08">\n',
+                       "site/index.html": "<p>defaced</p>\n"})
+    runner = tmp_path / "runner-card"
+    runner.mkdir()
+    done = repos.script(_weekly_step("share-card", "Hand the card to its commit job"), card,
+                        RUNNER_TEMP=str(runner))
+    assert done.returncode == 0, done.stderr
+    commit = repos.clone("commit")
+    for name in ("Check the card and lay it on the share-card job's commit", "Persist the card"):
+        done = repos.script(_weekly_step("commit-card", name), commit, RUNNER_TEMP=str(runner),
+                            BASE=base, GH_TOKEN="ghs_dummy_token_123")
+        assert done.returncode == 0, (name, done.stdout, done.stderr)
+    assert repos.shown("site/og/this-week-2026-w08.png") == "png 8"
+    assert repos.shown("site/og/this-week-2026-w07.png") is None
+    assert repos.shown("site/this-week.html").startswith("<meta")
+    assert repos.shown("site/index.html") == _RECORD["site/index.html"]
+
+
+@needs_git_and_bash
+@pytest.mark.parametrize("attack", ["workflow", "join-page", "attributes", "link", "card-name",
+                                    "other-branch", "not-a-commit", "empty"])
+def test_a_commit_job_refuses_an_artifact_that_reaches_past_its_paths(tmp_path, attack) -> None:
+    """What the check refuses, each before anything is laid down: a file
+    outside the record (a workflow, the join page with its payment links), a
+    git attributes file inside it (a merge driver or eol rule the push would
+    then obey), a link where a page should be, a card that is not this
+    week's card name, a starting commit that is not on the branch (rebasing
+    from another branch's commit pushes that branch's commits) or not a
+    commit at all, and an empty artifact. Refused means exit non-zero, a
+    message, and the checkout exactly as it was."""
+    repos = _Repos(tmp_path)
+    other = repos.clone("other")
+    repos.git("checkout", "-q", "-b", "feature", cwd=other)
+    repos.write(other, {".github/workflows/weekly.yml": "name: planted\n"})
+    repos.git("commit", "-q", "-am", "planted", cwd=other)
+    repos.git("push", "-q", "origin", "feature", cwd=other)
+    planted = repos.git("rev-parse", "HEAD", cwd=other)
+    commit = repos.clone("commit")
+    tip = repos.git("rev-parse", "HEAD", cwd=commit)
+    job, folder, name = "commit-record", "record", "Check the record and lay it on the week job's commit"
+    files = {"data/processed/sent.jsonl": _RECORD["data/processed/sent.jsonl"] + '{"key": "x"}\n'}
+    base = tip
+    if attack == "workflow":
+        files[".github/workflows/weekly.yml"] = "name: planted\n"
+    elif attack == "join-page":
+        files["site/join/index.html"] = '<a href="https://pay.example.net">Pay</a>\n'
+    elif attack == "attributes":
+        files["data/processed/ledger/.gitattributes"] = "*.jsonl merge=planted\n"
+    elif attack == "card-name":
+        job, folder, name = "commit-card", "card", \
+            "Check the card and lay it on the share-card job's commit"
+        files = {"site/this-week.html": "<p>page</p>\n", "site/og/payment.png": "png"}
+    elif attack == "other-branch":
+        base = planted
+    elif attack == "not-a-commit":
+        base = "main"
+    elif attack == "empty":
+        files = {}
+    root = tmp_path / "runner" / folder
+    root.mkdir(parents=True)
+    repos.write(root, files)
+    if attack == "link":
+        (root / "site").mkdir()
+        (root / "site" / "this-week.html").symlink_to("/etc/hosts")
+    done = repos.script(_weekly_step(job, name), commit, RUNNER_TEMP=str(tmp_path / "runner"),
+                        BASE=base)
+    assert done.returncode != 0, (attack, done.stdout)
+    assert "::error::" in done.stdout and "nothing was persisted" in done.stdout
+    assert repos.git("rev-parse", "HEAD", cwd=commit) == tip
+    assert repos.git("status", "--porcelain", cwd=commit) == ""
+    # Without the attack, the same check lays the send log down: the refusal
+    # is the attack's, not the check's.
+    if job == "commit-record" and attack != "empty":
+        clean = tmp_path / "clean" / "record"
+        repos.write(clean, {"data/processed/sent.jsonl": files["data/processed/sent.jsonl"]})
+        done = repos.script(_weekly_step(job, name), commit, RUNNER_TEMP=str(clean.parent),
+                            BASE=tip)
+        assert done.returncode == 0, done.stderr
+        assert '"x"' in (commit / "data/processed/sent.jsonl").read_text(encoding="utf-8")
 
 
 def test_subscriber_state_is_cached_and_uploaded_only_sealed() -> None:
@@ -577,15 +923,22 @@ def test_the_crons_install_only_the_hash_locked_runtime_set() -> None:
 def test_the_crons_that_rebuild_a_page_commit_its_fresh_headers() -> None:
     """The Tuesday run rebuilds this-week.html and the Monday run the ledger
     page; each re-derives site/_headers and commits it with them, so a page
-    whose script changed never meets a stale policy on Cloudflare Pages."""
-    for name, page in (("weekly.yml", "site/this-week.html"), ("monday.yml", "site/ledger/")):
-        steps = list(_docs()[name]["jobs"].values())[0]["steps"]
-        commands = [_command(s) for s in steps]
-        refresh = next(i for i, c in enumerate(commands) if "-m render.headers" in c)
-        persist = next(i for i, c in enumerate(commands) if PUSH in c)
-        assert refresh <= persist, name
-        assert re.search(rf"git add[^\n]*{re.escape(page)}[^\n]*site/_headers", commands[persist]) \
-            or re.search(r"git add[^\n]*site/_headers", commands[persist]), name
+    whose script changed never meets a stale policy on Cloudflare Pages. The
+    Tuesday run's commit is commit-record's (SEC-1), so the refresh comes
+    before the week job hands the record over, and both files are in it."""
+    commands = [_command(s) for s in _docs()["monday.yml"]["jobs"]["receipts"]["steps"]]
+    refresh = next(i for i, c in enumerate(commands) if "-m render.headers" in c)
+    persist = next(i for i, c in enumerate(commands) if PUSH in c)
+    assert refresh <= persist
+    assert re.search(r"git add[^\n]*site/_headers", commands[persist])
+    jobs = _docs()["weekly.yml"]["jobs"]
+    commands = [_command(s) for s in jobs["week"]["steps"]]
+    refresh = next(i for i, c in enumerate(commands) if "-m render.headers" in c)
+    hand_off = next(i for i, c in enumerate(commands) if "RUNNER_TEMP/record" in c)
+    assert refresh < hand_off
+    assert "site/this-week.html" in commands[hand_off] and "site/_headers" in commands[hand_off]
+    persist = next(_command(s) for s in jobs["commit-record"]["steps"] if PUSH in _command(s))
+    assert re.search(r"git add[^\n]*site/this-week\.html[^\n]*site/_headers", persist)
 
 
 # --------------------------------------------------------------------- #

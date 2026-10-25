@@ -30,6 +30,15 @@ def _steps(name: str) -> list[dict]:
     return job["steps"]
 
 
+def _job_steps(name: str) -> list[dict]:
+    """Every job's steps, in file order. weekly.yml pushes from jobs of their
+    own (SEC-1): a property about what a workflow COMMITS lives in a job after
+    the first one."""
+    yaml = pytest.importorskip("yaml", reason="pyyaml not installed")
+    doc = yaml.safe_load(_text(name))
+    return [step for job in doc["jobs"].values() for step in job.get("steps") or []]
+
+
 def _commands(name: str) -> str:
     """Only what the workflow RUNS — YAML prose AND shell comments excluded.
 
@@ -247,7 +256,9 @@ def test_every_run_that_can_mail_a_weeks_report_commits_the_ledger() -> None:
     with the runner: odds mailed to a subscriber and never on the public
     record. Any workflow that runs a step able to deliver a week's report
     (run.tuesday, or run.intake WITHOUT --no-mail) commits the ledger in the
-    same step that commits the send log."""
+    same step that commits the send log — in weekly.yml that step is in
+    commit-record, the job that pushes what the week job handed it (SEC-1;
+    the hand-off itself is pinned in tests/test_prelaunch_infra.py)."""
     import re
     for name in sorted(p.name for p in WORKFLOWS.glob("*.yml")):
         commands = _commands(name)
@@ -255,7 +266,7 @@ def test_every_run_that_can_mail_a_weeks_report_commits_the_ledger() -> None:
                  or re.search(r"-m run\.intake(?![^\n]*--no-mail)", commands))
         if not mails:
             continue
-        persists = [str(s.get("run", "")) for s in _steps(name)
+        persists = [str(s.get("run", "")) for s in _job_steps(name)
                     if "sent.jsonl" in str(s.get("run", ""))
                     and "git add" in str(s.get("run", ""))]
         assert persists, f"{name} mails a week's report and never commits the send log"
@@ -391,14 +402,16 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     assert hours[1] - hours[0] <= 8, \
         f"the retry is {hours[1] - hours[0]}h later — subscribers expect Tuesday"
     # And it must be the SAME job, so the retry cannot drift from the send.
-    # The one other job is the secretless share card (G2), which sends
-    # nothing: it draws a PNG after the send and commits only that.
+    # The other jobs send nothing: commit-record pushes the week job's record
+    # (SEC-1), file-issue raises the failure issue, share-card draws a PNG
+    # after the send (G2) and commit-card pushes only that.
     yaml = pytest.importorskip("yaml")
     jobs = yaml.safe_load(text)["jobs"]
-    assert list(jobs) == ["week", "share-card"] and text.count("runs-on:") == 2, \
+    assert list(jobs) == ["week", "commit-record", "file-issue", "share-card", "commit-card"] \
+        and text.count("runs-on:") == 5, \
         "the retry became a second job — one definition, or they will diverge"
-    assert "-m run.tuesday" not in str(jobs["share-card"]), \
-        "the share-card job must never send"
+    for other in list(jobs)[1:]:
+        assert "-m run.tuesday" not in str(jobs[other]), f"the {other} job must never send"
 
 
 def test_the_report_refuses_a_week_whose_box_scores_are_missing() -> None:
@@ -520,7 +533,7 @@ def test_a_repeated_failure_comments_on_the_open_issue_instead_of_filing_another
     into a wall of issues: one open issue per kind, a comment per run. The
     title can carry no date, or "the same title" would be a new one daily."""
     filers = [(name, step) for name in SCHEDULED
-              for step in _steps(name) if "gh issue" in str(step.get("run", ""))]
+              for step in _job_steps(name) if "gh issue" in str(step.get("run", ""))]
     assert len({n for n, _ in filers}) == len(SCHEDULED)
     for name, step in filers:
         run = str(step["run"])

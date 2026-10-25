@@ -342,14 +342,19 @@ def test_a_queued_second_run_reads_what_the_first_one_pushed() -> None:
     the first run pushed its send log — so the second run would read a log
     with none of the first run's sends in it and mail every subscriber again.
     The send log's idempotency only holds if the run reads the latest log;
-    checking out the branch tip is what makes the double trigger safe."""
+    checking out the branch tip is what makes the double trigger safe. Every
+    checkout, in every job: weekly.yml's commit jobs (SEC-1) start from the
+    tip too, and lay their artifact on the commit the job before them began
+    from, which must be on it."""
     for name in SCHEDULED:
         doc = _yaml(name)
-        steps = list(doc["jobs"].values())[0]["steps"]
+        steps = [s for job in doc["jobs"].values() for s in job["steps"]]
         assert any("git push" in str(s.get("run", "")) for s in steps), name
-        checkout = next(s for s in steps if "actions/checkout" in str(s.get("uses")))
-        assert checkout.get("with", {}).get("ref") == "${{ github.ref_name }}", \
-            f"{name} checks out the trigger commit, not the branch tip"
+        checkouts = [s for s in steps if "actions/checkout" in str(s.get("uses"))]
+        assert checkouts, name
+        for checkout in checkouts:
+            assert checkout.get("with", {}).get("ref") == "${{ github.ref_name }}", \
+                f"{name} checks out the trigger commit, not the branch tip"
         group = doc.get("concurrency") or {}
         assert group.get("group") and group.get("cancel-in-progress") is False, \
             f"{name} can run twice at once, or cancels a run half-way"
