@@ -276,14 +276,13 @@ def test_reduced_motion_lands_every_animation_on_its_last_frame() -> None:
 def test_a_slanted_gold_button_shows_its_focus_ring() -> None:
     """Reproduced by Tab in headless Chrome: 404's "Back to the front page"
     took keyboard focus with NO visible ring, because clip-path clips the
-    outline along with everything else (before-404-focus-390.png). Every page
-    with a clipped gold button squares it off while it holds keyboard focus,
-    the report template included."""
-    for name in OWNED:
-        css = _style(_page(name))
-        if "clip-path:polygon" in css:
-            assert ".btn.gold:focus-visible{clip-path:none;}" in css, name
-    assert ".btn:focus-visible{clip-path:none;}" in TEMPLATE
+    outline along with everything else (before-404-focus-390.png). Contract
+    C7 retired the slant on every surface — a flat rounded rectangle, no
+    clip-path — so no button can clip its own focus ring: none remains on
+    any of these pages, the landing or the report template."""
+    for name in (*OWNED, "index.html"):
+        assert "clip-path:polygon" not in _style(_page(name)), f"{name} clips a button again"
+    assert "clip-path:polygon" not in TEMPLATE
 
 
 def test_focus_on_paper_is_navy_never_gold() -> None:

@@ -1,0 +1,623 @@
+{
+ "bench": [
+  {
+   "game": "@ BAL · Thu 8:15 PM ET",
+   "games": [
+    5.3,
+    3.1,
+    8.9,
+    23.2,
+    16.4,
+    14.4,
+    7.3,
+    11.4,
+    26.7
+   ],
+   "last_season_per_game": 4.5,
+   "last_season_rank": "RB61",
+   "name": "Chase Brown",
+   "notable": false,
+   "out": false,
+   "out_kind": null,
+   "out_reason": null,
+   "out_sentence": null,
+   "out_text": null,
+   "player_id": "00-0038597",
+   "position": "RB",
+   "projected": 10.3
+  },
+  {
+   "game": "@ HOU · Sun 8:20 PM ET",
+   "games": [
+    8.5,
+    3.3,
+    5.6,
+    9.3,
+    12.2,
+    3.5,
+    16.8,
+    4.8
+   ],
+   "last_season_per_game": 14.1,
+   "last_season_rank": "TE3",
+   "name": "Sam LaPorta",
+   "notable": true,
+   "out": false,
+   "out_kind": null,
+   "out_reason": null,
+   "out_sentence": null,
+   "out_text": null,
+   "player_id": "00-0039065",
+   "position": "TE",
+   "projected": 9.5
+  },
+  {
+   "game": "@ KC · Sun 1:00 PM ET",
+   "games": [
+    7.8,
+    3.6,
+    13.8,
+    15.0,
+    5.2,
+    15.3,
+    17.1,
+    23.3
+   ],
+   "last_season_per_game": 11.9,
+   "last_season_rank": "WR39",
+   "name": "Courtland Sutton",
+   "notable": false,
+   "out": false,
+   "out_kind": null,
+   "out_reason": null,
+   "out_sentence": null,
+   "out_text": null,
+   "player_id": "00-0034348",
+   "position": "WR",
+   "projected": 9.3
+  },
+  {
+   "game": "vs NE · Sun 1:00 PM ET",
+   "games": [
+    2.1,
+    5.3,
+    23.4,
+    2.0,
+    9.0,
+    6.0,
+    8.4,
+    15.4
+   ],
+   "last_season_per_game": null,
+   "last_season_rank": null,
+   "name": "Rome Odunze",
+   "notable": false,
+   "out": false,
+   "out_kind": null,
+   "out_reason": null,
+   "out_sentence": null,
+   "out_text": null,
+   "player_id": "00-0039919",
+   "position": "WR",
+   "projected": 9.1
+  },
+  {
+   "game": "vs CIN · Thu 8:15 PM ET",
+   "games": [
+    4.0,
+    7.0,
+    2.0,
+    7.0,
+    1.0,
+    3.0,
+    6.0,
+    1.0,
+    10.0
+   ],
+   "last_season_per_game": null,
+   "last_season_rank": null,
+   "name": "Baltimore Ravens",
+   "notable": false,
+   "out": false,
+   "out_kind": null,
+   "out_reason": null,
+   "out_sentence": null,
+   "out_text": null,
+   "player_id": "DEF-BAL",
+   "position": "DEF",
+   "projected": 4.7
+  },
+  {
+   "games": [
+    33.1,
+    6.6,
+    10.9,
+    27.1,
+    13.7,
+    14.8,
+    3.0,
+    7.5,
+    16.3
+   ],
+   "last_season_per_game": 13.6,
+   "last_season_rank": "WR26",
+   "name": "Jayden Reed",
+   "notable": false,
+   "out": true,
+   "out_kind": "bye",
+   "out_reason": "GB on bye (NFL schedule)",
+   "out_sentence": "GB is on bye this week.",
+   "out_text": "GB on bye this week",
+   "player_id": "00-0039146",
+   "position": "WR",
+   "projected": null
+  }
+ ],
+ "checklist": [
+  {
+   "action": "Bench Sam LaPorta — Tony Pollard starts at FLEX",
+   "deadline": "before this week's first kickoff",
+   "detail": "Sam LaPorta: TE3 last season. Last three games: 3.5, 16.8, 4.8. Projects 9.5, Tony Pollard 10.3.",
+   "urgency": "now"
+  },
+  {
+   "action": "Set this lineup",
+   "deadline": "before this week's first kickoff",
+   "detail": "QB Josh Allen · RB Saquon Barkley · RB Bijan Robinson · WR Amon-Ra St. Brown · WR Ja'Marr Chase · TE George Kittle · FLEX Tony Pollard · K Jake Bates · DEF Denver Broncos",
+   "urgency": "now"
+  },
+  {
+   "action": "Thursday night: Ja'Marr Chase kicks off at 8:15 PM ET — set your lineup before then.",
+   "deadline": "before Thursday's kickoff",
+   "urgency": "deadline"
+  },
+  {
+   "action": "Saquon Barkley and Bijan Robinson start — no odds against Chase Brown this week",
+   "deadline": "nothing to change",
+   "detail": "Chase Brown, on your bench, is getting 24.0 targets + carries a game over his last two, up from 11.9 in Weeks 1–7, and his projection still counts those earlier games as much as the recent ones. So those calls carry no odds; the lineup stands.",
+   "urgency": "done"
+  },
+  {
+   "action": "Sunday morning: check Tony Pollard's status",
+   "deadline": "gameday morning",
+   "detail": "Your if/then below already has the answer either way.",
+   "urgency": "deadline"
+  }
+ ],
+ "lineup": [
+  {
+   "alternative_id": null,
+   "alternative_name": null,
+   "alternative_projected": null,
+   "appear_probability": 0.93,
+   "confidence": null,
+   "confidence_gate": "nobody on your bench is eligible here",
+   "edge": null,
+   "flags": [],
+   "form_games": 9,
+   "game": "@ IND · Sun 1:00 PM ET",
+   "if_then": false,
+   "last_three": [
+    21.0,
+    19.8,
+    22.1
+   ],
+   "player_id": "00-0034857",
+   "player_name": "Josh Allen",
+   "position": "QB",
+   "projected": 19.8,
+   "season_label": "2024",
+   "season_per_game": 20.1,
+   "short_games": [],
+   "slot": "QB",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 4 games: 131 pass attempts (32.8 a game), 21 carries"
+  },
+  {
+   "alternative_id": "00-0038597",
+   "alternative_name": "Chase Brown",
+   "alternative_projected": 10.3,
+   "appear_probability": 0.91,
+   "confidence": null,
+   "confidence_gate": "held: the bench option's role is growing (Chase Brown)",
+   "edge": 7.3,
+   "flags": [],
+   "form_games": 8,
+   "game": "@ DAL · Sun 4:25 PM ET",
+   "if_then": false,
+   "last_three": [
+    26.7,
+    12.1,
+    32.9
+   ],
+   "player_id": "00-0034844",
+   "player_name": "Saquon Barkley",
+   "position": "RB",
+   "projected": 17.6,
+   "season_label": "2024",
+   "season_per_game": 22.1,
+   "short_games": [],
+   "slot": "RB",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 4 games: 10 targets (2.5 a game), 84 carries"
+  },
+  {
+   "alternative_id": "00-0038597",
+   "alternative_name": "Chase Brown",
+   "alternative_projected": 10.3,
+   "appear_probability": 0.92,
+   "confidence": null,
+   "confidence_gate": "held: the bench option's role is growing (Chase Brown)",
+   "edge": 4.8,
+   "flags": [],
+   "form_games": 9,
+   "game": "@ NO · Sun 1:00 PM ET",
+   "if_then": false,
+   "last_three": [
+    23.3,
+    23.6,
+    21.5
+   ],
+   "player_id": "00-0038542",
+   "player_name": "Bijan Robinson",
+   "position": "RB",
+   "projected": 15.1,
+   "season_label": "2024",
+   "season_per_game": 17.9,
+   "short_games": [],
+   "slot": "RB",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 4 games: 23 targets (5.8 a game), 68 carries"
+  },
+  {
+   "alternative_id": "00-0034348",
+   "alternative_name": "Courtland Sutton",
+   "alternative_projected": 9.3,
+   "appear_probability": 0.95,
+   "confidence": 0.8,
+   "confidence_gate": null,
+   "edge": 7.6,
+   "flags": [],
+   "form_games": 8,
+   "game": "@ HOU · Sun 8:20 PM ET",
+   "if_then": false,
+   "last_three": [
+    25.2,
+    8.7,
+    18.6
+   ],
+   "player_id": "00-0036963",
+   "player_name": "Amon-Ra St. Brown",
+   "position": "WR",
+   "projected": 16.9,
+   "season_label": "2024",
+   "season_per_game": 16.8,
+   "short_games": [],
+   "slot": "WR",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 4 games: 21 targets (5.2 a game)"
+  },
+  {
+   "alternative_id": "00-0034348",
+   "alternative_name": "Courtland Sutton",
+   "alternative_projected": 9.3,
+   "appear_probability": 0.96,
+   "confidence": 0.728,
+   "confidence_gate": null,
+   "edge": 6.7,
+   "flags": [],
+   "form_games": 9,
+   "game": "@ BAL · Thu 8:15 PM ET",
+   "if_then": false,
+   "last_three": [
+    17.6,
+    20.4,
+    11.3
+   ],
+   "player_id": "00-0036900",
+   "player_name": "Ja'Marr Chase",
+   "position": "WR",
+   "projected": 16.0,
+   "season_label": "2024",
+   "season_per_game": 18.9,
+   "short_games": [],
+   "slot": "WR",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 4 games: 34 targets (8.5 a game), 1 carry"
+  },
+  {
+   "alternative_id": "00-0039065",
+   "alternative_name": "Sam LaPorta",
+   "alternative_projected": 9.5,
+   "appear_probability": 0.91,
+   "confidence": 0.715,
+   "confidence_gate": null,
+   "edge": 4.7,
+   "flags": [],
+   "form_games": 7,
+   "game": "@ TB · Sun 1:00 PM ET",
+   "if_then": false,
+   "last_three": [
+    22.8,
+    15.2,
+    24.8
+   ],
+   "player_id": "00-0033288",
+   "player_name": "George Kittle",
+   "position": "TE",
+   "projected": 14.1,
+   "season_label": "2024",
+   "season_per_game": 18.0,
+   "short_games": [],
+   "slot": "TE",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false,
+   "usage": "last 3 games: 20 targets (6.7 a game)"
+  },
+  {
+   "alternative_id": "00-0038597",
+   "alternative_name": "Chase Brown",
+   "alternative_projected": 10.3,
+   "appear_probability": 0.91,
+   "confidence": null,
+   "confidence_gate": "availability in doubt (designated Questionable)",
+   "edge": 0.0,
+   "flags": [
+    {
+     "kind": "questionable",
+     "text": "Questionable in Week 9 (foot) — played, 18.4"
+    }
+   ],
+   "form_games": 8,
+   "game": "@ LAC · Sun 4:05 PM ET",
+   "if_then": true,
+   "last_three": [
+    8.5,
+    14.7,
+    18.4
+   ],
+   "player_id": "00-0035261",
+   "player_name": "Tony Pollard",
+   "position": "RB",
+   "projected": 10.3,
+   "reason": "Chase Brown plays Thursday, before Tony Pollard's status is known; starting Tony Pollard keeps Sam LaPorta as a fallback if he sits.",
+   "season_label": "2024",
+   "season_per_game": 14.7,
+   "short_games": [],
+   "slot": "FLEX",
+   "status": "questionable",
+   "status_reason": "designated Questionable",
+   "tossup": false,
+   "usage": "last 4 games: 16 targets (4.0 a game), 81 carries"
+  },
+  {
+   "alternative_id": null,
+   "alternative_name": null,
+   "alternative_projected": null,
+   "appear_probability": 0.97,
+   "confidence": null,
+   "confidence_gate": "nobody on your bench is eligible here",
+   "edge": null,
+   "flags": [],
+   "form_games": 8,
+   "game": "@ HOU · Sun 8:20 PM ET",
+   "if_then": false,
+   "last_three": [
+    8.0,
+    12.0,
+    6.0
+   ],
+   "player_id": "00-0039172",
+   "player_name": "Jake Bates",
+   "position": "K",
+   "projected": 9.3,
+   "season_label": "2024",
+   "season_per_game": 8.9,
+   "short_games": [],
+   "slot": "K",
+   "status": "active",
+   "status_reason": "no injury designation",
+   "tossup": false
+  },
+  {
+   "alternative_id": "DEF-BAL",
+   "alternative_name": "Baltimore Ravens",
+   "alternative_projected": 4.7,
+   "appear_probability": 1.0,
+   "confidence": null,
+   "confidence_gate": "we don't put odds on defenses — a defense gets its projection, and odds are kept for the head-to-heads we can call",
+   "edge": 2.2,
+   "flags": [],
+   "form_games": 9,
+   "game": "@ KC · Sun 1:00 PM ET",
+   "if_then": false,
+   "last_three": [
+    10.0,
+    7.0,
+    -3.0
+   ],
+   "player_id": "DEF-DEN",
+   "player_name": "Denver Broncos",
+   "position": "DEF",
+   "projected": 6.9,
+   "season_label": "2024",
+   "season_per_game": 7.7,
+   "short_games": [],
+   "slot": "DEF",
+   "status": "active",
+   "status_reason": "team defense",
+   "tossup": false
+  }
+ ],
+ "matchup": {
+  "range_basis": "",
+  "you": {
+   "ceiling": 157.7,
+   "floor": 94.4,
+   "label": "Your Team",
+   "projected_total": 126.1,
+   "sd": 24.699
+  }
+ },
+ "meta": {
+  "anonymized_demo": true,
+  "availability_as_of": "the week 9 injury report, the last complete one before this report goes out",
+  "first_week_demo": false,
+  "gaps": [
+   {
+    "field": "opponent",
+    "reason": "the subscriber's league is not read (PLAN §0), so no opponent lineup, fragility, waiver market, league hype or last-week result is computable"
+   }
+  ],
+  "generated_at": "2026-10-25T17:01:07+00:00",
+  "historical_demo": true,
+  "last_week": 18,
+  "league_id": "typed-ppr-12-2024",
+  "league_name": "Your league",
+  "lineup_as_set": false,
+  "llm_tokens": 0,
+  "my_label": "Your Team",
+  "my_roster_id": 1,
+  "named_rival_label": null,
+  "num_teams": 12,
+  "rival_label": null,
+  "rival_roster_id": null,
+  "rivalry_week": false,
+  "scoring": "Full PPR",
+  "season": "2024",
+  "solo": true,
+  "team_lead": "Josh Allen",
+  "week": 10
+ },
+ "no_opponent": "Every call below is your starter against your own bench.",
+ "pivots": [
+  {
+   "about": "00-0035261",
+   "action": "Move Sam LaPorta into FLEX (projects 9.5). Chase Brown (10.3) plays Thursday, before Tony Pollard's status is known.",
+   "condition": "Tony Pollard (FLEX) is ruled out"
+  }
+ ],
+ "pivots_note": null,
+ "receipts": {
+  "note": "In a subscriber's report, this section lists the calls from their earlier reports and how each one finished.",
+  "record": null,
+  "stamp": null
+ },
+ "regret": {
+  "closer": "Closer on points: Tony Pollard or Chase Brown at FLEX, 10.3 vs 10.3 — no odds, because Tony Pollard was questionable in Week 9.",
+  "confidence": 0.715,
+  "definition": "That's the chance George Kittle outscores Sam LaPorta this week.",
+  "drivers": [
+   {
+    "label": "proj",
+    "value": "14.1 vs 9.5"
+   },
+   {
+    "label": "games this season",
+    "value": "7 vs 8"
+   }
+  ],
+  "label": "Closest call with odds",
+  "over_id": "00-0039065",
+  "over_name": "Sam LaPorta",
+  "reason": "George Kittle projects 14.1 to Sam LaPorta's 9.5. Last three: George Kittle 22.8, 15.2, 24.8; Sam LaPorta 3.5, 16.8, 4.8.",
+  "slot": "TE",
+  "start_id": "00-0033288",
+  "start_name": "George Kittle"
+ },
+ "rising": [
+  {
+   "earlier": 11.9,
+   "earlier_weeks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "jump": 12.1,
+   "line": "Chase Brown (CIN, RB), on your roster: 24.0 targets + carries a game over his last two, up from 11.9 in Weeks 1–7.",
+   "missed": [],
+   "name": "Chase Brown",
+   "on_roster": true,
+   "player_id": "00-0038597",
+   "position": "RB",
+   "recent": 24.0,
+   "team": "CIN"
+  },
+  {
+   "earlier": 10.0,
+   "earlier_weeks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "jump": 10.0,
+   "line": "Tyrone Tracy Jr. (NYG, RB): 20.0 targets + carries a game over his last two, up from 10.0 in Weeks 1–7.",
+   "missed": [],
+   "name": "Tyrone Tracy Jr.",
+   "player_id": "00-0039384",
+   "position": "RB",
+   "recent": 20.0,
+   "team": "NYG"
+  },
+  {
+   "earlier": 4.1,
+   "earlier_weeks": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "jump": 6.4,
+   "line": "Elijah Moore (CLE, WR): 10.5 targets + carries a game over his last two, up from 4.1 in Weeks 1–7.",
+   "missed": [],
+   "name": "Elijah Moore",
+   "player_id": "00-0036980",
+   "position": "WR",
+   "recent": 10.5,
+   "team": "CLE"
+  },
+  {
+   "earlier": 3.6,
+   "earlier_weeks": [
+    1,
+    2,
+    3,
+    6,
+    7
+   ],
+   "jump": 6.4,
+   "line": "Cedric Tillman (CLE, WR): 10.0 targets + carries a game over his last two, up from 3.6 in Weeks 1, 2, 3, 6 and 7. He wasn't in the box score in Weeks 4–5.",
+   "missed": [
+    4,
+    5
+   ],
+   "name": "Cedric Tillman",
+   "player_id": "00-0038979",
+   "position": "WR",
+   "recent": 10.0,
+   "team": "CLE"
+  }
+ ]
+}

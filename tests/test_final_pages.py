@@ -342,12 +342,13 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     off the injury report and have enough games on record". The rising hold
     and the practice squad withhold pairs that pass all three checks, so the
     clause is "only where", identically on the meta and JSON-LD entity
-    sentence, landing step 03 and the join page."""
+    sentence, the landing's "Decided against your bench" step and the join
+    page."""
     meta = re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1)
     product = next(n for n in json.loads(re.search(
         r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S).group(1))["@graph"]
         if n["@type"] == "Product")
-    step = _flat(LANDING.split("<h3>When a % prints</h3>")[1].split("</article>")[0])
+    step = _flat(LANDING.split("<h3>Decided against your bench</h3>")[1].split("</article>")[0])
     assert meta == product["description"]
     assert "the odds " + GATE_CLAUSE in meta
     assert "A percentage prints " + GATE_CLAUSE + "." in step
@@ -376,35 +377,43 @@ def test_the_refund_sits_under_the_heros_buy_button_with_no_price() -> None:
     """Business #1: the strongest true objection-killer (a no-questions refund
     until the second weekly report's week kicks off) sat only in the price
     card, ~4,700px down on a phone. Open, it is built under the hero's button
-    and hidden with it at the season's end; the trust strip's checkout cell
-    carries it in every state. No price in either (the hero rule)."""
+    and hidden with it at the season's end; the price card carries it in
+    every state (the trust strip that also did went with contract B3). No
+    price in the hero line (the hero rule)."""
     block = LANDING.split("if (CHECKOUT_OPEN) {")[1].split("if (CHECKOUT_CAN_COMPLETE)")[0]
     risk = _flat(block[block.index('const heroRow'):block.index("heroRow.after(risk)")])
     assert "Full refund, no questions, until your second weekly report's week kicks off" in risk
     assert "$" not in risk
     assert '"risk-line"' in _js_function(LANDING, "closeForSeason")
-    cred = _flat(LANDING.split('<div class="cred">')[1].split("</section>")[0])
-    assert "No-questions refund until your second weekly report's week kicks off" in cred
-    assert "$" not in cred
+    card = _flat(LANDING.split('id="pass-card"')[1].split("</section>")[0])
+    assert "Full refund, no questions, until your second weekly report's week kicks off" in card
 
 
 def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     """Copy review: the page's best hook ("He was on your bench. He went for
     30. You lost by four.") sat after four feature tiles. It is the first
-    section after the hero, and the trust strip shares its rule."""
+    section after the hero (the trust strip that shared its rule went with
+    contract B3)."""
     after = LANDING.split("</header>", 1)[1]
     first = re.search(r"<section[^>]*>", after).group(0)
     assert first == '<section class="proof">'
-    assert after.index('class="proof"') < after.index('class="credsec"')
-    assert ".proof + .credsec .cred{margin-top:0;border-top:0;}" in LANDING
+    assert 'class="credsec"' not in LANDING
 
 
 def test_the_phone_says_not_every_row_gets_odds() -> None:
-    """Business #7: the mockup shows a % on 3 of 4 rows while a real week's
+    """Business #7: the mockup showed a % on 3 of 4 rows while a real week's
     report can print odds on 3 of 9; a buyer expecting nine is a Week-2
-    refund. The caption says so — a disclosure, not a claim."""
-    cap = _flat(LANDING.split('<div class="fcap">')[1].split("</div>")[0])
-    assert "Some rows get no %; they're still decided, with the reason." in cap
+    refund. The phone now shows the real card 01 (contract C11): all nine
+    slots, odds on three, and every other row its reason in the report's own
+    words — the disclosure is the report itself, not a caption about it."""
+    card = LANDING.split('data-sec="lineup"')[1].split("</section>")[0]
+    rows = re.findall(r'<div class="frow"[^>]*>(.*?)</div>', card, re.S)
+    odds = [r for r in rows if 'class="fpct"' in r]
+    assert len(rows) == 9 and 0 < len(odds) < len(rows), (len(rows), len(odds))
+    for row in rows:
+        if row not in odds:
+            assert re.search(r'<span class="fnc[^"]*">[^<]+</span>', row), row
+    assert "the bar starts at 50% (a toss-up)" in _flat(card)
 
 
 def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
