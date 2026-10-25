@@ -595,7 +595,7 @@ def test_the_counters_page_and_event_names_are_the_contracts() -> None:
         assert f'"{name}"' in src.split("const COUNT_EVENTS")[1].split(";")[0]
     pages = src.split("const COUNT_PAGES")[1].split(";")[0]
     for key in ("index", "join", "join-pass", "join-try", "league-pass", "how-it-works",
-                "thanks", "sample", "this-week", "first-week", "404", "other"):
+                "thanks", "sample", "this-week", "first-week", "planner", "404", "other"):
         assert f'"{key}"' in pages, key
     assert 'blobs: [fields.e, page, fields.v, fields.r, fields.d, fields.s, where]' in src
     assert "COUNTS.writeDataPoint(row)" in src and "await env.COUNTS" not in src

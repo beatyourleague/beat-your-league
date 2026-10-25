@@ -444,6 +444,9 @@ FUNNEL = (
     ("Free-report page views", lambda r: r["e"] == "view" and r["p"] == "join-try"),
     ("Free-report rosters checked", lambda r: r["e"] == "roster" and r["p"] == "join-try"),
     ("Free reports requested", lambda r: r["e"] == "trial"),
+    ("Planner views", lambda r: r["e"] == "view" and r["p"] == "planner"),
+    ("Planner rosters checked", lambda r: r["e"] == "roster" and r["p"] == "planner"),
+    ("Waitlist joined from the planner", lambda r: r["e"] == "waitlist" and r["p"] == "planner"),
 )
 # External input: a field that is not the shape the Worker writes drops the
 # whole row, never prints — no field can smuggle an address through (C1's own

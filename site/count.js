@@ -32,12 +32,13 @@
   const PAGES = {
     "": "index", "join": "join", "league-pass": "league-pass",
     "how-it-works": "how-it-works", "thanks": "thanks", "sample-report": "sample",
-    "this-week": "this-week", "sample-first-week": "first-week", "404": "404",
+    "this-week": "this-week", "sample-first-week": "first-week", "byes": "planner", "404": "404",
   };
   // Real pages with no key of their own. Any path in neither list is GitHub
   // Pages answering with 404.html, so that is what it counts as.
   const OTHER = ["join/confirm", "terms", "privacy", "legal", "compare", "confidence",
-                 "projections", "no-call", "backtest", "ledger"];
+                 "projections", "no-call", "backtest", "ledger",
+                 "espn", "yahoo", "sleeper", "cbs"];
   // The keys the join page may name for itself (window.bylPage).
   const JOIN_KEYS = ["join", "join-pass", "join-try", "other"];
   const sent = {};

@@ -50,7 +50,7 @@ LIVE_URL = "https://forms.beatyourleague.com/e"
 TAG = '<script src="/count.js" defer></script>'
 FIELD = re.compile(r"^[a-z0-9.-]{0,40}$")
 PAGE_KEYS = {"index", "join", "join-pass", "join-try", "league-pass", "how-it-works",
-             "thanks", "sample", "this-week", "first-week", "404", "other"}
+             "thanks", "sample", "this-week", "first-week", "planner", "404", "other"}
 EVENTS = ("view", "roster", "checkout", "waitlist", "trial")
 # The three generated pages this branch may not rebuild: the lead runs `make
 # sample` after merging, and this-week.html is rebuilt by the Tuesday cron.
@@ -179,7 +179,7 @@ def test_every_page_has_a_key_and_only_the_404_page_counts_as_404(tmp_path) -> N
                 "league-pass.html": "league-pass", "how-it-works.html": "how-it-works",
                 "thanks.html": "thanks", "sample-report.html": "sample",
                 "this-week.html": "this-week", "sample-first-week.html": "first-week",
-                "404.html": "404"}
+                "byes/index.html": "planner", "404.html": "404"}
     for (published, url), result in zip(paths, results):
         [body] = _bodies(result)
         assert body["p"] in PAGE_KEYS
@@ -1094,3 +1094,22 @@ def test_launch_does_not_promise_the_phone_is_left_out() -> None:
     start = launch.index("## 5b.")
     intro = launch[start:launch.index("1. Cloudflare", start)]
     assert "(on every page)" not in intro and "the generated ones too" in intro
+
+
+def test_the_planner_has_its_own_rows_in_the_funnel() -> None:
+    """The free bye-week planner (/byes/, key "planner") is the free tool the
+    go-to-market leans on, so `make stats` counts its views, its roster checks
+    and the waitlist rows it brings — and nothing from another page lands in
+    those rows. Its waitlist rows still count in the whole-waitlist row."""
+    rows = {label: test for label, test in stats.FUNNEL}
+    def row(e, p, s=""):
+        return {"e": e, "p": p, "s": s, "v": "", "r": "", "d": "", "c": ""}
+    assert rows["Planner views"](row("view", "planner"))
+    assert not rows["Planner views"](row("view", "index"))
+    assert rows["Planner rosters checked"](row("roster", "planner"))
+    assert not rows["Planner rosters checked"](row("roster", "join"))
+    assert rows["Waitlist joined from the planner"](row("waitlist", "planner", "closed"))
+    assert not rows["Waitlist joined from the planner"](row("waitlist", "index"))
+    assert rows["Waitlist joined"](row("waitlist", "planner", "closed"))
+    page = (SITE / "byes" / "index.html").read_text(encoding="utf-8")
+    assert 'window.bylCount("roster")' in page and 'window.bylCount("waitlist", "closed")' in page
