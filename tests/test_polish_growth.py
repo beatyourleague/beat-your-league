@@ -507,8 +507,8 @@ KIT_MARKUP = """  <!-- The commissioner kit (G4): two things a commissioner can 
   </div>
 """
 KIT_CSS = """  /* The commissioner kit (G4): the ask's own chatline and share button. */
-  .kit-lead{margin-top:6px;font-size:14px;line-height:1.55;color:var(--dusk2);}
-  .kit-item + .kit-item{margin-top:18px;}
+  .kit-lead{margin-top:8px;font-size:15px;line-height:1.55;color:var(--dusk2);}
+  .kit-item + .kit-item{margin-top:20px;}
 """
 # Inside the page's script, after the ask's handler.
 KIT_SHARE_JS = """// The commissioner kit (G4): each line goes to the group chat through the

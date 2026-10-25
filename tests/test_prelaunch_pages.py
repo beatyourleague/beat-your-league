@@ -272,13 +272,14 @@ def test_no_green_call_to_action_and_no_dashed_placeholder() -> None:
     CTA on the site (button{background:var(--turf)}), a dead .checkout rule
     sat beside it, and the closed checkout — on join and League Pass alike —
     was a dashed "opens soon" box that read as a wireframe. Primary buttons
-    are the site's gold; the closed state is a real button."""
+    are the site's gold; the closed state is a real button — contract C7's
+    flat secondary (truth pass): a 1.5px navy outline."""
     css = _style(JOIN)
     rule = re.search(r"\n  button\{([^}]*)\}", css).group(1)
     assert "--turf" not in rule and "--flag" in rule
     assert ".checkout{" not in css
     closed = css.split("#submit.is-closed{", 1)[1].split("}", 1)[0]
-    assert "dashed" not in closed and "border:2px solid var(--navy)" in closed
+    assert "dashed" not in closed and "border:1.5px solid var(--navy)" in closed
     lp_css = _style(LEAGUE_PASS)
     assert ".soon" not in LEAGUE_PASS and "dashed #C9C3B4" not in lp_css
 
@@ -289,11 +290,13 @@ def test_the_league_pass_share_buttons_are_secondaries_not_three_more_golds() ->
     two to a desktop screen and three to a phone's, outweighing the page's
     one real ask (contract C2: one primary, one secondary). They are the
     ghost now — no fill, a light border, gold only on hover — and the copy
-    boxes above them are solid, not the dashed wireframe style C2 retired."""
+    boxes above them are solid, not the dashed wireframe style C2 retired.
+    The ghost is contract C7's (truth pass): a 1.5px border, 8px corners."""
     css = _style(LEAGUE_PASS)
     share = re.search(r"\n  \.sharebtn\{([^}]*)\}", css).group(1)
     assert "background:transparent" in share and "gradient" not in share
-    assert "border:2px solid rgba(246,244,238,.4)" in share and "color:var(--paper)" in share
+    assert "border:1.5px solid rgba(246,244,238,.4)" in share and "color:var(--paper)" in share
+    assert "border-radius:8px" in share
     assert not re.search(r"\.sharebtn(?::hover)?::after", css), "the share button still carries the sheen"
     assert re.search(r"\n  \.sharebtn:hover\{border-color:var\(--flag\);\}", css)
     chat = re.search(r"\n  \.chatline\{([^}]*)\}", css).group(1)
@@ -355,18 +358,26 @@ def test_page_buttons_are_the_two_c2_styles(name: str) -> None:
 def test_the_confirm_button_is_the_sites_primary() -> None:
     """D3, reproduced (shots/confirm390.png): join/confirm.html's button was a
     6px-rounded pale pill in sentence-case body type, the only button on the
-    site in its own style."""
+    site in its own style. It is the site's primary (contract C7, truth
+    pass): display caps, the flat gold fill, 8px corners, 48px tall."""
     rule = _style(CONFIRM).split("\n  button{", 1)[1].split("}", 1)[0]
     assert "var(--display)" in rule or "Barlow Condensed" in rule
-    assert "text-transform:uppercase" in rule and "border-radius:0" in rule
-    assert "border-radius:6px" not in rule
+    assert "text-transform:uppercase" in rule and "border-radius:8px" in rule
+    assert "background:var(--flag)" in rule and "gradient" not in rule
+    assert "min-height:48px" in rule and "border-radius:6px" not in rule
 
 
-def test_cards_are_square_and_only_what_you_can_press_moves() -> None:
+def test_cards_are_radius_12_and_only_what_you_can_press_moves() -> None:
     """C2 / D9: the join page and its sidebar were the only rounded cards on
     the paper pages, and a hover that lifts something you cannot press
-    promises a click that does nothing."""
+    promises a click that does nothing. The truth pass (contract C7) gave
+    every card one shape instead: a paper card is 12px with a 1px border, the
+    navy sidebar 16px — never the 4px one-off."""
     css = _style(JOIN)
+    step = re.search(r"\n  section\{([^}]*)\}", css).group(1)
+    assert "border-radius:12px" in step and "border:1px solid var(--line)" in step
+    side = re.search(r"\n  \.side\{([^}]*)\}", css).group(1)
+    assert "border-radius:16px" in side
     for card in (".page{", ".side{"):
         rules = [r.split("}", 1)[0] for r in css.split(card)[1:]]
         assert all("border-radius:4px" not in r for r in rules), card
@@ -377,14 +388,29 @@ def test_cards_are_square_and_only_what_you_can_press_moves() -> None:
                                  selector), (name, selector)
 
 
-def test_a_phone_shows_the_page_not_a_sheet_on_a_desk() -> None:
+PAPER_FULL_BLEED = ("how-it-works.html", "thanks.html", "404.html", "join/confirm.html",
+                    "join/index.html", "byes/index.html", "espn/index.html", "yahoo/index.html",
+                    "sleeper/index.html", "cbs/index.html")
+
+
+@pytest.mark.parametrize("name", PAPER_FULL_BLEED)
+def test_no_paper_page_is_a_sheet_on_a_desk_at_any_width(name: str) -> None:
     """D15, reproduced (shots/hiw390-t0.png, thanks390, 404390, confirm390):
     at 390px the paper pages kept an 8px beige margin and a drop shadow around
-    the card, and join ended in a grey shadow smear under its sidebar."""
-    rule = "@media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}"
-    for name in ("how-it-works.html", "thanks.html", "404.html", "join/confirm.html"):
-        assert rule in _style(_page(name)), name
-    assert ".side{position:static;box-shadow:none;}" in _style(JOIN)
+    the card, and join ended in a grey shadow smear under its sidebar. The
+    truth pass (contract C2) took the sheet away at EVERY width: the page is
+    the paper, edge to edge, under a flat navy band — no .sheet/.page frame,
+    no beige desk — and a sidebar is a navy card with no smear under it."""
+    page, css = _page(name), _style(_page(name))
+    assert not re.search(r'class="(?:sheet|page)"', page), f"{name}: still a sheet"
+    assert ".sheet{" not in css and "#E7E4DA" not in css, f"{name}: still a desk"
+    body = re.search(r"\n  body\{([^}]*)\}", css).group(1)
+    assert "background:var(--paper)" in body and "padding:0" in body, name
+    band = re.search(r"\n  header\{([^}]*)\}", css).group(1)
+    assert "background:var(--navy)" in band and "gradient" not in band, name
+    if name in ("join/index.html", "byes/index.html"):
+        side = re.search(r"\n  \.side\{([^}]*)\}", css).group(1)
+        assert "border-radius:16px" in side and "box-shadow" not in side, name
 
 
 def test_the_checked_roster_has_quiet_remove_controls_and_step_three_says_it_once() -> None:
@@ -398,7 +424,8 @@ def test_the_checked_roster_has_quiet_remove_controls_and_step_three_says_it_onc
     assert 'drop.textContent = "×";' in draw and 'drop.textContent = "remove"' not in draw
     assert 'drop.setAttribute("aria-label", "Remove " +' in draw
     drop = _style(JOIN).split(".row .fix button.drop{", 1)[1].split("}", 1)[0]
-    assert "border:0" in drop and "width:32px" in drop
+    # 44px tall for a thumb (truth pass: every control at 390 is 44px or more).
+    assert "border:0" in drop and "width:40px" in drop and "height:44px" in drop
     head = re.search(r'<div class="eyebrow" id="step3-head">([^<]*)</div>', JOIN).group(1)
     label = re.search(r'<label class="optlabel" id="lbl-email" for="email">([^<]*)</label>',
                       JOIN).group(1)
@@ -521,15 +548,54 @@ def test_the_yes_buys_what_is_on_the_page_not_what_was_there_when_it_asked(
 # D8 — How it works, pictured with the report itself
 # --------------------------------------------------------------------- #
 
+def _bar_from_even(pct: int) -> int:
+    """Contract C9: every bar is drawn from the PRINTED percentage, from 50%
+    (render.report.bar_from_even once the report branch lands)."""
+    return max(0, min(100, (pct - 50) * 2))
+
+
+# The five cards How it works annotates, in the report's order (contract C1),
+# each between its hiw-* markers.
+HIW_CARDS = (("hiw-lineup", "lineup", "Your Lineup, Decided", "01"),
+             ("hiw-closest", "closest", "The Week's Closest Call", "02"),
+             ("hiw-plan", "plan", "Your Game Plan", "03"),
+             ("hiw-ifthen", "ifthen", "If/Then for Gameday", "04"),
+             ("hiw-slot", "slots", "Slot by Slot", "05"))
+
+
 def test_how_it_works_pictures_the_report_with_the_samples_own_rows() -> None:
     """D8, reproduced (shots/hiw1440-t0..t2): seven numbered text sections, a
     ten-term glossary and no picture of the report it explains, numbered "1."
     while the report and landing say "01". Each glossary group now sits beside
     the real component, every figure on those cards is one the published
     sample prints (the landing's own guard, on this page — mutation: change
-    16.9 to 17.9), and each odds bar starts at 50% as the report draws it."""
+    16.9 to 17.9), and each odds bar starts at 50% as the report draws it.
+
+    Truth pass: the cards are the report's own five, in the report's order and
+    under its own titles and numbers — 01 Your Lineup, Decided, 02 The Week's
+    Closest Call, 03 Your Game Plan, 04 If/Then for Gameday, 05 Slot by Slot —
+    each between its hiw-* markers as render/phone.py's hiw_cards writes it
+    (card_html in ONE data-real filecard, so the figure guard sweeps it; a
+    filecard nested in a filecard is a merge gone wrong), inside the page's
+    own .annocard cell, never a hand-drawn picture in a style of its own."""
+    at = 0
+    for marker, key, title, number in HIW_CARDS:
+        start, end = f"<!-- {marker}:start -->", f"<!-- {marker}:end -->"
+        assert HOW.count(start) == 1 and HOW.count(end) == 1, marker
+        assert HOW.index(start) > at, f"{marker} is out of the report's order"
+        at = HOW.index(end)
+        cell = HOW[:HOW.index(start)].rsplit("<div ", 1)[1]
+        assert cell.startswith('class="annocard" data-reveal>'), marker
+        card = HOW[HOW.index(start) + len(start):at].strip()
+        assert card.startswith('<div class="filecard" data-real="2024-w10">'), marker
+        assert card.endswith("</div><!--/card-->"), marker
+        assert card.count('class="filecard') == 1, f"{marker}: a filecard inside the filecard"
+        head = re.search(r'<section class="card" data-sec="([a-z]+)"><div class="eyebrow">'
+                         r'<span class="tag">([^<]+)</span><span class="n">(\d\d)</span>', card)
+        assert head and (head.group(1), html.unescape(head.group(2)), head.group(3)) == \
+            (key, title, number), (marker, head and head.groups())
     cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+"[^>]*>(.*?)<!--/card-->', HOW, re.S)
-    assert len(cards) >= 4, "How it works lost its pictures of the report"
+    assert len(cards) == len(HIW_CARDS), "How it works lost its pictures of the report"
     flat_sample = html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", SAMPLE_REPORT)))
     for card in cards:
         body = html.unescape(re.sub(r"<[^>]+>", " ", re.sub(r"<!--.*?-->", " ", card, flags=re.S)))
@@ -537,32 +603,31 @@ def test_how_it_works_pictures_the_report_with_the_samples_own_rows() -> None:
         assert figures, "a sample card with no figures"
         for figure in sorted(figures):
             assert figure in flat_sample, f"How it works quotes {figure!r}, which the sample never printed"
-        for name in re.findall(r"<b>([A-Z][^<]+)</b>", card):
-            assert name in flat_sample, f"{name!r} is not a row of the sample"
-        # Each bar is the sample's own bar for that row, drawn from 50% on the
-        # unrounded number: review found Kittle's at 44% beside the sample's
-        # 43% (72% printed, 0.716 drawn), because it was derived from the
-        # rounded percentage.
-        for name, pct, width in re.findall(
-                r'<b>([^<]+)</b>.*?<span class="pct">(\d+)%</span><span class="cbar">'
-                r'<i style="width:(\d+)%">', card):
-            theirs = re.search(r'<span class="tname">' + re.escape(name) + r'</span>.*?'
-                               r'<td class="tcall"><b>(\d+)%</b><span class="cbar"[^>]*>'
-                               r'<i style="width:(\d+)%">', SAMPLE_REPORT.replace(
-                                   "&#x27;", "'"))
-            assert theirs and theirs.groups() == (pct, width), \
-                f"{name}'s bar ({pct}%, {width}% wide) is not the sample's {theirs and theirs.groups()}"
-            assert abs(int(width) - (int(pct) - 50) * 2) <= 1, "the bar is not drawn from 50%"
+        for name in re.findall(r'class="(?:fname|tname)">(?:<a [^>]*>)?([^<]+)<', card):
+            assert html.unescape(name) in flat_sample, f"{name!r} is not a row of the sample"
+        # Every bar from 50% on the PRINTED number (contract C9): a bar drawn
+        # from the unrounded figure put Kittle's at 43% on one surface and 44%
+        # on another for the same printed 72%.
+        for width, pct in (re.findall(r'<span class="fbar"><i style="width:(\d+)%"></i></span>'
+                                      r'<span class="fpct">(\d+)%</span>', card)
+                           + re.findall(r'<span class="cbar"><i style="width:(\d+)%"></i></span>'
+                                        r'<b class="cpct">(\d+)%</b>', card)):
+            assert int(width) == _bar_from_even(int(pct)), (pct, width)
+            if hasattr(rr, "bar_from_even"):
+                assert int(width) == rr.bar_from_even(int(pct))
         # Row by row, not figure by figure: a figure that happens to appear
         # elsewhere in the sample ("17.9 a game") must not pass for the row's.
-        for row in re.findall(r'<div class="frow">(.*?)</div>', card):
-            name = re.search(r"<b>([^<]+)</b>", row).group(1)
-            proj = re.search(r'<span class="proj">([^<]+)</span>', row).group(1)
-            call = html.unescape(re.sub(r"<[^>]+>", " ", row.split('class="call">', 1)[1]))
-            call = re.sub(r"\s+", " ", call).strip()
-            assert re.search(re.escape(html.unescape(name)) + r".{0,420}?" + re.escape(proj)
-                             + r" " + re.escape(call), flat_sample), \
+        for row in re.findall(r'<div class="frow" data-i="\d+">(.*?)</div>', card):
+            name = html.unescape(re.sub(r"<[^>]+>", "",
+                                        re.search(r'<span class="fname">(.*?)</span>', row).group(1)))
+            proj = re.search(r'<span class="fproj">([^<]+)</span>', row).group(1)
+            call = re.search(r'<span class="fpct">([^<]+)</span>|<span class="fnc[^"]*">([^<]+)</span>', row)
+            call = html.unescape(call.group(1) or call.group(2))
+            assert re.search(re.escape(name) + r".{0,420}?" + re.escape(proj) + r" "
+                             + re.escape(call), flat_sample), \
                 f"{name}'s row ({proj}, {call}) is not the sample's"
+    rows = re.findall(r'<div class="frow" data-i="\d+">', cards[0])
+    assert len(rows) == 9, "the lineup card is not all nine starters"
     assert '<span class="n">01</span>What you get, and when</h2>' in HOW
     assert not re.search(r"<h2[^>]*>\d\. ", HOW), "a section still numbers itself 1."
     links = _style(HOW).split("main a,p a,li a{", 1)[1].split("}", 1)[0]
