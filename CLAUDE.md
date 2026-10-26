@@ -1490,27 +1490,36 @@ skeptic re-ran every one; four fix branches and an integration followed. Rules i
   and the forms share `forms.beatyourleague.com` (`/e` and `/rows`); the free rate-limit rule
   is URI Path `/rows`, 10 per 10 s.
 
-**The push token never shares a job with installed code — weekly.yml (SEC-1, Oct 25 2026).**
+**The push token never shares a job with installed code (SEC-1, Oct 25–26 2026).**
 Every step of a job shares one runner and one checkout, so a step that runs pip packages or
 Chrome reaches a later step through what it leaves behind: a git hook or config key (filter
 driver, credential.helper, include.path, http.proxy), `$GITHUB_ENV` (BASH_ENV, LD_PRELOAD),
 `$GITHUB_PATH` (a fake git). A push token in that later step was a push token on the branch
-that serves the payment pages. weekly.yml's `week` and `share-card` jobs are now
-`contents: read` and push nothing: each copies the files git would commit at its own paths
-(`git ls-files --cached --others --exclude-standard`) into `$RUNNER_TEMP` and uploads them.
-`commit-record` / `commit-card` (contents: write only; a checkout, the artifact download, git
-and the shell, nothing installed) refuse an artifact holding anything but plain files at those
-paths, lay it on the commit the first job's checkout reported (`outputs.base`, which must be
-on the branch), and rebase, so a push in between (the hourly intake, Monday) is union-merged
-and never overwritten. The record is never deleted from, so a partial artifact can't drop a
-send-log line. commit-record keeps the old persist step's `if: always()`; `file-issue` raises
-"Weekly run failed" for either job. Still open: the other five pushers (daily, monday,
-saturday, privacy, notice) push from jobs that run venv Python and have only the interim git
-wrapper (`core.hooksPath=/dev/null`, `core.fsmonitor=false`, first line of every pushing
-step). Residual: the week job still writes the record's contents, so a compromised build can
-put a bad row or page at those paths (never at another path), and the hand-off puts an upload
-and a second runner between the send and the push of sent.jsonl (the weekly-reports artifact
-keeps a copy; "Re-run failed jobs" on commit-record pushes the same record again).
+that serves the payment pages. Now no job that runs anything installed holds
+`contents: write`, in any workflow. Each job that used to push (weekly's `week` and
+`share-card`, daily's `intake`, monday's `receipts`, saturday's `check`, `privacy`, `notice`)
+is `contents: read` and ends with the same hand-off: it copies the files git would commit at
+its record's paths (`RECORD_PATHS`, via `git ls-files --cached --others --exclude-standard`)
+into `$RUNNER_TEMP/record`, uploads them, and says `staged=true|false`. Its `commit-record`
+(weekly also `commit-card`) has contents: write only — a checkout, the artifact download, git
+and the shell, nothing installed — and runs the same check everywhere: plain files matching
+`RECORD_ALLOWED` and nothing else, laid on the commit the first job's checkout reported
+(`outputs.base`, which must be on the branch), then the old persist step, which rebases, so
+another cron's push in between is union-merged and never overwritten. Nothing in a record is
+deleted except a folder named in `RECORD_REPLACES` (only the card folder). Each commit job keeps
+its old persist step's condition plus "something was staged" (before launch there is no
+sent.jsonl, so Saturday and the notice hand over nothing). The hand-off and check scripts are
+word for word identical in all seven pairs, held so by test; only their `env` differs.
+`file-issue` jobs cover a failed push (weekly, monday and saturday moved their issue there;
+daily keeps its own beside the watchdog and adds one for the push). The interim git wrapper
+(`core.hooksPath=/dev/null`, `core.fsmonitor=false`) stays the first line of every pushing
+step. Residual: a build job still writes its record's contents, so a compromised build can
+put a bad row or page at those paths (never at another path); the hand-off puts an upload and
+a second runner between a send and the push of sent.jsonl ("Re-run failed jobs" on the commit
+job pushes the same record); and three tokens still sit in jobs that ran installed code —
+the `statebox open` steps' actions: read, daily intake's issues: write (the watchdog's issue
+reads a file the run wrote), and privacy's actions: write for deleting older caches and
+backups.
 
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.

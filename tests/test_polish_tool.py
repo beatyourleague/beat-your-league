@@ -1117,8 +1117,9 @@ def test_the_tuesday_cron_refreshes_and_commits_the_planners_data() -> None:
     assert run.index("render.player_index") < run.index("render.bye_index")
     line = next(l for l in run.splitlines() if "render.bye_index" in l)
     assert '--season "$SEASON"' in line and "|| echo \"::warning::" in line
-    hand_off = next(s for s in steps if s.get("name") == "Hand the record to its commit job")["run"]
-    assert "site/join/byes.json" in hand_off and "site/byes/index.html" in hand_off
+    hand_off = next(s for s in steps if s.get("name") == "Hand the record to its commit job")
+    paths = hand_off["env"]["RECORD_PATHS"].split()
+    assert "site/join/byes.json" in paths and "site/byes/index.html" in paths
     commit = doc["jobs"]["commit-record"]["steps"]
     persist = next(s for s in commit if s.get("name") == "Persist the record")["run"]
     add = next(l for l in persist.splitlines() if l.strip().startswith("git add -A"))

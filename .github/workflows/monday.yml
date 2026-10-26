@@ -41,33 +41,38 @@ concurrency:
   group: monday-receipts
   cancel-in-progress: false
 
-# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+# Nothing by default; each job below asks for exactly what it uses (INFRA-14).
 permissions: {}
 
+# Three jobs (SEC-1, Oct 2026; weekly.yml says why at length): `receipts` runs
+# the pip-installed packages and pushes nothing, `commit-record` pushes what it
+# handed over from a runner that installs and runs nothing, and `file-issue`
+# raises the failure issue for either.
 jobs:
   receipts:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
-      contents: write   # commit the graded ledger and its page
-      issues: write     # one open issue per kind of failure
+      contents: read    # the checkout; commit-record pushes the graded record
+    outputs:
+      # The commit this job started from, as the checkout action itself reports
+      # it (fixed before any step of ours runs), and whether the hand-off below
+      # found anything to persist. Its commit job reads both (SEC-1).
+      base: ${{ steps.checkout.outputs.commit }}
+      staged: ${{ steps.handoff.outputs.staged }}
     steps:
-      # fetch-depth: 0 because this job COMMITS BACK. The default is a
-      # shallow clone, and `git pull --rebase` against a shallow history
-      # can fail — which would break the persist step whose whole job is
-      # keeping the record safe.
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
       # out the ledger as it was when it was QUEUED — before the run ahead
       # of it pushed — and grade from a stale record. (A double trigger is
       # routine now: the Worker's dispatch plus GitHub's backup.)
       #
-      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
-      # push token kept out of .git/config until the persist step (INFRA-07).
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and no
+      # token left in .git/config (INFRA-07) — this job has none that can push.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        id: checkout
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -119,12 +124,127 @@ jobs:
             data/processed/ledger/
           if-no-files-found: warn
       # The republished page's inline-script hashes (site/_headers), re-derived
-      # in a step of its own BEFORE the persist step: that one holds the push
-      # token, and no venv Python (third-party packages and their startup
-      # hooks) ever runs beside it (INFRA-07). Same opt-out as the page itself.
+      # before the hand-off so they travel with the page. Same opt-out as the
+      # page itself.
       - name: Refresh the security headers
         if: always() && vars.PUSH_LEDGER != 'false'
         run: .venv/bin/python -m render.headers
+      # The graded ledger, the page and its headers, handed to commit-record,
+      # which pushes them from a runner nothing here has touched. `always()`:
+      # the graded ledger is persisted whether or not the page is published or
+      # grading finished — the record is the asset. The page is staged either
+      # way; PUSH_LEDGER decides in commit-record whether it is committed.
+      - name: Hand the record to its commit job
+        id: handoff
+        if: always()
+        env:
+          RECORD_PATHS: data/processed/ledger site/ledger site/_headers
+        run: |
+          set -euo pipefail
+          set -f
+          stage="$RUNNER_TEMP/record"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          git ls-files -z --cached --others --exclude-standard -- $RECORD_PATHS |
+            while IFS= read -r -d '' path; do
+              case "/$path" in */.git*) continue ;; esac
+              [ -f "$path" ] && [ ! -L "$path" ] || continue
+              mkdir -p "$stage/$(dirname "$path")"
+              cp "$path" "$stage/$path"
+            done
+          if [ -n "$(find "$stage" -type f -print -quit)" ]; then
+            echo "staged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing at the record's paths to hand over"
+            echo "staged=false" >> "$GITHUB_OUTPUT"
+          fi
+      # overwrite: a re-run of this job replaces the record its first attempt
+      # left, rather than failing on the name and persisting nothing.
+      - name: Upload the record
+        if: always() && steps.handoff.outputs.staged == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: monday-record
+          path: ${{ runner.temp }}/record/
+          if-no-files-found: error
+          overwrite: true
+
+  # The graded record, pushed from a runner that installs nothing and runs
+  # nothing but git and the shell (SEC-1): the artifact must hold plain files
+  # at the record's paths and nothing else, and is laid on the commit
+  # `receipts` started from and rebased, so the Tuesday run's or the hourly
+  # intake's ledger lines pushed in between are merged (merge=union), never
+  # overwritten. `always()`, as the persist step it replaces had.
+  commit-record:
+    needs: receipts
+    if: always() && needs.receipts.outputs.staged == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the record; nothing else
+    steps:
+      # fetch-depth: 0: the starting commit is checked against this branch's
+      # history, and `git pull --rebase` against a shallow history can fail.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Outside the checkout: nothing in it reaches the work tree until the
+      # check below has passed it.
+      - name: Download the record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: monday-record
+          path: ${{ runner.temp }}/record
+      - name: Check the record and lay it on the receipts job's commit
+        env:
+          BASE: ${{ needs.receipts.outputs.base }}
+          RECORD_ALLOWED: /data/processed/ledger/* /site/ledger/* /site/_headers
+        run: |
+          set -euo pipefail
+          set -f
+          record="$RUNNER_TEMP/record"
+          # The starting commit must be on this branch: rebasing from anywhere
+          # else would push whatever lies between it and here.
+          if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
+            echo "::error::the starting commit is not on this branch; nothing was persisted"
+            exit 1
+          fi
+          odd=$(find "$record" -mindepth 1 ! -type f ! -type d -print -quit)
+          if [ -n "$odd" ]; then
+            echo "::error::the artifact holds something that is not a plain file; nothing was persisted"
+            exit 1
+          fi
+          files=()
+          while IFS= read -r -d '' file; do
+            path=${file#"$record"/}
+            ok=
+            case "/$path" in
+              */.git*) ;;
+              *) for allowed in $RECORD_ALLOWED; do
+                   case "/$path" in $allowed) ok=1 ;; esac
+                 done ;;
+            esac
+            if [ -z "$ok" ]; then
+              printf '::error::the artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
+              exit 1
+            fi
+            files+=("$path")
+          done < <(find "$record" -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::the artifact is empty; nothing was persisted"
+            exit 1
+          fi
+          git reset -q --hard "$BASE"
+          for folder in ${RECORD_REPLACES:-}; do
+            rm -rf "$folder"
+          done
+          for path in "${files[@]}"; do
+            mkdir -p "$(dirname "$path")"
+            cp "$record/$path" "$path"
+          done
+          echo "${#files[@]} file(s) laid on $BASE"
       # The graded ledger is persisted whether or not the page is published —
       # the record is the asset, the page is only its rendering.
       #
@@ -133,7 +253,6 @@ jobs:
       # repo variable arrives as an environment value, never pasted into the
       # shell (INFRA-14).
       - name: Persist the graded record
-        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           PUSH_LEDGER: ${{ vars.PUSH_LEDGER }}
@@ -158,8 +277,8 @@ jobs:
           # publishes is not a record. Set PUSH_LEDGER to "false" to hold it
           # back deliberately (e.g. before launch), which is the opposite
           # default and the safe direction for a promise about honesty.
-          # The page's inline-script hashes go with it (site/_headers, made by
-          # the step above), so the republished page never meets a stale
+          # The page's inline-script hashes go with it (site/_headers, made in
+          # the receipts job), so the republished page never meets a stale
           # Content-Security-Policy.
           if [ "$PUSH_LEDGER" != "false" ]; then
             git add site/ledger/ site/_headers
@@ -168,20 +287,32 @@ jobs:
           git commit -m "Monday grading run: ledger settled"
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
+
+  # ONE open issue per kind of failure, for the grading job or the push of
+  # what it graded: either leaves published calls pending and the public
+  # record stale.
+  file-issue:
+    needs: [receipts, commit-record]
+    if: always() && (needs.receipts.result == 'failure' || needs.commit-record.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write     # one open issue per kind of failure
+    steps:
       # ONE open issue per kind of failure: a later failure comments on the
       # open one instead of opening another (before launch these crons filed
       # 16 near-identical issues, which teaches exactly the wrong habit). The
       # title carries no date for that reason; each comment does. Listed, not
       # searched: the search index can lag a fresh issue by minutes.
       - name: Raise an issue if grading failed
-        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           TITLE: Monday grading failed
         run: |
           body="$(date -u +%Y-%m-%d): grading did not complete, so published calls stay pending and the
-          public record is stale.
+          public record is stale. If commit-record is the job that failed, grading ran but
+          its result never reached the branch: Re-run failed jobs pushes the same record.
 
           Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           number=$(gh issue list --state open --limit 200 --json number,title \

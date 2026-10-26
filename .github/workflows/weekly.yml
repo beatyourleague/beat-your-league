@@ -95,8 +95,10 @@ jobs:
       # The commit this job started from, as the checkout action itself
       # reports it — fixed before any step of ours runs, so nothing later in
       # the job can change it. commit-record lays the record on this commit
-      # and rebases, exactly as this job's own push used to.
+      # and rebases, exactly as this job's own push used to. And whether the
+      # hand-off found anything to persist.
       base: ${{ steps.checkout.outputs.commit }}
+      staged: ${{ steps.handoff.outputs.staged }}
     steps:
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
@@ -372,26 +374,36 @@ jobs:
       # files never are), at the same paths under one folder, so the
       # artifact's layout never depends on which of them exist.
       - name: Hand the record to its commit job
+        id: handoff
         if: always()
+        env:
+          RECORD_PATHS: >-
+            data/processed/ledger data/processed/sent.jsonl site/join/players.json
+            site/this-week.html site/week.json site/_headers content/this-week.md
+            site/join/byes.json site/byes/index.html
         run: |
           set -euo pipefail
+          set -f
           stage="$RUNNER_TEMP/record"
           rm -rf "$stage"
           mkdir -p "$stage"
-          git ls-files -z --cached --others --exclude-standard -- \
-              data/processed/ledger data/processed/sent.jsonl site/join/players.json \
-              site/this-week.html site/week.json site/_headers content/this-week.md \
-              site/join/byes.json site/byes/index.html |
+          git ls-files -z --cached --others --exclude-standard -- $RECORD_PATHS |
             while IFS= read -r -d '' path; do
               case "/$path" in */.git*) continue ;; esac
               [ -f "$path" ] && [ ! -L "$path" ] || continue
               mkdir -p "$stage/$(dirname "$path")"
               cp "$path" "$stage/$path"
             done
+          if [ -n "$(find "$stage" -type f -print -quit)" ]; then
+            echo "staged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing at the record's paths to hand over"
+            echo "staged=false" >> "$GITHUB_OUTPUT"
+          fi
       # overwrite: a re-run of this job replaces the record its first attempt
       # left, rather than failing on the name and persisting nothing.
       - name: Upload the record
-        if: always()
+        if: always() && steps.handoff.outputs.staged == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: weekly-record
@@ -453,10 +465,15 @@ jobs:
   #
   # `if: always()`, as the persist step it replaces had: a failed or
   # cancelled send still records who WAS mailed — the alternative is
-  # double-sending them on the retry.
+  # double-sending them on the retry. Skipped only when the hand-off found
+  # nothing at the record's paths, where the old step had nothing to add.
+  #
+  # The hand-off and the check below are word for word the same in every
+  # commit-job pair (daily, monday, saturday, privacy, notice): only their
+  # `env` differs, and a test holds them identical.
   commit-record:
     needs: week
-    if: always()
+    if: always() && needs.week.outputs.staged == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -481,42 +498,49 @@ jobs:
       - name: Check the record and lay it on the week job's commit
         env:
           BASE: ${{ needs.week.outputs.base }}
+          RECORD_ALLOWED: >-
+            /data/processed/ledger/* /data/processed/sent.jsonl /site/join/players.json
+            /site/this-week.html /site/week.json /site/_headers /content/this-week.md
+            /site/join/byes.json /site/byes/index.html
         run: |
           set -euo pipefail
+          set -f
           record="$RUNNER_TEMP/record"
-          # The week job's starting commit must be on this branch: rebasing
-          # from anywhere else would push whatever lies between it and here.
+          # The starting commit must be on this branch: rebasing from anywhere
+          # else would push whatever lies between it and here.
           if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
-            echo "::error::the week job's starting commit is not on this branch; nothing was persisted"
+            echo "::error::the starting commit is not on this branch; nothing was persisted"
             exit 1
           fi
           odd=$(find "$record" -mindepth 1 ! -type f ! -type d -print -quit)
           if [ -n "$odd" ]; then
-            echo "::error::the record holds something that is not a plain file; nothing was persisted"
+            echo "::error::the artifact holds something that is not a plain file; nothing was persisted"
             exit 1
           fi
           files=()
           while IFS= read -r -d '' file; do
             path=${file#"$record"/}
+            ok=
             case "/$path" in
-              */.git*) bad=1 ;;
-              /data/processed/ledger/*) bad= ;;
-              /data/processed/sent.jsonl | /site/join/players.json | /site/this-week.html) bad= ;;
-              /site/week.json | /site/_headers | /content/this-week.md) bad= ;;
-              /site/join/byes.json | /site/byes/index.html) bad= ;;
-              *) bad=1 ;;
+              */.git*) ;;
+              *) for allowed in $RECORD_ALLOWED; do
+                   case "/$path" in $allowed) ok=1 ;; esac
+                 done ;;
             esac
-            if [ -n "$bad" ]; then
-              printf '::error::the record holds %q, which this job never commits; nothing was persisted\n' "$path"
+            if [ -z "$ok" ]; then
+              printf '::error::the artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
               exit 1
             fi
             files+=("$path")
           done < <(find "$record" -type f -print0)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::the record is empty; nothing was persisted"
+            echo "::error::the artifact is empty; nothing was persisted"
             exit 1
           fi
           git reset -q --hard "$BASE"
+          for folder in ${RECORD_REPLACES:-}; do
+            rm -rf "$folder"
+          done
           for path in "${files[@]}"; do
             mkdir -p "$(dirname "$path")"
             cp "$record/$path" "$path"
@@ -612,8 +636,9 @@ jobs:
       contents: read    # the checkout; commit-card pushes the card
     outputs:
       # As the week job's: the checkout's own report, fixed before any step
-      # of ours runs.
+      # of ours runs, and whether the hand-off found anything.
       base: ${{ steps.checkout.outputs.commit }}
+      staged: ${{ steps.handoff.outputs.staged }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         id: checkout
@@ -632,24 +657,37 @@ jobs:
       # The card folder as the draw left it (an older week's card deleted, at
       # most this week's in it) and the page whose preview tags point at it.
       # Only those: nothing else this job touches is ever committed.
-      - name: Hand the card to its commit job
+      - name: Hand the record to its commit job
+        id: handoff
+        env:
+          RECORD_PATHS: site/og site/this-week.html
         run: |
           set -euo pipefail
-          stage="$RUNNER_TEMP/card"
+          set -f
+          stage="$RUNNER_TEMP/record"
           rm -rf "$stage"
           mkdir -p "$stage"
-          git ls-files -z --cached --others --exclude-standard -- site/og site/this-week.html |
+          git ls-files -z --cached --others --exclude-standard -- $RECORD_PATHS |
             while IFS= read -r -d '' path; do
               case "/$path" in */.git*) continue ;; esac
               [ -f "$path" ] && [ ! -L "$path" ] || continue
               mkdir -p "$stage/$(dirname "$path")"
               cp "$path" "$stage/$path"
             done
-      - name: Upload the card
+          if [ -n "$(find "$stage" -type f -print -quit)" ]; then
+            echo "staged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing at the record's paths to hand over"
+            echo "staged=false" >> "$GITHUB_OUTPUT"
+          fi
+      # overwrite: a re-run of this job replaces the record its first attempt
+      # left, rather than failing on the name and persisting nothing.
+      - name: Upload the record
+        if: steps.handoff.outputs.staged == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: share-card
-          path: ${{ runner.temp }}/card/
+          path: ${{ runner.temp }}/record/
           if-no-files-found: error
           overwrite: true
 
@@ -661,6 +699,7 @@ jobs:
   # that drew it did the same).
   commit-card:
     needs: share-card
+    if: needs.share-card.outputs.staged == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -671,50 +710,60 @@ jobs:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Download the card
+      - name: Download the record
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: share-card
-          path: ${{ runner.temp }}/card
-      - name: Check the card and lay it on the share-card job's commit
+          path: ${{ runner.temp }}/record
+      - name: Check the record and lay it on the share-card job's commit
         env:
           BASE: ${{ needs.share-card.outputs.base }}
+          RECORD_ALLOWED: /site/this-week.html /site/og/this-week-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png
+          # The card folder is REPLACED by the artifact's: an older week's
+          # card leaves the site that way.
+          RECORD_REPLACES: site/og
         run: |
           set -euo pipefail
-          card="$RUNNER_TEMP/card"
+          set -f
+          record="$RUNNER_TEMP/record"
+          # The starting commit must be on this branch: rebasing from anywhere
+          # else would push whatever lies between it and here.
           if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
-            echo "::error::the share-card job's starting commit is not on this branch; nothing was persisted"
+            echo "::error::the starting commit is not on this branch; nothing was persisted"
             exit 1
           fi
-          odd=$(find "$card" -mindepth 1 ! -type f ! -type d -print -quit)
+          odd=$(find "$record" -mindepth 1 ! -type f ! -type d -print -quit)
           if [ -n "$odd" ]; then
-            echo "::error::the card artifact holds something that is not a plain file; nothing was persisted"
+            echo "::error::the artifact holds something that is not a plain file; nothing was persisted"
             exit 1
           fi
           files=()
           while IFS= read -r -d '' file; do
-            path=${file#"$card"/}
+            path=${file#"$record"/}
+            ok=
             case "/$path" in
-              */.git*) bad=1 ;;
-              /site/this-week.html) bad= ;;
-              /site/og/this-week-[0-9][0-9][0-9][0-9]-w[0-9][0-9].png) bad= ;;
-              *) bad=1 ;;
+              */.git*) ;;
+              *) for allowed in $RECORD_ALLOWED; do
+                   case "/$path" in $allowed) ok=1 ;; esac
+                 done ;;
             esac
-            if [ -n "$bad" ]; then
-              printf '::error::the card artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
+            if [ -z "$ok" ]; then
+              printf '::error::the artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
               exit 1
             fi
             files+=("$path")
-          done < <(find "$card" -type f -print0)
+          done < <(find "$record" -type f -print0)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::the card artifact is empty; nothing was persisted"
+            echo "::error::the artifact is empty; nothing was persisted"
             exit 1
           fi
           git reset -q --hard "$BASE"
-          rm -rf site/og
+          for folder in ${RECORD_REPLACES:-}; do
+            rm -rf "$folder"
+          done
           for path in "${files[@]}"; do
             mkdir -p "$(dirname "$path")"
-            cp "$card/$path" "$path"
+            cp "$record/$path" "$path"
           done
           echo "${#files[@]} file(s) laid on $BASE"
       - name: Persist the card

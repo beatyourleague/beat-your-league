@@ -176,8 +176,9 @@ def test_the_public_record_publishes_by_default() -> None:
     """The page was regenerated every Monday and thrown away: committing it was
     gated on a repo variable that is undocumented and unset. Principle 2 is
     "grade everything publicly", and a record that never publishes is not a
-    record — so the gate is now an opt-OUT."""
-    persist = [s for s in _steps("monday.yml")
+    record — so the gate is now an opt-OUT. The persist step lives in
+    commit-record now (SEC-1); the decision is the same one, made there."""
+    persist = [s for s in _job_steps("monday.yml")
                if "Persist" in str(s.get("name", ""))][0]
     run = str(persist["run"])
     assert "site/ledger/" in run
@@ -193,18 +194,28 @@ def test_the_monday_cron_needs_no_secrets() -> None:
     fail for want of one."""
     yaml = pytest.importorskip("yaml", reason="pyyaml not installed")
     doc = yaml.safe_load(_text("monday.yml"))
-    for step in list(doc["jobs"].values())[0]["steps"]:
-        if str(step.get("if", "")).strip() == "failure()":
-            continue                        # the issue-filing step needs a token
-        env = step.get("env") or {}
-        # The persist step is handed the job's own push token and the opt-out
-        # variable (INFRA-07/14: checkout no longer leaves the token in
-        # .git/config) — neither is a secret the owner has to set.
-        if "Persist" in str(step.get("name", "")):
-            assert env == {"GH_TOKEN": "${{ github.token }}",
-                           "PUSH_LEDGER": "${{ vars.PUSH_LEDGER }}"}, env
-            continue
-        assert not env, f"{step.get('name')!r} needs {sorted(env)}"
+    for job_name, job in doc["jobs"].items():
+        if job_name == "file-issue":
+            continue                        # the issue-filing job needs a token
+        for step in job["steps"]:
+            env = step.get("env") or {}
+            name = str(step.get("name", ""))
+            # The persist step is handed the job's own push token and the
+            # opt-out variable (INFRA-07/14: checkout no longer leaves the
+            # token in .git/config) — neither is a secret the owner has to
+            # set. The hand-off and the check carry their paths and the
+            # starting commit (SEC-1), none of them secret either.
+            if "Persist" in name:
+                assert env == {"GH_TOKEN": "${{ github.token }}",
+                               "PUSH_LEDGER": "${{ vars.PUSH_LEDGER }}"}, env
+            elif name.startswith("Hand the record"):
+                assert set(env) == {"RECORD_PATHS"}, env
+            elif name.startswith("Check the record"):
+                assert set(env) == {"BASE", "RECORD_ALLOWED"}, env
+                assert env["BASE"] == "${{ needs.receipts.outputs.base }}"
+            else:
+                assert not env, f"{name!r} needs {sorted(env)}"
+            assert "secrets." not in str(env), (job_name, name)
 
 
 # --------------------------------------------------------------------- #
@@ -240,7 +251,7 @@ def test_the_daily_sweep_runs_intake_and_only_intake() -> None:
 def test_the_daily_sweep_persists_the_send_log() -> None:
     """sent.jsonl is the only record of who was welcomed; losing it
     double-welcomes everyone on the next run."""
-    persist = [s for s in _steps("daily.yml")
+    persist = [s for s in _job_steps("daily.yml")
                if "Persist" in str(s.get("name", ""))]
     assert persist, "the daily sweep never persists sent.jsonl"
     assert "sent.jsonl" in str(persist[0]["run"])

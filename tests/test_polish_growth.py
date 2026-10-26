@@ -347,17 +347,18 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     runs = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert ".venv/bin/python -m render.og --week" in runs
     assert "git push" not in runs and "GH_TOKEN" not in str(job)
-    assert ("git ls-files -z --cached --others --exclude-standard -- site/og site/this-week.html"
-            in runs)
+    hand_off = next(s for s in job["steps"] if s.get("id") == "handoff")
+    assert hand_off["env"] == {"RECORD_PATHS": "site/og site/this-week.html"}
     upload = next(s for s in job["steps"] if "upload-artifact" in str(s.get("uses", "")))
     assert upload["with"]["name"] == "share-card"
-    assert upload["with"]["path"] == "${{ runner.temp }}/card/"
+    assert upload["with"]["path"] == "${{ runner.temp }}/record/"
     checkout = job["steps"][0]
     assert checkout["with"]["persist-credentials"] is False
     assert checkout["with"]["ref"] == "${{ github.ref_name }}"
     assert checkout["id"] == "checkout"
     assert job["outputs"]["base"] == "${{ steps.checkout.outputs.commit }}"
-    assert commit["needs"] == "share-card" and "if" not in commit
+    assert commit["needs"] == "share-card"
+    assert commit["if"] == "needs.share-card.outputs.staged == 'true'"
     assert commit["permissions"] == {"contents": "write"}
     commit_runs = "\n".join(str(s.get("run", "")) for s in commit["steps"])
     adds = [line.strip() for line in re.findall(r"^\s*git add .*$", commit_runs, re.M)]

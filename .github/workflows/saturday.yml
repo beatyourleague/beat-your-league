@@ -32,17 +32,26 @@ concurrency:
   group: saturday-final-check
   cancel-in-progress: false
 
-# Nothing by default; the job below asks for exactly what it uses (INFRA-14).
+# Nothing by default; each job below asks for exactly what it uses (INFRA-14).
 permissions: {}
 
+# Three jobs (SEC-1, Oct 2026; weekly.yml says why at length): `check` runs the
+# pip-installed packages and pushes nothing, and `commit-record` pushes what it
+# handed over from a runner that installs and runs nothing.
+# `file-issue` raises the failure issue for either.
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write   # persist sent.jsonl — it is what stops a second send
-      issues: write
+      contents: read    # the checkout; commit-record pushes the send log
       actions: read     # the sealed registry's and plans' backups, when the cache is gone
+    outputs:
+      # The commit this job started from, as the checkout action itself reports
+      # it (fixed before any step of ours runs), and whether the hand-off below
+      # found anything to persist. Its commit job reads both (SEC-1).
+      base: ${{ steps.checkout.outputs.commit }}
+      staged: ${{ steps.handoff.outputs.staged }}
     steps:
       # ref = the branch TIP, not the commit this run was triggered on. A run
       # queued behind another in the concurrency group would otherwise check
@@ -50,12 +59,12 @@ jobs:
       # of it pushed — and mail everything that run just mailed. (A double
       # trigger is routine now: the Worker's dispatch plus GitHub's backup.)
       #
-      # Actions pinned to a full commit, tag in the comment (INFRA-06), and the
-      # push token kept out of .git/config until the persist step (INFRA-07).
+      # Actions pinned to a full commit, tag in the comment (INFRA-06), and no
+      # token left in .git/config (INFRA-07) — this job has none that can push.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        id: checkout
         with:
           ref: ${{ github.ref_name }}
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -120,10 +129,125 @@ jobs:
           # variable set for one week, AWAY@HOME. Unset excuses nothing.
           POSTPONED_GAMES: ${{ vars.POSTPONED_GAMES }}
         run: .venv/bin/python -m run.saturday
+      # The send log, handed to commit-record, which pushes it from a runner
+      # nothing here has touched. `always()`: a failed send still records who
+      # WAS mailed — the alternative is mailing them again.
+      - name: Hand the record to its commit job
+        id: handoff
+        if: always()
+        env:
+          RECORD_PATHS: data/processed/sent.jsonl
+        run: |
+          set -euo pipefail
+          set -f
+          stage="$RUNNER_TEMP/record"
+          rm -rf "$stage"
+          mkdir -p "$stage"
+          git ls-files -z --cached --others --exclude-standard -- $RECORD_PATHS |
+            while IFS= read -r -d '' path; do
+              case "/$path" in */.git*) continue ;; esac
+              [ -f "$path" ] && [ ! -L "$path" ] || continue
+              mkdir -p "$stage/$(dirname "$path")"
+              cp "$path" "$stage/$path"
+            done
+          if [ -n "$(find "$stage" -type f -print -quit)" ]; then
+            echo "staged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "nothing at the record's paths to hand over"
+            echo "staged=false" >> "$GITHUB_OUTPUT"
+          fi
+      # overwrite: a re-run of this job replaces the record its first attempt
+      # left, rather than failing on the name and persisting nothing.
+      - name: Upload the record
+        if: always() && steps.handoff.outputs.staged == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: saturday-record
+          path: ${{ runner.temp }}/record/
+          if-no-files-found: error
+          overwrite: true
+
+
+  # The send log, pushed from a runner that installs nothing and runs nothing
+  # but git and the shell (SEC-1): the artifact must hold the send log and
+  # nothing else, and is laid on the commit `check` started from and rebased,
+  # so another cron's lines pushed in between are merged (merge=union), never
+  # overwritten. `always()`, as the persist step it replaces had: a failed
+  # send still records who WAS mailed. Skipped only when there is no send log
+  # yet (before launch), where the old step had nothing to add.
+  commit-record:
+    needs: check
+    if: always() && needs.check.outputs.staged == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # push the record; nothing else
+    steps:
+      # fetch-depth: 0: the starting commit is checked against this branch's
+      # history, and `git pull --rebase` against a shallow history can fail.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      # Outside the checkout: nothing in it reaches the work tree until the
+      # check below has passed it.
+      - name: Download the record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: saturday-record
+          path: ${{ runner.temp }}/record
+      - name: Check the record and lay it on the check job's commit
+        env:
+          BASE: ${{ needs.check.outputs.base }}
+          RECORD_ALLOWED: /data/processed/sent.jsonl
+        run: |
+          set -euo pipefail
+          set -f
+          record="$RUNNER_TEMP/record"
+          # The starting commit must be on this branch: rebasing from anywhere
+          # else would push whatever lies between it and here.
+          if ! [[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || ! git merge-base --is-ancestor "$BASE" HEAD; then
+            echo "::error::the starting commit is not on this branch; nothing was persisted"
+            exit 1
+          fi
+          odd=$(find "$record" -mindepth 1 ! -type f ! -type d -print -quit)
+          if [ -n "$odd" ]; then
+            echo "::error::the artifact holds something that is not a plain file; nothing was persisted"
+            exit 1
+          fi
+          files=()
+          while IFS= read -r -d '' file; do
+            path=${file#"$record"/}
+            ok=
+            case "/$path" in
+              */.git*) ;;
+              *) for allowed in $RECORD_ALLOWED; do
+                   case "/$path" in $allowed) ok=1 ;; esac
+                 done ;;
+            esac
+            if [ -z "$ok" ]; then
+              printf '::error::the artifact holds %q, which this job never commits; nothing was persisted\n' "$path"
+              exit 1
+            fi
+            files+=("$path")
+          done < <(find "$record" -type f -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::the artifact is empty; nothing was persisted"
+            exit 1
+          fi
+          git reset -q --hard "$BASE"
+          for folder in ${RECORD_REPLACES:-}; do
+            rm -rf "$folder"
+          done
+          for path in "${files[@]}"; do
+            mkdir -p "$(dirname "$path")"
+            cp "$record/$path" "$path"
+          done
+          echo "${#files[@]} file(s) laid on $BASE"
       # The only step handed a token that can push (the helper reads it from
       # this step's environment; .git/config never holds it).
       - name: Persist the send log
-        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -139,13 +263,23 @@ jobs:
           git commit -m "Saturday final check: send log"
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
+
+  # ONE open issue per kind of failure, for check or the push of what it
+  # handed over.
+  file-issue:
+    needs: [check, commit-record]
+    if: always() && (needs.check.result == 'failure' || needs.commit-record.result == 'failure')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write     # one open issue per kind of failure
+    steps:
       # ONE open issue per kind of failure: a later failure comments on the
       # open one instead of opening another (before launch these crons filed
       # 16 near-identical issues, which teaches exactly the wrong habit). The
       # title carries no date for that reason; each comment does. Listed, not
       # searched: the search index can lag a fresh issue by minutes.
       - name: Raise an issue if the check failed
-        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -157,7 +291,9 @@ jobs:
 
           Check in this order: whether this week's injury report was published
           (the log says so), whether the sealed plans were restored and opened
-          (CACHE_KEY), the email provider credentials."
+          (CACHE_KEY), the email provider credentials. If commit-record is the job
+          that failed, the checks went out but the send log never reached the
+          branch: Re-run failed jobs pushes the same log."
           number=$(gh issue list --state open --limit 200 --json number,title \
             --jq '[.[] | select(.title == env.TITLE)][0].number // empty' || true)
           if [ -n "$number" ]; then
