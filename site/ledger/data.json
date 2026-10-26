@@ -1,1 +1,47 @@
-[]
+[
+ {
+  "season": "2026",
+  "week": 7,
+  "slot": "FLEX",
+  "scoring": "ppr",
+  "league_size": 12,
+  "pick": "Rome Odunze",
+  "over": "Rashid Shaheed",
+  "confidence": 0.61,
+  "status": "graded",
+  "outcome": "hit",
+  "margin": 8.8,
+  "void_reason": null,
+  "regret": true
+ },
+ {
+  "season": "2026",
+  "week": 7,
+  "slot": "WR",
+  "scoring": "ppr",
+  "league_size": 12,
+  "pick": "Amon-Ra St. Brown",
+  "over": "Rashid Shaheed",
+  "confidence": 0.829,
+  "status": "graded",
+  "outcome": "hit",
+  "margin": 22.1,
+  "void_reason": null,
+  "regret": false
+ },
+ {
+  "season": "2026",
+  "week": 7,
+  "slot": "WR",
+  "scoring": "ppr",
+  "league_size": 12,
+  "pick": "Zay Flowers",
+  "over": "Rashid Shaheed",
+  "confidence": 0.807,
+  "status": "graded",
+  "outcome": "hit",
+  "margin": 25.6,
+  "void_reason": null,
+  "regret": false
+ }
+]
