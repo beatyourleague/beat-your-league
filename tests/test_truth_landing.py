@@ -227,12 +227,13 @@ def test_the_faq_answers_in_the_order_a_buyer_asks_and_its_twin_follows() -> Non
     """Contract B3, cut to five by the owner's Oct 28 2026 plan: the rankings
     objection is answered by its own comparison table and the League Pass by
     its own line under the price, so the FAQ opens with "Does it work with my
-    league?" and still ends with "Who's behind this?"; the FAQPage structured
+    league?" (owner, Oct 28 2026: product questions only — "Who's behind
+    this?" gave its place to "What if news breaks after Tuesday?"); the FAQPage structured
     data lists the same questions in the same order, with the same answers,
     so a search snippet and the page never disagree."""
     order = ["Does it work with my league?", "Is it worth joining mid-season?",
-             "What if my roster changes mid-season?", "Can I check how it decides?",
-             "Who's behind this?"]
+             "What if news breaks after Tuesday?", "What if my roster changes mid-season?",
+             "Can I check how it decides?"]
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     asked = [html.unescape(q) for q in re.findall(r"<summary>(.*?)</summary>", faq)]
     assert asked == order, asked

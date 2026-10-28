@@ -436,7 +436,7 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     assert ld["acceptedAnswer"]["text"] == answer
     assert answer.startswith("Yes — it's built for the playoff push.")
     assert "usually lands within the hour" in answer
-    assert "Subscribers alone pay for it" not in LANDING and "Buyers alone pay for it" in LANDING
+    assert "Subscribers alone pay for it" not in LANDING
 
 
 def test_the_price_cards_first_line_is_the_outcome() -> None:

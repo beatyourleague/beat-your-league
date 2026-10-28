@@ -4855,10 +4855,12 @@ def test_who_built_it_agrees_with_the_terms() -> None:
     """Panel review BE-D4: the FAQ and its JSON-LD said "built by fantasy
     players" while terms §15 and privacy §11 say "an independent solo
     project". Anonymous, and singular."""
+    # The landing's FAQ dropped "Who's behind this?" for a product question
+    # (owner, Oct 28 2026); How it works still answers it, singular.
     for page in (LANDING, HOW):
         text = prose(page)
         assert "built by fantasy players" not in text and "We built it because we" not in text
-        assert "one fantasy player built it" in text
+    assert "one fantasy player built it" in prose(HOW)
     assert "an independent solo project" in prose(TERMS)
 
 
