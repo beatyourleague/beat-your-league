@@ -84,6 +84,12 @@ def test_receipts_odds_and_bar_words_describe_the_report() -> None:
 
 def test_the_league_pass_names_its_size_limit() -> None:
     """D18: a pass carries as many seats as its league has teams, up to 14 —
-    "covers every manager" with no limit was false for a 16-team league."""
-    assert LANDING.count("in a league of up to 14 teams with one payment") == 2
-    assert "Up to 14 teams." in TEXT
+    "covers every manager" with no limit was false for a 16-team league.
+    Since Oct 28 2026 the landing names the pass in one line under the price
+    (its FAQ answer went with the FAQ's cut to five), and the limit rides in
+    that same line, right after "covers every manager"."""
+    line = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", re.search(
+        r'<p class="lpline">(.*?)</p>', LANDING, re.S).group(1)))
+    assert "covers every manager. Up to 14 teams." in line
+    flat = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", LANDING))
+    assert flat.count("covers every manager") == 1, "an unlimited claim elsewhere"

@@ -427,8 +427,9 @@ def test_the_shine_the_icons_and_the_progress_bar_run_on_the_compositor() -> Non
 
 def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> None:
     """LAND-MOTION-SECTIONS: one beat per section, played once on entrance
-    from the observers already there — the 12:55 yard line draws, groups
-    arrive one item after another, an FAQ answer eases open. Contract C7
+    from the observers already there — How it works draws its three steps
+    in order, the report's bars fill as the close-up arrives, groups arrive
+    one item after another, an FAQ answer eases open. Contract C7
     took out the decoration that had collected on top (the method cards'
     gold rules drawing in, the week strip's glint, the stamp landing, the
     group-chat bubble, the closer's sheen). The stagger step is 80ms and
@@ -436,18 +437,20 @@ def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> No
     lifts on hover, and buttons lift by one pixel, flat."""
     assert "(Math.min(i, 6) * 0.08)" in SCRIPT
     parts = SCRIPT.split("const parts = document.querySelectorAll(")[1].split(");")[0]
-    for part in (".proofline", ".rows", ".leaguepass", ".plans", ".closer > *"):
+    for part in (".shotwrap", ".plans", ".lpline", ".closer > *"):
         assert part in parts, part
     groups = SCRIPT.split("const groups = document.querySelectorAll(")[1].split(");")[0]
-    for group in (".timeline", ".method", ".reads", ".faq"):
+    for group in (".callouts", ".vstable tbody", ".faq"):
         assert group in groups, group
-    assert ".js .proofline.reveal.shown::before{transform:none;" in CSS
+    # The steps play their own timeline, so the generic rise leaves them be.
+    assert ".steps" not in parts and ".steps" not in groups
+    assert ".js .shotwrap.reveal.shown .fbar i{transform:none;" in CSS
     for gone in ("weekpass", "@keyframes stamp", ".bubble", "article::before", ".shine"):
         assert gone not in LANDING, gone
     assert not re.search(r"\.price[^{]*\{[^}]*animation", CSS), "the price moves"
     assert ".faq details[open] .a{animation:faqin" in CSS
-    for card in (r"\.dcard", r"\.method article", r"\.timeline li", r"\.plan(?:\.founder)?",
-                 r"\.lpcard", r"\.filecard", r"\.card"):
+    for card in (r"\.step", r"\.sicon", r"\.callouts li", r"\.vstable[^{]*",
+                 r"\.plan(?:\.founder)?", r"\.shot[^{]*", r"\.filecard", r"\.card"):
         assert not re.search(card + r":hover", CSS), f"{card} reacts to hover"
     assert ".btn.gold:hover{background:#FFD24A;transform:translateY(-1px);}" in CSS
     assert ".btn:active{transform:translateY(1px);" in CSS
@@ -460,11 +463,11 @@ def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
     included) and in print."""
     for selector in (".heroline .clock", ".livepill .dot::after", ".stamp50",
                      ".faq details[open] .a", ".watchnote.ok::before", ".watchform::after",
-                     ".js .proofline.reveal::before", ".phone .screen *", ".js .reveal",
-                     ".js .stagger > *"):
+                     ".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+                     ".phone .screen *", ".js .reveal", ".js .stagger > *"):
         assert selector in REDUCED, f"{selector} still moves under reduced motion"
-    for selector in (".js .proofline.reveal::before", ".phone .screen *", ".js .reveal",
-                     ".watchform::after"):
+    for selector in (".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+                     ".phone .screen *", ".js .reveal", ".watchform::after"):
         assert selector in PRINT, f"{selector} can print mid-motion"
     assert "!reduced && !form.classList.contains(\"called\")" in SCRIPT
     # LOOK-7: the progress bar was the one thing left moving under reduced
@@ -637,18 +640,20 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
 
 def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season() -> None:
     """L1 / contract C7: the free bye-week planner lives at /byes/ and every
-    link to it from the site root is href="byes/". It is a ghost tile in
-    "Read a real one first" (never gold, so the price CTA keeps priority) and
-    a footer link — no longer a hero link (contract B3: the hero's row is the
-    report and the price). The tile goes once no bye is left to plan for
-    (byes_left false) or the season is over (run under node)."""
+    link to it from the site root is href="byes/". Since the owner's Oct 28
+    2026 plan it is a text link in the fourth callout of "What you get" (the
+    byes checked to your title game — never gold, so the price CTA keeps
+    priority) and a footer link, never a hero link (contract B3). The link
+    goes once no bye is left to plan for (byes_left false) or the season is
+    over (run under node); the callout's own words stay, because every
+    report still checks the byes it has left."""
     hrefs = re.findall(r'href="([^"]*bye[^"]*)"', BODY)
     assert hrefs and set(hrefs) == {"byes/"}, hrefs
-    assert "planner-link" not in LANDING and 'data-planner href="byes/"' not in HERO
-    reads = BODY.split('<div class="reads">')[1].split("</section>")[0]
-    tile = re.search(r'<a class="dcard" href="byes/" data-planner>(.*?)</a>', reads, re.S)
-    assert tile and "Your byes, free" in _flat(tile.group(1)), "the planner tile is gone"
-    assert "btn gold" not in reads
+    assert "planner-link" not in LANDING and 'href="byes/"' not in HERO
+    callouts = BODY.split('<ol class="callouts">')[1].split("</ol>")[0]
+    link = re.search(r'<a class="go" href="byes/" data-planner>(.*?)</a>', callouts, re.S)
+    assert link and "free" in _flat(link.group(1)), "the planner link is gone"
+    assert "btn" not in callouts
     footer = BODY.split("<footer>")[1].split("</footer>")[0]
     assert '<a href="byes/">' in footer
     nobyes, over, kept = _clock("""[
@@ -658,16 +663,18 @@ def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season(
 
 
 def test_the_landing_reads_in_impulse_buyer_order() -> None:
-    """L1, then contract B3: what you get comes before why, and why before
-    the price. The ninety-seconds-on-Tuesday week, then the rest of the real
-    report, then what makes it yours ("Your team, not a ranking"), then three
-    ways to read one before paying, then the price, the League Pass, the FAQ
-    and the closer."""
+    """L1, contract B3, then the owner's Oct 28 2026 plan: six sections,
+    what you get before why and why before the price. The hero (with the
+    Sunday scene as its last line), how it works in three pictures, the real
+    report annotated, rankings against the report, the price, the FAQ and
+    the closer."""
     heads = [_flat(h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", BODY, re.S)]
-    assert heads == ["Your week, handled", "What lands in your inbox",
-                     "Your team, not a ranking", "Read a real one first",
-                     "Take it through your title game.", "One payment covers every manager",
+    assert heads == ["Paste once, then just play", "Everything Sunday needs, by Tuesday",
+                     "Rankings rank. Your report decides",
+                     "Take it through your title game.",
                      "Before you ask the group chat", "Your lineup, decided every Tuesday."], heads
+    # Six page sections; the report's own cards are <section class="card">.
+    assert len(re.findall(r'<section\b(?! class="card")', BODY)) == 6
 
 
 def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
@@ -682,12 +689,13 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     assert sub == ("Every Tuesday, one email decides your lineup for your exact roster — all "
                    "the way to your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
-    method = _flat(BODY.split('<div class="method">')[1].split("</section>")[0])
-    # The cards contrast a ranking with the report (Oct 25 2026: the
-    # weakest answer was "why pay when rankings are free"); each proves it
-    # with a line of the real sample.
-    assert "Yours: your roster, your scoring, your lineup." in method
-    assert method.count("Real sample:") == 3 and method.count("A ranking:") == 3
+    # The comparison contrasts a rankings list with the report (Oct 25
+    # 2026: the weakest answer was "why pay when rankings are free"), now
+    # as one table (Oct 28 2026), a row per fact, two columns.
+    table = BODY.split('<table class="vstable">')[1].split("</table>")[0]
+    assert re.findall(r'<th scope="col"[^>]*>([^<]+)</th>', table) == ["A rankings list",
+                                                                      "Your report"]
+    assert table.count('<td class="no">') == table.count('<td class="yes">') == 5
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     qa = {q: _flat(a) for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>",
                                              faq, re.S)}
@@ -695,7 +703,7 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
                                  LANDING, re.S).group(1))
     twin = {q["name"]: q["acceptedAnswer"]["text"]
             for q in next(n for n in block["@graph"] if n["@type"] == "FAQPage")["mainEntity"]}
-    for question in ("Does it work with my league?", "How is this different from free rankings?"):
+    for question in ("Does it work with my league?", "Is it worth joining mid-season?"):
         assert qa[question] == twin[question], question
     assert "Sample visuals above are real output, labeled where shown." in _flat(BODY)
 

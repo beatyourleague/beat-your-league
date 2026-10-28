@@ -14,7 +14,8 @@ body its masthead, card 01 complete and card 02 through its drivers line.
 and injects:
 
     site/index.html         phone   — the whole inner HTML of the hero's .screen
-                            inbox   — cards 03, 04 and 05, one item each
+                            shot    — "What you get": the masthead, card 01 and
+                                      card 04, annotated by the page's callouts
     site/how-it-works.html  hiw-*   — cards 01–05, annotated by the page
 
 A test rebuilds every block from the fixture and requires it to equal what the
@@ -49,11 +50,11 @@ LOCK_TIME = "9:41"
 MAIL_TIME = "9:41 AM"
 SENDER = "Beat Your League"
 
-# The plan item the landing's "What lands in your inbox" shows (the Thursday
-# kickoff), the two How it works annotates, and the one Slot by Slot row both
-# show. Pinned to the sample: a selection whose target is gone RAISES, so a
-# rebuilt sample that no longer says these things cannot ship a blank card.
-INBOX_PLAN = ("Thursday night:",)
+# The plan items How it works annotates, the one Slot by Slot row it shows,
+# and the one line of card 01's legend the landing's "What you get" keeps.
+# Pinned to the sample: a selection whose target is gone RAISES, so a rebuilt
+# sample that no longer says these things cannot ship a blank card.
+SHOT_LEGEND = "Checked for you:"
 HIW_PLAN = ("Bench Sam LaPorta", "Sunday morning")
 SLOT_ROW = "Amon-Ra St. Brown"
 
@@ -212,23 +213,28 @@ def _card(report: Mapping[str, Any], key: str, model: dict) -> str:
     return filecard(report, card_html(key, model, number(report, key), interactive=False))
 
 
-def inbox_cards(report: Mapping[str, Any]) -> str:
-    """The landing's "What lands in your inbox": cards 03, 04 and 05 of the
-    same report, in report order, after the phone has shown 01 and 02 — the
-    Thursday-kickoff item of the game plan, the if/then whole, and one Slot by
-    Slot row. Nothing here repeats the phone."""
+def shot(report: Mapping[str, Any]) -> str:
+    """The landing's "What you get" (owner plan, Oct 28 2026): ONE picture of
+    the same report the phone opens — its masthead (which labels it the 2024
+    archive), card 01 and card 04 — on one sheet of paper, for the page's
+    numbered callouts to point at. Card 01 is cropped as the phone crops card
+    02: its projected-total line and two of its three legend lines go (the
+    phone shows them whole, and the callout beside the picture states the %
+    in the report's own words); every row, the task and the "Checked for
+    you" line stay exactly as the report prints them."""
     if not report.get("pivots"):
         raise SelectionError("the sample carries no if/then; the landing shows one")
-    # One item of the game plan, cropped like the rest of it: the standing
-    # Saturday line is not a move with a deadline, and the page's own week
-    # strip already says what Saturday brings.
-    plan = _items(anatomy.plan(report), INBOX_PLAN)
-    plan["saturday"] = None
-    return "\n".join((
-        _card(report, "plan", plan),
-        _card(report, "ifthen", anatomy.ifthen(report)),
-        _card(report, "slots", _slot_row(anatomy.slots(report))),
-    ))
+    lineup = copy.deepcopy(anatomy.lineup(report))
+    kept = [line for line in lineup.get("legend") or [] if line.get("head") == SHOT_LEGEND]
+    if len(kept) != 1:
+        raise SelectionError(f"card 01's legend has {len(kept)} lines headed "
+                             f"{SHOT_LEGEND!r}; the landing shows exactly one")
+    lineup["week"], lineup["legend"] = None, kept
+    body = (masthead_html(report)
+            + card_html("lineup", lineup, number(report, "lineup"), interactive=False)
+            + card_html("ifthen", anatomy.ifthen(report), number(report, "ifthen"),
+                        interactive=False))
+    return filecard(report, body, ' id="shot-card"')
 
 
 def hiw_cards(report: Mapping[str, Any]) -> dict[str, str]:
@@ -271,7 +277,7 @@ def inject(path: Path, name: str, html: str) -> None:
 
 
 def landing_blocks(report: Mapping[str, Any]) -> dict[str, str]:
-    return {"phone": phone_screen(report), "inbox": inbox_cards(report)}
+    return {"phone": phone_screen(report), "shot": shot(report)}
 
 
 def write_fixture(report: Mapping[str, Any], path: Path | None = None) -> None:

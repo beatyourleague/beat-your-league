@@ -202,15 +202,20 @@ def test_the_phone_is_one_image_with_nothing_to_focus() -> None:
 
 
 def test_the_page_never_shows_one_call_in_two_cards() -> None:
-    """Contract B3: the phone carries the closest call (card 02), so the
-    inbox section shows the cards that come next — 03, 04, 05, in report
-    order — and nothing on the page repeats the phone."""
-    rows = BODY.split('<div class="rows">')[1].split('<p class="realfoot">')[0]
-    keys = re.findall(r'<section class="card" data-sec="(\w+)">', rows)
-    numbers = re.findall(r'<span class="n">(\d+)</span>', rows)
-    assert keys == ["plan", "ifthen", "slots"] and numbers == ["03", "04", "05"], (keys, numbers)
+    """Contract B3, as the owner's Oct 28 2026 plan reshaped it: the phone
+    carries the closest call (card 02) and nothing else on the page repeats
+    it. "What you get" is ONE generated picture — the masthead (which labels
+    it the 2024 archive), card 01 and card 04, in report order — so card 01
+    appears twice by design (the phone, and the annotated close-up), card 02
+    once, and no other card at all."""
+    shot = BODY.split("<!-- shot:start -->")[1].split("<!-- shot:end -->")[0]
+    keys = re.findall(r'<section class="card" data-sec="(\w+)">', shot)
+    numbers = re.findall(r'<span class="n">(\d+)</span>', shot)
+    assert keys == ["lineup", "ifthen"] and numbers == ["01", "04"], (keys, numbers)
+    assert '<div class="mh">' in shot and 'id="shot-card"' in shot
     page = markup_only(LANDING)
-    assert page.count('data-sec="closest"') == 1 and page.count('data-sec="lineup"') == 1
+    assert page.count('data-sec="closest"') == 1 and page.count('data-sec="lineup"') == 2
+    assert page.count('<section class="card"') == 4
     assert "Who's getting the ball" not in LANDING
 
 
@@ -219,13 +224,14 @@ def test_the_page_never_shows_one_call_in_two_cards() -> None:
 # --------------------------------------------------------------------- #
 
 def test_the_faq_answers_in_the_order_a_buyer_asks_and_its_twin_follows() -> None:
-    """Contract B3: the FAQ leads with "How is this different from free
-    rankings?" and ends with "Who's behind this?"; the FAQPage structured
+    """Contract B3, cut to five by the owner's Oct 28 2026 plan: the rankings
+    objection is answered by its own comparison table and the League Pass by
+    its own line under the price, so the FAQ opens with "Does it work with my
+    league?" and still ends with "Who's behind this?"; the FAQPage structured
     data lists the same questions in the same order, with the same answers,
     so a search snippet and the page never disagree."""
-    order = ["How is this different from free rankings?", "Does it work with my league?",
-             "Is it worth joining mid-season?", "What if my roster changes mid-season?",
-             "Can I check how it decides?", "I'm in more than one league. What do I need?",
+    order = ["Does it work with my league?", "Is it worth joining mid-season?",
+             "What if my roster changes mid-season?", "Can I check how it decides?",
              "Who's behind this?"]
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     asked = [html.unescape(q) for q in re.findall(r"<summary>(.*?)</summary>", faq)]
@@ -241,24 +247,38 @@ def test_the_faq_answers_in_the_order_a_buyer_asks_and_its_twin_follows() -> Non
 
 
 def test_the_league_pass_teaser_has_no_price_and_no_chat_bubble() -> None:
-    """Contract B3: one decision at checkout — the League Pass is sold on its
-    own page, so the landing's teaser carries no price, one ghost button, and
-    the group-chat bubble went (league-pass.html keeps that copy)."""
-    lp = BODY.split('<section class="leaguepass">')[1].split("</section>")[0]
-    assert "$" not in lp and "bubble" not in lp and "chatmock" not in lp
-    assert re.findall(r'class="btn (\w+)"', lp) == ["ghost"]
-    assert 'href="league-pass.html"' in lp
+    """Contract B3 and PLAN §4, one decision at checkout: the League Pass is
+    sold on its own page, so the landing names it in ONE line under the
+    price card — no price, no button, no chat bubble (league-pass.html keeps
+    that copy) — and it is a link, not a second card."""
+    line = re.search(r'<p class="lpline">(.*?)</p>', BODY, re.S)
+    assert line, "the League Pass line is gone"
+    text = line.group(1)
+    assert "$" not in text and "btn" not in text and "bubble" not in LANDING
+    assert "chatmock" not in LANDING and 'class="leaguepass"' not in LANDING
+    assert 'href="league-pass.html"' in text
+    pricing = BODY.split('<section id="pricing">')[1].split("</section>")[0]
+    assert '<p class="lpline">' in pricing and pricing.count('class="plan ') == 1
 
 
 def test_the_landing_stays_inside_its_word_budget() -> None:
-    """Quality gate, contract B3: replace, don't add. The generated phone
-    brought the real email's words onto the page, so the hand-written copy
-    gave room (the trust strip, the chat bubble, the Monday beat, the hero's
-    bye link, the inbox lede). Measured the way test_site counts it."""
-    rendered = re.sub(r"<script.*?</script>|<style.*?</style>|<head>.*?</head>", "",
-                      LANDING, flags=re.S)
-    words = len(re.sub(r"<[^>]+>", " ", rendered).split())
-    assert words <= 1289, f"the landing is {words} words"
+    """Quality gate, contract B3 and the owner's Oct 28 2026 plan ("half the
+    words, more picture than text"): replace, don't add. The rebuild cut the
+    page from 1,286 words to 1,171, generated report text
+    included (the phone and the annotated close-up are pictures, but they are
+    counted). The cap sits about 10% above what shipped so the page cannot
+    creep back. Measured the way test_site counts it."""
+    def count(page: str) -> int:
+        rendered = re.sub(r"<script.*?</script>|<style.*?</style>|<head>.*?</head>", "",
+                          page, flags=re.S)
+        return len(re.sub(r"<[^>]+>", " ", rendered).split())
+    words = count(LANDING)
+    assert words <= 1250, f"the landing is {words} words"
+    # The words somebody wrote by hand, without the generated report text
+    # and without comments: 952 before the rebuild, 781 after it.
+    hand = re.sub(r"<!-- (phone|shot):start -->.*?<!-- \1:end -->", "", LANDING, flags=re.S)
+    hand = count(re.sub(r"<!--.*?-->", "", hand, flags=re.S))
+    assert hand <= 860, f"the landing's own copy is {hand} words"
 
 
 # --------------------------------------------------------------------- #
@@ -336,14 +356,17 @@ def test_the_storyline_still_starts_and_ends_on_the_opened_email() -> None:
         assert "transform:none" in first and "transform:none" in last, name
 
 
-def test_the_inbox_game_plan_is_drawn_as_the_email_draws_it() -> None:
-    """Integration truth check (Oct 25 2026): the landing's "Your Game Plan"
-    card tinted its move like card 01's "Set this lineup" box, while the
-    email, the web report and How it works draw the plan's moves as hairline
-    rows — only card 01's one task is tinted. The inbox card follows the
-    email."""
-    rule = re.search(r"\n  \.rows \.cbody \.task\{([^}]*)\}", CSS).group(1)
-    assert "background" not in rule and "border-top:1px solid #EEEAE1" in rule
+def test_the_close_up_if_then_is_drawn_as_the_email_draws_it() -> None:
+    """Integration truth check, moved with the inbox cards (Oct 28 2026): the
+    landing's close-up draws card 04 as the email does — the condition in
+    brick capitals, the move bold navy, the reason in the body grey — at the
+    phone's own cqw scale, so the close-up is the same email, larger."""
+    rules = {sel: _rule_body(CSS, f".shot .pivot .{sel}") for sel in ("if", "then", "rest")}
+    assert "color:var(--brick)" in rules["if"] and "text-transform:uppercase" in rules["if"]
+    assert "font-weight:700" in rules["then"] and "color:var(--navy)" in rules["then"]
+    assert "color:var(--ink2)" in rules["rest"]
+    for body in rules.values():
+        assert re.search(r"font-size:[\d.]+cqw", body), body
 
 
 # --------------------------------------------------------------------- #
@@ -417,23 +440,15 @@ def test_the_phone_sets_the_email_in_the_emails_own_type() -> None:
     assert body and squash(body.group(1)) == squash(FONT)
 
 
-def test_the_inbox_slot_card_is_drawn_as_the_report_draws_it() -> None:
-    """Review SLEEK-4: the landing's hand copy of Slot by Slot's lines had
-    drifted from the report template — the projection regular and grey where
-    the web report, How it works and the email print it bold navy, and the
-    lines 14px against 13px everywhere else. Each line's size, weight and
-    colour now match the template's own rule."""
-    template = (ROOT / "rival-report-template.html").read_text(encoding="utf-8")
-    tcss = _style(template)
-
-    def props(body: str) -> dict:
-        out = dict(re.findall(r"(font-size|font-weight|color):([^;]+);", body))
-        out.setdefault("font-weight", "400")
-        return out
-    for name in ("tgame", "tsub", "tflag", "tcall", "tproj", "tname"):
-        mine = props(_rule_body(CSS, f".rows .cbody .{name}"))
-        theirs = props(_rule_body(tcss, f".{name}"))
-        assert mine == theirs, (name, mine, theirs)
+def test_the_close_up_wears_the_phones_own_email_rules() -> None:
+    """Review SLEEK-4's lesson, kept for the close-up: a hand copy of the
+    report's card rules drifts from the report. So the close-up carries the
+    phone's own `.screen` class and inherits every one of its email rules (the
+    email's type, the rows' grid, the bars) rather than a second copy; only
+    the sheet around it and card 04's three lines are its own."""
+    assert re.search(r'<div class="shot screen" role="img" aria-label="[^"]+">', LANDING)
+    assert ".shot.screen{" in CSS and ".shot .ghead" in CSS
+    assert not re.search(r"\n  \.shot \.(?:frow|fname|fbar|fpct|fslot)\{", CSS)
 
 
 def test_setting_the_lineup_takes_the_same_minute_everywhere() -> None:

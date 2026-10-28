@@ -1594,7 +1594,11 @@ def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     assert re.search(r"set it in about a minute", LANDING_PROSE, re.I)
     assert not re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
     assert re.search(r"tuesday morning", LANDING_PROSE, re.I)
-    assert re.search(r"tick off the game plan", LANDING_PROSE, re.I)
+    # What you do, in the three steps (Oct 28 2026): paste once, the email
+    # decides every slot, Sunday you play ("tick off the game plan" went
+    # with the week strip it belonged to).
+    assert re.search(r"one email decides every slot", LANDING_PROSE, re.I)
+    assert re.search(r"Sunday, just play", LANDING_PROSE)
 
 
 def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
@@ -2563,14 +2567,15 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
     published sample. Since the phone and the inbox cards became GENERATED
     (contract C11, render/phone.py) the guard sweeps the generated markup:
     the phone's card and the three that follow it, and a kickoff time counts
-    as a figure (the Thursday item quotes one and nothing else)."""
+    as a figure. Since Oct 28 2026 the page carries exactly two: the phone's
+    card and the "What you get" close-up (masthead, card 01, card 04)."""
     import html as _html
     # Re-anchored Sep 29 2026: the redesign states "Real file" once, not on
     # every card, so the cards carry a data marker and a closing comment.
     # Oct 25 2026: the phone's card carries an id before its marker.
     cards = re.findall(r'<div class="filecard[^"]*"[^>]*\bdata-real="[^"]+"[^>]*>(.*?)<!--/card-->',
                        LANDING, re.S)
-    assert len(cards) >= 4, (
+    assert len(cards) >= 2 and 'id="shot-card"' in LANDING, (
         "the landing lost its Real-output cards, or the markup moved and this "
         "guard went blind again — re-anchor it, never delete it")
     flat_sample = _html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
@@ -4723,15 +4728,17 @@ def test_the_landing_sells_without_a_comparison_essay() -> None:
         assert not re.search(claim, page, re.I), f"a results claim: {claim}"
     rendered = re.sub(r"<script.*?</script>|<style.*?</style>|<head>.*?</head>", "", LANDING, flags=re.S)
     words = len(re.sub(r"<[^>]+>", " ", rendered).split())
-    assert words < 1300, f"the landing grew back to {words} words"
+    assert words <= 1250, f"the landing grew back to {words} words"
 
 
 def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
     """I8: twelve questions read as a stock section; the three that compared
     tools now live in the comparison, and the heading column is sticky beside
     the answers on a wide screen."""
+    # Five since the owner's Oct 28 2026 plan: the rankings question became
+    # its own table, the League Pass its own line under the price.
     questions = re.findall(r"<summary>(.*?)</summary>", LANDING.split('<section id="faq">')[1])
-    assert 6 <= len(questions) <= 7, questions
+    assert 4 <= len(questions) <= 5, questions
     assert re.search(r"@media \(min-width:881px\)\{\.faqgrid > div:first-child\{position:sticky",
                      LANDING)
 

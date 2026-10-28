@@ -342,13 +342,14 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     off the injury report and have enough games on record". The rising hold
     and the practice squad withhold pairs that pass all three checks, so the
     clause is "only where", identically on the meta and JSON-LD entity
-    sentence, the landing's "Decided against your bench" step and the join
+    sentence, the landing's "Odds against your own bench" callout (the
+    "Decided against your bench" step until Oct 28 2026) and the join
     page."""
     meta = re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1)
     product = next(n for n in json.loads(re.search(
         r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S).group(1))["@graph"]
         if n["@type"] == "Product")
-    step = _flat(LANDING.split("<h3>Decided against your bench</h3>")[1].split("</article>")[0])
+    step = _flat(LANDING.split("<h3>Odds against your own bench</h3>")[1].split("</li>")[0])
     assert meta == product["description"]
     assert "the odds " + GATE_CLAUSE in meta
     # Review BUYER-2: the step defines the % in the report's own words
@@ -395,13 +396,16 @@ def test_the_refund_sits_under_the_heros_buy_button_with_no_price() -> None:
 
 def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     """Copy review: the page's best hook ("He was on your bench. He went for
-    30. You lost by four.") sat after four feature tiles. It is the first
-    section after the hero (the trust strip that shared its rule went with
-    contract B3)."""
-    after = LANDING.split("</header>", 1)[1]
-    first = re.search(r"<section[^>]*>", after).group(0)
-    assert first == '<section class="proof">'
-    assert 'class="credsec"' not in LANDING
+    30. You lost by four.") sat after four feature tiles. It moved up to the
+    first section after the hero, and since the owner's Oct 28 2026 plan it
+    is the hero's own last line — the punchline under the headline and the
+    phone, before any section (the trust strip that shared its rule went
+    with contract B3)."""
+    hero = LANDING.split('<header class="hero">', 1)[1].split("</header>", 1)[0]
+    punch = re.search(r'<p class="punch">(.*?)</p>\s*$', hero, re.S)
+    assert punch, "the Sunday scene is not the hero's last line"
+    assert "He was on your bench. He went for 30. You lost by four." in _flat(punch.group(1))
+    assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
 
 
 def test_the_phone_says_not_every_row_gets_odds() -> None:
