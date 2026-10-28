@@ -5105,3 +5105,16 @@ def test_the_glossary_defines_the_realistic_range_in_the_reports_words() -> None
     entry = re.sub(r"<[^>]+>", "", entry).strip()
     assert entry == RANGE_DEFINITION[0].upper() + RANGE_DEFINITION[1:]
     assert not re.search(r"\d", entry)
+
+
+def test_the_home_page_names_the_site_for_search() -> None:
+    """Oct 28 2026: a Google search for "beat your league" led to the League
+    Pass page, not the home page. Google's site-name guidance asks for
+    WebSite structured data on the home page, its url the canonical one."""
+    block = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>',
+                                 LANDING, re.S).group(1))
+    site = next(n for n in block["@graph"] if n["@type"] == "WebSite")
+    canonical = re.search(r'<link rel="canonical" href="([^"]+)"', LANDING).group(1)
+    assert site["name"] == "Beat Your League" and site["url"] == canonical
+    org = next(n for n in block["@graph"] if n["@type"] == "Organization")
+    assert org["url"] == canonical
