@@ -303,12 +303,13 @@ def test_the_closed_pricing_card_is_a_real_button_not_a_placeholder() -> None:
     assert not re.search(r"\.plan [^{]*\{[^}]*dashed", CSS)
     finance = BODY.split('id="finance-note"')[1].split("</p>")[0]
     assert "Checkout opens soon" not in finance
-    # The League Pass is pitched once, by its own section right below the
-    # pricing (review BUYER-4/SLEEK-6: "Running the league? One payment can
-    # cover every team" sat directly above "Run the league? One payment
-    # covers every manager"), and the open state does not bring it back.
+    # The League Pass is pitched once, by its own line under the card
+    # (review BUYER-4/SLEEK-6: "Running the league? One payment can cover
+    # every team" sat directly above "Run the league? One payment covers
+    # every manager"), and the open state does not bring it back.
     assert 'href="league-pass.html"' not in finance and "Running the league" not in LANDING
-    assert 'href="league-pass.html"' in BODY.split('<section class="leaguepass">')[1]
+    lpline = re.search(r'<p class="lpline">(.*?)</p>', BODY, re.S).group(1)
+    assert 'href="league-pass.html"' in lpline and "Run the league?" in lpline
 
 
 def test_the_card_uses_the_sites_check_bullets() -> None:
@@ -372,32 +373,26 @@ console.log(JSON.stringify([check(false), check(true)]));
 # the FAQ (M3)
 # --------------------------------------------------------------------- #
 
-def test_the_faq_answers_the_free_rankings_objection_with_facts_only() -> None:
-    """M3: none of the seven questions answered the first objection to a paid
-    start/sit report — "my app and free rankings already do this". "When does
-    it arrive?" gave its place (the week strip already says Tuesday and
-    Saturday). The answer says only what the report does: no claim of better
-    projections (our own evaluation found a free feed's beat the model's), no
-    number, no link to a grading page, and the JSON-LD says the same words."""
-    faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
-    qa = dict(re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>", faq, re.S))
-    assert len(qa) == 7 and "When does it arrive?" not in qa
-    answer = qa["How is this different from free rankings?"]
-    text = _flat(answer)
-    assert "<a " not in answer and not re.search(r"\d", text)
-    for claim in (r"\bbetter\b", r"\bmore accurate\b", r"\bbeats? (?:them|rankings)\b",
-                  r"\bsmarter\b", r"\bwin\b", r"\bproven\b", r"\btested\b"):
+def test_the_rankings_objection_is_answered_with_facts_only() -> None:
+    """M3, moved from the FAQ to its own table by the owner's Oct 28 2026
+    plan: the first objection to a paid start/sit report is "my app and free
+    rankings already do this". The table says only what each one does — no
+    competitor named, no claim of better projections (our own evaluation
+    found a free feed's beat the model's), no number, no link to a grading
+    page, no results promise — and the FAQ no longer repeats it."""
+    table = BODY.split('<table class="vstable">')[1].split("</table>")[0]
+    text = _flat(table)
+    assert "<a " not in table and not re.search(r"\d", text)
+    for claim in (r"\bbetter\b", r"\bmore accurate\b", r"\bbeats?\b", r"\bsmarter\b",
+                  r"\bwin\b", r"\bproven\b", r"\btested\b", r"\bbest\b", r"\bonly\b"):
         assert not re.search(claim, text, re.I), claim
-    for fact in ("your roster", "bench player", "if/then", "byes", "Saturday",
-                 "Friday's injury report"):
-        assert fact.lower() in text.lower() or fact in text, fact
-    block = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>',
-                                 LANDING, re.S).group(1))
-    faq_ld = next(n for n in block["@graph"] if n["@type"] == "FAQPage")
-    twin = {q["name"]: q["acceptedAnswer"]["text"] for q in faq_ld["mainEntity"]}
-    assert twin["How is this different from free rankings?"] == re.sub(r"\s+", " ", text).strip()
-    week = _flat(BODY.split('<ol class="timeline">')[1].split("</ol>")[0])
-    assert "Tuesday" in week and "Saturday" in week, "the removed answer's facts left the page"
+    for fact in ("roster", "Every slot decided", "bench", "if/then", "Saturday", "title game"):
+        assert fact in text, fact
+    for brand in ("ESPN", "Yahoo", "Sleeper", "CBS", "FantasyPros", "Rotowire", "4for4"):
+        assert brand not in text, brand
+    faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
+    assert "How is this different from free rankings?" not in faq
+    assert "Tuesday" in _flat(BODY) and "Saturday" in _flat(BODY)
 
 
 # --------------------------------------------------------------------- #
@@ -407,22 +402,16 @@ def test_the_faq_answers_the_free_rankings_objection_with_facts_only() -> None:
 def test_nothing_that_cannot_be_clicked_moves_on_hover() -> None:
     """D9 / contract C2: the method cards lifted 5px with a gold glow, the
     pricing card glowed and the week strip tinted on hover — none of them is
-    a link, so each promised a click that did nothing. No hover state on any
-    of them; only the three read-first tiles, which ARE links, answer the
-    cursor. Contract C7 reshaped the cards (one dark card, 16px radius, a 1px
-    hairline, no side or top bars), so the old 3px gold top rule is gone."""
-    for sel in (r"\.method article", r"\.plan(?:\.founder)?", r"\.timeline li",
-                r"\.dcard", r"\.lpcard"):
+    a link, so each promised a click that did nothing. Nothing that is not a
+    link answers the cursor: the steps, their pictures, the callouts, the
+    comparison, the pricing card and the report close-up hold still; the
+    planner link in the callouts, which IS a link, does answer it. No 3-4px
+    side or top bars."""
+    for sel in (r"\.step", r"\.sicon", r"\.callouts li", r"\.vstable[^{,]*",
+                r"\.plan(?:\.founder)?", r"\.shot[^{,]*", r"\.anat"):
         assert not re.search(sel + r":hover", CSS), f"{sel} still reacts to hover"
-    dcard = re.search(r"\n  \.dcard\{([^}]*)\}", CSS).group(1)
-    assert "border-radius:16px" in dcard and "border:1px solid" in dcard
-    for article in re.findall(r"<article([^>]*)>", BODY.split('<div class="method">')[1]):
-        assert 'class="dcard"' in article
     assert not re.search(r"border-(?:top|left):[34]px", CSS), "a 3-4px side bar is back"
-    assert re.search(r"\n  \.reads a:hover\{", CSS), "the read-first links lost their hover"
-
-
-
+    assert re.search(r"\n  \.callouts a\.go:hover\{", CSS), "the planner link lost its hover"
 
 
 def test_section_heads_follow_one_rule() -> None:
@@ -450,21 +439,19 @@ def test_section_heads_follow_one_rule() -> None:
 
 def test_no_headline_is_used_twice_and_the_note_does_not_repeat_its_card() -> None:
     """D17: "Odds only when earned" was both the credibility strip's third
-    item and method card 03, and "The close one, called" repeated its card's
-    "Start Bijan Robinson over Chase Brown — 70%, proj 15.1 vs 10.3" verbatim
-    beside it (directly above it on a phone). No head on the page repeats
-    another, and no inbox note repeats a figure from the card beside it."""
+    item and method card 03, and a note repeated its card's figures verbatim
+    beside it. No head on the page repeats another — the three steps, the
+    four callouts and the comparison's row labels — and no callout repeats a
+    figure from the report close-up it annotates."""
     heads = (re.findall(r"<h3>([^<]+)</h3>", BODY)
-             + re.findall(r'<div class="note"><b>([^<]+)</b>', BODY)
-             + [re.sub(r"<small>.*", "", b) for b in
-                re.findall(r"<b>(\w+<small>[^<]+)</small></b>",
-                           BODY.split('<ol class="timeline">')[1].split("</ol>")[0])])
-    assert len(heads) == len(set(heads)) >= 9, heads
-    rows = BODY.split('<div class="rows">')[1].split('<p class="realfoot">')[0]
-    cards = " ".join(re.findall(r'<div class="filecard[^>]*>(.*?)<!--/card-->', rows, re.S))
-    figures = set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(cards)))
-    for note in re.findall(r'<div class="note">(.*?)</div>', rows, re.S):
-        assert not set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(note))) & figures, _flat(note)
+             + re.findall(r'<th scope="row">([^<]+)</th>', BODY))
+    assert len(heads) == len(set(heads)) >= 12, heads
+    shot = BODY.split('id="shot-card"')[1].split("<!--/card-->")[0] if "<!--/card-->" in BODY \
+        else BODY.split('id="shot-card"')[1].split('<figcaption')[0]
+    figures = set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(shot)))
+    callouts = BODY.split('<ol class="callouts">')[1].split("</ol>")[0]
+    for item in re.findall(r"<li[^>]*>(.*?)</li>", callouts, re.S):
+        assert not set(re.findall(r"\d+(?:[.:]\d+)?%?", _flat(item))) & figures, _flat(item)
 
 
 def test_the_title_names_the_category_a_searcher_types() -> None:
