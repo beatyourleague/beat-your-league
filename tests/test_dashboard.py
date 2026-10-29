@@ -569,3 +569,79 @@ def test_a_dispute_needing_response_is_critical() -> None:
 def test_counts_never_read_a_traffic_view_as_people() -> None:
     page = dash.render_page(rich_sources(), NOW, fonts=False)
     assert "never people" in page
+
+
+# --------------------------------------------------------------------- #
+# live mode (`make dashboard-live`)
+# --------------------------------------------------------------------- #
+
+def test_live_mode_refuses_an_interval_under_the_github_allowance(tmp_path, capsys) -> None:
+    """Each build makes one unsigned GitHub request per workflow; GitHub allows
+    60 an hour, so a 5-minute loop would start failing its own cron health."""
+    code = dash.cli(["--no-open", "--every", "5", "--out", "data/dashboard.html"], environ={},
+                    env_file=tmp_path / ".env", collectors={})
+    assert code == 2 and "at least 10" in capsys.readouterr().err
+
+
+def test_live_mode_rebuilds_opens_once_and_survives_a_bad_round(tmp_path) -> None:
+    out = dash.REPO_ROOT / "data" / f"dashboard-live-{id(tmp_path)}.html"
+    rich = rich_sources()
+    calls = {"n": 0}
+
+    def flaky(ctx):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError(f"network blip for {LEAK} with {SECRET}")
+        return rich["plan"]
+
+    collectors = {**{k: (lambda ctx, s=s: s) for k, s in rich.items()}, "plan": flaky}
+    opened, slept = [], []
+    try:
+        code = dash.cli(["--out", str(out), "--every", "15", "--rounds", "3", "--now", NOW.isoformat()],
+                        environ={"STRIPE_API_KEY": SECRET}, env_file=tmp_path / ".env",
+                        collectors=collectors, opener=opened.append, sleep=slept.append)
+        assert code == 0
+        assert opened == [out]                       # the tab opens once, then reloads itself
+        assert slept == [900, 900]                   # no sleep after the last round
+        page = out.read_text(encoding="utf-8")
+        assert 'data-refresh="900"' in page and f'data-generated="{int(NOW.timestamp() * 1000)}"' in page
+        assert "Live · every 15 min" in page and 'class="stale" hidden' in page
+        assert not out.with_name(f".{out.name}.tmp").exists()
+    finally:
+        out.unlink(missing_ok=True)
+
+
+def test_a_failed_round_never_prints_a_secret(tmp_path, capsys, monkeypatch) -> None:
+    """collect_all contains a single collector's failure, so the round-level
+    catch is for the rest (rendering, the disk): force the whole build to fail."""
+    out = dash.REPO_ROOT / "data" / f"dashboard-live-{id(tmp_path)}.html"
+
+    def failing_build(*a, **k):
+        raise RuntimeError(f"Stripe said no to {SECRET} for {LEAK}")
+
+    monkeypatch.setattr(dash, "_build", failing_build)
+    code = dash.cli(["--out", str(out), "--every", "10", "--rounds", "1", "--no-open"],
+                    environ={"STRIPE_API_KEY": SECRET}, env_file=tmp_path / ".env",
+                    collectors={}, sleep=lambda s: None)
+    assert not out.exists()
+    err = capsys.readouterr().err
+    assert code == 0 and "this update failed" in err
+    assert SECRET not in err and LEAK not in err
+
+
+def test_a_one_off_build_carries_no_reload() -> None:
+    """`make dashboard` is a snapshot: it must not reload itself into an
+    unchanged file every few minutes, or claim to be live."""
+    page = dash.render_page(rich_sources(), NOW, fonts=False)
+    body_tag = re.search(r"<body[^>]*>", page).group(0)
+    assert "data-refresh" not in body_tag and "Live · every" not in page and 'class="stale"' not in page
+    live = dash.render_page(rich_sources(), NOW, fonts=False, live_minutes=15)
+    assert 'data-refresh="900"' in live
+
+
+def test_the_reload_never_spins_on_a_stopped_loop() -> None:
+    """If the loop has stopped, the file never changes; the page must wait at
+    least a minute between reloads rather than reloading in a tight loop."""
+    assert "Math.max(gen+(refresh+45)*1000-Date.now(),60000)" in dash.JS
+    assert "document.hidden" in dash.JS                      # no reloads in a background tab
+    assert 'sessionStorage.setItem("byl-dash-y"' in dash.JS   # the reader keeps their place

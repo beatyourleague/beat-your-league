@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-live dashboard-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
         platforms
 
@@ -104,6 +104,14 @@ stats-registry:
 # ledger, then opened in the browser. Refuses in CI. ARGS=--no-open writes only.
 dashboard:
 	$(PY) -m run.dashboard $(ARGS)
+
+# The same page kept fresh: rebuilt every EVERY minutes (default 15, at least
+# 10) until Ctrl-C, and the open tab reloads itself after each rebuild, keeping
+# your place. Leave it running in a Terminal tab; the page turns amber when it
+# stops updating.
+EVERY ?= 15
+dashboard-live:
+	$(PY) -m run.dashboard --every $(EVERY) $(ARGS)
 
 # The same page with subscribers and League Pass seats, from a sealed-registry
 # copy opened in a temporary folder outside the repo and deleted on exit (the

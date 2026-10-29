@@ -60,6 +60,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.request
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -74,6 +75,11 @@ from run.redact import redact
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO_ROOT / "data" / "dashboard.html"
+# Live mode (`make dashboard-live`) rebuilds on a timer. The floor is set by
+# GitHub's unauthenticated API allowance (60 requests an hour, one per workflow
+# per build): every 10 minutes is 36 an hour, safely under it.
+LIVE_MIN_MINUTES = 10
+LIVE_DEFAULT_MINUTES = 15
 ET = ZoneInfo("America/New_York")
 GITHUB_REPO = "beatyourleague/beat-your-league"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
@@ -2212,7 +2218,8 @@ NAV = (("overview", "Overview"), ("traffic", "Traffic"), ("funnel", "Funnel"), (
 
 
 def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_ROOT,
-                fonts: bool = True, env: Mapping[str, str] | None = None) -> str:
+                fonts: bool = True, env: Mapping[str, str] | None = None,
+                live_minutes: int | None = None) -> str:
     M = {p: metrics_for(sources, p, now) for p, _l, _d in PERIODS}
     sends = sources["sends"].data if sources["sends"].ok else None
     ledger = ledger_view(sources["ledger"], now)
@@ -2230,15 +2237,24 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
     consoles = "".join(f'<a href="{h(u)}" target="_blank" rel="noopener noreferrer">{h(n)} '
                        f'{icon("ext", "ic tiny")}</a>' for n, u in CONSOLES)
     stamp = now.astimezone(ET)
+    # Live mode: the page reloads itself after the next rebuild and says so,
+    # and says so again when the rebuilds have stopped (the stale strip).
+    live = (f'<span class="live" title="Rebuilt every {live_minutes} minutes while make dashboard-live '
+            f'runs">Live · every {live_minutes} min</span>' if live_minutes else "")
+    stale = ('<div class="stale" hidden>These numbers stopped updating. Live updates stopped at '
+             f'{stamp:%-I:%M %p} ET; run <code>make dashboard-live</code> again.</div>'
+             if live_minutes else "")
+    body_attrs = (f' data-refresh="{live_minutes * 60}" data-generated="{int(now.timestamp() * 1000)}"'
+                  if live_minutes else "")
     body = (
         f'<header class="top"><div class="topin"><a class="brand" href="#overview">'
         f'{mark_svg("dash", "logo")}<span><b>Beat Your League</b><em>Owner dashboard</em></span></a>'
         f'<span class="gen" title="Generated {h(now.isoformat())}">{icon("clock", "ic tiny")} '
-        f'{stamp:%a %b} {stamp.day}, {stamp:%-I:%M %p} ET</span>'
+        f'{stamp:%a %b} {stamp.day}, {stamp:%-I:%M %p} ET</span>{live}'
         f'<button class="theme" type="button" aria-label="Switch light or dark">{icon("moon", "ic moon")}'
         f'{icon("sun", "ic sun")}</button></div>'
         f'<nav class="tabs" aria-label="Sections"><div class="tabsin">{nav}</div></nav></header>'
-        f'<main class="wrap">'
+        f'<main class="wrap">{stale}'
         f'{attention(issues)}'
         f'<div class="filters"><div class="seg" role="group" aria-label="Period">{periods}</div>'
         f'<p class="muted small fnote">Traffic keeps 90 days; money and forms count all time under “All”.</p>'
@@ -2263,7 +2279,7 @@ def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_
             '<meta name="robots" content="noindex, nofollow">'
             '<meta name="referrer" content="no-referrer">'
             '<title>BYL — Owner dashboard</title>'
-            f'<style>{css}</style></head><body data-period="30d">{body}'
+            f'<style>{css}</style></head><body data-period="30d"{body_attrs}>{body}'
             f'<script>{JS}</script></body></html>\n')
 
 
@@ -2309,6 +2325,11 @@ a{color:inherit}h2,h3,h4,p{margin:0}code{font:13px ui-monospace,Menlo,monospace;
 .brand b{display:block;font:800 18px/1 "Barlow Condensed",Barlow,sans-serif;letter-spacing:.04em;text-transform:uppercase}
 .brand em{display:block;font:500 12px/1.3 Barlow,sans-serif;font-style:normal;color:#AEB9CC;letter-spacing:.02em}
 .gen{margin-left:auto;font-size:13px;color:#C9D2E1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#BFE8CF;
+background:rgba(95,196,140,.14);border:1px solid rgba(95,196,140,.3);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.live::before{content:"";width:7px;height:7px;border-radius:50%;background:#5FC48C;box-shadow:0 0 0 3px rgba(95,196,140,.22)}
+.stale{margin:0 0 16px;padding:12px 16px;border-radius:12px;border:1px solid var(--warn);background:var(--warnbg);
+color:var(--ink);font-size:14px;font-weight:600}
 .theme{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;border-radius:8px;
 width:34px;height:34px;display:grid;place-items:center;cursor:pointer}
 .theme:hover{background:rgba(255,255,255,.14)}.theme .sun{display:none}
@@ -2495,7 +2516,7 @@ padding:6px 12px;border:1px solid var(--line);border-radius:9px;background:var(-
 @media (max-width:960px){.delivery,.grid-funnel,.grid-money,.grid-issues,.grid-record{grid-template-columns:minmax(0,1fr)}
 .insights{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:700px){.hm{display:none}.gates thead{display:none}.gates tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--line2)}.gates tr:last-child{border-bottom:0}.gates td{padding:0!important;border:0!important}.gates td:nth-child(1){grid-column:1;grid-row:2;color:var(--muted);font-size:12.5px}.gates td:nth-child(2){grid-column:1/-1;grid-row:1;font-weight:600}.gates td:nth-child(3){grid-column:1;grid-row:3;color:var(--ink2)}.gates td:nth-child(3)::before{content:"Green: ";color:var(--muted)}.gates td:nth-child(4){grid-column:2;grid-row:3;text-align:right}.gates td:nth-child(5){grid-column:1/-1;grid-row:4}.gates td:nth-child(6){grid-column:2;grid-row:2;text-align:right}.xaxis span:nth-child(even):not(:last-child),.colx span:nth-child(even){display:none}.kpis>:last-child:nth-child(odd){grid-column:1/-1}.brand b{font-size:16px;white-space:nowrap}.brand .logo{width:26px;height:26px}.srclist{position:static;min-width:0;margin-top:8px}.srcs[open]{flex-basis:100%}.chips{margin-left:0}.fnote{display:none}.wrap{padding:16px 16px 48px}.topin{padding:10px 16px 6px;gap:10px}.tabsin{padding:0 8px}
-.brand em{display:none}.gen{font-size:12px}.grid2,.grid-cust{grid-template-columns:minmax(0,1fr)}
+.brand em{display:none}.gen{font-size:12px}.live{font-size:0;padding:4px}.live::before{margin:0}.grid2,.grid-cust{grid-template-columns:minmax(0,1fr)}
 .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.kpi{min-height:132px;padding:14px 14px 0}.kval{font-size:28px}
 .kpi .spark{margin:auto -14px 0;width:calc(100% + 28px)}
 .sech{flex-direction:column;align-items:flex-start}.sech h2{font-size:23px}.card{padding:16px;border-radius:12px}
@@ -2545,6 +2566,19 @@ for(var c=0;c<charts.length;c++)(function(fig){
  plot.addEventListener("keydown",function(e){if(e.key==="ArrowLeft"){cur=Math.max(0,cur-1);show(cur);e.preventDefault()}
   else if(e.key==="ArrowRight"){cur=Math.min(n-1,cur+1);show(cur);e.preventDefault()}});
 })(charts[c]);
+var refresh=+body.getAttribute("data-refresh")||0,gen=+body.getAttribute("data-generated")||0;
+if(refresh&&gen){
+ try{var y=sessionStorage.getItem("byl-dash-y");if(y!==null){sessionStorage.removeItem("byl-dash-y");window.scrollTo({top:+y,behavior:"instant"});}}catch(e){}
+ var stale=document.querySelector(".stale");
+ function reload(){try{sessionStorage.setItem("byl-dash-y",String(window.scrollY))}catch(e){}location.reload();}
+ function tick(){var age=Date.now()-gen;
+  if(stale)stale.hidden=age<(2*refresh+120)*1000;
+  // The rebuild lands within a minute or so of its slot; never reload faster
+  // than once a minute, so a stopped loop can't make the page spin.
+  var wait=Math.max(gen+(refresh+45)*1000-Date.now(),60000);
+  setTimeout(function(){if(document.hidden){document.addEventListener("visibilitychange",function v(){
+   if(!document.hidden){document.removeEventListener("visibilitychange",v);reload();}});}else reload();},wait);}
+ tick();}
 })();
 """
 
@@ -2560,17 +2594,23 @@ def env_from(environ: Mapping[str, str], env_file: Path) -> dict[str, str]:
 
 
 def write_dashboard(sources: Mapping[str, Source], out: Path, now: datetime,
-                    root: Path = REPO_ROOT, env: Mapping[str, str] | None = None) -> Path:
-    page = render_page(sources, now, root, env=env or {})
+                    root: Path = REPO_ROOT, env: Mapping[str, str] | None = None,
+                    live_minutes: int | None = None) -> Path:
+    page = render_page(sources, now, root, env=env or {}, live_minutes=live_minutes)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(page, encoding="utf-8")
+    # Written beside the target and swapped in, so a reload mid-write never
+    # reads half a page.
+    tmp = out.with_name(f".{out.name}.tmp")
+    tmp.write_text(page, encoding="utf-8")
+    os.replace(tmp, out)
     return out
 
 
 def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
         env_file: Path | None = None,
         collectors: Mapping[str, Callable[[Context], Source]] | None = None,
-        opener: Callable[[Path], None] | None = None) -> int:
+        opener: Callable[[Path], None] | None = None,
+        sleep: Callable[[float], None] | None = None) -> int:
     environ = os.environ if environ is None else environ
     if stats.in_ci(environ):
         print("make dashboard does not run in CI: the repository is public, so the job "
@@ -2584,25 +2624,69 @@ def cli(argv: list[str] | None = None, environ: Mapping[str, str] | None = None,
                         help="a registry copy to count subscribers and seats from")
     parser.add_argument("--no-open", action="store_true", help="write the page, don't open it")
     parser.add_argument("--now", help="pretend it is this ISO time (for checks)")
+    parser.add_argument("--every", type=int, default=None, metavar="MINUTES",
+                        help=f"live mode: rebuild every MINUTES (at least {LIVE_MIN_MINUTES}) until "
+                             "Ctrl-C; the open page reloads itself")
+    parser.add_argument("--rounds", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.every is not None and args.every < LIVE_MIN_MINUTES:
+        print(f"--every must be at least {LIVE_MIN_MINUTES} minutes: GitHub allows 60 unsigned "
+              f"requests an hour and each build makes one per workflow.", file=sys.stderr)
+        return 2
     now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
     if not stats._gitignored(args.out):
         print(f"{args.out} is not gitignored, so the counts could be committed to a public "
               f"repository — use a path such as data/dashboard.html.", file=sys.stderr)
         return 2
     env = env_from(environ, env_file or stats.ENV_FILE)
-    ctx = Context(env=env, now=now, registry=args.registry)
-    print("Reading your sources (read-only)…", file=sys.stderr)
-    sources = collect_all(ctx, collectors)
-    for src in sources.values():
-        mark = {"ok": "✓", "off": "–", "error": "✗"}[src.status]
-        print(f"  {mark} {src.label}" + (f": {scrub(src.note, env)}" if src.note else ""),
+    if args.every is None:
+        out = _build(env, now, args, collectors)
+        if not args.no_open:
+            (opener or _open)(out)
+        return 0
+    # Live mode. One round failing (a network blip, a provider error) keeps
+    # the last good page up and tries again next round; the page itself turns
+    # amber when its numbers are older than two rounds.
+    rounds = 0
+    try:
+        while True:
+            now = (stats._when(args.now) if args.now else None) or datetime.now(timezone.utc)
+            try:
+                out = _build(env, now, args, collectors, live_minutes=args.every, quiet=rounds > 0)
+                print(f"{now.astimezone(ET):%-I:%M %p} ET  updated; next in {args.every} min "
+                      f"(Ctrl-C stops)", file=sys.stderr)
+                if rounds == 0 and not args.no_open:
+                    (opener or _open)(out)
+            except Exception as exc:  # noqa: BLE001 — a bad round must not end the loop
+                print(f"{now.astimezone(ET):%-I:%M %p} ET  this update failed "
+                      f"({scrub(type(exc).__name__ + ': ' + str(exc), env)}); the last page stays up",
+                      file=sys.stderr)
+            rounds += 1
+            if args.rounds and rounds >= args.rounds:
+                return 0
+            (sleep or time.sleep)(args.every * 60)
+    except KeyboardInterrupt:
+        print("\nStopped. The page keeps its last numbers and will say they've stopped updating.",
               file=sys.stderr)
-    out = write_dashboard(sources, args.out, now, env=env)
-    print(f"Written to {out}", file=sys.stderr)
-    if not args.no_open:
-        (opener or _open)(out)
-    return 0
+        return 0
+
+
+def _build(env: Mapping[str, str], now: datetime, args: argparse.Namespace,
+           collectors: Mapping[str, Callable[[Context], Source]] | None,
+           live_minutes: int | None = None, quiet: bool = False) -> Path:
+    ctx = Context(env=env, now=now, registry=args.registry)
+    if not quiet:
+        print("Reading your sources (read-only)…", file=sys.stderr)
+    sources = collect_all(ctx, collectors)
+    if not quiet:
+        for src in sources.values():
+            mark = {"ok": "✓", "off": "–", "error": "✗"}[src.status]
+            print(f"  {mark} {src.label}" + (f": {scrub(src.note, env)}" if src.note else ""),
+                  file=sys.stderr)
+    out = write_dashboard(sources, args.out, now, env=env, live_minutes=live_minutes)
+    if not quiet:
+        print(f"Written to {out}", file=sys.stderr)
+    return out
 
 
 def _open(path: Path) -> None:

@@ -804,6 +804,13 @@ it in public. A source you haven't connected shows its LAUNCH step instead of nu
 `make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
 never runs in CI.
 
+**Keep it fresh.** `make dashboard-live` does the same, then rebuilds every 15 minutes while
+it runs, and the open tab reloads itself after each rebuild without losing your place. Leave
+it running in a Terminal tab and press Ctrl-C to stop. `make dashboard-live EVERY=30`
+changes the interval (10 minutes is the floor, set by GitHub's limit for unsigned requests).
+It only updates while your Mac is awake, and the page turns amber when its numbers are more
+than two rounds old.
+
 Seats filled per League Pass and free report → paid also need the subscriber list, which
 lives only in the runs' encrypted storage. `make stats-registry` reads a copy: it downloads
 the newest sealed backup, opens it outside the repo folder with `CACHE_KEY`, runs the same
