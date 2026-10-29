@@ -1538,6 +1538,21 @@ draw the screen at 1x on phones. A bench player named on a starter's row reads "
 landing story: one email decides your lineup → your team, not a ranking → read a real one first
 → one refundable payment; "about a minute", never "ninety seconds".
 
+**The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
+self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
+Mac from read-only sources (the counter, Stripe, the Worker, Resend, the public Actions API, the
+fast launch gates, the ledger, PLAN §6): what needs you now, traffic, funnel, money, customers,
+issues with the step that fixes each, the record and plain insights, by 7/30 days/all, light and
+dark. No server and no login (security principle); refuses in CI (public repo) and any path that
+isn't gitignored; counts and dollars only, every string scrubbed of addresses and secret values.
+`make dashboard-live` rebuilds every 15 minutes (10 is the floor: GitHub's 60 unsigned requests an
+hour), the tab reloads itself and turns amber when updates stop. **Profit and posts** come from
+the owner's books (`run/books.py`, `data/costs.csv|hours.csv|posts.csv`): `make cost`, `make
+hours`, `make link TAG=reddit-oct28 WHERE=…` (prints the tagged link, refuses a reused tag). A
+post tag uses the site's own `?via=` rule, counts under its channel (the part before the first
+hyphen) and on its own row, and is pinned on the traffic chart. A line the books can't read is
+a low issue, never a guess.
+
 **The season's end, run for real (Oct 9 2026).** `python -m run.proving <dir> 14-18` drove
 2025's last five weeks through every runner: all green, and two gaps no test could see.
 **The offseason rebuilt Week 18 every Tuesday**: `current_week` answers the last week forever

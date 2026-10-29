@@ -9,6 +9,7 @@ or missing never takes the page down.
 
 from __future__ import annotations
 
+import math
 import random
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -40,7 +41,8 @@ PAGES = (("index", 46), ("join", 17), ("sample", 11), ("this-week", 8), ("how-it
          ("planner", 7), ("join-try", 4), ("league-pass", 2))
 REFS = (("", 38), ("reddit.com", 22), ("x.com", 14), ("t.co", 8), ("google.com", 9),
         ("discord.com", 6), ("beatyourleague.com", 3))
-VIAS = (("", 52), ("reddit", 18), ("x", 12), ("discord", 9), ("groupchat", 6), ("newsletter", 3))
+VIAS = (("", 52), ("reddit", 12), ("reddit-oct20", 6), ("x", 8), ("x-thread1", 4), ("discord", 9),
+        ("groupchat", 6), ("newsletter", 3))
 COUNTRIES = (("US", 82), ("CA", 10), ("GB", 3), ("AU", 2), ("IE", 1), ("DE", 1), ("XX", 1))
 
 
@@ -94,9 +96,9 @@ def aggregate(events: list[dict], now: datetime, days: int) -> list[dict]:
 def daily(events: list[dict]) -> list[dict]:
     agg: dict[tuple, int] = {}
     for e in events:
-        key = (e["day"], e["e"], e["p"], e["s"])
+        key = (e["day"], e["e"], e["p"], e["s"], e["v"])
         agg[key] = agg.get(key, 0) + 1
-    return [{"day": d, "e": e, "p": p, "s": s, "n": n} for (d, e, p, s), n in agg.items()]
+    return [{"day": d, "e": e, "p": p, "s": s, "v": v, "n": n} for (d, e, p, s, v), n in agg.items()]
 
 
 def traffic_source(now: datetime = NOW) -> Source:
@@ -115,8 +117,8 @@ def stripe_sessions(now: datetime = NOW, seed: int = 3) -> list[dict]:
         created = int((now - timedelta(days=rng.uniform(0, 6) if i < 9 else rng.uniform(6, 26))
                        ).timestamp())
         out.append({"id": f"cs_test_{i:04d}", "created": created, "status": "complete", "paid": True,
-                    "via": _pick(rng, (("reddit", 5), ("x", 3), ("discord", 2), ("groupchat", 2),
-                                       (None, 6))),
+                    "via": _pick(rng, (("reddit", 3), ("reddit-oct20", 2), ("x", 3), ("discord", 2),
+                                       ("groupchat", 2), (None, 6))),
                     "pass": kind, "amount": price, "refunded": 0.0, "full_refund": False,
                     "dispute": None, "payment": f"pi_test_{i:04d}", "who": f"w{i:03d}"})
     out[3].update(refunded=29.0, full_refund=True)
@@ -226,8 +228,22 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
                                            "players_at": (now - timedelta(hours=22)).isoformat()},
                              read_at=now),
         "plan": dash._source("plan", data=dash.parse_plan_gates(plan_text), read_at=now),
+        "books": dash._source("books", data=books_fixture(now), read_at=now),
     }
     return S
+
+
+def books_fixture(now: datetime = NOW):
+    from run.books import Books, Cost, Hours, Post
+    today = now.date()
+    return Books(
+        costs=[Cost(date(2026, 8, 1), "Domain", 12.0, "yearly"),
+               Cost(date(2026, 9, 5), "Mailbox for the sender address", 9.99, "monthly"),
+               Cost(date(2026, 10, 20), "Reddit ad test", 40.0, "once")],
+        hours=[Hours(today - timedelta(days=k), 1.5, "") for k in range(20)],
+        posts=[Post(date(2026, 10, 20), "reddit-oct20", "r/fantasyfootball", ""),
+               Post(date(2026, 10, 25), "x-thread1", "X thread", "")],
+        problems=[], found=("costs.csv", "hours.csv", "posts.csv"))
 
 
 def empty_sources(now: datetime = NOW) -> dict[str, Source]:
@@ -297,7 +313,7 @@ def test_nothing_connected_renders_setup_cards_everywhere() -> None:
     page = dash.render_page(empty_sources(), NOW, fonts=False)
     for step in ("LAUNCH.md step 5b", "LAUNCH.md step 3", "LAUNCH.md step 5 ", "LAUNCH.md step 2"):
         assert step.strip() in page
-    assert page.count('class="kpi off"') == 7 * len(dash.PERIODS)
+    assert page.count('class="kpi off"') == 8 * len(dash.PERIODS)
 
 
 def test_one_source_raising_does_not_break_the_page() -> None:
@@ -645,3 +661,81 @@ def test_the_reload_never_spins_on_a_stopped_loop() -> None:
     assert "Math.max(gen+(refresh+45)*1000-Date.now(),60000)" in dash.JS
     assert "document.hidden" in dash.JS                      # no reloads in a background tab
     assert 'sessionStorage.setItem("byl-dash-y"' in dash.JS   # the reader keeps their place
+
+
+# --------------------------------------------------------------------- #
+# profit and posts (run/books.py)
+# --------------------------------------------------------------------- #
+
+def test_profit_is_net_revenue_less_the_costs_charged_in_the_period() -> None:
+    S = rich_sources()
+    m = dash.metrics_for(S, "30d", NOW)
+    # Oct 5 mailbox + Oct 20 ad fall in the last 30 days; the Aug 1 domain doesn't.
+    assert m.profit["costs"] == round(9.99 + 40, 2)
+    assert m.profit["profit"] == round(m.money["net"] - 49.99, 2)
+    assert m.profit["hours"] == 30.0 and m.profit["per_hour"] == pytest.approx(m.profit["profit"] / 30)
+    allm = dash.metrics_for(S, "all", NOW)
+    assert allm.profit["costs"] == round(12 + 9.99 * 2 + 40, 2)
+
+
+def test_break_even_counts_passes_at_their_net_after_stripe() -> None:
+    S = rich_sources()
+    S["stripe"] = dash._source("stripe", data={"sessions": stripe_sessions()[:1], "link_map": True,
+                                               "dispute_errors": 0}, read_at=NOW)
+    page = dash.render_page(S, NOW, fonts=False)
+    per = dash.net_per_pass()
+    assert 25 < per < 29
+    m = dash.metrics_for(S, "all", NOW)
+    gap = 71.98 - m.money["net"]
+    need = math.ceil(gap / per)
+    assert f"{need} more $29 pass" in page
+
+
+def test_without_costs_the_profit_card_says_how_to_add_them() -> None:
+    S = rich_sources()
+    S["books"] = dash.off("books", "No costs, hours or posts recorded yet.")
+    page = dash.render_page(S, NOW, fonts=False)
+    assert "Record costs: make cost" in page and 'make cost ITEM=&quot;Domain&quot;' in page
+    # Post-shaped tags seen on the site still get their rows without a log.
+    assert "reddit-oct20" in page and "No posts tracked yet" not in page
+
+
+def test_with_no_post_tags_at_all_the_posts_card_says_how_to_start() -> None:
+    m = dash.Metrics("30d", 30, traffic={"rows": []}, money=None)
+    html = dash.posts_card(m, {})
+    assert "No posts tracked yet" in html and "make link TAG=" in html
+
+
+def test_a_post_tag_counts_under_its_channel_and_on_its_own_row() -> None:
+    S = rich_sources()
+    m = dash.metrics_for(S, "30d", NOW)
+    channels = {r["channel"] for r in m.channels}
+    assert "reddit" in channels and "reddit-oct20" not in channels
+    posts = {r["tag"]: r for r in m.posts}
+    assert set(posts) == {"reddit-oct20", "x-thread1"}
+    assert posts["reddit-oct20"]["where"] == "r/fantasyfootball" and posts["reddit-oct20"]["day"] == "2026-10-20"
+    assert posts["reddit-oct20"]["views"] > 0 and posts["reddit-oct20"]["paid"] >= 0
+    page = dash.render_page(S, NOW, fonts=False)
+    assert 'class="pmark"' in page and "Posted Oct 20: reddit-oct20" in page
+
+
+def test_an_unlogged_post_tag_gets_the_first_day_it_was_seen() -> None:
+    S = rich_sources()
+    S["books"] = dash.off("books", "none")
+    m = dash.metrics_for(S, "all", NOW)
+    row = {r["tag"]: r for r in m.posts}["x-thread1"]
+    first = min(r["day"] for r in S["traffic"].data["daily"] if r["v"] == "x-thread1" and r["e"] == "view")
+    assert row["day"] == first and not row["logged"]
+
+
+def test_a_bad_line_in_the_books_is_a_low_issue() -> None:
+    S = rich_sources()
+    S["books"].data.problems.append("data/costs.csv line 4 was skipped: could not convert string to float.")
+    m = dash.metrics_for(S, "7d", NOW)
+    issues = dash.build_issues(S, NOW, [], None, m)
+    hit = [i for i in issues if "line 4" in i.title]
+    assert hit and hit[0].severity == "low"
+
+
+def test_the_books_reader_is_listed_with_the_sources() -> None:
+    assert "books" in dash.COLLECTORS and "books" in dash.FRESHNESS_KEYS

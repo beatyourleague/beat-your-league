@@ -2,6 +2,7 @@
 
 Usage:
     python -m run.dashboard [--out PATH] [--registry PATH] [--no-open] [--now ISO]
+                            [--every MINUTES]     (make dashboard-live: rebuild on a timer)
 
 One self-contained HTML page, built on the owner's own Mac from the owner's own
 sources, opened in the browser. The decisions, each for a reason:
@@ -45,6 +46,14 @@ sources, opened in the browser. The decisions, each for a reason:
   numbers they rest on and say "not enough data yet" below a floor instead of
   reading noise; decision-gate targets are read from PLAN.md §6's own table,
   never restated here.
+- **Profit and posts come from the owner's own books** (``run/books.py``:
+  ``data/costs.csv``, ``hours.csv``, ``posts.csv``, all gitignored). A cost
+  counts on the day it is charged; profit is Stripe's net less those; a post
+  is a ``?via=`` tag (``make link``), counted on its own row and under its
+  channel (the part before the first hyphen), and pinned on the traffic chart
+  on the day it went out.
+- **Live mode** (``--every``) rebuilds on a timer and the page reloads itself;
+  the page turns amber when its numbers are older than two rounds.
 """
 
 from __future__ import annotations
@@ -165,6 +174,10 @@ SOURCE_INFO = {
              "How old this week's sample and the player directory are."),
     "plan": ("PLAN.md §6", "PLAN.md §6 — the decision gates",
              "The pre-committed decision gates and where each stands."),
+    "books": ("Your books", 'make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly — costs, hours and '
+                            'post links live in data/ (run/books.py)',
+              "Profit after your costs, when you break even, what you earn per hour, and which "
+              "posts sold."),
 }
 
 
@@ -208,9 +221,9 @@ def _season(ctx: Context) -> str:
 # --- traffic ---------------------------------------------------------- #
 
 DAILY_SQL = ("SELECT toStartOfInterval(timestamp, INTERVAL '1' DAY) AS t, blob1 AS e, "
-             "blob2 AS p, blob6 AS s, SUM(_sample_interval) AS n FROM {dataset} "
+             "blob2 AS p, blob6 AS s, blob3 AS v, SUM(_sample_interval) AS n FROM {dataset} "
              "WHERE timestamp > NOW() - INTERVAL '{days}' DAY "
-             "GROUP BY t, e, p, s ORDER BY t LIMIT 10000 FORMAT JSON")
+             "GROUP BY t, e, p, s, v ORDER BY t LIMIT 10000 FORMAT JSON")
 _DAY = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
@@ -234,9 +247,9 @@ def query_daily(account: str, token: str, days: int) -> list[dict]:
         if not isinstance(row, dict):
             continue
         day = _DAY.match(str(row.get("t") or ""))
-        clean = {k: row.get(k) if isinstance(row.get(k), str) else "" for k in "eps"}
+        clean = {k: row.get(k) if isinstance(row.get(k), str) else "" for k in "epsv"}
         if (not day or clean["e"] not in stats.COUNT_EVENTS
-                or not all(stats._FIELD.fullmatch(clean[k]) for k in "ps")):
+                or not all(stats._FIELD.fullmatch(clean[k]) for k in "psv")):
             continue
         try:
             n = int(float(row.get("n") or 0))
@@ -563,11 +576,20 @@ def collect_plan(ctx: Context) -> Source:
     return _source("plan", data=parsed, read_at=ctx.now)
 
 
+def collect_books(ctx: Context) -> Source:
+    from run.books import load
+    books = load(ctx.root)
+    if not books.found:
+        return off("books", "No costs, hours or posts recorded yet.")
+    return _source("books", data=books, read_at=ctx.now)
+
+
 COLLECTORS: dict[str, Callable[[Context], Source]] = {
     "traffic": collect_traffic, "forms": collect_forms, "stripe": collect_stripe,
     "intake": collect_intake, "sends": collect_sends, "registry": collect_registry,
     "bounces": collect_bounces, "github": collect_github, "launch": collect_launch,
     "ledger": collect_ledger, "site": collect_site, "plan": collect_plan,
+    "books": collect_books,
 }
 
 
@@ -673,6 +695,8 @@ class Metrics:
     forms: dict | None = None
     funnel: list = field(default_factory=list)
     channels: list = field(default_factory=list)
+    posts: list = field(default_factory=list)
+    profit: dict | None = None
 
 
 TRAFFIC_STEPS = (("Landing views", "Landing views"), ("Buy-page views", "Buy-page views"),
@@ -752,6 +776,12 @@ def money_metrics(src: Source, period: str, now: datetime) -> dict | None:
     out = dict(cur)
     out["types"] = Counter(s.get("pass") or "unknown" for s in paid)
     out["by_channel"] = Counter(s.get("via") or stats.NO_VIA for s in paid)
+    net_by_via: Counter = Counter()
+    for s in paid:
+        if isinstance(s.get("amount"), (int, float)):
+            net_by_via[s.get("via") or stats.NO_VIA] += (s["amount"] - (s.get("refunded") or 0)
+                                                         - stripe_fee(s["amount"], one_time=True))
+    out["net_by_via"] = net_by_via
     out["disputes"] = [s for s in paid_all if s.get("dispute")]
     if prev is not None:
         p = money(prev)
@@ -759,8 +789,10 @@ def money_metrics(src: Source, period: str, now: datetime) -> dict | None:
         out["net_delta"] = delta(cur["net"], p["net"])
         out["refund_delta"] = (None if cur["refund_rate"] is None or p["refund_rate"] is None
                                else cur["refund_rate"] - p["refund_rate"])
+        out["prev_net"] = p["net"]
     else:
         out["count_delta"] = out["net_delta"] = out["refund_delta"] = None
+        out["prev_net"] = None
     span = days or 90
     spark_days = day_range(now, max(span, 14))
     by_day = Counter(_ts(s.get("created")).date().isoformat() for s in paid_all
@@ -837,11 +869,14 @@ def funnel_steps(traffic: dict | None, money: dict | None) -> list[tuple[str, in
 
 
 def channel_rows(traffic: dict | None, money: dict | None) -> list[dict]:
+    """By channel — a post's tag counts under its channel (reddit-oct28 is
+    reddit); the posts table has each post on its own."""
+    from run.books import channel_of
     if traffic is None:
         return []
     by: dict[str, dict] = defaultdict(lambda: {"views": 0, "rosters": 0, "presses": 0, "paid": 0})
     for r in traffic["rows"]:
-        v = r["v"] or stats.NO_VIA
+        v = channel_of(r["v"]) or stats.NO_VIA
         if r["e"] == "view" and r["p"] in ("index",) + stats.BUY_PAGES:
             by[v]["views"] += r["n"]
         elif r["e"] == "roster" and r["p"] in stats.BUY_PAGES:
@@ -850,10 +885,96 @@ def channel_rows(traffic: dict | None, money: dict | None) -> list[dict]:
             by[v]["presses"] += r["n"]
     if money is not None:
         for v, n in money["by_channel"].items():
-            by[v]["paid"] += n
+            by[v if v == stats.NO_VIA else channel_of(v)]["paid"] += n
     rows = [{"channel": k, **v} for k, v in by.items()]
     rows.sort(key=lambda r: (r["channel"] == stats.NO_VIA, -r["views"], -r["paid"], r["channel"]))
     return rows
+
+
+def post_rows(traffic: dict | None, money: dict | None, books: Source,
+              daily: list[dict] | None) -> list[dict]:
+    """One row per post: every tag the posts log names, plus any post-shaped
+    tag (channel-detail, e.g. reddit-oct28) seen on the site. A post's day is
+    the log's, else the first day the counter saw its tag."""
+    from run.books import channel_of
+    logged = {p.tag: p for p in books.data.posts} if books.ok else {}
+    by: dict[str, dict] = {}
+
+    def row(tag: str) -> dict:
+        if tag not in by:
+            post = logged.get(tag)
+            by[tag] = {"tag": tag, "channel": channel_of(tag), "where": post.where if post else "",
+                       "day": post.day.isoformat() if post else None, "logged": post is not None,
+                       "views": 0, "rosters": 0, "presses": 0, "paid": 0}
+        return by[tag]
+    for tag in logged:
+        row(tag)
+    if traffic is not None:
+        for r in traffic["rows"]:
+            v = r["v"]
+            if not v or (v not in logged and "-" not in v):
+                continue
+            if r["e"] == "view":
+                row(v)["views"] += r["n"]
+            elif r["e"] == "roster":
+                row(v)["rosters"] += r["n"]
+            elif r["e"] == "checkout":
+                row(v)["presses"] += r["n"]
+    if money is not None:
+        for v, n in money["by_channel"].items():
+            if v in by or (v != stats.NO_VIA and "-" in v):
+                row(v)["paid"] += n
+    for r in daily or ():
+        v = r.get("v") or ""
+        if v in by and not by[v]["logged"] and r["e"] == "view":
+            if by[v]["day"] is None or r["day"] < by[v]["day"]:
+                by[v]["day"] = r["day"]
+    rows = list(by.values())
+    rows.sort(key=lambda r: (r["day"] or "", r["tag"]), reverse=True)
+    return rows
+
+
+NET_PER_PASS_PRICE = 29.00      # the pass a break-even is counted in
+
+
+def net_per_pass() -> float:
+    from run.economics import stripe_fee
+    return NET_PER_PASS_PRICE - stripe_fee(NET_PER_PASS_PRICE, one_time=True)
+
+
+def profit_metrics(books: Source, money: dict | None, period: str, now: datetime) -> dict | None:
+    """Net revenue less the costs charged in the period, the hours logged in
+    it, and a cumulative-profit line. Costs and hours count by Eastern date,
+    the date you'd write on them."""
+    if not books.ok:
+        return None
+    from run.books import charges, spent
+    b = books.data
+    today = now.astimezone(ET).date()
+    days = period_days(period)
+    start = today - timedelta(days=days) if days else None
+    costs = spent(b.costs, start, today)
+    hours = round(sum(x.hours for x in b.hours if x.day <= today and (start is None or x.day > start)), 2)
+    net = money["net"] if money is not None else None
+    profit = round(net - costs, 2) if net is not None else None
+    prev = None
+    if days and money is not None and money.get("prev_net") is not None:
+        prev_costs = spent(b.costs, start - timedelta(days=days), start)
+        prev = round(money["prev_net"] - prev_costs, 2)
+    span = max(days or 90, 14)
+    spark_days = [(today - timedelta(days=i)) for i in range(span - 1, -1, -1)]
+    per_day: Counter = Counter()
+    for c in b.costs:
+        for d in charges(c, today):
+            per_day[d] += c.amount
+    net_days = money["spark_net"] if money is not None and len(money["spark_net"]) == span else [0] * span
+    running, line = 0.0, []
+    for i, d in enumerate(spark_days):
+        running += net_days[i] - per_day.get(d, 0)
+        line.append(round(running, 2))
+    return {"costs": costs, "net": net, "profit": profit, "prev": prev, "hours": hours,
+            "per_hour": (profit / hours) if profit is not None and hours else None,
+            "spark": line}
 
 
 def metrics_for(sources: Mapping[str, Source], period: str, now: datetime) -> Metrics:
@@ -863,6 +984,10 @@ def metrics_for(sources: Mapping[str, Source], period: str, now: datetime) -> Me
     m.forms = forms_metrics(sources["forms"], period, now)
     m.funnel = funnel_steps(m.traffic, m.money)
     m.channels = channel_rows(m.traffic, m.money)
+    daily = sources["traffic"].data["daily"] if sources["traffic"].ok else None
+    books = sources.get("books") or off("books", "Not read this time.")
+    m.posts = post_rows(m.traffic, m.money, books, daily)
+    m.profit = profit_metrics(books, m.money, period, now)
     return m
 
 
@@ -1140,6 +1265,10 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
                                         f"PLAN §6's red line of {red:g}%.",
                                 "PLAN §6 says: talk to every refunder before another selling hour.",
                                 "", "Money"))
+    if sources["books"].ok:
+        for problem in sources["books"].data.problems[:5]:
+            issues.append(Issue("low", problem, "Open the file in a text editor and fix or delete that "
+                                                "line; the rest of the file still counts.", "", "Books"))
     issues.sort(key=lambda i: SEVERITY[i.severity])
     return issues
 
@@ -1286,6 +1415,31 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
                                    + (" — too few to judge calibration." if n < 50 else "."),
                            "Owner view only: selling pages never quote the record.",
                            "data/processed/ledger"))
+    posts = [r for r in m.posts if r["views"] >= MIN_CHANNEL_VIEWS]
+    if posts and t is not None:
+        by_paid = money is not None and any(r["paid"] for r in posts)
+        key = "paid" if by_paid else "presses"
+        best = max(posts, key=lambda r: (r[key] / r["views"], r["views"]))
+        if best[key]:
+            unit = "purchases" if by_paid else "buy presses"
+            out.append(Insight("good", f"Your best post is {best['tag']}"
+                                       + (f" ({best['where']})" if best["where"] else "")
+                                       + f": {best[key]} {unit} from {best['views']:,} views.",
+                               "Post the same way again in that place, with a new tag so you can compare.",
+                               f"posts with ≥{MIN_CHANNEL_VIEWS} views, {span}"))
+    pr = m.profit
+    if pr is not None and pr["profit"] is not None and m.period == "all" and pr["costs"]:
+        if pr["profit"] < 0:
+            need = math.ceil(-pr["profit"] / net_per_pass())
+            out.append(Insight("warn" if money and money["count"] >= MIN_REFUND_SAMPLE else "info",
+                               f"Still {money_fmt(-pr['profit'], True)} short of covering costs: "
+                               f"{need} more $29 pass{'es' if need != 1 else ''} breaks even.",
+                               "Hold off new costs until sales cover the ones you have.",
+                               "Stripe net revenue and data/costs.csv"))
+        else:
+            out.append(Insight("good", f"Costs are covered: {money_fmt(pr['profit'], True)} profit so far.",
+                               "Every pass from here is profit after Stripe's fee.",
+                               "Stripe net revenue and data/costs.csv"))
     order = {"warn": 0, "good": 1, "info": 2}
     out.sort(key=lambda i: order[i.tone])
     return out
@@ -1373,6 +1527,19 @@ def delta_chip(d: float | None, good_up: bool = True, points: bool = False, labe
             f'<span aria-hidden="true">{arrow}</span> {text}</span>')
 
 
+def money_chip(cur: float | None, prev: float | None) -> str:
+    """Change in dollars: a percentage of a profit that crossed zero means
+    nothing, a dollar figure always does."""
+    if cur is None or prev is None:
+        return '<span class="delta flat">no prior period</span>'
+    d = cur - prev
+    if abs(d) < 0.5:
+        return '<span class="delta flat">— flat</span>'
+    arrow = "↑" if d > 0 else "↓"
+    return (f'<span class="delta {"good" if d > 0 else "bad"}" title="vs the previous period">'
+            f'<span aria-hidden="true">{arrow}</span> {money_fmt(abs(d))}</span>')
+
+
 def weekly_buckets(values: list[float]) -> list[float]:
     """Seven-day sums counted back from the newest day, oldest first."""
     out = []
@@ -1446,7 +1613,7 @@ def short_day(iso: str) -> str:
 
 
 def area_chart(cid: str, days: list[str], values: list[int], extras: list[tuple[str, list[int]]],
-               label: str) -> str:
+               label: str, marks: list[tuple[str, str]] | None = None) -> str:
     top, step = nice_ticks(max(values) if values else 0)
     n = len(values)
     pts = [(i / (n - 1) * 100 if n > 1 else 50, 100 - v / top * 100) for i, v in enumerate(values)]
@@ -1474,9 +1641,28 @@ def area_chart(cid: str, days: list[str], values: list[int], extras: list[tuple[
             f'<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'
             f'{gradient("ag-" + cid)}<g class="grid">{grid}</g><path class="fill" fill="url(#ag-{cid})" d="{line} L100,100 L0,100 Z"/>'
             f'<path class="line" d="{line}"/><line class="base" x1="0" x2="100" y1="100" y2="100"/></svg>'
+            f'{post_marks(days, marks or [])}'
             f'<div class="xhair" hidden></div><div class="hdot" hidden></div>'
             f'<div class="tip" role="status" hidden></div></div>'
             f'<div class="xaxis" aria-hidden="true">{xlabels}</div></figure>')
+
+
+def post_marks(days: list[str], marks: list[tuple[str, str]]) -> str:
+    """A thin gold rule and a pin at each day a post went out, so a spike
+    sits next to the post that caused it."""
+    n = len(days)
+    index = {d: i for i, d in enumerate(days)}
+    by_day: dict[str, list[str]] = defaultdict(list)
+    for day, label in marks:
+        if day in index:
+            by_day[day].append(label)
+    out = []
+    for day, labels in sorted(by_day.items()):
+        x = index[day] / (n - 1) * 100 if n > 1 else 50
+        text = f"Posted {short_day(day)}: " + ", ".join(labels)
+        out.append(f'<span class="pmark" style="left:{x:.2f}%" title="{h(text)}">'
+                   f'<span class="sr">{h(text)}</span></span>')
+    return "".join(out)
 
 
 def column_chart(days: list[str], values: list[float], unit: str, money_vals: bool = False,
@@ -1547,20 +1733,22 @@ def setup_card(src: Source, compact: bool = False) -> str:
                 f'<p class="ed">{h(src.note)}</p>'
                 f'<p class="es">Shows: {h(src.shows)}</p></div></div>')
     return (f'<div class="empty{" compact" if compact else ""}">{icon("plug", "eic")}'
-            f'<div><p class="et">{h(src.label)} — not connected yet</p>'
+            f'<div><p class="et">{h(src.label)} — '
+            f'{"nothing recorded yet" if src.key == "books" else "not connected yet"}</p>'
             f'<p class="ed">{h(src.note)}</p>'
             f'<p class="es"><b>Set up:</b> {h(src.setup)}</p>'
             f'<p class="es">Once connected: {h(src.shows)}</p></div></div>')
 
 
 def kpi(label: str, value: str, chip: str, sparkline: str, sub: str, hint: str = "",
-        missing: Source | None = None) -> str:
+        missing: Source | None = None, why: str = "") -> str:
     if missing is not None:
         step = re.search(r"step [0-9a-z.]+", missing.setup)
-        why = "Not connected" if missing.status == "off" else "Couldn't read"
+        if not why:
+            why = "Not connected" if missing.status == "off" else "Couldn't read"
+            why += f" · {step.group(0)}" if step else ""
         return (f'<div class="kpi off"><p class="kl">{h(label)}</p><p class="kval">—</p>'
-                f'<p class="ks">{icon("plug", "ic tiny")} {why}'
-                f'{" · " + h(step.group(0)) if step else ""}</p></div>')
+                f'<p class="ks">{icon("plug", "ic tiny")} {h(why)}</p></div>')
     title = f' title="{h(hint)}"' if hint else ""
     return (f'<div class="kpi"{title}><p class="kl">{h(label)}</p>'
             f'<p class="kval">{value}</p><div class="krow">{chip}<span class="ks">{h(sub)}</span></div>'
@@ -1615,6 +1803,17 @@ def overview(S: Mapping[str, Source], M: Mapping[str, Metrics], sends: dict | No
                          f"{money_fmt(mo['gross'])} gross" if mo else "",
                          "After refunds and Stripe's modelled fee (run/economics.py)",
                          missing=None if mo else st))
+        pr = m.profit
+        if pr is not None and pr["profit"] is not None:
+            cards.append(kpi("Profit", money_fmt(pr["profit"]), money_chip(pr["profit"], pr["prev"])
+                             if p != "all" else delta_chip(None, label="all time"),
+                             spark(pr["spark"], "spark cumulative"),
+                             f"{money_fmt(pr['costs'])} costs",
+                             "Net revenue less the costs in data/costs.csv; the line is the running total"))
+        elif pr is not None:
+            cards.append(kpi("Profit", "", "", "", "", missing=st, why="Needs Stripe for revenue"))
+        else:
+            cards.append(kpi("Profit", "", "", "", "", missing=S["books"], why="Record costs: make cost"))
         cards.append(kpi("Refund rate", pct(mo["refund_rate"]) if mo else "",
                          delta_chip(mo["refund_delta"], good_up=False, points=True,
                                     label="no earlier sales" if p != "all" else "all time") if mo else "",
@@ -1640,6 +1839,8 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
         return section("traffic", "Traffic", "Where visits come from and what they look at.",
                        setup_card(src))
 
+    from run.books import channel_of
+
     def one(p: str) -> str:
         t = M[p].traffic
         rows = t["rows"]
@@ -1655,13 +1856,14 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
             host = r["r"]
             if host != stats.OWN_HOST and not host.endswith("." + stats.OWN_HOST):
                 refs[host or "Direct / hidden"] += r["n"]
-            chans[r["v"] or "(no tag)"] += r["n"]
+            chans[channel_of(r["v"]) or "(no tag)"] += r["n"]
             countries[COUNTRY.get(r["c"], r["c"] or "Unknown")] += r["n"]
             devices[{"m": "Phone", "d": "Desktop"}.get(r["d"], "Unknown")] += r["n"]
         span = "last 90 days" if p == "all" else f"last {M[p].days} days"
+        marks = [(r["day"], r["tag"]) for r in M["all"].posts if r["day"]]
         chart = area_chart(f"visits-{p}", t["chart_days"], t["chart"],
                            [("Landing", t["chart_landing"]), ("Buy page", t["chart_buy"])],
-                           "Page views per day")
+                           "Page views per day", marks)
         total = sum(devices.values()) or 1
         dev = "".join(f'<span class="dseg s{i}" style="width:{n / total * 100:.1f}%" '
                       f'title="{h(k)} {n / total:.0%}"></span>'
@@ -1669,14 +1871,16 @@ def traffic_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
         legend = "".join(f'<span class="lg"><i class="sw s{i}"></i>{h(k)} <b>{n / total:.0%}</b></span>'
                          for i, (k, n) in enumerate(devices.most_common()))
         return (f'<div class="card chartcard"><div class="cardhead"><div><h3>Page views per day</h3>'
-                f'<p class="muted small">{num(t["views"])} views · {span} · UTC days</p></div>'
+                f'<p class="muted small">{num(t["views"])} views · {span} · UTC days'
+                f'{" · gold pins mark your posts" if marks else ""}</p></div>'
                 f'<div class="devices"><div class="segbar">{dev}</div>'
                 f'<div class="legend">{legend}</div></div></div>{chart}</div>'
                 f'<div class="grid2">'
                 + bar_list("Top pages", "Views", pages.most_common(), "No page views yet.")
                 + bar_list("Sources", "Views", refs.most_common(), "No arrivals yet.",
                            note="Referring sites; steps between our own pages are left out.")
-                + bar_list("Channels (?via=)", "Views", chans.most_common(), "No tagged links yet.")
+                + bar_list("Channels (?via=)", "Views", chans.most_common(), "No tagged links yet.",
+                           note="A post's tag counts under its channel: reddit-oct28 is reddit.")
                 + bar_list("Countries", "Views", countries.most_common(), "No views yet.")
                 + '</div>')
     return section("traffic", "Traffic",
@@ -1754,6 +1958,7 @@ def funnel_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
                      f'<th class="r">Paid</th><th class="r hm">Press rate</th><th class="r">Paid rate</th></tr></thead><tbody>{trs}</tbody></table></div></div>')
         else:
             table = ""
+        table += posts_card(m, S)
         return (f'<div class="card"><div class="cardhead"><div>'
                 f'<h3>Landing → paid</h3><p class="muted small">Step counts in the period. Cookieless, so '
                 f'these are counts of each step, not one cohort of people.</p></div></div>{main}</div>'
@@ -1761,6 +1966,38 @@ def funnel_section(S: Mapping[str, Source], M: Mapping[str, Metrics]) -> str:
                 f'<div class="card"><div class="cardhead"><h3>Bye planner</h3></div>{plan}</div></div>'
                 f'{table}')
     return section("funnel", "Funnel", "Where the signup path loses people.", by_period(one))
+
+
+LINK_HOWTO = 'make link TAG=reddit-oct28 WHERE="r/fantasyfootball"'
+
+
+def posts_card(m: Metrics, S: Mapping[str, Source]) -> str:
+    """Which posts sold: each tagged link on its own row."""
+    rows = m.posts
+    head = (f'<div class="cardhead"><div><h3>Posts</h3><p class="muted small">Each post\'s own link '
+            f'tag. Make one with <code>{h(LINK_HOWTO)}</code> — it prints the link and logs the post.'
+            f'</p></div><span class="unit">?via= tag</span></div>')
+    if not rows:
+        return (f'<div class="card">{head}<p class="muted small pad">No posts tracked yet. Give every '
+                f'post its own tag (channel first, then anything: reddit-oct28, x-thread2) and this '
+                f'table shows what each one brought in, down to the sale.</p></div>')
+    def where(r: dict) -> str:
+        return f'<br><span class="muted small">{h(r["where"])}</span>' if r["where"] else ""
+    trs = "".join(
+        f'<tr><td><b>{h(r["tag"])}</b>{where(r)}</td>'
+        f'<td class="hm">{h(short_day(r["day"])) if r["day"] else "—"}</td>'
+        f'<td class="r">{num(r["views"]) if m.traffic else "—"}</td>'
+        f'<td class="r hm">{num(r["rosters"]) if m.traffic else "—"}</td>'
+        f'<td class="r">{num(r["presses"]) if m.traffic else "—"}</td>'
+        f'<td class="r"><b>{num(r["paid"]) if m.money else "—"}</b></td>'
+        f'<td class="r">{money_fmt(m.money["net_by_via"].get(r["tag"], 0), True) if m.money and r["paid"] else "—"}</td></tr>'
+        for r in rows[:15])
+    more = f'<p class="more">+ {len(rows) - 15} older posts</p>' if len(rows) > 15 else ""
+    return (f'<div class="card">{head}<div class="tablewrap"><table class="tbl posts">'
+            f'<thead><tr><th>Post</th><th class="hm">Posted</th><th class="r" title="Page views on any page">Views</th>'
+            f'<th class="r hm">Rosters</th><th class="r">Buy presses</th><th class="r">Paid</th>'
+            f'<th class="r" title="What those purchases left after refunds and Stripe\'s fee">Net</th></tr></thead>'
+            f'<tbody>{trs}</tbody></table></div>{more}</div>')
 
 
 def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledger: dict | None,
@@ -1845,12 +2082,74 @@ def gates_html(S: Mapping[str, Source], now: datetime, sends: dict | None, ledge
             f'<tbody>{"".join(rows)}</tbody></table></div></div>')
 
 
+def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetime) -> str:
+    """Profit after your own costs, break-even, per hour, and what's due next."""
+    books = S["books"]
+    if not books.ok:
+        return (f'<div class="card"><div class="cardhead"><div><h3>Profit</h3><p class="muted small">'
+                f'Revenue minus what the business costs you.</p></div></div>{setup_card(books, compact=True)}'
+                f'<p class="muted small">Record a cost: <code>make cost ITEM="Domain" AMOUNT=12 '
+                f'REPEATS=yearly</code> · time spent: <code>make hours H=1.5</code></p></div>')
+    from run.books import monthly_run_rate, next_charges, spent
+    b = books.data
+    today = now.astimezone(ET).date()
+    all_m = M["all"]
+    costs_all = spent(b.costs, None, today)
+    net_all = all_m.money["net"] if all_m.money is not None else None
+    per_pass = net_per_pass()
+    if net_all is None:
+        be = (f'<p class="be-line">Costs so far: <b>{money_fmt(costs_all, True)}</b>. Connect Stripe to '
+              f'see how far revenue has come against them.</p>')
+    else:
+        gap = costs_all - net_all
+        fill = 100 if costs_all <= 0 else min(100, max(0, net_all / costs_all * 100))
+        if gap > 0:
+            need = math.ceil(gap / per_pass)
+            line = (f'<b>{need} more $29 pass{"es" if need != 1 else ""}</b> to break even '
+                    f'({money_fmt(gap, True)} to go at {money_fmt(per_pass, True)} each after Stripe).')
+        else:
+            line = f'<b>Broken even</b>, {money_fmt(-gap, True)} ahead of every cost so far.'
+        be = (f'<div class="be"><div class="bebar"><i style="width:{fill:.1f}%"></i></div>'
+              f'<p class="be-line">{line}</p><p class="muted small">Net revenue to date '
+              f'{money_fmt(net_all, True)} · costs to date {money_fmt(costs_all, True)}</p></div>')
+
+    def one(p: str) -> str:
+        pr = M[p].profit
+        span = "all time" if p == "all" else f"last {M[p].days} days"
+        tiles = [("Net revenue", money_fmt(pr["net"], True) if pr["net"] is not None else "—", ""),
+                 ("Costs", money_fmt(-pr["costs"], True) if pr["costs"] else "$0.00", ""),
+                 ("Profit", money_fmt(pr["profit"], True) if pr["profit"] is not None else "—", " net"),
+                 ("Per hour", (money_fmt(pr["per_hour"], True) if pr["per_hour"] is not None else "—"),
+                  "")]
+        th = "".join(f'<div class="mini{c}"><p class="kl">{h(a)}</p><p class="mv">{v}</p></div>'
+                     for a, v, c in tiles)
+        hrs = (f'{pr["hours"]:g} h logged, {span}' if pr["hours"] else
+               'Log time with <code>make hours H=1.5</code> to see this')
+        return f'<div class="minis">{th}</div><p class="muted small">{hrs}</p>'
+    due = next_charges(b.costs, today)
+    due_html = ("".join(f'<li><span>{h(short_day(d.isoformat()))}</span><b>{h(c.item)}</b>'
+                        f'<em>{money_fmt(c.amount, True)}</em></li>' for d, c in due[:6])
+                or '<li class="muted">Nothing recurring due in the next 30 days.</li>')
+    items: Counter = Counter()
+    for c in b.costs:
+        items[c.item] += spent([c], None, today)
+    cost_list = bar_list("Costs by item", "$ so far", [(k, round(v)) for k, v in items.most_common() if v],
+                         "No costs recorded yet.",
+                         note=f"Recurring: {money_fmt(monthly_run_rate(b.costs), True)} a month.")
+    return (f'<div class="card profit"><div class="cardhead"><div><h3>Profit</h3>'
+            f'<p class="muted small">Net revenue after Stripe, less the costs you record in '
+            f'data/costs.csv.</p></div></div>{by_period(one)}{be}</div>'
+            f'<div class="grid2">{cost_list}<div class="card"><div class="cardhead"><h3>Due in the next '
+            f'30 days</h3><span class="unit">Recurring</span></div><ul class="due">{due_html}</ul></div></div>')
+
+
 def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetime,
                   sends: dict | None, ledger: dict | None, ftp) -> str:
     gates = gates_html(S, now, sends, ledger, S["registry"])
+    profit = profit_block(S, M, now)
     if not S["stripe"].ok:
-        return section("money", "Money", "Passes sold, what they left after Stripe, and the plan's gates.",
-                       setup_card(S["stripe"]) + gates)
+        return section("money", "Money", "Passes sold, what they left after Stripe, profit and the "
+                       "plan's gates.", setup_card(S["stripe"]) + profit + gates)
 
     def one(p: str) -> str:
         m = M[p]
@@ -1882,7 +2181,11 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
         convh = (f'<div class="minis conv">{convh}</div>' if convh else
                  '<p class="muted small">Conversion needs the page counter as well as Stripe.</p>')
         types = sorted(mo["types"].items(), key=lambda kv: -kv[1])
-        chans = sorted(mo["by_channel"].items(), key=lambda kv: (kv[0] == stats.NO_VIA, -kv[1]))
+        from run.books import channel_of
+        grouped: Counter = Counter()
+        for via, n in mo["by_channel"].items():
+            grouped[via if via == stats.NO_VIA else channel_of(via)] += n
+        chans = sorted(grouped.items(), key=lambda kv: (kv[0] == stats.NO_VIA, -kv[1]))
         span_days = mo["chart_days"]
         chart = column_chart(span_days, mo["chart"], "passes") if span_days else ""
         disputes = [s for s in mo["disputes"]]
@@ -1897,10 +2200,11 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
                 f'<div class="grid2">'
                 + bar_list("Passes by type", "Sold", types, "No passes sold in this period.")
                 + bar_list("Paid by channel", "Sold", chans, "No paid signups in this period.",
-                           note="From the ?via= tag carried on the payment's own reference.")
+                           note="From the ?via= tag on the payment; a post counts under its "
+                                "channel (the Posts table has each post).")
                 + '</div>')
-    return section("money", "Money", "Passes sold, what they left after Stripe, and the plan's gates.",
-                   by_period(one) + gates)
+    return section("money", "Money", "Passes sold, what they left after Stripe, profit and the "
+                   "plan's gates.", by_period(one) + profit + gates)
 
 
 def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime) -> str:
@@ -2141,7 +2445,7 @@ def attention(issues: list[Issue]) -> str:
 
 
 FRESHNESS_KEYS = ("traffic", "stripe", "forms", "intake", "sends", "bounces", "github", "ledger",
-                  "launch", "registry", "plan")
+                  "launch", "registry", "plan", "books")
 
 
 def freshness(S: Mapping[str, Source], now: datetime) -> str:
@@ -2153,6 +2457,8 @@ def freshness(S: Mapping[str, Source], now: datetime) -> str:
     for key in FRESHNESS_KEYS:
         src = S[key]
         word = {"ok": "live", "off": "not connected", "error": "couldn't be read"}[src.status]
+        if key == "books" and src.status == "off":
+            word = "nothing recorded yet"
         extra = ""
         if key == "sends" and src.ok and src.data["entries"]:
             last = max((e["sent_at"] or "" for e in src.data["entries"]), default="")
@@ -2180,6 +2486,8 @@ def freshness(S: Mapping[str, Source], now: datetime) -> str:
         src = S[key]
         if not src.ok:
             word = "not connected" if src.status == "off" else "error"
+            if key == "books" and src.status == "off":
+                word = "nothing recorded yet"
             chips.append(f'<span class="chip {"warn" if src.status == "off" else "bad"}" '
                          f'title="{h(src.note)}"><i></i>{h(src.label)} <em>{word}</em></span>')
     return f'<div class="chips">{"".join(chips)}</div>'
@@ -2220,6 +2528,8 @@ NAV = (("overview", "Overview"), ("traffic", "Traffic"), ("funnel", "Funnel"), (
 def render_page(sources: Mapping[str, Source], now: datetime, root: Path = REPO_ROOT,
                 fonts: bool = True, env: Mapping[str, str] | None = None,
                 live_minutes: int | None = None) -> str:
+    # A source nobody read is an unconnected one, never a crash.
+    sources = {**{k: off(k, "Not read this time.") for k in SOURCE_INFO}, **sources}
     M = {p: metrics_for(sources, p, now) for p, _l, _d in PERIODS}
     sends = sources["sends"].data if sources["sends"].ok else None
     ledger = ledger_view(sources["ledger"], now)
@@ -2388,7 +2698,7 @@ background:var(--surface);border:1px solid var(--line);color:var(--ink2);white-s
 body[data-period="7d"] .pv:not([data-p="7d"]),body[data-period="30d"] .pv:not([data-p="30d"]),
 body[data-period="all"] .pv:not([data-p="all"]){display:none}
 /* KPIs */
-.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .kpi{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 16px 0;
 box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:146px}
 .kl{font-size:13px;color:var(--muted);font-weight:600}
@@ -2512,6 +2822,18 @@ background:var(--line2);color:var(--ink2);white-space:nowrap;letter-spacing:.02e
 .consoles a{display:inline-flex;align-items:center;gap:5px;text-decoration:none;font-weight:600;font-size:14px;
 padding:6px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 .consoles a:hover{border-color:var(--ink2)}.consoles .muted{margin-right:4px;font-size:13px}
+.pmark{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed var(--gold);opacity:.75;pointer-events:auto}
+.pmark::after{content:"";position:absolute;top:-4px;left:-5px;width:9px;height:9px;border-radius:50%;background:var(--gold);
+box-shadow:0 0 0 2px var(--surface)}
+.be{margin-top:16px;padding-top:14px;border-top:1px solid var(--line2)}
+.bebar{height:10px;border-radius:999px;background:var(--line2);overflow:hidden}
+.bebar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--good),#3FA36B)}
+.be-line{margin:10px 0 2px;font-size:15px}
+.due{list-style:none;margin:0;padding:0}.due li{display:flex;gap:12px;align-items:baseline;padding:9px 0;
+border-bottom:1px solid var(--line2);font-size:14px}.due li:last-child{border-bottom:0}
+.due li span{color:var(--muted);width:56px;flex:none;font-variant-numeric:tabular-nums}
+.due li em{margin-left:auto;font-style:normal;font-weight:600;font-variant-numeric:tabular-nums}
+.card.profit .minis{margin-top:4px}.tbl.posts td b{font-weight:600}
 @media (max-width:1180px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (max-width:960px){.delivery,.grid-funnel,.grid-money,.grid-issues,.grid-record{grid-template-columns:minmax(0,1fr)}
 .insights{grid-template-columns:minmax(0,1fr)}}

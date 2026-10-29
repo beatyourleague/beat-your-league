@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-live dashboard-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-live dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
         platforms
 
@@ -112,6 +112,22 @@ dashboard:
 EVERY ?= 15
 dashboard-live:
 	$(PY) -m run.dashboard --every $(EVERY) $(ARGS)
+
+# Your books, for the dashboard's profit and posts (run/books.py; files in the
+# gitignored data/ folder, never committed):
+#   make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly   (once | monthly | yearly; DATE=2026-08-01)
+#   make hours H=1.5 NOTE="replied to emails"
+#   make link TAG=reddit-oct28 WHERE="r/fantasyfootball" PAGE=byes/   (prints the link to post)
+#   make books                                          (what's recorded)
+REPEATS ?= once
+cost:
+	@$(PY) -m run.books cost "$(ITEM)" "$(AMOUNT)" --repeats "$(REPEATS)" $(if $(DATE),--date "$(DATE)",)
+hours:
+	@$(PY) -m run.books hours "$(H)" --note "$(NOTE)" $(if $(DATE),--date "$(DATE)",)
+link:
+	@$(PY) -m run.books link "$(TAG)" --where "$(WHERE)" --page "$(PAGE)" --note "$(NOTE)" $(if $(DATE),--date "$(DATE)",)
+books:
+	@$(PY) -m run.books show
 
 # The same page with subscribers and League Pass seats, from a sealed-registry
 # copy opened in a temporary folder outside the repo and deleted on exit (the

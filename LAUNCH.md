@@ -811,6 +811,21 @@ changes the interval (10 minutes is the floor, set by GitHub's limit for unsigne
 It only updates while your Mac is awake, and the page turns amber when its numbers are more
 than two rounds old.
 
+**Profit and posts.** The dashboard turns revenue into profit once you record what the business
+costs, and shows which post sold once each post has its own link. All of it is kept in three
+small files in the `data/` folder, which is never committed:
+- `make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly` records a cost (`once`, `monthly` or
+  `yearly`; add `DATE=2026-08-01` for a past one). A recurring cost counts on each day it's
+  charged. The Money section shows profit, how many $29 passes until you break even, what's due
+  in the next 30 days, and, if you log your time with `make hours H=1.5`, what you earn per hour.
+- `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
+  `PAGE=byes/` to send people to another page) and logs it. Start the tag with the channel:
+  `reddit-…`, `x-…`, `discord-…`. The Funnel section then lists each post with its views, rosters,
+  buy presses and sales, the traffic chart pins the day it went out, and the channel totals add
+  it under its channel. One tag per post: reusing one merges two posts' numbers, so it's refused.
+- `make books` prints what's recorded. You can also edit the files in any text editor; a line the
+  dashboard can't read shows as a low issue and the rest still counts.
+
 Seats filled per League Pass and free report → paid also need the subscriber list, which
 lives only in the runs' encrypted storage. `make stats-registry` reads a copy: it downloads
 the newest sealed backup, opens it outside the repo folder with `CACHE_KEY`, runs the same
