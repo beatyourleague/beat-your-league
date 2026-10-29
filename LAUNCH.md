@@ -792,6 +792,18 @@ step 5b pair in `.env` for traffic and, for payments, the `owner-stats` key from
 `STRIPE_API_KEY` (the cron key can't read refunds). The Stripe Dashboard's phone app is the
 live view of money; `make stats` is the funnel around it. It never runs in CI.
 
+**The dashboard.** `make dashboard` is the same data as `make stats`, plus the cron health
+from GitHub, the launch check's quick gates and this season's record, as one private page that
+opens in your browser: what needs you now at the top, then traffic, the funnel, money against
+PLAN §6's gates, customers, issues (each with the step that fixes it), the record and plain
+insights, switchable between 7 days, 30 days and all. It reads the same `.env` and shell
+(`STRIPE_STATS_KEY` if you keep the read-only key under its own name, else `STRIPE_API_KEY`;
+`RESEND_READ_KEY` adds bounces), changes nothing anywhere, and writes only
+`data/dashboard.html`, which is gitignored: don't commit it, share it or post a screenshot of
+it in public. A source you haven't connected shows its LAUNCH step instead of numbers.
+`make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
+never runs in CI.
+
 Seats filled per League Pass and free report → paid also need the subscriber list, which
 lives only in the runs' encrypted storage. `make stats-registry` reads a copy: it downloads
 the newest sealed backup, opens it outside the repo folder with `CACHE_KEY`, runs the same
