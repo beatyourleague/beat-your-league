@@ -158,11 +158,11 @@ def test_a_defense_that_cannot_play_claims_no_projection() -> None:
     """Reproduction (final review PIPE-6, roster E, Week 7): "DEF Buffalo
     Bills — projection only / OUT — BUF on bye this week" beside a dash, on
     all three surfaces. A certainly-out defense prints no tag, as an on-bye
-    QB doesn't; a playing one still says "projection only"."""
+    QB doesn't; a playing one says it carries no odds."""
     gate = "we don't put odds on defenses — a defense gets its projection"
     assert rr.row_label({"confidence_gate": gate, "status": "out",
                          "projected": None}) == ""
-    assert rr.row_label({"confidence_gate": gate, "status": "active"}) == "projection only"
+    assert rr.row_label({"confidence_gate": gate, "status": "active"}) == "no odds on defenses"
     # A blank label is not a marked row (the note carries the reason).
     assert not rr.row_marked({"confidence_gate": gate, "status": "out"}, True)
 

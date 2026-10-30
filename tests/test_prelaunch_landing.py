@@ -63,10 +63,11 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     and says what it is: the masthead's stamp names the 2024 season archive,
     the caption under the phone names 2024, and on a phone the button row
     sits between the clock and the phone, so the two weeks never read as one
-    line. Since the sales review the caption leads with the year ("2024
+    line. Since Oct 30 2026 a phone meets the report first (owner review), so
+    the form stands between them instead, with the clock below it. Since the sales review the caption leads with the year ("2024
     sample report · Week 10, replayed"), and this week's live link sits under
-    the hero's "See a real report" (one secondary group), above the phone on
-    a phone too — it names no week, so only the clock and the sample do."""
+    the hero's "See a real report" (one secondary group) — it names no week,
+    so only the clock and the sample do."""
     masthead = SCREEN.split('<div class="mh">')[1].split('<section class="card"')[0]
     assert "Week 10" in _flat(masthead)
     stamp = _flat(re.search(r'<div class="mh-stamp">(.*?)</div>', masthead, re.S).group(1))
@@ -76,16 +77,16 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     phones = CSS.split("@media (max-width:880px){\n")[1]
     assert _flat(tag).strip().startswith("2024"), "the caption no longer leads with the year"
     order = {name: int(re.search(r"\.hero \." + name + r"\{order:(\d+)", phones).group(1))
-             for name in ("heroline", "cta-row", "phonewrap", "livepill", "livecall")}
-    assert order["heroline"] < order["cta-row"] < order["phonewrap"], order
-    assert order["cta-row"] == order["livepill"] == order["livecall"] < order["phonewrap"], order
+             for name in ("heroline", "cta-row", "phonewrap", "livepill", "livecall", "watchform")}
+    assert order["phonewrap"] < order["watchform"] < order["heroline"] < order["cta-row"], order
+    assert order["cta-row"] == order["livepill"] == order["livecall"], order
     assert HERO.index('<div class="cta-row">') < HERO.index('<a class="livepill"') \
         < HERO.index('<p class="livecall"')
     # Open, the buy row moves up to the form's place and the clock goes with
     # it, still above the row (equal orders keep source order: the clock's
     # line comes first in the markup).
-    assert ".hero.can-buy .heroline{order:5;}" in phones
-    assert ".hero.can-buy .cta-row{order:5;}" in phones
+    assert ".hero.can-buy .heroline{order:6;}" in phones
+    assert ".hero.can-buy .cta-row{order:6;}" in phones
     assert HERO.index('<p class="heroline">') < HERO.index('<div class="cta-row">')
 
 
@@ -263,9 +264,10 @@ def test_a_phone_sees_any_app_no_login_before_the_phone_mockup() -> None:
     for sel, value in orders.items():
         assert re.fullmatch(r"-?\d+", value.strip()), f"{sel} order:{value} is not an integer"
     num = {k: int(v) for k, v in orders.items()}
-    assert num[".hero .sub"] < num[".hero .creds"] < num[".hero .watchform"] \
-        < num[".hero .heroline"] < num[".hero .phonewrap"], num
-    assert num[".hero.can-buy .cta-row"] < num[".hero .phonewrap"]
+    assert num[".hero .sub"] < num[".hero .creds"] < num[".hero .phonewrap"] \
+        < num[".hero .watchform"] < num[".hero .heroline"], num
+    # The report, then the action: closed or open, the phone never sits under it.
+    assert num[".hero .phonewrap"] < num[".hero.can-buy .cta-row"]
 
 
 def test_the_nav_is_the_logo_lockup_and_a_phone_keeps_one_route() -> None:
@@ -538,11 +540,15 @@ def test_the_sticky_bar_hides_while_the_pricing_cards_button_is_on_screen() -> N
     on screen — the bar watched only the hero and the closer, and the card
     had become a real button in D4. The card's button is watched too
     (measured after: the bar hides while it is in view and returns once it
-    leaves)."""
+    leaves). Since Oct 30 2026 it watches the hero's action, not the hero: on a
+    phone the report comes first, so the hero could fill the screen with no way
+    to act in sight."""
     script = LANDING.split('const stickybar = document.getElementById("stickybar");')[1] \
         .split("\n}\n")[0]
     watched = re.search(r"const watched = \[(.*?)\]", script, re.S).group(1)
-    for source in ('document.querySelector(".hero")', 'document.getElementById("season-cta")',
+    assert 'document.querySelector(".hero")' not in watched
+    for source in ('document.getElementById("watch-form")', 'document.getElementById("hero-open")',
+                   'document.getElementById("season-cta")',
                    'document.querySelector(".closer")'):
         assert source in watched, f"the sticky bar no longer watches {source}"
     assert 'id="season-cta"' in BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]

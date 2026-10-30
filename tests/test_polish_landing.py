@@ -636,10 +636,11 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
     assert "min-height:1.45em" in _rule(".livecall")
     assert "@media (max-width:600px){.livecall{min-height:2.9em;}}" in CSS
     # On a phone it stays with the live link, under the hero's "See a real
-    # report" and above the phone (sales review: one secondary group); its
-    # room is reserved, so its arrival moves nothing.
+    # report" (sales review: one secondary group), after the phone since a
+    # phone meets the report first (Oct 30 2026); its room is reserved, so its
+    # arrival moves nothing.
     narrow = _blocks("@media (max-width:880px)")
-    assert ".hero .phonewrap{order:9;" in narrow and ".hero .livecall{order:8;}" in narrow
+    assert ".hero .phonewrap{order:5;" in narrow and ".hero .livecall{order:9;}" in narrow
 
 
 def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season() -> None:

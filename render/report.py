@@ -621,6 +621,23 @@ PROJECTION_ONLY_GATES = ("we don't put odds on defenses",
                          "held: an input")
 
 
+# A defense's own reason, within PROJECTION_ONLY_GATES: "projection only" told a
+# reader what the row lacks; this tells them it's the rule, not a gap (owner
+# review, Oct 30 2026). Words only: the gate itself doesn't move.
+DEFENSE_GATE_PREFIX = "we don't put odds on defenses"
+# Slots a lineup usually fills with one player, where "your only" is the plain
+# fact. Elsewhere other starters share the position, so "your only RB" is false.
+ONE_STARTER_SLOTS = ("QB", "TE", "K", "DEF")
+
+
+def only_option(slot: str) -> str:
+    """A row with nobody to compare against reads as settled, not as a gap
+    ("no bench QB" read like an error code beside rows showing odds)."""
+    if slot in ONE_STARTER_SLOTS:
+        return f"your only {slot}"
+    return f"no other {slot} on your bench".replace("  ", " ")
+
+
 def note_gates(slots) -> set[str]:
     """The no-odds reasons the note under the lineup names: one per gate a
     row actually prints. An OUT defense prints a dash and no "projection
@@ -676,7 +693,10 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # the projection would be, so "projection only" named a projection
         # the row does not show (final review PIPE-6) — the row's OUT flag
         # says it all, as it does for an on-bye QB.
-        return "" if slot.get("status") == "out" else "projection only"
+        if slot.get("status") == "out":
+            return ""
+        return ("no odds on defenses" if gate.startswith(DEFENSE_GATE_PREFIX)
+                else "projection only")
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
         # a starter with five games and a usage line counting four of them —
@@ -705,7 +725,7 @@ def row_label(slot: Mapping[str, Any]) -> str:
     if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):
-        return f"no bench {slot.get('slot', '')}".strip()
+        return only_option(slot.get("slot", ""))
     if gate.startswith("no eligible player") or not gate:
         return ""
     if starter_ok and alt:

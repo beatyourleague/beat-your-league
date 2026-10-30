@@ -1547,6 +1547,14 @@ draw the screen at 1x on phones. A bench player named on a starter's row reads "
 landing story: one email decides your lineup → your team, not a ranking → read a real one first
 → one refundable payment; "about a minute", never "ninety seconds".
 
+**Rows without odds read as decisions; a phone meets the report first (owner review, Oct 30
+2026).** Odds never move, and 3 of 9 is typical (874 odds across 240 rosters, about 3.6 a report),
+so the sample stays. The words changed: `render.report.only_option` ("your only QB"; "no other RB
+on your bench", because two RBs start) and "no odds on defenses", with "Rows without odds say why."
+on the landing. On phones the hero runs headline, sentence, apps line, phone, form: the apps line
+stays above the phone (M6), and the sticky bar watches the hero's action, not the hero, so the
+action stays in reach while the report fills the screen.
+
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
 Mac from read-only sources (the counter, Stripe, the Worker, Resend, the public Actions API, the

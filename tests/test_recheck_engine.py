@@ -537,7 +537,7 @@ def test_a_defense_row_says_defenses_carry_no_odds_whoever_is_on_the_bench() -> 
         [pick] = optimal_lineup(season, team_week, model, players, availability, 5)
         assert pick.player_id == "DEF-SEA" and pick.confidence is None
         assert pick.confidence_gate == DEFENSE_GATE, (byes, pick.confidence_gate)
-    assert rr.row_label({"confidence_gate": DEFENSE_GATE}) == "projection only"
+    assert rr.row_label({"confidence_gate": DEFENSE_GATE}) == "no odds on defenses"
 
 
 # --------------------------------------------------------------------- #

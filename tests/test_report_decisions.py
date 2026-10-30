@@ -769,7 +769,7 @@ def test_a_defense_row_always_says_projection_only() -> None:
     assert not any(s.get("confidence") is not None for s in report["lineup"])
     row = report["lineup"][1]
     row.update(confidence_gate=DEFENSE_GATE, slot="DEF")
-    assert row_label(row) == "projection only"
+    assert row_label(row) == "no odds on defenses"
     assert row_marked(row, mixed=False), "a week with no odds anywhere still says it"
     for name, page in _surfaces(report).items():
         assert "projection only" in page, name
@@ -794,8 +794,8 @@ def test_the_only_quarterback_says_so_in_a_week_with_odds() -> None:
     # would be.
     qb = re.search(r'<span class="fslot">QB</span>.*?</div>', page, re.S)
     # Sentence case on the row since Oct 30 2026 (render.anatomy); the words are row_label's.
-    assert '<span class="fnc">No bench QB</span>' in qb.group(0)
-    assert "QB     Quinn Only" in text_summary(report) and "no bench QB" in text_summary(report)
+    assert '<span class="fnc">Your only QB</span>' in qb.group(0)
+    assert "QB     Quinn Only" in text_summary(report) and "your only QB" in text_summary(report)
 
 
 def test_a_starter_row_carries_his_season_and_last_three() -> None:
@@ -1115,3 +1115,16 @@ def test_one_deadline_prints_in_one_colour() -> None:
     calm["checklist"].append({"action": "Check X has been elevated",
                               "deadline": "before Monday's kickoff", "urgency": "deadline"})
     assert not anatomy.early_week(calm)
+
+
+def test_a_row_with_nobody_to_compare_reads_as_settled_and_stays_true() -> None:
+    """"No bench QB" read like an error code beside rows with odds (owner review,
+    Oct 30 2026). "Your only" is the plain fact on a one-starter slot; two RBs
+    start, so "your only RB" would be false and the wording says what is true."""
+    from render.report import only_option
+    gate = "nobody on your bench to compare"
+    for slot, text in (("QB", "your only QB"), ("TE", "your only TE"), ("K", "your only K"),
+                       ("RB", "no other RB on your bench"), ("WR", "no other WR on your bench"),
+                       ("FLEX", "no other FLEX on your bench")):
+        assert only_option(slot) == text
+        assert row_label({"confidence_gate": gate, "status": "active", "slot": slot}) == text
