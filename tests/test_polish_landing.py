@@ -513,8 +513,8 @@ def test_the_capture_answers_the_eye_with_no_new_words() -> None:
     assert handler.index("if (!res.ok)") < ok < handler.index("You're on the list.")
     assert handler.count("watchnote ok") == 1
     for kept in ("That email doesn't look right.", "You're on the list. ",
-                 "We couldn't accept that address — check it for typos. Nothing was recorded.",
-                 "That didn't send — check your connection and try again. Nothing was recorded."):
+                 "We couldn't accept that address. Check it for typos. Nothing was recorded.",
+                 "That didn't send. Check your connection and try again. Nothing was recorded."):
         assert kept in handler, kept
     assert "@keyframes callring{from{opacity:.6;transform:none}" in CSS
     click = LANDING.split('document.addEventListener("click", (event) => {')[1].split("\n});")[0]
@@ -690,8 +690,8 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     sub = _flat(re.search(r'<p class="sub">(.*?)</p>', HERO, re.S).group(1))
     # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
     # their own app, and "sets your lineup" read as automation.
-    assert sub == ("Every Tuesday, one email decides your lineup for your exact roster — all "
-                   "the way to your title game.")
+    assert sub == ("Every Tuesday, one email decides your lineup for your roster, all the "
+                   "way to your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     # The comparison contrasts a rankings list with the report (Oct 25
     # 2026: the weakest answer was "why pay when rankings are free"), now

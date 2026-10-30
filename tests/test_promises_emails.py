@@ -65,7 +65,7 @@ def test_an_offseason_welcome_promises_no_report_today() -> None:
         assert "Today:" not in msg.text
         assert "When next season's schedule is out: Your first report" in msg.text
     live = welcome_message("a@example.com", "season", "abc123def0", "2026")
-    assert live.subject == "You're in — your first report is on its way"
+    assert live.subject == "You're in. Your first report is on its way"
     assert "Today: Your first report" in live.text
 
 
@@ -169,7 +169,7 @@ def test_the_reply_route_is_offered_only_where_it_can_be_applied(monkeypatch) ->
     monkeypatch.setenv("UPDATE_SECRET", "s")
     monkeypatch.setenv("FORM_ENDPOINT", "https://w.test")
     assert "Reply to this email" in rr.update_line(meta)
-    assert "reply to any report" in welcome_message("a@example.com", "season",
+    assert "Reply to any report" in welcome_message("a@example.com", "season",
                                                     "abc123def0", "2026").text
 
 

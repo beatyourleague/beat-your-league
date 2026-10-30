@@ -34,7 +34,11 @@ TERMS_VERSIONS = [
     # The refund window moved to the first weekly report (owner decision), the
     # site's nav (C2, with League Pass) and C5's "a second purchase after a
     # refund is final". No buyer had ever paid, so no change notice was owed.
-    ("2026-10-30", "49eab6541ab0c527"),
+    # Then, before it was ever published: the plain-words pass (terms §3-§4 lead
+    # with the 2026 pass, the 2027 plans under their own heading; no clause moved
+    # in substance). The 2026-10-30 version never went live, so its digest was
+    # replaced rather than a new version added.
+    ("2026-10-30", "1e54e86e1716742f"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")

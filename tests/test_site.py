@@ -381,7 +381,7 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     assert re.search(r"first game of the week that report\s+covers", section, re.I), \
         "\"kicks off\" needs the game it means, or Sunday's slate is an argument"
     assert re.search(r"weekly report covers one week", section, re.I)
-    assert re.search(r"roster report[^.]*isn't one", section, re.I)
+    assert re.search(r"roster report[^.]*isn't\s+a weekly report", section, re.I)
     assert re.search(r"window runs until\s+the week your first weekly report covers kicks off",
                      section, re.I), \
         "a buyer who joins mid-week has a roster report and no stated close"
@@ -537,7 +537,7 @@ def test_an_open_checkout_with_no_links_still_warns_before_the_work() -> None:
         return                      # checkout can actually complete; nothing to warn about
     assert 'id="closed-note"' in JOIN, \
         "checkout is open with no payment links and the picker has no warning"
-    assert re.search(r"isn't open just yet", JOIN), \
+    assert re.search(r"isn't open yet", JOIN), \
         "the closed-checkout message is gone while the links are still empty"
     # And it is decided from the LINKS, not hand-toggled — a hand-set banner
     # is one someone forgets to remove the day the links land.
@@ -652,7 +652,7 @@ def test_no_payment_details_are_collected_by_us() -> None:
     for page in (LANDING, JOIN):
         assert not re.search(r'type="(card|cc-number|creditcard)"', page, re.I)
         assert not re.search(r'autocomplete="cc-', page, re.I)
-    assert re.search(r"never touch our systems", JOIN, re.I)
+    assert re.search(r"never see, transmit or store\s+your card details", JOIN, re.I)
 
 
 def test_join_collects_only_the_stated_minimum() -> None:
@@ -692,7 +692,7 @@ def test_nothing_is_claimed_saved_when_nothing_recorded_it() -> None:
     assert 'id="done-head"' in JOIN
     assert re.search(r"your roster isn't saved", JOIN_PROSE, re.I), \
         "the not-open path must admit the roster was not stored"
-    assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
+    assert re.search(r"isn't open yet", JOIN_PROSE, re.I)
 
 
 
@@ -951,7 +951,7 @@ def test_signup_degrades_honestly_without_a_contact_route() -> None:
     filled in, carrying the typed address and a link holding the roster — but
     only there (no list, a contact inbox), and its words never say anything
     was sent or saved, because a mail app may open nothing."""
-    assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
+    assert re.search(r"isn't open yet", JOIN_PROSE, re.I)
     code = _js_code(JOIN)
     assert code.count("mailto:") == 1, "one mail path, and only one"
     ask = _js_function(JOIN, "askByMail")
@@ -967,7 +967,7 @@ def test_signup_degrades_honestly_without_a_contact_route() -> None:
     assert action.index("if (NOTIFY_LIST_ENDPOINT) return \"list\";") < \
         action.index('if (CONTACT_EMAIL) return "mail";')
     line = prose(re.sub(r'"\s*\+\s*"', "", _js_function(JOIN, "mailLineWords")))
-    assert "it opens your mail app with a request to us filled in" in line
+    assert "Press below to open your mail app with a request to us filled in" in line
     assert "Send it and we'll email you once, the morning it opens" in line
     # No instruction anywhere on the page sends a buyer back to the front page.
     assert "front page" not in prose(markup_only(JOIN)) + prose(code)
@@ -1497,7 +1497,7 @@ def test_the_contract_describes_the_product_actually_sold() -> None:
     # a deceptive-pricing pattern.
     assert re.search(r"Founding subscribers renew at their founding price", legal)
     # 2026 sells one-time passes; the founding promise is the 2027 price.
-    assert re.search(r"Founding rate", LANDING) and re.search(r"\$39 USD, never more", legal)
+    assert re.search(r"Founding rate", LANDING) and re.search(r"\$39 USD</b> when the 2027 season opens", legal)
 
 
 def test_renewal_terms_are_in_sight_of_the_checkout_button() -> None:
@@ -1658,14 +1658,17 @@ def test_league_pass_states_its_own_terms() -> None:
                      r"no-questions refund", r"18\+", r"not affiliated"):
         assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
     # It must not promise a report to managers who never signed up.
-    assert re.search(r"Managers who never sign up simply don't get a report", prose_page, re.I)
+    assert re.search(r"Managers who never sign up don't get a report", prose_page, re.I)
     assert re.search(r'href="terms\.html"', LEAGUE_PASS)
 
 
 def test_league_pass_makes_no_win_promise() -> None:
     prose_page = prose(LEAGUE_PASS)
     assert re.search(r"not a guarantee", prose_page, re.I)
-    assert re.search(r"somebody finishes last|exactly one champion", prose_page, re.I)
+    # The line that said one team still wins went with the owner's plain-words
+    # pass (Oct 30 2026); what must hold is that nothing here promises a win.
+    assert not re.search(r"\bwin(?:s|ning)?\b[^.]{0,40}\b(?:league|title|championship)\b|"
+                         r"\bguarantee[sd]?\b[^.]{0,20}\bwin", prose_page, re.I)
 
 
 def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
@@ -2265,10 +2268,10 @@ def test_launch_notify_uses_the_list_endpoint_never_the_seat_form() -> None:
     # outcome cannot slip in without both.
     messages = re.findall(r'show(?:Error\("err-email", |Ok\()(.*?)\);', prose(closed), re.S)
     assert len(messages) >= 3, messages
-    kept = [m for m in messages if "we kept" in m]
-    assert len(kept) == 1 and "we kept your email and this roster" in kept[0], messages
+    kept = [m for m in messages if "We kept" in m]
+    assert len(kept) == 1 and "We kept your email and this roster" in kept[0], messages
     for message in messages:
-        assert "isn't open just yet" in message, f"a not-open outcome hides it: {message}"
+        assert "isn't open yet" in message, f"a not-open outcome hides it: {message}"
         if message not in kept:
             assert "isn't saved" in message, f"a not-open outcome implies a save: {message}"
     # The kept one is a done message, said only after the backend accepted it.
@@ -3083,7 +3086,7 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     # The header chips are gone (truth pass): the price lives in the pitch,
     # beside its terms, so no stale chip can name another mode's price.
     assert "setChips" not in JOIN and 'id="header-chips"' not in JOIN
-    assert "$69 for your whole league, rest of season — one payment" in prose(pass_branch)
+    assert "$69 for your whole league, rest of season: one payment" in prose(pass_branch)
     # Monthly is a function since Oct 9 2026, because the buyer can now switch
     # to it on the page as well as arrive with ?plan=monthly.
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
@@ -3734,7 +3737,7 @@ def test_the_league_pass_is_never_sold_before_its_seats_can_be_claimed() -> None
     assert got == ["", "https://buy.stripe.com/x", ""]
     # A closed pass says so up front and in its own name, never as a $99 button.
     assert "League Pass opens soon" in JOIN
-    assert "The League Pass isn't open just yet" in JOIN
+    assert "The League Pass isn't open yet" in JOIN
 
 
 def _funnel_pages() -> dict[str, str]:
@@ -4514,7 +4517,7 @@ def test_a_seat_confirmation_says_seat_on_the_confirm_page() -> None:
                                     "follows the same day"), seat["after"]
     assert "seats are all taken" in seat["after"] and "Confirmed" not in seat["after"]
     closed = _run_confirm_page(f"?c={good}&k=seat", "")
-    assert closed["after"] == "Seats aren't open just yet — nothing was set up."
+    assert closed["after"] == "Seats aren't open yet. Nothing was set up."
     assert closed["posted"] == []
     broken = _run_confirm_page("?c=zz&k=seat", "https://w.test")
     assert broken["before"]["disabled"] and "reply to any report" not in broken["before"]["msg"]
@@ -5109,8 +5112,8 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
             "(8, 10, 12 or 14), filled in the order members confirm them by email") in terms
     assert TERMS_VERSION >= "2026-10-17", "a change to the terms must move their version"
     lp = prose(LEAGUE_PASS)
-    assert ("As many as your league has teams — one for every other manager, plus one to "
-            "spare for a co-manager. Seats go to the managers who confirm theirs first") in lp
+    assert ("As many as your league has teams: one for every other manager, plus one "
+            "spare for a co-manager. Seats go to the managers who confirm first") in lp
     assert "and each gets the report, while your league's seats last." in lp
     assert ("Your League Pass covers your own team, so you still get one report a week, not "
             "two. Both are one payment, so nothing keeps billing") in lp

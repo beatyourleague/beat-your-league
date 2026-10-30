@@ -573,7 +573,7 @@ def test_the_launch_email_names_the_league_pass_only_when_it_can_be_bought(monke
     assert lead not in body()
     monkeypatch.setattr(waitlist, "_league_pass_live", lambda: True)
     assert lead in body() and "https://beatyourleague.com/league-pass.html" in body()
-    assert body().index("one per person") < body().index(lead) < body().index("/join/"), \
+    assert body().index("One per person") < body().index(lead) < body().index("/join/"), \
         "the line belongs after the offer paragraph"
     assert body().count("league-pass.html") == 1
     page = (SITE / "join" / "index.html").read_text(encoding="utf-8")
@@ -677,7 +677,7 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert "$" not in visible and not re.search(r"better than|more accurate|grade", visible, re.I)
     assert f"<title>{name} fantasy football start/sit report for your roster — Beat Your League</title>" in page
     assert (f'<meta name="description" content="Copy your {name} fantasy roster and paste it, no '
-            f"login: every Tuesday a report decides your lineup — every slot decided, close calls "
+            f"login. Every Tuesday a report decides your lineup: every slot decided, close calls "
             f'explained, byes checked through Week 17.">') in page
     assert f"<h1>Your {name} roster, decided every Tuesday</h1>" in page
     assert f'<link rel="canonical" href="https://beatyourleague.com/{slug}/">' in page

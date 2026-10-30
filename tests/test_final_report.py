@@ -479,13 +479,13 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
 
     sunday = datetime(2026, 10, 25, 15, 0, tzinfo=timezone.utc)
     subject, body, preview = wl.compose("https://x/join/", "S", CLOCK, sunday)
-    assert subject == "It's open — your Week 8 lineup lands Tuesday"
+    assert subject == "It's open: your Week 8 lineup lands Tuesday"
     assert "in time for Week 8" in body and "Week 8" in preview
     flat = " ".join(body.split())
     for term in ("$29, one payment", "nothing renews",
                  "Refunds are no-questions until your first weekly report's week kicks off",
                  "every slot decided, every close call explained", "if/then",
-                 "only one you are getting", 'reply "unsubscribe"'):
+                 "only email you'll get", 'reply "unsubscribe"'):
         assert term in flat, term
     assert "type your roster once" not in flat.lower()
     assert body.count("http") == 1
@@ -495,7 +495,7 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
     tuesday = {**CLOCK, "week": 8, "lands_on": "2026-11-03",
                "first_kickoff": "2026-10-30T00:15:00Z"}
     assert wl.compose("u", "S", tuesday, datetime(2026, 10, 28, tzinfo=timezone.utc))[0] \
-        == "It's open — get your Week 8 lineup before kickoff"
+        == "It's open: get your Week 8 lineup before kickoff"
     # A clock nobody rebuilt, or out of season: no week named.
     stale = datetime(2026, 11, 5, tzinfo=timezone.utc)
     assert wl.compose("u", "S", CLOCK, stale)[0] == wl.SUBJECT
@@ -524,9 +524,9 @@ def test_the_launch_email_keeps_the_saved_roster_line(monkeypatch) -> None:
     sunday = datetime(2026, 10, 25, 15, 0, tzinfo=timezone.utc)
     plain, saved = wl.messages(["a@example.com", "b@example.com"], "https://x/join/",
                                {"b@example.com": ref}, clock=CLOCK, now=sunday)
-    assert plain.subject == saved.subject == "It's open — your Week 8 lineup lands Tuesday"
+    assert plain.subject == saved.subject == "It's open: your Week 8 lineup lands Tuesday"
     assert wl.SAVED_LINE in saved.text and wl.SAVED_LINE not in plain.text
-    assert "<title>It&#x27;s open — your Week 8 lineup lands Tuesday</title>" in saved.html
+    assert "<title>It&#x27;s open: your Week 8 lineup lands Tuesday</title>" in saved.html
     assert plain.unsubscribe.endswith("?subject=unsubscribe")
 
 

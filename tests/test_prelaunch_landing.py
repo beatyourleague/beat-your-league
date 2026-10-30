@@ -349,7 +349,7 @@ def test_the_pass_card_promises_a_first_report_not_a_first_weekly_one() -> None:
     }
     for name, text in surfaces.items():
         assert "the first usually within the hour" not in text, name
-        assert "your first report usually lands within the hour of joining" in text, name
+        assert "Your first report usually lands within the hour" in text, name
 
 
 def test_the_playoff_swap_never_relabels_the_closed_button() -> None:

@@ -191,7 +191,7 @@ def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:
     week = meta.get("week")
     if isinstance(week, int) and week + 1 >= TRIAL_PLAYOFF_FROM_WEEK:
         offer = ("Every Tuesday through your title game: one payment, nothing "
-                 "renews — the join page shows this week's price.")
+                 "renews. The join page shows this week's price.")
     else:
         offer = (f"Every Tuesday through your title game: the {SEASON_PRICE} "
                  f"Rest-of-Season Pass, one payment, nothing renews.")

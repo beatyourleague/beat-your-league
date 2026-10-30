@@ -192,7 +192,7 @@ def test_the_join_header_carries_the_price_with_its_terms_and_no_chips() -> None
     assert 'id="header-chips"' not in page and "beta-chips" not in page
     pitch = re.sub(r"\s+", " ", re.search(r'<p id="header-pitch">(.*?)</p>', page, re.S).group(1))
     assert pitch == ("Every lineup from here to your title game, decided for your roster and in "
-                     "your inbox every Tuesday. <b>$29 for the rest of the season</b> — one "
+                     "your inbox every Tuesday. <b>$29 for the rest of the season</b>: one "
                      "payment, no subscription, and a full refund until your first weekly "
                      "report's week kicks off.")
     label = re.search(r"function closedLabel\(action\) \{.*?\n\}\n", page, re.S).group(0)

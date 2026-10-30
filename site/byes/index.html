@@ -330,7 +330,7 @@
     <div class="kicker">Free · no login · no email needed</div>
     <h1>Bye week planner</h1>
     <p class="sub">Paste your roster from ESPN, Yahoo, Sleeper or CBS. See every week from
-    now through Week 17 where a bye leaves a starting spot empty — fantasy playoff weeks
+    now through Week 17 where a bye leaves a starting spot empty, fantasy playoff weeks
     included.</p>
     <div class="progress needs-js" aria-hidden="true"><span class="s1 on">1 · Lineup</span><span class="s2">2 · Roster</span><span class="s3">3 · Byes</span></div>
   </div>
@@ -409,7 +409,7 @@ Baltimore Ravens
   </section>
 
   <section class="cta" id="cta">
-    <h2>Want this checked every Tuesday&nbsp;— with your whole lineup set?</h2>
+    <h2>Want this checked every Tuesday, with your whole lineup set?</h2>
     <p class="lead">The weekly report checks every bye still ahead and decides every slot:
     every close call explained, an if/then for late news.<span id="cta-closed"> Checkout
     isn't open yet.</span></p>
@@ -505,7 +505,7 @@ if (!window.R || !window.B) {
   const note = document.createElement("p");
   note.className = "nojs";
   note.setAttribute("role", "alert");
-  note.textContent = "The player list didn't load — reload the page. Every bye week " +
+  note.textContent = "The player list didn't load. Reload the page. Every bye week " +
     "this season is listed below.";
   document.querySelectorAll(".needs-js").forEach((el) => { el.style.display = "none"; });
   document.getElementById("main").prepend(note);
@@ -1174,15 +1174,15 @@ $("cta-form").addEventListener("submit", async (event) => {
       if (window.bylCount) window.bylCount("waitlist", "closed");
       note.className = "ctanote ok";
       note.textContent = ref
-        ? "Checkout isn't open just yet — we kept your email and this roster. " +
+        ? "Checkout isn't open yet. We kept your email and this roster. " +
           "The morning it opens you'll get one email, with a link that brings this " +
           "roster back ready to check out."
         : "You're on the list. One email when signups open, nothing else.";
     } catch (err) {
       button.disabled = false;
       note.textContent = err && err.refused
-        ? "We couldn't accept that address — check it for typos. Nothing was recorded."
-        : "That didn't send — check your connection and try again. Nothing was recorded.";
+        ? "We couldn't accept that address. Check it for typos. Nothing was recorded."
+        : "That didn't send. Check your connection and try again. Nothing was recorded.";
     }
     return;
   }
@@ -1209,12 +1209,12 @@ function shareLine(text, line, status) {
   const byHand = () => {
     window.getSelection().selectAllChildren(line);
     status.dataset.ok = "";
-    status.textContent = "The message is selected — copy it and paste it in the group chat.";
+    status.textContent = "The message is selected. Copy it and paste it in the group chat.";
   };
   const copyIt = () => {
     if (!(navigator.clipboard && navigator.clipboard.writeText)) return byHand();
     navigator.clipboard.writeText(text).then(
-      () => { status.dataset.ok = "1"; status.textContent = "Copied — paste it in the group chat."; },
+      () => { status.dataset.ok = "1"; status.textContent = "Copied. Paste it in the group chat."; },
       byHand);
   };
   if (!navigator.share) return copyIt();

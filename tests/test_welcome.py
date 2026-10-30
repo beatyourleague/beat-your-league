@@ -96,7 +96,7 @@ def test_a_seat_holder_is_never_shown_billing_terms() -> None:
     msg = _msg("seat")
     for doc in (msg.html, msg.text):
         assert re.search(r"nothing bills you", doc, re.I)
-        assert re.search(r"never\s+quietly convert into a charge", doc, re.I)
+        assert re.search(r"your reports stop and nothing is charged", doc, re.I)
         for price in (SEASON_PRICE, MONTHLY_PRICE, PASS_PRICE):
             assert price + " USD" not in doc
         assert not re.search(r"renews", doc, re.I)

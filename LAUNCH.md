@@ -962,7 +962,7 @@ on the card and in the terms, and build the roster roll — hold reports until a
 roster is confirmed — before July 2027.
 
 **The founding price, and how 2026 buyers hear about 2027.** The site promises a 2026 buyer
-"your 2027 season pass is $39, never more", but nothing says how long "never" lasts, what a
+"your 2027 season pass is $39", but nothing says how long that price lasts, what a
 2026 League Pass buyer gets, or that we may email them when 2027 opens — the privacy page
 lists no such email, and a one-time buyer gets no renewal notice. *Recommend:* section 12's
 proposed sentences, before the first sale. Stripe already holds every 2026 buyer, so the
@@ -1160,7 +1160,7 @@ have a statutory cancellation right on top of our refund.
    answered, *recommend* treating a Quebec postal code (starting G, H or J) like a buyer from
    outside the US and Canada: refund, with an apology.
 5. **The founding price and the 2027 email.** Is the proposed wording below enough to make
-   "never more" definite, and is one email to 2026 buyers when 2027 opens covered by CASL's
+   the $39 price definite, and is one email to 2026 buyers when 2027 opens covered by CASL's
    two-year existing business relationship (Canadians) and CAN-SPAM's opt-out (US)? And CASL
    express consent for the planned "Email me when 2027 opens" box: the sender's name, mailing
    address, a contact and a withdrawal statement beside it.

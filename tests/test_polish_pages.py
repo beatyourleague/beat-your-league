@@ -402,7 +402,7 @@ def test_checkout_not_open_is_a_notice_and_a_failed_send_is_still_an_error() -> 
     # Four since Oct 30 2026: the mail-app request (askByMail, which sits
     # between the handler and the hand-off) is a not-open notice too.
     assert len(info) == 4, calls
-    assert all("isn't open just yet" in re.sub(r'"\s*\+\s*"', "", c) for c in info)
+    assert all("isn't open yet" in re.sub(r'"\s*\+\s*"', "", c) for c in info)
     failed = closed.split(".catch((err) => {", 1)[1].split("});", 1)[0]
     assert "showError(" in failed and '"info"' not in failed
     # A calm card, not a brick alert — and no side bar (contract C7).

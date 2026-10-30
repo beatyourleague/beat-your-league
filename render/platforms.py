@@ -62,7 +62,7 @@ PLATFORMS = (
         slug="espn", name="ESPN",
         lineup="ESPN's default lineup is the one we call Standard: QB, 2 RB, 2 WR, TE, "
                "FLEX, K and D/ST.",
-        paste="A copy of ESPN's roster table works as it comes — positions, teams, "
+        paste="A copy of ESPN's roster table works as it comes: positions, teams, "
               "opponents, projections and tags like Q, OUT or IR included.",
         pastes=("espn", "espn-table", "espn-desktop", "espn-lines"),
         example=("Josh Allen  QB BUF  OUT", "Saquon Barkley  RB PHI  DTD",
@@ -109,15 +109,15 @@ PLATFORMS = (
 )
 
 TITLE = "{name} fantasy football start/sit report for your roster — Beat Your League"
-DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login: every Tuesday a "
-               "report decides your lineup — every slot decided, close calls explained, byes "
+DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login. Every Tuesday a "
+               "report decides your lineup: every slot decided, close calls explained, byes "
                "checked through Week 17.")
 H1 = "Your {name} roster, decided every Tuesday"
 STEPS = (
     "On a computer, open your team's roster page on {name}. On a phone, skip to step 3.",
     "Select from your first starter down to your last bench player, copy it, and paste it "
     "into the roster box. Extra text rides along fine.",
-    "Or type each name into “Add a player” and tap him — any part of his name finds him.",
+    "Or type each name into “Add a player” and tap him. Any part of his name finds him.",
     "Pick your scoring, league size and starting lineup. {lineup}",
 )
 DOES_LEAD = "Every Tuesday through your title game:"
@@ -126,7 +126,7 @@ DOES = ("every slot decided for that roster",
         "an if/then for questionable starters",
         "the Saturday check, only if Friday's injury report changes your lineup",
         "every bye ahead checked through the playoffs")
-DOESNT = ("It doesn't connect to {name} or set your lineup there — you make the moves. "
+DOESNT = ("It doesn't connect to {name} or set your lineup there. You make the moves. "
           "Roster changed? Update it from the link in any report, or reply with it.")
 PLANNER_LINK = "Free: check your roster's byes through Week 17"
 # The join page's own words for what is scored (site/join/index.html).
@@ -347,7 +347,7 @@ def page(platform: Platform) -> str:
     {site_bar("../")}
     <p class="kicker">For {esc(name)} leagues</p>
     <h1>{esc(H1.format(name=name))}</h1>
-    <p>Paste the roster you already have on {esc(name)} — no login, nothing to connect.
+    <p>Paste the roster you already have on {esc(name)}. No login, nothing to connect.
     Every Tuesday a report built from it decides your lineup for your scoring.</p>
     <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
   </div>

@@ -128,7 +128,7 @@ def test_the_sidebar_refund_limit_is_true_in_every_mode() -> None:
     league." while the sticky sidebar beside it read "— one per person", on
     one screen. The sidebar now says what terms §5 says, in every mode."""
     trust = _flat(JOIN.split('<div class="trust">')[1].split("</div>")[0])
-    assert "one per person (one per league for a League Pass)" in trust
+    assert "One per person (one per league for a League Pass)" in trust
 
 
 def test_every_price_on_the_join_page_has_the_refund_beside_it() -> None:
@@ -370,7 +370,7 @@ def test_the_free_report_pitch_says_what_arrives_not_the_gate() -> None:
     definition — the exception, sold first. It says what lands now."""
     fn = _flat(_js_function(JOIN, "drawTrial"))
     pitch = fn[fn.index('"Free: "'):fn.index("One per person, no card.")]
-    assert "every slot decided" in pitch and "if/then for late news" in pitch
+    assert "Every slot decided" in pitch and "if/then for late news" in pitch
     assert "odds" not in pitch and "injury report" not in pitch
 
 
@@ -434,7 +434,7 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     faqs = next(n for n in graph if n["@type"] == "FAQPage")["mainEntity"]
     ld = next(q for q in faqs if q["name"] == "Is it worth joining mid-season?")
     assert ld["acceptedAnswer"]["text"] == answer
-    assert answer.startswith("Yes — it's built for the playoff push.")
+    assert answer.startswith("Yes. It's built for the playoff push.")
     assert "usually lands within the hour" in answer
     assert "Subscribers alone pay for it" not in LANDING
 
@@ -444,8 +444,8 @@ def test_the_price_cards_first_line_is_the_outcome() -> None:
     report from now…"); it leads with what the buyer gets, and the Playoff
     swap says the same."""
     span = _flat(LANDING.split('id="pass-span">')[1].split("</li>")[0])
-    assert span.startswith("Your lineup decided every Tuesday from now through your title game")
-    assert "Your lineup decided every Tuesday from Week " in _flat(
+    assert span.startswith("Your lineup every Tuesday through your title game")
+    assert "Your lineup every Tuesday from Week " in _flat(
         _js_function(LANDING, "showPlayoffPass"))
 
 

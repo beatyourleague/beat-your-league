@@ -48,7 +48,7 @@ def test_the_day_one_line_names_what_actually_lands() -> None:
                  "Your first one comes the day you sign up"):
         assert gone not in LANDING, gone
     assert TEXT.count("within the hour") >= 5
-    assert "your first report usually lands within the hour" in TEXT
+    assert "Your first report usually lands within the hour" in TEXT
     assert "Set up now and your first report lands today." in LANDING
     # No string the page's scripts can write says it (comments may explain).
     scripts = "\n".join(re.findall(r"<script>(.*?)</script>", LANDING, re.S))

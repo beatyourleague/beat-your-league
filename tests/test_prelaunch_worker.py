@@ -351,7 +351,7 @@ process.stdout.write(JSON.stringify(out));
                           timeout=60)
     assert done.returncode == 0, done.stderr
     closed, bad, plain, network = json.loads(done.stdout)
-    assert closed.startswith("Free reports aren't open just yet") and "typos" not in closed
+    assert closed.startswith("Free reports aren't open yet") and "typos" not in closed
     assert "typos" in bad and "typos" in plain and "connection" in network
 
 

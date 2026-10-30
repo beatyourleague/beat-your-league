@@ -167,9 +167,9 @@ def _plan_terms(plan: str, one_time: bool = False,
             "a seat on your league's League Pass",
             # "Your league's pass", never "your commissioner's": any manager
             # may buy the pass (panel review LP-D7).
-            ["Nothing bills you for this seat, ever — your league's pass "
-             "covers it. If the pass lapses, your reports stop; they never "
-             "quietly convert into a charge.", SEAT_RESET_NOTE],
+            ["Nothing bills you for this seat. Your league's pass covers it. "
+             "If the pass lapses, your reports stop and nothing is charged.",
+             SEAT_RESET_NOTE],
         )
     return (
         f"the season pass — {SEASON_PRICE} USD for the season",
@@ -188,7 +188,7 @@ def _site() -> str:
 _PLAN_NAME = {"season": "season pass", "monthly": "monthly plan",
               "league_pass": "League Pass", "pass": "League Pass"}
 TWICE_HEAD = "One report for this roster"
-TWICE_SUBJECT = "You're in — one report a week for this roster, not two"
+TWICE_SUBJECT = "You're in. One report a week for this roster, not two"
 
 
 def duplicate_line(plan: str, duplicate: str | None) -> str | None:
@@ -245,8 +245,8 @@ def this_is_the_spare(plan: str, duplicate: str | None) -> bool:
 
 
 SEAT_LINK_PENDING = ("Every manager in your league gets their own report at no "
-                     "charge to them. Your league's seat link isn't ready yet — "
-                     "it goes on your weekly reports as soon as it is.")
+                     "charge to them. Your league's seat link isn't ready yet. "
+                     "It goes on your weekly reports as soon as it is.")
 
 
 def _share(plan: str, seat_link: str | None) -> tuple[str, str, str] | None:
@@ -313,8 +313,8 @@ NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
 # _first_file chooses the first report by, in the same run — and only from the
 # cached schedule; NEXT_TODAY stays the fallback when it cannot be read, since
 # it is true whichever report goes out.
-NEXT_TODAY_WEEK = "Your first report — this week's lineup, decided."
-NEXT_TODAY_ROSTER = ("Your first report — the byes ahead on your roster and last "
+NEXT_TODAY_WEEK = "Your first report: this week's lineup, decided."
+NEXT_TODAY_ROSTER = ("Your first report: the byes ahead on your roster and last "
                      "season under your scoring.")
 NEXT_TODAY_THEN = "{day}: your Week {week} report."
 # Where the reports come from, so the first Tuesday one is not filtered. The
@@ -328,8 +328,8 @@ CONTACTS_LINE = "Add {address} to your contacts so Tuesday's report lands in you
 # setup (run/solo.seeded_scope) — EMAILS-90.
 NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
                 "your scoring, with odds on the close calls from Week 4 (Week 2 "
-                "for a 12-team PPR standard lineup), and any bye still ahead — "
-                "playoff weeks included — that leaves a spot nobody on your "
+                "for a 12-team PPR standard lineup), and any bye ahead, "
+                "playoff weeks included, that leaves a spot nobody on your "
                 "roster can fill. Your lineup comes first, and setting it takes "
                 "about a minute.")
 # From Week 4 on, odds already print in every setup, so "odds ... from Week 4"
@@ -337,23 +337,23 @@ NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
 # business #6). The pre-Week-4 promise above stays exactly as it was.
 NEXT_TUESDAY_LIVE = ("The week's report: the lineup we'd set for your roster "
                      "under your scoring, with odds on the close calls, and any "
-                     "bye still ahead — playoff weeks included — that leaves a "
+                     "bye ahead, playoff weeks included, that leaves a "
                      "spot nobody on your roster can fill. Your lineup comes "
                      "first, and setting it takes about a minute.")
 ODDS_EVERYWHERE_FROM = 4
-NEXT_SATURDAY = ("The Saturday check — if Friday's injury report changes your "
-                 "lineup, it tells you the swap. No news, no email.")
+NEXT_SATURDAY = ("If Friday's injury report changes your lineup, the Saturday "
+                 "check tells you the swap. No news, no email.")
 
 
 # Between the season's last game and next season's schedule the intake has no
 # week to build (run.solo.SeasonOver), so nothing goes out "today": the first
 # email is the roster report, once the schedule exists (EMAILS-80/81/89).
 NEXT_SCHEDULE_WHEN = "When next season's schedule is out"
-NEXT_SCHEDULE = ("Your first report: your roster report — the byes that leave "
-                 "you short and last season under your scoring.")
-SEASON_OVER_SUBJECT = ("You're in — your first report comes when next season's "
+NEXT_SCHEDULE = ("Your first report: the byes that leave you short and last "
+                 "season under your scoring.")
+SEASON_OVER_SUBJECT = ("You're in. Your first report comes when next season's "
                        "schedule is out")
-SEAT_SEASON_OVER_SUBJECT = ("Your seat is in — your first report comes when next "
+SEAT_SEASON_OVER_SUBJECT = ("Your seat is in. Your first report comes when next "
                             "season's schedule is out")
 
 
@@ -539,9 +539,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
 
     when = None if seat else _purchase_date(purchased_at)
     opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
-    roster_line = ("Trades and pickups happen — reply to any report with your "
-                   "updated roster and your report follows it from the next "
-                   "Tuesday." if reply_update_works() else "")
+    roster_line = ("Roster changed? Reply to any report with your updated roster "
+                   "and your report follows it from the next Tuesday."
+                   if reply_update_works() else "")
     share = _share(plan, seat_link)
     site = _site()
     terms_url = f"{site}/terms.html" if site.startswith("https://") else ""
@@ -675,10 +675,10 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     # seat since LP-I4), so both subjects say it is on its way — except a
     # second purchase of a roster already served, whose reports carry on.
     subject = ((SEAT_SEASON_OVER_SUBJECT if season_over else
-                "Your seat is in — your first report is on its way") if seat else
+                "Your seat is in. Your first report is on its way") if seat else
                TWICE_SUBJECT if twice else
                SEASON_OVER_SUBJECT if season_over else
-               "You're in — your first report is on its way")
+               "You're in. Your first report is on its way")
     # Keyed on the PURCHASE, not the calendar. `season` moved every August,
     # so the key moved with it and `servable` — the projection of an
     # append-only signup log that is never pruned and never entitlement-checked

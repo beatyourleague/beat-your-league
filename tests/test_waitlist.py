@@ -99,7 +99,7 @@ def test_the_brand_line_no_longer_describes_the_sleeper_product() -> None:
 
 def test_the_announcement_states_its_own_volume_and_exit() -> None:
     body = compose("https://x/join/", "Beat Your League · PO Box 1 · hello@beatyourleague.com", {})[1]
-    assert "only one you are getting" in body
+    assert "only email you'll get" in body
     assert "unsubscribe" in body.lower()
 
 

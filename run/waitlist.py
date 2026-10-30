@@ -71,11 +71,11 @@ EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[a-zA-Z]{2,}$")
 
 # The subject when the season clock (site/week.json) can't say which week a
 # buyer's first weekly report is — absent, stale, or out of season.
-SUBJECT = "Signups are open — your first report lands the day you join"
+SUBJECT = "Signups are open. Your first report lands the day you join"
 # With the clock (final review, copy improvements): the week this buyer's
 # lineup is for, the join page's own rule (``launch_frame``).
-SUBJECT_TUESDAY = "It's open — your Week {week} lineup lands {day}"
-SUBJECT_BEFORE_KICKOFF = "It's open — get your Week {week} lineup before kickoff"
+SUBJECT_TUESDAY = "It's open: your Week {week} lineup lands {day}"
+SUBJECT_BEFORE_KICKOFF = "It's open: get your Week {week} lineup before kickoff"
 
 # Mid-season (owner decision, Oct 18 2026): sold as every lineup from here to
 # the title game. The three things it does, each one the product does in every
@@ -95,9 +95,9 @@ leaves a spot empty, playoff weeks included.
 
   {url}
 
-That is the only email you asked for, so it is the only one you are getting.
-To be taken off the list anyway, reply "unsubscribe" (or use your mail app's
-Unsubscribe button) and you're off within 10 business days; we do not ask why.
+This is the only email you'll get from this list. To be taken off anyway,
+reply "unsubscribe" (or use your mail app's Unsubscribe button) and you're off
+within 10 business days.
 
 {sender}
 """
@@ -106,7 +106,7 @@ OPENING_WEEK = "You asked to hear when this opened. It's open, in time for Week 
 # The join page's own terms line for each pass (site/join/index.html), so the
 # email and the checkout state one offer in one set of words.
 _REFUND = ("Refunds are no-questions until your first weekly report's week "
-           "kicks off — one per person.")
+           "kicks off. One per person.")
 OFFER = ("The Rest-of-Season Pass is {price}, one payment: nothing renews and "
          "nothing more is charged. " + _REFUND)
 OFFER_PLAYOFF = ("The Playoff Pass is {price}, one payment: nothing renews and "

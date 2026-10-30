@@ -39,7 +39,7 @@ def test_a_refused_row_is_not_blamed_on_the_connection() -> None:
     got = _node(src + "\nconsole.log(JSON.stringify([400, 413, 500].map((status) =>"
                 " notSentWords(refusedBy({status}))).concat([notSentWords(new Error('x'))])));")
     assert got[0] == got[1] and "couldn't accept that address" in got[0]
-    assert "check your connection" in got[2] and got[2] == got[3]
+    assert "Check your connection" in got[2] and got[2] == got[3]
     code = _js_code(JOIN)
     # The free report reads the Worker's own reason first (refusedFrom wraps
     # refusedBy): a 403 "free reports are not open" is not a typo.

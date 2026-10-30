@@ -425,11 +425,11 @@
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Every lineup from here to your title game, decided for your
-    roster and in your inbox every Tuesday. <b>$29 for the rest of the season</b> — one
+    roster and in your inbox every Tuesday. <b>$29 for the rest of the season</b>: one
     payment, no subscription, and a full refund until your first weekly report's week
     kicks off.</p>
-    <div class="note" id="closed-note" style="display:none">Checkout isn't open just
-    yet. You're welcome to set up now: once you check your roster it stays in this
+    <div class="note" id="closed-note" style="display:none">Checkout isn't open
+    yet. You can set up now: once you check your roster it stays in this
     page's address, so a bookmark brings it back.</div>
   </div>
 </header>
@@ -500,7 +500,7 @@
     TE, FLEX, K and DEF. Superflex adds a second flex that can take a quarterback.</div>
     <!-- After the settings it vouches for, so it is ticked having seen them. -->
     <label class="settings-ok" id="settings-ok-wrap" style="display:none"><input
-      type="checkbox" id="settings-ok"> These are my league's settings now —
+      type="checkbox" id="settings-ok"> These are my league's settings now:
       scoring, league size and starting lineup.</label>
   </section>
 
@@ -553,7 +553,7 @@ Baltimore Ravens
       <p class="terms-line" id="terms-line">The Rest-of-Season Pass is <b>$29, one
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
       your first weekly report's week kicks off (or a week after it reaches you, if
-      we send it late) — one per person, and a second purchase after a refund is final.</p>
+      we send it late). One per person, and a second purchase after a refund is final.</p>
       <p class="terms-line" id="mail-line" hidden></p>
       <button id="submit" type="submit">Continue to checkout — $29</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
@@ -579,14 +579,14 @@ Baltimore Ravens
              (OPS-R1, run/intake.py sweep_seats): the next hourly run mails
              the button, so nothing has been emailed yet at submit
              (FUNNEL F11's rule for updates, applied to seats). -->
-        <li id="seat-note" style="display:none">There's nothing for you to pay — the
+        <li id="seat-note" style="display:none">There's nothing for you to pay. The
         seat comes out of your league's League Pass, and you get your <b>own</b>
         report, built from the roster you just entered. We'll email a button to
-        the address you entered, usually within the hour: press it and your seat
+        the address you entered, usually within the hour. Press it and your seat
         is usually set up within the hour. Nothing is set up until it's pressed, and the
-        button works for 7 days. Your first report lands the day you confirm —
+        button works for 7 days. Your first report lands the day you confirm:
         this week's report if it's Week 2 or later and the week's games haven't
-        started, otherwise a report on your roster as it stands — then a new one every Tuesday. If
+        started, otherwise a report on your roster as it stands. Then a new one every Tuesday. If
         it can't be matched to an active League Pass, or your league's seats are all
         taken, we email you to say so.</li>
         <!-- What the intake actually does (run/updates.py validate_requests),
@@ -597,22 +597,22 @@ Baltimore Ravens
         reports go to and the roster or settings differ from the ones on file,
         we'll email that address a button to confirm the change, usually within
         the hour (up to three requests a day). Press it within 7 days and your next
-        report uses this roster and these settings — and Saturday's final check too,
-        if you press it by Friday night (ET). Nothing changes until it's pressed.
+        report uses this roster and these settings. Press it by Friday night (ET) and
+        Saturday's final check uses them too. Nothing changes until it's pressed.
         More than one team on this address? Use the update link in that team's own
         report.</li>
         <li id="trial-note" style="display:none">If this address hasn't had a free
         report this season and doesn't belong to a pass holder, it's built from the roster you just
         entered and usually lands within the hour. From the week's first kickoff
         until Tuesday it waits for the next week's report, so it's never about games
-        already underway. One free report per person — nothing to pay, no card.</li>
-        <li id="pay-note">Card details never touch our systems — Stripe handles the
-        payment and we never see, transmit or store them.</li>
+        already underway. One free report per person. Nothing to pay, no card.</li>
+        <li id="pay-note">Stripe handles the payment. We never see, transmit or store
+        your card details.</li>
         <li id="renew-note">The Rest-of-Season Pass is <b>$29, one payment</b>: nothing
         renews and nothing more is charged.</li>
         <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
         until your first weekly report's week kicks off (or a week after it reaches
-        you, if we send it late) — one per person, and a
+        you, if we send it late). One per person, and a
         second purchase after a refund is final.
         Nothing to cancel: your pass is one payment and
         <a href="../terms.html#cancel">ends on its own</a> after the season's last report.</li>
@@ -634,17 +634,17 @@ Baltimore Ravens
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
     <span>Full refund, no questions, until your first weekly report's week kicks off
-      (or a week after it reaches you, if we send it late) — one per person (one per
+      (or a week after it reaches you, if we send it late). One per person (one per
       league for a League Pass)</span>
-    <span>One payment — nothing renews, nothing to cancel</span>
-    <span>No league login, no password — just your roster</span>
+    <span>One payment. Nothing renews, nothing to cancel</span>
+    <span>No league login, no password</span>
   </div>
 </aside>
 </div>
 <footer>
   <div class="wrap">
     We store the minimum: your email, your scoring settings and your roster. We never
-    ask for a password, and we never connect to your league<span id="footer-checkout"> — checkout runs on Stripe's
+    ask for a password, and we never connect to your league<span id="footer-checkout">. Checkout runs on Stripe's
     own secure page, which also asks for your card's country and, where needed, its postal code</span>. Beat Your League —
     analysis, not betting picks. Must be 18+.<br>
     <a href="../terms.html">Terms &amp; refunds</a> &middot;
@@ -680,7 +680,7 @@ if (!window.R) {
   const note = document.createElement("div");
   note.className = "note";
   note.setAttribute("role", "alert");
-  note.textContent = "The player list didn't load — reload the page.";
+  note.textContent = "The player list didn't load. Reload the page.";
   const again = document.createElement("button");
   again.type = "button";
   again.className = "retry";
@@ -1599,15 +1599,15 @@ $("form-email").addEventListener("submit", (event) => {
         state.listed = true;
         state.listedRef = tagged;
         if (window.bylCount) window.bylCount("waitlist", "closed");
-        showOk("Checkout isn't open just yet — we kept your email and this roster. " +
+        showOk("Checkout isn't open yet. We kept your email and this roster. " +
           "The morning it opens you'll get one email, with a link that brings this " +
           "roster back ready to check out.");
         noteClosedFor(link, otherLink);
       }).catch((err) => {
         $("submit").disabled = false;
-        showError("err-email", "Checkout isn't open just yet, and " + (err && err.refused
-          ? "we couldn't accept that address — check it for typos."
-          : "that didn't send — check your connection and try again.") +
+        showError("err-email", "Checkout isn't open yet, and " + (err && err.refused
+          ? "we couldn't accept that address. Check it for typos."
+          : "that didn't send. Check your connection and try again.") +
           " Your roster isn't saved with us, but it's kept in this page's address.");
       });
       return;
@@ -1618,20 +1618,20 @@ $("form-email").addEventListener("submit", (event) => {
       return;
     }
     if (seasonOver()) {
-      showError("err-email", "Checkout isn't open just yet: the season's over, and it " +
+      showError("err-email", "Checkout isn't open yet: the season's over, and it " +
         "opens again for next season. Your roster isn't saved with us.", "info");
       return;
     }
     if (WANTS_PASS && OWN_PLAN_HREF) {
-      showError("err-email", "The League Pass isn't open just yet — nothing was " +
+      showError("err-email", "The League Pass isn't open yet. Nothing was " +
         "charged, and your roster isn't saved with us (it's kept in this page's " +
         "address). A plan for your own team is open now: the link is at the top " +
         "of this page.", "info");
       return;
     }
     showError("err-email", (WANTS_PASS ? "The League Pass" : "Checkout") +
-      " isn't open just yet. Your roster isn't saved with us, but it's kept in " +
-      "this page's address — bookmark it and it comes back.", "info");
+      " isn't open yet. Your roster isn't saved with us, but it's kept in " +
+      "this page's address. Bookmark it and it comes back.", "info");
     return;
   }
   // Stripe locks the address, so it is read back once before the page leaves:
@@ -1655,12 +1655,12 @@ $("form-email").addEventListener("submit", (event) => {
 // never that anything was sent or saved.
 function mailLineWords() {
   if (seasonOver()) {
-    return "Checkout isn't open yet. Press below — it opens your mail app with a " +
+    return "Checkout isn't open yet. Press below to open your mail app with a " +
       "request to us filled in. Send it and we'll email you once, when it opens.";
   }
-  return "Checkout isn't open yet. Press below — it opens your mail app with a " +
+  return "Checkout isn't open yet. Press below to open your mail app with a " +
     "request to us filled in. Send it and we'll email you once, the morning it " +
-    "opens — your roster comes back with it.";
+    "opens, with your roster.";
 }
 function askByMail(email, tagged) {
   const lines = ["Email me once, the morning checkout opens.", "", "Reports go to: " + email];
@@ -1668,7 +1668,7 @@ function askByMail(email, tagged) {
     lines.push("My roster, ready to check out: " +
       new URL("?ref=" + encodeURIComponent(tagged), location.href).href);
   }
-  showError("err-email", "Checkout isn't open just yet, and your request isn't saved " +
+  showError("err-email", "Checkout isn't open yet, and your request isn't saved " +
     "with us until you send that email. Your mail app should open with it filled " +
     "in. Nothing opened? Email " +
     CONTACT_EMAIL + " with the subject \u201cTell me when it opens\u201d" +
@@ -1784,14 +1784,14 @@ function refusedBy(response) {
 function notSentWords(err) {
   if (err && err.closed) return err.closed + " Nothing was saved.";
   return err && err.refused
-    ? "We couldn't accept that address — check it for typos. Nothing was saved."
-    : "That didn't send — check your connection and try again. Nothing was saved.";
+    ? "We couldn't accept that address. Check it for typos. Nothing was saved."
+    : "That didn't send. Check your connection and try again. Nothing was saved.";
 }
 // The Worker says WHY it refused a row (infra/form-worker.js answers JSON
 // {error}), so the page reads it rather than guessing from the status: a
 // 403 "free reports are not open" is not a typo in the visitor's address.
 const WORKER_CLOSED = {
-  "free reports are not open": "Free reports aren't open just yet — we're finishing setup.",
+  "free reports are not open": "Free reports aren't open yet. We're finishing setup.",
 };
 async function refusedFrom(response) {
   const err = refusedBy(response);
@@ -1813,7 +1813,7 @@ function submitSeat(email, ref) {
     return;
   }
   if (!FORM_ENDPOINT) {
-    showError("err-email", "Seats aren't open just yet — we're finishing setup. " +
+    showError("err-email", "Seats aren't open yet. We're finishing setup. " +
       "Nothing was sent or saved.");
     return;
   }
@@ -1849,20 +1849,20 @@ function submitSeat(email, ref) {
 // told — on the page and if they press the button anyway.
 function seatLinkMissingWords() {
   return "Seats are claimed with your league's own seat link. Ask whoever bought " +
-    "your league's League Pass for it — it's in their welcome email and on their " +
-    "weekly reports — and open that link instead.";
+    "your league's League Pass for it, then open that link. It's in their " +
+    "welcome email and on their weekly reports.";
 }
 
 function submitUpdate(email, ref) {
   if (!FORM_ENDPOINT) {
-    showError("err-email", "Roster updates aren't open just yet — we're finishing " +
+    showError("err-email", "Roster updates aren't open yet. We're finishing " +
       "setup. Nothing was sent or saved.");
     return;
   }
   // The settings ride in the ref and replace the ones on file (FUNNEL F1).
   if (!UPDATE_SETTINGS_FROM_LINK && !$("settings-ok").checked) {
-    showError("err-email", "Check your league's settings at step 1 first — an " +
-      "update replaces the ones on file — and tick the box there.");
+    showError("err-email", "Check your league's settings at step 1 first, then " +
+      "tick the box there. An update replaces the ones on file.");
     return;
   }
   fetch(FORM_ENDPOINT, {
@@ -1888,7 +1888,7 @@ function submitUpdate(email, ref) {
 
 function submitTrial(email, ref) {
   if (!FORM_ENDPOINT || !TRIAL_OPEN) {
-    showError("err-email", "Free reports aren't open just yet — we're finishing " +
+    showError("err-email", "Free reports aren't open yet. We're finishing " +
       "setup. Nothing was sent or saved.");
     return;
   }
@@ -1924,10 +1924,10 @@ function showSeatLink() {
   const share = $("seat-share");
   share.replaceChildren();
   share.appendChild(document.createTextNode(
-    "Once your payment goes through, every manager in your league — up to 14 " +
-    "teams — can claim a seat. Your welcome email has the link to send them, and " +
-    "what to send with it — each enters their own roster and claims their own " +
-    "seat from it once, nothing to pay. Seats only work after the pass is paid for."));
+    "Once your payment goes through, every manager in your league (up to 14 " +
+    "teams) can claim a seat. Your welcome email has the link to send them, and " +
+    "what to send with it. Each enters their own roster and claims their own " +
+    "seat once, nothing to pay. Seats only work after the pass is paid for."));
   share.style.display = "block";
 }
 
@@ -2044,7 +2044,7 @@ function drawFirst() {
     // A seat has no checkout to wait for; it waits for seats to open.
     const day = SEAT_MODE ? "the day your seat is confirmed" : "the day you join";
     const opens = SEAT_MODE ? ", once seats open" : ", once checkout opens";
-    side.replaceChildren(b("A report " + day), t(opens + " — then a new one every Tuesday morning"));
+    side.replaceChildren(b("A report " + day), t(opens + ", then a new one every Tuesday morning"));
     note.replaceChildren(t("A report lands "), b(day), t(opens + "."));
   } else if (FIRST && FIRST.when === "before") {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
@@ -2107,8 +2107,8 @@ function nothingToPay(stepLabel) {
 // checkout note exists to prevent). The submit handlers still refuse too.
 function closedUpFront(what) {
   const note = $("closed-note");
-  note.textContent = what + " aren't open just yet — we're finishing setup. You're " +
-    "welcome to try the page, but nothing is sent or saved until they open.";
+  note.textContent = what + " aren't open yet. We're finishing setup. You can " +
+    "try the page, but nothing is sent or saved until they open.";
   note.style.display = "block";
 }
 
@@ -2162,34 +2162,34 @@ function closedNoteNodes(action) {
     // into the next one — so no "set up now" invitation, just the list.
     const over = text("The season's over, so checkout is closed until next season. ");
     return action === "list"
-      ? [over, text("Leave your email below, at step 3, and we'll send exactly one " +
+      ? [over, text("Leave your email below, at step 3, and we'll send one " +
                     "message when it opens.")]
       : action === "mail"
         ? [over, text("Press the button at step 3: it opens your mail app with a request " +
                       "to us filled in. Send it and we'll email you once, when it opens.")]
         : [over];
   }
-  const lead = WANTS_PASS ? "The League Pass isn't open just yet" : "Checkout isn't open just yet";
+  const lead = WANTS_PASS ? "The League Pass isn't open yet" : "Checkout isn't open yet";
   if (WANTS_PASS && OWN_PLAN_HREF) {
-    return [text(lead + " — it opens the day your league can claim its seats, so " +
+    return [text(lead + ". It opens the day your league can claim its seats, so " +
                  "nobody pays for a seat that can't be used. A plan for your own team " +
                  "is open now: "), link(OWN_PLAN_HREF, "set that up instead"), text(".")];
   }
   // The work is kept either way (BE-I3, I1): a checked roster stays in this
   // page's address, and with the list connected it is kept with the email.
-  const head = text(lead + ". You're welcome to set up now: once your roster is " +
+  const head = text(lead + ". You can set up now: once your roster is " +
                     "checked it stays in this page's address, so a bookmark brings it " +
                     "back. ");
   if (action === "list") {
     return [head, text("Then leave your email below, at step 3: we'll keep it with " +
-                       "your roster and send exactly one message when it opens, with " +
+                       "your roster and send one message when it opens, with " +
                        "a link that brings the roster back.")];
   }
   // The roster rides in the request itself, so the bookmark advice is not
   // repeated: one sentence, about the one thing to do.
   if (action === "mail") {
     return [text(lead + ". Set up now: at step 3, one press opens your mail app with " +
-                 "a request to us filled in — send it and we'll email you once, the " +
+                 "a request to us filled in. Send it and we'll email you once, the " +
                  "morning it opens, with your roster ready to go.")];
   }
   return [head];
@@ -2203,7 +2203,7 @@ function noteClosedFor(link, other) {
       "report is due. The season pass is open now: switch to it in step 3 to buy today.";
   } else if (action === "switch") {
     note.textContent = (monthlyChosen ? "Monthly" : "The season pass") + " isn't " +
-      "open just yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
+      "open yet, but " + (monthlyChosen ? "the season pass" : "monthly") +
       " is: switch to it in step 3 to buy today.";
   } else if (!link) {
     note.replaceChildren(...closedNoteNodes(action));
@@ -2238,11 +2238,11 @@ function monthlyPlan() {
     "to cover them. $14.99 a month, and billing stops on its own after the season's " +
     "last weekly report.";
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
-    "until you cancel — and billing stops on its own after the season's last " +
+    "until you cancel. Billing stops on its own after the season's last " +
     "weekly report: your last charge is the month that report falls in. Cancel " +
     "yourself any time. Refunds are no-questions until your first weekly " +
     "report's week kicks off (or a week after it reaches you, if we send it " +
-    "late) — one per person.";
+    "late). One per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
   drawFirst();
@@ -2266,7 +2266,7 @@ function trialClosedWords() {
   if (TRIAL && TRIAL.when === "pre") {
     const when = TRIAL.opens ? ", " + TRIAL.opens.toLocaleDateString("en-US",
       { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }) : "";
-    return "Free reports open at the season's first kickoff" + when + " — a request " +
+    return "Free reports open at the season's first kickoff" + when + ". A request " +
       "before then isn't sent.";
   }
   return "The season's over, so free reports are closed until next season.";
@@ -2281,7 +2281,7 @@ function drawTrial() {
   // M15: what arrives, in the visitor's words — the odds gate is How it
   // works' job, and a pitch that opened with it sold the exception.
   $("header-pitch").textContent =
-    "Free: " + what[0] + " — every slot decided for your roster, every close " +
+    "Free: " + what[0] + ". Every slot decided for your roster, every close " +
     "call explained, an if/then for late news. One per person, no card.";
   if (FORM_ENDPOINT && TRIAL_OPEN && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
     const note = $("closed-note");
@@ -2292,7 +2292,7 @@ function drawTrial() {
     // visitor asks to hear when it opens again — no detour to another page.
     note.replaceChildren(...(TRIAL.when === "pre"
       ? [document.createTextNode(trialClosedWords() + " Or "), a,
-         document.createTextNode(" — your first report comes the day you join.")]
+         document.createTextNode(". Your first report comes the day you join.")]
       : [document.createTextNode(trialClosedWords())]));
     note.style.display = "block";
     $("submit").textContent = "Free reports are closed";
@@ -2317,7 +2317,7 @@ if (TRY_MODE) {
     // Not open yet: no pitch for a form that would only refuse (review,
     // m-try). The heading says so, and the form goes, as for a seat page
     // opened without its link; what a visitor can use today is linked.
-    $("header-pitch").textContent = "One free report on your own roster — every " +
+    $("header-pitch").textContent = "One free report on your own roster: every " +
       "slot decided, every close call explained. It isn't open yet, so there's " +
       "nothing to fill in today.";
     const note = $("closed-note");
@@ -2340,7 +2340,7 @@ if (TRY_MODE) {
 } else if (UPDATE_MODE) {
   $("header-pitch").textContent =
     "Check your league's settings, paste your roster as it " +
-    "stands now — trades, pickups, drops — and your next report is built from " +
+    "stands now, and your next report is built from " +
     "both. Nothing to pay. Enter the address your reports go to and we'll email " +
     "it a button to confirm the change.";
   $("lbl-email").textContent = "The address your reports go to";
@@ -2362,16 +2362,15 @@ if (TRY_MODE) {
   // for (JOIN-123).
   $("header-pitch").textContent = FORM_ENDPOINT
     ? "If your league's League Pass has a seat left, it's yours at no charge. " +
-      "Enter your own roster and you get your own report — not a copy of " +
-      "anyone else's. Nothing to pay."
-    : "Seats open soon — once your league's League Pass is live, your seat " +
+      "Enter your own roster and you get your own report. Nothing to pay."
+    : "Seats open soon. Once your league's League Pass is live, your seat " +
       "costs you nothing.";
   // A matched seat is sent its first report the day it is confirmed, by the
   // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
   // promise before seats had a first email.
   $("submit").textContent = "Claim my seat";
   nothingToPay("3 · Claim");
-  $("lbl-email").textContent = "Your email — your reports go here";
+  $("lbl-email").textContent = "Your email (your reports go here)";
   $("seat-note").style.display = "list-item";
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
@@ -2383,8 +2382,8 @@ if (TRY_MODE) {
   // Say seats aren't open BEFORE they paste fifteen names, same as checkout.
   if (!FORM_ENDPOINT) {
     const note = $("closed-note");
-    note.textContent = "Seats aren't open just yet — we're finishing setup. " +
-      "You're welcome to set up now to see how it works, but nothing is saved " +
+    note.textContent = "Seats aren't open yet. We're finishing setup. " +
+      "You can set up now to see how it works, but nothing is saved " +
       "until they open.";
     note.style.display = "block";
   }
@@ -2411,12 +2410,12 @@ if (TRY_MODE) {
   // price on the page has to be the one this purchase actually costs.
   // Each manager claims their own seat, once, from the link in the buyer's
   // welcome email — nothing reaches anyone who doesn't (JOIN-7).
-  $("header-pitch").textContent = "Every manager in your league — up to 14 teams — " +
-    "gets their own report every Tuesday. You get a link to send them; each manager " +
+  $("header-pitch").textContent = "Every manager in your league (up to 14 teams) " +
+    "gets their own report every Tuesday. You get a link to send them, and each manager " +
     "claims their seat from it once, with their own roster. $69 for your whole league, rest " +
-    "of season — one payment, nothing renews, and a full refund until your first " +
+    "of season: one payment, nothing renews, and a full refund until your first " +
     "weekly report's week kicks off.";
-  $("lbl-email").textContent = "Your email — your own report and the receipt go here";
+  $("lbl-email").textContent = "Your email (your own report and the receipt go here)";
   // The pass is $99, and the renewal disclosure must name the amount that
   // actually renews — the season-pass sentence would be a wrong disclosure —
   // and the day it does (LP-I11), so a commissioner can budget the dues.
@@ -2428,7 +2427,7 @@ function passTermsText() {
   return "The League Pass is $69, one payment for your whole league's rest of " +
     "season: nothing renews and nothing more is charged. Refunds are " +
     "no-questions until your first weekly report's week kicks " +
-    "off (or a week after it reaches you, if we send it late) — one per " +
+    "off (or a week after it reaches you, if we send it late). One per " +
     "league.";
 }
 
@@ -2475,7 +2474,7 @@ function switchPlan() {
   document.querySelector('input[name="plan"][value="' + to + '"]').checked = true;
   applyPlan();
   showOk((to === "monthly" ? "Switched to monthly" : "Switched to the season pass") +
-    " — its price and terms are just above the button.");
+    ". Its price and terms are above the button.");
   $("submit").focus();
 }
 // A plan that takes money names its step 3 as the progress bar does (D14).
@@ -2590,13 +2589,13 @@ drawFirst();
           const terms = "The Playoff Pass is $19, one payment: nothing renews and " +
             "nothing more is charged. Refunds are no-questions until your first " +
             "weekly report's week kicks off (or a week after it reaches you, if " +
-            "we send it late) — one per person.";
+            "we send it late). One per person.";
           $("terms-line").textContent = terms;
           $("renew-note").textContent = terms;
           $("submit").textContent = "Continue to checkout — $19";
           $("header-pitch").textContent = "Every lineup from Week " + firstWeek +
             " to your title game, decided for your roster and in your inbox every " +
-            "Tuesday. $19 for the Playoff Pass — one payment, no subscription, and a " +
+            "Tuesday. $19 for the Playoff Pass: one payment, no subscription, and a " +
             "full refund until your first weekly report's week kicks off.";
           drawFirst();
         }

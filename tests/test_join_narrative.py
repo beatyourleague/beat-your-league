@@ -127,7 +127,7 @@ def test_a_missing_player_list_says_so_and_stops_cleanly() -> None:
         first = min(m.start() for m in re.finditer(r"\bR\.\w", code))
         assert at < first, f"{name}: R is used before the guard"
         guard = code[at:code.index("\n}\n", at)]
-        assert "The player list didn't load — reload the page." in guard, name
+        assert "The player list didn't load. Reload the page." in guard, name
         assert "event.error === stop) event.preventDefault()" in guard, name
         assert guard.rstrip().endswith("throw stop;"), name
         assert "innerHTML" not in guard, name

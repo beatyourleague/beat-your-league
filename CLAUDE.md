@@ -1354,7 +1354,7 @@ weekly report would be Week 13+: the landing's `PLAYOFF_PASS_READY` must equal "
 season** — all Payment Links in **payment mode**: one payment, no subscription, nothing renews.
 Monthly is not sold in 2026 (`MONTHLY_OFFERED = false` on join; the landing shows one pricing
 card, the League Pass stays on its own page per PLAN §4). Founding rate: 2026 buyers get the
-2027 full season pass at $39, never more (terms §3). How the code carries it:
+2027 full season pass at $39 (terms §3). How the code carries it:
 - **A one-time purchase is named by its PaymentIntent** (`pi_…`) everywhere a subscription id
   (`sub_…`) is: `run.intake._subscription_id`, `subscription_ids` / `pass_id` on rows
   (`run.rosters._SUBSCRIPTION_RE` takes both), so RULE E1/E2 (refunds, seats) apply unchanged.
@@ -1372,6 +1372,15 @@ card, the League Pass stays on its own page per PLAN §4). Founding rate: 2026 b
 - `run/economics.py` keeps the $39/$14.99/$99 subscription prices (the docs' fee figures) and
   models `ONE_TIME` beside them (no Stripe Billing fee). The subscription machinery (billing,
   renewals, portal) stays for 2027.
+
+**Plain words (owner direction, Oct 30 2026).** Selling copy is short, plain sentences a busy
+person reads on a phone: say what happens, one idea per sentence. Banned as AI tells: "never
+more", "just", "exactly", "the point of", template rhythms, and em dashes wherever a period,
+comma or colon works. The good lines stay ("Know who to start.", "Your lineup, decided"). Terms
+§3–§4 lead with the 2026 pass; every renewal, monthly and cancel rule sits under its own "From
+2027" heading, labelled as not applying to a 2026 pass. Left with em dashes on purpose: buy
+buttons, the disclaimer line, the `bought` strings in render/welcome.py (the preheader splits on
+" — "), Stripe's checkout text, and the report's own sentences in render/report.py.
 
 **The pre-launch review (Oct 23–24 2026) — eight lenses, then six build branches.** A marketer,
 designer, product, QA, analytics, app-security, infra-security and business review, each finding
