@@ -131,11 +131,49 @@ def test_how_it_works_moves_on_the_compositor_once_and_holds_offscreen() -> None
 
 def test_reduced_motion_and_print_show_the_finished_pictures() -> None:
     """The static page IS the end state, so reduced motion and print only
-    have to stop what was armed: the steps, and the close-up's bars."""
+    have to stop what was armed: the steps (step 01's paste card included,
+    whose rest state is both columns: the copied lines at 40% and every name
+    ticked)."""
     for query in ("@media (prefers-reduced-motion: reduce)", "@media print"):
         block = _blocks(query)
         assert ".js .steps.armed *{animation:none!important;}" in block, query
-        assert ".js .shotwrap.reveal .fbar i{transform:none!important;" in block, query
+    raw = re.search(r"\n  \.paste \.raw\{([^}]*)\}", CSS).group(1)
+    assert "opacity:.4" in raw
+    assert "opacity" not in re.search(r"\n  \.paste \.ok\{([^}]*)\}", CSS).group(1)
+
+
+def test_how_it_works_plays_in_about_a_second_and_a_half() -> None:
+    """Sales review: the three steps took 3.3s to draw. Now the steps start
+    .35s apart, each wire draws in .3s and the kick lasts .6s, so the whole
+    picture is in by about 1.4s; step 01's paste reads in row by row, 80ms
+    apart, 250ms a row."""
+    ends = []
+    for sel, body in re.findall(r"\n  (\.js \.steps\.armed [^{]+)\{([^}]*)\}", CSS):
+        delay = re.search(r"animation-delay:([\d.]+)s", body)
+        if delay:
+            ends.append(float(delay.group(1)))
+    assert max(ends) <= 0.9, ends
+    assert ".js .steps.armed .ball{animation-name:hiw-kick;animation-duration:.6s;" in CSS
+    assert ".js .steps.armed .wire i{animation-name:hiw-line;animation-duration:.3s;" in CSS
+    rows = [float(d) for d in re.findall(
+        r"\.prow:nth-child\(\d\) :is\(\.raw,\.ok\)\{animation-delay:([\d.]+)s;\}", CSS)]
+    assert len(rows) == 4 and all(round(b - a, 2) == 0.08 for a, b in zip(rows, rows[1:])), rows
+    assert ".js .steps.armed .paste .ok{animation-name:hiw-row;animation-duration:.25s;}" in CSS
+
+
+def test_step_one_shows_a_real_paste_from_the_espn_page() -> None:
+    """Step 01 shows the paste: four lines of the ESPN page's own example
+    (render/platforms.py, itself backed by a tested paste fixture), each
+    beside the name the roster box reads it as — never an invented line."""
+    from render.platforms import PLATFORMS
+    espn = next(p for p in PLATFORMS if p.slug == "espn")
+    step = re.findall(r'<li class="step">(.*?)</li>', _section("how"), re.S)[0]
+    rows = re.findall(r'<span class="raw">([^<]+)</span><span class="ok">([^<]+)</span>', step)
+    assert len(rows) == 4
+    pairs = set(zip(espn.example, espn.reads))
+    for raw, read in rows:
+        assert (html.unescape(raw), html.unescape(read)) in pairs, (raw, read)
+    assert "Copied from ESPN" in step and "Read as" in step
 
 
 # --------------------------------------------------------------------- #
@@ -147,54 +185,68 @@ def _fixture() -> dict:
 
 
 def test_the_close_up_is_the_generated_report_with_numbered_pins() -> None:
-    """The picture is generated (render.phone.shot, from the pinned sample);
-    the numbered pins are the page's CSS on the report's own elements — card
-    01's title, its Odds column head, card 04's title — so a pin can never
-    point at a figure somebody typed. Each pin's target must exist in the
-    generated markup, or the pin silently vanishes."""
+    """Sales review: the close-up repeated the lineup the phone had just
+    shown, and its pins 1–3 collided with the report's own badges 01 and 04.
+    The picture is now the same email scrolled on past the phone — cards 03
+    and 04, generated (render.phone.shot, from the pinned sample) — and the
+    pins ARE the report's printed numbers: each callout carries its card's
+    own number, the close-up's badges wear the callouts' disc, and the two
+    cards on the phone (01, 02) are drawn outlined. No pin is typed onto the
+    picture, so none can point at a figure somebody typed."""
     from render import phone
     shot = BODY.split("<!-- shot:start -->")[1].split("<!-- shot:end -->")[0]
     assert shot.strip() == phone.shot(_fixture()).strip()
-    lineup = shot.split('data-sec="lineup"')[1].split("</section>")[0]
-    ifthen = shot.split('data-sec="ifthen"')[1].split("</section>")[0]
-    assert '<span class="tag">' in lineup and '<span class="tag">' in ifthen
-    assert re.search(r'<div class="ghead"><span>Proj</span><span>Odds</span></div>', lineup)
-    pins = dict(re.findall(r'\n  (\.shot [^{]+?)\{content:"(\d)" / "";', CSS))
-    assert pins == {".shot [data-sec=lineup] .eyebrow .tag::before": "1",
-                    ".shot .ghead span + span::after": "2",
-                    ".shot [data-sec=ifthen] .eyebrow .tag::before": "3"}, pins
-    callouts = re.findall(r"<li( class=\"off-pic\")?><h3>([^<]+)</h3>",
+    badges = re.findall(r'<section class="card" data-sec="(\w+)"><div class="eyebrow">'
+                        r'<span class="tag">[^<]+</span><span class="n">(\d+)</span>', shot)
+    assert badges == [("plan", "03"), ("ifthen", "04")], badges
+    assert ".shot .eyebrow .n{" in CSS and not re.search(r'\.shot [^{]*\{content:"\d"', CSS)
+    callouts = re.findall(r'<li( class="[\w-]+")?(?: data-pin="(\d+)")?><h3>([^<]+)</h3>',
                           BODY.split('<ol class="callouts">')[1].split("</ol>")[0])
-    assert [h for _, h in callouts] == ["Every slot decided", "Odds against your own bench",
-                                        "A plan for late news", "Byes checked to your title game"]
-    # The fourth is not on the picture (a replayed week checks no byes
-    # ahead), so its number is drawn outlined, never as a pin.
-    assert [bool(c) for c, _ in callouts] == [False, False, False, True]
+    assert [(c, n, h) for c, n, h in callouts] == [
+        (' class="on-phone"', "01", "Your lineup, decided"),
+        (' class="on-phone"', "02", "The week's closest call"),
+        ("", "03", "Your game plan"),
+        ("", "04", "If/then for gameday"),
+        (' class="off-pic"', "", "Byes ahead")], callouts
+    # Byes ahead is on no card of a replayed week, so it carries no number.
+    assert '.callouts li::before{content:attr(data-pin) / "";' in CSS
+    assert '.callouts li.off-pic::before{content:"+" / "";' in CSS
     assert re.search(r'<div class="shot screen" role="img" aria-label="[^"]+">\s*'
                      r'<div aria-hidden="true">', LANDING)
+    # The connector from the phone's cards to these two: static, drawn.
+    cue = BODY.split('<div class="scrollcue" aria-hidden="true">')[1].split("</div>")[0]
+    assert "<svg" in cue and "keep scrolling the same email" in _flat(cue)
+    assert "animation" not in re.search(r"\n  \.scrollcue\{([^}]*)\}", CSS).group(1)
 
 
-def test_the_close_up_crops_only_lines_the_phone_shows_whole() -> None:
-    """The close-up keeps every lineup row, the task and the "Checked for
-    you" line exactly as printed; it drops only the projected-total line and
-    two legend lines, which the phone above shows whole — and a sample that
-    no longer carries "Checked for you" stops the build rather than ship a
-    blank."""
+def test_the_close_up_shows_what_the_phone_does_not_and_only_the_samples_words() -> None:
+    """The close-up shows no card the phone shows (no lineup, no closest
+    call, no masthead), card 04 whole, and card 03 cut to three of its items
+    exactly as the report prints them, with its standing Saturday line; every
+    figure in it is the published sample's. A sample whose plan no longer
+    carries a selected item stops the build rather than ship a blank."""
     from render import anatomy, phone
+    from test_site import SAMPLE_REPORT
     report = _fixture()
     shot = phone.shot(report)
-    rows = re.findall(r'<div class="frow" data-i="(\d)">', shot)
-    assert rows == [str(r["i"]) for r in anatomy.lineup(report)["rows"]]
-    assert "Checked for you:" in shot and '<p class="wk">' not in shot
-    assert len(re.findall(r'<p class="legend">', shot)) == 1
-    broken = copy.deepcopy(report)
-    lineup = anatomy.lineup
+    assert 'data-sec="lineup"' not in shot and 'data-sec="closest"' not in shot
+    assert '<div class="mh">' not in shot
+    heads = [html.unescape(h) for h in re.findall(r'<b class="do">([^<]+)</b>', shot)]
+    assert [h.split(":")[0].split(" —")[0] for h in heads] == [
+        "Bench Sam LaPorta", "Thursday night", "Sunday morning"], heads
+    assert '<p class="standing"><b>Saturday:</b>' in shot
+    plans = anatomy.ifthen(report)["plans"]
+    assert len(re.findall(r'<div class="pivot">', shot)) == len(plans)
+    flat_sample = _flat(SAMPLE_REPORT)
+    for figure in set(re.findall(r"\d+(?:[.:]\d+)?", _flat(shot))):
+        assert figure in flat_sample, figure
+    plan = anatomy.plan
     try:
-        anatomy.lineup = lambda r: {**lineup(r), "legend": []}
+        anatomy.plan = lambda r: {**plan(r), "items": plan(r)["items"][:1]}
         with pytest.raises(phone.SelectionError):
-            phone.shot(broken)
+            phone.shot(copy.deepcopy(report))
     finally:
-        anatomy.lineup = lineup
+        anatomy.plan = plan
 
 
 # --------------------------------------------------------------------- #

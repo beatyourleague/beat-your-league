@@ -4620,7 +4620,11 @@ def test_the_hero_report_is_on_screen_from_the_first_frame() -> None:
     and it may not start until the decided report has held the screen for at
     least three seconds: .story is added only inside start(), and start() is
     reached only through a setTimeout of 3000ms or more, or the visitor's own
-    press of the play toggle. Its first frame is the decided report too."""
+    press of the play toggle — or, since the sales review, the first play's
+    kick(): 6s after load, or the visitor's first scroll or pointer over the
+    hero, whichever comes first (the decided report is still the first frame,
+    and the visitor's own move starts it). Its first frame is the decided
+    report too."""
     hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
     card = re.search(r'<div class="([^"]*)" id="hero-card"', hero).group(1)
     assert "anim" not in card.split(), "the hero card is held back until it animates"
@@ -4635,8 +4639,13 @@ def test_the_hero_report_is_on_screen_from_the_first_frame() -> None:
     timed = re.findall(r"setTimeout\(\(\) => \{ wait = 0; start\(\); \}, (\d+)\)", story)
     assert timed and all(int(ms) >= 3000 for ms in timed), timed
     clicked = story.split('toggle.addEventListener("click"')[1].split("});")[0]
-    assert len(calls) == len(timed) + clicked.count("start()"), \
-        "start() is reached some other way than the dwell timer or the toggle"
+    kick = story.split("const kick = () => {")[1].split("\n  };")[0]
+    assert "setTimeout(kick, 6000);" in story
+    assert 'window.addEventListener("scroll", kick, { passive: true });' in story
+    assert 'hero.addEventListener("pointerenter", kick, { passive: true });' in story
+    assert "if (kicked) return;" in kick and kick.count("start()") == 1
+    assert len(calls) == len(timed) + clicked.count("start()") + 1, \
+        "start() is reached some other way than the dwell timer, the kick or the toggle"
     for gone in ("heroCard", "mailrow", "play("):
         assert gone not in story, f"the storyline still drives {gone}"
 
@@ -4721,7 +4730,9 @@ def test_the_landing_sells_without_a_comparison_essay() -> None:
     the page says what the buyer gets, shows the real report, prices it and
     answers six questions. Kept from the old guard: no results claim and no
     rankings straw man anywhere on the page."""
-    assert 'class="cmpsec"' not in LANDING and 'class="why"' not in LANDING
+    # (Card 03 of the generated close-up carries the report's own
+    # <span class="why"> reasons; the retired essay was a section.)
+    assert 'class="cmpsec"' not in LANDING and '<section class="why"' not in LANDING
     page = prose(markup_only(LANDING))
     assert "Why not just use rankings" not in page
     for claim in (r"\bmore (?:often|wins|accurate)\b", r"\bwin more\b", r"make the playoffs"):

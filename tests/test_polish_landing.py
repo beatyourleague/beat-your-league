@@ -22,7 +22,7 @@ CSS = _style(LANDING)
 BODY = re.sub(r"<!--.*?-->", "", markup_only(LANDING), flags=re.S)
 HERO = BODY.split('<header class="hero">')[1].split("</header>")[0]
 SCREEN = HERO.split('<div class="screen"')[1].split('>', 1)[1].split('<div class="phone-floor"')[0]
-LOCK = '<div class="lock"' + HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
+LOCK = '<div class="lock"' + HERO.split('<div class="lock"')[1].split('<div class="glass"')[0]
 SCRIPT = "\n".join(re.findall(r"<script>(.*?)</script>", LANDING, re.S))
 CLOCK = LANDING.split("// The season clock.")[1]
 CLOCK_IIFE = CLOCK[CLOCK.index("(function () {"):CLOCK.index("})();") + 5]
@@ -249,7 +249,7 @@ def test_the_pause_toggle_holds_the_float_the_floor_and_the_glow_too() -> None:
     stop = story.split("const stop = (byVisitor) => {")[1].split("\n  };")[0]
     held = stop.split("if (byVisitor) {")[1].split("}")[0]
     assert 'hero.classList.add("still")' in held and "pressed(true)" in held and "held = true" in held
-    assert "if (++cycles >= 3) stop();" in story
+    assert "++cycles >= 3) stop();" in story
     for target in (".phone-float", ".phone-floor", ".phonewrap::before"):
         _assert_pause_wins(target, "still")
 
@@ -366,14 +366,15 @@ def test_the_tilt_follows_a_mouse_only_and_rests_flat() -> None:
 
 
 def test_rest_states_with_no_script_reduced_motion_and_print() -> None:
-    """LAND-PHONE-STORY: with no script the lock and the black sit at opacity
-    0 over the decided report; under reduced motion and in print they, and
-    the moving glass streak, are not drawn at all and nothing inside the
-    screen animates."""
-    assert "opacity:0" in re.search(r"\n  \.lock,\.lk-dark\{([^}]*)\}", CSS).group(1)
-    assert ".lock,.lk-dark,.glass i{display:none!important;}" in REDUCED
+    """LAND-PHONE-STORY: with no script the lock sits at opacity 0 over the
+    decided report (the black layer went with the sales review: the report
+    cross-fades to a mid-navy lock screen, no dip to black); under reduced
+    motion and in print it, and the moving glass streak, are not drawn at
+    all and nothing inside the screen animates."""
+    assert "opacity:0" in re.search(r"\n  \.lock\{([^}]*)\}", CSS).group(1)
+    assert ".lock,.glass i{display:none!important;}" in REDUCED
     assert ".phone .screen *{animation:none!important;}" in REDUCED
-    assert re.search(r"\.lock,\.lk-dark,[^{]*\{display:none!important;\}", PRINT)
+    assert re.search(r"\.lock,[^{]*\{display:none!important;\}", PRINT)
     assert ".phone .screen *{animation:none!important;}" in PRINT
     assert ".phone,.phone-float,.phone-floor{animation:none!important;transform:none!important;}" \
         in PRINT
@@ -428,7 +429,7 @@ def test_the_shine_the_icons_and_the_progress_bar_run_on_the_compositor() -> Non
 def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> None:
     """LAND-MOTION-SECTIONS: one beat per section, played once on entrance
     from the observers already there — How it works draws its three steps
-    in order, the report's bars fill as the close-up arrives, groups arrive
+    in order, the close-up rises as it arrives, groups arrive
     one item after another, an FAQ answer eases open. Contract C7
     took out the decoration that had collected on top (the method cards'
     gold rules drawing in, the week strip's glint, the stamp landing, the
@@ -444,7 +445,9 @@ def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> No
         assert group in groups, group
     # The steps play their own timeline, so the generic rise leaves them be.
     assert ".steps" not in parts and ".steps" not in groups
-    assert ".js .shotwrap.reveal.shown .fbar i{transform:none;" in CSS
+    # The close-up shows cards 03 and 04 since the sales review: no bars of
+    # its own to fill, so it only rises with its section.
+    assert ".shotwrap.reveal" not in CSS
     for gone in ("weekpass", "@keyframes stamp", ".bubble", "article::before", ".shine"):
         assert gone not in LANDING, gone
     assert not re.search(r"\.price[^{]*\{[^}]*animation", CSS), "the price moves"
@@ -463,10 +466,10 @@ def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
     included) and in print."""
     for selector in (".heroline .clock", ".livepill .dot::after", ".stamp50",
                      ".faq details[open] .a", ".watchnote.ok::before", ".watchform::after",
-                     ".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+                     ".js .steps.armed *",
                      ".phone .screen *", ".js .reveal", ".js .stagger > *"):
         assert selector in REDUCED, f"{selector} still moves under reduced motion"
-    for selector in (".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+    for selector in (".js .steps.armed *",
                      ".phone .screen *", ".js .reveal", ".watchform::after"):
         assert selector in PRINT, f"{selector} can print mid-motion"
     assert "!reduced && !form.classList.contains(\"called\")" in SCRIPT
@@ -632,10 +635,11 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
     assert ".livecall[hidden]{display:block!important;visibility:hidden;" in CSS
     assert "min-height:1.45em" in _rule(".livecall")
     assert "@media (max-width:600px){.livecall{min-height:2.9em;}}" in CSS
-    # On a phone it goes under the phone (contract B3): its late arrival
-    # moves nothing above the phone there.
+    # On a phone it stays with the live link, under the hero's "See a real
+    # report" and above the phone (sales review: one secondary group); its
+    # room is reserved, so its arrival moves nothing.
     narrow = _blocks("@media (max-width:880px)")
-    assert ".hero .phonewrap{order:9;" in narrow and ".hero .livecall{order:11;}" in narrow
+    assert ".hero .phonewrap{order:9;" in narrow and ".hero .livecall{order:8;}" in narrow
 
 
 def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season() -> None:

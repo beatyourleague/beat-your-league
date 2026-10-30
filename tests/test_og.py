@@ -147,7 +147,9 @@ def test_the_card_names_the_season_and_week_it_shows() -> None:
     year, week = re.search(r'<div class="filecard"[^>]*data-real="(\d{4})-w(\d+)"',
                            LANDING).groups()
     page = og.build_html(LANDING)
-    assert f"Real report · {year}, Week {int(week)}" in page and "Real output" not in page
+    assert f"{year} sample report · Week {int(week)}" in page and "Real output" not in page
+    # The landing's own caption under the phone says it the same way.
+    assert f'<b>{year} sample report</b> · <span class="nw">Week {int(week)}, replayed' in LANDING
     with pytest.raises(og.OgError):
         og.real_label(LANDING.replace("data-real=", "data-x="))
 

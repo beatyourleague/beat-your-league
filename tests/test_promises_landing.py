@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from test_site import LANDING, prose
+from test_site import LANDING, markup_only, prose
 
 SCRIPT = LANDING.split("// The season clock.")[1].split("})();")[0]
 TEXT = prose(LANDING)
@@ -40,13 +40,20 @@ def test_the_season_end_puts_the_closed_state_back() -> None:
 
 def test_the_day_one_line_names_what_actually_lands() -> None:
     """LANDING-54/56/65/89/111: the day-one email is that week's report only
-    before its first game (from Week 2); otherwise the roster report."""
+    before its first game (from Week 2); otherwise the report of the weeks
+    ahead. To a buyer both are "your first report" (sales review: "roster
+    report" named an email nobody had heard of), so the open line says only
+    that it lands today."""
     for gone in ("Your first report the day you sign up", "the first on the day you join",
                  "Your first one comes the day you sign up"):
         assert gone not in LANDING, gone
     assert TEXT.count("within the hour") >= 5
     assert "your first report usually lands within the hour" in TEXT
-    assert "Set up your team: your roster report lands today, and Week " in SCRIPT
+    assert "Set up now and your first report lands today." in LANDING
+    # No string the page's scripts can write says it (comments may explain).
+    scripts = "\n".join(re.findall(r"<script>(.*?)</script>", LANDING, re.S))
+    assert not re.findall(r'"[^"\n]*roster report[^"\n]*"', re.sub(r"//[^\n]*", "", scripts))
+    assert "roster report" not in prose(markup_only(LANDING))
 
 
 def test_monthly_billing_words_match_the_billing_rule() -> None:

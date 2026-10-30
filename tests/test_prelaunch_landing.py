@@ -29,7 +29,7 @@ def _sample() -> dict:
 
 def _lock_text() -> tuple[str, str]:
     """The notification's subject and preview, as the phone prints them."""
-    lock = HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
+    lock = HERO.split('<div class="lock"')[1].split('<div class="glass"')[0]
     subject = re.search(r'<span class="lsub">(.*?)</span>', lock, re.S).group(1)
     preview = re.search(r'<span class="lpre">(.*?)</span>', lock, re.S).group(1)
     return html.unescape(subject), html.unescape(preview)
@@ -63,7 +63,10 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     and says what it is: the masthead's stamp names the 2024 season archive,
     the caption under the phone names 2024, and on a phone the button row
     sits between the clock and the phone, so the two weeks never read as one
-    line."""
+    line. Since the sales review the caption leads with the year ("2024
+    sample report · Week 10, replayed"), and this week's live link sits under
+    the hero's "See a real report" (one secondary group), above the phone on
+    a phone too — it names no week, so only the clock and the sample do."""
     masthead = SCREEN.split('<div class="mh">')[1].split('<section class="card"')[0]
     assert "Week 10" in _flat(masthead)
     stamp = _flat(re.search(r'<div class="mh-stamp">(.*?)</div>', masthead, re.S).group(1))
@@ -71,10 +74,13 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     tag = HERO.split('<p class="realtag">')[1].split("</p>")[0]
     assert "2024" in tag and "Week 10" in _flat(tag), "the sample's week left its caption"
     phones = CSS.split("@media (max-width:880px){\n")[1]
+    assert _flat(tag).strip().startswith("2024"), "the caption no longer leads with the year"
     order = {name: int(re.search(r"\.hero \." + name + r"\{order:(\d+)", phones).group(1))
              for name in ("heroline", "cta-row", "phonewrap", "livepill", "livecall")}
     assert order["heroline"] < order["cta-row"] < order["phonewrap"], order
-    assert order["phonewrap"] < order["livepill"] and order["phonewrap"] < order["livecall"], order
+    assert order["cta-row"] == order["livepill"] == order["livecall"] < order["phonewrap"], order
+    assert HERO.index('<div class="cta-row">') < HERO.index('<a class="livepill"') \
+        < HERO.index('<p class="livecall"')
     # Open, the buy row moves up to the form's place and the clock goes with
     # it, still above the row (equal orders keep source order: the clock's
     # line comes first in the markup).
@@ -110,7 +116,7 @@ def test_the_notification_is_solid_and_only_shows_on_the_lock_screen() -> None:
     note = re.search(r"\.lnote\{([^}]*)\}", CSS).group(1)
     background = re.search(r"background:([^;]+);", note).group(1)
     assert re.fullmatch(r"#[0-9A-Fa-f]{6}", background), f"translucent again: {background}"
-    lock = HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
+    lock = HERO.split('<div class="lock"')[1].split('<div class="glass"')[0]
     assert 'class="lnote"' in lock, "the notification left the lock screen"
     # Contract C11: the notification IS the email's own subject and preview.
     assert _lock_text() == (subject_for(_sample()), preheader_for(_sample()))
@@ -118,9 +124,10 @@ def test_the_notification_is_solid_and_only_shows_on_the_lock_screen() -> None:
     def z(rule: str) -> int:
         block = re.search(rule + r"\{([^}]*)\}", CSS).group(1)
         return int(re.search(r"z-index:(\d+)", block).group(1))
-    # Each layer's own rule, at the start of a line (".lock,.lk-dark{" sets
-    # neither z-index).
-    assert z(r"\n  \.statusbar") < z(r"\n  \.lock") < z(r"\n  \.lk-dark") < z(r"\n  \.island")
+    # Each layer's own rule, at the start of a line. No black layer since
+    # the sales review: the report cross-fades to the lock and back.
+    assert z(r"\n  \.statusbar") < z(r"\n  \.lock") < z(r"\n  \.island")
+    assert "lk-dark" not in HERO and "lk-dark" not in CSS
     # The lock is fully up from its first opaque stop to its last; the card's
     # opaque stops all fall inside that stretch.
     lock_up = [t for t, d in _keyframes("st-lock") if "opacity:1" in d]
@@ -182,7 +189,9 @@ def test_the_live_report_chip_waits_for_the_heros_rule_and_names_its_week() -> N
     """M4, reproduced: this week's 2026 report was four words of small
     underlined text ("see this week's") at the fold under a phone showing a
     2024 week. It is a link of its own under the season clock now, still shown only by
-    the three-odds rule, and it names the week and the day it was built.
+    the three-odds rule, and it names the day it was built — "this week's",
+    never a week number (sales review: with the clock's week and the
+    sample's, a third number read as three weeks at once).
     Run under node: a week.json with 3 odds reveals it labelled from the
     file; one with 2 leaves it hidden and untouched."""
     chip = re.search(r'<a class="livepill"[^>]*>', HERO).group(0)
@@ -193,7 +202,7 @@ def test_the_live_report_chip_waits_for_the_heros_rule_and_names_its_week() -> N
     clock = LANDING.split("// The season clock.")[1]
     iife = clock[clock.index("(function () {"):clock.index("})();") + 5]
     harness = r"""
-const make = (id) => ({ id, hidden: true, textContent: "This week's real report",
+const make = (id) => ({ id, hidden: true, textContent: "or this week's live report",
   replaceChildren() {}, appendChild() {} });
 function run(w) {
   const els = { "season-clock": make("season-clock"), "this-week-link": make("this-week-link"),
@@ -226,12 +235,12 @@ const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
 })();
 """.replace("IIFE", iife)
     shown, held, undated, old_layout, loose = _node(harness)
-    assert shown == {"hidden": False, "label": "Week 7's real report, built Tue, Oct 20"}
-    assert held == {"hidden": True, "label": "This week's real report"}
-    assert undated == {"hidden": False, "label": "Week 7's real report"}
+    assert shown == {"hidden": False, "label": "or this week's live report (built Tue, Oct 20)"}
+    assert held == {"hidden": True, "label": "or this week's live report"}
+    assert undated == {"hidden": False, "label": "or this week's live report"}
     # Review BUYER-1: a page built before the card stack (no `cards` on its
     # clock, as the Oct 20 build wrote it) is not offered beside the phone.
-    assert old_layout == loose == {"hidden": True, "label": "This week's real report"}
+    assert old_layout == loose == {"hidden": True, "label": "or this week's live report"}
 
 
 # --------------------------------------------------------------------- #
@@ -352,7 +361,7 @@ def test_the_playoff_swap_never_relabels_the_closed_button() -> None:
     fn = _js_function(LANDING, "showPlayoffPass")
     assert 'link.setAttribute("data-buy", "")' in LANDING.split("if (CHECKOUT_OPEN)")[1]
     harness = r"""
-let PASS_LABEL = "Get the Rest-of-Season Pass — $29";
+let PASS_LABEL = "Get my lineups — $29";
 function check(buy) {
   const cta = { tagName: "A", textContent: "Tell me when it opens",
                 hasAttribute: (n) => buy && n === "data-buy" };
@@ -366,7 +375,7 @@ console.log(JSON.stringify([check(false), check(true)]));
 """.replace("FN", fn)
     closed, open_ = _node(harness)
     assert closed == "Tell me when it opens"
-    assert open_ == "Get the Playoff Pass — $19"
+    assert open_ == "Get my lineups — $19"
 
 
 # --------------------------------------------------------------------- #
@@ -549,10 +558,11 @@ def test_every_storyline_layer_starts_and_ends_on_the_decided_report() -> None:
     and untransformed; the lock's text layer is gone by the end. Since the
     phone became the generated email (contract C11) the report layers are the
     scroll, card 01's bars and card 02's bar; the old peek layers are gone."""
-    hidden_at_rest = ("st-dark", "st-lock")
+    hidden_at_rest = ("st-lock",)
     on_report = ("st-view", "st-bar", "st-call")
     names = re.findall(r"@keyframes (st-[\w-]+)\{", CSS)
-    assert {"st-dark", "st-lock", "st-fg", "st-note", "st-tap", "st-pad", *on_report} <= set(names)
+    assert {"st-lock", "st-fg", "st-note", "st-tap", "st-pad", *on_report} <= set(names)
+    assert "st-dark" not in names, "the dip to black is back (sales review)"
     assert not {"st-flip", "st-if", "st-rise"} & set(names), "a retired peek layer is back"
     for name in names:
         stops = _keyframes(name)
@@ -564,7 +574,7 @@ def test_every_storyline_layer_starts_and_ends_on_the_decided_report() -> None:
                 assert "transform:none" in decl and "opacity:0" not in decl, (name, t, decl)
     assert "opacity:0" in _keyframes("st-fg")[-1][1]
     # Without .story the layers themselves are invisible.
-    assert re.search(r"\.lock,\.lk-dark\{[^}]*opacity:0", CSS)
+    assert re.search(r"\n  \.lock\{[^}]*opacity:0", CSS)
     assert re.search(r"\.lk-tap\{[^}]*opacity:0", CSS)
 
 

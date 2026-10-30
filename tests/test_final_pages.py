@@ -342,14 +342,14 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     off the injury report and have enough games on record". The rising hold
     and the practice squad withhold pairs that pass all three checks, so the
     clause is "only where", identically on the meta and JSON-LD entity
-    sentence, the landing's "Odds against your own bench" callout (the
-    "Decided against your bench" step until Oct 28 2026) and the join
-    page."""
+    sentence, the landing's "The week's closest call" callout ("Odds against
+    your own bench" until the sales review, the "Decided against your bench"
+    step until Oct 28 2026) and the join page."""
     meta = re.search(r'<meta name="description" content="([^"]+)"', LANDING).group(1)
     product = next(n for n in json.loads(re.search(
         r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S).group(1))["@graph"]
         if n["@type"] == "Product")
-    step = _flat(LANDING.split("<h3>Odds against your own bench</h3>")[1].split("</li>")[0])
+    step = _flat(LANDING.split("<h3>The week's closest call</h3>")[1].split("</li>")[0])
     assert meta == product["description"]
     assert "the odds " + GATE_CLAUSE in meta
     # Review BUYER-2: the step defines the % in the report's own words
@@ -500,12 +500,12 @@ setTimeout(() => console.log(JSON.stringify({ closed,
   hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent })), 50);
 """
     start = {"season-clock": "Checkout is open." if open_ else "A new report every Tuesday of the season.",
-             "hero-open": "Set up my team",
-             "closer-cta": "Set up my team" if open_ else "Tell me when it opens",
-             "sticky-cta": "Set up my team" if open_ else "Tell me when it opens",
+             "hero-open": "Get my lineups",
+             "closer-cta": "Get my lineups" if open_ else "Tell me when it opens",
+             "sticky-cta": "Get my lineups" if open_ else "Tell me when it opens",
              "this-week-label": ""}
     if open_ and can:
-        start["open-line"] = " Set up your team and your first report lands today."
+        start["open-line"] = " Set up now and your first report lands today."
     return _node(script % {"now": json.dumps(now), "start": json.dumps(start),
                            "week": json.dumps(week), "open": "true" if open_ else "false",
                            "iife": iife})
@@ -523,42 +523,44 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     (run/intake.py), while the hero read "Week 9's report lands Tuesday. 9
     lineups…" beside "Set up your team and Week 8's report lands today" — the
     week and the count one short of what that buyer gets. Open, the clock now
-    counts from the week a buyer gets first, and the button says it ("Get my
-    Week 8 lineup", copy review). Closed, it keeps the product's own calendar.
-    Mutation: count from w.week + 1 always and the first case fails."""
+    counts from the week a buyer gets first. Closed, it keeps the product's
+    own calendar. Since the sales review every buy button says one verb,
+    "Get my lineups" (the price card adds its price), so the week lives in
+    the clock alone. Mutation: count from w.week + 1 always and the first
+    case fails."""
     mid = {**WEEK7, "week": 8, "lands_on": "2026-11-03", "first_kickoff": "2026-10-30T00:15:00Z"}
     got = _clock(mid, "2026-10-28T16:00:00Z", open_=True)
     assert got["clock"] == "Week 8's report lands today. 10 lineups to a Week 17 title game, every one decided."
-    assert got["open"] == " Set up your team before the week's first game."
-    assert got["hero"] == got["closer"] == "Get my Week 8 lineup"
+    assert got["open"] == " Set up now and your first report lands today."
+    assert got["hero"] == got["closer"] == "Get my lineups"
     closed = _clock(mid, "2026-10-28T16:00:00Z", open_=False)
     assert closed["clock"].startswith("Week 9's report lands Tuesday. 9 lineups")
-    assert closed["hero"] == "Set up my team" and closed["closer"] == "Tell me when it opens"
+    assert closed["hero"] == "Get my lineups" and closed["closer"] == "Tell me when it opens"
 
 
 @needs_node
 def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     """Funnel review, seen in the open state: "Week 8's report lands Tuesday. …
     Set up your team: your roster report lands today, and Week 8's report on
-    Tuesday." The second clause repeated the clock; it is dropped whenever the
-    clock shows, and kept only when the clock cannot say it."""
+    Tuesday." The second clause repeated the clock. Since the sales review
+    the open line never names a week or "roster report" (an email a buyer
+    has never heard of): it says the one thing true at every hour — "Set up
+    now and your first report lands today." — and the clock names the week."""
     got = _clock(WEEK7, "2026-10-24T16:00:00Z", open_=True)
     assert got["clock"].startswith("Week 8's report lands Tuesday. 10 lineups")
-    assert got["open"] == " Set up your team: your roster report lands today."
-    assert got["hero"] == "Get my Week 8 lineup"
-    # On the report Tuesday itself, before that morning's build, a buyer gets
-    # that day's report: the line says so rather than "roster report".
+    assert got["open"] == " Set up now and your first report lands today."
+    assert got["hero"] == "Get my lineups"
     tuesday = _clock(WEEK7, "2026-10-27T11:00:00Z", open_=True)
     assert tuesday["clock"].startswith("Week 8's report lands today.")
-    assert tuesday["open"] == " Set up your team before the week's first game."
+    assert tuesday["open"] == " Set up now and your first report lands today."
 
 
 @needs_node
 def test_a_stale_week_file_leaves_the_static_words_and_the_plain_button() -> None:
     """The fallback: a week.json past its lands_on (a missed build) names no
-    week anywhere — "Set up my team" and the static clock stay."""
+    week anywhere — "Get my lineups" and the static clock stay."""
     got = _clock(WEEK7, "2026-11-05T16:00:00Z", open_=True)
-    assert got["hero"] == "Set up my team" and got["clock"] == "Checkout is open."
+    assert got["hero"] == "Get my lineups" and got["clock"] == "Checkout is open."
 
 
 # --------------------------------------------------------------------- #

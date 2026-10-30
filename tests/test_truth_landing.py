@@ -202,20 +202,23 @@ def test_the_phone_is_one_image_with_nothing_to_focus() -> None:
 
 
 def test_the_page_never_shows_one_call_in_two_cards() -> None:
-    """Contract B3, as the owner's Oct 28 2026 plan reshaped it: the phone
-    carries the closest call (card 02) and nothing else on the page repeats
-    it. "What you get" is ONE generated picture — the masthead (which labels
-    it the 2024 archive), card 01 and card 04, in report order — so card 01
-    appears twice by design (the phone, and the annotated close-up), card 02
-    once, and no other card at all."""
+    """Contract B3, as the owner's Oct 28 2026 plan and the sales review
+    reshaped it: the phone carries the masthead, card 01 and the closest call
+    (card 02), and nothing else on the page repeats them. "What you get" is
+    ONE generated picture of the same email scrolled on — cards 03 and 04, in
+    report order — so every card appears exactly once (the caption under it
+    labels it the 2024 sample)."""
     shot = BODY.split("<!-- shot:start -->")[1].split("<!-- shot:end -->")[0]
     keys = re.findall(r'<section class="card" data-sec="(\w+)">', shot)
     numbers = re.findall(r'<span class="n">(\d+)</span>', shot)
-    assert keys == ["lineup", "ifthen"] and numbers == ["01", "04"], (keys, numbers)
-    assert '<div class="mh">' in shot and 'id="shot-card"' in shot
+    assert keys == ["plan", "ifthen"] and numbers == ["03", "04"], (keys, numbers)
+    assert '<div class="mh">' not in shot and 'id="shot-card"' in shot
     page = markup_only(LANDING)
-    assert page.count('data-sec="closest"') == 1 and page.count('data-sec="lineup"') == 2
+    assert page.count('data-sec="closest"') == 1 and page.count('data-sec="lineup"') == 1
+    assert page.count('<div class="mh">') == 1
     assert page.count('<section class="card"') == 4
+    cap = BODY.split('<figcaption class="shotcap">')[1].split("</figcaption>")[0]
+    assert "2024 sample report" in cap
     assert "Who's getting the ball" not in LANDING
 
 
@@ -418,7 +421,7 @@ def test_the_lock_status_bar_never_zooms_over_the_emails() -> None:
     # Paused (offscreen, hidden tab) the zooming wallpaper pauses with the rest.
     assert ".phone.paused .screen *::before" in CSS
     # The status bar is not inside the zooming foreground.
-    lock_html = BODY.split('<div class="lock">')[1].split('<div class="lk-dark">')[0]
+    lock_html = BODY.split('<div class="lock">')[1].split('<div class="glass">')[0]
     assert lock_html.index('class="lk-status"') < lock_html.index('class="lk-fg"')
 
 
@@ -446,9 +449,10 @@ def test_the_close_up_wears_the_phones_own_email_rules() -> None:
     report's card rules drifts from the report. So the close-up carries the
     phone's own `.screen` class and inherits every one of its email rules (the
     email's type, the rows' grid, the bars) rather than a second copy; only
-    the sheet around it and card 04's three lines are its own."""
+    the sheet around it, card 03's reasons and standing line, card 04's three
+    lines and the badges' disc are its own."""
     assert re.search(r'<div class="shot screen" role="img" aria-label="[^"]+">', LANDING)
-    assert ".shot.screen{" in CSS and ".shot .ghead" in CSS
+    assert ".shot.screen{" in CSS and re.search(r"\n  \.screen \.task\{", CSS)
     assert not re.search(r"\n  \.shot \.(?:frow|fname|fbar|fpct|fslot)\{", CSS)
 
 
