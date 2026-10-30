@@ -304,6 +304,20 @@ NEXT_TODAY = ("Your first report. This week's lineup if it's Week 2 or later "
               "and the week's games haven't started, otherwise your roster "
               "report: the byes that leave you short and last season under "
               "your scoring.")
+# The same row as one true sentence, once the schedule says which applies
+# (review, Oct 30 2026: the conditional above read as small print to the one
+# buyer it described). Decided on the RUN's clock — the clock run/intake.
+# _first_file chooses the first report by, in the same run — and only from the
+# cached schedule; NEXT_TODAY stays the fallback when it cannot be read, since
+# it is true whichever report goes out.
+NEXT_TODAY_WEEK = "Your first report — this week's lineup, decided."
+NEXT_TODAY_ROSTER = ("Your first report — the byes ahead on your roster and last "
+                     "season under your scoring.")
+NEXT_TODAY_THEN = "{day}: your Week {week} report."
+# Where the reports come from, so the first Tuesday one is not filtered. The
+# address is LAUNCH.md's EMAIL_FROM, the one thanks.html names too.
+SENDER_ADDRESS = "reports@beatyourleague.com"
+CONTACTS_LINE = "Add {address} to your contacts so Tuesday's report lands in your inbox."
 # "The odds on the close calls", never "every": a slot gets odds only when both
 # players are confirmed to play, and a bye-heavy week can have few (PE-11).
 # "About ninety seconds to read" was the game plan, not the report (a Week-6
@@ -324,8 +338,8 @@ NEXT_TUESDAY_LIVE = ("The week's report: the lineup we'd set for your roster "
                      "spot nobody on your roster can fill. Your lineup comes "
                      "first, and setting it takes about a minute.")
 ODDS_EVERYWHERE_FROM = 4
-NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
-                 "changes your lineup. No news, no email.")
+NEXT_SATURDAY = ("The Saturday check — if Friday's injury report changes your "
+                 "lineup, it tells you the swap. No news, no email.")
 
 
 # Between the season's last game and next season's schedule the intake has no
@@ -340,9 +354,77 @@ SEAT_SEASON_OVER_SUBJECT = ("Your seat is in — your first report comes when ne
                             "season's schedule is out")
 
 
+def _schedule_kickoff(season: str, week: int) -> datetime | None:
+    """The week's first kickoff (UTC) from the CACHED schedule only — a
+    welcome makes no network call (week_at's rule) — or None."""
+    from zoneinfo import ZoneInfo
+
+    from run.solo import CACHE_DIR, _schedule
+    eastern = ZoneInfo("America/New_York")
+    first = None
+    for row in _schedule(CACHE_DIR, live=False):
+        if str(row.get("season") or "") != str(season):
+            continue
+        try:
+            if int(row.get("week") or 0) != int(week):
+                continue
+            local = datetime.strptime(
+                f"{(row.get('gameday') or '').strip()} "
+                f"{(row.get('gametime') or '').strip() or '13:00'}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        start = local.replace(tzinfo=eastern).astimezone(timezone.utc)
+        first = start if first is None or start < first else first
+    return first
+
+
+def today_text(season: str, now: datetime | None = None) -> str:
+    """The "Today" row as one true sentence, chosen the way run/intake.
+    _first_file chooses the first report: this week's report from Week 2 on,
+    before the week's first kickoff; otherwise the roster report, and the day
+    the next weekly report lands. NEXT_TODAY when the schedule can't say."""
+    now = now or datetime.now(timezone.utc)
+    try:
+        from run.solo import CACHE_DIR, current_week, next_report_day
+        if not (CACHE_DIR / "games.csv").is_file():
+            return NEXT_TODAY
+        week = current_week(CACHE_DIR, str(season), now.date(), live=False)
+        kickoff = _schedule_kickoff(str(season), week)
+        if kickoff is None:
+            return NEXT_TODAY
+        if week > 1 and now < kickoff:
+            return NEXT_TODAY_WEEK
+        if week == 1:
+            # The Week 1 report goes out on the Tuesday run before its games
+            # (run.solo.week_one_due); which Tuesday a buyer lands on is not
+            # this email's to promise, so the next row says "Every Tuesday".
+            return NEXT_TODAY_ROSTER
+        day = next_report_day(CACHE_DIR, str(season), week, live=False)
+        from run.solo import last_week
+        last = last_week(CACHE_DIR, str(season), live=False)
+        if not day or (last is not None and week >= last):
+            return NEXT_TODAY_ROSTER
+        lands = datetime.fromisoformat(day)
+        when = f"{lands:%A}, {lands:%b} {lands.day}"
+        return f"{NEXT_TODAY_ROSTER} {NEXT_TODAY_THEN.format(day=when, week=week + 1)}"
+    except Exception:               # no cache, no schedule, a bad clock
+        return NEXT_TODAY
+
+
+def contacts_line() -> str:
+    """CONTACTS_LINE with the address reports are sent from: EMAIL_FROM's
+    when it names a real one, else LAUNCH.md's."""
+    raw = os.environ.get("EMAIL_FROM", "")
+    address = raw.rsplit("<", 1)[-1].rstrip("> ").strip() if raw else ""
+    if "@" not in address or address.endswith(".invalid"):
+        address = SENDER_ADDRESS
+    return CONTACTS_LINE.format(address=address)
+
+
 def _next_rows(seat: bool, carries_on: bool = False,
                season_over: bool = False,
-               week: int | None = None) -> list[tuple[str, str]]:
+               week: int | None = None,
+               today: str = NEXT_TODAY) -> list[tuple[str, str]]:
     """``carries_on``: a second purchase of a roster this address already
     gets reports for (LP2-D1). Its reports simply continue, so "Today: your
     first report" would promise something the intake does not send.
@@ -350,7 +432,7 @@ def _next_rows(seat: bool, carries_on: bool = False,
     next schedule."""
     today = ([] if carries_on else
              [(NEXT_SCHEDULE_WHEN, NEXT_SCHEDULE)] if season_over else
-             [("Today", NEXT_TODAY)])
+             [("Today", today)])
     tuesday = (NEXT_TUESDAY_LIVE if week is not None and not season_over
                and week >= ODDS_EVERYWHERE_FROM else NEXT_TUESDAY)
     return [*today, ("Every Tuesday", tuesday),
@@ -405,7 +487,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                     purchased_at: str = "", seat_link: str | None = None,
                     duplicate: str | None = None,
                     season_over: bool = False, one_time: bool = False,
-                    playoff: bool = False, week: int | None = None) -> Message:
+                    playoff: bool = False, week: int | None = None,
+                    now: datetime | None = None) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
     league seat link (C4), or None to fall back to the generic seat page.
@@ -416,12 +499,15 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     Pass link (contract C4), so the email names the Playoff Pass and its price;
     it is one payment, so it implies ``one_time``. ``week``: the week the
     purchase fell in (``week_at`` reads it from the schedule when omitted),
-    which decides whether "odds from Week 4" is still news."""
+    which decides whether "odds from Week 4" is still news. ``now``: the
+    run's clock, which decides the "Today" row (``today_text``)."""
     if playoff and plan not in ("monthly", "seat", *PAYER_PLANS):
         one_time = True
     bought, terms = _plan_terms(plan, one_time, playoff)
     if week is None and not season_over:
         week = week_at(season, purchased_at)
+    today = NEXT_TODAY if season_over else today_text(season, now)
+    contacts = contacts_line()
     # A seat CLAIMED a place on somebody else's pass and has no Stripe
     # subscription, so "you bought" and a billing-page cancel were both false
     # for it: the portal finds no customer at that address, which left a seat
@@ -481,7 +567,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'{esc(when_)}</td><td style="{BASE}padding:9px 0;'
         f'border-top:1px solid {LINE};">{esc(what)}</td></tr>'
         for when_, what in _next_rows(seat, carries_on=bool(twice),
-                                      season_over=season_over, week=week))
+                                      season_over=season_over, week=week,
+                                      today=today))
     blocks = []
     twice_text = None
     if twice:
@@ -521,7 +608,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     blocks.append(_block(
         "What happens next",
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0">{rows_html}</table>'))
+        f'border="0">{rows_html}</table>'
+        f'<p style="{BASE}font-size:14px;color:{SLATE};margin:10px 0 0 0;">'
+        f'{esc(contacts)}</p>'))
     terms_html = "".join(f'{para}{esc(term)}</p>' for term in terms)
     terms_html += (f'<p style="{SMALL}margin:4px 0 0 0;">{esc(terms_ref)}: '
                    + (f'<a href="{esc(terms_url)}" style="color:{NAVY};">'
@@ -568,7 +657,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     text_lines += ["", "WHAT HAPPENS NEXT",
                    *[f"{when_}: {what}" for when_, what
                      in _next_rows(seat, carries_on=bool(twice),
-                                   season_over=season_over, week=week)],
+                                   season_over=season_over, week=week,
+                                   today=today)],
+                   contacts,
                    "", "THE TERMS, IN WRITING", *terms,
                    f"{terms_ref}: " + (terms_url or "on our site's terms page."),
                    "", CANCEL_HEAD.upper(), stop_text,

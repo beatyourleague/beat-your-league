@@ -372,8 +372,9 @@ def test_the_saturday_and_roster_emails_open_like_the_report() -> None:
                                [Change("swap", "Start X at RB", "Y is out.")],
                                datetime(2024, 11, 9, 16, tzinfo=timezone.utc))
     lockup = 'Beat Your <span style="color:#F0B62A;">League</span>'
-    assert lockup in check and ">Final check</div>" in check and ">Week 10</div>" in check
-    assert "Week 10 · Final Check</div>" not in check
+    assert lockup in check and "The Saturday check</b>" in check and ">Week 10</div>" in check
+    assert "Week 10 · Saturday Check</div>" not in check
+    assert "Week 10 Saturday Check</title>" in check
     assert ">swap</span>" in check and "border-radius:12px" in check
     from test_preseason import _report as roster_report
 

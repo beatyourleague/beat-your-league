@@ -99,7 +99,10 @@ def test_italic_only_in_the_lockup_and_the_league_pass_slab(name: str) -> None:
     lockup and the hero slab (here, the League Pass headline, drawn as the
     landing hero draws it). The $69, the closer and the app pages' headlines
     were italic."""
-    allowed = {".sitebar .brand"} | ({"h1", "h1 em"} if name == "league-pass.html" else set())
+    # The League Pass's stack of real reports draws each report's own
+    # masthead, whose lockup is italic as it is in every report (Oct 30 2026).
+    allowed = {".sitebar .brand"} | ({"h1", "h1 em", ".fcard .mh-brand"}
+                                     if name == "league-pass.html" else set())
     italic = {sel for sel, body in _rules(_style(_page(name))) if "font-style:italic" in body}
     assert italic <= allowed, (name, italic - allowed)
 
@@ -204,10 +207,10 @@ def test_the_join_header_carries_the_price_with_its_terms_and_no_chips() -> None
     assert '<h2>What lands in your inbox</h2>' in side
 
 
-HOW_INTRO = ("Every Tuesday: every slot decided, the week's closest call explained, what to do "
-             "and by when, and a plan for late news. Here's what each part means, where the "
-             "numbers come from and how to check any call. You paste your roster when you sign "
-             "up, and again whenever it changes. No login, no league connection.")
+# Oct 30 2026 review: the intro names the report's four parts in their own
+# words; the paste-your-roster line moved to "What you get, and when".
+HOW_INTRO = ("Every Tuesday: your lineup decided, the week's closest call, your game plan and "
+             "an if/then for late news. Here's what each part means and how to check any call.")
 
 
 def test_how_it_works_reads_in_the_reports_order_and_words() -> None:

@@ -199,8 +199,8 @@ def test_the_alt_text_describes_what_is_actually_on_the_card() -> None:
         "the alt text no longer describes the card the landing page defines")
     # "marked questionable" must be what those rows really say (the sample's
     # FLEX starter is questionable, and his row reads "questionable · see
-    # if/then").
-    assert all(str(r["nocall"]).startswith("questionable") for r in nocall), nocall
+    # if/then", sentence case since Oct 30 2026 — the card draws it in capitals).
+    assert all(str(r["nocall"]).lower().startswith("questionable") for r in nocall), nocall
 
 
 def test_a_dropped_row_refuses_rather_than_shipping_a_shorter_card() -> None:

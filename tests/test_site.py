@@ -261,6 +261,49 @@ def test_a_seat_claimed_in_week_1_is_promised_the_roster_report_it_gets() -> Non
                          r"roster report", text, re.I), name
 
 
+def test_the_welcome_names_the_first_report_it_is_sending(tmp_path, monkeypatch) -> None:
+    """Review Oct 30 2026: the welcome's "Today" row printed the whole
+    conditional ("This week's lineup if it's Week 2 or later and…") to a
+    buyer whose week the email already knew. It now says the one branch that
+    applies, by run/intake._first_file's own rule on the run's clock: Week 1
+    → the roster report; Week 2+ before the week's first kickoff → this
+    week's lineup; after kickoff → the roster report and the Tuesday the next
+    weekly report lands. No readable schedule → the conditional, which is
+    true either way. From the cached schedule only (no network)."""
+    from datetime import datetime, timezone
+
+    import run.solo as solo
+    from render import welcome
+    games = tmp_path / "games.csv"
+    games.write_text(
+        "season,game_type,week,gameday,gametime,home_team,away_team,home_score,away_score\n"
+        "2030,REG,1,2030-09-12,20:20,KC,BAL,,\n"
+        "2030,REG,1,2030-09-15,13:00,NYG,DAL,,\n"
+        "2030,REG,2,2030-09-19,20:15,KC,LV,,\n"
+        "2030,REG,2,2030-09-23,20:15,NYG,PHI,,\n"
+        "2030,REG,3,2030-09-26,20:15,DAL,KC,,\n"
+        "2030,REG,3,2030-09-29,13:00,BAL,NYG,,\n", encoding="utf-8")
+    monkeypatch.setattr(solo, "CACHE_DIR", tmp_path)
+    at = lambda iso: datetime.fromisoformat(iso).replace(tzinfo=timezone.utc)
+    assert welcome.today_text("2030", at("2030-09-01T12:00")) == welcome.NEXT_TODAY_ROSTER
+    assert welcome.today_text("2030", at("2030-09-17T12:00")) == welcome.NEXT_TODAY_WEEK
+    after = welcome.today_text("2030", at("2030-09-21T12:00"))
+    assert after == f"{welcome.NEXT_TODAY_ROSTER} Tuesday, Sep 24: your Week 3 report."
+    # The last week has no next report to name.
+    assert welcome.today_text("2030", at("2030-09-27T12:00")) == welcome.NEXT_TODAY_ROSTER
+    monkeypatch.setattr(solo, "CACHE_DIR", tmp_path / "none")
+    assert welcome.today_text("2030", at("2030-09-17T12:00")) == welcome.NEXT_TODAY
+    # The email carries the branch and where its reports come from.
+    monkeypatch.setattr(solo, "CACHE_DIR", tmp_path)
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    msg = welcome.welcome_message("a@example.com", "season", "abcdef0123", "2030",
+                                  one_time=True, now=at("2030-09-17T12:00"))
+    assert welcome.NEXT_TODAY_WEEK in msg.text and welcome.NEXT_TODAY not in msg.text
+    assert ("Add reports@beatyourleague.com to your contacts so Tuesday's report lands "
+            "in your inbox.") in msg.text
+    assert "reports@beatyourleague.com" in (SITE.parent / "LAUNCH.md").read_text(encoding="utf-8")
+
+
 def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
     """OPS-R1, the join page's half, reproduced: a seat claim became a seat
     only once the claimed address pressed a mailed button (run/intake.py
@@ -4847,7 +4890,7 @@ def test_every_selling_page_states_the_odds_gate_in_the_same_plain_words() -> No
     explained = prose(HOW.split("<dt>Rows with no percentage</dt>")[1].split("</dd>")[0])
     for check in ("teams play this week", "questionable, doubtful or out",
                   "reserve list or the practice squad", "three this season",
-                  "Never on defenses", "never in Week 1"):
+                  "Never on defenses", "no odds in Week 1"):
         assert check in explained, check
 
 

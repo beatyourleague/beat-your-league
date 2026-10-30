@@ -160,19 +160,46 @@ def table_html(payload: Mapping[str, Any], players_payload: Mapping[str, Any]) -
     lines = [f'<h2 id="every-bye">Every {esc(str(payload["season"]))} NFL bye week</h2>',
              '<ul class="byetable">']
     empty: list[int] = []
+    current = played_before(payload)
     for week in payload["weeks"]:
         if not week["bye"]:
             empty.append(int(week["week"]))
             continue
         teams = sorted(names.get(team, team) for team in week["bye"])
-        lines.append(f"<li><b>Week {int(week['week'])}</b> — "
-                     f"{esc(', '.join(teams))}</li>")
+        # A week already played is dimmed and says so (review, Oct 30 2026):
+        # the list read as if every bye in it were still ahead.
+        done = current is not None and int(week["week"]) < current
+        opener = '<li class="played">' if done else "<li>"
+        tag = ' <span class="tag pl">played</span>' if done else ""
+        lines.append(f"{opener}<b>Week {int(week['week'])}</b> — "
+                     f"{esc(', '.join(teams))}{tag}</li>")
     lines.append("</ul>")
     if empty:
         noun = "Week" if len(empty) == 1 else "Weeks"
         lines.append(f"<p>No byes in {noun} {esc(_ranges(empty))}.</p>")
     lines.append(f'<p class="src">{esc(SOURCE_LINE)}</p>')
     return "\n".join(lines)
+
+
+def played_before(payload: Mapping[str, Any]) -> int | None:
+    """The week being played when the data was built — run.solo.current_week's
+    rule (the first week whose regular window ends that day or later, NFL
+    time), on the payload's own "generated" stamp, so the table is a function
+    of the committed file and never of the day it is read. None when the
+    stamp can't be read, or the season is over (then nothing is dimmed)."""
+    try:
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+        built = datetime.fromisoformat(str(payload.get("generated")))
+        if built.tzinfo is None:
+            built = built.replace(tzinfo=timezone.utc)
+        day = built.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    except (TypeError, ValueError):
+        return None
+    for week in payload.get("weeks") or []:
+        if str(week.get("ends") or "") >= day:
+            return int(week["week"])
+    return None
 
 
 def with_table(page: str, block: str) -> str:
@@ -237,7 +264,16 @@ def main(argv: list[str] | None = None) -> int:
         payload = build(args.season, args.raw, directory)
         validate(payload, directory)
         page = args.page.read_text(encoding="utf-8")
-        new_page = with_season(with_table(page, table_html(payload, directory)),
+        table = payload
+        if args.check:
+            # The table's "played" marks follow the committed file's own
+            # stamp: a check asks whether the FACTS moved, not the calendar.
+            try:
+                stamp = json.loads(args.output.read_text(encoding="utf-8")).get("generated")
+            except (OSError, ValueError, AttributeError):
+                stamp = None
+            table = dict(payload, generated=stamp or payload.get("generated"))
+        new_page = with_season(with_table(page, table_html(table, directory)),
                                payload["season"])
     except (ByeIndexError, NflverseError, OSError, ValueError, KeyError) as exc:
         print(f"refusing to write the bye planner's data: {exc} — last week's file stays",

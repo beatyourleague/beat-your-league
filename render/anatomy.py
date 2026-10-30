@@ -297,6 +297,11 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
             tone = "flag" if alarming else "muted"
         elif not projected and slot.get("usage"):
             label, tone = str(slot["usage"]), "basis"
+        if label and tone != "basis":
+            # Sentence case on every surface (web, email, phone): the reason
+            # used to print in tracked capitals ("NO BENCH QB") and read as an
+            # error code. Casing only; the words are row_label's.
+            label = label[:1].upper() + label[1:]
         rows.append({
             "i": i,
             "slot": rr.SLOT_DISPLAY.get(slot.get("slot"), slot.get("slot")),

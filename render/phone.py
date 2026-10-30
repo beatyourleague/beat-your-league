@@ -248,6 +248,77 @@ def hiw_cards(report: Mapping[str, Any]) -> dict[str, str]:
     }
 
 
+# ------------------------------------------------- the League Pass's stack
+
+# "One pass, a report for every team" (review, Oct 30 2026): three paper
+# reports, masthead up, fanned out from a stack. Each is the masthead of a
+# REAL generated report — the pinned 2024 Week 10 sample, the first-week
+# sample and a week of the live sample — named the way the product names a
+# subscriber's team (render.report.team_name: its roster's lead, fixed by last
+# season). Nothing on a card is typed here: each entry is stack_entry() of the
+# report that built its page, kept in a small fixture so the page can be
+# re-injected without the data cache, and a test holds the sample entries to
+# their pages' own mastheads.
+PASS_STACK = REPO_ROOT / "tests" / "fixtures" / "pass-stack.json"
+LEAGUE_PASS = REPO_ROOT / "site" / "league-pass.html"
+# The pages, in the stack's order front to back.
+STACK_SOURCES = ("this-week.html", "sample-report.html", "sample-first-week.html")
+STACK_CAPTION = ("Real reports from our samples, mastheads up. With the League Pass, "
+                 "every manager who claims a seat gets one like these, built from "
+                 "their own roster.")
+
+
+def stack_entry(report: Mapping[str, Any], source: str) -> dict[str, str]:
+    """One card of the stack: the report's own masthead, with its team named
+    by the roster's lead as a subscriber's report names it."""
+    m = anatomy.masthead(report)
+    lead = (report.get("meta") or {}).get("team_lead")
+    return {"source": source, "label": str(m["label"]), "week": str(m["week"]),
+            "team": f"{lead}'s team" if lead else str(m["team"]),
+            "meta": str(m["meta"]), "stamp": str(m["stamp"])}
+
+
+def load_stack(path: Path | None = None) -> list[dict[str, str]]:
+    path = path or PASS_STACK
+    if not path.is_file():
+        return []
+    return list(json.loads(path.read_text(encoding="utf-8")))
+
+
+def write_stack_entry(entry: Mapping[str, str], path: Path | None = None) -> None:
+    """Replace (or add) the entry for ``entry["source"]``, kept in
+    STACK_SOURCES order."""
+    path = path or PASS_STACK
+    entries = {e["source"]: e for e in load_stack(path)}
+    entries[entry["source"]] = dict(entry)
+    ordered = [entries[s] for s in STACK_SOURCES if s in entries]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(ordered, indent=1, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+
+
+def pass_stack(entries: list[Mapping[str, str]]) -> str:
+    """The stack's markup. Raises unless every source has its entry."""
+    have = [e.get("source") for e in entries]
+    if have != list(STACK_SOURCES):
+        raise SelectionError(f"the pass stack needs {list(STACK_SOURCES)}, has {have}")
+    cards = []
+    for e in entries:
+        cards.append(
+            '<div class="fcard"><div class="mh"><div class="mh-top"><span class="mh-brand">'
+            'Beat Your <span class="lg">League</span></span>'
+            f'<span class="mh-label">{esc(e["label"])}</span></div>'
+            f'<div class="mh-week">{esc(e["week"])}</div>'
+            f'<div class="mh-meta"><b>{esc(e["team"])}</b> · {esc(e["meta"])}</div>'
+            f'<div class="mh-stamp">{esc(e["stamp"])}</div></div>'
+            '<div class="fpaper" aria-hidden="true"><span class="ftag">Your Lineup, '
+            'Decided</span><i></i><i></i><i></i></div></div>')
+    names = ", ".join(f'{e["team"]} ({e["week"]})' for e in entries)
+    return (f'<figure class="passfan"><div class="fan" data-reveal role="img" '
+            f'aria-label="{esc("Three real reports: " + names)}">{"".join(cards)}</div>'
+            f'<figcaption>{esc(STACK_CAPTION)}</figcaption></figure>')
+
+
 # ------------------------------------------------------------------ injection
 
 def markers(name: str) -> tuple[str, str]:
@@ -292,14 +363,18 @@ def load_fixture(path: Path | None = None) -> dict:
 
 
 def publish(report: Mapping[str, Any], pages: tuple[str, ...] = ("index", "hiw"),
-            landing: Path | None = None, how: Path | None = None) -> None:
-    """Inject every generated block into the pages that carry them."""
+            landing: Path | None = None, how: Path | None = None,
+            league_pass: Path | None = None, stack: Path | None = None) -> None:
+    """Inject every generated block into the pages that carry them. "lp" is
+    the League Pass's stack, from its own fixture (``load_stack``)."""
     if "index" in pages:
         for name, html in landing_blocks(report).items():
             inject(landing or LANDING, name, html)
     if "hiw" in pages:
         for name, html in hiw_cards(report).items():
             inject(how or HOW, name, html)
+    if "lp" in pages:
+        inject(league_pass or LEAGUE_PASS, "pass-stack", pass_stack(load_stack(stack)))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -307,11 +382,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--fixture", type=Path, default=FIXTURE)
-    parser.add_argument("--pages", default="index,hiw",
-                        help="comma-separated: index, hiw")
+    parser.add_argument("--pages", default="index,hiw,lp",
+                        help="comma-separated: index, hiw, lp")
+    parser.add_argument("--stack-live", type=Path, metavar="REPORT_JSON",
+                        help="refresh the League Pass stack's this-week card from a "
+                             "saved live-sample report (render.live_sample)")
     args = parser.parse_args(argv)
     report = load_fixture(args.fixture)
     pages = tuple(p for p in args.pages.split(",") if p)
+    if args.stack_live:
+        write_stack_entry(stack_entry(json.loads(args.stack_live.read_text(encoding="utf-8")),
+                                      "this-week.html"))
     try:
         publish(report, pages)
     except (ValueError, SelectionError) as exc:

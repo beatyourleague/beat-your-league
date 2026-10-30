@@ -781,3 +781,39 @@ def test_a_published_sample_is_titled_as_a_fantasy_football_report() -> None:
                                      if k not in ("anonymized_demo", "historical_demo")}}
     assert "<title>Beat Your League — 2024 Week 10 Report</title>" in rr.render(
         subscriber, rr.TEMPLATE_PATH.read_text(encoding="utf-8"))
+
+
+def test_the_league_pass_stack_is_three_real_reports() -> None:
+    """Review, Oct 30 2026: "one pass, a report for every team" is drawn as
+    three paper reports, masthead up — never an invented team or number. The
+    block is render/phone.py's pass_stack of its committed fixture; each
+    sample card's week, settings and stamp are its page's own masthead, word
+    for word (make sample rewrites both together); every team is named the way
+    a subscriber's report names it, by the roster's lead, and that player is on
+    the page the card came from. The fan opens from a stack on entering view
+    by transform alone (site/motion.js adds .in), so without the script, under
+    reduced motion or in print, it is simply open."""
+    import json
+
+    from render import phone
+    entries = phone.load_stack()
+    assert [e["source"] for e in entries] == list(phone.STACK_SOURCES)
+    assert phone.block(LEAGUE_PASS, "pass-stack") == phone.pass_stack(entries)
+    lead = json.loads(phone.FIXTURE.read_text(encoding="utf-8"))["meta"]["team_lead"]
+    for entry in entries:
+        page = (SITE / entry["source"]).read_text(encoding="utf-8")
+        assert entry["team"].endswith("'s team")
+        assert html.escape(entry["team"][:-len("'s team")]) in page, entry
+        if entry["source"] == "this-week.html":
+            continue          # rebuilt every Tuesday; its card is a past week's
+        head = re.search(r'<div class="masthead"><h1>(.*?) · (.*?)</h1><p class="mmeta">'
+                         r'<b>[^<]*</b> · (.*?)</p><p class="mstamp">(.*?)</p>', page)
+        assert head.groups() == (entry["week"], entry["label"], html.escape(entry["meta"]),
+                                 html.escape(entry["stamp"])), entry["source"]
+        assert entry["team"] == f"{lead}'s team"
+    css = LEAGUE_PASS.split("<style>")[1].split("</style>")[0]
+    fan = [line for line in css.splitlines() if ".fcard" in line or ".fan" in line]
+    assert any(".motion .fan:not(.in) .fcard" in line for line in fan)
+    assert not any(re.search(r"\b(opacity|width|height|left|top):", line)
+                   for line in fan if ":not(.in)" in line and "[data-reveal]" not in line)
+    assert "transition:transform .5s" in css

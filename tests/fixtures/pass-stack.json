@@ -1,0 +1,26 @@
+[
+ {
+  "source": "this-week.html",
+  "label": "Your Report",
+  "week": "Week 8",
+  "team": "De'Von Achane's team",
+  "meta": "12 teams · Full PPR",
+  "stamp": "Built Tue Oct 27 · 2:04 PM ET"
+ },
+ {
+  "source": "sample-report.html",
+  "label": "Your Report",
+  "week": "Week 10",
+  "team": "Josh Allen's team",
+  "meta": "12 teams · Full PPR",
+  "stamp": "Rebuilt Oct 30, 2026 from the 2024 season archive"
+ },
+ {
+  "source": "sample-first-week.html",
+  "label": "Your Report",
+  "week": "Week 1",
+  "team": "Josh Allen's team",
+  "meta": "12 teams · Full PPR",
+  "stamp": "Rebuilt Oct 30, 2026 from the 2024 season archive"
+ }
+]

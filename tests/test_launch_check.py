@@ -50,7 +50,9 @@ def test_a_free_report_button_with_nowhere_to_post_fails(site) -> None:
 
 def test_a_banned_word_or_betting_word_on_a_selling_page_fails(site) -> None:
     page = site / "league-pass.html"
-    page.write_text(page.read_text().replace("<h2>Fair play</h2>",
+    # The anchor moved when "Fair play" was cut (review, Oct 30 2026): any
+    # heading on the page serves, the gate reads the whole page.
+    page.write_text(page.read_text().replace('<h2 id="lp-faq">Before you ask</h2>',
                                              "<h2>Fair play, proven</h2><p>no sportsbook</p>"))
     gates = lc.check_selling_copy()
     assert _status(gates, "banned claim words") == "FAIL"

@@ -174,7 +174,7 @@ def build(cache_dir: Path = CACHE_DIR, season: str | None = None,
     report["meta"]["live_demo"] = True
     report["meta"]["anonymized_demo"] = True
     missing = absences(data, roster)
-    report["meta"]["thin_week_note"] = thin_week_line(report, missing)
+    report["meta"]["thin_week_note"] = week_note(report, missing)
     if context is not None:
         from run.solo import _row_teams
         context["teams"] = _row_teams(spec, data)
@@ -234,11 +234,101 @@ def thin_week_line(report: Mapping[str, Any],
             f"carry odds.")
 
 
+# --------------------------------------------------------------------- #
+# a rough week is framed as the demo it is
+# --------------------------------------------------------------------- #
+
+# Buyer words for a position, singular and plural. A starter keeps the slot's
+# own code ("its QB"), the way the lineup prints it.
+_POSITION_WORDS = {
+    "QB": ("quarterback", "quarterbacks"), "RB": ("running back", "running backs"),
+    "WR": ("receiver", "receivers"), "TE": ("tight end", "tight ends"),
+    "K": ("kicker", "kickers"), "DEF": ("defense", "defenses"),
+}
+_COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+                7: "seven", 8: "eight", 9: "nine"}
+
+
+def _why_out(text: str, kind: str | None, plural: bool = False) -> str:
+    """"is on bye" / "was ruled out last week" / "is on injured reserve" —
+    from the report's own reason for a player who can't (or may not) play."""
+    text = (text or "").strip()
+    if kind == "designation" or text.startswith("designated"):
+        return "were ruled out last week" if plural else "was ruled out last week"
+    if kind == "bye" or " on bye" in f" {text}":
+        return "are on bye" if plural else "is on bye"
+    if text == "released":
+        return "have been released" if plural else "has been released"
+    return f"{'are' if plural else 'is'} {text or 'out'}"
+
+
+def rough_week_line(report: Mapping[str, Any]) -> str | None:
+    """The banner line for a week whose lineup has a starting slot this roster
+    can't cover — an absent starter or an empty slot, which is also when the
+    team total is withheld (engine.week_report.team_range_gate). The page opens
+    on that withheld total, and without this it read as a broken report rather
+    than the hard week it is. Every clause is a fact the report carries: the
+    slot, why its starter can't play, the bench player held behind him, and
+    the rest of the bench who can't play this week. None on a week every slot
+    can be covered."""
+    lineup = report.get("lineup") or []
+    clauses: list[str] = []
+    named: set[str] = set()
+    for slot in lineup:
+        code = str(slot.get("slot") or "")
+        if not slot.get("player_id"):
+            clauses.append(f"its {code} spot has nobody to start")
+            continue
+        if slot.get("status") != "out":
+            continue
+        clause = f"its {code} {_why_out(str(slot.get('status_reason') or ''), None)}"
+        held = slot.get("bench_held") or {}
+        if held.get("name"):
+            named.add(str(held["name"]))
+            clause += (f" and his backup "
+                       f"{_why_out(str(held.get('text') or ''), held.get('kind'))}")
+        clauses.append(clause)
+    if not clauses:
+        return None
+    groups: dict[tuple[str, str], int] = {}
+    for entry in report.get("bench") or []:
+        if not entry.get("out") or str(entry.get("name")) in named:
+            continue
+        position = str(entry.get("position") or "")
+        why = (entry.get("out_kind") or "", str(entry.get("out_text") or ""))
+        key = (position, "|".join(why))
+        groups[key] = groups.get(key, 0) + 1
+    for (position, why), count in groups.items():
+        kind, text = why.split("|", 1)
+        one, many = _POSITION_WORDS.get(position, (position, position))
+        who = f"a {one}" if count == 1 else f"{_COUNT_WORDS.get(count, str(count))} {many}"
+        clauses.append(f"{who} {_why_out(text, kind or None, plural=count > 1)}")
+    said = (clauses[0] if len(clauses) == 1
+            else ", ".join(clauses[:-1]) + ", and " + clauses[-1])
+    return (f"This week's sample roster is a rough one: {said}. Your Game Plan "
+            f"shows exactly what its manager should do.")
+
+
+def week_note(report: Mapping[str, Any],
+              missing: list[tuple[str, str]]) -> str | None:
+    """The one banner line a week gets: a rough week framed as the demo it is
+    (and, when it is also thin, how many slots carry odds), else the thin-week
+    line, else nothing."""
+    rough = rough_week_line(report)
+    thin = thin_week_line(report, missing)
+    if rough and thin:
+        lineup = report.get("lineup") or []
+        odds = sum(1 for slot in lineup if slot.get("confidence") is not None)
+        return f"{rough} {odds} of its {len(lineup)} slots carry odds."
+    return rough or thin
+
+
 # The banner is the first notice inside <main> (render/report.py; it was a
 # .regret-note before the panel-review chrome, which left the thin-week line
 # anchored to nothing and outside every landmark).
 _BANNER = re.compile(r'(<div class="(?:notice|regret-note)"[^>]*>(?:<b>)?THIS WEEK.{1,8}S REPORT.*?</div>)',
                      re.S)
+_PLAN_NUMBER = re.compile(r'<span class="tag">Your Game Plan</span><span class="n">(\d+)</span>')
 
 
 def with_thin_week(page: str, line: str | None) -> str:
@@ -246,6 +336,11 @@ def with_thin_week(page: str, line: str | None) -> str:
     (or at the top of the report if the banner moved)."""
     if not line:
         return page
+    # "Your Game Plan" points at the card by its printed number, read off the
+    # page (sections are numbered by position, render.report.number_sections).
+    plan = _PLAN_NUMBER.search(page)
+    if plan and "Your Game Plan shows" in line:
+        line = line.replace("Your Game Plan shows", f"Your Game Plan ({plan.group(1)}) shows", 1)
     note = f'<div class="notice">{esc(line)}</div>'
     if _BANNER.search(page):
         return _BANNER.sub(lambda m: m.group(1) + note, page, count=1)
@@ -987,6 +1082,18 @@ _PROMISE = re.compile(r"(<div class=\"ctacard\"><p>.*?)Yours is built from your 
 _OLD_SOURCE = "Aggregated and scored to your league&#x27;s settings by us."
 _NEW_SOURCE = ("Aggregated and scored by us under the scoring you chose (full PPR, "
                "half PPR or standard).")
+# Retired chrome wording -> today's (review, Oct 30 2026): one name for the
+# Saturday email, "the Saturday check", and the footer's tagline. Words only.
+_RETIRED_CHROME = (
+    ("— the weekly scouting report for your fantasy roster, every Tuesday of the season.",
+     "— your lineup, decided every Tuesday of the season."),
+    ('<p class="standing"><b>Saturday:</b>', '<p class="standing"><b>The Saturday check:</b>'),
+    ("If he is, Saturday&#x27;s final check will tell you.",
+     "If he is, the Saturday check will tell you."),
+)
+# A row's reason, sentence case (render.anatomy): the style used to draw it in
+# capitals, so a page built before then carries it in lower case.
+_ROW_NOTE = re.compile(r'(<span class="fnc(?: flag)?">)([a-z])')
 
 
 def restamp_chrome(page: str, *, byes_left: bool | None = None,
@@ -1023,6 +1130,8 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
     stop = cancel_html(stop_route({"anonymized_demo": True}), sample=True)
     page = _STOP_BLOCK.sub(lambda _m: stop, page, count=1)
     page = page.replace(_OLD_SOURCE, _NEW_SOURCE)
+    for old, new in _RETIRED_CHROME:
+        page = page.replace(old, new)
     # The two head lines a rebuild would also change, said the way it would
     # (render.report.render's sample title; share_text's facts, minus the
     # ones only the report can confirm): the odds count advertised the slots
@@ -1055,8 +1164,11 @@ def restamp_style(page: str, template: str) -> str:
     if 'class="card"' not in page:
         return page
     style, _links = extract_design(template)
-    return re.sub(r"<style>.*?</style>", lambda _m: f"<style>{style + MARK_CSS}</style>",
+    page = re.sub(r"<style>.*?</style>", lambda _m: f"<style>{style + MARK_CSS}</style>",
                   page, count=1, flags=re.S)
+    # The style no longer capitalises a row's reason; the words do (casing
+    # only, render.anatomy), so a page drawn before keeps reading as it should.
+    return _ROW_NOTE.sub(lambda m: m.group(1) + m.group(2).upper(), page)
 
 
 def keep_last_page(out: Path, *, season_over: bool = True) -> None:
@@ -1186,7 +1298,7 @@ def main(argv: list[str] | None = None) -> int:
         # build stands, and the page may print nothing it does not hold.
         report = hold_closest(recorded_only(report, args.processed_dir),
                               REBUILT_CLOSEST)
-        report["meta"]["thin_week_note"] = thin_week_line(
+        report["meta"]["thin_week_note"] = week_note(
             report, context.get("missing") or [])
         print("nothing recorded: this week was recorded by its first build "
               "(--force); the page shows only those odds")
@@ -1210,7 +1322,7 @@ def main(argv: list[str] | None = None) -> int:
         odds = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
         report = hold_closest(recorded_only(report, args.processed_dir), UNRECORDED_CLOSEST)
         if sum(1 for s in report["lineup"] if s.get("confidence") is not None) != odds:
-            report["meta"]["thin_week_note"] = thin_week_line(
+            report["meta"]["thin_week_note"] = week_note(
                 report, context.get("missing") or [])
             print("withheld: some of this build's odds are on the record at other "
                   "values; the page prints only the recorded ones")

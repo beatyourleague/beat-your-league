@@ -291,6 +291,14 @@
     letter-spacing:.06em;text-transform:uppercase;color:#fff;}
   .side p{margin-top:12px;font-size:14px;line-height:1.5;color:#B9C2D0;}
   .side p.src{margin-top:10px;font-size:12px;color:#8FA3BC;}
+  /* A week already played (render/bye_index.py, from the data's own date):
+     dimmed to the stamp's muted blue, not by opacity, which would take the
+     text under 4.5:1 on navy. */
+  .byetable li.played,.byetable li.played b{color:#8FA3BC;}
+  .byetable li.played b{font-weight:700;}
+  .byetable .tag.pl{margin-left:6px;padding:1px 6px;background:transparent;border:1px solid rgba(143,163,188,.5);
+    border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:#8FA3BC;white-space:nowrap;}
 
   @media (max-width:960px){
     .shell{grid-template-columns:minmax(0,1fr);max-width:688px;}
@@ -439,9 +447,9 @@ Baltimore Ravens
 <!-- byes:start -->
 <h2 id="every-bye">Every 2026 NFL bye week</h2>
 <ul class="byetable">
-<li><b>Week 5</b> — Carolina Panthers, Kansas City Chiefs</li>
-<li><b>Week 6</b> — Cincinnati Bengals, Detroit Lions, Miami Dolphins, Minnesota Vikings</li>
-<li><b>Week 7</b> — Buffalo Bills, Jacksonville Jaguars, Los Angeles Chargers, Washington Commanders</li>
+<li class="played"><b>Week 5</b> — Carolina Panthers, Kansas City Chiefs <span class="tag pl">played</span></li>
+<li class="played"><b>Week 6</b> — Cincinnati Bengals, Detroit Lions, Miami Dolphins, Minnesota Vikings <span class="tag pl">played</span></li>
+<li class="played"><b>Week 7</b> — Buffalo Bills, Jacksonville Jaguars, Los Angeles Chargers, Washington Commanders <span class="tag pl">played</span></li>
 <li><b>Week 8</b> — Houston Texans, New Orleans Saints, New York Giants, San Francisco 49ers</li>
 <li><b>Week 9</b> — Pittsburgh Steelers, Tennessee Titans</li>
 <li><b>Week 10</b> — Chicago Bears, Denver Broncos, Philadelphia Eagles, Tampa Bay Buccaneers</li>

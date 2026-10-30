@@ -152,8 +152,8 @@ TRIAL_ONLY = ("This is the only email we'll send you unless you sign up. Didn't 
 # email whose whole job is to convert. No price here: the join page states
 # the prices with their renewal terms beside them, which an email ask can't.
 TRIAL_ASK_HEAD = "Want this every Tuesday?"
-TRIAL_ASK = ("Your lineup decided like this one, every Tuesday, plus a final "
-             "check on Saturday when injury news changes it.")
+TRIAL_ASK = ("Your lineup decided like this one, every Tuesday, plus the "
+             "Saturday check when injury news changes it.")
 TRIAL_BUTTON = "Get next Tuesday's report"
 # The channel tag the join page reads (^[a-z0-9-]{1,24}$), so a signup that
 # came from a free report is counted as one (`make stats`).
@@ -164,7 +164,7 @@ TRIAL_VIA = "trial"
 # checkout closes once that week kicks off (D9), so the ask is next season's.
 TRIAL_LAST_ASK_HEAD = "Want this next season?"
 TRIAL_LAST_ASK = ("Your lineup decided like this one, every Tuesday from Week 1, "
-                  "plus a final check on Saturday when injury news changes it.")
+                  "plus the Saturday check when injury news changes it.")
 TRIAL_LAST_BUTTON = "Tell me when it opens"
 
 # The free report's price line, at the TOP (pre-launch review M5): the one ask
@@ -1558,10 +1558,13 @@ def _lineup_body(model: Mapping[str, Any]) -> str:
             if row.get("tone") == "basis":
                 style = f'{FACT}padding:1px 0 9px 0;'
             else:
-                style = (f'font-family:{FONT};font-size:11px;font-weight:bold;line-height:1.4;'
-                         f'letter-spacing:.5px;text-transform:uppercase;'
-                         f'color:{BRICK if row.get("tone") == "flag" else SLATE};'
-                         f'padding:1px 0 9px 0;')
+                # Sentence case like the web row (.fnc); only a red flag
+                # keeps its capitals (review: tracked capitals read as error
+                # codes).
+                style = (f'font-family:{FONT};font-size:12px;font-weight:bold;line-height:1.4;'
+                         + (f'letter-spacing:.5px;text-transform:uppercase;color:{BRICK};'
+                            if row.get("tone") == "flag" else f'color:{SLATE};')
+                         + 'padding:1px 0 9px 0;')
             rows.append(f'<tr><td></td><td colspan="{cols - 1}" style="{style}">'
                         f'{esc(label)}</td></tr>')
     out.append(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '

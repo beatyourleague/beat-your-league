@@ -28,6 +28,8 @@ from render.sender import sender_line
 ACT = (SWAP, NO_FILL, BACK)
 KEEP_AN_EYE = (WATCH, REMINDER)
 PREHEADER = "Friday's injury report, applied to your lineup."
+# The one name every surface uses for this email (review, Oct 30 2026).
+CHECK_NAME = "The Saturday check"
 STANDS = ("Everything else in Tuesday's report stands. We only send this "
           "when something changes.")
 HEADS = {"act": "Make these changes", "watch": "Keep an eye on",
@@ -109,13 +111,16 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
     """``seat``: a League Pass seat holder, who has no billing to cancel, so
     the footer gives a stop route instead (render.report.cancel_html).
 
-    The Tuesday report's shell (contract A7): the same navy masthead — "Final
-    check" at its right, the week big, what this is beneath — and each group
-    a card of plan items, on paper."""
+    The Tuesday report's shell (contract A7): the same navy masthead — the
+    week big, then what this is, by its one name ("the Saturday check"), and
+    each group a card of plan items, on paper. No label beside the lockup:
+    "Saturday" is one unbreakable word, and in a wide fallback font it pushed
+    the masthead a pixel past a 320px phone ("Final check" wrapped)."""
     week = esc(plan["week"])
     header = masthead_html(
-        "Final check", f"Week {plan['week']}",
-        f'<b style="color:#FFFFFF;">{esc(PREHEADER)}</b>', checked_line(at))
+        "", f"Week {plan['week']}",
+        f'<b style="color:#FFFFFF;">{esc(CHECK_NAME)}</b> — {esc(PREHEADER)}',
+        checked_line(at))
     sections = [_sec(0, HEADS[key], _items_table([_model(c, key) for c in items]), key)
                 for key, items in _groups(changes)]
     footer = (
@@ -133,7 +138,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        f'{EMAIL_META}<title>Beat Your League — Week {week} Final Check</title>\n</head>\n'
+        f'{EMAIL_META}<title>Beat Your League — Week {week} Saturday Check</title>\n</head>\n'
         f'<body style="margin:0;padding:0;background:{PAPER};">\n'
         f'{preheader_html(PREHEADER)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
@@ -148,7 +153,7 @@ def render_final_check(plan: Mapping[str, Any], changes: list[Change],
 @buyer_slots
 def text_for_check(plan: Mapping[str, Any], changes: list[Change],
                    at: datetime, seat: bool = False) -> str:
-    lines = [f"BEAT YOUR LEAGUE — WEEK {plan['week']} FINAL CHECK",
+    lines = [f"BEAT YOUR LEAGUE — WEEK {plan['week']} SATURDAY CHECK",
              PREHEADER, checked_line(at), ""]
     for key, items in _groups(changes):
         lines.append(HEADS[key].upper())
