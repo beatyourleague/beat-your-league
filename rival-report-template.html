@@ -141,9 +141,11 @@
   .fpct{font:800 20px/1 var(--display);color:var(--navy);text-align:right;
     font-variant-numeric:tabular-nums;}
   /* Why a row has no %: a short second line under the name, never a column. */
-  .fnc{grid-column:2 / -1;margin-top:3px;font-size:12px;font-weight:700;line-height:1.3;
-    letter-spacing:.06em;text-transform:uppercase;color:var(--slate);}
-  .fnc.flag{color:var(--brick);}
+  /* Sentence case, like the rest of the row (review: tracked capitals read
+     as error codes); only a red flag keeps the capitals that make it one. */
+  .fnc{grid-column:2 / -1;margin-top:3px;font-size:12px;font-weight:600;line-height:1.35;
+    letter-spacing:0;color:var(--slate);}
+  .fnc.flag{color:var(--brick);font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
   .fnc.basis{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;
     color:var(--ink2);}
 

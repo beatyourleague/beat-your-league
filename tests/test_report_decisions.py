@@ -793,7 +793,8 @@ def test_the_only_quarterback_says_so_in_a_week_with_odds() -> None:
     # The QB's glance row in card 01 (contract C3): its reason, where its %
     # would be.
     qb = re.search(r'<span class="fslot">QB</span>.*?</div>', page, re.S)
-    assert '<span class="fnc">no bench QB</span>' in qb.group(0)
+    # Sentence case on the row since Oct 30 2026 (render.anatomy); the words are row_label's.
+    assert '<span class="fnc">No bench QB</span>' in qb.group(0)
     assert "QB     Quinn Only" in text_summary(report) and "no bench QB" in text_summary(report)
 
 
@@ -1075,7 +1076,7 @@ def test_a_questionable_starter_leads_his_row_when_his_bench_option_is_held() ->
     rows = anatomy.lineup({"meta": {"solo": True},
                            "lineup": [held, fine, called]})["rows"]
     assert (rows[0]["label"], rows[0]["tone"]) == (
-        "questionable · De'Von Achane (bench) can't play", "flag")
+        "Questionable · De'Von Achane (bench) can't play", "flag")
     assert (rows[1]["label"], rows[1]["tone"]) == (
         "De'Von Achane (bench) can't play", "muted")
     assert (rows[0]["proj"], rows[0]["pct"], rows[2]["pct"]) == ("9.1", None, 80)

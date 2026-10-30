@@ -288,8 +288,7 @@ MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
 # here is a false claim on every surface at once. (The launch announcement
 # carried it too until Oct 24 2026; it now says what the pass does in its
 # own words — run/waitlist.BODY.)
-BRAND_LINE = ("the weekly scouting report for your fantasy roster, "
-              "every Tuesday of the season.")
+BRAND_LINE = ("your lineup, decided every Tuesday of the season.")
 # Contract C5 (final review FUN-6/COPY-8): the one betting phrase any surface
 # may carry is "not betting picks". The old line denied a second betting term
 # by name on every report, both samples and every email. One constant; the
@@ -1524,14 +1523,14 @@ def section_regret(regret: Mapping[str, Any]) -> str:
 # mails a swap when he is cleared, and stays quiet when he is not (RULE F3) —
 # hence "if he is", never "either way". Never on a free report: there is no
 # Saturday check behind one.
-SATURDAY_FOLLOWUP = "If he is, Saturday's final check will tell you."
+SATURDAY_FOLLOWUP = "If he is, the Saturday check will tell you."
 # The standing line under every subscriber's game plan (pre-launch review F7):
 # not one of five weekly reports said a Saturday check existed. Never "no
 # email means it stands" — a Saturday run that refuses (the final report not
 # in, a failure) sends nothing, and that promise would turn a failure into
 # false reassurance. Never on a free report: there is no Saturday check
 # behind one.
-SATURDAY_LINE_HEAD = "Saturday"
+SATURDAY_LINE_HEAD = "The Saturday check"
 SATURDAY_LINE = ("after Friday's final injury report, we email you if it "
                  "changes your lineup.")
 
@@ -2188,14 +2187,14 @@ UPDATE_HEAD = "Roster changed?"
 # The Saturday check runs at 16:17 UTC with no intake of its own, and a change
 # takes two hourly intakes (the code out, the press in), so "by Saturday
 # morning" missed for anyone after about 10:47 AM ET (EMAILS-43/44).
-UPDATE_BODY = ("Update it here by Friday night (ET) — your final check and your "
-               "next report use it. We'll email you a button to confirm:")
+UPDATE_BODY = ("Update it here by Friday night (ET) — the Saturday check and "
+               "your next report use it. We'll email you a button to confirm:")
 UPDATE_REPLY = ("Reply to this email with your updated roster and your next report "
                 "follows it.")
 # The season's last report has no next report to follow a change, so the reply
 # route goes and the link keeps only what is still true of it.
-UPDATE_BODY_LAST = ("Update it here by Friday night (ET) — your final check uses "
-                    "it. We'll email you a button to confirm:")
+UPDATE_BODY_LAST = ("Update it here by Friday night (ET) — the Saturday check "
+                    "uses it. We'll email you a button to confirm:")
 
 
 def reply_update_works() -> bool:

@@ -92,7 +92,9 @@ def test_the_brand_line_no_longer_describes_the_sleeper_product() -> None:
     """BRAND_LINE renders in the report footer, the email footer AND this
     announcement, so a stale promise there is false on every surface at once."""
     assert "rival" not in BRAND_LINE.lower()
-    assert "roster" in BRAND_LINE.lower()
+    # Oct 30 2026: the tagline says what the roster product does for the
+    # buyer ("your lineup, decided every Tuesday"), and never reads a league.
+    assert "your lineup" in BRAND_LINE.lower() and "league's" not in BRAND_LINE.lower()
 
 
 def test_the_announcement_states_its_own_volume_and_exit() -> None:

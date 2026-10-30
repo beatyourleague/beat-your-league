@@ -494,86 +494,21 @@ def test_the_drafts_file_says_where_the_planner_card_is(tmp_path) -> None:
 
 
 # --------------------------------------------------------------------- #
-# G4 — the commissioner kit (markup for site/league-pass.html, pasted by the
-# pages builder) and the League Pass line in the one launch email
+# G4 — the commissioner kit (folded into one line on site/league-pass.html)
+# and the League Pass line in the one launch email
 # --------------------------------------------------------------------- #
 
-# The canonical kit: integrator_notes carries these verbatim. It goes after
-# the "Ask the league first" block, before "What you do after paying".
-KIT_MARKUP = """  <!-- The commissioner kit (G4): two things a commissioner can send the group
-       chat today, whether or not checkout is open. Neither needs an email or a login, neither names a price
-       (and the lead names no count: from Week 14 the bye line hides and one is left), and
-       ?via=league-chat lets `make stats` count what the kit brought. The bye
-       line hides once week.json says no bye is left or the season is over. -->
-  <div class="steps ask kit" id="kit" data-reveal>
-    <h3>Something free for the league</h3>
-    <p class="kit-lead">Free to send the group chat today. Nothing here needs an email or a login.</p>
-    <div class="kit-item" id="kit-byes-block">
-      <div class="chatline">
-        <p id="kit-byes">Bye check for the playoff push, free, no login: paste your roster and it shows every week through 17 where a bye leaves a starting spot empty. https://beatyourleague.com/byes/?via=league-chat</p>
-      </div>
-      <button type="button" class="sharebtn" data-share-from="kit-byes" data-share-status="kit-byes-msg" aria-describedby="kit-byes">Send this to the group chat</button>
-      <p class="chatline-msg" id="kit-byes-msg" role="status"></p>
-    </div>
-    <div class="kit-item" id="kit-sample-block">
-      <div class="chatline">
-        <p id="kit-sample">This is the report each of us would get every Tuesday, built from our own roster: https://beatyourleague.com/sample-report.html?via=league-chat</p>
-      </div>
-      <button type="button" class="sharebtn" data-share-from="kit-sample" data-share-status="kit-sample-msg" aria-describedby="kit-sample">Send this to the group chat</button>
-      <p class="chatline-msg" id="kit-sample-msg" role="status"></p>
-    </div>
-  </div>
-"""
-KIT_CSS = """  /* The commissioner kit (G4): the ask's own chatline and share button. */
-  .kit-lead{margin-top:8px;font-size:15px;line-height:1.55;color:var(--dusk2);}
-  .kit-item + .kit-item{margin-top:20px;}
-"""
-# Inside the page's script, after the ask's handler.
-KIT_SHARE_JS = """// The commissioner kit (G4): each line goes to the group chat through the
-// page's one shareLine.
-document.querySelectorAll("[data-share-from]").forEach((button) => {
-  button.addEventListener("click", () => {
-    const line = document.getElementById(button.getAttribute("data-share-from"));
-    const status = document.getElementById(button.getAttribute("data-share-status"));
-    if (line && status) shareLine(line.textContent.replace(/\\s+/g, " ").trim(), line, status);
-  });
-});
-"""
+# The kit, folded (review, Oct 30 2026): the page carried three group-chat
+# snippets — the ask, the kit's bye line and its sample line — and read as a
+# wall of copy. The ask and the after-paying example stay; the sample line is
+# gone; the bye line is ONE line under the ask, linking the planner. It still
+# hides once week.json says no bye is left or the season is over.
 # First thing inside the week.json fetch's `.then((w) => {`, before its early return.
 KIT_HIDE_JS = """      // No bye left to plan, or the season is over: the kit's bye line goes (G4).
       const kitByes = document.getElementById("kit-byes-block");
       if (kitByes && w && (w.byes_left === false || w.phase === "over")) kitByes.hidden = true;
 """
 VIA_RE = r"^[a-z0-9-]{1,24}$"
-
-
-def _kit_lines() -> list[str]:
-    return re.findall(r'<p id="kit-[a-z]+">(.*?)</p>', KIT_MARKUP, re.S)
-
-
-def test_the_kit_lines_sell_nothing_and_say_where_they_came_from() -> None:
-    """No price (so no disclosure is owed), no checkout link, and each ends
-    with an https URL tagged ?via=league-chat — a tag the funnel's own
-    sanitiser keeps — on the planner (contract C7) or the sample."""
-    lines = _kit_lines()
-    assert len(lines) == 2
-    for line in lines:
-        assert "$" not in line and "join/" not in line
-        url = line.rsplit(" ", 1)[1]
-        assert url.startswith("https://beatyourleague.com/") and url.endswith("?via=league-chat")
-        assert re.fullmatch(VIA_RE, url.rsplit("=", 1)[1])
-        low = line.lower()
-        assert not re.search(r"\b(calibrated|tested|proven|accurate|file|bet|odds)\b", low)
-    assert lines[0].split(" https://")[1].startswith("beatyourleague.com/byes/")
-    assert lines[1].split(" https://")[1].startswith("beatyourleague.com/sample-report.html")
-    # T2: the bye line hides from Week 14 on (KIT_HIDE_JS), so a lead that
-    # counted its items ("Two things…") promised two above one.
-    lead = re.search(r'<p class="kit-lead">(.*?)</p>', KIT_MARKUP).group(1)
-    assert not re.search(r"\b(two|both|neither|one)\b", lead.lower()), lead
-    buttons = re.findall(r"<button[^>]*>", KIT_MARKUP)
-    assert len(buttons) == 2 and all("data-share-from" in b and "data-share-status" in b
-                                     for b in buttons)
-    assert "shareLine(" in KIT_SHARE_JS and "data-share-from" in KIT_SHARE_JS
 
 
 def _node(script: str):
@@ -585,23 +520,13 @@ def _node(script: str):
     return json.loads(done.stdout)
 
 
-def test_the_kit_shares_each_line_and_hides_the_bye_line_with_no_byes_left() -> None:
-    """Run under node with a stub DOM: each button hands ITS line to
-    shareLine; the bye block hides on byes_left false or phase over, and
-    stays for an ordinary week, an unknown one and the preseason."""
+def test_the_kit_bye_line_hides_with_no_byes_left() -> None:
+    """Run under node with a stub DOM: the bye line hides on byes_left false
+    or phase over, and stays for an ordinary week, an unknown one and the
+    preseason."""
     got = _node("""
-const els = {"kit-byes": {textContent: " Bye check\\n  for the push https://x/byes/?via=league-chat "},
-             "kit-byes-msg": {}, "kit-sample": {textContent: "This is the report https://x/s"},
-             "kit-sample-msg": {}};
-const buttons = [["kit-byes", "kit-byes-msg"], ["kit-sample", "kit-sample-msg"]].map(([f, s]) => ({
-  attrs: {"data-share-from": f, "data-share-status": s},
-  getAttribute(n) { return this.attrs[n]; },
-  addEventListener(_e, fn) { this.click = fn; }}));
-const document = {querySelectorAll: () => buttons, getElementById: (id) => els[id]};
-const shared = [];
-function shareLine(text, line, status) { shared.push([text, line === els[buttons[shared.length].attrs["data-share-from"]], !!status]); }
-""" + KIT_SHARE_JS + """
-buttons.forEach((b) => b.click());
+const els = {};
+const document = {getElementById: (id) => els[id]};
 const hidden = [{byes_left: false}, {phase: "over"}, {byes_left: true, phase: "season"},
                 {}, {phase: "preseason"}, null].map((w) => {
   const block = {hidden: false};
@@ -611,25 +536,26 @@ const hidden = [{byes_left: false}, {phase: "over"}, {byes_left: true, phase: "s
   })();
   return block.hidden;
 });
-console.log(JSON.stringify({shared, hidden}));
+console.log(JSON.stringify({hidden}));
 """)
-    assert got["shared"] == [["Bye check for the push https://x/byes/?via=league-chat", True, True],
-                             ["This is the report https://x/s", True, True]]
     assert got["hidden"] == [True, True, False, False, False, False]
 
 
-def test_once_pasted_the_kit_follows_the_ask_and_precedes_the_steps() -> None:
-    """When the pages builder has pasted the kit into league-pass.html: it is
-    the markup above, after "Ask the league first" (whose #ask-text and
-    #ask-share stay) and before "What you do after paying", and its two
-    scripts are in the page."""
+def test_the_kit_is_one_line_under_the_ask() -> None:
+    """The folded kit on league-pass.html: one line, inside "Ask the league
+    first" and before "What you do after paying", linking the free planner;
+    no price, no checkout link, no banned word; the sample-link snippet and
+    the per-line share buttons are gone, and the hide script stays."""
     page = (SITE / "league-pass.html").read_text(encoding="utf-8")
-    if 'id="kit"' not in page:
-        pytest.skip("the commissioner kit is not pasted into league-pass.html yet (integrator note G4)")
-    assert KIT_MARKUP.strip() in page
-    assert page.index('id="ask-share"') < page.index('id="kit"') < page.index("What you do after paying")
-    assert KIT_SHARE_JS.strip() in page and KIT_HIDE_JS.strip() in page
-    assert KIT_CSS.strip() in page
+    assert 'id="kit"' not in page and "kit-sample" not in page and "data-share-from" not in page
+    line = re.search(r'<p class="kitline" id="kit-byes-block">(.*?)</p>', page, re.S)
+    assert line, "the planner line is missing"
+    text = re.sub(r"\s+", " ", line.group(1))
+    assert 'href="byes/"' in text and "$" not in text and "join/" not in text
+    assert not re.search(r"\b(calibrated|tested|proven|accurate|file|bet|odds)\b", text.lower())
+    assert page.index('id="ask-share"') < page.index('id="kit-byes-block"') \
+        < page.index("What you do after paying")
+    assert KIT_HIDE_JS.strip() in page
 
 
 def test_the_launch_email_names_the_league_pass_only_when_it_can_be_bought(monkeypatch) -> None:

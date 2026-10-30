@@ -117,6 +117,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"could not build the sample: {exc}", file=sys.stderr)
         return 1
     out.write_text(page(report), encoding="utf-8")
+    if args.week == FIRST_WEEK and args.out is None:
+        # The League Pass's stack shows this page's masthead (render/phone.py).
+        from render import phone
+        phone.write_stack_entry(phone.stack_entry(report, FIRST_WEEK_OUT.name))
+        try:
+            phone.publish(report, ("lp",))
+        except (ValueError, phone.SelectionError) as exc:
+            print(f"could not inject the League Pass stack: {exc}", file=sys.stderr)
+            return 1
     if args.week == WEEK and args.out is None:
         # The landing's phone and real-report cards, and How it works' cards,
         # are generated from THIS report (render/phone.py), so a rebuilt
@@ -125,8 +134,9 @@ def main(argv: list[str] | None = None) -> int:
         # hold the pages to it.
         from render import phone
         phone.write_fixture(report)
+        phone.write_stack_entry(phone.stack_entry(report, DEFAULT_OUT.name))
         try:
-            phone.publish(report)
+            phone.publish(report, ("index", "hiw", "lp"))
         except ValueError as exc:
             print(f"could not inject the generated cards: {exc}", file=sys.stderr)
             return 1

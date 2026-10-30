@@ -224,6 +224,65 @@ def test_a_thin_week_says_why_in_facts_the_build_computed() -> None:
     assert main.index("THIS WEEK'S REPORT") < main.index("Why this week is thin")
 
 
+def test_a_rough_week_is_framed_as_the_demo_it_is() -> None:
+    """Week 8 of 2026, reproduced: the sample roster's QB was on bye, his only
+    backup out on last week's report and two running backs on injured
+    reserve, so the page opened on "Heads up: no projected total — your QB
+    can't play this week…" with 3 odds on the board — enough that the
+    thin-week line stayed silent, so nothing said this was a hard week for the
+    DEMO, and a visitor read a broken report. When a starting slot can't be
+    covered (the same condition that withholds the team total), the banner
+    frames it, built only from the report's own facts: the slot, why, the held
+    backup, the rest of the bench who can't play. Every slot covered: silent."""
+    lineup = [
+        {"slot": "QB", "player_id": "q1", "status": "out",
+         "status_reason": "SF on bye (NFL schedule)", "confidence": None,
+         "bench_held": {"name": "Backup QB", "kind": "designation",
+                        "text": "Ruled out for Week 7 (ankle)"}},
+        {"slot": "RB", "player_id": "r1", "status": "active", "confidence": None},
+        {"slot": "WR", "player_id": "w1", "status": "active", "confidence": 0.78},
+        {"slot": "WR", "player_id": "w2", "status": "active", "confidence": 0.77},
+        {"slot": "FLEX", "player_id": "w3", "status": "active", "confidence": 0.57},
+    ]
+    bench = [
+        {"name": "Backup QB", "position": "QB", "out": True, "out_kind": "designation",
+         "out_text": "Ruled out for Week 7 (ankle)"},
+        {"name": "RB One", "position": "RB", "out": True, "out_kind": "roster",
+         "out_text": "on injured reserve"},
+        {"name": "RB Two", "position": "RB", "out": True, "out_kind": "roster",
+         "out_text": "on injured reserve"},
+        {"name": "WR Healthy", "position": "WR", "out": False},
+    ]
+    report = {"lineup": lineup, "bench": bench}
+    line = live.rough_week_line(report)
+    assert line == ("This week's sample roster is a rough one: its QB is on bye and "
+                    "his backup was ruled out last week, and two running backs are on "
+                    "injured reserve. Your Game Plan shows exactly what its manager "
+                    "should do.")
+    for name in ("Backup QB", "RB One", "Purdy"):
+        assert name not in line, "facts, not a roll call"
+    # 3 odds: the thin line is silent, the rough one still frames the week.
+    missing = [("Brock Purdy", "on bye")]
+    assert live.thin_week_line(report, missing) is None
+    assert live.week_note(report, missing) == line
+    # Thin AND rough: one line, carrying the count the thin line would have.
+    thin = {"lineup": [dict(s, confidence=None) for s in lineup], "bench": bench}
+    assert live.week_note(thin, missing).endswith("0 of its 5 slots carry odds.")
+    # An empty slot is a slot that can't be covered, too.
+    empty = {"lineup": [{"slot": "K", "player_id": None}], "bench": []}
+    assert live.rough_week_line(empty).startswith(
+        "This week's sample roster is a rough one: its K spot has nobody to start.")
+    # Every slot covered (a bench player out changes nothing): silent.
+    covered = {"lineup": lineup[1:], "bench": bench}
+    assert live.rough_week_line(covered) is None
+    assert live.week_note(covered, missing) is None
+    # The card is named by the number the page prints, read off the page.
+    page = ('<main id="main"><div class="notice"><b>THIS WEEK\'S REPORT</b> — Week 8'
+            '</div><section class="card" data-sec="plan"><div class="eyebrow"><span '
+            'class="tag">Your Game Plan</span><span class="n">03</span></div></section></main>')
+    assert "Your Game Plan (03) shows" in live.with_thin_week(page, line)
+
+
 def test_the_share_card_names_the_week(tmp_path, monkeypatch, week) -> None:
     """GTM-9, reproduced: every link to this-week.html previewed as "a real
     weekly report" with a description of a past season, while the page was

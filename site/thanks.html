@@ -135,6 +135,13 @@
   .nextcard p.msg{color:var(--slate);font-size:13px;}
   .nextcard p.msg:empty{display:none;}
   @media (max-width:700px){.steps,.nextsteps{grid-template-columns:minmax(0,1fr);}}
+  /* Numbered steps as gold pins: the landing's .callouts numbers. */
+  ol.pins{list-style:none;counter-reset:pin;margin:16px 0 0;display:grid;gap:14px;}
+  ol.pins li{counter-increment:pin;position:relative;padding-left:48px;margin:0;}
+  ol.pins li::before{content:counter(pin);position:absolute;left:0;top:-2px;display:grid;
+    place-items:center;width:32px;height:32px;border-radius:50%;background:var(--flag);
+    color:var(--navy);font-family:var(--display);font-weight:800;font-size:17px;line-height:1;
+    box-shadow:0 0 0 5px rgba(242,194,48,.18);}
   .nextcard p.msg:not(:empty){animation:msgin .3s var(--ease-out);}
   .nextcard p.msg[data-ok="1"]::before{content:"";display:inline-block;width:14px;height:14px;
     margin-right:6px;vertical-align:-2px;border-radius:50%;
@@ -231,9 +238,10 @@
     </div>
 
     <ol class="steps">
-      <li id="step-today"><b>Today</b>Your first report, built from the roster you just entered.</li>
+      <li id="step-today"><b>Today</b><span id="step-today-text">Your first report, built from
+      the roster you just entered.</span></li>
       <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
-      <li><b>Saturday, if needed</b>A short final check when injury news changes your lineup,
+      <li><b>Saturday, if needed</b>The Saturday check, when injury news changes your lineup
       or a starting spot still has nobody to fill it.</li>
     </ol>
 
@@ -245,11 +253,11 @@
         <p>Reports come from <b>reports@beatyourleague.com</b>. Add it to your contacts and
         Tuesday's report lands in your inbox.</p></div>
       <div class="nextcard"><b>Run this league?</b>
-        <p>The <a href="league-pass.html">League Pass</a> gives every manager in your league
-        their own weekly report: $69 for the whole league, one payment, nothing renews, and a
-        no-questions refund until your second weekly report's week kicks off (one per league).
-        Buy it with this same email, then reply to any report while your own pass's refund
-        window is open and we'll refund it, so you haven't paid twice.</p></div>
+        <p>The <a href="league-pass.html">League Pass</a> gives every manager their own weekly
+        report: $69 for the whole league, one payment, nothing renews, with a no-questions
+        refund until your second weekly report's week kicks off (one per league). Buy it with
+        this same email and reply to any report while your own pass's refund window is open:
+        we'll refund your pass, so you haven't paid twice.</p></div>
       <div class="nextcard"><b>Know a manager in another league?</b>
         <p id="friend-line">Beat Your League sends a lineup report for your own roster every
         Tuesday, every slot decided: https://beatyourleague.com/?via=friend</p>
@@ -258,28 +266,21 @@
     </div>
 
     <h2><span class="n">01</span>What arrives, and when</h2>
-    <ul>
-      <li id="what-today"><b>Today:</b> your first report. Before the season starts that is your roster report —
-      every bye week on your team, last season&#x27;s numbers under your scoring with each
-      player&#x27;s rank at his position, and the weeks your lineup cannot be filled. From
-      Week 2 on, join at least an hour before that week&#x27;s first game and you get the
-      current week&#x27;s report instead; join later, or in Week 1, and the roster report
-      comes today, the week&#x27;s report on Tuesday.</li>
-      <li><b>Every Tuesday morning after that:</b> the week&#x27;s report — your lineup decided
-      under your scoring, every close call explained, and a plain reason wherever a row
-      has no odds.</li>
+    <ol class="pins">
+      <li><b>Every Tuesday morning:</b> your Tuesday report — your lineup decided under your
+      scoring, every close call explained, and a plain reason wherever a row has no odds.</li>
       <li><b>Saturday, only when it matters:</b> if Friday&#x27;s injury report changes
-      your lineup, a short final check tells you the swap — and if a starting spot still
+      your lineup, the Saturday check tells you the swap — and if a starting spot still
       has nobody to fill it, it says so. Nothing to change, no email.</li>
       <li><b>A separate email, usually within the hour:</b> a short receipt from us with
       your terms, to keep. Your pass was one payment: nothing renews.</li>
-    </ul>
+    </ol>
 
     <h2><span class="n">02</span>If your roster changes</h2>
     <p>Rosters churn — that is the point of the waiver run. Use the roster link at the bottom
     of any weekly report, or reply to one with your updated roster. We email you a button to
-    confirm; press it and your next report uses the new roster — and Saturday&#x27;s final
-    check too, if you press it by Friday night (ET).</p>
+    confirm; press it and your next report uses the new roster — and the Saturday check
+    too, if you press it by Friday night (ET).</p>
 
     <h2><span class="n">03</span>Changed your mind</h2>
     <p>Full refund, no questions, any time until your second weekly report's week kicks off
@@ -359,14 +360,38 @@ document.getElementById("friend-share").addEventListener("click", () => {
           const [y, m, d] = w.lands_on.split("-").map(Number);
           over = Date.now() >= Date.UTC(y, m - 1, d + 1, 5);   // past lands_on, ET
         }
-        if (!over) return;
+        if (!over) {
+          // The Today card says which first report is coming, from the same
+          // clock and the same rule as the landing and run/intake._first_file:
+          // the week's report from Week 2 on before its first kickoff,
+          // otherwise the roster report and the Tuesday the next one lands.
+          // Only in a week still current; the static sentence stays otherwise.
+          const today = document.getElementById("step-today-text");
+          const landsOk = /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "");
+          const et = {};
+          new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric",
+            month: "2-digit", day: "2-digit" }).formatToParts(new Date())
+            .forEach((x) => { et[x.type] = x.value; });
+          const fresh = landsOk && et.year + "-" + et.month + "-" + et.day <= w.lands_on;
+          const kick = Date.parse(w.first_kickoff || "");
+          if (!today || (w.phase || "season") !== "season" || !fresh ||
+              !Number.isInteger(w.week) || !Number.isInteger(w.last_week) || isNaN(kick)) return;
+          if (w.week > 1 && Date.now() < kick) {
+            today.textContent = "Your first report: your Week " + w.week + " lineup, decided.";
+          } else if (w.week > 1 && w.week < w.last_week) {
+            const day = new Date(w.lands_on + "T12:00:00Z").toLocaleDateString("en-US",
+              { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
+            today.textContent = "Your first report. " + day + ": your Week " + (w.week + 1) +
+              " report.";
+          }
+          return;
+        }
         const note = document.getElementById("first-note");
         const b = document.createElement("b");
         b.textContent = "The season's over, so no report goes out until next season.";
         note.replaceChildren(b, document.createTextNode(" Questions, or a refund: " +
           "hello@beatyourleague.com."));
         document.getElementById("step-today").hidden = true;
-        document.getElementById("what-today").hidden = true;
         document.getElementById("next-steps").hidden = true;
       })
       .catch(() => {});

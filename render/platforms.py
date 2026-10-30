@@ -124,7 +124,7 @@ DOES_LEAD = "Every Tuesday through your title game:"
 DOES = ("every slot decided for that roster",
         "each close call naming the bench player and the points gap",
         "an if/then for questionable starters",
-        "a Saturday note only if Friday's injury report changes your lineup",
+        "the Saturday check, only if Friday's injury report changes your lineup",
         "every bye ahead checked through the playoffs")
 DOESNT = ("It doesn't connect to {name} or set your lineup there — you make the moves. "
           "Roster changed? Update it from the link in any report, or reply with it.")
