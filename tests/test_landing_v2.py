@@ -234,7 +234,8 @@ def test_the_close_up_shows_what_the_phone_does_not_and_only_the_samples_words()
     heads = [html.unescape(h) for h in re.findall(r'<b class="do">([^<]+)</b>', shot)]
     assert [h.split(":")[0].split(" —")[0] for h in heads] == [
         "Bench Sam LaPorta", "Thursday night", "Sunday morning"], heads
-    assert '<p class="standing"><b>Saturday:</b>' in shot
+    from render.report import SATURDAY_LINE_HEAD
+    assert f'<p class="standing"><b>{SATURDAY_LINE_HEAD}:</b>' in shot
     plans = anatomy.ifthen(report)["plans"]
     assert len(re.findall(r'<div class="pivot">', shot)) == len(plans)
     flat_sample = _flat(SAMPLE_REPORT)
