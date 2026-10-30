@@ -60,20 +60,20 @@ def resolve_roster(text: str, directory) -> list[str]:
     """
     ids: list[str] = []
     problems: list[str] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        match = directory.resolve(line)
+    # The whole paste at once, as the join page reads it: an app's copy spreads
+    # one player over several lines ("Josh Allen / Buf - QB / Q"), and read a
+    # line at a time every team line was "no current player by that name".
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for match in directory.resolve_all(lines):
         if match.resolved:
             ids.append(match.player.player_id)
         elif match.candidates:
             names = ", ".join(f"{c.name} ({c.team or '?'})"
                               for c in match.candidates[:4])
-            problems.append(f"{line!r} is ambiguous — could be {names}. "
+            problems.append(f"{match.typed!r} is ambiguous — could be {names}. "
                             f"Ask which, then retype with the team name.")
         else:
-            problems.append(f"{line!r} — no current player by that name. "
+            problems.append(f"{match.typed!r} — no current player by that name. "
                             f"Check the spelling with them.")
     if problems:
         raise TrialError("The roster needs a human first:\n  " +

@@ -37,9 +37,14 @@ def test_an_unknown_name_stops_the_run_and_names_the_line(tmp_path) -> None:
 
 
 def test_a_duplicate_is_refused(tmp_path) -> None:
+    """Twice with somebody between is a mistake. Twice in a row is one player:
+    an app prints a name and then its own line for him, and the join page reads
+    it that way."""
     directory = _directory(tmp_path)
+    other = next(p.name for p in directory.players if p.name != "Aaron Armstrong")
     with pytest.raises(trial.TrialError, match="twice"):
-        trial.resolve_roster("Aaron Armstrong\nAaron Armstrong QB KC\n", directory)
+        trial.resolve_roster(f"Aaron Armstrong\n{other}\nAaron Armstrong\n", directory)
+    assert len(trial.resolve_roster("Aaron Armstrong\nAaron Armstrong QB KC\n", directory)) == 1
 
 
 def test_the_trial_key_is_stable_and_carries_no_address() -> None:

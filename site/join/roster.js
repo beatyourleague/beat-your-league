@@ -63,10 +63,24 @@ function tidy(line) {
   return (line || "").replace(WHITESPACE, " ").trim();
 }
 
+// What a copy of a whole page sweeps up, in normalize()'s form. Only a WHOLE
+// line matches. Mirrors engine/roster.py _PAGE_WORDS, same list, same order.
+const PAGE_WORDS = new Set(`
+  offense defense defensespecialteams kickers kicker injured squad pos position opponent
+  projected projection fanpts pts points rank start owned stats action actions add drop
+  trade move editlineup setlineup startactive empty matchup myteam roster team standings
+  scoreboard research videoforecast note nonewnotes nonewplayernotes
+  newnote freeagent waivers
+  waiverclaim gametimedecision questionable doubtful active inactive final finalw finall
+  l w tnf mnf superflex super dl db idp hc mylineup waiverwire close save submit done
+  lineuplocked espnfantasy yahoofantasy sleeper cbssports
+`.split(/\s+/).filter(Boolean));
+
 // Nothing to resolve: no LETTER of any script survives (emoji and bullets are
-// blank; a line of Cyrillic is not — it is reported back).
+// blank; a line of Cyrillic is not — it is reported back), or the whole line is
+// the page around the roster, not a roster entry.
 function isBlank(cleaned) {
-  return !/\p{L}/u.test(cleaned || "");
+  return !/\p{L}/u.test(cleaned || "") || PAGE_WORDS.has(normalize(cleaned));
 }
 
 // Tags a table copy glues onto the cell before them (BE-D1, a real ESPN

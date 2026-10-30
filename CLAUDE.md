@@ -1547,6 +1547,16 @@ draw the screen at 1x on phones. A bench player named on a starter's row reads "
 landing story: one email decides your lineup → your team, not a ranking → read a real one first
 → one refundable payment; "about a minute", never "ninety seconds".
 
+**A paste becomes a report, end to end (Oct 30 2026, `tests/test_paste_to_report.py`).** The reader
+was tested alone; nothing walked the road: `roster.js` → ref → `decode_roster` → `report_for` →
+email. It now runs for each app's copy format (written from the formats the app pages describe, not
+captured from a logged-in account). `_PAGE_WORDS` (engine/roster.py, same list in roster.js) drops
+whole lines of page furniture: 76 of 118 common ones ("Offense", "Set Lineup", "Final W 24-17") came
+back as unreadable, one to delete by hand each, on a select-all. A word on the list may not be a
+player's name (tested), and an unknown line still comes back to the buyer (RULE R3). `run.trial`
+reads through `resolve_all` now: line by line it refused 5 of 9 formats. If that test file skips,
+it has checked nothing; its skip reads the same cached file the build does.
+
 **Rows without odds read as decisions; a phone meets the report first (owner review, Oct 30
 2026).** Odds never move, and 3 of 9 is typical (874 odds across 240 rosters, about 3.6 a report),
 so the sample stays. The words changed: `render.report.only_option` ("your only QB"; "no other RB

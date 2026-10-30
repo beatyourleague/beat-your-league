@@ -518,10 +518,29 @@ def exact_name(typed: str, name: str, teams: set[str] | None = None) -> bool:
     return fold(_strip_decoration(typed, teams)) == fold(name)
 
 
+# What a copy of a whole page sweeps up: column heads, section labels, buttons,
+# status words and game results, in normalize()'s form (decoration already off,
+# so "Final W 24-17" arrives as "finalw"). Each used to come back "we can't read
+# this line", so a buyer who selected the page had dozens to delete by hand
+# before checkout. Only a WHOLE line matches: nothing that carries a name can.
+# The browser twin in site/join/roster.js holds the same list, in the same order.
+_PAGE_WORDS = frozenset("""
+    offense defense defensespecialteams kickers kicker injured squad pos position
+    opponent projected projection fanpts pts points rank start owned stats action
+    actions add drop trade move editlineup setlineup startactive empty matchup myteam
+    roster team standings scoreboard research videoforecast note nonewnotes nonewplayernotes
+    newnote
+    freeagent waivers waiverclaim gametimedecision questionable doubtful active inactive
+    final finalw finall l w tnf mnf superflex super dl db idp hc mylineup waiverwire
+    close save submit done lineuplocked espnfantasy yahoofantasy sleeper cbssports
+""".split())
+
+
 def _is_blank(cleaned: str) -> bool:
-    """Nothing to resolve: no LETTER of any script survives. (Emoji and bullets
-    are blank; a line of Cyrillic is not — it is reported back.)"""
-    return not re.search(r"[^\W\d_]", cleaned or "")
+    """Nothing to resolve: no LETTER of any script survives (emoji and bullets
+    are blank; a line of Cyrillic is not — it is reported back), or the whole
+    line is the page around the roster, not a roster entry."""
+    return not re.search(r"[^\W\d_]", cleaned or "") or normalize(cleaned) in _PAGE_WORDS
 
 
 def _strip_decoration(line: str, teams: set[str] | None = None,
