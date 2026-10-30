@@ -1041,7 +1041,7 @@ SITE_FOOTER_CSS = (
     "    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;\n"
     "    font-family:var(--sans);font-size:14px;line-height:1.3;}\n"
     "  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;\n"
-    "    text-transform:uppercase;opacity:.75;}\n"
+    "    text-transform:uppercase;}\n"
     "  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}\n"
     "  footer .footmap a:hover{text-decoration:underline;}\n"
     "  footer .footmap a[hidden]{display:none;}\n"
