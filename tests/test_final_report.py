@@ -162,7 +162,7 @@ def test_a_defense_that_cannot_play_claims_no_projection() -> None:
     gate = "we don't put odds on defenses — a defense gets its projection"
     assert rr.row_label({"confidence_gate": gate, "status": "out",
                          "projected": None}) == ""
-    assert rr.row_label({"confidence_gate": gate, "status": "active"}) == "no odds on defenses"
+    assert rr.row_label({"confidence_gate": gate, "status": "active"}) == "defenses: projection only"
     # A blank label is not a marked row (the note carries the reason).
     assert not rr.row_marked({"confidence_gate": gate, "status": "out"}, True)
 

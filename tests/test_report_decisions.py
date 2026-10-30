@@ -769,7 +769,7 @@ def test_a_defense_row_always_says_projection_only() -> None:
     assert not any(s.get("confidence") is not None for s in report["lineup"])
     row = report["lineup"][1]
     row.update(confidence_gate=DEFENSE_GATE, slot="DEF")
-    assert row_label(row) == "no odds on defenses"
+    assert row_label(row) == "defenses: projection only"
     assert row_marked(row, mixed=False), "a week with no odds anywhere still says it"
     for name, page in _surfaces(report).items():
         assert "projection only" in page, name

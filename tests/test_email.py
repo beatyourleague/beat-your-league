@@ -213,7 +213,7 @@ def test_a_structural_hold_does_not_spend_a_row_on_any_surface() -> None:
     from render.report import row_label
     assert not is_structural_gate(DEFENSE_GATE)
     assert row_label({"confidence_gate": DEFENSE_GATE, "status": "active",
-                      "slot": "DEF"}) == "no odds on defenses"
+                      "slot": "DEF"}) == "defenses: projection only"
     assert is_structural_gate("no eligible player with any scoring history")
     assert not is_structural_gate("availability in doubt (designated Questionable)")
     assert not is_structural_gate("not enough games on record yet (1 and 2)")

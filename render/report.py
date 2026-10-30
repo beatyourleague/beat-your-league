@@ -695,7 +695,7 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # says it all, as it does for an on-bye QB.
         if slot.get("status") == "out":
             return ""
-        return ("no odds on defenses" if gate.startswith(DEFENSE_GATE_PREFIX)
+        return ("defenses: projection only" if gate.startswith(DEFENSE_GATE_PREFIX)
                 else "projection only")
     if gate.startswith("not enough games"):
         # Name who is short (launch audit F11): "odds after 3 games" sat beside
