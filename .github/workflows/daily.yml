@@ -359,7 +359,7 @@ jobs:
       # run" is read off the claim step above, which runs only then.
       - name: Back up the sealed registry
         if: always() && steps.seal.outputs.registry_sealed == 'true' && (steps.seal.outputs.registry_changed == 'true' || steps.today.outcome == 'success')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sealed-registry
           path: data/sealed/registry.enc
@@ -373,7 +373,7 @@ jobs:
           key: nflverse-${{ github.run_id }}
       - name: Upload the day's reply kit
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reply-kit
           path: content/
@@ -409,7 +409,7 @@ jobs:
       # left, rather than failing on the name and persisting nothing.
       - name: Upload the record
         if: always() && steps.handoff.outputs.staged == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: daily-record
           path: ${{ runner.temp }}/record/
