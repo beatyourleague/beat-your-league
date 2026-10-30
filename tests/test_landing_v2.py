@@ -68,13 +68,16 @@ def _blocks(query: str) -> str:
 # --------------------------------------------------------------------- #
 
 def test_the_hero_has_one_action_one_secondary_and_ends_on_the_scene() -> None:
-    """One primary action at rest (closed checkout: the email capture), one
-    secondary ("See a real report"), the phone beside them, and the Sunday
-    scene as the hero's last line. No price anywhere in it."""
-    assert re.search(r'<form class="watchform" id="watch-form"', HERO)
+    """One primary action at rest (the roster check, which works with checkout
+    closed, Oct 30 2026), one secondary ("See a real report"), the phone beside
+    them, and the Sunday scene as the hero's last line. No price anywhere in
+    it. The email capture moved to the closer, for whoever isn't ready to paste."""
+    assert 'id="watch-form"' not in HERO and "<form" not in HERO
     gold = re.findall(r'<(?:a|button)\b[^>]*class="btn gold"[^>]*>', HERO)
     visible = [g for g in gold if " hidden" not in g]
-    assert len(visible) == 1 and "<button" in visible[0], gold
+    assert len(visible) == 1 and 'id="hero-open"' in visible[0], gold
+    assert re.search(r'<a class="btn gold" id="hero-open" href="join/index\.html">Check my team</a>',
+                     HERO)
     assert re.search(r'<a class="btn ghost" id="hero-sample" href="sample-report.html">'
                      r'See a real report</a>', HERO)
     assert re.search(r'<p class="punch">.*?</p>\s*$', HERO, re.S)

@@ -682,7 +682,8 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert f"<h1>Your {name} roster, decided every Tuesday</h1>" in page
     assert f'<link rel="canonical" href="https://beatyourleague.com/{slug}/">' in page
     assert "noindex" not in page and SOCIAL_IMAGE_TAGS in page
-    assert page.count('href="../byes/"') == 2 and "bye-week-planner" not in page
+    # Twice in the page, then the bar, its Menu and the footer map.
+    assert page.count('href="../byes/"') == 5 and "bye-week-planner" not in page
     assert f"Not affiliated with {name}." in visible
     assert live.esc(platform.lineup) in page and live.esc(platform.paste) in page
     assert re.search(r'<a class="btn gold" href="\.\./(?:index\.html#watch-form|'

@@ -410,9 +410,11 @@ def _digest(path: Path) -> str:
 def test_the_page_loads_the_scripts_it_was_tested_with_in_order() -> None:
     """roster.js at join/'s own digest (the parser the intake tests run),
     byes.js at its own, email-check.js at the landing's, ONE inline script
-    (make headers hashes it), then the counter — and nothing else."""
+    (make headers hashes it), then the counter — and nothing else, but for the
+    footer map's own small script (site_footer), which sits inside its markup."""
     srcs = re.findall(r'<script src="([^"]+)"', PAGE)
-    assert srcs == [f"../join/roster.js?v={_digest(ROSTER_JS)}", f"byes.js?v={_digest(BYES_JS)}",
+    assert srcs[0].startswith("/footer.js?v="), srcs
+    assert srcs[1:] == [f"../join/roster.js?v={_digest(ROSTER_JS)}", f"byes.js?v={_digest(BYES_JS)}",
                     f"/email-check.js?v={_digest(EMAIL_JS)}", "/count.js"]
     assert f'<script src="roster.js?v={_digest(ROSTER_JS)}"></script>' in JOIN
     assert f'<script src="/email-check.js?v={_digest(EMAIL_JS)}"></script>' in LANDING
@@ -483,7 +485,7 @@ def test_the_page_is_an_indexed_site_page_with_its_own_head() -> None:
     assert sitemap.url_for(PAGE_PATH) == "https://beatyourleague.com/byes/"
     assert "https://beatyourleague.com/byes/" in (SITE / "sitemap.xml").read_text()
     assert "noindex" not in PAGE and "ld+json" not in PAGE
-    assert rr.site_bar("../") in PAGE and rr.SITE_BAR_CSS in PAGE
+    assert rr.site_bar("../", current="byes/") in PAGE and rr.SITE_BAR_CSS in PAGE
     assert rr.SOCIAL_IMAGE_TAGS in PAGE and rr.FAVICON_LINK in PAGE
     for needle in ('property="og:title" content="Free bye week planner — your roster, '
                    'through Week 17"', 'name="twitter:description"', 'property="og:description"'):

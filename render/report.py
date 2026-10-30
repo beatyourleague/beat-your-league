@@ -19,6 +19,7 @@ Two rules enforced throughout (CLAUDE.md security + principle 3):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -907,14 +908,41 @@ def team_name(report: Mapping[str, Any]) -> str | None:
 # "BEAT YOUR" in paper and "LEAGUE" in the logo's gold, Barlow Condensed 900
 # italic, as site/brand/logo.png draws it (render/brand.py logo_html) — and it
 # is the way home: the "← Home" pill beside it wrapped onto a row of its own on
-# a phone and repeated a link the lockup already is. On a phone the bar is the
-# lockup and ONE link, "See a real report"; League Pass and Pricing return at
-# 600px and How it works at 720px. Every nav sits on navy or darker, so this is the dark-ground lockup.
+# a phone and repeated a link the lockup already is. Routes leave the bar by
+# width, never wrap: all five from 720px; Sample report and Bye planner from
+# 600px; on a phone the lockup and ONE route, Sample report. Below 720px the
+# rest live in a small "Menu" (a plain <details>, no script), so a phone is one
+# tap from every route rather than a long scroll from the footer. Every nav
+# sits on navy or darker, so this is the dark-ground lockup.
 # Hand-written pages paste SITE_BAR_CSS and site_bar()'s markup verbatim (the
 # page defines --display and --sans, as every page's type does), and
-# tests/test_prelaunch_pages.py holds every copy to these two.
-SITE_NAV_REAL_REPORT = "See a real report"
+# tests/test_prelaunch_pages.py holds every copy to these two. The landing
+# draws its own nav around a gold button and pastes the menu alone.
+SITE_NAV_REAL_REPORT = "Sample report"
 SITE_NAV_LEAGUE_PASS = "League Pass"
+SITE_NAV_PLANNER = "Bye planner"
+# The roster check: the site's main action, closed or open. join/ checks a
+# roster with checkout closed too, so this label is true in every state; the
+# buy label ("Get my lineups") is the landing's and the asks' to set.
+CHECK_LABEL = "Check my team"
+SITE_MENU_CSS = (
+    "  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);\n"
+    "    font-size:14px;font-weight:600;}\n"
+    "  .sitemenu summary{display:flex;align-items:center;gap:6px;padding:8px 2px;list-style:none;\n"
+    "    color:#F6F4EE;cursor:pointer;}\n"
+    "  .sitemenu summary::-webkit-details-marker{display:none;}\n"
+    '  .sitemenu summary::after{content:"";width:6px;height:6px;border:solid currentColor;\n'
+    "    border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);}\n"
+    "  .sitemenu[open] summary::after{transform:translateY(1px) rotate(225deg);}\n"
+    "  .sitemenu summary:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}\n"
+    "  .sitemenu-list{position:absolute;top:100%;right:0;z-index:40;min-width:196px;margin-top:6px;\n"
+    "    padding:6px;background:#101E33;border:1px solid rgba(246,244,238,.24);border-radius:8px;}\n"
+    "  .sitemenu .sitemenu-list a{display:block;padding:11px 12px;color:#F6F4EE;text-decoration:none;\n"
+    "    white-space:nowrap;}\n"
+    "  .sitemenu .sitemenu-list a:hover{text-decoration:underline;}\n"
+    "  .sitemenu .sitemenu-list a.go{margin-bottom:4px;background:#F2C230;border-radius:8px;\n"
+    "    color:#101E33;}\n"
+    "  .sitemenu-list a:focus-visible{outline:3px solid #F6F4EE;outline-offset:-3px;}\n")
 SITE_BAR_CSS = (
     "  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}\n"
     "  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;\n"
@@ -929,13 +957,36 @@ SITE_BAR_CSS = (
     "  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}\n"
     "  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}\n"
     "  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}\n"
-    "  @media (max-width:719px){.sitenav .hidemd{display:none;}}\n"
+    + SITE_MENU_CSS +
+    "  @media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}\n"
     "  @media (max-width:599px){.sitenav .hidesm{display:none;}"
-    ".sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}\n")
+    ".sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}\n"
+    "  @media (max-width:369px){.sitenav .hidexs{display:none;}}\n")
+
+
+def site_menu(prefix: str = "", current: str | None = None, pricing: bool = True,
+              check: bool = True) -> str:
+    """The small "Menu": every route, one tap away, wherever the bar has no
+    room for them. A plain <details>: no script, and shown only below the
+    width where a route leaves the bar. The roster check comes first, as the
+    one gold fill. The summary carries a class because the FAQ readers (here
+    and in run/launch_check.py) match a bare <summary>."""
+    routes = (*((("join/index.html", CHECK_LABEL, ' class="go"'),) if check else ()),
+              ("how-it-works.html", "How it works", ""),
+              ("sample-report.html", SITE_NAV_REAL_REPORT, ""),
+              ("byes/", SITE_NAV_PLANNER, ""),
+              ("league-pass.html", SITE_NAV_LEAGUE_PASS, ""),
+              *((("index.html#pricing", "Pricing", ""),) if pricing else ()))
+    links = []
+    for href, label, klass in routes:
+        here = ' aria-current="page"' if href == current else ""
+        links.append(f'<a{klass} href="{prefix}{href}"{here}>{esc(label)}</a>')
+    return ('<details class="sitemenu"><summary class="sitemenu-open">Menu</summary>'
+            f'<div class="sitemenu-list">{"".join(links)}</div></details>')
 
 
 def site_bar(prefix: str = "", home: str | None = None, current: str | None = None,
-             uid: str = "byln", pricing: bool = True) -> str:
+             uid: str = "byln", pricing: bool = True, check: bool = True) -> str:
     """The nav row every site page carries above its headline. ``prefix`` is
     the way back to the site root from the page ("" at the root, "../" one
     folder down, "/" for the 404, which is served at any depth); ``home`` the
@@ -943,20 +994,24 @@ def site_bar(prefix: str = "", home: str | None = None, current: str | None = No
     ``current`` the route this page is ("how-it-works.html", …), marked
     aria-current. ``pricing``: False on a page reached by paying (thanks.html,
     launch review D5), where "Pricing" offers what the visitor just bought.
+    ``check``: False on the retired study (projections.html), which sells nothing.
     Relative links, so the live sample's ?via= carry rewrites exactly these."""
     home = home or f"{prefix}index.html"
     # League Pass is a route of its own (owner decision, Oct 30 2026): the
-    # owner could not find it as one line under the price card. It sits
-    # beside Pricing and, like it, leaves the bar on a phone. Four routes and
-    # the lockup don't fit below 720px, so How it works goes first (measured:
-    # terms and the 404 ran 32-49px past their bar at 600px).
+    # owner could not find it as one line under the price card. So is the bye
+    # planner (owner review, Oct 30 2026: a free tool nobody could find).
+    # Five routes and the lockup need 619px of column, so below 720px How it
+    # works, League Pass and Pricing move to the Menu (measured: the four-route
+    # bar ran 32-49px past its column at 600px).
     # A phone keeps one route. On the sample itself that would be a link to the
-    # page you are reading, so there the one route is Pricing.
+    # page you are reading, so there the one route is Pricing. Below 370px the
+    # Menu alone sits beside the lockup (measured: 320px holds no more).
     on_sample = current == "sample-report.html"
-    routes = (("how-it-works.html", "How it works", "hidesm hidemd"),
-              ("sample-report.html", SITE_NAV_REAL_REPORT, "hidesm" if on_sample else ""),
-              ("league-pass.html", SITE_NAV_LEAGUE_PASS, "hidesm"),
-              *((("index.html#pricing", "Pricing", "" if on_sample else "hidesm"),)
+    routes = (("how-it-works.html", "How it works", "hidemd"),
+              ("sample-report.html", SITE_NAV_REAL_REPORT, "hidemd" if on_sample else "hidexs"),
+              ("byes/", SITE_NAV_PLANNER, "hidesm"),
+              ("league-pass.html", SITE_NAV_LEAGUE_PASS, "hidemd"),
+              *((("index.html#pricing", "Pricing", "hidexs" if on_sample else "hidemd"),)
                 if pricing else ()))
     links = []
     for href, label, hide in routes:
@@ -968,7 +1023,56 @@ def site_bar(prefix: str = "", home: str | None = None, current: str | None = No
         '<div class="sitebar">'
         f'<a class="brand" href="{home}">{mark_svg(uid)}'
         '<span>Beat Your <span class="lg">League</span></span></a>'
-        f'<nav class="sitenav" aria-label="Site">{links}</nav></div>')
+        f'<nav class="sitenav" aria-label="Site">{links}'
+        f'{site_menu(prefix, current, pricing, check)}</nav></div>')
+
+
+# The site's footer map, one drawing for every selling page, as the bar is:
+# hand-written pages paste SITE_FOOTER_CSS and site_footer()'s markup verbatim
+# and tests/test_prelaunch_pages.py holds every copy to these two. It sits at
+# the top of each page's own footer, above that page's legal line, and takes
+# the page's own footer link colour, so it reads on paper and on navy alike.
+# terms.html and privacy.html don't carry it: their visible text is pinned to
+# their dates (tests/test_promises_legal.py). "This week's report" is gated
+# like every link to that page (site/footer.js, the hero's rule): hidden
+# until the Tuesday build says the week has something to show.
+SITE_FOOTER_CSS = (
+    "  .footmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 24px;\n"
+    "    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;\n"
+    "    font-family:var(--sans);font-size:14px;line-height:1.3;}\n"
+    "  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;\n"
+    "    text-transform:uppercase;opacity:.75;}\n"
+    "  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}\n"
+    "  footer .footmap a:hover{text-decoration:underline;}\n"
+    "  footer .footmap a[hidden]{display:none;}\n"
+    "  @media (max-width:600px){.footmap{grid-template-columns:repeat(2,minmax(0,1fr));}}\n")
+_FOOTER_SCRIPT = REPO_ROOT / "site" / "footer.js"
+
+
+def site_footer(prefix: str = "") -> str:
+    """The grouped map of the site. ``prefix`` as site_bar's. The script
+    carries a digest of its own file, as every versioned script here does."""
+    version = hashlib.sha256(_FOOTER_SCRIPT.read_bytes()).hexdigest()[:10]
+    groups = (
+        ("Product", (("how-it-works.html", "How it works", ""),
+                     ("sample-report.html", "Sample report", ""),
+                     ("this-week.html", "This week's report", " data-live-week hidden"),
+                     ("league-pass.html", SITE_NAV_LEAGUE_PASS, ""))),
+        ("Free tools", (("join/index.html", CHECK_LABEL, ""),
+                        ("byes/", SITE_NAV_PLANNER, ""))),
+        ("Your app", (("espn/", "ESPN", ""), ("yahoo/", "Yahoo", ""),
+                      ("sleeper/", "Sleeper", ""), ("cbs/", "CBS", ""))),
+        ("About", (("terms.html", "Terms & refunds", ""), ("privacy.html", "Privacy", ""))),
+    )
+    columns = []
+    for head, links in groups:
+        items = "".join(f'<a href="{prefix}{href}"{extra}>{esc(label)}</a>'
+                        for href, label, extra in links)
+        if head == "About":
+            items += '<a href="mailto:hello@beatyourleague.com">Contact</a>'
+        columns.append(f"<div><p>{esc(head)}</p>{items}</div>")
+    return (f'<nav class="footmap" aria-label="Site map">{"".join(columns)}</nav>'
+            f'<script src="/footer.js?v={version}" defer></script>')
 
 
 def _site_bar() -> str:
@@ -979,10 +1083,12 @@ def _site_bar() -> str:
 
 # The samples' one ask, at the top and at the end. It follows the landing's
 # CHECKOUT_OPEN, read from site/index.html when the page is rendered (promise
-# audit INFO-4, D15): open, "Get this for your team" goes to the join page;
-# closed, the button says what it does and goes to the landing's email capture,
-# like every closed CTA there. It never names a price (the hero rule).
-SAMPLE_CTA = "Get this for your team"
+# audit INFO-4, D15): open, "Get my lineups" goes to the join page; closed,
+# "Check my team" goes there too, because the roster check works with checkout
+# closed and the button says exactly that. Only a season that is over takes the
+# email capture, SAMPLE_CTA_CLOSED (render.live_sample). It never names a price
+# (the hero rule).
+SAMPLE_CTA = "Get my lineups"
 SAMPLE_CTA_CLOSED = "Tell me when it opens"
 LANDING_PAGE = REPO_ROOT / "site" / "index.html"
 _CHECKOUT_FLAG = re.compile(r"^const CHECKOUT_OPEN = (true|false);", re.M)
@@ -1001,9 +1107,8 @@ def checkout_open(landing: Path | None = None) -> bool:
 
 
 def sample_cta() -> str:
-    if checkout_open():
-        return f'<a class="btn gold" href="join/index.html">{esc(SAMPLE_CTA)}</a>'
-    return f'<a class="btn gold" href="index.html#watch-form">{esc(SAMPLE_CTA_CLOSED)}</a>'
+    label = SAMPLE_CTA if checkout_open() else CHECK_LABEL
+    return f'<a class="btn gold" href="join/index.html">{esc(label)}</a>'
 
 
 def header(meta: Mapping[str, Any], team: str | None = None) -> str:
@@ -2311,9 +2416,11 @@ def footer(meta: Mapping[str, Any]) -> str:
     # The gap COUNT is operator bookkeeping; a buyer only needs to know that
     # anything unproven was withheld, which the report already says in place.
     gap_line = ""
+    # A published sample is a site page; a subscriber's own report is not.
+    footmap = site_footer() if meta.get("anonymized_demo") else ""
     return (
         f'{demo_band(meta)}'
-        f'<footer><b>Beat Your League</b> — {esc(BRAND_LINE)}'
+        f'<footer>{footmap}<b>Beat Your League</b> — {esc(BRAND_LINE)}'
         f'<br>{esc(demo)}{esc(basis)}{esc(gap_line)}<br>'
         f'{read_line(meta)}'
         f'{update_line(meta)}'

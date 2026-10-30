@@ -1570,6 +1570,30 @@ on the landing. On phones the hero runs headline, sentence, apps line, phone, fo
 stays above the phone (M6), and the sticky bar watches the hero's action, not the hero, so the
 action stays in reach while the report fills the screen.
 
+**Finding things (Oct 30 2026, owner review).** "The join page isn't so obvious." Audited in
+Chrome: join/ was three clicks from home on any device, the app pages two, because every main
+button pointed at an email box while checkout was closed. Rules it left (`tests/test_wayfinding.py`):
+- **The roster check is the main action, closed or open.** The landing's gold buttons (nav, hero,
+  sticky bar, closer) are "Check my team" → join/ in the static page and "Get my lineups" once
+  CHECKOUT_OPEN flips; samples, How it works, the app pages and the planner end on the same ask
+  (`render.report.CHECK_LABEL`, `sample_cta`). It may go to join/ closed because it says what
+  happens there. The price card keeps "Tell me when it opens": one decision, the capture.
+- **The email capture lives in the closer** (`#watch-form`, a real label, a ghost button). Every
+  `#watch-form` link lands there. A season that is over has no week to check, so `closeForSeason`
+  sends the main buttons there too and how-it-works' `setCheckoutCta("over")` does the same.
+- **The bar and the Menu.** `site_bar` routes: How it works, Sample report, Bye planner, League
+  Pass, Pricing; all five from 720px, Sample report and Bye planner from 600px, one route on a
+  phone, the Menu alone below 370px. The Menu (`site_menu`, a plain `<details>`, no script) shows
+  wherever a route leaves and starts with the roster check, the one gold fill. Its `<summary>`
+  carries a class because the FAQ readers match a bare `<summary>`. The landing pastes it and
+  `SITE_MENU_CSS` into its own nav. projections.html's bar passes `check=False`: a retired study
+  sells nothing. terms.html and privacy.html keep the bars they were dated with, and no footer map.
+- **One footer map** (`render.report.site_footer` + `SITE_FOOTER_CSS`) on every selling page,
+  inside the page's own footer above its legal line, pasted verbatim like the bar; samples get it
+  through `footer()` and `restamp_chrome`. `<script src="/footer.js">` rides in it: "This week's
+  report" stays hidden until the hero's rule passes, on pages with no script of their own.
+- Landing word cap: at 1,250 of 1,250, so anything added there replaces something.
+
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
 Mac from read-only sources (the counter, Stripe, the Worker, Resend, the public Actions API, the

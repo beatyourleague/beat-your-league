@@ -12,6 +12,7 @@ import json
 import re
 from pathlib import Path
 
+import render.report as rr
 from test_site import (LANDING, SAMPLE_REPORT, _js_function, _node, _style, markup_only,
                        prose)
 
@@ -64,7 +65,7 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     the caption under the phone names 2024, and on a phone the button row
     sits between the clock and the phone, so the two weeks never read as one
     line. Since Oct 30 2026 a phone meets the report first (owner review), so
-    the form stands between them instead, with the clock below it. Since the sales review the caption leads with the year ("2024
+    the clock follows the phone, above the buttons. Since the sales review the caption leads with the year ("2024
     sample report · Week 10, replayed"), and this week's live link sits under
     the hero's "See a real report" (one secondary group) — it names no week,
     so only the clock and the sample do."""
@@ -77,17 +78,15 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     phones = CSS.split("@media (max-width:880px){\n")[1]
     assert _flat(tag).strip().startswith("2024"), "the caption no longer leads with the year"
     order = {name: int(re.search(r"\.hero \." + name + r"\{order:(\d+)", phones).group(1))
-             for name in ("heroline", "cta-row", "phonewrap", "livepill", "livecall", "watchform")}
-    assert order["phonewrap"] < order["watchform"] < order["heroline"] < order["cta-row"], order
+             for name in ("heroline", "promise", "cta-row", "phonewrap", "livepill", "livecall")}
+    assert order["phonewrap"] < order["heroline"] <= order["promise"] < order["cta-row"], order
     assert order["cta-row"] == order["livepill"] == order["livecall"], order
     assert HERO.index('<div class="cta-row">') < HERO.index('<a class="livepill"') \
         < HERO.index('<p class="livecall"')
-    # Open, the buy row moves up to the form's place and the clock goes with
-    # it, still above the row (equal orders keep source order: the clock's
-    # line comes first in the markup).
-    assert ".hero.can-buy .heroline{order:6;}" in phones
-    assert ".hero.can-buy .cta-row{order:6;}" in phones
+    # The clock stays above the row, closed and open (equal orders keep source
+    # order: the clock's line comes first in the markup).
     assert HERO.index('<p class="heroline">') < HERO.index('<div class="cta-row">')
+    assert "can-buy" not in LANDING
 
 
 def _keyframes(name: str) -> list[tuple[float, str]]:
@@ -203,7 +202,7 @@ def test_the_live_report_chip_waits_for_the_heros_rule_and_names_its_week() -> N
     clock = LANDING.split("// The season clock.")[1]
     iife = clock[clock.index("(function () {"):clock.index("})();") + 5]
     harness = r"""
-const make = (id) => ({ id, hidden: true, textContent: "or this week's live report",
+const make = (id) => ({ id, hidden: true, textContent: "or this week's report",
   replaceChildren() {}, appendChild() {} });
 function run(w) {
   const els = { "season-clock": make("season-clock"), "this-week-link": make("this-week-link"),
@@ -236,12 +235,12 @@ const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
 })();
 """.replace("IIFE", iife)
     shown, held, undated, old_layout, loose = _node(harness)
-    assert shown == {"hidden": False, "label": "or this week's live report (built Tue, Oct 20)"}
-    assert held == {"hidden": True, "label": "or this week's live report"}
-    assert undated == {"hidden": False, "label": "or this week's live report"}
+    assert shown == {"hidden": False, "label": "or this week's report (built Tue, Oct 20)"}
+    assert held == {"hidden": True, "label": "or this week's report"}
+    assert undated == {"hidden": False, "label": "or this week's report"}
     # Review BUYER-1: a page built before the card stack (no `cards` on its
     # clock, as the Oct 20 build wrote it) is not offered beside the phone.
-    assert old_layout == loose == {"hidden": True, "label": "or this week's live report"}
+    assert old_layout == loose == {"hidden": True, "label": "or this week's report"}
 
 
 # --------------------------------------------------------------------- #
@@ -265,9 +264,8 @@ def test_a_phone_sees_any_app_no_login_before_the_phone_mockup() -> None:
         assert re.fullmatch(r"-?\d+", value.strip()), f"{sel} order:{value} is not an integer"
     num = {k: int(v) for k, v in orders.items()}
     assert num[".hero .sub"] < num[".hero .creds"] < num[".hero .phonewrap"] \
-        < num[".hero .watchform"] < num[".hero .heroline"], num
+        < num[".hero .heroline"] < num[".hero .cta-row"], num
     # The report, then the action: closed or open, the phone never sits under it.
-    assert num[".hero .phonewrap"] < num[".hero.can-buy .cta-row"]
 
 
 def test_the_nav_is_the_logo_lockup_and_a_phone_keeps_one_route() -> None:
@@ -275,23 +273,30 @@ def test_the_nav_is_the_logo_lockup_and_a_phone_keeps_one_route() -> None:
     tracked gold caps) rather than as the logo in site/brand (heavy italic,
     "Beat Your" in paper, "League" in gold). D19: below 600px the nav was the
     logo alone. M13: the landing nav had no Pricing link while every other
-    page's does. A phone keeps exactly one text route — the real report — and
-    Pricing is a same-page anchor (index.html#pricing from "/" reloads)."""
+    page's does. A phone keeps exactly one text route — the sample report — and
+    Pricing is a same-page anchor (index.html#pricing from "/" reloads). The
+    Menu (a plain <details>) holds the routes the width takes away, and on the
+    landing its Pricing is the same same-page anchor."""
     nav = BODY.split("<nav>")[1].split("</nav>")[0]
     assert re.search(r'<a class="brand" href="index\.html"><svg class="mark".*?</svg>'
                      r'<span>Beat Your <span class="lg">League</span></span></a>', nav, re.S)
     brand = re.search(r"\n  \.brand\{([^}]*)\}", CSS).group(1)
     assert "font-weight:900" in brand and "font-style:italic" in brand
     assert "letter-spacing:.24em" not in brand
-    links = re.findall(r'<a (?:class="([^"]*)" )?href="([^"]+)"[^>]*>([^<]+)</a>',
-                       nav.split('<div class="navlinks">')[1])
+    bar, menu = nav.split('<div class="navlinks">')[1].split('<details class="sitemenu">')
+    assert '<details class="sitemenu">' + menu.split("</details>")[0] + "</details>" == \
+        rr.site_menu().replace('href="index.html#pricing"', 'href="#pricing"')
+    assert rr.SITE_MENU_CSS in CSS
+    links = re.findall(r'<a (?:class="([^"]*)" )?href="([^"]+)"[^>]*>([^<]+)</a>', bar)
     by_label = {label.strip(): (cls, href) for cls, href, label in links}
     assert by_label["Pricing"][1] == "#pricing"
-    assert by_label["See a real report"] == ("", "sample-report.html"), \
+    assert by_label["Sample report"] == ("hidexs", "sample-report.html"), \
         "the phone's one route is hidden again"
+    assert "@media (max-width:369px){.navlinks .hidexs{display:none;}}" in CSS, \
+        "only the narrowest phone may lose it, with the Menu beside the lockup"
     small = _block(CSS, "@media (max-width:599px)")
     assert "nav .btn{display:none;}" in small and ".navlinks a{display:none" not in small
-    for label in ("How it works", "Pricing"):
+    for label in ("How it works", "Bye planner", "League Pass", "Pricing"):
         assert "hidemd" in by_label[label][0], f"{label} crowds the phone nav"
 
 
@@ -511,8 +516,10 @@ def test_the_live_report_link_never_promotes_a_page_with_subscription_terms() ->
                 f"{link} describes a subscription ({subscription!r}) under a one-payment "
                 f"landing — restamp it before the hero links it")
     if "const CHECKOUT_OPEN = false;" in LANDING:
-        assert 'href="join/' not in markup_only(target), \
-            f"{link} sends buyers into a closed checkout"
+        # The ask into join/ says what a closed checkout can do (Oct 30 2026).
+        for ask in re.findall(r'<a class="btn[^"]*" href="join/[^"]*">([^<]*)</a>',
+                              markup_only(target)):
+            assert ask == rr.CHECK_LABEL, f"{link} sends buyers into a closed checkout"
 
 
 def test_the_live_report_link_is_a_text_link_not_a_third_button() -> None:

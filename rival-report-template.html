@@ -282,8 +282,35 @@
   .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
-  @media (max-width:719px){.sitenav .hidemd{display:none;}}
+  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitemenu summary{display:flex;align-items:center;gap:6px;padding:8px 2px;list-style:none;
+    color:#F6F4EE;cursor:pointer;}
+  .sitemenu summary::-webkit-details-marker{display:none;}
+  .sitemenu summary::after{content:"";width:6px;height:6px;border:solid currentColor;
+    border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);}
+  .sitemenu[open] summary::after{transform:translateY(1px) rotate(225deg);}
+  .sitemenu summary:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  .sitemenu-list{position:absolute;top:100%;right:0;z-index:40;min-width:196px;margin-top:6px;
+    padding:6px;background:#101E33;border:1px solid rgba(246,244,238,.24);border-radius:8px;}
+  .sitemenu .sitemenu-list a{display:block;padding:11px 12px;color:#F6F4EE;text-decoration:none;
+    white-space:nowrap;}
+  .sitemenu .sitemenu-list a:hover{text-decoration:underline;}
+  .sitemenu .sitemenu-list a.go{margin-bottom:4px;background:#F2C230;border-radius:8px;
+    color:#101E33;}
+  .sitemenu-list a:focus-visible{outline:3px solid #F6F4EE;outline-offset:-3px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  .footmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 24px;
+    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;
+    font-family:var(--sans);font-size:14px;line-height:1.3;}
+  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;opacity:.75;}
+  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}
+  footer .footmap a:hover{text-decoration:underline;}
+  footer .footmap a[hidden]{display:none;}
+  @media (max-width:600px){.footmap{grid-template-columns:repeat(2,minmax(0,1fr));}}
   /* The site's button (contract C7): a flat rounded rectangle, gold on navy
      ink. No clip-path, so its focus ring is never clipped away. */
   .btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;

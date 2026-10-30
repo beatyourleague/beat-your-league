@@ -1074,6 +1074,7 @@ def clock_hints(path: Path | None = None) -> tuple[bool | None, str | None]:
 # --------------------------------------------------------------------- #
 
 _SITEBAR = re.compile(r'<div class="sitebar">.*?</nav></div>', re.S)
+_FOOTMAP = re.compile(r'<nav class="footmap".*?</nav><script src="/footer\.js[^>]*></script>', re.S)
 _STOP_BLOCK = re.compile(r"<b>Done with this\?</b>.*?(?=</footer>)", re.S)
 _PROMISE = re.compile(r"(<div class=\"ctacard\"><p>.*?)Yours is built from your own "
                       r"roster.*?(</p>)", re.S)
@@ -1099,8 +1100,8 @@ _ROW_NOTE = re.compile(r'(<span class="fnc(?: flag)?">)([a-z])')
 def restamp_chrome(page: str, *, byes_left: bool | None = None,
                    phase: str | None = None) -> str:
     """A published sample with today's chrome and nothing else moved: the
-    site nav, both asks (sample_cta, which follows the landing's
-    CHECKOUT_OPEN), the closing card's promise, and the footer's way out
+    site nav, the footer map, both asks (sample_cta, which follows the
+    landing's CHECKOUT_OPEN), the closing card's promise, and the footer's way out
     (render.report.stop_route — while the site sells one-time passes, the
     one-payment stop route), the free planner's line under the closing
     card's button while checkout is closed (G6; ``byes_left`` and ``phase``
@@ -1115,7 +1116,7 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
     would have moved the numbers: after kickoff a --force rebuild drops
     every odds whose game has started. Idempotent."""
     from render.report import (JOIN_PROMISE, cancel_html, sample_cta, site_bar,
-                               stop_route, with_counter)
+                               site_footer, stop_route, with_counter)
     page = _SITEBAR.sub(lambda m: site_bar(
         uid="bylm", current="sample-report.html"
         if 'sample-report.html" aria-current' in m.group(0) else None), page)
@@ -1131,6 +1132,8 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
                         count=1)
     stop = cancel_html(stop_route({"anonymized_demo": True}), sample=True)
     page = _STOP_BLOCK.sub(lambda _m: stop, page, count=1)
+    page = (_FOOTMAP.sub(lambda _m: site_footer(), page, count=1) if _FOOTMAP.search(page)
+            else page.replace("<footer>", "<footer>" + site_footer(), 1))
     page = page.replace(_OLD_SOURCE, _NEW_SOURCE)
     for old, new in _RETIRED_CHROME:
         page = page.replace(old, new)

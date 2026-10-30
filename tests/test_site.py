@@ -2220,11 +2220,9 @@ def test_every_proof_page_ends_with_an_ask() -> None:
     in the funnel; each used to end at a footer with no way to buy."""
     backtest = (SITE / "backtest.html").read_text(encoding="utf-8")
     sample = SAMPLE_REPORT
-    # D15 (promise audit): the sample's ask follows the landing's checkout
-    # state — the join page while it can sell, the waitlist while it can't.
-    from render.report import checkout_open
-    ask = "join/index.html" if checkout_open() else 'href="index.html#watch-form"'
-    assert ask in sample, "sample report is a dead end"
+    # D15 (promise audit), then Oct 30 2026: the sample's ask goes to the join
+    # page closed or open, because the roster check works with checkout closed.
+    assert 'class="btn gold" href="join/index.html"' in sample, "sample report is a dead end"
     assert "join/index.html" in backtest, "backtest page is a dead end"
     assert "../join/index.html" in LEDGER, "ledger page is a dead end"
 
@@ -3007,8 +3005,7 @@ def test_the_two_samples_point_at_each_other() -> None:
     """Each page shows what the other one does not: rebuilding one without the
     other is how the pair drifts into contradicting itself."""
     assert 'href="sample-report.html"' in FIRST_WEEK_SAMPLE
-    from render.report import checkout_open
-    ask = "join/index.html" if checkout_open() else 'href="index.html#watch-form"'
+    ask = 'class="btn gold" href="join/index.html"'
     assert ask in FIRST_WEEK_SAMPLE, "first-week sample is a dead end"
     assert ask in SAMPLE_REPORT, "the sample is a dead end"
     # The mid-season sample no longer points at the week-1 file (Sep 29 2026):
@@ -3025,14 +3022,23 @@ def test_closed_checkout_shows_no_live_paid_cta_anywhere() -> None:
     led to a closed checkout, beside a monthly card honestly saying "Checkout
     opens at launch". The resting state in static markup must be the CLOSED
     state, because that is what renders if the script never runs; the open
-    state is what JS builds the day the constant flips."""
+    state is what JS builds the day the constant flips.
+
+    Since Oct 30 2026 (owner review: the best thing on the site could not be
+    reached) the closed gold buttons go to join/ again, and the rule's point
+    stands: a gold button may not read as a purchase while none can be made.
+    "Check my team" says what the page does with checkout closed, and the
+    price card, the one place a visitor is deciding to buy, keeps the capture."""
     static = LANDING.split("<script>")[0]
-    for anchor in re.findall(r"<a\b[^>]*>", static):
-        if "join/index.html" not in anchor or "btn gold" not in anchor:
-            continue
-        assert "hidden" in anchor, (
-            "a live gold CTA points at join/ while checkout is closed — gate "
-            f"it behind CHECKOUT_OPEN like hero-open: {anchor}")
+    golds = re.findall(r"<a\b[^>]*btn gold[^>]*>(?:<[^>]+>)*([^<]*)", static)
+    assert golds, "no gold CTA in the static page"
+    for anchor, label in re.findall(r"(<a\b[^>]*btn gold[^>]*>)(?:<[^>]+>)*([^<]*)", static):
+        if "join/index.html" in anchor:
+            assert label == "Check my team", (
+                f"a gold CTA into join/ reads as a purchase while checkout is closed: {anchor}")
+    assert '<a class="btn gold" id="season-cta" href="#watch-form"' in static
+    # What the button promises exists on the page it goes to, closed.
+    assert '<button id="resolve" type="submit">Check my roster</button>' in JOIN
     # The open state still routes every paid CTA through the picker.
     rewrites = LANDING.split("if (CHECKOUT_OPEN)")[1]
     for cta in ("nav-cta", "season-cta", "closer-cta"):   # one card in 2026
@@ -5147,6 +5153,10 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
 
 # thanks.html is reached by paying, so its nav offers no Pricing (launch
 # review D5): tests/test_prelaunch_pages.py pins its routes (NAV_PAGES).
+def _sample_route(name: str) -> str:
+    return "See a real report" if name in ("terms.html", "privacy.html") else "Sample report"
+
+
 @pytest.mark.parametrize("name", tuple(p for p in _PAPER if p != "thanks.html")
                          + ("league-pass.html",))
 def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
@@ -5158,9 +5168,9 @@ def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
     root = "/" if name == "404.html" else ""
     nav = re.search(r'<nav class="sitenav" aria-label="Site">(.*?)</nav>', page, re.S)
     assert nav, f"{name} has no site nav"
-    # "See a real report" is contract C2's label (site_bar).
+    # site_bar's label; terms and privacy keep the bars they were dated with.
     for href, label in ((f"{root}how-it-works.html", "How it works"),
-                        (f"{root}sample-report.html", "See a real report"),
+                        (f"{root}sample-report.html", _sample_route(name)),
                         (f"{root}index.html#pricing", "Pricing")):
         assert re.search(rf'<a [^>]*href="{re.escape(href)}"[^>]*>{label}</a>', nav.group(1)), \
             f"{name}: no {label}"
@@ -5184,20 +5194,19 @@ def test_every_page_declares_its_colour_scheme_and_bar_colour(name: str, scheme:
 def test_a_tablet_keeps_its_nav_and_two_pricing_cards() -> None:
     """Launch review I14, at 768px: the nav showed the logo alone (links and
     CTA hidden below 880px) and the pricing cards stacked into 724px-wide
-    cards of mostly empty line. The CTA (short label) and How it works stay
-    down to 600px; the cards go one column only at 640px."""
+    cards of mostly empty line. The CTA and the sample report stay down to
+    600px, the Menu holding the rest; the cards go one column only at 640px."""
     css = _style(LANDING)
     tablet = css.split("@media (max-width:880px){\n")[1].split("\n  }")[0]
     assert "nav .btn{display:none" not in tablet and ".navlinks .hidesm{display:none" not in tablet
-    assert "nav .btn .short{display:inline;}" in tablet
+    assert "@media (max-width:880px){.navlinks .hidemd{display:none;} nav .sitemenu{display:block;}}" in css
     assert ".plans{grid-template-columns:1fr;}" not in tablet
     assert "@media (max-width:640px){.plans{grid-template-columns:1fr;}}" in css
     phone = css.split("@media (max-width:599px){")[1].split("\n  }")[0]
     assert "nav .btn{display:none;}" in phone
-    # The base rule hiding the short label must come BEFORE the media query
-    # that shows it, or the cascade leaves the tablet's button empty (found in
-    # Chrome at 768px while building this).
-    assert css.index("nav .btn .short{display:none;}") < css.index("@media (max-width:880px){\n")
+    # One label at every width now: "Check my team" fits where "Tell me when
+    # it opens" needed a short form.
+    assert "nav .btn .short" not in css
 
 
 def test_the_social_card_uses_the_heros_headline_treatment() -> None:

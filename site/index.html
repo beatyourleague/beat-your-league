@@ -76,10 +76,24 @@
   /* 24px minimum target: the text links were 17px tall. */
   .navlinks a:not(.btn){padding:7px 4px;}
   .navlinks a:hover{color:var(--paper);}
-  /* The nav CTA's two labels; the short one takes over below 880px. Declared
-     here, BEFORE the media queries, or this base rule would win the cascade
-     and leave a tablet's button empty. */
-  nav .btn .short{display:none;}
+  /* The site's small Menu (render.report.SITE_MENU_CSS, every page's one copy). */
+  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitemenu summary{display:flex;align-items:center;gap:6px;padding:8px 2px;list-style:none;
+    color:#F6F4EE;cursor:pointer;}
+  .sitemenu summary::-webkit-details-marker{display:none;}
+  .sitemenu summary::after{content:"";width:6px;height:6px;border:solid currentColor;
+    border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);}
+  .sitemenu[open] summary::after{transform:translateY(1px) rotate(225deg);}
+  .sitemenu summary:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  .sitemenu-list{position:absolute;top:100%;right:0;z-index:40;min-width:196px;margin-top:6px;
+    padding:6px;background:#101E33;border:1px solid rgba(246,244,238,.24);border-radius:8px;}
+  .sitemenu .sitemenu-list a{display:block;padding:11px 12px;color:#F6F4EE;text-decoration:none;
+    white-space:nowrap;}
+  .sitemenu .sitemenu-list a:hover{text-decoration:underline;}
+  .sitemenu .sitemenu-list a.go{margin-bottom:4px;background:#F2C230;border-radius:8px;
+    color:#101E33;}
+  .sitemenu-list a:focus-visible{outline:3px solid #F6F4EE;outline-offset:-3px;}
 
   /* ------------------------------------------------ buttons (contract C7)
      One shape on every surface: a flat rounded rectangle, 48px (the nav's 40,
@@ -149,6 +163,9 @@
   .creds{list-style:none;display:grid;gap:6px;margin-top:18px;
     font-size:14px;font-weight:600;color:var(--dusk2);}
   .creds li{display:flex;align-items:center;gap:8px;text-wrap:balance;}
+  .creds a{text-decoration:underline;text-decoration-color:rgba(246,244,238,.4);
+    text-underline-offset:3px;}
+  .creds a:hover{color:var(--paper);text-decoration-color:var(--flag);}
   .creds li::before{content:"";width:14px;height:14px;flex:none;border-radius:50%;
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   /* One colour, the clock alone in gold: the line mixed gold-bold, white-bold
@@ -165,13 +182,15 @@
   @keyframes clockin{from{opacity:0}}
   /* The season clock and this week's link both arrive with the Tuesday
      build's week file, a beat after first paint on a slow phone. Their room is
-     reserved — three lines for the clock's sentence, the live report's link
+     reserved — two lines for the clock's sentence, the live report's link
      its own line under it — so their arrival moves nothing (measured in Chrome on
      Slow 4G at 1280px: CLS 0.10, the button row and the whole page below the
      hero pushed down by one line each). */
-  .heroline{min-height:calc(3 * 1.55em);}
+  .heroline{min-height:calc(2 * 1.55em);}
   .livepill[hidden]{display:inline-flex!important;visibility:hidden;}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;align-items:center;}
+  /* What pressing the hero's button does, in one line under it. */
+  .promise{margin-top:12px;font-size:14px;color:var(--dusk2);line-height:1.5;max-width:52ch;}
   .cta-row .textlink{color:var(--dusk2);font-size:15px;padding:10px 2px;}
   .cta-row .textlink:hover{color:var(--paper);}
   /* A phone's route to the price (review M13): the nav's Pricing is hidden
@@ -932,10 +951,29 @@
   .closer{text-align:center;padding:var(--gap-section) 0 20px;}
   .closer p{color:var(--dusk2);margin:8px auto 24px;max-width:46ch;text-wrap:balance;}
   .closer .cta-row{justify-content:center;}
+  /* The email capture lives here, under the page's last ask: for whoever isn't
+     ready to paste a roster. Every "#watch-form" link lands in it. */
+  .closer .watchform{flex-wrap:wrap;justify-content:center;margin:36px auto 0;}
+  .closer .watchform label{flex:1 0 100%;font-size:14px;color:var(--dusk2);line-height:1.5;
+    text-wrap:balance;}
+  .closer .watchnote{margin:10px auto 0;text-align:left;}
+  /* The bye planner's standing line under the comparison (owner review, Oct 30
+     2026: a free tool with no visible home). */
+  .freetool{margin-top:18px;font-size:15px;color:var(--dusk2);line-height:1.5;}
+  .freetool a{color:var(--flag);font-weight:700;}
   footer{margin-top:56px;border-top:1px solid rgba(246,244,238,.14);
     padding:24px 0 48px;font-size:13px;color:#8C9CB3;line-height:1.8;}
   footer a{color:var(--flag);text-decoration:none;}
   footer a:hover{text-decoration:underline;}
+  .footmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 24px;
+    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;
+    font-family:var(--sans);font-size:14px;line-height:1.3;}
+  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;opacity:.75;}
+  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}
+  footer .footmap a:hover{text-decoration:underline;}
+  footer .footmap a[hidden]{display:none;}
+  @media (max-width:600px){.footmap{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
   /* Motion shows the product doing its job, once. The static HTML already
      holds every final value, so a page whose script never runs is complete. */
@@ -989,29 +1027,27 @@
     .lpline{flex-wrap:wrap;align-items:flex-start;padding:14px 16px;}
     .lpline .lpbody{flex:1 1 calc(100% - 42px);}
     .lpline a{padding:6px 0 2px 42px;}
-    /* Phones: headline, what it works with, the report itself, then the form
-       and the line that explains it, then the button row. The product is the
-       strongest thing on the page, so a visitor from a phone meets it first;
-       it sat a full screen down, under the form (owner review, Oct 30 2026).
-       The sticky bar keeps the action in reach until the form scrolls in. The
-       phone's caption names 2024, so its "Week 10" never reads as the season
-       clock's week. This week's link and its call stay with the button row
-       (one secondary group, sales review). They sit far below the first
-       screen here, so their arrival moves nothing a visitor can see, and no
-       room is held for them: in a week without them it read as a blank gap
-       above the punch line.
-       With checkout open the hero's own button row takes the form's place,
-       the clock just above it (equal orders keep source order).
+    /* Phones: headline, sentence, what it works with, the report itself, then
+       the action. The product is the strongest thing on the page, so a visitor
+       from a phone meets it first (owner review, Oct 30 2026). The sticky bar
+       keeps the action in reach until the button scrolls in. The phone's
+       caption names 2024, so its "Week 10" never reads as the season clock's
+       week. This week's link and its call stay with the button row (one
+       secondary group, sales review). They sit far below the first screen
+       here, so their arrival moves nothing a visitor can see, and no room is
+       held for them: in a week without them it read as a blank gap above the
+       punch line.
+       The clock and the line saying what the button does sit just above it, so
+       "See pricing" wrapping under the buttons never parts the two. Open, the
+       risk line sits under the row (equal orders keep source order).
        `order` takes integers only. */
     .hero{grid-template-columns:1fr;padding:16px 0 20px;gap:0;}
     .hero > div:first-child{display:contents;}
     .hero .kicker{order:1;} .hero h1{order:2;} .hero .sub{order:3;}
     .hero .creds{order:4;margin-top:12px;}
     .hero .phonewrap{order:5;margin:16px 0 8px;}
-    .hero .watchform{order:6;margin-top:16px;} .hero .watchnote{order:7;}
-    .hero .heroline{order:8;margin-top:12px;}
-    .hero.can-buy .heroline{order:6;}
-    .hero.can-buy .cta-row{order:6;} .hero.can-buy .riskline{order:6;}
+    .hero .heroline{order:6;margin-top:12px;min-height:0;}
+    .hero .promise{order:6;margin-top:4px;}
     .hero .cta-row{order:9;margin-top:12px;} .hero .riskline{order:9;}
     .hero .livepill{order:9;justify-self:start;}
     .hero .livecall{order:9;}
@@ -1023,10 +1059,6 @@
        caption 202px and it broke mid-phrase ("2024, / Week 10") while the
        story played (review SLEEK-7). */
     .hero .realrow{max-width:100%;}
-    /* A tablet keeps its nav and the CTA, in the short label: at 768px the
-       nav used to show the logo alone (launch review I14). */
-    nav .btn .long{display:none;}
-    nav .btn .short{display:inline;}
     .hero .punch{order:12;margin-top:28px;}
     /* How it works stacks: each picture beside its words, the line running
        down from one picture to the next. */
@@ -1050,7 +1082,10 @@
     .stickybar{display:block;}
     footer{padding-bottom:96px;}
   }
-  @media (max-width:760px){.navlinks .hidemd{display:none;}}
+  /* Routes leave the bar by width and move to the Menu, never wrap: five routes,
+     the gold button and the lockup need about 860px. A tablet keeps the lockup,
+     the sample report, the Menu and the button (launch review I14). */
+  @media (max-width:880px){.navlinks .hidemd{display:none;} nav .sitemenu{display:block;}}
   @media (max-width:640px){.plans{grid-template-columns:1fr;}}
   @media (max-width:600px){
     :root{--gap-section:72px;}
@@ -1070,8 +1105,8 @@
     .vstable td::before{flex:none;top:0;}
   }
   @media (max-width:599px){
-    /* The form is the action on a phone; a second gold button in the nav
-       above it competes with it. The sticky bar takes over once it scrolls. */
+    /* The hero's button is the action on a phone; a second gold button in the
+       nav above it competes with it. The sticky bar keeps it in reach. */
     nav .btn{display:none;}
     .cta-row .onlysm{display:inline-block;}
   }
@@ -1084,12 +1119,13 @@
     .brand{font-size:19px;}
     .navlinks{gap:12px;}
   }
-  /* 320px: at 19px the lockup ended 3px before "See a real report"
-     (measured: brand 22..187, link 190..298). */
+  /* 320px: the lockup, the Menu and nothing else (at 19px the lockup ended 3px
+     before the nav's one route; measured: brand 22..187, link 190..298). */
+  @media (max-width:379px){.brand{font-size:18px;}}
+  @media (max-width:369px){.navlinks .hidexs{display:none;}}
   @media (max-width:360px){.brand{font-size:17px;} .wrap{padding:0 16px;}
     h1{font-size:46px;}
-    /* The clock's sentence runs to four lines here: its room is kept. */
-    .heroline{min-height:calc(4 * 1.55em);}}
+}
 </style>
 <!-- fonts/fonts.css, inlined without its comments: linked, it was a
      render-blocking round trip of its own that held the first paint (Slow 4G,
@@ -1204,18 +1240,20 @@
 
 <nav>
   <a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a>
-  <!-- On a phone: the logo and one route, to the real report (pre-launch
-       review D19 — below 600px the nav used to be the logo alone). The gold
-       CTA leaves too there; the sticky bar takes over once the form scrolls. -->
+  <!-- On a phone: the logo, one route (pre-launch review D19 — below 600px the
+       nav used to be the logo alone) and the Menu, which holds the rest. The
+       gold CTA leaves too there; the sticky bar keeps it in reach. -->
   <div class="navlinks">
     <a class="hidemd" href="how-it-works.html">How it works</a>
-    <a href="sample-report.html">See a real report</a>
+    <a class="hidexs" href="sample-report.html">Sample report</a>
+    <a class="hidemd" href="byes/">Bye planner</a>
     <a class="hidemd" href="league-pass.html">League Pass</a>
     <a class="hidemd" href="#pricing">Pricing</a>
-    <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
-         a closed checkout reads as bait. JS rewrites it the day checkout opens;
-         if JS never runs, the honest state is what shows. -->
-    <a class="btn gold" id="nav-cta" href="#watch-form"><span class="long">Tell me when it opens</span><span class="short">Notify me</span></a>
+    <!-- The roster check works with checkout closed, so this button is true in
+         every state and does what it says. CHECKOUT_OPEN relabels it the day
+         checkout opens; if JS never runs, the honest label is what shows. -->
+    <a class="btn gold" id="nav-cta" href="join/index.html">Check my team</a>
+    <details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html">League Pass</a><a href="#pricing">Pricing</a></div></details>
   </div>
 </nav>
 
@@ -1228,26 +1266,21 @@
          league's way" and odds on every call (launch review PC-10, PE-11). -->
     <p class="sub">Every Tuesday, one email decides your lineup for your roster, all the way
     to your title game.</p>
-    <!-- While checkout is closed, the one action a visitor can complete lives
-         right here: one email, no card. The paid CTA unhides the day
-         CHECKOUT_OPEN flips. -->
-    <form class="watchform" id="watch-form" novalidate>
-      <input type="email" id="watch-email" placeholder="you@example.com"
-             autocomplete="email" aria-label="Email me when checkout opens">
-      <button class="btn gold" type="submit">Tell me when it opens</button>
-    </form>
-    <p class="watchnote" id="watch-note" role="status"></p>
     <ul class="creds" aria-label="Works with">
-      <li>ESPN, Yahoo, Sleeper, CBS: paste your roster, no login</li>
+      <li><span><a href="espn/">ESPN</a>, <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a>,
+      <a href="cbs/">CBS</a>: paste your roster, no login</span></li>
     </ul>
-    <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b> One email when
-    checkout opens, nothing else. Unsubscribe any time.</p>
+    <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b></p>
+    <!-- One action, one secondary. The roster check is the best thing to do on
+         this site and it works with checkout closed, so it is the action either
+         way: the static label is the closed state, CHECKOUT_OPEN relabels it. -->
     <div class="cta-row">
-      <a class="btn gold" id="hero-open" hidden href="join/index.html">Get my lineups</a>
+      <a class="btn gold" id="hero-open" href="join/index.html">Check my team</a>
       <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
       <a class="btn ghost" id="hero-sample" href="sample-report.html">See a real report</a>
       <a class="textlink onlysm" href="#pricing">See pricing</a>
     </div>
+    <p class="promise" id="hero-promise">Paste your roster. See the calls on your team in seconds. No card.</p>
     <!-- The one secondary group: "See a real report" above, and this week's
          live report as one muted line straight under it (pre-launch review
          M4, sales review). Shown only when the Tuesday build says this week's
@@ -1259,7 +1292,7 @@
          its room is reserved, so its late arrival moves nothing; stacked, it
          sits below the first screen and no room is held. -->
     <a class="livepill" id="this-week-link" data-live-week hidden href="this-week.html"><span
-    class="dot" aria-hidden="true"></span><span id="this-week-label">or this week's live report</span><span
+    class="dot" aria-hidden="true"></span><span id="this-week-label">or this week's report</span><span
     class="go" aria-hidden="true">→</span></a>
     <!-- This week's closest call with odds, quoted from the live sample's
          recorded build (the clock file's "closest", contract C6): shown only in a
@@ -1376,8 +1409,8 @@
       <li data-pin="04"><h3>If/then for gameday</h3><p>A plan for every questionable
         starter. If Friday's injury report changes your lineup, the Saturday check brings the
         swap.</p></li>
-      <li class="off-pic"><h3>Byes ahead</h3><p>Any week ahead where a bye leaves a starting
-        spot empty, flagged through your title game.
+      <li class="off-pic"><h3>Byes ahead</h3><p>Any week a bye empties a starting
+        spot, through your title game.
         <a class="go" href="byes/" data-planner>Check yours free</a></p></li>
     </ol>
   </div>
@@ -1397,11 +1430,11 @@
       <tr><th scope="row">Bye weeks</th><td class="no">Yours to track</td><td class="yes">Checked to your title game</td></tr>
     </tbody>
   </table>
+  <p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a> checks your roster through Week 17.</p>
 </section>
 
 <section id="pricing">
   <h2>Take it through your title game.</h2>
-  <p class="lede">Every lineup from now to your title game, one payment.</p>
   <!-- 2026 sells ONE-TIME passes (owner decision, Oct 18 2026): no
        subscription, nothing renews. One decision at checkout (PLAN §4): the
        League Pass is a slim strip under the card, never a pricing card. From
@@ -1445,7 +1478,7 @@
       </details>
       <details>
         <summary>Is it worth joining mid-season?</summary>
-        <div class="a">Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and Saturday's check catches Friday's injury news.</div>
+        <div class="a">Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and the Saturday check catches Friday's injury news.</div>
       </details>
       <details>
         <summary>What if news breaks after Tuesday?</summary>
@@ -1465,31 +1498,32 @@
 
 <section class="closer">
   <h2 id="closer-head">Your lineup, decided every Tuesday.</h2>
-  <p id="closer-note">Leave your email for one message the morning checkout opens.</p>
+  <p id="closer-note">Paste your roster. No card.</p>
   <div class="cta-row">
-    <a class="btn gold" id="closer-cta" href="#watch-form">Tell me when it opens</a>
-    <a class="textlink" href="sample-report.html">or read a real report first</a>
+    <a class="btn gold" id="closer-cta" href="join/index.html">Check my team</a>
     <a class="textlink onlysm" href="#pricing">See pricing</a>
   </div>
+  <!-- The email capture, for whoever isn't ready to paste a roster: every
+       "#watch-form" link on the site lands here. It retires the day a purchase
+       can complete (CHECKOUT_CAN_COMPLETE). -->
+  <form class="watchform" id="watch-form" novalidate>
+    <label for="watch-email" id="watch-label">Not ready? One email when checkout opens. Unsubscribe any time.</label>
+    <input type="email" id="watch-email" placeholder="you@example.com" autocomplete="email">
+    <button class="btn ghost" type="submit">Tell me when it opens</button>
+  </form>
+  <p class="watchnote" id="watch-note" role="status"></p>
 </section>
 
-<div class="stickybar" id="stickybar"><a class="btn gold" id="sticky-cta" href="#watch-form">Tell me when it opens</a></div>
+<div class="stickybar" id="stickybar"><a class="btn gold" id="sticky-cta" href="join/index.html">Check my team</a></div>
 
 </main>
 
 <footer>
+  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your app</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
   <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
   Sample visuals above are real output, labeled where shown.
-  NFL data: nflverse (nflverse-data), CC-BY-4.0, aggregated and scored by us under the
-  scoring you pick. Projections are analysis, not guarantees. Must be 18+ to buy.
-  Not affiliated with the NFL.<br>
-  <a href="how-it-works.html">How it works</a> ·
-  <a href="sample-report.html">See a real report</a> ·
-  <a href="league-pass.html">League Pass</a> ·
-  <a href="byes/">Free bye week planner</a> ·
-  <a href="mailto:hello@beatyourleague.com">hello@beatyourleague.com</a> ·
-  <a href="terms.html">Terms &amp; refunds</a> &middot;
-    <a href="privacy.html">Privacy</a>
+  NFL data: nflverse (nflverse-data), CC-BY-4.0. Projections are analysis, not guarantees.
+  Must be 18+ to buy. Not affiliated with the NFL.
 </footer>
 
 </div>
@@ -1523,7 +1557,7 @@
       "@type": "FAQPage",
       "mainEntity": [
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes: ESPN, Yahoo, Sleeper, CBS or any app. Paste your roster, no login. Full PPR, half-PPR or standard (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
-        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and Saturday's check catches Friday's injury news."}},
+        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and the Saturday check catches Friday's injury news."}},
         {"@type": "Question", "name": "What if news breaks after Tuesday?", "acceptedAnswer": {"@type": "Answer", "text": "Your report already plans for it: every questionable starter comes with an if/then and the backup who can still play in time. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after. Your roster is used only to build your report and is never sold."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How it works has the detail."}}
@@ -1747,7 +1781,11 @@ if (CHECKOUT_OPEN) {
     .filter(([, el]) => el)
     .map(([sel, el]) => [sel, el.cloneNode(true)]);
   const heroOpen = document.getElementById("hero-open");
-  if (heroOpen) heroOpen.hidden = false;
+  if (heroOpen) heroOpen.textContent = "Get my lineups";
+  // "No card" belongs to the roster check; the line below the button now
+  // answers the question a buyer has (the risk line, next).
+  const promise = document.getElementById("hero-promise");
+  if (promise) promise.hidden = true;
   // The strongest true answer to "what if it's no good?", where the decision
   // is made rather only in the price card ~4,700px down on a phone (business
   // review #1). No price, so the no-price-in-hero rule holds; closeForSeason
@@ -1819,8 +1857,6 @@ if (CHECKOUT_OPEN) {
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     }
-    const hero = document.querySelector(".hero");
-    if (hero) hero.classList.add("can-buy");
     const heroline = document.querySelector(".heroline");
     if (heroline) {
       heroline.replaceChildren();
@@ -1870,24 +1906,23 @@ if (CHECKOUT_OPEN) {
     const clockEl = document.getElementById("season-clock");
     if (heroline && clockEl) {
       heroline.replaceChildren(clockEl, document.createTextNode(
-        " Not ready yet? Leave your email for one message from us, nothing else."));
+        " Not ready yet? Leave your email at the end of this page."));
     }
     const closerNote = document.getElementById("closer-note");
-    if (closerNote) {
-      closerNote.textContent = "Not ready yet? Leave your email at the top of the page " +
-        "for one message from us, nothing else.";
-    }
+    if (closerNote) closerNote.textContent = "Set up takes about two minutes.";
     const watchButton = document.querySelector("#watch-form button");
     if (watchButton) watchButton.textContent = "Email me once";
     watchDoneTail = "One message from us, nothing else.";
-    const watchField = document.getElementById("watch-email");
-    if (watchField) watchField.setAttribute("aria-label", "Your email");
+    const watchLabel = document.getElementById("watch-label");
+    if (watchLabel) watchLabel.textContent = "Not ready yet? One message from us, nothing else.";
   }
 }
 
 // Checkout closes with the season: from the last week's first kickoff no
 // weekly report is left to sell, and join/ says so too. Puts the closed state
-// back (the capture, its caption, "Tell me when it opens") and says why.
+// back and says why, with one change from the closed state a live season
+// shows: the roster check has no week left to check, so the main buttons go to
+// the email capture instead, and the closer's own button leaves.
 function closeForSeason(line) {
   if (closedState) {
     for (const [sel, clone] of closedState) {
@@ -1904,20 +1939,28 @@ function closeForSeason(line) {
       const el = document.getElementById(id);
       if (el) el.hidden = false;
     });
-    const hero = document.querySelector(".hero");
-    if (hero) hero.classList.remove("can-buy");
     // The form itself is never cloned (its listener would go), so the words
     // the proving window gave it (FUN-7) are put back by hand.
     const watchButton = document.querySelector("#watch-form button");
     if (watchButton) watchButton.textContent = "Tell me when it opens";
-    const watchField = document.getElementById("watch-email");
-    if (watchField) watchField.setAttribute("aria-label", "Email me when checkout opens");
     watchDoneTail = "One email when checkout opens, nothing else.";
   }
-  ["hero-open", "try-cta", "risk-line"].forEach((id) => {
+  const watchLabel = document.getElementById("watch-label");
+  if (watchLabel) watchLabel.textContent = "One email when checkout opens, nothing else.";
+  ["try-cta", "risk-line", "hero-promise", "closer-cta"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
+  [["hero-open", "Tell me when it opens"], ["sticky-cta", "Tell me when it opens"],
+   ["nav-cta", "Notify me"]].forEach(([id, label]) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.setAttribute("href", "#watch-form");
+      el.textContent = label;
+    }
+  });
+  const closerNote = document.getElementById("closer-note");
+  if (closerNote) closerNote.textContent = "Leave your email for one message the morning checkout opens.";
   const clock = document.getElementById("season-clock");
   if (clock) clock.textContent = line;
 }
@@ -2279,7 +2322,7 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           const label = document.getElementById("this-week-label");
           const built = Date.parse(w.built_at || "");
           if (label) {
-            label.textContent = "or this week's live report" + (isNaN(built) ? ""
+            label.textContent = "or this week's report" + (isNaN(built) ? ""
               : " (built " + new Date(built).toLocaleDateString("en-US", { weekday: "short",
                 month: "short", day: "numeric", timeZone: "America/New_York" }) + ")");
           }
@@ -2389,8 +2432,8 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
   } catch (e) { /* the static sentence stays */ }
 })();
 
-// The phone-width bar: shown only while none of the hero, the pricing card's
-// own gold button and the closer (each with its own) is on screen. The card's
+// The phone-width bar: shown only while none of the hero's action, the pricing
+// card's own gold button and the closer (each with its own) is on screen. The card's
 // button was not watched once it became a real button (D4), so at 390px its
 // "Tell me when it opens" sat stacked over the bar's identical one (pre-launch
 // review); open, "Get the Rest-of-Season Pass" sat over "Set up my team". The
@@ -2399,8 +2442,9 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
 const stickybar = document.getElementById("stickybar");
 if (stickybar && "IntersectionObserver" in window) {
   // The hero's own action, not the hero: on a phone the report comes first, so
-  // the hero can fill the screen with no way to act in sight. A hidden one
-  // simply never intersects, so this holds closed and open.
+  // the hero can fill the screen with no way to act in sight. The form sits in
+  // the closer and a hidden one simply never intersects, so this holds closed
+  // and open.
   const watched = [document.getElementById("watch-form"), document.getElementById("hero-open"),
                    document.getElementById("season-cta"),
                    document.querySelector(".closer")].filter(Boolean);
@@ -2411,8 +2455,8 @@ if (stickybar && "IntersectionObserver" in window) {
   });
   watched.forEach((el) => obs.observe(el));
 }
-// Every "#watch-form" link — the nav, the sticky bar, the closer, the pricing
-// cards — lands IN the form, not merely near it: the field takes the cursor
+// Every "#watch-form" link — the pricing card's, and in a season that is over
+// the nav's, the hero's and the sticky bar's — lands IN the form, not merely near it: the field takes the cursor
 // (on a phone, the keyboard opens) and the form scrolls to mid-screen, at once
 // for a visitor who asked for reduced motion (launch review I4, D6). In the
 // open state these links point at join/ and none of this applies.

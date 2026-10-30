@@ -501,9 +501,9 @@ setTimeout(() => console.log(JSON.stringify({ closed,
   hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent })), 50);
 """
     start = {"season-clock": "Checkout is open." if open_ else "A new report every Tuesday of the season.",
-             "hero-open": "Get my lineups",
-             "closer-cta": "Get my lineups" if open_ else "Tell me when it opens",
-             "sticky-cta": "Get my lineups" if open_ else "Tell me when it opens",
+             "hero-open": "Get my lineups" if open_ else "Check my team",
+             "closer-cta": "Get my lineups" if open_ else "Check my team",
+             "sticky-cta": "Get my lineups" if open_ else "Check my team",
              "this-week-label": ""}
     if open_ and can:
         start["open-line"] = " Set up now and your first report lands today."
@@ -536,7 +536,7 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     assert got["hero"] == got["closer"] == "Get my lineups"
     closed = _clock(mid, "2026-10-28T16:00:00Z", open_=False)
     assert closed["clock"].startswith("Week 9's report lands Tuesday. 9 lineups")
-    assert closed["hero"] == "Get my lineups" and closed["closer"] == "Tell me when it opens"
+    assert closed["hero"] == closed["closer"] == "Check my team"
 
 
 @needs_node

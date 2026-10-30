@@ -35,18 +35,20 @@ def test_how_it_works_checkout_flag_is_the_landings() -> None:
     mine = FLAG.search(HOW)
     assert landing and mine and landing.group(1) == mine.group(1)
     # The static markup is the closed state (fail closed), like the landing's.
-    for anchor in re.findall(r"<a [^>]*data-checkout-cta[^>]*>[^<]*</a>", HOW):
-        assert 'href="index.html#watch-form"' in anchor
-        assert "Tell me when it opens" in anchor
+    # Since Oct 30 2026 the closed ask is the roster check, which works closed.
+    anchors = re.findall(r"<a [^>]*data-checkout-cta[^>]*>[^<]*</a>", HOW)
+    assert len(anchors) == 2
+    for anchor in anchors:
+        assert 'href="join/index.html"' in anchor
+        assert "Check my team" in anchor
 
 
 def test_the_sample_ask_follows_the_landing_flag(tmp_path, monkeypatch) -> None:
     landing = tmp_path / "index.html"
     monkeypatch.setattr(rr, "LANDING_PAGE", landing)
-    assert "index.html#watch-form" in rr.sample_cta(), "absent landing reads closed"
+    assert rr.CHECK_LABEL in rr.sample_cta(), "absent landing reads closed"
     landing.write_text("<script>\nconst CHECKOUT_OPEN = false;\n</script>")
-    assert rr.SAMPLE_CTA_CLOSED in rr.sample_cta()
-    assert "join/index.html" not in rr.sample_cta()
+    assert rr.sample_cta() == f'<a class="btn gold" href="join/index.html">{rr.CHECK_LABEL}</a>'
     landing.write_text("<script>\nconst CHECKOUT_OPEN = true;\n</script>")
     assert rr.sample_cta() == f'<a class="btn gold" href="join/index.html">{rr.SAMPLE_CTA}</a>'
 
@@ -174,7 +176,8 @@ def test_a_season_that_is_over_keeps_its_last_page_marked_as_the_last(
                      page)
     # Checkout is closed once the season is over (D9): no ask to join, and no
     # "first report the day you join" on the kept card.
-    assert "join/index.html" not in re.sub(r"<script.*?</script>", "", page, flags=re.S)
+    assert not re.search(r'class="btn[^"]*" href="join/',
+                         re.sub(r"<script.*?</script>", "", page, flags=re.S))
     assert "Tell me when it opens" in page and "the day you join" not in page
     assert live.NEXT_SEASON.replace("'", "&#x27;") in page
     # Idempotent: a second offseason Tuesday leaves the page as it is.
@@ -274,7 +277,8 @@ def test_how_it_works_closes_the_ask_from_the_last_weeks_first_kickoff() -> None
                                     text=True, check=True).stdout)
     assert got == {"last": True, "notyet": False, "mid": False, "over": True,
                    "pre": False}
-    assert "if (clock.closed && CHECKOUT_OPEN) setCheckoutCta(false);" in HOW
+    # Closed or open: the roster check has no week left to check.
+    assert 'if (clock.closed) setCheckoutCta("over");' in HOW
 
 
 # --------------------------------------------------------------------- #

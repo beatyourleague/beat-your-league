@@ -30,9 +30,14 @@ def test_the_season_end_puts_the_closed_state_back() -> None:
     assert 'phase === "over" ||' in SCRIPT and "closeForSeason(" in SCRIPT
     assert "last && ((landsOk && !fresh) || kicked)" in SCRIPT
     fn = LANDING.split("function closeForSeason(line) {")[1].split("\n}\n")[0]
-    for must in ('"watch-form", "watch-note"', '"hero-open", "try-cta"', "el.hidden = true",
-                 "el.hidden = false", 'classList.remove("can-buy")', "carryVia("):
+    for must in ('"watch-form", "watch-note"', '"try-cta", "risk-line", "hero-promise", "closer-cta"',
+                 "el.hidden = true", "el.hidden = false", "carryVia("):
         assert must in fn, must
+    # The roster check has no week left to check: the main buttons go to the
+    # capture, which is the one thing a visitor can still do.
+    for cta in ("hero-open", "sticky-cta", "nav-cta"):
+        assert f'"{cta}"' in fn, cta
+    assert 'el.setAttribute("href", "#watch-form");' in fn
     # The flip keeps what it replaces, under the ids the revert looks up.
     assert 'link.id = "season-cta"' in LANDING
     assert "closedState = [" in LANDING.split("if (CHECKOUT_CAN_COMPLETE)")[0]

@@ -45,8 +45,37 @@
   .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
-  @media (max-width:719px){.sitenav .hidemd{display:none;}}
+  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitemenu summary{display:flex;align-items:center;gap:6px;padding:8px 2px;list-style:none;
+    color:#F6F4EE;cursor:pointer;}
+  .sitemenu summary::-webkit-details-marker{display:none;}
+  .sitemenu summary::after{content:"";width:6px;height:6px;border:solid currentColor;
+    border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);}
+  .sitemenu[open] summary::after{transform:translateY(1px) rotate(225deg);}
+  .sitemenu summary:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  .sitemenu-list{position:absolute;top:100%;right:0;z-index:40;min-width:196px;margin-top:6px;
+    padding:6px;background:#101E33;border:1px solid rgba(246,244,238,.24);border-radius:8px;}
+  .sitemenu .sitemenu-list a{display:block;padding:11px 12px;color:#F6F4EE;text-decoration:none;
+    white-space:nowrap;}
+  .sitemenu .sitemenu-list a:hover{text-decoration:underline;}
+  .sitemenu .sitemenu-list a.go{margin-bottom:4px;background:#F2C230;border-radius:8px;
+    color:#101E33;}
+  .sitemenu-list a:focus-visible{outline:3px solid #F6F4EE;outline-offset:-3px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  .footmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 24px;
+    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;
+    font-family:var(--sans);font-size:14px;line-height:1.3;}
+  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;opacity:.75;}
+  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}
+  footer .footmap a:hover{text-decoration:underline;}
+  footer .footmap a[hidden]{display:none;}
+  @media (max-width:600px){.footmap{grid-template-columns:repeat(2,minmax(0,1fr));}}
   /* A dark page (contract C6): one flat ground, hairlines instead of shadows,
      gold only where it fills — the button and the headline's slab. */
   html{overflow-x:hidden;overflow-x:clip;background:var(--abyss);}
@@ -369,7 +398,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm hidemd" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="league-pass.html" aria-current="page">League Pass</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidemd" href="how-it-works.html">How it works</a><a class="hidexs" href="sample-report.html">Sample report</a><a class="hidesm" href="byes/">Bye planner</a><a class="hidemd" href="league-pass.html" aria-current="page">League Pass</a><a class="hidemd" href="index.html#pricing">Pricing</a><details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html" aria-current="page">League Pass</a><a href="index.html#pricing">Pricing</a></div></details></nav></div>
     <h1>One payment.<br><em><span>The whole league.</span></em></h1>
     <p class="lede">In a league of up to 14 teams, every manager who claims a seat gets their
     own report every Tuesday, built from their own roster. Twelve rosters, twelve
@@ -438,7 +467,7 @@
          2026: three group-chat snippets on one page read as a wall). It hides
          once week.json says no bye is left or the season is over (G4). -->
     <p class="kitline" id="kit-byes-block">Free for everyone in the league, no email or login:
-    the <a href="byes/">bye-week planner</a> shows every week through 17 where a bye leaves a
+    the <a href="byes/">bye planner</a> shows every week through 17 where a bye leaves a
     starting spot empty.</p>
   </div>
 
@@ -522,12 +551,9 @@
   </div>
   </main>
   <footer>
+    <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your app</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
     <b>Beat Your League</b> — analysis, not betting picks. Not a guarantee. Must be 18+ to
-    purchase. Not affiliated with the NFL.<br>
-    <a href="terms.html">Terms &amp; refunds</a> &middot;
-    <a href="privacy.html">Privacy</a> ·
-    <a href="byes/">Free bye week planner</a> ·
-    <a href="index.html">Back to the main page</a>
+    purchase. NFL data: nflverse (nflverse-data), CC-BY-4.0. Not affiliated with the NFL.
   </footer>
 </div>
 

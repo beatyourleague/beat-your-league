@@ -42,8 +42,37 @@
   .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
-  @media (max-width:719px){.sitenav .hidemd{display:none;}}
+  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitemenu summary{display:flex;align-items:center;gap:6px;padding:8px 2px;list-style:none;
+    color:#F6F4EE;cursor:pointer;}
+  .sitemenu summary::-webkit-details-marker{display:none;}
+  .sitemenu summary::after{content:"";width:6px;height:6px;border:solid currentColor;
+    border-width:0 2px 2px 0;transform:translateY(-2px) rotate(45deg);}
+  .sitemenu[open] summary::after{transform:translateY(1px) rotate(225deg);}
+  .sitemenu summary:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  .sitemenu-list{position:absolute;top:100%;right:0;z-index:40;min-width:196px;margin-top:6px;
+    padding:6px;background:#101E33;border:1px solid rgba(246,244,238,.24);border-radius:8px;}
+  .sitemenu .sitemenu-list a{display:block;padding:11px 12px;color:#F6F4EE;text-decoration:none;
+    white-space:nowrap;}
+  .sitemenu .sitemenu-list a:hover{text-decoration:underline;}
+  .sitemenu .sitemenu-list a.go{margin-bottom:4px;background:#F2C230;border-radius:8px;
+    color:#101E33;}
+  .sitemenu-list a:focus-visible{outline:3px solid #F6F4EE;outline-offset:-3px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  @media (max-width:369px){.sitenav .hidexs{display:none;}}
+  .footmap{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 24px;
+    align-items:start;justify-content:stretch;margin:0 0 24px;padding:0;
+    font-family:var(--sans);font-size:14px;line-height:1.3;}
+  .footmap p{margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;opacity:.75;}
+  footer .footmap a{display:block;width:fit-content;padding:5px 0;text-decoration:none;}
+  footer .footmap a:hover{text-decoration:underline;}
+  footer .footmap a[hidden]{display:none;}
+  @media (max-width:600px){.footmap{grid-template-columns:repeat(2,minmax(0,1fr));}}
   /* Full-bleed paper (contract C2 of the truth pass): a flat navy band, then
      the page itself on the paper, edge to edge at every width — no sheet on a
      desk, no frame, no double rules. */
@@ -204,7 +233,7 @@
 <body>
 <header>
   <div class="wrap">
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm hidemd" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="league-pass.html">League Pass</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidemd" href="how-it-works.html">How it works</a><a class="hidexs" href="sample-report.html">Sample report</a><a class="hidesm" href="byes/">Bye planner</a><a class="hidemd" href="league-pass.html">League Pass</a><details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html">League Pass</a></div></details></nav></div>
     <div class="done"><svg class="check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
     <h1>You&#x27;re in.</h1></div>
     <p>Payment went through and your pass is live. Here's what happens next.</p>
@@ -396,9 +425,10 @@ document.getElementById("friend-share").addEventListener("click", () => {
   } catch (e) { /* the page stays as it is */ }
 })();
 </script>
-<footer><div class="wrap"><b>Beat Your League</b> — analysis, not betting picks. This page is written in plain language
+<footer><div class="wrap"><nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your app</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
+    <b>Beat Your League</b> — analysis, not betting picks. This page is written in plain language
   rather than legalese; it is not legal advice, and it does not limit any right you have under
-  consumer law where you live.</div></footer>
+  consumer law where you live. NFL data: nflverse (nflverse-data), CC-BY-4.0.</div></footer>
 <script src="/motion.js?v=172057d003" defer></script>
 <script src="/count.js" defer></script>
 </body>
