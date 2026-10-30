@@ -280,3 +280,16 @@ questions each: would you have set your lineup differently, what would make you 
 teams do you run.
 
 - *(none yet)*
+
+## A/B testing (owner question, Oct 30 2026) — held until traffic exists
+- **Cookieless A/B tests, built when the dashboard shows ~1,000 landing views a week.** Below
+  that a test reads noise (landing → buy-page click at ~40% needs ~3,000 landing views across
+  both arms; landing → paid at ~1% needs ~15,000). Design agreed: the landing picks A/B per page
+  load in an inline script before paint (nothing stored, so the privacy page's no-cookies claim
+  holds); the arm rides funnel links like `?via=` (one `carryVia`) and the Stripe ref like
+  `_via-`; count.js gains one field the Worker re-validates (owner redeploy); the dashboard gets
+  an Experiments panel with a two-proportion readout and a "need N more" line. Rules written
+  before a test starts: one hypothesis, one primary metric, a fixed sample size, no peeking,
+  one test at a time; both arms pass every site copy test. Test order: hero headline/CTA, phone
+  story vs static report shot, the roster-paste step's explanation, free report on/off. Never
+  test price (fairness, refunds, law) — change it for everyone between seasons instead.
