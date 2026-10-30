@@ -314,19 +314,30 @@ def test_every_inline_script_parses() -> None:
         assert done.returncode == 0, done.stderr
 
 
-def test_the_phone_screen_cannot_leak_paper_around_the_lock_screen() -> None:
-    """A light background on the rounded .screen is antialiased on its own, so
-    a one-pixel cream line showed along the curve behind the dark lock screen
-    (owner report, Oct 30 2026). The screen is bezel black, the paper is a
-    layer inside the clip, and the lock sits past the edge. The close-up shares
-    the class and must keep its paper with no square layer behind its corners."""
+def test_a_ring_in_the_bezels_black_covers_the_seam_of_the_phone_screen() -> None:
+    """Every layer inside the screen's rounded clip is antialiased on its own, so
+    together they drew a one-pixel light line along the curve behind the dark lock
+    screen (owner report, Oct 30 2026). A ring in the bezel's own colour, over the
+    screen's edge, covers it in every state.
+
+    It has to sit above the screen's own layers: .screen makes no stacking context
+    of its own, so the lock's z-index outranks a ring with none, and the ring then
+    does nothing. The screen itself stays paper: making it black to hide the line
+    sat the report on black with a hard edge (owner report, same day)."""
     css = LANDING[LANDING.index("<style"):LANDING.index("</style>")]
     screen = re.search(r"\n\s*\.screen\{([^}]*)\}", css).group(1)
-    assert "background:#050608" in screen and "overflow:hidden" in screen
-    assert re.search(r"\.screen::before\{[^}]*inset:0;background:#F6F4EE;z-index:-1", css)
-    assert re.search(r"\n\s*\.lock\{[^}]*inset:-1px;border-radius:45px", css)
-    # The lock's contents are put back, or its icons sit a pixel off the email's.
-    assert "margin:1px 1px 0" in re.search(r"\.lk-status\{([^}]*)\}", css).group(1)
-    assert re.search(r"\.lk-fg\{position:absolute;inset:1px;\}", css)
-    assert "background:#F6F4EE" in re.search(r"\.shot\.screen\{([^}]*)\}", css).group(1)
-    assert re.search(r"\.shot\.screen::before,\.shot\.screen::after\{content:none;\}", css)
+    assert "background:#F6F4EE" in screen
+    assert not re.search(r"\.screen::before", css)
+    bezel = re.search(r"\n\s*\.phone\{([^}]*)\}", css).group(1)
+    colour = re.search(r"background:(#[0-9A-Fa-f]{6})", bezel).group(1)
+    ring = re.search(r"\n\s*\.edge\{([^}]*)\}", css).group(1)
+    assert f"solid {colour}" in ring
+    assert "pointer-events:none" in ring
+    tops = [int(n) for n in re.findall(r"\.(?:lock|glass|statusbar|island)\{[^}]*?z-index:(\d+)", css)]
+    assert tops and int(re.search(r"z-index:(\d+)", ring).group(1)) > max(tops)
+    # It reaches past the seam: the screen starts 10px in (the .phone's padding).
+    inset = int(re.search(r"inset:(\d+)px", ring).group(1))
+    width = float(re.search(r"border:([\d.]+)px", ring).group(1))
+    assert inset + width >= 11
+    # It is a child of the phone, outside the screen's clip, after the generated block.
+    assert re.search(r'<!-- phone:end -->\s*</div>\s*<span class="edge" aria-hidden="true"></span>', LANDING)
