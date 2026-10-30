@@ -140,6 +140,15 @@
   /* A confirmation with one item showing (free report, seat, update) is a
      sentence, not a list: a lone "1." sat in front of it (panel R5). */
   .done ol.single{list-style:none;margin-left:0;}
+  /* The settings in one line, with "Change" opening the radios. */
+  .setsum{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;
+    flex-wrap:wrap;margin-top:14px;padding:8px 8px 8px 16px;background:var(--card);
+    border:1px solid var(--line);border-radius:8px;}
+  .setsum b{font-size:15px;line-height:1.4;color:var(--navy);}
+  .setsum b span{white-space:nowrap;}
+  .setsum button{margin:0;}
+  #settings-body[hidden]{display:none;}
+  #settings-body > .note:first-child{margin-top:14px;}
   .settings-ok{display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:12px 14px;
     background:#fff;border:1px solid var(--opt);border-radius:8px;font-size:14px;font-weight:700;
     line-height:1.45;cursor:pointer;}
@@ -420,8 +429,7 @@
     kicks off.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now: once you check your roster it stays in this
-    page's address, so a bookmark brings it back. Leave your email on the
-    <a href="../index.html#watch-form">front page</a> and we'll send exactly one message when it opens.</div>
+    page's address, so a bookmark brings it back.</div>
   </div>
 </header>
 <div class="wrap shell">
@@ -437,10 +445,22 @@
          Prefilled from the report's link when it carries them; otherwise the
          subscriber says these are right before anything is sent. -->
     <div class="note" id="update-settings" style="display:none"></div>
+    <div class="note" id="settings-intro">Pick what your league uses. Six-point passing TDs or TE premium?
+    Pick the closest.</div>
+    <!-- The settings as one line, the radios behind "Change" (the review's
+         "settings wall before the roster"): most leagues keep the defaults,
+         and a link that carried its league's settings shows them here. The
+         line is drawn from the radios themselves (drawSettingsLine), so it
+         can never say one thing while the ref encodes another. -->
+    <div class="setsum" id="settings-summary">
+      <b id="settings-line"><span>Full PPR</span> · <span>12 teams</span> · <span>Standard lineup</span> · <span>K and DEF</span></b>
+      <button type="button" class="retry" id="settings-change" aria-expanded="false"
+              aria-controls="settings-body">Change</button>
+    </div>
+    <div id="settings-body" hidden>
     <div class="note">Full PPR, half PPR or standard scoring with 4-point passing
     touchdowns, in a league of 8, 10, 12 or 14 teams: every number in your report is worked
-    out that way. Six-point passing touchdowns and TE premium aren't scored yet —
-    pick the closest.</div>
+    out that way. Six-point passing touchdowns and TE premium aren't scored yet.</div>
     <div class="optlabel" id="lbl-scoring">Scoring</div>
     <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
@@ -473,6 +493,7 @@
     <div class="opts" id="opt-defense" role="radiogroup" aria-labelledby="lbl-defense">
       <label><input type="radio" name="defense" value="yes" checked>Starts a DEF</label>
       <label><input type="radio" name="defense" value="no">No DEF</label>
+    </div>
     </div>
     <div class="note" id="shape-note" aria-live="polite">Your lineup: QB, 2 RB, 2 WR,
     TE, FLEX, K and DEF. Superflex adds a second flex that can take a quarterback.</div>
@@ -532,6 +553,7 @@ Baltimore Ravens
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
       your second weekly report's week kicks off (or a week after your last report, if
       the season ends first) — one per person, and a second purchase after a refund is final.</p>
+      <p class="terms-line" id="mail-line" hidden></p>
       <button id="submit" type="submit">Continue to checkout — $29</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
       <!-- The address, read back before it is locked at Stripe
@@ -563,7 +585,7 @@ Baltimore Ravens
         is usually set up within the hour. Nothing is set up until it's pressed, and the
         button works for 7 days. Your first report lands the day you confirm —
         this week's report if it's Week 2 or later and the week's games haven't
-        started, otherwise your roster report — then a new one every Tuesday. If
+        started, otherwise a report on your roster as it stands — then a new one every Tuesday. If
         it can't be matched to an active League Pass, or your league's seats are all
         taken, we email you to say so.</li>
         <!-- What the intake actually does (run/updates.py validate_requests),
@@ -579,7 +601,7 @@ Baltimore Ravens
         More than one team on this address? Use the update link in that team's own
         report.</li>
         <li id="trial-note" style="display:none">If this address hasn't had a free
-        report this season and isn't a subscriber's, it's built from the roster you just
+        report this season and doesn't belong to a pass holder, it's built from the roster you just
         entered and usually lands within the hour. From the week's first kickoff
         until Tuesday it waits for the next week's report, so it's never about games
         already underway. One free report per person — nothing to pay, no card.</li>
@@ -643,6 +665,34 @@ Baltimore Ravens
 //   Nothing is DROPPED. A line we cannot read is shown back verbatim, as a
 //   text node. Pasting fifteen and silently getting thirteen is the same
 //   failure as guessing, wearing a different hat.
+
+// roster.js carries the resolver and the roster code. When it fails to load
+// (a blocked request, a dropped connection), the first line below that names
+// R throws "ReferenceError: R is not defined" and the page is left half-drawn,
+// its buttons wired to nothing (reproduced). So the page says so plainly and
+// this script ends here: a classic script can only end early by throwing, and
+// the listener swallows that one throw so it is not reported as a fault.
+if (!window.R) {
+  const stop = new Error("roster.js did not load");
+  window.addEventListener("error", (event) => { if (event.error === stop) event.preventDefault(); });
+  const main = document.getElementById("main");
+  const note = document.createElement("div");
+  note.className = "note";
+  note.setAttribute("role", "alert");
+  note.textContent = "The player list didn't load — reload the page.";
+  const again = document.createElement("button");
+  again.type = "button";
+  again.className = "retry";
+  again.textContent = "Reload the page";
+  again.addEventListener("click", () => location.reload());
+  note.appendChild(document.createElement("br"));
+  note.appendChild(again);
+  for (const child of main.children) child.style.display = "none";
+  main.prepend(note);
+  const progress = document.querySelector(".progress");
+  if (progress) progress.style.display = "none";
+  throw stop;
+}
 
 // Payment links. Empty means checkout is not open, and the page says the
 // roster was NOT saved rather than congratulating anyone.
@@ -822,6 +872,16 @@ const TRY_MODE = QUERY.get("try") === "1" && !UPDATE_MODE && !SEAT_MODE;
 // a roster restored as a League Pass counts as the pass page (window.bylCount).
 window.bylPage = SEAT_MODE || UPDATE_MODE ? "other" : TRY_MODE ? "join-try"
   : WANTS_PASS ? "join-pass" : "join";
+
+// The heading names what this visit is for (review: it read "Set Up Your
+// Team" over a roster update, a free report and a seat claim alike). The
+// markup keeps the default, so a page whose script never runs still reads
+// right for the visit most people make.
+const HEADING = SEAT_MODE ? "Claim your seat"
+              : UPDATE_MODE ? "Update your roster"
+              : TRY_MODE ? (FORM_ENDPOINT && TRIAL_OPEN ? "Get a free report" : "Free reports open soon")
+              : WANTS_PASS ? "Cover your whole league" : "";
+if (HEADING) document.querySelector("header h1").textContent = HEADING;
 
 // The sidebar sells a purchase. A seat holder buys nothing and an update comes
 // from somebody already subscribed: neither may read refund terms or "your
@@ -1384,11 +1444,54 @@ function drawShapeNote() {
       "projections, the if/then plan and the Saturday check.";
   }
   $("shape-note").textContent = text;
+  // With the radios folded away the lineup words repeat the line above them;
+  // an ungraded shape's caveat is said whatever the fold, before anyone pays.
+  $("shape-note").hidden = !settingsOpen() && R.GRADED_SHAPES.includes(code);
 }
+
+// The settings, said in one line from the radios themselves, with the radios
+// behind "Change". Nothing is chosen by the line: it only ever reads.
+function kickerDefenseWords(shape) {
+  if (shape.kicker && shape.defense) return "K and DEF";
+  if (shape.kicker) return "K, no DEF";
+  if (shape.defense) return "DEF, no K";
+  return "no K or DEF";
+}
+function drawSettingsLine() {
+  const shape = shapeChoice();
+  const parts = [SCORING_WORDS[radio("scoring")] || SCORING_WORDS.ppr,
+    leagueSize() + " teams", BASE_WORDS[shape.base], kickerDefenseWords(shape)];
+  // Each setting stays whole when the line wraps on a phone.
+  const nodes = [];
+  parts.forEach((words, i) => {
+    if (i) nodes.push(document.createTextNode(" · "));
+    const span = document.createElement("span");
+    span.textContent = words;
+    nodes.push(span);
+  });
+  $("settings-line").replaceChildren(...nodes);
+}
+function settingsOpen() { return !$("settings-body").hidden; }
+function showSettings(open) {
+  $("settings-body").hidden = !open;
+  $("settings-change").setAttribute("aria-expanded", open ? "true" : "false");
+  $("settings-change").textContent = open ? "Done" : "Change";
+  drawShapeNote();
+}
+$("settings-change").addEventListener("click", () => {
+  const open = !settingsOpen();
+  showSettings(open);
+  // Opening moves the eye to the first choice; closing returns to the button.
+  if (open) {
+    const first = document.querySelector('input[name="scoring"]:checked');
+    if (first) first.focus();
+  }
+});
 
 $("step-league").addEventListener("change", () => {
   closeEmailCheck();
   drawShapeNote();
+  drawSettingsLine();
   // The tally counts starting spots and the kept address encodes the
   // settings, so both follow a change made after the roster was checked.
   if (state.matches.length && !state.stale) draw();
@@ -1508,10 +1611,14 @@ $("form-email").addEventListener("submit", (event) => {
       });
       return;
     }
+    if (closedAction(otherLink) === "mail") {
+      if (!typoSettled(email)) return;      // the launch email goes to this address
+      askByMail(email, tagged);
+      return;
+    }
     if (seasonOver()) {
       showError("err-email", "Checkout isn't open just yet: the season's over, and it " +
-        "opens again for next season. Your roster isn't saved with us — leave your " +
-        "email on the front page for one message when it opens.", "info");
+        "opens again for next season. Your roster isn't saved with us.", "info");
       return;
     }
     if (WANTS_PASS && OWN_PLAN_HREF) {
@@ -1523,8 +1630,7 @@ $("form-email").addEventListener("submit", (event) => {
     }
     showError("err-email", (WANTS_PASS ? "The League Pass" : "Checkout") +
       " isn't open just yet. Your roster isn't saved with us, but it's kept in " +
-      "this page's address — bookmark it and it comes back. Leave your email on " +
-      "the front page for one message the morning checkout opens.", "info");
+      "this page's address — bookmark it and it comes back.", "info");
     return;
   }
   // Stripe locks the address, so it is read back once before the page leaves:
@@ -1538,6 +1644,38 @@ $("form-email").addEventListener("submit", (event) => {
   }
   leaveForCheckout(link, tagged, email);
 });
+
+// While checkout is closed and no list is connected: the request goes by the
+// visitor's own mail app, to the project inbox, carrying the address they
+// typed and a link that brings this roster back (contract C6's ref — a roster
+// code, no name and no address in it). The privacy policy says a waitlist
+// request is an email until the forms are on (privacy sections 4 and 7). A
+// mail app may open nothing at all, so the words say what to do by hand and
+// never that anything was sent or saved.
+function mailLineWords() {
+  if (seasonOver()) {
+    return "Checkout isn't open yet. Press below — it opens your mail app with a " +
+      "request to us filled in. Send it and we'll email you once, when it opens.";
+  }
+  return "Checkout isn't open yet. Press below — it opens your mail app with a " +
+    "request to us filled in. Send it and we'll email you once, the morning it " +
+    "opens — your roster comes back with it.";
+}
+function askByMail(email, tagged) {
+  const lines = ["Email me once, the morning checkout opens.", "", "Reports go to: " + email];
+  if (!seasonOver()) {
+    lines.push("My roster, ready to check out: " +
+      new URL("?ref=" + encodeURIComponent(tagged), location.href).href);
+  }
+  showError("err-email", "Checkout isn't open just yet, and your request isn't saved " +
+    "with us until you send that email. Your mail app should open with it filled " +
+    "in. Nothing opened? Email " +
+    CONTACT_EMAIL + " with the subject \u201cTell me when it opens\u201d" +
+    (seasonOver() ? "." : " and this page's address, which holds your roster."), "info");
+  window.location.href = "mailto:" + CONTACT_EMAIL +
+    "?subject=" + encodeURIComponent("Tell me when it opens") +
+    "&body=" + encodeURIComponent(lines.join("\n") + "\n");
+}
 
 // The hand-off to Stripe, once the address has been read back.
 function leaveForCheckout(link, tagged, email) {
@@ -1911,10 +2049,10 @@ function drawFirst() {
     side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
   } else if (FIRST && FIRST.when === "after") {
-    side.replaceChildren(b("Your roster report today"),
-      t(", your first weekly report " + FIRST.tuesday));
-    note.replaceChildren(t("Your roster report lands "), b("today"),
-      t("; your first weekly report, " + FIRST.tuesday + "."));
+    side.replaceChildren(b("Your first report today"),
+      t(", then your Tuesday report from " + FIRST.tuesday));
+    note.replaceChildren(t("Your first report lands "), b("today"),
+      t("; your Tuesday report starts " + FIRST.tuesday + "."));
   } else {
     side.replaceChildren(b("A report the day you join"), t(", then a new one every Tuesday morning"));
     note.replaceChildren(t("A report lands "), b("the day you join"), t("."));
@@ -1981,6 +2119,9 @@ function closedUpFront(what) {
 // (launch audit F5/F6 — a label promising a capture that never happened):
 //   "switch" — the other plan can be bought this minute: pressing switches.
 //   "list"   — the email list is connected: pressing keeps the email, once.
+//   "mail"   — no list yet: pressing opens the visitor's mail app with a
+//              request to us filled in (the landing's own fallback). A mail
+//              app may open nothing, so no word says it was sent or saved.
 //   "none"   — nothing to do here: the switched-off look.
 // ``other`` is the link of the plan NOT chosen, when there is a choice.
 function closedAction(other) {
@@ -1988,7 +2129,12 @@ function closedAction(other) {
   // The launch list is one message "when checkout opens". A pass buyer whose
   // own team's plan is already open has had that moment; listing them would
   // send a launch email about a checkout that already works.
-  if (NOTIFY_LIST_ENDPOINT && !(WANTS_PASS && OWN_PLAN_HREF)) return "list";
+  if (WANTS_PASS && OWN_PLAN_HREF) return "none";
+  if (NOTIFY_LIST_ENDPOINT) return "list";
+  // The dead end this replaces: fifteen names and an email typed, then a
+  // switched-off button and "leave your email on the front page" (review,
+  // flow-join). The email they typed is the one the request carries.
+  if (CONTACT_EMAIL) return "mail";
   return "none";
 }
 function closedLabel(action) {
@@ -1996,11 +2142,12 @@ function closedLabel(action) {
     return "Switch to " + (monthlyChosen ? "the season pass" : "monthly") + " — open now";
   }
   if (action === "list") return "Email me when checkout opens";
+  if (action === "mail") return "Tell me when it opens";
   return closedChipText();
 }
-// The note at the top, pointing only at something that exists: the form below
-// when it is connected, the plan that is open, or the front page's capture
-// (which the landing shows for as long as no plan can be bought).
+// The note at the top, pointing only at something that exists: the button at
+// step 3 (the list when it is connected, a request by email until then) or the
+// plan that is open.
 function closedNoteNodes(action) {
   const text = (words) => document.createTextNode(words);
   const link = (href, words) => {
@@ -2016,8 +2163,10 @@ function closedNoteNodes(action) {
     return action === "list"
       ? [over, text("Leave your email below, at step 3, and we'll send exactly one " +
                     "message when it opens.")]
-      : [over, text("Leave your email on the "), link("../index.html#watch-form", "front page"),
-         text(" and we'll send exactly one message when it opens.")];
+      : action === "mail"
+        ? [over, text("Press the button at step 3: it opens your mail app with a request " +
+                      "to us filled in. Send it and we'll email you once, when it opens.")]
+        : [over];
   }
   const lead = WANTS_PASS ? "The League Pass isn't open just yet" : "Checkout isn't open just yet";
   if (WANTS_PASS && OWN_PLAN_HREF) {
@@ -2035,8 +2184,14 @@ function closedNoteNodes(action) {
                        "your roster and send exactly one message when it opens, with " +
                        "a link that brings the roster back.")];
   }
-  return [head, text("Leave your email on the "), link("../index.html#watch-form", "front page"),
-          text(" and we'll send exactly one message when it opens.")];
+  // The roster rides in the request itself, so the bookmark advice is not
+  // repeated: one sentence, about the one thing to do.
+  if (action === "mail") {
+    return [text(lead + ". Set up now: at step 3, one press opens your mail app with " +
+                 "a request to us filled in — send it and we'll email you once, the " +
+                 "morning it opens, with your roster ready to go.")];
+  }
+  return [head];
 }
 function noteClosedFor(link, other) {
   if (seasonOver()) { link = ""; other = ""; }
@@ -2060,8 +2215,13 @@ function noteClosedFor(link, other) {
   const listed = action === "list" && state.listed;
   if (!link) {
     $("submit").textContent = listed ? "You're on the list"
-      : seasonOver() && action !== "list" ? "Closed until next season" : closedLabel(action);
+      : seasonOver() && action !== "list" && action !== "mail" ? "Closed until next season"
+      : closedLabel(action);
   }
+  // In sight of the button, what pressing it does while checkout is closed.
+  const mailLine = $("mail-line");
+  mailLine.textContent = action === "mail" ? mailLineWords() : "";
+  mailLine.hidden = action !== "mail";
   $("submit").disabled = listed;
   $("submit").classList.toggle("is-closed", action === "none");
   $("submit").setAttribute("aria-disabled", action === "none" || listed ? "true" : "false");
@@ -2111,6 +2271,8 @@ function trialClosedWords() {
   return "The season's over, so free reports are closed until next season.";
 }
 function drawTrial() {
+  // Switched off: the page said so at first paint and took the form away.
+  if (!(FORM_ENDPOINT && TRIAL_OPEN)) return;
   const what = TRIAL && TRIAL.when === "this" ? ["this week's report", "This week's report"]
              : TRIAL && TRIAL.when === "next"
                ? ["next week's report, on " + TRIAL.tuesday, "Next week's report"]
@@ -2123,14 +2285,14 @@ function drawTrial() {
   if (FORM_ENDPOINT && TRIAL_OPEN && TRIAL && (TRIAL.when === "over" || TRIAL.when === "pre")) {
     const note = $("closed-note");
     const a = document.createElement("a");
-    const pre = TRIAL.when === "pre";
-    a.href = carryVia(pre ? "index.html" : "../index.html#watch-form", VIA);
-    a.textContent = pre ? "set up a plan" : "front page";
-    note.replaceChildren(...(pre
+    a.href = carryVia("index.html", VIA);
+    a.textContent = "set up a plan";
+    // Over: the season's done, and the plan page's own button is where a
+    // visitor asks to hear when it opens again — no detour to another page.
+    note.replaceChildren(...(TRIAL.when === "pre"
       ? [document.createTextNode(trialClosedWords() + " Or "), a,
-         document.createTextNode(" — your roster report comes the day you join.")]
-      : [document.createTextNode(trialClosedWords() + " Leave your email on the "), a,
-         document.createTextNode(" for one message when checkout opens.")]));
+         document.createTextNode(" — your first report comes the day you join.")]
+      : [document.createTextNode(trialClosedWords())]));
     note.style.display = "block";
     $("submit").textContent = "Free reports are closed";
     $("submit").classList.add("is-closed");
@@ -2145,14 +2307,38 @@ if (TRY_MODE) {
   $("pay-note").style.display = "none";
   $("renew-note").style.display = "none";
   $("terms-line").style.display = "none";
-  if (FORM_ENDPOINT && TRIAL_OPEN) { $("closed-note").style.display = "none"; }
-  else { closedUpFront("Free reports"); }
   $("first-note").style.display = "none";
   $("trial-note").style.display = "list-item";
   document.querySelector(".secure").style.display = "none";
+  if (FORM_ENDPOINT && TRIAL_OPEN) {
+    $("closed-note").style.display = "none";
+  } else {
+    // Not open yet: no pitch for a form that would only refuse (review,
+    // m-try). The heading says so, and the form goes, as for a seat page
+    // opened without its link; what a visitor can use today is linked.
+    $("header-pitch").textContent = "One free report on your own roster — every " +
+      "slot decided, every close call explained. It isn't open yet, so there's " +
+      "nothing to fill in today.";
+    const note = $("closed-note");
+    const link = (href, words) => {
+      const a = document.createElement("a");
+      a.href = carryVia(href, VIA);
+      a.textContent = words;
+      return a;
+    };
+    note.replaceChildren(document.createTextNode("Free reports aren't open yet. Until " +
+      "they are, "), link("../sample-report.html", "read a real report"),
+      document.createTextNode(", or check the byes ahead on your roster with the "),
+      link("../byes/", "free bye-week planner"), document.createTextNode("."));
+    note.style.display = "block";
+    for (const child of $("main").children) child.style.display = "none";
+    $("main").prepend(note);
+    const progress = document.querySelector(".progress");
+    if (progress) progress.style.display = "none";
+  }
 } else if (UPDATE_MODE) {
   $("header-pitch").textContent =
-    "Update your roster. Check your league's settings, paste your roster as it " +
+    "Check your league's settings, paste your roster as it " +
     "stands now — trades, pickups, drops — and your next report is built from " +
     "both. Nothing to pay. Enter the address your reports go to and we'll email " +
     "it a button to confirm the change.";
@@ -2340,12 +2526,16 @@ function prefillUpdateSettings() {
   const told = RESTORED ? [] : settingsFromLink();
   UPDATE_SETTINGS_FROM_LINK = told.length === 3;
   $("update-settings").textContent = UPDATE_SETTINGS_FROM_LINK
-    ? "Your league's settings, from your report: " + told.join(" · ") +
-      ". They stay as they are unless you change them here."
+    ? "Your league's settings are filled in from your report. They stay as they " +
+      "are unless you change them here."
     : "An update replaces the settings on file with the ones below, so set them " +
       "to your league's as it is now, then tick the box under them.";
   $("update-settings").style.display = "block";
   $("settings-ok-wrap").style.display = UPDATE_SETTINGS_FROM_LINK ? "none" : "flex";
+  // Not known from the link: the radios are what the box vouches for, so they
+  // are open rather than folded behind a line.
+  if (!UPDATE_SETTINGS_FROM_LINK) showSettings(true);
+  else $("settings-intro").hidden = true;
 }
 if (RESTORED) {
   setRadio("scoring", RESTORED.scoring);
@@ -2354,9 +2544,10 @@ if (RESTORED) {
 } else if (SEAT_MODE) {
   const told = settingsFromLink();
   if (told.length) {
-    $("seat-settings").textContent = "Your league's settings, from its League Pass: " +
-      told.join(" · ") + ". Not right? Change them below.";
+    $("seat-settings").textContent = "Your league's settings are filled in from its " +
+      "League Pass. Not right? Change them below.";
     $("seat-settings").style.display = "block";
+    $("settings-intro").hidden = true;    // the note above says where they came from
   }
 } else if (!UPDATE_MODE) {
   // A link from a league-app page names that app's default lineup (?t=): it
@@ -2365,6 +2556,7 @@ if (RESTORED) {
   settingsFromLink();
 }
 if (UPDATE_MODE) prefillUpdateSettings();
+drawSettingsLine();
 drawShapeNote();
 fillRenewalDates();
 drawFirst();

@@ -256,9 +256,13 @@ def test_a_seat_claimed_in_week_1_is_promised_the_roster_report_it_gets() -> Non
             # Oct 21 2026 (fewer words): the page promises "a first report the
             # day they confirm" and names no particular one, which is true of both.
             continue
+        # The join page names the day-one email by what it is, never "roster
+        # report" (the site-wide name is "your first report", review Oct 30).
         assert re.search(r"(?:that|this) week's (?:lineup|report) if it's Week 2 or later "
-                         r"and the week's games haven't started, otherwise (?:their|your) "
-                         r"roster report", text, re.I), name
+                         r"and the week's games haven't started, otherwise (?:(?:their|your) "
+                         r"roster report|a report on (?:their|your) roster as it stands)",
+                         text, re.I), name
+    assert "roster report" not in seat
 
 
 def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
@@ -884,11 +888,34 @@ def test_no_tracked_file_carries_a_home_folder_path() -> None:
 
 def test_signup_degrades_honestly_without_a_contact_route() -> None:
     """With checkout unwired, the form must say so rather than opening an empty
-    mailto: that looks like it worked. The join page no longer has a mailto path
-    at all — the picks ride into Stripe or nowhere."""
+    mailto: that looks like it worked. Oct 30 2026 (review, flow-join): with
+    no list endpoint the closed checkout ended in a switched-off button and
+    "leave your email on the front page" after fifteen names and an email. It
+    now takes the landing's own fallback — a mail app opened with the request
+    filled in, carrying the typed address and a link holding the roster — but
+    only there (no list, a contact inbox), and its words never say anything
+    was sent or saved, because a mail app may open nothing."""
     assert re.search(r"isn't open just yet", JOIN_PROSE, re.I)
-    assert "mailto:" not in JOIN, \
-        "the join page must not fall back to an email draft — it loses the signup"
+    code = _js_code(JOIN)
+    assert code.count("mailto:") == 1, "one mail path, and only one"
+    ask = _js_function(JOIN, "askByMail")
+    assert '"mailto:" + CONTACT_EMAIL' in ask
+    assert "Reports go to: \" + email" in ask and 'encodeURIComponent(tagged)' in ask
+    said = prose(re.sub(r'"\s*\+\s*"', "", ask))
+    assert "isn't saved with us until you send that email" in said
+    assert "Nothing opened?" in said
+    for claim in ("you're on the list", "we kept", "we've got", "is saved", "was sent"):
+        assert claim not in said.lower(), claim
+    # Reached only when the list is not connected and an inbox exists.
+    action = _js_function(JOIN, "closedAction")
+    assert action.index("if (NOTIFY_LIST_ENDPOINT) return \"list\";") < \
+        action.index('if (CONTACT_EMAIL) return "mail";')
+    line = prose(re.sub(r'"\s*\+\s*"', "", _js_function(JOIN, "mailLineWords")))
+    assert "it opens your mail app with a request to us filled in" in line
+    assert "Send it and we'll email you once, the morning it opens" in line
+    # No instruction anywhere on the page sends a buyer back to the front page.
+    assert "front page" not in prose(markup_only(JOIN)) + prose(code)
+    assert "watch-form" not in JOIN
     assert re.search(r"if \(!CONTACT_EMAIL\)", LANDING)
 
 
@@ -3861,29 +3888,37 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     pass removed the chips)."""
     fns = (_js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
            + _js_function(JOIN, "closedChipText"))
-    states = [  # notify, pass, own plan open, monthly chosen, other plan's link
-        ("https://f", False, "", False, "https://buy.stripe.com/m"),
-        ("", False, "", True, "https://buy.stripe.com/s"),
-        ("https://f", False, "", False, ""),
-        ("", False, "", False, ""),
-        ("https://f", True, "index.html", False, ""),
-        ("https://f", True, "", False, ""),
-        ("", True, "", False, ""),
+    # contact inbox, notify, pass, own plan open, monthly chosen, other plan's link
+    states = [
+        ("h@x", "https://f", False, "", False, "https://buy.stripe.com/m"),
+        ("h@x", "", False, "", True, "https://buy.stripe.com/s"),
+        ("h@x", "https://f", False, "", False, ""),
+        ("h@x", "", False, "", False, ""),     # today: no list, so the mail app
+        ("", "", False, "", False, ""),        # no inbox either: switched off
+        ("h@x", "https://f", True, "index.html", False, ""),
+        ("h@x", "", True, "index.html", False, ""),
+        ("h@x", "https://f", True, "", False, ""),
+        ("h@x", "", True, "", False, ""),
+        ("", "", True, "", False, ""),
     ]
     import json as _json
     got = _node(
-        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
+        "let CONTACT_EMAIL, NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
         "const FIRST = null, SEAT_MODE = false;\n" + fns +
-        "\nconsole.log(JSON.stringify(" + _json.dumps(states) + ".map(([n, p, o, m, other]) => {"
-        " NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o; monthlyChosen = m;"
-        " const a = closedAction(other); return [a, closedLabel(a)]; })));")
+        "\nconsole.log(JSON.stringify(" + _json.dumps(states) +
+        ".map(([c, n, p, o, m, other]) => {"
+        " CONTACT_EMAIL = c; NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o;"
+        " monthlyChosen = m; const a = closedAction(other); return [a, closedLabel(a)]; })));")
     assert got == [
         ["switch", "Switch to monthly — open now"],
         ["switch", "Switch to the season pass — open now"],
         ["list", "Email me when checkout opens"],
+        ["mail", "Tell me when it opens"],
         ["none", "Rest-of-Season Pass opens soon"],
         ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
+        ["none", "League Pass opens soon"],
         ["list", "Email me when checkout opens"],
+        ["mail", "Tell me when it opens"],
         ["none", "League Pass opens soon"],
     ]
     code = _js_code(JOIN)
@@ -3892,7 +3927,12 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     assert "if (switchesPlan()) {\n    switchPlan();" in handler
     assert 'closedAction(other) === "switch"' in _js_function(JOIN, "switchesPlan")
     assert 'closedAction(otherLink) === "list"' in handler
+    assert 'closedAction(otherLink) === "mail"' in handler
+    mail = handler.split('closedAction(otherLink) === "mail"')[1].split("return;\n    }")[0]
+    assert "typoSettled(email)" in mail and "askByMail(email, tagged);" in mail
     assert "closedLabel(action)" in _js_function(JOIN, "noteClosedFor")
+    # The step-3 line says what the mail button does, in sight of it, and only then.
+    assert 'mailLine.hidden = action !== "mail";' in _js_function(JOIN, "noteClosedFor")
     # The first paint knows the other plan too (it used to pass none).
     first = code.split("if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {\n  noteClosedFor(")[1] \
                 .split(");")[0]
@@ -3908,6 +3948,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     notes = _js_function(JOIN, "closedNoteNodes")
     below = notes.split('if (action === "list") {')[1].split("}")[0]
     assert "leave your email below" in below and "front page" not in below
+    assert "front page" not in notes and "watch-form" not in notes
 
 
 def test_adding_a_player_keeps_every_choice_already_made() -> None:

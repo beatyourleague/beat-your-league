@@ -399,7 +399,9 @@ def test_checkout_not_open_is_a_notice_and_a_failed_send_is_still_an_error() -> 
     closed = handler.split("if (!link) {", 1)[1]
     calls = re.findall(r'showError\("err-email", (.*?)\);', closed, re.S)
     info = [c for c in calls if c.rstrip().endswith('"info"')]
-    assert len(info) == 3, calls
+    # Four since Oct 30 2026: the mail-app request (askByMail, which sits
+    # between the handler and the hand-off) is a not-open notice too.
+    assert len(info) == 4, calls
     assert all("isn't open just yet" in re.sub(r'"\s*\+\s*"', "", c) for c in info)
     failed = closed.split(".catch((err) => {", 1)[1].split("});", 1)[0]
     assert "showError(" in failed and '"info"' not in failed

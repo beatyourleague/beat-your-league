@@ -483,6 +483,29 @@ Baltimore Ravens
 // percentage. The roster never leaves this browser unless the visitor leaves
 // an email (then it rides the waitlist row, contract C6).
 
+// roster.js (names) and byes.js (the rule) are separate files. When either
+// fails to load, the first line below that names R or B throws
+// "ReferenceError: R is not defined" and the planner is left half-drawn, its
+// buttons wired to nothing (reproduced on join/). So the page says so plainly,
+// the full bye table beside it still stands, and this script ends here: a
+// classic script can only end early by throwing, and the listener swallows
+// that one throw so it is not reported as a fault.
+if (!window.R || !window.B) {
+  const stop = new Error("roster.js or byes.js did not load");
+  window.addEventListener("error", (event) => { if (event.error === stop) event.preventDefault(); });
+  const note = document.createElement("p");
+  note.className = "nojs";
+  note.setAttribute("role", "alert");
+  note.textContent = "The player list didn't load — reload the page. Every bye week " +
+    "this season is listed below.";
+  document.querySelectorAll(".needs-js").forEach((el) => { el.style.display = "none"; });
+  document.getElementById("main").prepend(note);
+  // "Below" is made true the way the no-script rule makes it: one column.
+  const shell = document.querySelector(".shell");
+  if (shell) shell.style.gridTemplateColumns = "minmax(0,688px)";
+  throw stop;
+}
+
 // The launch list: kind "waitlist" to the form Worker, like join/'s own
 // (tests/test_polish_tool.py pins it equal to join's NOTIFY_LIST_ENDPOINT).
 const NOTIFY_LIST_ENDPOINT = "";
