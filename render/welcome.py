@@ -45,7 +45,7 @@ PASS_PRICE = "$69"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
-TERMS_VERSION = "2026-10-18"
+TERMS_VERSION = "2026-10-30"
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "
@@ -61,16 +61,19 @@ TERMS_STEPS = "beatyourleague.com/terms.html#cancel"
 
 # The refund window is PURCHASE-relative, never a calendar week: "through
 # Week 2" gave anyone who bought from Week 3 on no window at all, while every
-# selling page kept promising one. The terms page defines a weekly file; this
+# selling page kept promising one. The terms page defines a weekly report; this
 # is the retainable copy of the same promise, so it states when it closes —
-# at kickoff, before the second file's lineup can be played and then returned.
-# Terms §5's two later closes ride along (EMAILS-95/96): a Week-17 buyer gets
-# at most one weekly report, and a window that only closed at the second one's
-# kickoff never closed at all in the copy they keep.
-_REFUND_WINDOW = ("Refunds are no-questions until your second weekly report's "
-                  "week kicks off. If the season ends first, the window closes "
-                  "a week after your last report; if your second report reaches "
-                  "you late, a week after it arrives.")
+# at kickoff, before the first report's lineup can be played and then returned
+# (owner decision, Oct 30 2026; it used to be the second report's kickoff, which
+# left the first report's whole week to watch before asking). Terms §5's two
+# later closes ride along (EMAILS-95/96): our own late send never shuts the
+# window before the report arrives, and a season that ends with no weekly report
+# delivered still has an end date in the copy the buyer keeps.
+_REFUND_WINDOW = ("Refunds are no-questions until your first weekly report's "
+                  "week kicks off (a roster report on the day you join isn't a "
+                  "weekly report). If your first weekly report reaches you late, "
+                  "the window closes a week after it arrives; if the season ends "
+                  "before one reaches you, a week after the season's last game.")
 # "A second purchase", never "a re-subscription" (contract C5, final review
 # COPY-9): every 2026 pass is one payment, and the retainable copy of the
 # terms should not describe a subscription the buyer never had.

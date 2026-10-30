@@ -152,7 +152,7 @@ def test_the_dark_page_draws_hairlines_not_shadows() -> None:
     assert ".price .btn{display:flex;width:100%;min-height:52px;}" in css
     card = page.split('<div class="price" data-reveal>')[1].split('<p class="see">')[0]
     words = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", card))
-    for term in ("$69", "One payment. Nothing renews", "refund until your second weekly report"):
+    for term in ("$69", "One payment. Nothing renews", "refund until your first weekly report"):
         assert term in words, term
     # The group-chat line lives here, shareable: the one copy of it (the
     # landing's bubble is the landing builder's to retire).
@@ -193,7 +193,7 @@ def test_the_join_header_carries_the_price_with_its_terms_and_no_chips() -> None
     pitch = re.sub(r"\s+", " ", re.search(r'<p id="header-pitch">(.*?)</p>', page, re.S).group(1))
     assert pitch == ("Every lineup from here to your title game, decided for your roster and in "
                      "your inbox every Tuesday. <b>$29 for the rest of the season</b> — one "
-                     "payment, no subscription, and a full refund until your second weekly "
+                     "payment, no subscription, and a full refund until your first weekly "
                      "report's week kicks off.")
     label = re.search(r"function closedLabel\(action\) \{.*?\n\}\n", page, re.S).group(0)
     assert label.rstrip().endswith('return closedChipText();\n}')

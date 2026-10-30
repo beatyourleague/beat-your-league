@@ -1386,8 +1386,8 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
             out.append(Insight("good" if rate * 100 <= green else "warn",
                                f"Refund rate {rate:.0%} ({money['full_refunds']} of {money['count']}) "
                                f"against PLAN §6's green line of ≤{green:g}%.",
-                               "Read every refund reason; the second weekly report is the moment to win."
-                               if rate * 100 > green else "Keep the first two reports strong.",
+                               "Read every refund reason; the first weekly report is the moment to win."
+                               if rate * 100 > green else "Keep the first weekly report strong.",
                                f"full refunds, {span}"))
     elif money is not None and money["count"]:
         out.append(Insight("info", f"Only {money['count']} purchase(s) in {span} — too few to "

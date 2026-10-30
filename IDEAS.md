@@ -64,7 +64,7 @@ the Stripe products and the GitHub repo are done; what is left is there.
 ### Pricing and positioning
 - ~~$29 is at the floor of this market.~~ **DONE: the season pass is $39.**
 - Reconsider the refund window's LENGTH (now purchase-relative since Sep 29 2026,
-  closing when the second weekly file's week kicks off): Footballguys gives 30
+  closing when the first weekly report's week kicks off): Footballguys gives 30
   days, Draft Sharks refunds through December.
 - ~~Retire "Beat your league, not the books."~~ **DONE: it is on no page.**
 - The three landing feature cards share one internal anatomy and all three

@@ -94,9 +94,9 @@ def test_the_league_pass_names_its_size_limit() -> None:
     "covers every manager" with no limit was false for a 16-team league.
     Since Oct 28 2026 the landing names the pass in one line under the price
     (its FAQ answer went with the FAQ's cut to five), and the limit rides in
-    that same line, right after "covers every manager"."""
+    that same strip, in the sentence that says "covers every manager"."""
     line = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", re.search(
         r'<p class="lpline">(.*?)</p>', LANDING, re.S).group(1)))
-    assert "covers every manager. Up to 14 teams." in line
+    assert "covers every manager, each with their own report, up to 14 teams." in line
     flat = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", LANDING))
     assert flat.count("covers every manager") == 1, "an unlimited claim elsewhere"

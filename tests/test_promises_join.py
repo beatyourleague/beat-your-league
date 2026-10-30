@@ -176,7 +176,7 @@ def test_the_join_words_describe_the_product_after_the_decisions() -> None:
     assert "billing stops on its own after the season's last weekly report" in prose(code)
     assert "your last charge is the month that report falls in" in prose(code)
     assert "billing stops on its own when the season ends" not in prose(code)
-    assert code.count("(or a week after your last report, if the season ends first)") >= 2
+    assert code.count("(or a week after it reaches you, if we send it late)") >= 2
     assert "each manager claims their seat from it once" in prose(code)
     assert "up to 14 teams" in prose(code) and "Covers every manager" not in code
     assert "Seat already paid" not in code and "Claim my seat — already paid" not in code

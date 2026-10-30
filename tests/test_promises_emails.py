@@ -88,12 +88,15 @@ def test_the_monthly_terms_match_the_stop() -> None:
 
 
 def test_the_retained_refund_terms_carry_every_close_in_terms_5() -> None:
-    """EMAILS-95/96: the season-end and late-send closes."""
+    """EMAILS-95/96: the season-end and late-send closes, and the day-one
+    roster report, which a buyer could otherwise take for their first."""
     for terms in (REFUND_TERMS, REFUND_TERMS_LEAGUE):
-        assert "second weekly report's week kicks off" in terms
-        assert "If the season ends first" in terms
-        assert "a week after your last report" in terms
+        assert "first weekly report's week kicks off" in terms
+        assert "roster report on the day you join isn't a weekly report" in terms
         assert "reaches you late" in terms
+        assert "a week after it arrives" in terms
+        assert "if the season ends before one reaches you" in terms
+        assert "a week after the season's last game" in terms
     assert "One per person" in REFUND_TERMS and "One per league" in REFUND_TERMS_LEAGUE
 
 

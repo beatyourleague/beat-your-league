@@ -45,6 +45,7 @@
   .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   /* A dark page (contract C6): one flat ground, hairlines instead of shadows,
      gold only where it fills — the button and the headline's slab. */
@@ -367,7 +368,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm hidemd" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="league-pass.html" aria-current="page">League Pass</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
     <h1>One payment.<br><em><span>The whole league.</span></em></h1>
     <p class="lede">In a league of up to 14 teams, every manager who claims a seat gets their
     own weekly report, built from their own roster, every Tuesday. Twelve rosters means twelve
@@ -407,7 +408,7 @@
       <li>A separate weekly report for every manager who claims their seat</li>
       <li>Each seat is its own report: own roster, own scoring, own calls</li>
       <li>The same full report every pass holder gets — nothing held back</li>
-      <li>No-questions refund until your second weekly report's week kicks off — one per
+      <li>No-questions refund until your first weekly report's week kicks off — one per
       league</li>
       <li>The byes ahead flagged in every report, playoff weeks included</li>
       <li>One payment. Nothing renews, nothing to cancel.</li>
@@ -516,7 +517,7 @@
   <div class="closer" data-reveal>
     <h2>Every manager, their own report.</h2>
     <p>$69 for the whole league, for the rest of the season: one payment, nothing renews,
-    and a no-questions refund until your second weekly report's week kicks off — one per
+    and a no-questions refund until your first weekly report's week kicks off — one per
     league.</p>
     <div class="ctaslot" data-lp-cta><a class="btn gold" href="index.html#watch-form">Tell
       me when it opens</a><small>One email, the morning checkout opens.</small></div>

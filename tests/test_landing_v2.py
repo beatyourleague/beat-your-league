@@ -276,7 +276,7 @@ def test_the_price_card_carries_its_risk_reversal_and_a_way_to_look_first() -> N
     card = BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]
     text = _flat(card)
     assert "$29" in text and "One payment. Nothing renews" in text
-    assert ("Full refund, no questions, until your second weekly report's week kicks off. "
+    assert ("Full refund, no questions, until your first weekly report's week kicks off. "
             "One per person") in text
     assert re.search(r'<a class="cardlink" href="sample-report.html">See a real report first</a>',
                      card)

@@ -52,6 +52,7 @@
   .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   /* Full-bleed paper (contract C2 of the truth pass): a flat navy band with
      the headline, then the steps as paper cards beside the navy sidebar —
@@ -420,12 +421,12 @@
 <body>
 <header>
   <div class="wrap">
-    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="../how-it-works.html">How it works</a><a href="../sample-report.html">See a real report</a><a class="hidesm" href="../index.html#pricing">Pricing</a></nav></div>
+    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm hidemd" href="../how-it-works.html">How it works</a><a href="../sample-report.html">See a real report</a><a class="hidesm" href="../league-pass.html">League Pass</a><a class="hidesm" href="../index.html#pricing">Pricing</a></nav></div>
     <h1>Set Up Your Team</h1>
     <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
     <p id="header-pitch">Every lineup from here to your title game, decided for your
     roster and in your inbox every Tuesday. <b>$29 for the rest of the season</b> — one
-    payment, no subscription, and a full refund until your second weekly report's week
+    payment, no subscription, and a full refund until your first weekly report's week
     kicks off.</p>
     <div class="note" id="closed-note" style="display:none">Checkout isn't open just
     yet. You're welcome to set up now: once you check your roster it stays in this
@@ -551,8 +552,8 @@ Baltimore Ravens
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The Rest-of-Season Pass is <b>$29, one
       payment: nothing renews and nothing more is charged</b>. Refunds are no-questions until
-      your second weekly report's week kicks off (or a week after your last report, if
-      the season ends first) — one per person, and a second purchase after a refund is final.</p>
+      your first weekly report's week kicks off (or a week after it reaches you, if
+      we send it late) — one per person, and a second purchase after a refund is final.</p>
       <p class="terms-line" id="mail-line" hidden></p>
       <button id="submit" type="submit">Continue to checkout — $29</button>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
@@ -610,8 +611,8 @@ Baltimore Ravens
         <li id="renew-note">The Rest-of-Season Pass is <b>$29, one payment</b>: nothing
         renews and nothing more is charged.</li>
         <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
-        until your second weekly report's week kicks off (or a week after your last
-        report, if the season ends first) — one per person, and a
+        until your first weekly report's week kicks off (or a week after it reaches
+        you, if we send it late) — one per person, and a
         second purchase after a refund is final.
         Nothing to cancel: your pass is one payment and
         <a href="../terms.html#cancel">ends on its own</a> after the season's last report.</li>
@@ -632,8 +633,8 @@ Baltimore Ravens
   <div class="proof"><b>Your team.</b>Not a list written for everybody.
   <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
   <div class="trust">
-    <span>Full refund, no questions, until your second weekly report's week kicks off
-      (or a week after your last, if the season ends first) — one per person (one per
+    <span>Full refund, no questions, until your first weekly report's week kicks off
+      (or a week after it reaches you, if we send it late) — one per person (one per
       league for a League Pass)</span>
     <span>One payment — nothing renews, nothing to cancel</span>
     <span>No league login, no password — just your roster</span>
@@ -2239,9 +2240,9 @@ function monthlyPlan() {
   const monthlyTerms = "Monthly is $14.99 and bills again each month " +
     "until you cancel — and billing stops on its own after the season's last " +
     "weekly report: your last charge is the month that report falls in. Cancel " +
-    "yourself any time. Refunds are no-questions until your second weekly " +
-    "report's week kicks off (or a week after your last report, if the season " +
-    "ends first) — one per person.";
+    "yourself any time. Refunds are no-questions until your first weekly " +
+    "report's week kicks off (or a week after it reaches you, if we send it " +
+    "late) — one per person.";
   $("renew-note").textContent = monthlyTerms;
   $("terms-line").textContent = monthlyTerms;
   drawFirst();
@@ -2413,7 +2414,7 @@ if (TRY_MODE) {
   $("header-pitch").textContent = "Every manager in your league — up to 14 teams — " +
     "gets their own report every Tuesday. You get a link to send them; each manager " +
     "claims their seat from it once, with their own roster. $69 for your whole league, rest " +
-    "of season — one payment, nothing renews, and a full refund until your second " +
+    "of season — one payment, nothing renews, and a full refund until your first " +
     "weekly report's week kicks off.";
   $("lbl-email").textContent = "Your email — your own report and the receipt go here";
   // The pass is $99, and the renewal disclosure must name the amount that
@@ -2426,8 +2427,8 @@ if (TRY_MODE) {
 function passTermsText() {
   return "The League Pass is $69, one payment for your whole league's rest of " +
     "season: nothing renews and nothing more is charged. Refunds are " +
-    "no-questions until your second weekly report's week kicks " +
-    "off (or a week after your last report, if the season ends first) — one per " +
+    "no-questions until your first weekly report's week kicks " +
+    "off (or a week after it reaches you, if we send it late) — one per " +
     "league.";
 }
 
@@ -2587,16 +2588,16 @@ drawFirst();
             firstWeek >= PLAYOFF_FROM_WEEK) {
           PLAYOFF_ACTIVE = true;
           const terms = "The Playoff Pass is $19, one payment: nothing renews and " +
-            "nothing more is charged. Refunds are no-questions until your second " +
-            "weekly report's week kicks off (or a week after your last report, if " +
-            "the season ends first) — one per person.";
+            "nothing more is charged. Refunds are no-questions until your first " +
+            "weekly report's week kicks off (or a week after it reaches you, if " +
+            "we send it late) — one per person.";
           $("terms-line").textContent = terms;
           $("renew-note").textContent = terms;
           $("submit").textContent = "Continue to checkout — $19";
           $("header-pitch").textContent = "Every lineup from Week " + firstWeek +
             " to your title game, decided for your roster and in your inbox every " +
             "Tuesday. $19 for the Playoff Pass — one payment, no subscription, and a " +
-            "full refund until your second weekly report's week kicks off.";
+            "full refund until your first weekly report's week kicks off.";
           drawFirst();
         }
         if (w && w.phase === "preseason" && STRIPE_LINK_MONTHLY && !SEAT_MODE && !WANTS_PASS) {

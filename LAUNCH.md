@@ -383,7 +383,7 @@ Nobody else's money moves until you've watched your own go all the way through.
 2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should go green, and
    its log should say the sealed registry was saved (the "Seal the registry" step).
 3. **The emails:**
-   - **The welcome:** $29, **one payment, nothing renews**, refunds until your second weekly
+   - **The welcome:** $29, **one payment, nothing renews**, refunds until your first weekly
      report's week kicks off, and how to stop (reply "stop" to hello@; there is nothing to
      cancel).
    - **Bought Tuesday to Thursday before kickoff:** this week's report, too.
@@ -850,11 +850,12 @@ next. After the last game every weekly job exits quietly until the next schedule
 
 **A refund request, in three checks:**
 1. **Inside the window?** Find the first week below whose kickoff comes after they paid
-   (Stripe shows the time). That week's report was their first weekly report; their window
-   closes at the kickoff **one row further down**. Paid within two hours of a kickoff? Start
-   from the next row. *Example: paid Wed Oct 21 → first report Week 7 → closes Thu Oct 29,
-   8:15pm ET.* If a send of ours ran late and their second report arrived after its week
-   kicked off, they have a week from that send — ask me and I'll check the send log.
+   (Stripe shows the time). That week's report was their first weekly report, and their
+   window closes **at that kickoff**. Paid within two hours of a kickoff? Start from the next
+   row: they got the roster report, and the next week's is their first weekly report.
+   *Example: paid Wed Oct 21 → first weekly report Week 7 → closes Thu Oct 22, 8:15pm ET.* If
+   a send of ours ran late and their first weekly report arrived after its week kicked off,
+   they have a week from that send — ask me and I'll check the send log.
 2. **Their first refund?** Search their email under **Customers**. One per person (one per
    league for a League Pass).
 3. **Issue it:** **Payments** → their payment → **Refund** → the full amount. That is all: a
@@ -978,8 +979,8 @@ per team in the payer's league (`run/intake.PassInfo.seat_cap`), the first confi
 a claim counts only once its own inbox confirms it — and a claim past the cap is told so by
 email. Stated on the League Pass page and in the terms (§1, dated 17 October 2026).
 
-**The League Pass refund window.** It closes when the payer's second report's week kicks off,
-but seats start the Tuesday after they claim — leaguemates may have seen one report or none
+**The League Pass refund window.** It closes when the payer's first weekly report's week kicks
+off, but seats start the Tuesday after they claim — leaguemates may have seen one report or none
 when the commissioner loses the refund on the league's money. *Recommend:* count a pass's
 window from the first seat's first weekly report. Terms §5 and the pass welcome change
 together.

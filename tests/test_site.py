@@ -177,8 +177,8 @@ def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> No
     promise a reader relies on, voided by a date they were never shown.
 
     Reproduction: the site went on selling from Week 4 of 2026 under exactly
-    that wording. The window is the buyer's own first two weekly files, so it
-    exists whenever in the season they join."""
+    that wording. The window is counted to the buyer's own first weekly
+    report, so it exists whenever in the season they join."""
     calendar = re.compile(
         r"refund[^.<]{0,60}\b(?:through|until|in|during)\s+(?:the\s+)?"
         r"(?:week[\s-]*\d|first\s+two\s+weeks)", re.I)
@@ -194,35 +194,41 @@ def test_the_refund_window_is_counted_from_the_purchase_not_the_calendar() -> No
                                              .read_text(encoding="utf-8"))),
                        ("terms", prose((SITE / "terms.html")
                                        .read_text(encoding="utf-8")))):
-        assert re.search(r"first two weekly reports|second weekly report", page, re.I), \
+        assert re.search(r"first weekly report|its week kicks off", page, re.I), \
             f"{name} page lost the refund window where the money is asked for"
 
 
-def test_the_refund_window_closes_before_the_second_file_is_played() -> None:
+def test_the_refund_window_closes_before_the_first_report_is_played() -> None:
     """A window that ran "a week after your second weekly file" let a buyer
     set that file's lineup, watch the games settle it, and refund on the
-    result — the second file used in full, then returned. The window closes
-    when the second file's week kicks off: both files are in hand, the first
-    one's week has played out, and the second has not been put to use yet.
+    result. Closing at the second report's kickoff (Sep 29 2026) only moved
+    the hole one report earlier: the first report's lineup was played in full
+    and could be returned on the result. The window closes when the FIRST
+    weekly report's week kicks off (owner decision, Oct 30 2026): the report
+    is in hand and none of the games it covers has been played.
 
     Every surface has to say the same close, or the loosest one is the
-    promise: "through your first two weekly files" reads as the end of the
-    second file's games, which is the week this change takes back."""
+    promise, so the wording this replaced is banned everywhere a buyer reads
+    it, in reports or in files, and in the sweep the join page's joined
+    strings are read as a reader meets them. Mutation: put
+    "second weekly report's week kicks off" back on any one page."""
     import render.welcome as welcome
-    loose = re.compile(r"a\s+week\s+after\s+your\s+second\s+weekly"
-                       r"|through\s+your\s+first\s+two\s+weekly", re.I)
+    loose = re.compile(r"second\s+weekly\s+(?:report|file)"
+                       r"|a\s+week\s+after\s+your\s+last"
+                       r"|if\s+the\s+season\s+ends\s+first"
+                       r"|first\s+two\s+weekly", re.I)
     for name, page in _buyer_surfaces().items():
         text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
         assert not loose.search(text), \
-            f"{name} still promises a refund after the second file's games"
-    kickoff = re.compile(r"second\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
+            f"{name} still promises a refund after the first report's games"
+    kickoff = re.compile(r"first\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
     # COPY:F8: the selling pages used to say it shorter ("your second report's
     # week kicks off") beside a card that calls the day-one ROSTER report "your
     # first report" — so a mid-week joiner read a window a week shorter than
     # terms §5's, which counts weekly reports only. Every surface says "weekly".
     for name, page in _buyer_surfaces().items():
         text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
-        assert not re.search(r"second\s+report's\s+week", text, re.I), \
+        assert not re.search(r"(?:second|first)\s+report's\s+week", text, re.I), \
             f"{name} counts the refund window in reports, not weekly reports"
     for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE)):
         assert kickoff.search(page), f"{name} page does not say when the window closes"
@@ -367,20 +373,27 @@ def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> No
 def test_the_terms_define_the_file_the_refund_window_counts() -> None:
     """A window counted in files is only as firm as the definition of a file.
     Without one, "my day-one roster file was the first" and "the season ended
-    before my second" are both arguments the terms page must already have
+    before one reached me" are both arguments the terms page must already have
     settled, and a window that never closes is the one without an end date."""
     terms = prose((SITE / "terms.html").read_text(encoding="utf-8"))
     section = terms.split('id="refunds"', 1)[1].split("<h2", 1)[0]
-    assert re.search(r"your second weekly\s+report's\s+week\s+kicks\s+off", section, re.I)
+    assert re.search(r"your first weekly\s+report's\s+week\s+kicks\s+off", section, re.I)
     assert re.search(r"first game of the week that report\s+covers", section, re.I), \
         "\"kicks off\" needs the game it means, or Sunday's slate is an argument"
     assert re.search(r"weekly report covers one week", section, re.I)
     assert re.search(r"roster report[^.]*isn't one", section, re.I)
-    assert re.search(r"season ends before your second", section, re.I), \
-        "a buyer who joins in the last fortnight has a window with no end"
+    assert re.search(r"window runs until\s+the week your first weekly report covers kicks off",
+                     section, re.I), \
+        "a buyer who joins mid-week has a roster report and no stated close"
+    assert re.search(r"season ends before a weekly report reaches you,\s+the window stays open "
+                     r"until a week after the season's last game", section, re.I), \
+        "a season that ends first leaves a window with no end"
     assert re.search(r"reaches you after its week has kicked off[^.]*"
                      r"a week after it reaches you", section, re.I), \
-        "a late send would close the window before the second file arrived"
+        "a late send would close the window before the first report arrived"
+    assert re.search(r"one refund per person</b> \(one per league for a league pass\)\. "
+                     r"a second purchase\s+after a refund is final", section, re.I)
+    assert "subscribe again" not in section
 
 
 def test_cancellation_is_promised_and_never_obstructed() -> None:
@@ -5139,11 +5152,9 @@ def test_every_secondary_page_carries_the_sites_routes(name: str) -> None:
     root = "/" if name == "404.html" else ""
     nav = re.search(r'<nav class="sitenav" aria-label="Site">(.*?)</nav>', page, re.S)
     assert nav, f"{name} has no site nav"
-    # "See a real report" is contract C2's label (site_bar); terms and privacy
-    # keep "Real report" until their words next change, because their visible
-    # text is pinned to their Last-updated date (tests/test_promises_legal.py).
+    # "See a real report" is contract C2's label (site_bar).
     for href, label in ((f"{root}how-it-works.html", "How it works"),
-                        (f"{root}sample-report.html", "(?:See a real|Real) report"),
+                        (f"{root}sample-report.html", "See a real report"),
                         (f"{root}index.html#pricing", "Pricing")):
         assert re.search(rf'<a [^>]*href="{re.escape(href)}"[^>]*>{label}</a>', nav.group(1)), \
             f"{name}: no {label}"

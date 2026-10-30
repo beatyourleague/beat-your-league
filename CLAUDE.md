@@ -2478,6 +2478,26 @@ welcome email reads `REFUND_TERMS` / `REFUND_TERMS_LEAGUE` from `render/welcome.
 surfaces). The evidence for any refund decision is already in `sent.jsonl`: weekly files key
 as `{season}-wNN-{slug}` with `sent_at`, the roster file as `preseason-…`, which is exactly
 the line the definition draws.
+**Moved from the second weekly report to the FIRST (owner decision, Oct 30 2026; terms version
+2026-10-30, and no buyer has ever paid, so no change notice).** The hole above, one report
+earlier: a buyer could play the first report's lineup, see the result and refund. "Full
+refund, no questions, until your first weekly report's week kicks off" is now the sentence on
+every surface. The day-one roster report still isn't a weekly report (a buyer after a week's
+first game has until the next week's kickoff); a first weekly report WE send after its week
+kicked off closes it a week after that report's `sent_at`; a season that ends before one
+reaches the buyer leaves it open until a week after the last game. Short surfaces carry only
+the late-send clause, "(or a week after it reaches you, if we send it late)": selling stops at
+the last week's kickoff, so the season clause is an edge of our own failure and lives in terms
+§5 and the welcome email. `test_the_refund_window_closes_before_the_first_report_is_played`
+sweeps every buyer surface for the second-report wordings. The same words change finally let
+terms.html take contract C5's "a second purchase after a refund is final" and the shared nav.
+**League Pass in the nav (same day):** the owner could not find it, so it is a route in
+`site_bar()` (and the landing's own nav), a strip under the price card (`.lpline`, secondary
+to the one card, not a second price card, with the $69 and its terms beside it) and a footer
+link. Below 720px How it works leaves the bar first (four routes overflowed terms and the 404
+at 600px; the landing's five go at 760px). **privacy.html keeps the bar
+it was dated with**, without League Pass, because its visible text is pinned to its date; it
+takes the route at the next change to its words.
 
 **Terms and privacy are two documents (Aug 27 2026).** Stripe shows the Terms of service
 and Privacy policy URLs to the buyer at checkout, and `legal.html` told them nothing about

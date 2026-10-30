@@ -557,7 +557,7 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
         # refund terms beside it — and nowhere else.
         assert re.findall(r"\$\d+", doc) == ["$29"]
         assert ("the $29 Rest-of-Season Pass, one payment, nothing renews. Full "
-                "refund, no questions, until your second weekly report's week "
+                "refund, no questions, until your first weekly report's week "
                 "kicks off. One per person." in doc)
     # No site, no button.
     monkeypatch.delenv("SITE_URL")

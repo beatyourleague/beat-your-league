@@ -177,7 +177,7 @@ TRIAL_LAST_BUTTON = "Tell me when it opens"
 # whether that link is live, and a price the join page doesn't charge is
 # worse than none. Nothing in the season's last week: there is no next one.
 TRIAL_PLAYOFF_FROM_WEEK = 13
-TRIAL_REFUND = ("Full refund, no questions, until your second weekly report's "
+TRIAL_REFUND = ("Full refund, no questions, until your first weekly report's "
                 "week kicks off. One per person.")
 
 

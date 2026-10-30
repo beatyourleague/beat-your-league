@@ -352,8 +352,8 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
    the thing arriving in the inbox and on the published test.
 
 **At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
-Refunds no-questions until the buyer's second weekly file's week kicks off (was "through Week 2"
-until Sep 29 2026 — see the refund-cycling note below). Monthly moved from $9.99 to $14.99 because
+Refunds no-questions until the buyer's first weekly report's week kicks off (the second report's
+until Oct 30 2026, "through Week 2" until Sep 29 2026 — see the refund-cycling note below). Monthly moved from $9.99 to $14.99 because
 $9.99 inverted the ladder at $39; the corrections below record how.
 
 **CORRECTION forced by the price change:** at $39 the season pass is no longer cheaper than paying
@@ -614,8 +614,8 @@ point stands.)*
 weeks of reports, refund inside the no-questions window, re-subscribe later, refund again — a free
 season. The honest close is a policy stated *before* purchase, not friction added after it:
 
-> **One no-questions refund per person.** The window runs until your second weekly file's week
-> kicks off. Re-subscribe after a refund and that purchase is final — you keep every report either way.
+> **One no-questions refund per person.** The window runs until your first weekly report's week
+> kicks off. A second purchase after a refund is final — you keep every report either way.
 
 **The window is counted in the buyer's own files, not the calendar (owner decision, Sep 29 2026).**
 "Through Week 2" was written for a launch where everyone bought in August. The site went on
@@ -640,6 +640,16 @@ week and subscriber slug; the second weekly key's week number plus that week's f
 the NFL schedule is the whole evidence a refund decision needs, and its `sent_at` against that
 kickoff settles the late-send exception.
 
+**The window moved to the FIRST weekly report (owner decision, Oct 30 2026).** Closing at the second
+report's kickoff still let a buyer play the first report's lineup, watch the games settle it and
+refund on the result — the same hole the Sep 29 tightening closed one report later. The window now
+closes when the first weekly report's week kicks off: the report is in hand and none of its games
+has been played. The day-one roster report still isn't a weekly report, so a buyer who joins after
+a week's first game has until the next week's kickoff. A late send of ours closes it a week after
+that report's `sent_at`, and a season that ends with no weekly report delivered leaves it open a
+week past the last game. Terms version 2026-10-30; no buyer has ever paid, so no change notice was
+owed. The evidence is now the FIRST weekly key in `sent.jsonl`, not the second.
+
 Why this is the right shape: it is disclosed pre-purchase (so it is a term, not a trap), it costs
 an honest customer nothing, and it removes the only version of the loop worth running. Note the
 operator eats the payment-processing fee on every refund — about $2.72 on a $39 pass from this
@@ -653,9 +663,9 @@ disproportionate, hostile, and would collect exactly the data this project promi
 
 **Where the non-refundable money legitimately comes from:**
 1. **Season pass, paid upfront.** $39 lands on day one. The no-questions window closes when the
-   buyer's second weekly file's week kicks off; everything after is earned revenue, not float.
-2. **Value must land before that window shuts.** A buyer's first two files are the
-   highest-stakes deliverables they get — a missed or thin first file is a refund request with a
+   buyer's first weekly report's week kicks off; everything after is earned revenue, not float.
+2. **Value must land before that window shuts.** A buyer's first report is the
+   highest-stakes deliverable they get — a missed or thin first file is a refund request with a
    stamp on it.
 3. **Reduce refunds by removing their causes, never their availability:** set expectations about
    gated numbers up front ("when we don't show a number, that's the product working"), frame the

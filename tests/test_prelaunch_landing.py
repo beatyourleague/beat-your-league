@@ -312,7 +312,7 @@ def test_the_closed_pricing_card_is_a_real_button_not_a_placeholder() -> None:
     assert not re.search(r"\.plan [^{]*\{[^}]*dashed", CSS)
     finance = BODY.split('id="finance-note"')[1].split("</p>")[0]
     assert "Checkout opens soon" not in finance
-    # The League Pass is pitched once, by its own line under the card
+    # The League Pass is pitched once, by its own strip under the card
     # (review BUYER-4/SLEEK-6: "Running the league? One payment can cover
     # every team" sat directly above "Run the league? One payment covers
     # every manager"), and the open state does not bring it back.

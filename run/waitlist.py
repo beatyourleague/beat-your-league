@@ -105,7 +105,7 @@ OPENING = "You asked to hear when this opened. It's open."
 OPENING_WEEK = "You asked to hear when this opened. It's open, in time for Week {week}."
 # The join page's own terms line for each pass (site/join/index.html), so the
 # email and the checkout state one offer in one set of words.
-_REFUND = ("Refunds are no-questions until your second weekly report's week "
+_REFUND = ("Refunds are no-questions until your first weekly report's week "
            "kicks off — one per person.")
 OFFER = ("The Rest-of-Season Pass is {price}, one payment: nothing renews and "
          "nothing more is charged. " + _REFUND)

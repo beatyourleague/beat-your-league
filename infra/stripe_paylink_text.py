@@ -58,8 +58,8 @@ CANCEL = ("you can cancel any time from your billing page")
 # refund term sits beside every price, the Pay button included).
 ONE_TIME_COVERS = ("It covers every weekly report from today through the "
                    "season's last")
-REFUND = ("Full refund, no questions, until your second weekly report's week "
-          "kicks off (or a week after your last report, if the season ends first)")
+REFUND = ("Full refund, no questions, until your first weekly report's week "
+          "kicks off (or a week after it reaches you, if we send it late)")
 ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews and nothing more is "
             f"ever charged. {ONE_TIME_COVERS}. {REFUND} — one per person.")
 MESSAGES = {

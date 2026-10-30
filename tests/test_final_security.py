@@ -544,8 +544,8 @@ def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
     Pay button is a price. The sentence is terms.html §5's window, and every
     message fits Stripe's 1,200 characters."""
     module = _paylink()
-    refund = ("Full refund, no questions, until your second weekly report's week kicks off "
-              "(or a week after your last report, if the season ends first)")
+    refund = ("Full refund, no questions, until your first weekly report's week kicks off "
+              "(or a week after it reaches you, if we send it late)")
     assert module.REFUND == refund
     assert module.ONE_TIME.endswith(refund + " — one per person.")
     assert module.MESSAGES["league_pass"].endswith(refund + " — one per league.")
@@ -554,7 +554,7 @@ def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
         assert len(module.MESSAGES[plan]) <= module.STRIPE_TEXT_LIMIT == 1200
         assert len(module.TOS_MESSAGES[plan]) <= module.STRIPE_TEXT_LIMIT
     from test_promises_legal import _visible
-    assert "until your second weekly report's week kicks off" in _visible("terms.html")
+    assert "until your first weekly report's week kicks off" in _visible("terms.html")
 
 
 def test_the_launch_check_reads_the_link_map(monkeypatch) -> None:
@@ -768,11 +768,11 @@ def test_a_real_restricted_key_403_keeps_the_permission_names(monkeypatch) -> No
 def test_the_pay_button_refund_sentence_carries_its_limits() -> None:
     """Reviewer: the refund sentence above Stripe's Pay button left out the
     limits every other surface states (one per person / one per league, and
-    the season-ends-first clause)."""
+    the late-send clause)."""
     from infra.stripe_paylink_text import MESSAGES
     assert "one per person" in MESSAGES["season"] and "one per league" in MESSAGES["league_pass"]
     for plan in ("season", "league_pass"):
-        assert "if the season ends first" in MESSAGES[plan]
+        assert "if we send it late" in MESSAGES[plan]
 
 
 def test_clearing_acknowledges_a_session_still_in_the_sweep(

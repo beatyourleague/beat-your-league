@@ -548,7 +548,7 @@ def test_the_free_report_states_the_price_and_refund_terms_up_top(monkeypatch) -
     line = trial_price_line(report["meta"])
     assert line == ("Every Tuesday through your title game: the $29 Rest-of-Season "
                     "Pass, one payment, nothing renews. Full refund, no questions, "
-                    "until your second weekly report's week kicks off. One per person.")
+                    "until your first weekly report's week kicks off. One per person.")
     # Above the report's first card (contract C1: the lineup leads now, and a
     # free report whose only task is setting the lineup carries no plan card).
     page = render_email(report).replace("&#x27;", "'")

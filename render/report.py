@@ -888,12 +888,13 @@ def team_name(report: Mapping[str, Any]) -> str | None:
 # italic, as site/brand/logo.png draws it (render/brand.py logo_html) — and it
 # is the way home: the "← Home" pill beside it wrapped onto a row of its own on
 # a phone and repeated a link the lockup already is. On a phone the bar is the
-# lockup and ONE link, "See a real report"; How it works and Pricing return at
-# 600px. Every nav sits on navy or darker, so this is the dark-ground lockup.
+# lockup and ONE link, "See a real report"; League Pass and Pricing return at
+# 600px and How it works at 720px. Every nav sits on navy or darker, so this is the dark-ground lockup.
 # Hand-written pages paste SITE_BAR_CSS and site_bar()'s markup verbatim (the
 # page defines --display and --sans, as every page's type does), and
 # tests/test_prelaunch_pages.py holds every copy to these two.
 SITE_NAV_REAL_REPORT = "See a real report"
+SITE_NAV_LEAGUE_PASS = "League Pass"
 SITE_BAR_CSS = (
     "  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}\n"
     "  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;\n"
@@ -908,6 +909,7 @@ SITE_BAR_CSS = (
     "  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}\n"
     "  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}\n"
     "  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}\n"
+    "  @media (max-width:719px){.sitenav .hidemd{display:none;}}\n"
     "  @media (max-width:599px){.sitenav .hidesm{display:none;}"
     ".sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}\n")
 
@@ -923,12 +925,18 @@ def site_bar(prefix: str = "", home: str | None = None, current: str | None = No
     launch review D5), where "Pricing" offers what the visitor just bought.
     Relative links, so the live sample's ?via= carry rewrites exactly these."""
     home = home or f"{prefix}index.html"
-    routes = (("how-it-works.html", "How it works", True),
-              ("sample-report.html", SITE_NAV_REAL_REPORT, False),
-              *((("index.html#pricing", "Pricing", True),) if pricing else ()))
+    # League Pass is a route of its own (owner decision, Oct 30 2026): the
+    # owner could not find it as one line under the price card. It sits
+    # beside Pricing and, like it, leaves the bar on a phone. Four routes and
+    # the lockup don't fit below 720px, so How it works goes first (measured:
+    # terms and the 404 ran 32-49px past their bar at 600px).
+    routes = (("how-it-works.html", "How it works", "hidesm hidemd"),
+              ("sample-report.html", SITE_NAV_REAL_REPORT, ""),
+              ("league-pass.html", SITE_NAV_LEAGUE_PASS, "hidesm"),
+              *((("index.html#pricing", "Pricing", "hidesm"),) if pricing else ()))
     links = []
     for href, label, hide in routes:
-        klass = ' class="hidesm"' if hide else ""
+        klass = f' class="{hide}"' if hide else ""
         here = ' aria-current="page"' if href == current else ""
         links.append(f'<a{klass} href="{prefix}{href}"{here}>{esc(label)}</a>')
     links = "".join(links)

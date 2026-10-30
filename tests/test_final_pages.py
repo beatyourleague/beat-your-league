@@ -31,7 +31,7 @@ EMAIL_CHECK = (SITE / "email-check.js").read_text(encoding="utf-8")
 # Contract C5: the odds-gate clause, identical everywhere it appears.
 GATE_CLAUSE = ("only where both players are playing, off the injury report and have "
                "enough games on record (never on team defenses)")
-REFUND_BESIDE_PRICE = "a full refund until your second weekly report's week kicks off"
+REFUND_BESIDE_PRICE = "a full refund until your first weekly report's week kicks off"
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
@@ -380,18 +380,18 @@ def test_the_free_report_pitch_says_what_arrives_not_the_gate() -> None:
 
 def test_the_refund_sits_under_the_heros_buy_button_with_no_price() -> None:
     """Business #1: the strongest true objection-killer (a no-questions refund
-    until the second weekly report's week kicks off) sat only in the price
+    until the first weekly report's week kicks off) sat only in the price
     card, ~4,700px down on a phone. Open, it is built under the hero's button
     and hidden with it at the season's end; the price card carries it in
     every state (the trust strip that also did went with contract B3). No
     price in the hero line (the hero rule)."""
     block = LANDING.split("if (CHECKOUT_OPEN) {")[1].split("if (CHECKOUT_CAN_COMPLETE)")[0]
     risk = _flat(block[block.index('const heroRow'):block.index("heroRow.after(risk)")])
-    assert "Full refund, no questions, until your second weekly report's week kicks off" in risk
+    assert "Full refund, no questions, until your first weekly report's week kicks off" in risk
     assert "$" not in risk
     assert '"risk-line"' in _js_function(LANDING, "closeForSeason")
     card = _flat(LANDING.split('id="pass-card"')[1].split("</section>")[0])
-    assert "Full refund, no questions, until your second weekly report's week kicks off" in card
+    assert "Full refund, no questions, until your first weekly report's week kicks off" in card
 
 
 def test_the_sunday_scene_sits_directly_under_the_hero() -> None:

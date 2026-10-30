@@ -818,12 +818,23 @@
   .finance{margin-top:16px;font-size:13px;color:var(--dusk);line-height:1.65;max-width:70ch;}
   .finance a{color:var(--flag);}
 
-  /* "See a real report first", under the card's button, and the League
-     Pass as one line under the card (one decision at checkout, PLAN §4). */
+  /* "See a real report first", under the card's button. Then the League
+     Pass, a slim strip under the card: dark on the dark page where the card
+     is paper, and a text link where the card has the button, so it is found
+     without being a second choice at checkout (PLAN §4; owner decision,
+     Oct 30 2026 — as one line it could not be found). */
   .plan .cardlink{align-self:center;display:inline-block;margin-top:10px;padding:4px 0;font-size:14px;
     font-weight:700;color:var(--turf);}
-  .lpline{margin-top:20px;font-size:15px;line-height:1.6;color:var(--dusk2);}
-  .lpline a{color:var(--flag);font-weight:600;}
+  .lpline{display:flex;align-items:center;gap:14px 16px;max-width:520px;margin-top:20px;
+    padding:14px 18px;border:1px solid rgba(188,201,219,.3);border-radius:12px;
+    font-size:15px;line-height:1.5;color:var(--dusk2);}
+  .lpline b{color:var(--paper);font-weight:700;}
+  .lpline .lpicon{width:26px;height:26px;flex:none;color:var(--flag);}
+  .lpline .lpbody{flex:1;min-width:0;}
+  .lpline .lpterms{display:block;margin-top:2px;font-size:13px;color:var(--dusk);}
+  .lpline a{flex:none;padding:8px 2px;color:var(--flag);font-weight:700;white-space:nowrap;}
+  /* The strip keeps the card's width: the card is 520px until the wide layout. */
+  @media (min-width:881px){.lpline{max-width:none;}}
 
   /* ------------------------------------------------ faq */
   .faqgrid{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:40px;
@@ -952,6 +963,9 @@
     .callouts{max-width:560px;}
   }
   @media (max-width:880px){
+    .lpline{flex-wrap:wrap;align-items:flex-start;padding:14px 16px;}
+    .lpline .lpbody{flex:1 1 calc(100% - 42px);}
+    .lpline a{padding:6px 0 2px 42px;}
     /* Phones: headline, what it works with, the form and the line that
        explains it, the button row, then the phone showing what arrives. The
        row sits between the season clock ("Week 8's report lands Tuesday")
@@ -1009,7 +1023,7 @@
     .stickybar{display:block;}
     footer{padding-bottom:96px;}
   }
-  @media (max-width:720px){.navlinks .hidemd{display:none;}}
+  @media (max-width:760px){.navlinks .hidemd{display:none;}}
   @media (max-width:640px){.plans{grid-template-columns:1fr;}}
   @media (max-width:600px){
     :root{--gap-section:72px;}
@@ -1169,6 +1183,7 @@
   <div class="navlinks">
     <a class="hidemd" href="how-it-works.html">How it works</a>
     <a href="sample-report.html">See a real report</a>
+    <a class="hidemd" href="league-pass.html">League Pass</a>
     <a class="hidemd" href="#pricing">Pricing</a>
     <!-- Closed resting state on purpose: a gold "Set up my team" that lands on
          a closed checkout reads as bait. JS rewrites it the day checkout opens;
@@ -1360,7 +1375,7 @@
   <p class="lede">Every lineup from now to your title game, one payment.</p>
   <!-- 2026 sells ONE-TIME passes (owner decision, Oct 18 2026): no
        subscription, nothing renews. One decision at checkout (PLAN §4): the
-       League Pass is one line under the card, never a pricing card. From
+       League Pass is a slim strip under the card, never a pricing card. From
        Week 13 the season clock swaps this card to the $19 Playoff Pass, once
        PLAYOFF_PASS_READY says its payment link is on the join page. -->
   <div class="plans one">
@@ -1372,7 +1387,7 @@
         game — your first report usually lands within the hour of joining</li>
         <li>One payment. Nothing renews, nothing to cancel
         (<a href="terms.html#cancel">how it ends</a>)</li>
-        <li>Full refund, no questions, until your second weekly report's week kicks off.
+        <li>Full refund, no questions, until your first weekly report's week kicks off.
         One per person (<a href="terms.html#refunds">details</a>).</li>
         <li>Founding rate: your 2027 season pass is $39, never more</li>
       </ul>
@@ -1384,8 +1399,9 @@
   <p class="finance" id="currency-note">All prices in US dollars. Secure checkout on Stripe — we never see your card.</p>
   <!-- Filled when checkout opens. -->
   <p class="finance" id="finance-note" hidden></p>
-  <p class="lpline">Run the league? <a href="league-pass.html">The League Pass covers every
-  manager</a>. Up to 14 teams.</p>
+  <p class="lpline"><svg class="lpicon" viewBox="0 0 26 26" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="9" r="4"/><path d="M5.5 22c.6-4.4 3.5-6.8 7.5-6.8s6.9 2.4 7.5 6.8"/><path d="M19.3 5.5a3.6 3.6 0 0 1 0 7M24 19.5c-.5-2.7-1.9-4.5-4.2-5.3M6.7 5.5a3.6 3.6 0 0 0 0 7M2 19.5c.5-2.7 1.9-4.5 4.2-5.3"/></g></svg><span class="lpbody"><b>Run the league?</b> The League Pass covers every manager, each with their own report, up to 14 teams.
+  <span class="lpterms">$69 for the whole league: one payment, nothing renews, full refund until your first weekly report's week kicks off. One per league.</span></span>
+  <a href="league-pass.html">See the League Pass →</a></p>
 </section>
 
 <section id="faq">
@@ -1471,7 +1487,7 @@
       "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds only where both players are playing, off the injury report and have enough games on record (never on team defenses), and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "29", "priceCurrency": "USD",
-         "description": "Rest-of-Season Pass — one payment, no subscription: every weekly report from now through your title game; your first report usually lands within the hour of joining. No-questions refund until your second weekly report's week kicks off."}
+         "description": "Rest-of-Season Pass — one payment, no subscription: every weekly report from now through your title game; your first report usually lands within the hour of joining. No-questions refund until your first weekly report's week kicks off."}
       ]
     },
     {
@@ -1569,7 +1585,7 @@ function showPlayoffPass(week) {
       offer.description = "Playoff Pass — one payment, no subscription: every " +
         "weekly report from Week " + week + " through your title game; your first " +
         "report usually lands within the hour of joining. No-questions refund " +
-        "until your second weekly report's week kicks off.";
+        "until your first weekly report's week kicks off.";
     }));
     ld.textContent = JSON.stringify(data);
   } catch (e) { /* unreadable structured data: the visible page is still right */ }
@@ -1712,7 +1728,7 @@ if (CHECKOUT_OPEN) {
     const risk = document.createElement("p");
     risk.className = "riskline";
     risk.id = "risk-line";
-    risk.textContent = "Full refund, no questions, until your second weekly report's " +
+    risk.textContent = "Full refund, no questions, until your first weekly report's " +
       "week kicks off. One payment, nothing renews.";
     heroRow.after(risk);
   }

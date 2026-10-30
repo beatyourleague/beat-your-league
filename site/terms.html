@@ -30,28 +30,26 @@
   :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
     --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;}
   *{margin:0;padding:0;box-sizing:border-box;}
+  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
+  .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
+    font-family:var(--display);
+    font-weight:900;font-style:italic;font-size:20px;line-height:1;letter-spacing:.01em;
+    text-transform:uppercase;white-space:nowrap;text-decoration:none;color:#F6F4EE;}
+  .sitebar .brand svg.mark{width:24px;height:24px;flex:none;}
+  .sitebar .brand .lg{color:#F0B62A;}
+  .sitenav{display:flex;align-items:center;gap:4px 16px;flex-wrap:nowrap;
+    font-family:var(--sans);
+    font-size:14px;font-weight:600;}
+  .sitenav a{color:#C9D4E2;text-decoration:none;padding:8px 2px;white-space:nowrap;}
+  .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
+  .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
+  @media (max-width:719px){.sitenav .hidemd{display:none;}}
+  @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
   body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
   .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
     box-shadow:0 2px 18px rgba(16,30,51,.10);}
   header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
-  header .brand{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.24em;
-    text-transform:uppercase;color:var(--flag);}
-  .brand svg.mark{width:22px;height:22px;flex:none;}
-  /* The site's routes on every page, the samples' masthead row (launch
-     review I5): a visitor arriving from a shared link had only a Home pill. */
-  .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;
-    flex-wrap:wrap;}
-  .sitenav{display:flex;align-items:center;gap:4px 14px;flex-wrap:wrap;font-family:var(--sans);
-    font-size:14px;font-weight:600;}
-  .sitenav a{color:#C9D4E2;text-decoration:none;padding:6px 2px;}
-  .sitenav a:hover,.sitenav a[aria-current]{color:var(--paper);}
-  .sitenav a.home{color:var(--paper);padding:8px 15px;}
-  .sitebar a:focus-visible,.headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
-  a.brand{text-decoration:none;padding:3px 0;}
-  .home{font-family:var(--sans);font-weight:600;font-size:14px;line-height:1;letter-spacing:0;
-    text-transform:none;white-space:nowrap;text-decoration:none;color:var(--paper);
-    padding:8px 15px;border:1.5px solid rgba(246,244,238,.45);border-radius:999px;}
-  .home:hover,.home:focus-visible{color:var(--flag);border-color:var(--flag);}
+  .headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
      and cancellation instructions a nervous buyer came here to read. */
   main a,p a,li a{color:var(--brick);text-decoration:underline;
@@ -74,9 +72,9 @@
 <body>
 <div class="sheet">
   <header>
-    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylgClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylgClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="sample-report.html">Real report</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div>
+    <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm hidemd" href="how-it-works.html">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="league-pass.html">League Pass</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
     <h1>Terms of Service</h1>
-    <p>Last updated 18 October 2026. Short, in plain words, and written to be kept. If
+    <p>Last updated 30 October 2026. Short, in plain words, and written to be kept. If
     anything here conflicts with what a sales page says, this page wins. Your data is covered separately, in the
     <a href="privacy.html">Privacy Policy</a>.</p>
   </header>
@@ -86,9 +84,8 @@
     fantasy football team: analysis, not betting picks. It recommends a lineup for you to
     decide on. It is not betting, gambling or professional advice, and it guarantees no result
     (section 2). We publish probabilities we can defend and stay quiet where we can't. Unhappy
-    with your first two weekly reports? Ask before your second weekly report's week kicks off
-    and we refund you, no questions — one refund per person, one per league for a League Pass
-    (section 5). If something goes wrong beyond that, the most you can get back is what you
+    with your first weekly report? Ask before its week kicks off and we refund you, no
+    questions — one refund per person, one per league for a League Pass (section 5). If something goes wrong beyond that, the most you can get back is what you
     paid us in the twelve months before the claim (section 8). The sections below are the full
     terms; where they add a detail or a limit, they govern.</div>
 
@@ -188,19 +185,24 @@
     where it offers one) and you're off within 10 business days.</p>
 
     <h2 id="refunds">5. Refunds</h2>
-    <p>Full refund, no questions asked, any time until <b>your second weekly report's week
-    kicks off</b> — the first game of the week that report covers. Both reports are in your
-    hands before you decide, whichever plan you bought, unless the season ends before your
-    second one (below).
-    A weekly report covers one week's games. The roster report you may get on the
-    day you join isn't one; if your first email is that week's report instead, it counts as
-    your first. If the season ends before your second weekly report, the window closes a week
-    after your last one; we stop selling once the season's last week kicks off. And if a send of ours ever runs late, so your second weekly report
-    reaches you after its week has kicked off, the window closes a week after it reaches you
-    instead.</p>
-    <p><b>One refund per person</b> (one per league for a League Pass). If you subscribe
-    again after taking a refund, that purchase is final. You keep every report we already
-    sent either way.</p>
+    <p>Full refund, no questions asked, any time until <b>your first weekly report's week
+    kicks off</b> — the first game of the week that report covers. Your first weekly report is
+    in your hands before you decide, whichever plan you bought, and none of the games it
+    covers has been played yet. A weekly report covers one week's games.</p>
+    <ul>
+      <li><b>Joining mid-week.</b> The roster report you may get on the day you join isn't
+      one: if you join after a week's first game, your window runs until the week your first
+      weekly report covers kicks off. If your first email is that week's report instead, it
+      is your first weekly report.</li>
+      <li><b>If we're late.</b> If a send of ours ever runs late, so your first weekly report
+      reaches you after its week has kicked off, the window closes a week after it reaches
+      you instead.</li>
+      <li><b>If the season ends.</b> If the season ends before a weekly report reaches
+      you, the window stays open until a week after the season's last game. We stop selling
+      once the season's last week kicks off.</li>
+    </ul>
+    <p><b>One refund per person</b> (one per league for a League Pass). A second purchase
+    after a refund is final. You keep every report we already sent either way.</p>
     <p>Outside that window, payments are non-refundable except where the law where you live
     says otherwise. <b>A refund is the only remedy we offer</b> if you're unhappy with the
     service, and it is capped at what you actually paid.</p>

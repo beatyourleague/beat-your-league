@@ -483,7 +483,7 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
     assert "in time for Week 8" in body and "Week 8" in preview
     flat = " ".join(body.split())
     for term in ("$29, one payment", "nothing renews",
-                 "Refunds are no-questions until your second weekly report's week kicks off",
+                 "Refunds are no-questions until your first weekly report's week kicks off",
                  "every slot decided, every close call explained", "if/then",
                  "only one you are getting", 'reply "unsubscribe"'):
         assert term in flat, term

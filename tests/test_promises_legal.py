@@ -31,6 +31,10 @@ PRIVACY_VERSIONS = [
 ]
 TERMS_VERSIONS = [
     ("2026-10-18", "0d5cce06d12dd87c"),
+    # The refund window moved to the first weekly report (owner decision), the
+    # site's nav (C2, with League Pass) and C5's "a second purchase after a
+    # refund is final". No buyer had ever paid, so no change notice was owed.
+    ("2026-10-30", "49eab6541ab0c527"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")
