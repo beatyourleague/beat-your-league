@@ -312,3 +312,21 @@ def test_every_inline_script_parses() -> None:
         done = subprocess.run(["node", "--check", fh.name], capture_output=True, text=True)
         Path(fh.name).unlink(missing_ok=True)
         assert done.returncode == 0, done.stderr
+
+
+def test_the_phone_screen_cannot_leak_paper_around_the_lock_screen() -> None:
+    """A light background on the rounded .screen is antialiased on its own, so
+    a one-pixel cream line showed along the curve behind the dark lock screen
+    (owner report, Oct 30 2026). The screen is bezel black, the paper is a
+    layer inside the clip, and the lock sits past the edge. The close-up shares
+    the class and must keep its paper with no square layer behind its corners."""
+    css = LANDING[LANDING.index("<style"):LANDING.index("</style>")]
+    screen = re.search(r"\n\s*\.screen\{([^}]*)\}", css).group(1)
+    assert "background:#050608" in screen and "overflow:hidden" in screen
+    assert re.search(r"\.screen::before\{[^}]*inset:0;background:#F6F4EE;z-index:-1", css)
+    assert re.search(r"\n\s*\.lock\{[^}]*inset:-1px;border-radius:45px", css)
+    # The lock's contents are put back, or its icons sit a pixel off the email's.
+    assert "margin:1px 1px 0" in re.search(r"\.lk-status\{([^}]*)\}", css).group(1)
+    assert re.search(r"\.lk-fg\{position:absolute;inset:1px;\}", css)
+    assert "background:#F6F4EE" in re.search(r"\.shot\.screen\{([^}]*)\}", css).group(1)
+    assert re.search(r"\.shot\.screen::before,\.shot\.screen::after\{content:none;\}", css)

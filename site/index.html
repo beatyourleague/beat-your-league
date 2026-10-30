@@ -216,7 +216,7 @@
     -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
     -webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);}
   .phone::after{content:"";position:absolute;inset:-4px;border-radius:58px;pointer-events:none;
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -1px 0 rgba(0,0,0,.6),
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.2),inset 0 -1px 0 rgba(0,0,0,.6),
       0 0 0 1px rgba(0,0,0,.55);}
   .hw{position:absolute;width:3px;border-radius:2px;pointer-events:none;
     background:linear-gradient(90deg,#3D4249,#B4BAC1 50%,#5A5F67);}
@@ -229,8 +229,13 @@
   .phone-floor{width:66%;max-width:212px;height:24px;margin-top:-6px;border-radius:50%;
     background:radial-gradient(closest-side,rgba(0,0,0,.72),rgba(0,0,0,.32) 55%,transparent);
     pointer-events:none;}
-  .screen{position:relative;height:100%;background:#F6F4EE;border-radius:44px;container-type:inline-size;
+  /* The screen's own background is the bezel's black and the paper is a layer
+     inside the rounded clip. A light background here is drawn by itself, antialiased
+     along the curve, so it leaked a one-pixel cream hairline around the dark
+     lock screen. */
+  .screen{position:relative;height:100%;background:#050608;border-radius:44px;container-type:inline-size;
     overflow:hidden;display:flex;flex-direction:column;}
+  .screen::before{content:"";position:absolute;inset:0;background:#F6F4EE;z-index:-1;}
   /* The island is hardware, not screen: it sits above every screen layer, so
      the storyline's lock screen and black pass UNDER it, never over it. Sized in
      proportion to the screen, as on the real phone: a fixed 92px island on the
@@ -370,7 +375,9 @@
   /* The paper runs on under the crop, as the rest of the email does. */
   .mailview{display:flex;flex-direction:column;flex:none;transform-origin:50% 78%;
     padding-bottom:12cqw;}
-  .lock{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  /* One pixel past the screen on every side, so its own rounded edge sits outside
+     the screen's clip and can't let the paper beneath show along the curve. */
+  .lock{position:absolute;inset:-1px;border-radius:45px;pointer-events:none;opacity:0;
     z-index:6;color:#fff;overflow:hidden;}
   /* The wallpaper is its own layer, so the wake and unlock zoom move it and
      the lock's text, never the status bar: through the unlock the lock's
@@ -383,10 +390,10 @@
       radial-gradient(120% 62% at 85% 4%,rgba(242,194,48,.28),transparent 62%),
       radial-gradient(90% 50% at 8% 92%,rgba(46,169,104,.26),transparent 64%),
       linear-gradient(172deg,#30527F 0%,#203D63 52%,#101E33 100%);}
-  .lk-status{position:relative;display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;height:48px;padding:15px 4px 0;}
+  .lk-status{position:relative;display:grid;grid-template-columns:1fr 31% 1fr;align-items:center;height:48px;padding:15px 4px 0;margin:1px 1px 0;}
   .lk-status .icons{grid-column:3;justify-self:center;display:flex;gap:5px;align-items:center;}
   .lk-status svg{height:11px;width:auto;display:block;fill:#fff;}
-  .lk-fg{position:absolute;inset:0;}
+  .lk-fg{position:absolute;inset:1px;}
   .lk-pad{position:absolute;left:50%;top:9.4%;width:11px;height:14px;margin-left:-5.5px;}
   .lk-pad::after{content:"";position:absolute;left:0;right:0;bottom:0;height:8px;border-radius:2px;background:#fff;}
   .lk-pad i{position:absolute;left:2px;right:2px;top:0;height:9px;border:1.8px solid #fff;border-bottom:0;
@@ -571,9 +578,9 @@
      paper on the dark page instead of a phone. */
   .filecard{color:var(--navy);}
   .card{padding:0;}
-  .shot.screen{height:auto;border-radius:16px;overflow:visible;padding:12px;
+  .shot.screen{height:auto;border-radius:16px;overflow:visible;padding:12px;background:#F6F4EE;
     box-shadow:0 2px 4px rgba(0,0,0,.25),0 40px 80px -36px rgba(0,0,0,.85);}
-  .shot.screen::after{content:none;}
+  .shot.screen::before,.shot.screen::after{content:none;}
   .shot.screen .filecard{margin:0;}
   .shot .pivot .if{font-size:2.83cqw;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
     color:var(--brick);}
