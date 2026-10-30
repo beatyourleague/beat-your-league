@@ -110,7 +110,7 @@ jobs:
       #
       # Actions pinned to a full commit, tag in the comment (INFRA-06), and no
       # token left in .git/config (INFRA-07) — this job has none that can push.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         id: checkout
         with:
           ref: ${{ github.ref_name }}
@@ -483,7 +483,7 @@ jobs:
       # branch's history, and `git pull --rebase` against a shallow history
       # can fail — which would break the step whose whole job is keeping the
       # record safe.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
@@ -640,7 +640,7 @@ jobs:
       base: ${{ steps.checkout.outputs.commit }}
       staged: ${{ steps.handoff.outputs.staged }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         id: checkout
         with:
           ref: ${{ github.ref_name }}
@@ -705,7 +705,7 @@ jobs:
     permissions:
       contents: write   # push the card and the page's preview tags; nothing else
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
