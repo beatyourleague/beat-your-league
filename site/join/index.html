@@ -402,6 +402,109 @@
     .opts label{animation:none!important;}
     .progress span::before{transition:none;}
   }
+  /* ---- the payoff: what "Check my roster" found ----
+     Facts about this roster, drawn in the browser from files published with
+     the site. Hidden until a check passes, then complete at rest: every
+     entrance below runs only under .play, and only on transform and opacity. */
+  #payoff{padding:0;overflow:hidden;scroll-margin-top:16px;}
+  .pf-top{background:var(--navy);color:var(--paper);padding:18px 24px 20px;}
+  .pf-top h2{font-family:var(--display);font-weight:800;font-size:22px;line-height:1.1;
+    letter-spacing:.01em;text-transform:uppercase;color:#FFFFFF;}
+  .pf-stats{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 28px;margin-top:12px;}
+  .pf-stat{min-width:0;font-size:14px;line-height:1.3;color:var(--dusk);white-space:nowrap;}
+  /* The long label takes what is left, and its own line when that is too little. */
+  .pf-stat.left{flex:1 1 130px;white-space:normal;}
+  .pf-stat b{display:block;font-family:var(--display);font-weight:800;font-size:46px;line-height:1;
+    color:#FFFFFF;font-variant-numeric:tabular-nums;margin-bottom:2px;}
+  .pf-stat.left b{color:var(--flag);}
+  .pf-body{padding:0 24px 24px;}
+  .pf-block{padding-top:20px;}
+  .pf-block + .pf-block{margin-top:20px;border-top:1px solid var(--rule);}
+  .pf-h{font-family:var(--display);font-weight:800;font-size:20px;line-height:1.1;letter-spacing:.01em;
+    text-transform:uppercase;color:var(--navy);}
+  .pf-lead{margin-top:6px;font-size:15px;line-height:1.5;color:var(--ink2);}
+  .pf-fine{margin-top:10px;font-size:13px;line-height:1.5;color:var(--slate);}
+  .pf-calls{list-style:none;display:grid;gap:14px;margin-top:14px;}
+  .pf-what{font-size:15px;line-height:1.4;color:var(--ink2);}
+  .pf-what b{color:var(--navy);}
+  .pf-chips{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .pf-chips li{padding:4px 9px;font-size:14px;font-weight:600;line-height:1.3;color:var(--navy);
+    background:var(--paper);border:1px solid var(--line);border-radius:4px;overflow-wrap:anywhere;}
+  .pf-chips li.out{font-weight:500;color:var(--slate);background:var(--card);border-style:dashed;}
+  /* One box a week. It stands beside the words under it and says nothing they
+     don't (aria-hidden): a week the words flag is brick, a clear week green,
+     and the label sits under the weeks it names. */
+  .pf-strip{display:grid;grid-template-columns:repeat(var(--weeks,10),minmax(0,1fr));gap:3px;
+    margin-top:12px;}
+  .pf-weekbox{display:flex;align-items:center;justify-content:center;height:30px;border-radius:4px;
+    font-family:var(--display);font-weight:700;font-size:14px;line-height:1;
+    font-variant-numeric:tabular-nums;color:#14502E;background:var(--turf-tint);}
+  .pf-weekbox.hit{color:#FFFFFF;background:var(--brick);}
+  .pf-po{grid-row:2;border-top:2px solid var(--flag);padding-top:3px;text-align:center;
+    font-family:var(--display);font-weight:700;font-size:12px;line-height:1.1;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--slate);white-space:nowrap;overflow:hidden;}
+  .pf-hits{list-style:none;display:grid;gap:8px;margin-top:12px;}
+  .pf-hits li{padding:9px 12px;font-size:15px;line-height:1.45;color:#7A2C1F;background:var(--brick-tint);
+    border-radius:8px;}
+  .pf-outs{list-style:none;display:grid;gap:4px;margin-top:8px;font-size:15px;line-height:1.45;
+    color:var(--ink2);}
+  .pf-outs b{color:var(--navy);}
+  /* Card 01's look, with nothing decided in it: rows by position, every
+     eligible name in the order pasted, and blurred bars of one fixed width
+     (a longer bar beside one name would read as a ranking). */
+  .pf-lock{margin-top:20px;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:var(--elev-2);}
+  .pf-lockhead{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:11px 16px;background:var(--navy);color:#F6F4EE;font-family:var(--display);font-weight:800;
+    font-size:14px;line-height:1.2;letter-spacing:.08em;text-transform:uppercase;}
+  .pf-lockhead svg{width:12px;height:14px;flex:none;}
+  .pf-lockhead svg rect{fill:var(--flag);}
+  .pf-lockhead svg path{fill:none;stroke:var(--flag);stroke-width:1.6;}
+  .pf-lockrow{display:grid;grid-template-columns:32px minmax(0,1fr) 58px;gap:6px 8px;align-items:center;
+    padding:10px 16px;background:var(--paper);border-top:1px solid var(--line);}
+  .pf-lockhead + .pf-lockrow{border-top:0;}
+  .pf-lockpos{font-family:var(--display);font-weight:800;font-size:12px;line-height:1.2;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--slate);}
+  .pf-locknames{font-size:14px;font-weight:600;line-height:1.4;color:var(--navy);overflow-wrap:anywhere;}
+  .pf-bar{display:grid;gap:5px;justify-items:end;}
+  .pf-bar i{display:block;height:8px;border-radius:4px;background:#C7BFAB;filter:blur(2.5px);}
+  .pf-bar i:first-child{width:56px;}
+  .pf-bar i:last-child{width:32px;background:var(--flag);}
+  .pf-lockline{padding:11px 16px;font-size:14px;font-weight:600;line-height:1.45;color:var(--navy);
+    background:var(--flag-tint);border-top:1px solid var(--line);}
+  /* The one entrance, once: blocks rise 300ms each, 80ms apart, the weeks fill
+     left to right, all over inside 1.5s of the press (--pf-start waits for the
+     roster's own cascade). drawPayoff sets .play; nothing here loops. */
+  #payoff.play{--pf-start:.4s;}
+  #payoff.play .pf-rise{animation:pfrise .3s var(--ease-out) both;
+    animation-delay:calc(var(--pf-start) + var(--i,0) * 80ms);}
+  #payoff.play .pf-weekbox{animation:pffill .2s var(--ease-out) both;
+    animation-delay:calc(var(--pf-start) + 280ms + var(--w,0) * var(--pf-step,30ms));}
+  #payoff.play .pf-po{animation:pfrise .3s var(--ease-out) both;
+    animation-delay:calc(var(--pf-start) + 520ms);}
+  @keyframes pfrise{from{opacity:0;transform:translateY(12px);}}
+  @keyframes pffill{from{opacity:0;transform:scale(.6);}}
+  /* Step 3: what they get first, then what the button does. */
+  .value-line{margin:0 0 4px;font-size:17px;font-weight:700;line-height:1.4;color:var(--navy);}
+  .see-real{display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:6px;
+    font-size:15px;font-weight:600;color:var(--navy);text-decoration:underline;text-underline-offset:3px;
+    text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);}
+  .see-real:hover{color:var(--brick);}
+  .see-real[hidden]{display:none;}
+  #submit{padding-top:12px;padding-bottom:12px;line-height:1.15;text-wrap:balance;}
+  @media (max-width:600px){
+    .pf-top{padding:16px 16px 18px;}
+    .pf-body{padding:0 16px 20px;}
+    .pf-stat b{font-size:40px;}
+    .pf-stats{gap:10px 20px;}
+    .pf-lockrow,.pf-lockhead,.pf-lockline{padding-left:12px;padding-right:12px;}
+    .pf-lockrow{grid-template-columns:30px minmax(0,1fr) 44px;}
+    .pf-bar i:first-child{width:44px;}
+    .pf-bar i:last-child{width:26px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    #payoff.play .pf-rise,#payoff.play .pf-weekbox,#payoff.play .pf-po{animation:none!important;}
+  }
   /* ---- paper pages: one depth, one focus ring, one button feel ----
      Identical on join/, join/confirm, how-it-works, thanks, 404 and compare/
      (tests/test_polish_pages.py compares them), and last in the sheet, so a
@@ -562,6 +665,11 @@ Baltimore Ravens
     <div id="rows"></div>
   </section>
 
+  <!-- The climax of the check: drawn by drawPayoff from this roster, the chosen
+       lineup and the published schedule, as text nodes only. A fact panel: nothing
+       here is a projection, a pick or a ranking, and nothing is recorded. -->
+  <section id="payoff" class="hidden"></section>
+
   <section id="step-email" class="hidden">
     <!-- The step's name, like the progress bar's; the field below carries its
          own label. "Where do reports go?" over "Where reports go" said it
@@ -570,6 +678,7 @@ Baltimore Ravens
          keeps this heading: the seat flow's copy is the WORKER's (contract C3). -->
     <div class="eyebrow" id="step3-head">3 · Where do reports go?</div>
     <div class="note" id="seat-share" style="display:none"></div>
+    <p class="value-line" id="value-line" hidden></p>
     <form id="form-email" novalidate>
       <div class="optlabel" id="lbl-plan" style="display:none">Your plan</div>
       <!-- autocomplete=off: a browser restoring form state on Back would
@@ -586,7 +695,9 @@ Baltimore Ravens
       your first weekly report's week kicks off (or a week after it reaches you, if
       we send it late). One per person, and a second purchase after a refund is final.</p>
       <p class="terms-line" id="mail-line" hidden></p>
+      <p class="terms-line" id="list-line" hidden></p>
       <button id="submit" type="submit">Continue to checkout — $29</button>
+      <a class="see-real" id="see-real" href="../sample-report.html" hidden>See a real report</a>
       <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
       <!-- The address, read back before it is locked at Stripe
            (locked_prefilled_email) — a typo there was a paid pass and an
@@ -682,6 +793,10 @@ Baltimore Ravens
   </div>
 </footer>
 <script src="roster.js?v=090a3d4026"></script>
+<!-- The bye rule, the planner's own copy (held equal to the Python by
+     tests/test_polish_tool.py): the panel after a check reuses it, and a page
+     where it failed to load simply leaves the byes out. -->
+<script src="../byes/byes.js?v=6659b2280e"></script>
 <!-- DOMAIN_FIXES and suggestedEmail, shared with the landing's waitlist (FUN-5). -->
 <script src="/email-check.js?v=2e2f372017"></script>
 <script>
@@ -930,8 +1045,13 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // ``stale``: the box was typed in since the list on screen was read from it.
 // ``listed``: the launch list already has this visitor's email (one row a visit).
 // ``defensesOk``: the defense count the buyer confirmed as all theirs (BE-D1).
+// ``checked``: "Check my roster" has been pressed (a roster restored from the
+// address, or built by type-to-add, has not). ``payoffPlayed``: the panel's one
+// entrance is spent. ``freshCheck``: this draw comes from that press.
 const state = { directory: null, matches: [], ready: false, dirFailed: false,
-                dirLoading: false, stale: false, listed: false, defensesOk: null };
+                dirLoading: false, stale: false, listed: false, defensesOk: null,
+                byes: null, week: null, checked: false, freshCheck: false,
+                payoffPlayed: false };
 
 function radio(name) {
   const picked = document.querySelector(`input[name="${name}"]:checked`);
@@ -1120,7 +1240,10 @@ $("resolve").addEventListener("click", () => {
   const rows = $("rows");
   rows.classList.add("fresh");
   setTimeout(() => rows.classList.remove("fresh"), 900);
+  state.checked = true;
+  state.freshCheck = true;
   draw();
+  state.freshCheck = false;
 });
 
 // An edit AFTER "Check my roster" makes the checked list stale, and encoding
@@ -1135,6 +1258,7 @@ $("roster-text").addEventListener("input", () => {
   state.stale = true;
   state.ready = false;
   $("step-email").classList.add("hidden");
+  drawPayoff();
   const tally = $("tally");
   tally.className = "tally bad";
   tally.textContent = 'Your roster changed — hit "Check my roster" again.';
@@ -1164,7 +1288,7 @@ function draw(focusAt) {
   closeEmailCheck();
   const list = $("rows");
   list.replaceChildren();
-  if (!state.matches.length) { $("tally").textContent = ""; return; }
+  if (!state.matches.length) { $("tally").textContent = ""; drawPayoff(); return; }
   const wrap = document.createElement("div");
   wrap.className = "rows";
 
@@ -1322,8 +1446,11 @@ function draw(focusAt) {
       (unique.length ? ", or pick “No " + unique.join("” and “No ") + "” above if your " +
         "league doesn't start one" : "") + ". You can still carry on.";
   } else {
-    tally.textContent = ids.length + " players read, " + slots.length + " starting spots. Looks right.";
+    tally.textContent = ids.length + " players read, " + slots.length + " starting spots." +
+      (payoffShows() ? " " + (SALES_PANEL ? "Here's what that means for your team."
+                                          : "Here's what's ahead for your team.") : "");
   }
+  drawPayoff();
   $("step-email").classList.toggle("hidden", !state.ready);
   $("resolve").classList.toggle("is-done", state.ready);
   keepInAddress();
@@ -1381,6 +1508,349 @@ function emptySpotWords(empty) {
   return parts.length < 2 ? parts.join("")
     : parts.slice(0, -1).join(", ") + " or " + parts[parts.length - 1];
 }
+
+// ---- the payoff: what the check found --------------------------------------
+// THE HARD RULE: facts about this roster, from the roster, the lineup chosen
+// above, site/join/byes.json and today's date. No projection, no percentage, no
+// recommendation, no ordering of anybody's players, nothing that needs the
+// model, and nothing recorded. Names stay in the order they were entered, so no
+// list here can read as a preference. An absence is never a zero: without
+// byes.json the panel simply has no byes section and no reserve marks.
+//
+// The panel's parts, by visit: a purchase gets all of them; a seat and a roster
+// update, who are buying nothing, get the byes and who can't play.
+const SALES_PANEL = !SEAT_MODE && !UPDATE_MODE;
+const PF_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+
+function panelNode(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function fieldPosition(position) { return position === "FB" ? "RB" : position; }
+// The reserve list for this visit, or nothing known: byes.json carries it.
+function reserveList() { return (state.byes && state.byes.out) || {}; }
+
+// Positions with a real choice in them. A position has one when somebody at it
+// can sit without emptying a spot: tried by taking one player away and seating
+// the rest with emptySpots, the same rule the tally counts spots with. So two
+// tight ends with nobody else to fill FLEX is no choice, and four receivers on
+// a roster short a running back is one. On the reserve list = not an option,
+// shown marked and left out of the count.
+function contestedCalls(players, slots, out) {
+  const able = players.filter((p) => !out[p.id]);
+  const seats = able.map((p) => fieldPosition(p.position));
+  const emptyNow = emptySpots(slots, seats).length;
+  const calls = [];
+  PF_POSITIONS.forEach((position) => {
+    const at = seats.indexOf(position);
+    const spots = slots.filter((slot) => slot === position).length;
+    const flex = slots.filter((slot) => (SLOT_TAKES[slot] || []).includes(position));
+    if (at < 0 || !(spots || flex.length)) return;      // nobody here, or no such spot
+    const without = seats.slice();
+    without.splice(at, 1);
+    if (emptySpots(slots, without).length !== emptyNow) return;
+    const count = able.filter((p) => fieldPosition(p.position) === position).length;
+    calls.push({
+      position,
+      words: count + (count === 1 ? " player, " : " players, ") +
+        spots + (spots === 1 ? " spot" : " spots") +
+        (flex.length ? " plus " + lineupWords(flex) : ""),
+      names: players.filter((p) => fieldPosition(p.position) === position)
+        .map((p) => ({ name: p.name, out: out[p.id] || "" })),
+    });
+  });
+  return calls;
+}
+
+// Rows of the locked preview: a position the lineup uses, and every player who
+// could fill it, in the order entered. Never a seat.
+function lockedRows(players, slots, out) {
+  return PF_POSITIONS.map((position) => ({
+    position,
+    names: players.filter((p) => !out[p.id] && fieldPosition(p.position) === position)
+      .map((p) => p.name),
+    used: slots.some((slot) => slot === position ||
+                               (SLOT_TAKES[slot] || []).includes(position)),
+  })).filter((row) => row.used && row.names.length)
+    .map((row) => ({ position: row.position, names: row.names }));
+}
+
+// The week a buyer's lineups start and how many are left to a Week 17 title
+// game: the landing's season clock, on the same file (week.json), with the same
+// rules. Null when the file can't say: a stale build names no count.
+function lineupsAhead(w, now, open) {
+  if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return null;
+  const phase = w.phase || "season";
+  if (phase !== "season" && phase !== "preseason") return null;
+  if (!/^\d{4}-\d\d-\d\d$/.test(w.lands_on || "")) return null;
+  const ahead = new Date(w.lands_on + "T23:59:59") - now;
+  if (!(ahead >= 0 && ahead <= 8 * 864e5)) return null;
+  const kicked = !!w.first_kickoff && now.getTime() >= Date.parse(w.first_kickoff);
+  const sameDay = phase === "season" && w.week > 1 && !kicked;
+  const next = phase === "preseason" ? w.week : open && sameDay ? w.week : w.week + 1;
+  const toTitle = 17 - next + 1;
+  return toTitle >= 1 ? { next, left: toTitle } : null;
+}
+
+// byes.js decides everything here: its describe() and byeCollisions() are the
+// planner's, held equal to the weekly report's rule by test. ``start`` moves the
+// plan's first week up to the first lineup still ahead, so the boxes and the
+// count of lineups agree; describe() reads that from a date in the week.
+function byePlan(players, slots, byes, todayIso, start) {
+  const rows = B.rosterRows(players, byes);
+  const current = B.currentWeek(byes, todayIso);
+  const first = start && current !== null && start > current
+    ? byes.weeks.find((w) => w.week === start) : null;
+  const plan = B.describe(rows, slots, byes, first ? first.ends : todayIso);
+  return { plan, hits: plan.kind === "plan" ? B.byeCollisions(rows, slots, plan.holes) : [] };
+}
+// "Week 13: nobody left for QB. Josh Allen is on bye."
+function byeHitWords(hit, row) {
+  const tag = row && row.tag ? ", " + row.tag.replace("*", "").toLowerCase() : "";
+  const out = hit.out.length ? " " + B.joinWords(hit.out) + " can't cover." : "";
+  return "Week " + hit.week + tag + ": nobody left for " + B.slotWords(hit.slots) + ". " +
+    B.joinWords(hit.short) + (hit.short.length === 1 && hit.slots[0] !== "DEF" ? " is" : " are") +
+    " on bye." + out;
+}
+
+function panelBlock(index, title) {
+  const block = panelNode("div", "pf-block pf-rise");
+  block.style.setProperty("--i", index);
+  block.appendChild(panelNode(SALES_PANEL ? "h3" : "h2", "pf-h", title));
+  return block;
+}
+
+function callsBlock(index, players, slots, out) {
+  const block = panelBlock(index, "The calls on your team");
+  const calls = contestedCalls(players, slots, out);
+  block.appendChild(panelNode("p", "pf-lead", !calls.length
+    ? "Everyone who can play starts, so no position has a choice to make right now."
+    : WANTS_PASS ? "Every manager's report decides these for their own team, every week. These are yours."
+    : "Your Tuesday report decides these for your team, every week."));
+  if (!calls.length) return block;
+  const list = panelNode("ul", "pf-calls");
+  calls.forEach((call) => {
+    const item = panelNode("li");
+    const what = panelNode("p", "pf-what");
+    what.append(panelNode("b", "", call.position + ":"), " " + call.words);
+    const names = panelNode("ul", "pf-chips");
+    call.names.forEach((n) => {
+      names.appendChild(panelNode("li", n.out ? "out" : "", n.name + (n.out ? " · " + n.out : "")));
+    });
+    item.append(what, names);
+    list.appendChild(item);
+  });
+  block.appendChild(list);
+  return block;
+}
+
+// The strip repeats the words beneath it, so it is hidden from a screen reader.
+function byeStrip(plan) {
+  const strip = panelNode("div", "pf-strip");
+  strip.setAttribute("aria-hidden", "true");
+  strip.style.setProperty("--weeks", plan.weeks.length);
+  strip.style.setProperty("--pf-step", Math.min(40, Math.round(320 / plan.weeks.length)) + "ms");
+  plan.weeks.forEach((row, i) => {
+    const box = panelNode("span", "pf-weekbox" + (row.kind === "empty" ? " hit" : ""), String(row.week));
+    box.style.setProperty("--w", i);
+    strip.appendChild(box);
+  });
+  const playoffs = plan.weeks.map((row, i) => (row.playoff ? i : -1)).filter((i) => i >= 0);
+  if (playoffs.length) {
+    const label = panelNode("span", "pf-po", "Playoffs");
+    label.style.gridColumn = (playoffs[0] + 1) + " / span " + playoffs.length;
+    strip.appendChild(label);
+  }
+  return strip;
+}
+
+function byesBlock(index, players, slots, start) {
+  const { plan, hits } = byePlan(players, slots, state.byes,
+                                 new Date().toISOString().slice(0, 10), start);
+  if (plan.kind === "over") return null;
+  const block = panelBlock(index, "Byes ahead");
+  block.appendChild(panelNode("p", "pf-lead", plan.summary));
+  if (plan.kind !== "plan") return block;
+  block.appendChild(byeStrip(plan));
+  if (hits.length) {
+    const list = panelNode("ul", "pf-hits");
+    hits.forEach((hit) => {
+      list.appendChild(panelNode("li", "",
+        byeHitWords(hit, plan.weeks.find((row) => row.week === hit.week))));
+    });
+    block.appendChild(list);
+  }
+  if (plan.thin) block.appendChild(panelNode("p", "pf-lead", plan.thin));
+  if (plan.footnote) block.appendChild(panelNode("p", "pf-fine", plan.footnote.replace("*", "")));
+  return block;
+}
+
+function outBlock(index, players, out) {
+  const gone = players.filter((p) => out[p.id]);
+  if (!gone.length) return null;
+  const block = panelBlock(index, "Can't play right now");
+  const list = panelNode("ul", "pf-outs");
+  gone.forEach((p) => {
+    const item = panelNode("li");
+    item.append(panelNode("b", "", p.name), ": " + out[p.id]);
+    list.appendChild(item);
+  });
+  const asOf = B.etDay(state.byes.reserve_as_of || state.byes.generated);
+  block.append(list, panelNode("p", "pf-fine",
+    "Reserve-list status as of " + (asOf || "the latest update") + " (nflverse)."));
+  return block;
+}
+
+const PF_SVG = "http://www.w3.org/2000/svg";
+function lockIcon() {
+  const icon = document.createElementNS(PF_SVG, "svg");
+  icon.setAttribute("viewBox", "0 0 12 14");
+  icon.setAttribute("aria-hidden", "true");
+  const shackle = document.createElementNS(PF_SVG, "path");
+  shackle.setAttribute("d", "M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6");
+  const body = document.createElementNS(PF_SVG, "rect");
+  [["x", "1"], ["y", "6"], ["width", "10"], ["height", "7.5"], ["rx", "1.5"]]
+    .forEach(([name, value]) => body.setAttribute(name, value));
+  icon.append(shackle, body);
+  return icon;
+}
+
+// What the report fills in, on this roster's real names, with nothing filled
+// in. No digit and no percentage reaches the page, not even blurred: the bars
+// are empty elements.
+function lockedPreview(index, players, slots, out) {
+  const block = panelNode("div", "pf-block pf-rise");
+  block.style.setProperty("--i", index);
+  const card = panelNode("div", "pf-lock");
+  const head = panelNode("div", "pf-lockhead");
+  head.append(panelNode("span", "", "Your Lineup, Decided"), lockIcon());
+  card.appendChild(head);
+  lockedRows(players, slots, out).forEach((row) => {
+    const line = panelNode("div", "pf-lockrow");
+    const bars = panelNode("span", "pf-bar");
+    bars.setAttribute("aria-hidden", "true");
+    bars.append(panelNode("i"), panelNode("i"));
+    line.append(panelNode("span", "pf-lockpos", row.position),
+                panelNode("span", "pf-locknames", row.names.join(" · ")), bars);
+    card.appendChild(line);
+  });
+  card.appendChild(panelNode("p", "pf-lockline", WANTS_PASS
+    ? "Locked until you join. Each manager's report fills this in for their own team, every Tuesday."
+    : "Locked until you join. Your report fills this in every Tuesday: who starts at every spot, with the close calls explained."));
+  block.appendChild(card);
+  return block;
+}
+
+function payoffTop(count, spots, ahead) {
+  const top = panelNode("div", "pf-top pf-rise");
+  const stats = panelNode("div", "pf-stats");
+  const stat = (number, words, className) => {
+    const box = panelNode("div", "pf-stat" + (className ? " " + className : ""));
+    box.append(panelNode("b", "", String(number)), words);
+    stats.appendChild(box);
+  };
+  stat(count, "players");
+  stat(spots, "starting spots");
+  if (ahead) {
+    stat(ahead.left, (ahead.left === 1 ? "lineup" : "lineups") + " left to a Week 17 title game",
+         "left");
+  }
+  top.append(panelNode("h2", "", "Your team from here"), stats);
+  return top;
+}
+
+// Whether a checked roster gets a panel at all on this visit. Once the season
+// is over there is nothing to look ahead to, and the free report keeps its own
+// short path.
+function payoffShows() {
+  if (!state.ready || state.stale || !state.matches.length || TRY_MODE || seasonOver()) return false;
+  return SALES_PANEL || Boolean(window.B && state.byes);
+}
+
+function countUp(node, to) {
+  const delay = 400, span = 420, began = performance.now();
+  node.textContent = "0";
+  const tick = (time) => {
+    const done = Math.min(1, Math.max(0, (time - began - delay) / span));
+    node.textContent = String(Math.round(to * (1 - Math.pow(1 - done, 3))));
+    if (done < 1 && node.isConnected) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  // A frame the browser never paints (a hidden tab) must not strand the number.
+  setTimeout(() => { node.textContent = String(to); }, delay + span + 60);
+}
+
+// Off screen after a real check, the panel is brought up gently, once, after
+// the rows have landed. Focus never moves: the tally keeps role=status.
+function bringPayoffIntoView(reduced) {
+  const top = $("payoff").getBoundingClientRect().top;
+  if (top >= 0 && top <= window.innerHeight * 0.7) return;
+  window.scrollTo({ top: top + window.scrollY - 16, behavior: reduced ? "auto" : "smooth" });
+}
+
+// Every draw rebuilds the panel at rest; only the first time it appears after a
+// press of "Check my roster" does it run its entrance, and only that press
+// scrolls. So a remove, a re-check or a changed setting redraws still, and a
+// roster restored from the address arrives complete.
+let payoffClock = 0;
+function drawPayoff() {
+  const panel = $("payoff");
+  clearTimeout(payoffClock);
+  panel.classList.remove("play");
+  panel.replaceChildren();
+  const shows = payoffShows();
+  panel.classList.toggle("hidden", !shows);
+  if (!shows) return;
+  const players = state.matches.map((m) => m.player);
+  const slots = template();
+  const out = window.B ? reserveList() : {};
+  const ahead = SALES_PANEL ? lineupsAhead(state.week, new Date(), canStartToday()) : null;
+  const body = panelNode("div", "pf-body");
+  const blocks = [];
+  panel.setAttribute("aria-label", SALES_PANEL ? "Your team from here" : "Your team ahead");
+  if (SALES_PANEL) {
+    panel.appendChild(payoffTop(players.length, slots.length, ahead));
+    blocks.push(callsBlock(1, players, slots, out));
+  }
+  if (window.B && state.byes) {
+    blocks.push(byesBlock(2, players, slots, ahead && ahead.next));
+    blocks.push(outBlock(3, players, out));
+  }
+  if (SALES_PANEL) blocks.push(lockedPreview(4, players, slots, out));
+  body.append(...blocks.filter(Boolean));
+  panel.appendChild(body);
+
+  const reduced = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (state.checked && !state.payoffPlayed) {
+    state.payoffPlayed = true;
+    if (!reduced) {
+      panel.classList.add("play");
+      payoffClock = setTimeout(() => panel.classList.remove("play"), 1500);
+      const number = panel.querySelector(".pf-stat b");
+      if (number) countUp(number, players.length);
+    }
+    if (state.freshCheck) setTimeout(() => bringPayoffIntoView(reduced), 400);
+  }
+}
+
+// The schedule and reserve list, for the panel. Loaded up front so a check can
+// use them at once; a failed read leaves them out and the panel says nothing
+// about byes (never "no byes").
+function loadByes() {
+  if (!window.B || TRY_MODE || !window.fetch) return;
+  fetch("byes.json", { signal: (window.AbortSignal && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined) })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((byes) => {
+      if (!byes || !Array.isArray(byes.weeks)) return;
+      state.byes = byes;
+      drawPayoff();
+    })
+    .catch(() => {});
+}
+loadByes();
 
 $("defenses-ok").addEventListener("click", () => {
   state.defensesOk = state.matches.filter((m) => m.player && m.player.position === "DEF").length;
@@ -2171,9 +2641,33 @@ function closedLabel(action) {
   if (action === "switch") {
     return "Switch to " + (monthlyChosen ? "the season pass" : "monthly") + " — open now";
   }
-  if (action === "list") return "Email me when checkout opens";
-  if (action === "mail") return "Tell me when it opens";
+  // Past the season there is no roster to keep: only the note that it opened.
+  if (action === "list" || action === "mail") {
+    if (FIRST && FIRST.when === "over") return "Tell me when it opens";
+    // The mail route saves nothing until they send it, so the label says how.
+    return action === "mail" ? "Save my team by email" : "Save my team and tell me when it opens";
+  }
   return closedChipText();
+}
+// Step 3 leads with what they get, and while checkout is closed it is a next
+// step, not a refusal: "Save your team". ``step3Action`` is closedAction's for
+// the plan on screen, or "open"; only "list" and "mail" can save anything.
+let step3Action = "open";
+function drawStep3() {
+  if (SEAT_MODE || UPDATE_MODE || TRY_MODE) return;
+  const saves = !seasonOver() && (step3Action === "list" || step3Action === "mail");
+  if (!MONTHLY_OFFERED) {
+    const name = saves ? "3 · Save your team" : "3 · Checkout";
+    $("step3-head").textContent = name;
+    document.querySelector(".progress .s3").textContent = name;
+  }
+  const value = $("value-line");
+  value.textContent = WANTS_PASS
+    ? "Your whole league, every lineup from now to the title game. $69, one payment."
+    : "Every lineup from now to your title game. " +
+      (PLAYOFF_ACTIVE ? "$19" : "$29") + ", one payment.";
+  value.hidden = seasonOver() || monthlyChosen;
+  $("see-real").hidden = step3Action === "open";
 }
 // The note at the top, pointing only at something that exists: the button at
 // step 3 (the list when it is connected, a request by email until then) or the
@@ -2252,6 +2746,14 @@ function noteClosedFor(link, other) {
   const mailLine = $("mail-line");
   mailLine.textContent = action === "mail" ? mailLineWords() : "";
   mailLine.hidden = action !== "mail";
+  // The list's own line: what the press will do, said before it is pressed.
+  const listLine = $("list-line");
+  listLine.textContent = action === "list" && !listed && !seasonOver()
+    ? "Press below and we'll keep your email and this roster, and send one email " +
+      "the morning it opens, with a link that brings your roster back." : "";
+  listLine.hidden = !listLine.textContent;
+  step3Action = action;
+  drawStep3();
   $("submit").disabled = listed;
   $("submit").classList.toggle("is-closed", action === "none");
   $("submit").setAttribute("aria-disabled", action === "none" || listed ? "true" : "false");
@@ -2508,6 +3010,7 @@ function switchPlan() {
 }
 // A plan that takes money names its step 3 as the progress bar does (D14).
 if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) $("step3-head").textContent = "3 · Checkout";
+drawStep3();
 if (MONTHLY_OFFERED && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   $("lbl-plan").style.display = "block";
   $("lbl-email").style.display = "block";
@@ -2601,6 +3104,7 @@ drawFirst();
       .then((r) => (r.ok ? r.json() : null))
       .then((w) => {
         const now = new Date();
+        state.week = w;
         if (TRY_MODE) { TRIAL = trialTiming(w, now); drawTrial(); return; }
         FIRST = seasonClosed(w, now) ? { when: "over" } : firstReportTiming(w, now);
         drawFirst();
@@ -2615,6 +3119,7 @@ drawFirst();
             (w.phase === undefined || w.phase === "season") && landsEnd && now < landsEnd &&
             firstWeek >= PLAYOFF_FROM_WEEK) {
           PLAYOFF_ACTIVE = true;
+          drawStep3();
           const terms = "The Playoff Pass is $19, one payment: nothing renews and " +
             "nothing more is charged. Refunds are no-questions until your first " +
             "weekly report's week kicks off (or a week after it reaches you, if " +
@@ -2650,6 +3155,7 @@ drawFirst();
           noteClosedFor("", "");
         }
       })
+      .then(drawPayoff)
       .catch(() => {});
   } catch (e) { /* the sentence true either way stays */ }
 })();

@@ -3980,13 +3980,13 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     assert got == [
         ["switch", "Switch to monthly — open now"],
         ["switch", "Switch to the season pass — open now"],
-        ["list", "Email me when checkout opens"],
-        ["mail", "Tell me when it opens"],
+        ["list", "Save my team and tell me when it opens"],
+        ["mail", "Save my team by email"],
         ["none", "Rest-of-Season Pass opens soon"],
         ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
         ["none", "League Pass opens soon"],
-        ["list", "Email me when checkout opens"],
-        ["mail", "Tell me when it opens"],
+        ["list", "Save my team and tell me when it opens"],
+        ["mail", "Save my team by email"],
         ["none", "League Pass opens soon"],
     ]
     code = _js_code(JOIN)
@@ -4215,7 +4215,7 @@ def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
     guard = draw.split("defenses > 2")[1].split("} else if")[0]
     assert "state.defensesOk !== defenses" in draw
     assert "did some come from a" in prose(guard) and 'confirm.style.display = "block"' in guard
-    assert draw.index("defenses > 2") < draw.index("Looks right")
+    assert draw.index("defenses > 2") < draw.index('" players read, "')
 
 
 def test_seat_links_name_their_pass_and_bring_their_settings() -> None:
