@@ -1557,6 +1557,11 @@ player's name (tested), and an unknown line still comes back to the buyer (RULE 
 reads through `resolve_all` now: line by line it refused 5 of 9 formats. If that test file skips,
 it has checked nothing; its skip reads the same cached file the build does.
 
+**A sample page never offers a phone a link to itself (Oct 30 2026).** A phone's bar keeps one route;
+`site_bar(current="sample-report.html")` makes that route Pricing there, `make sample` passes it and
+`restamp_chrome` keeps it. Section heads have no period and the two slogans do (D16): that mix is the
+rule, not a slip.
+
 **Rows without odds read as decisions; a phone meets the report first (owner review, Oct 30
 2026).** Odds never move, and 3 of 9 is typical (874 odds across 240 rosters, about 3.6 a report),
 so the sample stays. The words changed: `render.report.only_option` ("your only QB"; "no other RB

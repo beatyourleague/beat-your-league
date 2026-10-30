@@ -118,7 +118,9 @@ def test_every_published_sample_carries_the_sites_nav_and_day_one_line(name: str
     either/or "lands the day you join: this week's lineup, or your roster
     report if …" sentence, nor "scored your league's way" (INFO-113)."""
     page = _page(name)
-    assert rr.site_bar(uid="bylm") in page, f"{name}'s nav is not the site's — {_fix(name)}"
+    bar = rr.site_bar(uid="bylm", current="sample-report.html" if name == "sample-report.html"
+                      else None)
+    assert bar in page, f"{name}'s nav is not the site's — {_fix(name)}"
     assert 'class="home"' not in page
     card = page.split('<div class="ctacard"><p>', 1)[1].split("</p>", 1)[0]
     assert rr.esc(rr.JOIN_PROMISE) in card, f"{name}'s closing promise is stale — {_fix(name)}"
@@ -820,3 +822,16 @@ def test_the_league_pass_stack_is_three_real_reports() -> None:
     assert not any(re.search(r"\b(opacity|width|height|left|top):", line)
                    for line in fan if ":not(.in)" in line and "[data-reveal]" not in line)
     assert "transition:transform .5s" in css
+
+
+def test_the_sample_never_offers_a_phone_a_link_to_itself() -> None:
+    """A phone's bar keeps one route, and on the sample that route was "See a real
+    report": the page being read (review, Oct 30 2026). There it is Pricing."""
+    bar = rr.site_bar(uid="bylm", current="sample-report.html")
+    own = re.search(r'<a[^>]*href="sample-report\.html"[^>]*>', bar).group(0)
+    assert 'class="hidesm"' in own and 'aria-current="page"' in own
+    pricing = re.search(r'<a[^>]*href="index\.html#pricing"[^>]*>', bar).group(0)
+    assert "hidesm" not in pricing
+    plain = rr.site_bar(uid="bylm")
+    assert "hidesm" not in re.search(r'<a[^>]*href="sample-report\.html"[^>]*>', plain).group(0)
+    assert "hidesm" in re.search(r'<a[^>]*href="index\.html#pricing"[^>]*>', plain).group(0)

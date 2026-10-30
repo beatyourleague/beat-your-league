@@ -537,6 +537,9 @@
     max-width:320px;text-wrap:balance;}
   .realtag b{color:var(--flag);font-weight:700;}
   .realtag .nw{white-space:nowrap;}
+  /* Beside the pause toggle a small phone can't hold it on one line: two lines,
+     and no line starts with a stray dot. */
+  @media (max-width:359px){.realtag .sep{display:none;}.realtag .nw{display:block;}}
   /* This week's live report, as prominent as is honest (review M4): shown
      only in a week the Tuesday build says it carries 3+ odds and a closest
      call, labelled with the week and the day it was built. A TEXT link with a
@@ -1291,7 +1294,7 @@
          sample is the hero's "See a real report"; the toggle stops and
          restarts the phone's storyline (WCAG 2.2.2) and shows once that plays. -->
     <div class="realrow">
-    <p class="realtag"><b>2024 sample report</b> · <span class="nw">Week 10, replayed</span></p>
+    <p class="realtag"><b>2024 sample report</b><span class="sep"> · </span><span class="nw">Week 10, replayed</span></p>
     <button type="button" class="storytoggle" id="story-toggle" aria-pressed="false" aria-label="Pause the phone animation"><svg class="pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="2.8" height="9" rx=".8"/><rect x="7.2" y="1.5" width="2.8" height="9" rx=".8"/></svg><svg class="play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.4 6z"/></svg></button>
     </div>
   </div>

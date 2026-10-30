@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 from engine.subscriber import RosterSpec
-from render.report import TEMPLATE_PATH, render
+from render.report import TEMPLATE_PATH, render, site_bar
 from run.solo import CACHE_DIR, SoloError, load_week_data, report_for
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -101,6 +101,9 @@ def page(report: dict) -> str:
     from render.live_sample import (clock_hints, show_planner_line, with_planner_line,
                                     with_via_carry)
     page = with_via_carry(render(report, TEMPLATE_PATH.read_text(encoding="utf-8")))
+    if (report.get("meta") or {}).get("week") != 1:   # the first-week page links this one
+        page = page.replace(site_bar(uid="bylm"),
+                            site_bar(uid="bylm", current="sample-report.html"))
     return with_planner_line(page, show_planner_line(*clock_hints()))
 
 

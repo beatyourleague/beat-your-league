@@ -1116,7 +1116,9 @@ def restamp_chrome(page: str, *, byes_left: bool | None = None,
     every odds whose game has started. Idempotent."""
     from render.report import (JOIN_PROMISE, cancel_html, sample_cta, site_bar,
                                stop_route, with_counter)
-    page = _SITEBAR.sub(lambda _m: site_bar(uid="bylm"), page)
+    page = _SITEBAR.sub(lambda m: site_bar(
+        uid="bylm", current="sample-report.html"
+        if 'sample-report.html" aria-current' in m.group(0) else None), page)
     # A page restamp_last already marked as an OVER season's last report
     # keeps its closed asks: checkout is closed once the season is over (D9),
     # whatever the landing's flag says, and the card beneath them says

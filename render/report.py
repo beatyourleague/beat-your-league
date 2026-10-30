@@ -950,10 +950,14 @@ def site_bar(prefix: str = "", home: str | None = None, current: str | None = No
     # beside Pricing and, like it, leaves the bar on a phone. Four routes and
     # the lockup don't fit below 720px, so How it works goes first (measured:
     # terms and the 404 ran 32-49px past their bar at 600px).
+    # A phone keeps one route. On the sample itself that would be a link to the
+    # page you are reading, so there the one route is Pricing.
+    on_sample = current == "sample-report.html"
     routes = (("how-it-works.html", "How it works", "hidesm hidemd"),
-              ("sample-report.html", SITE_NAV_REAL_REPORT, ""),
+              ("sample-report.html", SITE_NAV_REAL_REPORT, "hidesm" if on_sample else ""),
               ("league-pass.html", SITE_NAV_LEAGUE_PASS, "hidesm"),
-              *((("index.html#pricing", "Pricing", "hidesm"),) if pricing else ()))
+              *((("index.html#pricing", "Pricing", "" if on_sample else "hidesm"),)
+                if pricing else ()))
     links = []
     for href, label, hide in routes:
         klass = f' class="{hide}"' if hide else ""
