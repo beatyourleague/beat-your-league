@@ -14,17 +14,19 @@ from __future__ import annotations
 import html
 import json
 import re
+from pathlib import Path
 
 from test_site import LANDING, SAMPLE_REPORT, SITE, _js_function, _node, _style, markup_only
 
 CSS = _style(LANDING)
 BODY = re.sub(r"<!--.*?-->", "", markup_only(LANDING), flags=re.S)
 HERO = BODY.split('<header class="hero">')[1].split("</header>")[0]
-SCREEN = HERO.split('<div class="screen">')[1].split('<div class="phone-floor"')[0]
+SCREEN = HERO.split('<div class="screen"')[1].split('>', 1)[1].split('<div class="phone-floor"')[0]
 LOCK = '<div class="lock"' + HERO.split('<div class="lock"')[1].split('<div class="lk-dark"')[0]
 SCRIPT = "\n".join(re.findall(r"<script>(.*?)</script>", LANDING, re.S))
 CLOCK = LANDING.split("// The season clock.")[1]
 CLOCK_IIFE = CLOCK[CLOCK.index("(function () {"):CLOCK.index("})();") + 5]
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "sample-report-w10.json"
 
 
 def _flat(page: str) -> str:
@@ -80,14 +82,17 @@ def test_the_phone_is_drawn_as_hardware_from_gradients_alone() -> None:
     proof. It is a glass bezel inside a titanium band (a conic sweep, masked
     to a ring), the five buttons a 16 Pro carries, the island's lens, a glass
     sheen and a contact shadow on the floor. All of it is decoration (hidden
-    from assistive tech), and none of it fetches an image."""
+    from assistive tech: the buttons each, the screen whole — the phone is one
+    image with one label), and none of it fetches an image."""
     float_at = HERO.index('<div class="phone-float">')
-    assert float_at < HERO.index('<div class="phone" id="hero-phone">') < \
+    assert float_at < HERO.index('<div class="phone" id="hero-phone"') < \
         HERO.index('<div class="phone-floor" aria-hidden="true"></div>')
     buttons = re.findall(r'<span\s+class="hw hw-([\w-]+)" aria-hidden="true"></span>', HERO)
     assert buttons == ["action", "up", "down", "side", "cam"], buttons
-    assert '<div class="island" aria-hidden="true"><i></i></div>' in HERO
-    assert '<div class="glass" aria-hidden="true"><i></i></div>' in HERO
+    assert re.search(r'<div class="phone" id="hero-phone" role="img" aria-label="[^"]+">', HERO)
+    assert '<div class="screen" aria-hidden="true">' in HERO
+    assert '<div class="island"><i></i></div>' in SCREEN
+    assert '<div class="glass"><i></i></div>' in SCREEN
     assert "max-width:320px" in _rule(".phone-float")
     phone = _rule(".phone")
     radius = int(re.search(r"border-radius:(\d+)px", phone).group(1))
@@ -116,10 +121,13 @@ def test_the_float_lives_on_its_own_wrapper_so_the_tilt_can_own_the_phone() -> N
     assert not re.search(r"\.phone \*\s*\{[^}]*transform", CSS), "a rule un-centres the island"
     for selector in (".island", ".homebar"):
         assert "translateX(-50%)" in _rule(selector)
-    # At 880px and below the phone is 286px, and so is everything centred
-    # with it, or the phone sits left inside a 320px float.
+    # At 880px and below the phone is 286px, and so is its float, or the
+    # phone sits left inside a 320px float. The caption row under it stays
+    # centred but may run wider (review SLEEK-7: held to 286px, the toggle
+    # and its spacer broke the caption mid-phrase at 390).
     narrow = _blocks("@media (max-width:880px)")
-    assert ".hero .phone-float,.hero .realrow{max-width:286px;}" in narrow
+    assert ".hero .phone-float{max-width:286px;}" in narrow
+    assert ".hero .realrow{max-width:100%;}" in narrow
 
 
 def test_the_status_bar_time_is_after_the_tuesday_send() -> None:
@@ -132,7 +140,7 @@ def test_the_status_bar_time_is_after_the_tuesday_send() -> None:
     sends = [(int(h), int(m)) for m, h in re.findall(r'cron: "(\d+) (\d+) \* \* 2"', workflow)]
     assert sends, "no Tuesday cron found in weekly.yml"
     hour, minute = min(sends)
-    shown = re.search(r'<div class="statusbar" aria-hidden="true"><span>(\d+):(\d\d)</span>',
+    shown = re.search(r'<div class="statusbar"[^>]*><span>(\d+):(\d\d)</span>',
                       HERO).groups()
     phone = int(shown[0]) * 60 + int(shown[1])
     for offset in (4, 5):                       # EDT, EST
@@ -147,21 +155,23 @@ def test_the_status_bar_time_is_after_the_tuesday_send() -> None:
 
 def test_every_word_and_figure_on_the_phone_is_already_on_the_record() -> None:
     """LAND-PHONE-STORY: the storyline says nothing the pinned sample does
-    not. The lock screen carries a day, the time, the sender, the inbox
-    preview sentence pinned elsewhere and "now" — nothing else — and every
-    figure anywhere on the screen is one the published 2024 W10 sample
-    prints. The retired banner's element, CSS and keyframes are gone."""
+    not. The lock screen carries a day, the time, the sender, the email's own
+    subject and inbox preview (contract C11: generated from the sample, never
+    typed) and "now" — nothing else — and every figure anywhere on the screen
+    is one the published 2024 W10 sample prints. The retired banner's element,
+    CSS and keyframes are gone, and so is the hand-written peek the screen
+    used to end on."""
+    from render.email import preheader_for, subject_for
+    sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
     words = _flat(LOCK)
-    assert words == ("Tuesday 9:41 Beat Your League Your lineup, decided. Closest call "
-                     "with odds: Kittle over LaPorta, 72%. now"), words
+    assert words == (f"Tuesday 9:41 Beat Your League {subject_for(sample)} "
+                     f"{preheader_for(sample)} now"), words
     flat_sample = _flat(SAMPLE_REPORT)
     for figure in set(re.findall(r"\d+\.\d+|\d+%", _flat(SCREEN))):
         assert figure in flat_sample, f"the phone shows {figure}, which the sample lacks"
-    for gone in ('id="notif"', ".notif", "@keyframes notif", "function arrive("):
+    for gone in ('id="notif"', ".notif", "@keyframes notif", "function arrive(",
+                 'id="hero-peek"', 'class="pk ', ".pk-rise", "st-rise"):
         assert gone not in LANDING, gone
-    # The peek's three parts are grouped so the story can bring each in.
-    peek = HERO.split('id="hero-peek"')[1].split('<div class="lock"')[0]
-    assert re.findall(r'<div class="pk pk-(\w+)">', peek) == ["call", "if", "rise"]
 
 
 def test_the_storyline_runs_on_one_clock_with_transform_and_opacity_only() -> None:
@@ -248,8 +258,10 @@ def test_the_scroll_beat_softens_its_edge_and_skips_a_beat_that_shows_nothing() 
     """LOOK-3: while the story scrolls the email up, it slid under the opaque
     status bar and was cut flat (half a row under 9:41, a half-disc avatar).
     A 16px fade under the bar shows only during that beat (opacity only,
-    invisible at rest), and a beat under 60px — every desktop size, where
-    the whole of Rising roles already fits — is skipped with the fade."""
+    invisible at rest). The beat brings card 02's drivers line to the bottom
+    edge with 3cqw of room above the home indicator (contract B4), never
+    below zero and never past the end of the email; a beat with nothing to
+    bring up is skipped with its fade."""
     edge = _rule(".statusbar::after")
     assert "top:100%" in edge and "opacity:0" in edge and "pointer-events:none" in edge
     assert ".phone.story .statusbar::after{animation:st-edge 16s linear infinite;}" in CSS
@@ -257,10 +269,13 @@ def test_the_scroll_beat_softens_its_edge_and_skips_a_beat_that_shows_nothing() 
     view = _keyframes()["st-view"]
     assert "58.1%,85%{transform:translateY(var(--scroll" in view
     assert _keyframes()["st-edge"] == "0%,52.5%{opacity:0}58.1%,85%{opacity:1}90%,100%{opacity:0}"
-    start = _js_function(LANDING, "storyline").split("const start = () => {")[1].split("\n  };")[0]
-    assert "const flat = px < 60;" in start
-    assert 'setProperty("--scroll", (flat ? 0 : -px) + "px")' in start
-    assert 'heroPhone.classList.toggle("flat", flat)' in start
+    story = _js_function(LANDING, "storyline")
+    measure = story.split("const measure = () => {")[1].split("\n  };")[0]
+    assert '[data-sec="closest"] .drivers' in story
+    assert "screen.clientWidth * 0.03" in measure
+    assert "Math.round(Math.max(0, Math.min(want, end)))" in measure
+    assert 'setProperty("--scroll", -px + "px")' in measure
+    assert 'heroPhone.classList.toggle("flat", px < 1)' in measure
 
 
 def test_no_motion_on_the_landing_touches_a_layout_property() -> None:
@@ -279,8 +294,9 @@ def test_the_storyline_waits_plays_in_view_and_rests() -> None:
     """LAND-PHONE-STORY: the decided report holds the screen first (D3), the
     loop runs only while the phone is in view and the tab is visible, three
     loops then rest, and nothing of it runs under reduced motion or without
-    IntersectionObserver. The scroll beat is measured once, capped, never
-    per frame."""
+    IntersectionObserver. The scroll beat is measured when the story starts
+    and on a resize — from layout offsets, so neither the pointer tilt nor the
+    story's own transform skews it — never per frame."""
     story = _js_function(LANDING, "storyline")
     assert 'if (!heroPhone || reduced || !("IntersectionObserver" in window)) return;' in story
     assert "{ threshold: 0.35 }).observe(heroPhone)" in story
@@ -289,9 +305,12 @@ def test_the_storyline_waits_plays_in_view_and_rests() -> None:
     assert 'classList.toggle("offscreen", !inView)' in story
     assert 'document.addEventListener("visibilitychange", sync)' in story
     assert 'addEventListener("animationiteration"' in story and "++cycles >= 3" in story
+    measure = story.split("const measure = () => {")[1].split("\n  };")[0]
+    assert "offsetTop" in measure and "getBoundingClientRect" not in measure
+    assert "requestAnimationFrame" not in measure
     start = story.split("const start = () => {")[1].split("\n  };")[0]
-    assert start.count("getBoundingClientRect()") == 2 and "* 0.3" in start
-    assert "Math.max(0, Math.min(over, cap))" in start
+    assert start.lstrip().startswith("measure();")
+    assert 'window.addEventListener("resize", measure, { passive: true });' in story
     assert "storyline();" in SCRIPT
 
 
@@ -366,38 +385,41 @@ def test_rest_states_with_no_script_reduced_motion_and_print() -> None:
 
 def test_report_card_bars_fill_by_scale_never_by_width() -> None:
     """LAND-MOTION-COMPLY: play() zeroed every bar's width and wrote it back
-    on timers — a layout per bar per frame of the transition. The markup's
-    width IS the figure and is never written; the bar scales out from the
-    left after its own delay (--bd). Only the print handler sets a width,
-    and print and reduced motion draw every bar full."""
-    play = _js_function(LANDING, "play")
-    assert ".style.width" not in play and 'setProperty("--bd"' in play
-    assert "(0.12 + i * 0.16).toFixed(2)" in play
-    assert 'bar.style.width = "0%"' not in LANDING
-    writes = re.findall(r"\.style\.width = ", SCRIPT)
-    printing = LANDING.split('window.addEventListener("beforeprint"')[1].split("\n});")[0]
-    assert len(writes) == 1 and "bar.style.width = bar.dataset.w" in printing
-    assert ".js .anim [data-w]{transform:scaleX(0);transform-origin:0 50%;" in CSS
-    assert ".js .anim.in [data-w]{transform:none;}" in CSS
+    on timers — a layout per bar per frame of the transition. The page's
+    report cards are generated now and drawn at rest; the only bars that
+    move are the phone's, by scale from the left inside the storyline (card
+    01's after their own --bd delay, set once by the script). No script
+    writes a width, the markup's width IS the printed figure, and print and
+    reduced motion stop the storyline, so every bar is drawn full."""
+    assert ".style.width" not in SCRIPT, "a script writes a bar's width again"
+    assert "function play(" not in SCRIPT and ".anim" not in CSS
+    assert ".phone.story [data-sec=lineup] .fbar i{transform-origin:0 50%;" in CSS
+    assert ".phone.story [data-sec=closest] .cbar i{transform-origin:0 50%;" in CSS
+    assert "animation-delay:var(--bd,0s)" in CSS
+    story = _js_function(LANDING, "storyline")
+    assert 'bar.style.setProperty("--bd", (i * 0.12).toFixed(2) + "s")' in story
     for block in (REDUCED, PRINT):
-        assert ".js .anim [data-w]{transform:none!important;transition:none!important;}" in block
-    for data_w, width in re.findall(r'data-w="(\d+)" style="width:(\d+)%"', BODY):
-        assert data_w == width
+        assert ".phone .screen *{animation:none!important;}" in block
+    for name in ("st-bar", "st-call"):
+        frames = _keyframes()[name]
+        assert "scaleX(0)" in frames and "width" not in frames
 
 
 def test_the_shine_the_icons_and_the_progress_bar_run_on_the_compositor() -> None:
-    """LAND-MOTION-COMPLY: the button's sheen moves by transform from a
-    parked position off its left edge (it was `left` from -60% to 130%), the
-    credential icons pop in by scale and opacity (they were drawn by dash
-    offset), and the scroll progress bar is a scroll-driven animation where
+    """LAND-MOTION-COMPLY: the button's sheen moved by `left`, the credential
+    icons were drawn by dash offset, and the scroll progress bar was a
+    per-frame script. Contract C7 retired the sheen (a flat button: the gold
+    is the emphasis) and the credential strip, so neither can come back
+    moving layout; the scroll progress bar is a scroll-driven animation where
     the browser has one — the per-frame script, which read the page height
-    every frame, runs only where it does not."""
-    assert "transform:translateX(-130%) skewX(-12deg)" in _rule(".btn.gold::after")
-    assert "@keyframes shine{to{transform:translateX(330%) skewX(-12deg)}}" in CSS
-    assert ".js .cred.stagger svg{opacity:0;transform:scale(.6) rotate(-8deg);" in CSS
+    every frame, runs only where it does not — and it is flat gold, never a
+    gradient."""
+    assert "@keyframes shine" not in CSS and ".shine" not in LANDING
+    assert ".btn.gold::after" not in CSS and not re.search(r"\.cred\b", CSS)
     timeline = CSS.split("@supports (animation-timeline: scroll()){")[1].split("\n  }")[0]
     # The shorthand resets animation-timeline, so the timeline comes after it.
     assert ".scrollbar{animation:progress linear both;animation-timeline:scroll(root);}" in timeline
+    assert "background:var(--flag)" in _rule(".scrollbar")
     guard = ('if (progress && !reduced && !(window.CSS && CSS.supports && '
              'CSS.supports("animation-timeline: scroll()")))')
     assert guard in SCRIPT
@@ -405,48 +427,47 @@ def test_the_shine_the_icons_and_the_progress_bar_run_on_the_compositor() -> Non
 
 def test_sections_each_get_one_entrance_and_only_clickables_answer_hover() -> None:
     """LAND-MOTION-SECTIONS: one beat per section, played once on entrance
-    from the observers already there — the 12:55 yard line draws, the method
-    steps' gold rules draw in order, one glint runs the week, the One
-    payment stamp lands (the price never moves: money is disclosure), the
-    group-chat bubble is sent, an FAQ answer eases open, the closer's button
-    catches the light. The stagger step is 80ms and stops growing at the
-    sixth item. D9 stands: nothing that is not a link lifts on hover."""
+    from the observers already there — How it works draws its three steps
+    in order, the report's bars fill as the close-up arrives, groups arrive
+    one item after another, an FAQ answer eases open. Contract C7
+    took out the decoration that had collected on top (the method cards'
+    gold rules drawing in, the week strip's glint, the stamp landing, the
+    group-chat bubble, the closer's sheen). The stagger step is 80ms and
+    stops growing at the sixth item. D9 stands: nothing that is not a link
+    lifts on hover, and buttons lift by one pixel, flat."""
     assert "(Math.min(i, 6) * 0.08)" in SCRIPT
     parts = SCRIPT.split("const parts = document.querySelectorAll(")[1].split(");")[0]
-    for part in (".proofline", ".plannerband", ".leaguepass", ".plans", ".closer > *"):
+    for part in (".shotwrap", ".plans", ".lpline", ".closer > *"):
         assert part in parts, part
-    rise = SCRIPT.split("const rise = new IntersectionObserver")[1].split("\n}\n")[0]
-    assert 'e.target.matches(".closer > .cta-row")' in rise
-    assert 'setTimeout(() => button.classList.add("shine"), 500)' in rise
-    assert ".js .proofline.reveal.shown::before{transform:none;" in CSS
-    assert ".js .method.stagger article::before{transform:scaleX(0);" in CSS
-    assert "border-top:3px solid var(--flag)" in _rule(".method article")
-    assert re.search(r"\.js \.timeline\.stagger\.shown::after\{animation:weekpass", CSS)
-    assert ".js .plans.reveal.shown .stamp50{animation:stamp" in CSS
+    groups = SCRIPT.split("const groups = document.querySelectorAll(")[1].split(");")[0]
+    for group in (".callouts", ".vstable tbody", ".faq"):
+        assert group in groups, group
+    # The steps play their own timeline, so the generic rise leaves them be.
+    assert ".steps" not in parts and ".steps" not in groups
+    assert ".js .shotwrap.reveal.shown .fbar i{transform:none;" in CSS
+    for gone in ("weekpass", "@keyframes stamp", ".bubble", "article::before", ".shine"):
+        assert gone not in LANDING, gone
     assert not re.search(r"\.price[^{]*\{[^}]*animation", CSS), "the price moves"
-    assert ".js .leaguepass.reveal.shown .bubble{opacity:1;transform:none;}" in CSS
     assert ".faq details[open] .a{animation:faqin" in CSS
-    for card in (r"\.leaf", r"\.method article", r"\.timeline li", r"\.plan(?:\.founder)?",
-                 r"\.plcard", r"\.lpcard", r"\.cred div"):
+    for card in (r"\.step", r"\.sicon", r"\.callouts li", r"\.vstable[^{]*",
+                 r"\.plan(?:\.founder)?", r"\.shot[^{]*", r"\.filecard", r"\.card"):
         assert not re.search(card + r":hover", CSS), f"{card} reacts to hover"
-    assert ".btn.gold:hover{transform:translateY(-2px);}" in CSS
-    assert ".btn:active{transform:translateY(1px) scale(.985);" in CSS
+    assert ".btn.gold:hover{background:#FFD24A;transform:translateY(-1px);}" in CSS
+    assert ".btn:active{transform:translateY(1px);" in CSS
 
 
 def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
-    """LAND-MOTION-SECTIONS item 12: every animated selector this pass added
-    is neutralised under prefers-reduced-motion (the page is complete at
-    rest, measured in Chrome: nothing runs, the scroll-linked progress bar
+    """LAND-MOTION-SECTIONS item 12: every animated selector on the page is
+    neutralised under prefers-reduced-motion (the page is complete at rest,
+    measured in Chrome: nothing runs, the scroll-linked progress bar
     included) and in print."""
-    for selector in (".heroline .clock", ".livepill .dot::after", ".timeline::after", ".stamp50",
+    for selector in (".heroline .clock", ".livepill .dot::after", ".stamp50",
                      ".faq details[open] .a", ".watchnote.ok::before", ".watchform::after",
-                     ".js .proofline.reveal::before", ".js .method.stagger article::before",
-                     ".js .leaguepass.reveal .bubble", ".js .plans.reveal .plan.founder::after",
-                     ".btn.gold::after", "h1 em::after"):
+                     ".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+                     ".phone .screen *", ".js .reveal", ".js .stagger > *"):
         assert selector in REDUCED, f"{selector} still moves under reduced motion"
-    for selector in (".js .proofline.reveal::before", ".js .method.stagger article::before",
-                     ".js .leaguepass.reveal .bubble", ".js .plans.reveal .plan.founder::after",
-                     ".btn.gold::after", "h1 em::after", ".timeline::after"):
+    for selector in (".js .steps.armed *", ".js .shotwrap.reveal .fbar i",
+                     ".phone .screen *", ".js .reveal", ".watchform::after"):
         assert selector in PRINT, f"{selector} can print mid-motion"
     assert "!reduced && !form.classList.contains(\"called\")" in SCRIPT
     # LOOK-7: the progress bar was the one thing left moving under reduced
@@ -456,12 +477,17 @@ def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
     assert 'if (progress && !reduced && !(window.CSS' in SCRIPT
 
 
-def test_the_headline_sheen_never_moves_the_headline() -> None:
-    """LAND-MOTION-SECTIONS item 2: one pass of light across the gold slab at
-    0.4s, on a pseudo-element: the h1's own box and text never animate, so
-    the largest paint is untouched, and it plays once."""
-    sheen = _rule("h1 em::after")
-    assert "animation:shine 1.1s var(--ease-out) .4s 1 forwards" in sheen
+def test_the_headline_never_moves_and_its_slab_is_flat() -> None:
+    """LAND-MOTION-SECTIONS item 2 held that the slab's sheen ran on a
+    pseudo-element so the h1 itself never animated (it is the page's largest
+    paint). Contract C6/C7 went further: the slab is flat gold — no sheen, no
+    glow, no shadow behind the headline, never a gradient — and the h1, its
+    slab and its words still never animate."""
+    assert "h1 em::after" not in CSS
+    slab = _rule("h1 em")
+    assert "background:var(--flag)" in slab and "gradient" not in slab
+    assert "box-shadow" not in slab and "rotate(-1.5deg)" in slab
+    assert "text-shadow" not in _rule("h1")
     assert not re.search(r"\n  h1(?: em)?(?: span)?\{[^}]*animation", CSS)
 
 
@@ -535,7 +561,7 @@ const call = { start: "Odunze", over: "Shaheed", slot: "WR", pct: 61, start_proj
                over_proj: "9.8", label: "Closest call with odds", tossup: false };
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, odds: 3, phase: "season",
-  first_kickoff: soon, recorded: true, closest: call };
+  first_kickoff: soon, recorded: true, closest: call, cards: true };
 const cases = CASES;
 (async () => {
   const out = [];
@@ -606,38 +632,49 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
     assert ".livecall[hidden]{display:block!important;visibility:hidden;" in CSS
     assert "min-height:1.45em" in _rule(".livecall")
     assert "@media (max-width:600px){.livecall{min-height:2.9em;}}" in CSS
-    assert ".hero .livecall{order:7;}" in _blocks("@media (max-width:880px)")
+    # On a phone it goes under the phone (contract B3): its late arrival
+    # moves nothing above the phone there.
+    narrow = _blocks("@media (max-width:880px)")
+    assert ".hero .phonewrap{order:9;" in narrow and ".hero .livecall{order:11;}" in narrow
 
 
 def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season() -> None:
     """L1 / contract C7: the free bye-week planner lives at /byes/ and every
-    link to it from the site root is href="byes/". The hero carries a text
-    link (never a third button) and a band sits after "Your week, handled"
-    with a ghost button, so the gold price CTA keeps priority. Both go once
-    no bye is left to plan for (byes_left false) or the season is over (run
-    under node), and the open checkout keeps the hero on buying."""
+    link to it from the site root is href="byes/". Since the owner's Oct 28
+    2026 plan it is a text link in the fourth callout of "What you get" (the
+    byes checked to your title game — never gold, so the price CTA keeps
+    priority) and a footer link, never a hero link (contract B3). The link
+    goes once no bye is left to plan for (byes_left false) or the season is
+    over (run under node); the callout's own words stay, because every
+    report still checks the byes it has left."""
     hrefs = re.findall(r'href="([^"]*bye[^"]*)"', BODY)
     assert hrefs and set(hrefs) == {"byes/"}, hrefs
-    assert '<a class="textlink" id="planner-link" data-planner href="byes/">Free: your byes ' \
-           'through Week 17</a>' in HERO
-    band = BODY.split('<section class="plannerband" data-planner')[1].split("</section>")[0]
-    assert '<a class="btn ghost" href="byes/">Check my byes</a>' in band and "btn gold" not in band
+    assert "planner-link" not in LANDING and 'href="byes/"' not in HERO
+    callouts = BODY.split('<ol class="callouts">')[1].split("</ol>")[0]
+    link = re.search(r'<a class="go" href="byes/" data-planner>(.*?)</a>', callouts, re.S)
+    assert link and "free" in _flat(link.group(1)), "the planner link is gone"
+    assert "btn" not in callouts
+    footer = BODY.split("<footer>")[1].split("</footer>")[0]
+    assert '<a href="byes/">' in footer
     nobyes, over, kept = _clock("""[
       { ...base, byes_left: false }, { ...base, phase: "over" }, base ]""")
     assert nobyes["planner"] == [True, True] and over["planner"] == [True, True]
     assert kept["planner"] == [False, False], "a week with byes left hid the planner"
-    complete = LANDING.split("if (CHECKOUT_CAN_COMPLETE) {")[1].split("} else {")[0]
-    assert 'getElementById("planner-link")' in complete and "plannerLink.hidden = true" in complete
 
 
 def test_the_landing_reads_in_impulse_buyer_order() -> None:
-    """L1: the ninety-seconds-on-Tuesday promise ("Your week, handled") now
-    comes before the method, so it lands before the deliberation, with the
-    free planner between them; the rest of the order is unchanged."""
+    """L1, contract B3, then the owner's Oct 28 2026 plan: six sections,
+    what you get before why and why before the price. The hero (with the
+    Sunday scene as its last line), how it works in three pictures, the real
+    report annotated, rankings against the report, the price, the FAQ and
+    the closer."""
     heads = [_flat(h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", BODY, re.S)]
-    assert heads[:4] == ["What lands in your inbox", "Your week, handled", "Bye-week planner",
-                         "How every call gets made"], heads
-    assert heads.index("How every call gets made") < heads.index("Take it through your title game.")
+    assert heads == ["Paste once, then just play", "Everything Sunday needs, by Tuesday",
+                     "Rankings rank. Your report decides",
+                     "Take it through your title game.",
+                     "Before you ask the group chat", "Your lineup, decided every Tuesday."], heads
+    # Six page sections; the report's own cards are <section class="card">.
+    assert len(re.findall(r'<section\b(?! class="card")', BODY)) == 6
 
 
 def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
@@ -647,12 +684,18 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     data; the footer no longer dates every visual to 2024 (the hero's 2026
     line is labelled as this week's)."""
     sub = _flat(re.search(r'<p class="sub">(.*?)</p>', HERO, re.S).group(1))
-    assert sub == ("Every Tuesday, one email sets your lineup for your exact roster — all "
+    # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
+    # their own app, and "sets your lineup" read as automation.
+    assert sub == ("Every Tuesday, one email decides your lineup for your exact roster — all "
                    "the way to your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
-    method = _flat(BODY.split('<div class="method">')[1].split("</section>")[0])
-    assert "Your scoring, your league's size, the lineup your league starts." in method
-    assert "byes, announced injuries and each game's expected scoring." in method
+    # The comparison contrasts a rankings list with the report (Oct 25
+    # 2026: the weakest answer was "why pay when rankings are free"), now
+    # as one table (Oct 28 2026), a row per fact, two columns.
+    table = BODY.split('<table class="vstable">')[1].split("</table>")[0]
+    assert re.findall(r'<th scope="col"[^>]*>([^<]+)</th>', table) == ["A rankings list",
+                                                                      "Your report"]
+    assert table.count('<td class="no">') == table.count('<td class="yes">') == 5
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     qa = {q: _flat(a) for q, a in re.findall(r"<summary>(.*?)</summary>\s*<div class=\"a\">(.*?)</div>",
                                              faq, re.S)}
@@ -660,7 +703,7 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
                                  LANDING, re.S).group(1))
     twin = {q["name"]: q["acceptedAnswer"]["text"]
             for q in next(n for n in block["@graph"] if n["@type"] == "FAQPage")["mainEntity"]}
-    for question in ("Does it work with my league?", "How is this different from free rankings?"):
+    for question in ("Does it work with my league?", "Is it worth joining mid-season?"):
         assert qa[question] == twin[question], question
     assert "Sample visuals above are real output, labeled where shown." in _flat(BODY)
 
@@ -692,3 +735,14 @@ def test_the_landing_inlines_fonts_css_rule_for_rule() -> None:
     assert head.count('rel="preload"') == 2 and "barlow-condensed-900i.woff2" in head
     for url in re.findall(r"url\(fonts/([^)]+)\)", "".join(got)):
         assert (SITE / "fonts" / url).is_file(), url
+
+
+def test_the_phone_holds_still_while_its_story_plays() -> None:
+    """Final visual review: four loops ran at once around the hero (a 6 s
+    float, a 6 s floor shadow, a 7 s glow and the 16 s story), which read as
+    busy beside Apple's one-motion-at-a-time restraint. While the story plays,
+    the float, the floor and the glow are held; they resume when it rests."""
+    page = LANDING
+    for target in (".phone-float", ".phone-floor"):
+        assert f".js .hero:has(.phone.story:not(.paused)) {target}" in page
+    assert ".hero:has(.phone.story:not(.paused)) .phonewrap::before{animation-play-state:paused;}" in page

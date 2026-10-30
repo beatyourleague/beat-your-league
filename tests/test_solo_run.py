@@ -738,7 +738,8 @@ def test_the_plain_text_summary_survives_a_solo_report(tmp_path) -> None:
     KeyError on matchup['rival'] before anything could be sent."""
     _report, _html, _email, text = _rendered(tmp_path)
     assert "vs None" not in text and " None" not in text
-    assert "YOUR WEEK" in text and "MATCHUP" not in text
+    # "Your Week" folded into the lineup card's week line (contract C1).
+    assert "YOUR LINEUP, DECIDED" in text and "MATCHUP" not in text
     assert "projected" in text
 
 

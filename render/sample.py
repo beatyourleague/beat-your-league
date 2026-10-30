@@ -4,6 +4,10 @@ Usage:
     python -m render.sample                     # site/sample-report.html (week 10)
     python -m render.sample --week 1 --out ...  # the first-week companion
 
+The week-10 build also writes tests/fixtures/sample-report-w10.json and injects
+the cards generated from it (render/phone.py): the landing's hero phone and its
+"What lands in your inbox" cards, and How it works' annotated cards.
+
 ``make sample`` is the only way to rebuild this page, for the same reason
 ``make demo`` was the only way to rebuild the old one: the published sample is
 the launch proof, and an ad-hoc rebuild is how it once drifted from the engine
@@ -113,8 +117,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"could not build the sample: {exc}", file=sys.stderr)
         return 1
     out.write_text(page(report), encoding="utf-8")
+    if args.week == WEEK and args.out is None:
+        # The landing's phone and real-report cards, and How it works' cards,
+        # are generated from THIS report (render/phone.py), so a rebuilt
+        # sample can never leave them quoting the one before it. The report
+        # itself is kept as a fixture so a test can rebuild every block and
+        # hold the pages to it.
+        from render import phone
+        phone.write_fixture(report)
+        try:
+            phone.publish(report)
+        except ValueError as exc:
+            print(f"could not inject the generated cards: {exc}", file=sys.stderr)
+            return 1
 
-    published = [s for s in report["lineup"] if s.get("confidence") is not None]
+    published =[s for s in report["lineup"] if s.get("confidence") is not None]
     print("=" * 62)
     print(f"sample report -> {out}")
     print(f"  {report['meta']['season']} week {report['meta']['week']} · "

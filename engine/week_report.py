@@ -1551,6 +1551,10 @@ def _set_lineup_item(seated: list[SlotPick], players: PlayerIndex,
         "detail": listed,
         "deadline": "before this week's first kickoff",
         "urgency": "now",
+        # Presentation metadata only (contract C2): the renderers draw this
+        # item as the lineup card's one box, not as a game-plan line. Its
+        # words and deadline are unchanged.
+        "kind": "set_lineup",
     }
 
 

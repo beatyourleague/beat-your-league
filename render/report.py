@@ -508,12 +508,21 @@ def no_call_explainer(listed: str) -> str:
     checks — both teams play, and neither player carried a designation on last
     week's injury report. "Only when": the live week's extra checks (reserve
     lists, the practice squad) only ever withhold more.
+
+    Two halves (contract C2, Oct 2026): ODDS_DEFINITION is said under the
+    lineup card, where the percentages are; ODDS_RULE is said under Slot by
+    Slot, beside the rows that carry none. Every caller of this function
+    still gets the whole sentence.
     """
-    return (f"The % is the chance your starter outscores your best bench "
-            f"player at that spot, and the bar starts at 50% (a toss-up). We only "
-            f"give odds when both players' teams play this week and neither was "
-            f"listed questionable, doubtful or out last week. Rows without "
-            f"odds this week: {listed}.")
+    return f"{ODDS_DEFINITION} {ODDS_RULE} Rows without odds this week: {listed}."
+
+
+# What a printed % is, said once beside the percentages.
+ODDS_DEFINITION = ("The % is the chance your starter outscores your best bench "
+                   "player at that spot, and the bar starts at 50% (a toss-up).")
+# When one prints — what the gate checks, never "confirmed to play".
+ODDS_RULE = ("We only give odds when both players' teams play this week and "
+             "neither was listed questionable, doubtful or out last week.")
 
 
 # §5 of the early-season method (Grade B): the seed moves every number in the
@@ -652,6 +661,11 @@ def row_label(slot: Mapping[str, Any]) -> str:
     gate = slot.get("confidence_gate") or ""
     alt = slot.get("alternative_name")
     starter_ok = slot.get("status") == "active"
+    # A bench player named on a starter's row is marked as the bench player:
+    # "Saquon Barkley — start · Chase Brown rising" read as an instruction to
+    # start Chase Brown, against the player named in the same row (review
+    # BUYER-3). Words only: no seat, odds or gate moves.
+    bench = lambda name: f"{name} (bench)"
     # Only a row whose player the if/then actually names may send the reader
     # there (launch audit R7). Reports built before the field existed, and the
     # league product, keep the old wording.
@@ -676,17 +690,19 @@ def row_label(slot: Mapping[str, Any]) -> str:
         return "odds after 3 games"
     if gate.startswith("bench option not cleared"):
         held = slot.get("bench_held") or {}
-        name = held.get("name") or "your bench player"
+        name = bench(held["name"]) if held.get("name") else "your bench player"
         return {"bye": f"{name} on bye", "roster": f"{name} can't play"}.get(
             held.get("kind"), f"{name} not cleared yet")
     if gate.startswith("not confirmed to play"):
         # Method §15 C9: "not confirmed to play (Zach Ertz: on the practice
         # squad)" — the row names who.
         who = gate[len("not confirmed to play"):].strip(" ()").split(":")[0]
+        if who and alt and who == alt:
+            who = bench(who)
         return f"{who} on practice squad" if who else "practice squad"
     if gate.startswith("held: the bench option's role is growing"):
         # The starter starts either way; the row says who the odds wait on.
-        return f"start · {alt} rising" if alt else "held this week"
+        return f"start · {bench(alt)} rising" if alt else "held this week"
     if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):
@@ -700,8 +716,8 @@ def row_label(slot: Mapping[str, Any]) -> str:
         # review RQ-18), and never said WHY (BE-D3) — the plain fact is last
         # week's designation, dated, and the bench row prints it in full.
         if gate.startswith("availability in doubt"):
-            return f"start · {alt} was questionable"
-        return f"start · {alt} not confirmed"
+            return f"start · {bench(alt)} was questionable"
+        return f"start · {bench(alt)} not confirmed"
     if gate.startswith("availability in doubt"):
         return f"questionable{see}"
     return f"status open{see}"
@@ -785,10 +801,19 @@ def _pct(value: float) -> int:
     return max(0, min(100, round(value * 100)))
 
 
+def bar_from_even(pct: int) -> int:
+    """Bar width for a PRINTED head-to-head percentage, drawn from 50% (a
+    coin flip) to 100%: 58 -> 16, 66 -> 32, 72 -> 44, 100 -> 100.
+
+    From the printed figure, never the raw probability: George Kittle's 0.715
+    prints 72% and was drawn 43% wide on one surface and 44% on another
+    (contract C9). One input, one width, on every surface."""
+    return max(0, min(100, (int(pct) - 50) * 2))
+
+
 def _bar_from_even(value: float) -> int:
-    """Bar width for a head-to-head probability, drawn from 50% (a coin
-    flip) to 100%: 0.58 -> 16, 0.66 -> 32, 1.0 -> 100."""
-    return max(0, min(100, round((value - 0.5) * 200)))
+    """bar_from_even of the percentage ``value`` prints as."""
+    return bar_from_even(_pct(value))
 
 
 def extract_design(template_html: str) -> tuple[str, str]:
@@ -951,106 +976,61 @@ def sample_cta() -> str:
 
 
 def header(meta: Mapping[str, Any], team: str | None = None) -> str:
-    """The masthead. ``team`` names a subscriber's roster (``team_name``), so
-    a manager with two teams can tell the two reports apart."""
-    chips = [
-        f'<span class="chip"><b>{esc(team or meta["league_name"])}</b>'
-        f' · {esc(meta["num_teams"])} teams'
-        + (f' · {esc(meta["scoring"])}' if meta.get("scoring") else "") + "</span>",
-        f'<span class="chip">{esc(_generated_stamp(meta))}</span>',
-    ]
-    # A solo report has no opponent, so there is no "this week" to name. The
-    # chip printed "This week: None" — an absent value rendered as a word.
-    if not meta.get("solo"):
-        chips.insert(1, f'<span class="chip">This week: '
-                        f'<b>{esc(meta["rival_label"])}</b></span>')
-    if meta.get("rivalry_week"):
-        chips.insert(1, '<span class="chip" style="border-color:var(--flag);'
-                        'color:var(--flag)"><b>RIVALRY WEEK</b></span>')
-    elif meta.get("named_rival_label"):
-        chips.insert(2, f'<span class="chip">Rival: '
-                        f'<b>{esc(meta["named_rival_label"])}</b></span>')
-    # Notices, not alarms: these wore .regret-note's brick alert tint, so the
-    # most-linked page of the site opened on what read as an error box.
-    banner = ""
-    if meta.get("live_demo"):
-        # The live sample (render/live_sample.py): this week's report for the
-        # published sample roster, rebuilt every Tuesday by the weekly cron.
-        # A rebuild after the week's first kickoff is NOT the way a
-        # subscriber's report is built (it withholds, and it still reads
-        # Tuesday's injury report), so it says what it is (INFO-100, INFO-117).
-        if meta.get("rebuilt_after_kickoff"):
-            banner = (
-                '<div class="notice">'
-                f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
-                f'{esc(meta["season"])} season for a sample roster, rebuilt '
-                f'{esc(_built_on(meta))} from this week\'s Tuesday information '
-                f'(the week {esc(int(meta["week"]) - 1)} injury report); later '
-                f'injury news is not in it.</div>')
-        else:
-            banner = (
-                '<div class="notice">'
-                f'<b>THIS WEEK\'S REPORT</b> — Week {esc(meta["week"])} of the '
-                f'{esc(meta["season"])} season, built {esc(_built_on(meta))} for a '
-                f'sample roster, exactly the way yours is built. Rebuilt every '
-                f'Tuesday of the season.</div>')
-    elif meta.get("historical_demo") and meta.get("solo"):
-        # The solo sample is built from the nflverse record, where past-season
-        # injury reports ARE available — so confidences print, and the old
-        # "numbers are left off" sentence would be false of the page it sits on.
-        # One banner per sample (INFO-99): Week 1 has no box score and no
-        # injury report behind it, and a mid-season week is built from what
-        # was out BEFORE its games, never from its own box scores.
-        scoring = str(meta.get("scoring") or "")
-        scored = (f"scored {scoring[:1].lower()}{scoring[1:]}" if scoring
-                  else "one scoring setting")
-        if meta.get("first_week_demo"):
-            banner = (
-                '<div class="notice">'
-                f'<b>SAMPLE REPORT</b> — Week 1 of the {esc(meta["season"])} NFL '
-                f'season, built the way yours will be: one roster, {esc(scored)}. '
-                f'Before Week 1 no game has been played and no injury report '
-                f'exists, so the slots are ordered by last season\'s scoring and '
-                f'no odds print.</div>')
-        else:
-            banner = (
-                '<div class="notice">'
-                f'<b>SAMPLE REPORT</b> — a real week from the {esc(meta["season"])} NFL '
-                f'season, built the way yours will be: one roster, {esc(scored)}, '
-                f'from the box scores and injury report out before that week\'s '
-                f'games.</div>')
-    elif meta.get("historical_demo"):
-        banner = (
-            '<div class="notice">'
-            f'SAMPLE REPORT — real data from the {esc(meta["season"])} season of '
-            f'{esc(meta["league_name"])}, built to show exactly what lands in your inbox '
-            f'on a Tuesday. Because it\'s a past season we can\'t check who was hurt or '
-            f'inactive back then, so the confidence numbers are left off — in a live week '
-            f'you get them on every slot where both players are confirmed active.'
-            + (' Team and manager names here are placeholders; every number is that '
-               'league\'s real record.' if meta.get("anonymized_demo") else "")
-            + '</div>'
-        )
-    if season_end_lines(meta):
-        banner += ('<div class="notice">'
-                   f'<b>{esc(SEASON_END_HEAD)}.</b> '
-                   f'{esc(" ".join(season_end_lines(meta)))}</div>')
-    brand = f'<div class="brand">{mark_svg("bylm")}<span>Beat Your League</span></div>'
-    cta = ""
+    """The masthead, then the notices under it. ``team`` names a
+    subscriber's roster (``team_name``), so a manager with two teams can tell
+    the two reports apart.
+
+    One navy card (contract C3/C8): the lockup on a subscriber's own report
+    (a published sample carries the site's nav above it instead, with its
+    one ask beneath), the week and what this is on ONE line, whose team and
+    which settings, and when it was built. The notices follow it, in the
+    words render.anatomy.bands keeps — information, never an alarm."""
+    from render import anatomy
+    head = anatomy.masthead({"meta": meta, "lineup": []})
+    team = team or head["team"]
+    extra = "".join(
+        (f' · {esc(lead)}<b>{esc(value)}</b>' if lead else
+         f' · <b class="rw">{esc(value)}</b>') for lead, value in head["extra"])
+    brand = (f'<div class="brand">{mark_svg("bylm")}'
+             f'<span>Beat Your <span class="lg">League</span></span></div>')
+    top, cta = "", ""
     if meta.get("anonymized_demo"):
         # The published samples are site pages a visitor reaches from the
-        # landing page or a shared link, and they offered no way back and no
-        # route to pricing or setup — only a Home pill (panel review I3, I5).
-        # A subscriber's own report is opened from their inbox and keeps the
-        # plain masthead.
-        brand = _site_bar()
+        # landing page or a shared link (panel review I3, I5): the site's nav
+        # on a full-bleed band, and the sample's ask under the masthead. A
+        # subscriber's own report is opened from their inbox and keeps the
+        # plain lockup.
+        top = f'<div class="siteband">{_site_bar()}</div>'
+        brand = ""
         if meta.get("solo"):
             cta = f'<p class="headcta">{sample_cta()}</p>'
     return (
-        f'<header class="bug">{brand}'
-        f'<h1>Week {esc(meta["week"])} · {"Your Report" if meta.get("solo") else "Rival Report"}</h1>'
-        f'<div class="chips">{"".join(chips)}</div>{cta}</header>{banner}'
+        f'<header class="top">{top}<div class="col"><div class="masthead">{brand}'
+        f'<h1>{esc(head["week"])} · {esc(head["label"])}</h1>'
+        f'<p class="mmeta"><b>{esc(team)}</b> · {esc(head["meta"])}{extra}</p>'
+        f'<p class="mstamp">{esc(head["stamp"])}</p></div>{cta}</div></header>'
+        f'{bands_html(meta)}'
     )
+
+
+def bands_html(meta: Mapping[str, Any]) -> str:
+    """The notices, as the web draws them (render.anatomy.bands)."""
+    from render import anatomy
+    out = []
+    for band in anatomy.bands({"meta": meta}):
+        # A sample's banner keeps its apostrophes as text, exactly as it has
+        # always been written ("THIS WEEK'S REPORT"); the others as before.
+        say = ((lambda s: html.escape(str(s), quote=False))
+               if band["kind"] == "sample" else esc)
+        words = (f'<b>{say(band["head"])}</b> {say(band["text"])}' if band["head"]
+                 else say(band["text"]))
+        if band.get("price"):
+            words += f'<br><br>{esc(band["price"])}'
+            if band.get("link"):
+                href, label = band["link"]
+                words += f' <a href="{esc(href)}">{esc(label)}</a>'
+        out.append(f'<div class="notice">{words}</div>')
+    return "".join(out)
 
 
 def eastern(stamp: datetime) -> str:
@@ -1350,81 +1330,11 @@ def _tape_side(slot: Mapping[str, Any], mine: bool, mixed: bool = False) -> str:
 TAPE_COLS = "<colgroup>" + "<col>" * 5 + "</colgroup>"
 
 
-# The solo lineup grid. Same table furniture as the Tape so the two products
-# look like one brand, but three columns instead of five: with no opponent there
-# is no centre spine and no tint, because a tint IS a comparison and there is
-# nothing to compare against. Emphasis comes from the slot order instead, which
-# is the order a manager reads their own lineup in anyway.
-LINEUP_COLS = ('<colgroup><col style="width:9%"><col style="width:58%">'
-               '<col style="width:12%"><col style="width:21%"></colgroup>')
-
-
-def section_your_lineup(report: Mapping[str, Any]) -> str:
-    """The lineup we would set, and what each call is worth.
-
-    GRADE C (reports/nflverse-backtest.md): the confidence numeral is a
-    recorded prediction, not an accuracy claim. Nothing here may describe it as
-    tested, calibrated or accurate — the note under the table says what it is
-    and the receipts section says it gets graded.
-    """
-    slots = report["lineup"]
-    mixed = any(s.get("confidence") is not None for s in slots)
-    shown_marker = False
-    rows = []
-    for slot in slots:
-        name = slot.get("player_name") or "—"
-        proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
-        # One fact a line: the call's own facts, his games this season, then
-        # the counted usage; and a reason sentence where one is owed.
-        lines = [" · ".join(call_bits(slot)), form_phrase(slot),
-                 str(slot.get("usage") or ""), str(slot.get("reason") or "")]
-        subs = "".join(f'<span class="tsub">{esc(line)}</span>' for line in lines if line)
-        flags = [f["text"] for f in (slot.get("flags") or [])]
-        # Opponent and kickoff (launch audit F7), straight under the name: it
-        # is the fact a manager checks first, and the one that says a starter
-        # plays Thursday night.
-        game = (f'<span class="tgame">{esc(slot["game"])}</span>'
-                if slot.get("game") else "")
-        confidence = slot.get("confidence")
-        if confidence is not None:
-            # The bar runs from 50% to 100%, not from zero: every number is a
-            # head-to-head against the best bench option, so 50 is a coin flip
-            # and the floor. Drawn from zero, a 58% lean looked nearly as long
-            # as a 66% call; drawn from 50 the reader who skims sees the same
-            # call as the reader who reads. Grade C: still a recorded
-            # prediction, not accuracy.
-            call = (f'<b>{_pct(confidence)}%</b>'
-                    f'<span class="cbar" title="Bar starts at 50%, a coin flip">'
-                    f'<i style="width:{_bar_from_even(confidence)}%"></i></span>')
-        elif slot.get("player_name") and row_marked(slot, mixed):
-            shown_marker = True
-            call = f'<span class="tsub">{esc(row_label(slot))}</span>'
-        else:
-            call = ""
-        rows.append(
-            f'<tr class="trow"><td class="tslot">{esc(slot["slot"])}</td>'
-            f'<td class="tside you"><span class="tname">{esc(name)}</span>{game}'
-            + (f'<span class="tflag">{esc(" · ".join(flags))}</span>' if flags else "")
-            + subs
-            + f'</td><td class="tpts you">{proj}</td>'
-            f'<td class="tcall">{call}</td></tr>')
-    head = ('<tr class="thead"><td></td><td>Your lineup</td>'
-            '<td style="text-align:right">Proj</td><td>Call</td></tr>')
-    note = ""
-    gates = note_gates(slots)
-    if gates:
-        head_text = no_call_head(shown_marker and mixed, mixed)
-        note = (f'<div class="withheld"><b>{esc(head_text)}</b> '
-                f'{esc(no_call_explainer(gate_list(gates)))}</div>')
-    hot = projection_note(slots)
-    if hot:
-        note += f'<div class="withheld">{esc(hot)}</div>'
-    seeded_note = (f'<div class="withheld">{esc(SEEDED_SECTION_LINE)}</div>'
-                   if report["meta"].get("seeded") else "")
-    return _section("The Lineup", 3,
-                    f'<table class="tape">{LINEUP_COLS}{head}'
-                    f'{"".join(rows)}</table>{_bench_table(report)}'
-                    f'{seeded_note}{note}')
+# Slot by Slot's three columns (contract C3): the slot, the detail cell that
+# carries one fact a line, the projection. Widths ride the <col> elements; a
+# phone needs no override, because nothing but the detail cell holds words.
+LINEUP_COLS = ('<colgroup><col style="width:10%"><col style="width:76%">'
+               '<col style="width:14%"></colgroup>')
 
 
 def row_marked(slot: Mapping[str, Any], mixed: bool) -> bool:
@@ -1446,43 +1356,15 @@ def row_marked(slot: Mapping[str, Any], mixed: bool) -> bool:
 
 
 def _bench_table(report: Mapping[str, Any]) -> str:
-    """Every rostered player who is not starting — nobody vanishes.
-
-    The lineup names each starter and one bench alternative per slot, so any
-    other bench player used to disappear from the file entirely; on a real
-    2026 week-4 roster that was Saquon Barkley, mentioned on no surface at all.
-    Same table idiom as the lineup, so it reads as the rest of the roster
-    rather than as an appendix.
-    """
-    bench = report.get("bench") or []
-    if not bench:
+    """Every rostered player who is not starting — nobody vanishes. The bench
+    half of Slot by Slot, drawn on its own (render.anatomy.slots)."""
+    from render import anatomy
+    model = anatomy.slots({"lineup": [], "bench": report.get("bench") or [],
+                           "meta": report.get("meta") or {}})
+    if not model["bench"]:
         return ""
-    rows = []
-    for entry in bench:
-        proj = (f'{entry["projected"]:.1f}' if entry.get("projected") is not None
-                else "—")
-        rank = entry.get("last_season_rank")
-        # NOT .tflag: that is brick, reserved for "cannot play", and a benched
-        # star must not read as an injury. Out players DO take the flag.
-        tag = (f'<span class="tflag">{esc(bench_phrase(entry))}</span>'
-               if entry.get("out") else
-               (f'<span class="tflag">{esc(entry["note"])}</span>'
-                if entry.get("note") else "")
-               + (f'<span class="trank">{esc(rank)} last season</span>'
-                  if entry.get("notable") and rank else ""))
-        game = (f'<span class="tgame">{esc(entry["game"])}</span>'
-                if entry.get("game") else "")
-        rows.append(
-            f'<tr class="trow bench"><td class="tslot">{esc(entry["position"])}</td>'
-            f'<td class="tside you"><span class="tname">{esc(entry["name"])}</span>'
-            f'{game}{tag}'
-            + (f'<span class="tsub">{esc(bench_form(entry))}</span>'
-               if bench_shows_form(entry) else "")
-            + '</td>'
-            f'<td class="tpts you">{proj}</td><td class="tcall"></td></tr>')
-    head = (f'<tr class="thead"><td></td><td>{esc(BENCH_HEAD)}</td>'
-            '<td style="text-align:right">Proj</td><td></td></tr>')
-    return f'<table class="tape benchtape">{LINEUP_COLS}{head}{"".join(rows)}</table>'
+    body = _slots_body({**model, "rows": [], "notes": []}, True)
+    return body.split("</table>", 1)[1]
 
 
 # Principle 5: every number shown has a definition. "94 – 158 realistic range"
@@ -1501,32 +1383,6 @@ RANGE_DEFINITION = ("your projected total, give or take the week-to-week swing "
 def range_text(team: Mapping[str, Any]) -> str:
     """"94 – 158": the band, rounded the way every surface prints it."""
     return f'{team["floor"]:.0f} – {team["ceiling"]:.0f}'
-
-
-def section_your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
-    """Your projected week — a total and a band, with no opponent to beat.
-
-    The head-to-head board would be half empty here, and half a scoreboard reads
-    as a broken scoreboard. So this is your number and its range, and one plain
-    sentence saying why there is no other side, stated once.
-    """
-    you = matchup["you"]
-    gate = matchup.get("range_gate")
-    if gate:
-        body = gate_note(gate)
-    else:
-        body = (f'<div class="team"><div class="name">{esc(you["label"])}</div>'
-                f'<div class="pts">{you["projected_total"]:.1f} <small>PROJ</small></div>'
-                f'<div class="wkrange">{range_text(you)} '
-                f'<span>{esc(RANGE_LABEL)}</span></div></div>'
-                f'<p class="rangedef"><b>{esc(RANGE_LABEL.capitalize())}:</b> '
-                f'{esc(RANGE_DEFINITION)}</p>')
-        basis = matchup.get("range_basis")
-        if basis:
-            body += f'<div class="yards">{esc(basis)}</div>'
-    if no_opponent:
-        body += f'<p class="withheldline">{esc(no_opponent)}</p>'
-    return _section("Your Week", 2, body)
 
 
 def section_tape(report: Mapping[str, Any]) -> str:
@@ -1741,24 +1597,6 @@ def rising_parts(row: Mapping[str, Any]) -> tuple[str, str]:
     line = str(row.get("line") or "")
     who, sep, what = line.partition(": ")
     return (who, what) if sep else ("", line)
-
-
-def section_rising(rows: Sequence[Mapping[str, Any]]) -> str:
-    """Counted usage, reported (RULE U1). Empty means the section is absent —
-    an empty 'rising roles' block would advertise a feature that found nothing.
-
-    Its own classes (launch audit W7): it borrowed ``ul.receipts``, whose rules
-    are scoped to the navy ledger card, so on the published samples the
-    bullets hung outside the section and the intro rendered as bare text."""
-    if not rows:
-        return ""
-    items = []
-    for row in rows:
-        who, what = rising_parts(row)
-        items.append(f'<li><b>{esc(who)}</b> {esc(what)}</li>' if who
-                     else f'<li>{esc(what)}</li>')
-    return _section(RISING_HEAD, 8, f'<p class="risingintro">{esc(rising_intro(rows))}</p>'
-                                     f'<ul class="rising">{"".join(items)}</ul>')
 
 
 def section_hype(entries: list[Mapping[str, Any]],
@@ -2004,6 +1842,11 @@ def section_waiver_market(market: Mapping[str, Any] | None) -> str:
 
 
 def section_receipts(receipts: Mapping[str, Any]) -> str:
+    return _section("The Receipts", 9, receipts_inner(receipts))
+
+
+def receipts_inner(receipts: Mapping[str, Any]) -> str:
+    """The receipts card's body, content as it has always been."""
     record = receipts.get("record")
     if not record:
         # D12: the stamp promises next week only where this report has odds
@@ -2031,7 +1874,7 @@ def section_receipts(receipts: Mapping[str, Any]) -> str:
                 f'(week {esc(worst["week"])}, {worst["margin"]:.1f}). '
                 f'Both stay on the ledger.')
         inner = "".join(parts) + '<br><span class="stamp">Graded on real box scores</span>'
-    return _section("The Receipts", 9, f'<div class="ledger">{inner}</div>')
+    return f'<div class="ledger">{inner}</div>'
 
 
 # What a sample promises a buyer (INFO-113): three scoring settings, not every
@@ -2470,10 +2313,12 @@ def _section(title: str, n: int, body: str) -> str:
     # register. "01" reads like a case file, which is the register the product
     # actually sells ("the file on Mike"). ``n`` now says only WHETHER the
     # section is numbered — see number_sections for why.
+    # The card shell every section shares (contract C3): a navy head with the
+    # title and its number, a white body.
     marker = f'<span class="n">{SECTION_MARK}</span>' if n else ""
     return (
-        f'<section><div class="eyebrow"><span class="tag">{esc(title)}</span>'
-        f'{marker}</div>{body}</section>'
+        f'<section class="card"><div class="eyebrow"><span class="tag">{esc(title)}</span>'
+        f'{marker}</div><div class="cbody">{body}</div></section>'
     )
 
 
@@ -2548,6 +2393,209 @@ def anonymize_for_public(report: Mapping[str, Any]) -> dict[str, Any]:
     return scrub(out)
 
 
+# --------------------------------------------------------------------- #
+# the cards: one markup for the web report, the phone and the landing
+# --------------------------------------------------------------------- #
+
+def _chip(model: Mapping[str, Any]) -> str:
+    return (f'<span class="chip {"ok" if model["tone"] == "ok" else "due"}">'
+            f'{esc(model["deadline"])}</span>' if model.get("deadline") else "")
+
+
+def task_html(model: Mapping[str, Any], *, interactive: bool,
+              detail: bool = True) -> str:
+    """One checklist item (render.anatomy.item): a box to tick, the action
+    (a bold head and its plain rest), why, and the deadline as a chip.
+
+    In the browser each task IS a checkbox — a label around a real one, named
+    by the task's own words; spans, because a label holds phrasing content
+    only; nothing stored, so a tick lasts until the page reloads. Drawn
+    elsewhere (the phone, the landing) it holds nothing focusable. An item
+    with nothing to do carries no box."""
+    inner = (f'<span class="tb"><b class="do">{esc(model["head"])}</b>{esc(model["rest"])}'
+             + (f'<span class="why">{esc(model["detail"])}</span>'
+                if detail and model.get("detail") else "")
+             + _chip(model) + '</span>')
+    if not model.get("box", True):
+        return f'<div class="task info">{inner}</div>'
+    if interactive:
+        return f'<label class="task"><input type="checkbox" class="box">{inner}</label>'
+    return f'<div class="task"><span class="box"></span>{inner}</div>'
+
+
+def _lineup_body(model: Mapping[str, Any], interactive: bool) -> str:
+    out = []
+    week = model.get("week")
+    if week:
+        out.append(f'<p class="wk"><b class="wkn">{esc(week["total"])}</b> '
+                   f'<span class="wku">proj</span> <b class="wkr">{esc(week["range"])}</b> '
+                   f'<span class="wku">{esc(week["range_label"])}</span></p>')
+    elif model.get("gate"):
+        out.append(f'<p class="gate"><b>{esc(NOT_CALLING_IT)}:</b> {esc(model["gate"])}</p>')
+    if model.get("basis"):
+        out.append(f'<p class="basis">{esc(model["basis"])}</p>')
+    if model.get("note"):
+        out.append(f'<p class="note">{esc(model["note"])}</p>')
+    heads = model.get("heads")
+    shape = {"proj+odds": "g5", "proj": "g3"}.get(heads or "", "g2")
+    rows = []
+    if heads:
+        rows.append('<div class="ghead"><span>Proj</span>'
+                    + ('<span>Odds</span>' if heads == "proj+odds" else "") + '</div>')
+    for row in model["rows"]:
+        name = esc(row["name"])
+        if interactive:
+            name = f'<a href="#slot-{row["i"]}">{name}</a>'
+        cells = [f'<span class="fslot">{esc(row["slot"])}</span>',
+                 f'<span class="fname">{name}</span>']
+        if heads:
+            cells.append(f'<span class="fproj">{esc(row["proj"] or "—")}</span>')
+        if row.get("pct") is not None:
+            cells.append(f'<span class="fbar"><i style="width:{row["bar"]}%"></i></span>'
+                         f'<span class="fpct">{row["pct"]}%</span>')
+        elif row.get("label"):
+            tone = {"flag": " flag", "basis": " basis"}.get(row.get("tone") or "", "")
+            cells.append(f'<span class="fnc{tone}">{esc(row["label"])}</span>')
+        rows.append(f'<div class="frow" data-i="{row["i"]}">{"".join(cells)}</div>')
+    out.append(f'<div class="glance {shape}">{"".join(rows)}</div>')
+    if model.get("task"):
+        # The rows ARE the lineup the task names, so its list is not repeated
+        # here (the plain-text half, which has no rows to point at, keeps it).
+        out.append(task_html(model["task"], interactive=interactive, detail=False))
+    for line in model.get("legend") or []:
+        head = f'<b>{esc(line["head"])}</b> ' if line.get("head") else ""
+        out.append(f'<p class="legend">{head}{esc(line["text"])}</p>')
+    return "".join(out)
+
+
+def _closest_body(model: Mapping[str, Any], interactive: bool) -> str:
+    if "gate" in model:
+        return f'<p class="fact">{esc(model["gate"])}</p>'
+    before, joiner, after = model["verdict"]
+    drivers = " · ".join(f'{esc(label)} <b>{esc(value)}</b>'
+                         for label, value in model.get("drivers") or [])
+    return (
+        (f'<p class="clabel">{esc(model["label"])}</p>' if model.get("label") else "")
+        # class="over": render/og.py reads this page's verdict back before it
+        # draws the weekly share card ("the card repeats the page").
+        + f'<p class="verdict">{esc(before)} <span class="over">{esc(joiner)}</span> '
+          f'{esc(after)}</p>'
+        # Drawn from 50%, like the lineup bars, so "the bar starts at 50%" is
+        # true of every bar in the report (promise audit LANDING-35).
+        + f'<div class="cmeter"><span class="cbar"><i style="width:{model["bar"]}%"></i>'
+          f'</span><b class="cpct">{model["pct"]}%</b></div>'
+        + (f'<p class="drivers">{drivers}</p>' if drivers else "")
+        + "".join(f'<p class="fact">{esc(line)}</p>' for line in model.get("lines") or [])
+        + (f'<p class="closer">{esc(model["closer"])}</p>' if model.get("closer") else ""))
+
+
+def _plan_body(model: Mapping[str, Any], interactive: bool) -> str:
+    out = [task_html(i, interactive=interactive) for i in model["items"]]
+    if model.get("saturday"):
+        out.append(f'<p class="standing"><b>{esc(SATURDAY_LINE_HEAD)}:</b> '
+                   f'{esc(model["saturday"])}</p>')
+    return "".join(out)
+
+
+def _ifthen_body(model: Mapping[str, Any], interactive: bool) -> str:
+    if not model["plans"]:
+        return f'<p class="fact">{esc(model["empty"])}</p>'
+    return "".join(
+        f'<div class="pivot"><p class="if">{esc(p["if"])}</p>'
+        f'<p class="then">{esc(p["then"])}</p>'
+        + (f'<p class="rest">{esc(p["rest"])}</p>' if p.get("rest") else "") + '</div>'
+        for p in model["plans"])
+
+
+def _slot_cell(lines: Sequence[tuple[str, str | None]]) -> str:
+    return "".join(f'<span class="{klass}">{esc(text)}</span>'
+                   for klass, text in lines if text)
+
+
+def _slots_body(model: Mapping[str, Any], interactive: bool) -> str:
+    rows = []
+    for row in model["rows"]:
+        anchor = f' id="slot-{row["i"]}"' if interactive else ""
+        detail = (f'<b class="tname">{esc(row["name"])}</b>'
+                  + _slot_cell([("tgame", row.get("game")),
+                                ("tflag", " · ".join(row.get("flags") or []) or None),
+                                ("tcall", row.get("call")),
+                                ("tsub", row.get("form")),
+                                # The archive keeps every clause of the count;
+                                # a phone's copy, the short line (MIN_SHOWN_RATE).
+                                ("tsub", row.get("usage_full") if interactive
+                                 else row.get("usage")),
+                                ("tsub", row.get("reason"))]))
+        rows.append(f'<tr{anchor}><td class="tslot">{esc(row["slot"])}</td>'
+                    f'<td class="tdet">{detail}</td>'
+                    f'<td class="tproj">{esc(row.get("proj") or "—")}</td></tr>')
+    out = [f'<table class="tape">{LINEUP_COLS}{"".join(rows)}</table>']
+    if model.get("bench"):
+        bench = []
+        for entry in model["bench"]:
+            detail = (f'<b class="tname">{esc(entry["name"])}</b>'
+                      + _slot_cell([("tgame", entry.get("game")),
+                                    ("tsub", entry.get("form")),
+                                    ("tflag", entry.get("note")),
+                                    ("trank", entry.get("rank"))]))
+            bench.append(f'<tr><td class="tslot">{esc(entry["position"])}</td>'
+                         f'<td class="tdet">{detail}</td>'
+                         f'<td class="tproj">{esc(entry.get("proj") or "—")}</td></tr>')
+        out.append(f'<p class="bhead">{esc(model.get("bench_head") or BENCH_HEAD)}</p>'
+                   f'<table class="tape bench">{LINEUP_COLS}{"".join(bench)}</table>')
+    for note in model.get("notes") or []:
+        head = f'<b>{esc(note["head"])}</b> ' if note.get("head") else ""
+        out.append(f'<p class="tnote">{head}{esc(note["text"])}</p>')
+    return "".join(out)
+
+
+def _rising_body(model: Mapping[str, Any], interactive: bool) -> str:
+    items = "".join(f'<li><b>{esc(who)}</b> {esc(what)}</li>' if who
+                    else f'<li>{esc(what)}</li>' for who, what in model["rows"])
+    return (f'<p class="risingintro">{esc(model["intro"])}</p>'
+            f'<ul class="rising">{items}</ul>')
+
+
+def _receipts_body(model: Mapping[str, Any], interactive: bool) -> str:
+    return receipts_inner(model["data"])
+
+
+_CARD_BODIES = {"lineup": _lineup_body, "closest": _closest_body, "plan": _plan_body,
+                "ifthen": _ifthen_body, "slots": _slots_body, "rising": _rising_body,
+                "receipts": _receipts_body}
+
+
+def card_html(key: str, model: Mapping[str, Any], number: str, *,
+              interactive: bool) -> str:
+    """One numbered card of the report, in the one web markup (contract C3):
+    the web report draws it with ``interactive=True`` (names link to their
+    Slot by Slot row, the game plan ticks); the landing's phone, its inbox
+    cards and How it works draw the same card with ``interactive=False``,
+    which holds no link, no input and nothing focusable. ``model`` is
+    render.anatomy's for ``key``; ``number`` is "01"… or SECTION_MARK, which
+    number_sections fills by position."""
+    from render import anatomy
+    title = model.get("title") or anatomy.TITLES[key]
+    body = _CARD_BODIES[key](model, interactive)
+    return (f'<section class="card" data-sec="{esc(key)}"><div class="eyebrow">'
+            f'<span class="tag">{esc(title)}</span><span class="n">{number}</span>'
+            f'</div><div class="cbody">{body}</div></section>')
+
+
+def alert_html(model: Mapping[str, Any], *, interactive: bool) -> str:
+    """An empty spot, above card 01: still a task to tick, in the alert tint."""
+    return f'<div class="alert">{task_html(model, interactive=interactive)}</div>'
+
+
+def solo_cards(report: Mapping[str, Any], *, interactive: bool = True) -> str:
+    """Alerts, then every numbered card, in order (contract C1)."""
+    from render import anatomy
+    return ("".join(alert_html(a, interactive=interactive)
+                    for a in anatomy.alerts(report))
+            + "".join(card_html(key, model, SECTION_MARK, interactive=interactive)
+                      for key, model in anatomy.cards(report)))
+
+
 def compose(report: Mapping[str, Any]) -> list[str]:
     """The sections, in order, for whichever product this report came from.
 
@@ -2560,15 +2608,11 @@ def compose(report: Mapping[str, Any]) -> list[str]:
     """
     meta = report["meta"]
     if meta.get("solo"):
+        # One card stack, top to bottom, in the email's order (contract C1):
+        # the masthead and its notices, any empty spot, then 01-07.
         return [
             header(meta, team_name(report)),
-            section_checklist(report["checklist"], report["meta"]),
-            section_your_week(report["matchup"], report.get("no_opponent")),
-            section_your_lineup(report),
-            section_regret(report["regret"]),
-            section_pivots(report["pivots"], report["meta"], report.get("pivots_note")),
-            section_rising(report.get("rising") or []),
-            section_receipts(report["receipts"]),
+            solo_cards(report),
             footer(meta),
         ]
     return [

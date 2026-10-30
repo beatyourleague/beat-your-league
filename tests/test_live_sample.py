@@ -270,8 +270,9 @@ NOW = datetime(2026, 10, 17, 0, 3, tzinfo=timezone.utc)
 
 
 def _odds(page: str) -> list[int]:
-    """The percentages the lineup's call column prints."""
-    return [int(n) for n in re.findall(r"<b>(\d+)%</b>", page)]
+    """The percentages the lineup prints — card 01's odds column (contract C3;
+    it was the call column's <b>NN%</b>)."""
+    return [int(n) for n in re.findall(r'<span class="fpct">(\d+)%</span>', page)]
 
 
 def test_a_week_is_recorded_once_by_its_first_build_before_kickoff(
@@ -424,3 +425,22 @@ def test_the_after_kickoff_page_withholds_but_never_adds_or_moves() -> None:
                                      "rebuilt_after_kickoff": True},
                             "lineup": out["lineup"]})[1].endswith(
         "Rebuilt after this week's first kickoff.")
+
+
+def test_the_clock_says_the_page_is_in_the_card_layout_only_when_it_is(
+        tmp_path, monkeypatch, week) -> None:
+    """Review BUYER-1/SLEEK-1/F7: three links promote "this week's real
+    report", and the page they opened (built Oct 20) was in the layout from
+    before the card stack — game plan first, the tape table, a slanted gold
+    button — right under a phone showing the cards. restamp_style leaves such
+    a page alone on purpose (restyling it would need a rebuild, and a rebuild
+    after kickoff drops odds), so the links wait for a page in the card
+    layout: the build writes `cards` beside it, only when the page it wrote
+    carries the cards, and an older clock has no such field."""
+    code, out, _ = _run(tmp_path, monkeypatch, kicked_off=False)
+    assert code == 0 and 'class="card"' in out.read_text(encoding="utf-8")
+    clock = json.loads((out.parent / "week.json").read_text(encoding="utf-8"))
+    assert clock["cards"] is True
+    plain = tmp_path / "plain.json"
+    live.write_week_json(week(), plain)
+    assert "cards" not in json.loads(plain.read_text(encoding="utf-8"))

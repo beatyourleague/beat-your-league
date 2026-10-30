@@ -604,12 +604,17 @@ def test_the_report_pages_lose_the_sheet_frame_on_a_phone() -> None:
     page (both samples, this week's, the roster report) kept a 14px/8px grey
     frame and a bordered sheet at 390. The template carries the same rule."""
     template = rr.TEMPLATE_PATH.read_text(encoding="utf-8")
-    rule = re.search(r"@media \(max-width:480px\)\{body\{padding:0;background:var\(--paper\);\}"
-                     r"\s*\.report\{border:0;box-shadow:none;\}\}", template)
-    assert rule, "the template lost its phone rule"
+    # Moved with the card stack (contract C3, Oct 2026): the paper runs edge
+    # to edge at EVERY width now — no grey desk, no bordered sheet — so the
+    # phone needs no rule of its own to lose them.
+    style = rr.extract_design(template)[0]
+    assert re.search(r"body\{background:var\(--paper\);", style), \
+        "the template lost its paper page"
+    assert not re.search(r"\.report\{[^}]*(border|box-shadow|background:#)", style)
+    assert "#E7E4DA" not in style, "the grey desk is back"
     from render.preseason import render
     page = render(_roster_report(), template)
-    assert "@media (max-width:480px){body{padding:0;background:var(--paper);}" in page
+    assert "body{background:var(--paper);" in page
 
 
 def test_a_change_notice_gives_a_one_time_pass_the_stop_route_not_a_billing_page() -> None:

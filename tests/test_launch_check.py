@@ -441,6 +441,11 @@ def test_a_join_page_that_unlocks_the_email_fails_in_the_browser(site) -> None:
     assert locked.search(text), "the join page no longer builds locked_prefilled_email"
     page.write_text(locked.sub(r"\1\2.toUpperCase())", text, count=1))
     gate = [g for g in lc.check_join_flows() if "hands off" in g.name][0]
+    if gate.status == "SKIP":
+        # Chrome could not start here (CI, Oct 25 2026: no DevTools port).
+        # That is the environment, not the page; the other browser tests
+        # skip the same way.
+        pytest.skip(f"Chrome could not run here: {gate.detail}")
     assert gate.status == "FAIL" and "locked email" in gate.detail, gate
 
 

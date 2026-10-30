@@ -4,7 +4,7 @@ SEASON ?= 2026
 RETIRED_LEAGUE ?= 289646328504385536
 
 .PHONY: week ingest backtest backtest-early backtest-retired test content receipts sync sync-preview dry-send send demo index \
-        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
+        intake intake-preview tuesday tuesday-preview saturday saturday-preview proving stats stats-registry dashboard dashboard-live dashboard-registry cost hours link books ask launch-check launch-check-fast drops sitemap monday monday-preview sample \
         og og-week brand billing billing-preview roster-update seat-release seat-reset waitlist-preview waitlist-send live-sample byes \
         platforms
 
@@ -97,6 +97,47 @@ stats-registry:
 	  gh run download -n sealed-registry -D "$$dir/data/sealed" && \
 	  $(PY) -I -S run/statebox.py open registry --root "$$dir" && \
 	  $(PY) -m run.stats --registry "$$dir/data/registry/rosters.json"
+
+# The owner's private dashboard (run/dashboard.py): one self-contained page at
+# data/dashboard.html (gitignored), built from the same read-only sources as
+# `make stats` plus Actions health, the launch check's fast gates and the
+# ledger, then opened in the browser. Refuses in CI. ARGS=--no-open writes only.
+dashboard:
+	$(PY) -m run.dashboard $(ARGS)
+
+# The same page kept fresh: rebuilt every EVERY minutes (default 15, at least
+# 10) until Ctrl-C, and the open tab reloads itself after each rebuild, keeping
+# your place. Leave it running in a Terminal tab; the page turns amber when it
+# stops updating.
+EVERY ?= 15
+dashboard-live:
+	$(PY) -m run.dashboard --every $(EVERY) $(ARGS)
+
+# Your books, for the dashboard's profit and posts (run/books.py; files in the
+# gitignored data/ folder, never committed):
+#   make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly   (once | monthly | yearly; DATE=2026-08-01)
+#   make hours H=1.5 NOTE="replied to emails"
+#   make link TAG=reddit-oct28 WHERE="r/fantasyfootball" PAGE=byes/   (prints the link to post)
+#   make books                                          (what's recorded)
+REPEATS ?= once
+cost:
+	@$(PY) -m run.books cost "$(ITEM)" "$(AMOUNT)" --repeats "$(REPEATS)" $(if $(DATE),--date "$(DATE)",)
+hours:
+	@$(PY) -m run.books hours "$(H)" --note "$(NOTE)" $(if $(DATE),--date "$(DATE)",)
+link:
+	@$(PY) -m run.books link "$(TAG)" --where "$(WHERE)" --page "$(PAGE)" --note "$(NOTE)" $(if $(DATE),--date "$(DATE)",)
+books:
+	@$(PY) -m run.books show
+
+# The same page with subscribers and League Pass seats, from a sealed-registry
+# copy opened in a temporary folder outside the repo and deleted on exit (the
+# stats-registry recipe). Needs `gh` logged in and CACHE_KEY in the shell.
+dashboard-registry:
+	@test -n "$$CACHE_KEY" || { echo "CACHE_KEY is not in this shell: read -s CACHE_KEY && export CACHE_KEY"; exit 2; }
+	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	  gh run download -n sealed-registry -D "$$dir/data/sealed" && \
+	  $(PY) -I -S run/statebox.py open registry --root "$$dir" && \
+	  $(PY) -m run.dashboard --registry "$$dir/data/registry/rosters.json" $(ARGS)
 
 # A roster change a subscriber sent by email ("reply with your new roster"),
 # applied through the same validated path as a confirmed self-serve update: it

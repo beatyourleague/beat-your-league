@@ -28,7 +28,8 @@
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
   :root{--display:'Barlow Condensed','Barlow Condensed Fallback','Arial Narrow',sans-serif;--sans:'Barlow','Barlow Fallback',-apple-system,'Segoe UI',Arial,sans-serif;--navy:#101E33;--paper:#F6F4EE;--card:#FFF;--turf:#1E7A46;--flag:#F2C230;
-    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#D8D3C6;--flag-deep:#D9A81B;}
+    --brick:#B3402F;--slate:#5A6B80;--ink2:#33445C;--line:#E2DDD0;--rule:#EEEAE1;--track:#E9E5DA;
+    --dusk:#BCC9DB;}
   *{margin:0;padding:0;box-sizing:border-box;}
   .sitebar{display:flex;align-items:center;justify-content:space-between;gap:8px 18px;}
   .sitebar .brand{display:inline-flex;align-items:center;gap:11px;flex:none;padding:3px 0;
@@ -44,119 +45,193 @@
   .sitenav a:hover,.sitenav a[aria-current]{color:#F6F4EE;}
   .sitebar a:focus-visible{outline:3px solid #F2C230;outline-offset:2px;}
   @media (max-width:599px){.sitenav .hidesm{display:none;}.sitebar .brand{font-size:17px;gap:9px;}.sitebar .brand svg.mark{width:21px;height:21px;}}
-  body{background:#E7E4DA;font-family:var(--sans);color:var(--navy);padding:14px 8px 44px;}
-  .sheet{max-width:800px;margin:0 auto;background:var(--paper);border:1px solid var(--line);
-    box-shadow:0 2px 18px rgba(16,30,51,.10);}
-  header{background:linear-gradient(180deg,#182A45,var(--navy));color:var(--paper);padding:26px 28px;}
+  /* Full-bleed paper (contract C2 of the truth pass): a flat navy band, then
+     the page itself on the paper, edge to edge at every width — no sheet on a
+     desk, no frame, no double rules. */
+  body{background:var(--paper);font-family:var(--sans);color:var(--navy);padding:0;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:0 24px;}
+  header{background:var(--navy);color:var(--paper);}
+  header .wrap{padding-top:32px;padding-bottom:48px;}
+  header h1{font-family:var(--display);font-weight:800;font-size:clamp(34px,4.6vw,48px);line-height:1;
+    text-transform:uppercase;margin-top:40px;text-wrap:balance;}
+  header p{margin-top:14px;font-size:18px;color:var(--dusk);line-height:1.5;max-width:640px;}
+  .headcta{margin-top:24px;}
   .headcta a:focus-visible{outline:3px solid var(--flag);outline-offset:2px;}
   /* Chrome's #0000EE is the only blue in the brand, and it lands on the refund
      and cancellation instructions a nervous buyer came here to read. */
-  main a,p a,li a{color:var(--navy);text-decoration:underline;
-    text-underline-offset:2px;text-decoration-thickness:1px;}
+  main a,p a,li a{color:var(--navy);text-decoration:underline;text-underline-offset:3px;
+    text-decoration-thickness:1px;text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);}
   main a:hover,p a:hover,li a:hover{color:var(--brick);}
-  header h1{font-family:var(--display);font-weight:800;font-size:40px;text-transform:uppercase;margin-top:6px;
-    text-wrap:balance;}
-  header p{margin-top:8px;font-size:14px;color:#C9D4E2;line-height:1.55;max-width:620px;}
-  main{padding:10px 28px 34px;}
-  .done{display:flex;align-items:center;gap:16px;margin-top:18px;}
-  .done h1{margin-top:0;}
-  .check{width:52px;height:52px;flex:none;}
-  .check circle{fill:none;stroke:var(--flag);stroke-width:3;stroke-dasharray:152;
-    stroke-dashoffset:152;animation:draw .6s ease-out .15s forwards;}
-  .check path{fill:none;stroke:var(--flag);stroke-width:4;stroke-linecap:round;
-    stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;
-    animation:draw .35s ease-out .7s forwards;}
-  @keyframes draw{to{stroke-dashoffset:0;}}
-  @media (prefers-reduced-motion: reduce){.check circle,.check path{animation:none;stroke-dashoffset:0;}}
-  .steps{list-style:none;margin:18px 0 6px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .steps li{margin:0;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--flag);
-    padding:12px 14px;font-size:13.5px;line-height:1.5;}
-  .steps li b{display:block;font-family:var(--display);font-weight:800;font-size:15px;
-    letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px;}
-  @media (max-width:600px){.steps{grid-template-columns:1fr;}}
-  h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;
-    margin:28px 0 8px;padding-top:14px;border-top:3px double var(--line);}
+  main{padding-bottom:72px;}
+  /* Sections: a slate number, then the heading — no rule between them. */
+  h2{font-family:var(--display);font-weight:800;font-size:clamp(28px,3.6vw,40px);line-height:1.05;
+    text-transform:uppercase;color:var(--navy);margin:48px 0 12px;text-wrap:balance;}
   /* The report's and the landing's section numbering: "01", never "1." (D8). */
-  h2 .n{display:block;font-size:13px;letter-spacing:.24em;color:var(--slate);margin-bottom:2px;}
-  p,li{font-size:14.5px;line-height:1.65;color:var(--ink2);margin:8px 0;}
+  h2 .n{display:block;font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--slate);
+    margin-bottom:6px;}
+  p,li{font-size:16px;line-height:1.6;color:var(--ink2);margin:10px 0;}
   ul{margin-left:20px;}
   b{color:var(--navy);}
-  .note{background:var(--card);border-left:5px solid var(--flag);padding:12px 14px;margin:14px 0;
-    font-size:14px;line-height:1.6;}
-  footer{padding:18px 28px 26px;font-size:12px;color:var(--slate);line-height:1.6;
-    border-top:3px double var(--line);}
-  dl.terms{margin:10px 0 4px;}
-  dl.terms dt{font-weight:800;color:var(--navy);margin-top:14px;font-size:15px;}
-  dl.terms dd{margin:2px 0 0 0;font-size:14.5px;line-height:1.65;color:var(--ink2);}
-  /* Contract C2: one primary (.btn.gold), one secondary (.btn.ghost). */
-  .btn{display:inline-block;font-family:var(--display);font-weight:800;font-size:16px;
-    letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;
-    padding:12px 22px;border:0;line-height:1.2;}
-  .btn.gold{color:var(--navy);background:linear-gradient(180deg,#FFDA5E,var(--flag) 55%,var(--flag-deep));
-    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);}
-  .btn.ghost{background:transparent;color:var(--navy);border:2px solid var(--navy);padding:10px 20px;}
+  footer{border-top:1px solid var(--line);}
+  footer .wrap{padding-top:24px;padding-bottom:40px;font-size:12px;line-height:1.6;color:var(--slate);}
+  dl.terms{margin:12px 0 4px;}
+  dl.terms dt{font-weight:700;color:var(--navy);margin-top:16px;font-size:16px;}
+  dl.terms dd{margin:4px 0 0 0;font-size:15px;line-height:1.6;color:var(--ink2);}
+  dl.terms dd ul{margin:6px 0 6px 20px;}
+  dl.terms dd li{margin:4px 0;font-size:15px;}
+  /* Contract C7: the site's one button — a flat rounded rectangle. One
+     primary (.btn.gold), one secondary (.btn.ghost). */
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;
+    border:0;border-radius:8px;font-family:var(--display);font-weight:800;font-size:16px;line-height:1;
+    letter-spacing:.06em;text-transform:uppercase;text-decoration:none;cursor:pointer;text-align:center;}
+  .btn.gold{color:var(--navy);background:var(--flag);}
+  .btn.gold:hover{background:#FFD24A;}
+  .btn.ghost{background:transparent;color:var(--navy);border:1.5px solid var(--navy);}
   main a.btn,main a.btn:hover{color:var(--navy);text-decoration:none;}
-  @media (prefers-reduced-motion: reduce){.btn{transition:none;transform:none!important;}}
-  .cta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0 4px;}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:32px 0 4px;}
   /* One primary, one secondary (contract C2); anything else beside them is a
      text link, as on the landing's cta-row, so the block reads as one ask
      rather than a list of choices (LOOK-9). */
   .cta .textlink{align-self:center;padding:10px 2px;font-size:15px;font-weight:700;}
-  .headcta{margin-top:16px;}
+  [hidden]{display:none!important;}
+  @media (max-width:600px){
+    .wrap{padding:0 16px;}
+    header .wrap{padding-top:24px;padding-bottom:32px;}
+    header h1{margin-top:32px;}
+    header p{font-size:16px;}
+    .cta .btn{width:100%;min-height:52px;}
+  }
+
   /* The report itself, beside the words that explain it (launch review D8):
-     rows copied from the published 2024 Week 10 sample, every figure pinned
-     to it (tests/test_prelaunch_pages.py) — never a mock-up. Drawn the way
-     the report draws them: square cards, the odds bar starting at 50%. */
-  .anno{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px 24px;
-    align-items:start;margin:16px 0 8px;}
+     each card is the published 2024 Week 10 sample's own card, drawn by the
+     report's own markup (render.report.card_html, contract C3) and injected
+     between the hiw-* markers by `make sample` — never a mock-up. The rules
+     below are the report template's own for the same classes, at the phone
+     width the card column holds: a navy head, a white body, slim gold bars
+     drawn from 50%, upright numerals. */
+  .anno{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px 32px;
+    align-items:start;margin:24px 0 8px;}
+  .anno + .anno{margin-top:40px;}
   .anno .terms{margin:0;}
   .anno .terms dt:first-child{margin-top:0;}
-  .filecard{background:var(--card);border:1px solid var(--line);box-shadow:var(--elev-2);}
-  .filehead{background:var(--navy);color:var(--paper);font-family:var(--display);font-weight:800;
-    font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;padding:8px 14px;}
-  .frow{display:grid;grid-template-columns:40px minmax(0,1fr) 38px 86px;gap:8px;align-items:center;
-    padding:9px 14px;border-top:1px solid #EDEAE1;font-size:13.5px;line-height:1.35;}
-  .filehead + .frow{border-top:0;}
-  .frow .slot{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.06em;
-    color:var(--slate);}
-  .frow b{display:block;color:var(--navy);}
-  .frow small{display:block;font-size:11.5px;color:var(--slate);}
-  .frow .proj{font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
-  .frow .call{font-size:11.5px;font-weight:700;color:var(--slate);}
-  /* The report's own colours (rival-report-template.html .tcall): a navy
-     numeral over a gold bar from 50% — never green, which the report keeps
-     for "nothing to change". */
-  .frow .pct{font-family:var(--display);font-weight:800;font-size:17px;color:var(--navy);}
-  .cbar{display:block;height:6px;background:#E6E2D6;margin-top:3px;}
-  .cbar i{display:block;height:100%;background:linear-gradient(90deg,var(--flag-deep),var(--flag));}
-  .task{display:grid;grid-template-columns:18px 1fr;gap:10px;padding:10px 14px;
-    border-top:1px solid #EDEAE1;font-size:13.5px;line-height:1.45;}
-  .filehead + .task{border-top:0;}
-  .task .box{width:16px;height:16px;border:2px solid var(--navy);margin-top:2px;}
-  .task b{display:block;color:var(--navy);}
-  .task small{display:block;font-size:11.5px;font-weight:700;color:var(--brick);
-    text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
-  /* The report's .dl.ok: a deadline already met by setting the lineup. */
-  .task small.ok{color:var(--turf);}
-  dl.terms dd ul{margin:4px 0 4px 20px;}
-  dl.terms dd li{margin:3px 0;}
-  .total{display:flex;align-items:baseline;gap:14px;padding:12px 14px;}
-  .total .big{font-family:var(--display);font-weight:800;font-size:40px;line-height:1;
+  .annocard,.filecard{display:block;min-width:0;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:var(--elev-2);text-align:left;}
+  .card .eyebrow{display:flex;justify-content:space-between;align-items:center;gap:12px;
+    background:var(--navy);padding:11px 16px;margin:0;}
+  .card .eyebrow .tag{color:#F6F4EE;font:800 14px/1.2 var(--display);letter-spacing:.08em;
+    text-transform:uppercase;}
+  .card .eyebrow .n{color:var(--flag);font:800 14px/1.2 var(--display);letter-spacing:.08em;
     font-variant-numeric:tabular-nums;}
-  .total small{display:block;font-size:11.5px;font-weight:700;color:var(--slate);
-    text-transform:uppercase;letter-spacing:.08em;}
-  .total .range{font-family:var(--display);font-weight:800;font-size:22px;}
-  .pivot{padding:12px 14px;font-size:14px;line-height:1.5;}
-  .pivot .if{font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  .cbody{padding:4px 16px 14px;}
+  .card p{margin:0;}
+  .card .fact,.card .legend,.card .basis,.card .note,.card .gate,.card .tnote{font-size:14px;
+    line-height:1.5;color:var(--ink2);}
+  .card .fact{margin-top:8px;}
+  .card .legend{margin-top:8px;font-size:13px;}
+  .card .legend b,.card .tnote b,.card .gate b{color:var(--navy);}
+  /* 01 — the week line, then every starter at a glance. */
+  .card .wk{margin:12px 0 4px;font-variant-numeric:tabular-nums;}
+  .wkn{font:800 32px/1 var(--display);color:var(--navy);}
+  .wku{font-size:13px;font-weight:600;color:var(--slate);}
+  .wkr{margin-left:8px;font-size:16px;font-weight:700;color:var(--ink2);}
+  .card .gate{margin:12px 0 6px;}
+  .card .basis{margin-top:4px;font-size:12px;color:var(--slate);}
+  .card .note{margin-top:6px;font-size:13px;}
+  .glance{margin-top:8px;}
+  .frow,.ghead{display:grid;column-gap:6px;align-items:center;}
+  .glance.g5 .frow,.glance.g5 .ghead{grid-template-columns:40px minmax(0,1fr) 40px 36px 42px;}
+  .glance.g3 .frow,.glance.g3 .ghead{grid-template-columns:40px minmax(0,1fr) 40px;}
+  .glance.g2 .frow{grid-template-columns:40px minmax(0,1fr);}
+  .frow{padding:9px 0;border-top:1px solid var(--rule);}
+  .ghead{padding:6px 0 4px;}
+  .ghead span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--slate);text-align:right;}
+  .ghead span:first-child{grid-column:3;}
+  .ghead span:nth-child(2){grid-column:4 / -1;}
+  .fslot{font:800 12px/1.2 var(--display);letter-spacing:.06em;text-transform:uppercase;
+    color:var(--slate);}
+  .fname{font-size:16px;font-weight:700;line-height:1.25;color:var(--navy);overflow-wrap:anywhere;}
+  .fproj{font-size:15px;font-weight:600;color:var(--ink2);text-align:right;
+    font-variant-numeric:tabular-nums;}
+  .fbar{display:block;height:6px;background:var(--track);border-radius:3px;overflow:hidden;}
+  .fbar i{display:block;height:100%;background:var(--flag);}
+  .fpct{font:800 20px/1 var(--display);color:var(--navy);text-align:right;
+    font-variant-numeric:tabular-nums;}
+  /* Why a row has no %: a short second line under the name, never a column. */
+  .fnc{grid-column:2 / -1;margin-top:3px;font-size:12px;font-weight:700;line-height:1.3;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--slate);}
+  .fnc.flag{color:var(--brick);}
+  .fnc.basis{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink2);}
+  /* A task: a box to tick, the action, why, and its deadline as a chip. */
+  .task{display:grid;grid-template-columns:18px minmax(0,1fr);gap:12px;align-items:start;
+    padding:12px 0;border-top:1px solid var(--rule);}
+  .task:first-child{border-top:0;}
+  .task.info{grid-template-columns:minmax(0,1fr);}
+  [data-sec="lineup"] .task{margin-top:10px;padding:10px 12px;background:#FBF3D9;
+    border:1px solid #EBDDAE;border-radius:8px;}
+  .task .box{display:block;width:18px;height:18px;margin:2px 0 0;border:2px solid var(--navy);
+    border-radius:4px;background:var(--card);}
+  .tb{display:block;font-size:15px;line-height:1.4;color:var(--navy);}
+  .task .do{font-size:16px;font-weight:600;}
+  .task .why{display:block;margin-top:3px;font-size:14px;line-height:1.45;color:var(--ink2);}
+  .chip{display:inline-block;margin-top:7px;padding:3px 8px;border-radius:4px;font-size:12px;
+    font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.3;}
+  .chip.ok{color:#1E7A46;background:#E3F2E8;}
+  .chip.due{color:#B3402F;background:#F9E6E1;}
+  .task .tb > .chip{display:table;}
+  .card .standing{margin-top:4px;padding-top:10px;border-top:1px solid var(--rule);font-size:14px;
+    line-height:1.5;color:var(--ink2);}
+  /* 02 — the week's closest call. */
+  .card .clabel{margin-top:12px;font-size:12px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--slate);}
+  .card .verdict{margin-top:4px;font-size:19px;font-weight:700;line-height:1.3;color:var(--navy);}
+  .verdict span{font-weight:500;color:var(--slate);}
+  .cmeter{display:flex;align-items:center;gap:12px;margin-top:10px;}
+  .cmeter .cbar{flex:1;display:block;height:8px;background:var(--track);border-radius:4px;
+    overflow:hidden;}
+  .cmeter .cbar i{display:block;height:100%;background:var(--flag);}
+  .cpct{font:800 32px/1 var(--display);color:var(--navy);font-variant-numeric:tabular-nums;}
+  .card .drivers{margin-top:8px;font-size:14px;line-height:1.5;color:var(--ink2);}
+  .card .drivers b{color:var(--navy);font-variant-numeric:tabular-nums;}
+  .card .closer{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule);font-size:14px;
+    line-height:1.5;color:var(--ink2);}
+  /* 04 — the if/then. */
+  .pivot{padding:12px 0;border-top:1px solid var(--rule);}
+  .pivot:first-child{border-top:0;}
+  .card .if{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
     color:var(--brick);}
-  .realfoot{font-size:12.5px;color:var(--slate);margin:4px 0 0;}
-  @media (max-width:640px){
-    .anno{grid-template-columns:1fr;}
-    .frow{grid-template-columns:34px minmax(0,1fr) 34px 74px;padding:9px 10px;}
+  .card .then{margin-top:3px;font-size:16px;font-weight:700;line-height:1.35;color:var(--navy);}
+  .card .rest{margin-top:3px;font-size:14px;line-height:1.5;color:var(--ink2);}
+  /* 05 — slot by slot. */
+  .tape{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px;}
+  .tape td{padding:11px 0;border-top:1px solid var(--rule);vertical-align:top;}
+  .tape tr:first-child td{border-top:0;}
+  .tslot{font:800 12px/1.5 var(--display);letter-spacing:.06em;text-transform:uppercase;
+    color:var(--slate);padding-top:13px!important;}
+  .tdet{padding-right:8px!important;}
+  .tname{display:block;font-size:16px;font-weight:700;line-height:1.3;color:var(--navy);}
+  .tgame{display:block;margin-top:2px;font-size:13px;line-height:1.45;color:var(--navy);}
+  .tflag{display:block;margin-top:2px;font-size:13px;line-height:1.45;font-weight:700;
+    color:var(--brick);}
+  .tcall{display:block;margin-top:2px;font-size:13px;line-height:1.45;font-weight:700;
+    color:var(--navy);}
+  .tsub{display:block;margin-top:2px;font-size:13px;line-height:1.45;color:var(--ink2);}
+  .trank{display:block;margin-top:2px;font-size:12px;line-height:1.45;font-weight:800;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--navy);}
+  .tproj{text-align:right;font-size:15px;font-weight:700;color:var(--navy);
+    font-variant-numeric:tabular-nums;}
+  .bhead{margin-top:6px;padding:14px 0 4px;border-top:1px solid var(--rule);font-size:12px;
+    font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--slate);}
+  .card .tnote{margin-top:10px;font-size:13px;}
+  .realfoot{font-size:13px;color:var(--slate);margin:24px 0 0;}
+  @media (max-width:720px){
+    .anno{grid-template-columns:minmax(0,1fr);}
   }
-  [hidden]{display:none!important;}
-  /* A phone shows the page, not a sheet on a desk (launch review D15). */
-  @media (max-width:480px){body{padding:0;background:var(--paper);}.sheet{border:0;box-shadow:none;}}
+  @media (max-width:600px){
+    .cbody{padding:4px 14px 14px;}
+  }
   /* The odds bars fill as they come up into view, the way a reader meets
      them in the report: empty as a bar crosses the bottom edge, full by the
      time it is 12% of the way up the screen, so a bar being read matches its
@@ -164,8 +239,8 @@
      are simply full. Only the reveal moves: the width is the published figure. */
   @media screen and (prefers-reduced-motion:no-preference){
     @supports (animation-timeline: view()){
-      .cbar{view-timeline:--fillbar block;}
-      .cbar i{transform-origin:0 50%;animation:cfill linear both;animation-timeline:--fillbar;
+      .fbar,.cbar{view-timeline:--fillbar block;}
+      .fbar i,.cbar i{transform-origin:0 50%;animation:cfill linear both;animation-timeline:--fillbar;
         animation-range:entry 0% cover 12%;}
       @keyframes cfill{from{transform:scaleX(0);}to{transform:none;}}
     }
@@ -175,38 +250,27 @@
      (tests/test_polish_pages.py compares them), and last in the sheet, so a
      page's own older rule of the same weight never wins. Motion is transform
      and opacity only; site/motion.js adds .motion, and without it (no script,
-     reduced motion) nothing here hides anything. */
+     reduced motion) nothing here hides anything. One depth (contract C7): the
+     paper shadow, on paper only. One press: a flat button lifts 1px and
+     settles — no slant, no gradient, no sheen, no drop shadow. */
   :root{--ease-out:cubic-bezier(.22,1,.36,1);--ease-pop:cubic-bezier(.34,1.56,.64,1);
     --elev-1:0 1px 2px rgba(16,30,51,.06);
-    --elev-2:0 1px 2px rgba(16,30,51,.05),0 10px 24px -14px rgba(16,30,51,.28);
-    --elev-3:0 2px 10px rgba(16,30,51,.06),0 30px 60px -30px rgba(16,30,51,.35);}
-  /* The sheet on a desk; a phone shows the paper edge to edge (D15). */
-  @media (min-width:481px){.page,.sheet,.report{box-shadow:var(--elev-3);}}
+    --elev-2:0 1px 2px rgba(16,30,51,.06),0 8px 24px -12px rgba(16,30,51,.18);}
   .nextcard,.pick > div,.checkmail,.scout,.rows,.suggest{box-shadow:var(--elev-2);}
   /* Navy on paper passes 3:1; the navy header keeps its gold ring. */
   main a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--navy);
     outline-offset:2px;border-radius:2px;}
-  /* A clip-path clips the outline too: a slanted gold button showed NO ring
-     when focused, so it squares off while it holds keyboard focus. */
+  /* A clip-path clips the outline too, so a slanted button left anywhere
+     squares off while it holds keyboard focus. */
   .btn.gold:focus-visible{clip-path:none;}
-  /* The outline survives forced colours; the gold halo is decoration. */
+  /* A field in focus: its border turns navy and a soft navy ring rises; the
+     transparent outline is what forced colours draws. */
   input[type=text]:focus-visible,input[type=email]:focus-visible,textarea:focus-visible{
-    outline:2px solid var(--navy);outline-offset:2px;box-shadow:0 0 0 6px rgba(242,194,48,.38);}
+    outline:2px solid transparent;outline-offset:2px;border-color:var(--navy);
+    box-shadow:0 0 0 3px rgba(16,30,51,.15);}
   .btn,button{transition:transform .18s var(--ease-out);}
-  .btn:hover,button:hover:not(:disabled){transform:translateY(-2px);}
+  .btn:hover,button:hover:not(:disabled){transform:translateY(-1px);}
   .btn:active,button:active:not(:disabled){transform:translateY(1px) scale(.985);transition-duration:.06s;}
-  /* A sheen across the primary only, on hover: one gold action at a time. */
-  .btn.gold,#resolve:not(.is-done),#submit:not(.is-closed):not(:disabled),#check-yes,
-  .confirm button:not(:disabled),.sharebtn{position:relative;overflow:hidden;}
-  .btn.gold::after,#resolve:not(.is-done)::after,#submit:not(.is-closed):not(:disabled)::after,
-  #check-yes::after,.confirm button:not(:disabled)::after,.sharebtn::after{content:"";
-    position:absolute;inset:0 auto 0 0;width:45%;pointer-events:none;
-    background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));
-    transform:translateX(-130%) skewX(-14deg);}
-  .btn.gold:hover::after,#resolve:not(.is-done):hover::after,
-  #submit:not(.is-closed):not(:disabled):hover::after,#check-yes:hover::after,
-  .confirm button:not(:disabled):hover::after,.sharebtn:hover::after{
-    transform:translateX(260%) skewX(-14deg);transition:transform .75s var(--ease-out);}
   /* Below-the-fold blocks rise in once (site/motion.js). Never a header, an
      h1 or the first paragraph, and never the words a reader is waiting for. */
   .motion [data-reveal]:not([data-reveal="group"]):not(.in),
@@ -222,8 +286,6 @@
      frame at once, so the page is complete at rest. */
   @media (prefers-reduced-motion:reduce){
     .btn,button,.opts label{transition:none!important;transform:none!important;}
-    .btn.gold::after,#resolve::after,#submit::after,#check-yes::after,.confirm button::after,
-    .sharebtn::after{display:none;}
     *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;
       animation-iteration-count:1!important;}
   }
@@ -231,26 +293,29 @@
 </style>
 </head>
 <body>
-<div class="sheet">
-  <header>
+<header>
+  <div class="wrap">
     <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidesm" href="how-it-works.html" aria-current="page">How it works</a><a href="sample-report.html">See a real report</a><a class="hidesm" href="index.html#pricing">Pricing</a></nav></div>
     <h1>How your report works</h1>
-    <p>What lands in your inbox, what each part means, where the numbers come from, and how
-    to check any call yourself. You paste your roster when you sign up, and again whenever
-    it changes (every report tells you how). No login, no league connection.</p>
+    <p>Every Tuesday: every slot decided, the week's closest call explained, what to do and
+    by when, and a plan for late news. Here's what each part means, where the numbers come
+    from and how to check any call. You paste your roster when you sign up, and again
+    whenever it changes. No login, no league connection.</p>
     <!-- Closed state is the static markup (fail closed), like the landing's;
          CHECKOUT_OPEN below, pinned equal to the landing's, opens it (D15). -->
     <p class="headcta"><a class="btn gold" href="index.html#watch-form" data-checkout-cta>Tell me when it opens</a></p>
-  </header>
-  <main>
+  </div>
+</header>
+<main>
+  <div class="wrap">
 
     <h2><span class="n">01</span>What you get, and when</h2>
     <ul>
       <li><b>Tuesday morning:</b> one report for your roster, under the scoring you pick (full
       PPR, half PPR or standard): every slot decided, every close call explained, the odds
       where we can give them (<a href="#read">which rows get them</a>), and a plan for late news.
-      The game plan at the top takes about a minute; the rest is the why, there when you want
-      it.</li>
+      Your lineup comes first, every slot decided, and setting it takes about a minute; the
+      rest is the why, there when you want it.</li>
       <li><b>Saturday, only if something changed:</b> if Friday's injury report changes your
       lineup, a short final check tells you the swap. No news, no email.</li>
       <li><b>That's the whole inbox.</b> The day you join, your welcome and your first report.
@@ -262,29 +327,18 @@
     like, and, where the app has one, its default lineup.</p>
 
     <h2 id="read"><span class="n">02</span>Reading your report</h2>
-    <!-- Each card is the published sample's own rows (site/sample-report.html,
-         2024 Week 10), beside the entries that explain them. -->
+    <!-- Each card is the published sample's own (site/sample-report.html,
+         2024 Week 10), in the report's order, beside the entries that explain
+         it. Between each hiw-* pair sits render/phone.py's hiw_cards output —
+         render.report.card_html in its data-real filecard, so the figure guard
+         sweeps it — written by `make sample`, never by hand. The page's own
+         .annocard around it is the cell that rises in (data-reveal). -->
     <div class="anno">
-      <div class="filecard" data-real="2024-w10" data-reveal>
-        <div class="filehead">Your game plan</div>
-        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Bench Sam LaPorta — Tony Pollard starts at FLEX</b>Sam LaPorta projects 9.5, Tony Pollard 10.3.<small class="ok">before this week's first kickoff</small></span></div>
-        <div class="task"><span class="box" aria-hidden="true"></span><span><b>Sunday morning: check Tony Pollard's status</b>Your if/then below already has the answer either way.<small>gameday morning</small></span></div>
-      </div><!--/card-->
-      <dl class="terms">
-      <dt>Game plan</dt>
-      <dd>The checklist at the top. Tick the boxes and you're done; everything below is the why.</dd>
-      </dl>
-    </div>
-    <div class="anno">
-      <div class="filecard" data-real="2024-w10" data-reveal>
-        <div class="filehead">Your lineup · 2024 Week 10</div>
-        <div class="frow"><span class="slot">WR</span><span><b>Amon-Ra St. Brown</b><small>+7.6 over Courtland Sutton on your bench</small></span><span class="proj">16.9</span><span class="call"><span class="pct">80%</span><span class="cbar"><i style="width:60%"></i></span></span></div>
-        <div class="frow"><span class="slot">WR</span><span><b>Ja'Marr Chase</b><small>+6.7 over Courtland Sutton on your bench</small></span><span class="proj">16.0</span><span class="call"><span class="pct">73%</span><span class="cbar"><i style="width:46%"></i></span></span></div>
-        <div class="frow"><span class="slot">TE</span><span><b>George Kittle</b><small>+4.7 over Sam LaPorta on your bench</small></span><span class="proj">14.1</span><span class="call"><span class="pct">72%</span><span class="cbar"><i style="width:43%"></i></span></span></div>
-        <div class="frow"><span class="slot">FLEX</span><span><b>Tony Pollard</b><small>Questionable in Week 9 (foot) — played, 18.4</small></span><span class="proj">10.3</span><span class="call">questionable · see if/then</span></div>
-        <div class="frow"><span class="slot">QB</span><span><b>Josh Allen</b><small>2024: 20.1 a game</small></span><span class="proj">19.8</span><span class="call">no bench QB</span></div>
-        <div class="frow"><span class="slot">DEF</span><span><b>Denver Broncos</b><small>+2.2 over Baltimore Ravens on your bench</small></span><span class="proj">6.9</span><span class="call">projection only</span></div>
-      </div><!--/card-->
+      <div class="annocard" data-reveal>
+<!-- hiw-lineup:start -->
+<div class="filecard" data-real="2024-w10"><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">no bench QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">start · Chase Brown (bench) rising</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">start · Chase Brown (bench) rising</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">no bench K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p><p class="legend"><b>Checked for you:</b> 15 players, 9 slots, every kickoff time and the Week 9 injury report.</p></div></section></div><!--/card-->
+<!-- hiw-lineup:end -->
+      </div>
       <dl class="terms">
       <dt>Proj</dt>
       <dd>Projected fantasy points for that player this week, under the scoring you picked
@@ -316,14 +370,6 @@
       </ul>
       From Week 2 those rows still get a projection (in Week 1 each row shows last season's
       scoring instead), and the report says why there's no number.</dd>
-      </dl>
-    </div>
-    <div class="anno">
-      <div class="filecard" data-real="2024-w10" data-reveal>
-        <div class="filehead">Your week</div>
-        <div class="total"><span><span class="big">126.1</span><small>proj</small></span><span><span class="range">94 – 158</span><small>realistic range</small></span></div>
-      </div><!--/card-->
-      <dl class="terms">
       <!-- render.report.RANGE_DEFINITION, verbatim: every report prints the
            range, and no page said what it was (panel review SS-I1). -->
       <dt>Realistic range</dt>
@@ -332,14 +378,12 @@
       </dl>
     </div>
     <div class="anno">
-      <div class="filecard" data-real="2024-w10" data-reveal>
-        <div class="filehead">If/then for gameday</div>
-        <div class="pivot"><div class="if">If Tony Pollard (FLEX) is ruled out</div>Move Sam LaPorta into FLEX (projects 9.5).</div>
-      </div><!--/card-->
+      <div class="annocard" data-reveal>
+<!-- hiw-closest:start -->
+<div class="filecard" data-real="2024-w10"><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card-->
+<!-- hiw-closest:end -->
+      </div>
       <dl class="terms">
-      <dt>If/then for gameday</dt>
-      <dd>What to do if a questionable player is ruled out, decided in advance so Sunday morning
-      isn't a scramble.</dd>
       <!-- The report's own label (COPY:F4, SS2-D2): the closest call WITH
            odds, and a narrower decision without them is named beside it. -->
       <dt>The week's closest call with odds</dt>
@@ -347,18 +391,55 @@
       be. If a closer one has no odds this week, the report names it too.</dd>
       </dl>
     </div>
-    <p class="realfoot">The cards are rows from the <a href="sample-report.html">2024 Week 10
-    sample report</a>, a real week built for a sample roster.</p>
-    <dl class="terms">
+    <div class="anno">
+      <div class="annocard" data-reveal>
+<!-- hiw-plan:start -->
+<div class="filecard" data-real="2024-w10"><section class="card" data-sec="plan"><div class="eyebrow"><span class="tag">Your Game Plan</span><span class="n">03</span></div><div class="cbody"><div class="task"><span class="box"></span><span class="tb"><b class="do">Bench Sam LaPorta — Tony Pollard starts at FLEX</b><span class="why">Sam LaPorta: TE3 last season. Last three games: 3.5, 16.8, 4.8. Projects 9.5, Tony Pollard 10.3.</span><span class="chip due">before this week&#x27;s first kickoff</span></span></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Sunday morning: check Tony Pollard&#x27;s status</b><span class="why">Your if/then below already has the answer either way.</span><span class="chip due">gameday morning</span></span></div><p class="standing"><b>Saturday:</b> after Friday&#x27;s final injury report, we email you if it changes your lineup.</p></div></section></div><!--/card-->
+<!-- hiw-plan:end -->
+      </div>
+      <dl class="terms">
+      <dt>Game plan</dt>
+      <dd>What to do this week and by when, each with its deadline. Tick the boxes and you're
+      done.</dd>
       <dt>Byes ahead</dt>
       <dd>A line in the game plan when a bye still to come — playoff weeks included — leaves a
       starting spot nobody on your roster can fill, with players at that spot who play that week
       and their points a game this season, so you can line up cover while there's time. Whether
       they're free in your league is yours to check. No line means every bye ahead is
       covered. Check yours now, free: <a href="byes/">the bye-week planner</a>.</dd>
+      </dl>
+    </div>
+    <div class="anno">
+      <div class="annocard" data-reveal>
+<!-- hiw-ifthen:start -->
+<div class="filecard" data-real="2024-w10"><section class="card" data-sec="ifthen"><div class="eyebrow"><span class="tag">If/Then for Gameday</span><span class="n">04</span></div><div class="cbody"><div class="pivot"><p class="if">If Tony Pollard (FLEX) is ruled out</p><p class="then">Move Sam LaPorta into FLEX (projects 9.5).</p><p class="rest">Chase Brown (10.3) plays Thursday, before Tony Pollard&#x27;s status is known.</p></div></div></section></div><!--/card-->
+<!-- hiw-ifthen:end -->
+      </div>
+      <dl class="terms">
+      <dt>If/then for gameday</dt>
+      <dd>What to do if a questionable player is ruled out, decided in advance so Sunday morning
+      isn't a scramble.</dd>
+      </dl>
+    </div>
+    <div class="anno">
+      <div class="annocard" data-reveal>
+<!-- hiw-slot:start -->
+<div class="filecard" data-real="2024-w10"><section class="card" data-sec="slots"><div class="eyebrow"><span class="tag">Slot by Slot</span><span class="n">05</span></div><div class="cbody"><table class="tape"><colgroup><col style="width:10%"><col style="width:76%"><col style="width:14%"></colgroup><tr><td class="tslot">WR</td><td class="tdet"><b class="tname">Amon-Ra St. Brown</b><span class="tgame">@ HOU · Sun 8:20 PM ET</span><span class="tcall">+7.6 over Courtland Sutton on your bench</span><span class="tsub">2024: 16.8 a game · last 3: 25.2, 8.7, 18.6</span><span class="tsub">last 4: 5.2 targets a game</span></td><td class="tproj">16.9</td></tr></table></div></section></div><!--/card-->
+<!-- hiw-slot:end -->
+      </div>
+      <dl class="terms">
+      <dt>Slot by slot</dt>
+      <dd>Every starter and bench player in full: his game and kickoff, the bench option he's
+      measured against and by how many points, his season and last three games, and his
+      recent usage.</dd>
+      </dl>
+    </div>
+    <p class="realfoot">The cards are rows from the <a href="sample-report.html">2024 Week 10
+    sample report</a>, a real week built for a sample roster.</p>
+    <dl class="terms">
       <dt>Rising roles</dt>
-      <dd>Players getting more of the ball lately. "Touches" means targets plus carries. It points
-      at who's getting more work; whether he's free in your league is for you to check.</dd>
+      <dd>Players getting more of the ball lately. It points at who's getting more work;
+      whether he's free in your league is for you to check.</dd>
       <dt>The Receipts</dt>
       <dd>Each call with odds in your last report and how it finished, in your next one. A
       call where neither player scored, or a tie, reads "no result".</dd>
@@ -410,7 +491,8 @@
     person) until your second weekly report's week kicks off
     (<a href="terms.html#refunds">the exact terms</a>). Nothing renews and there's nothing to
     cancel. Running a league of up to 14 teams? The <a href="league-pass.html">League
-    Pass</a> covers every manager for $69, one payment.</p>
+    Pass</a> covers every manager for $69, one payment, with the same full refund (one per
+    league).</p>
 
     <!-- The page's ask is the one action it leads to: setting up a team
          (launch review PE-3). The proof link follows the live-week rule. -->
@@ -420,11 +502,11 @@
       <a class="btn ghost" href="this-week.html" data-live-week hidden>See this week's report</a>
       <a class="textlink" href="index.html#pricing">Pricing</a>
     </div>
+  </div>
 </main>
-  <footer><b>Beat Your League</b> — analysis, not betting picks. Projections are analysis, not
+<footer><div class="wrap"><b>Beat Your League</b> — analysis, not betting picks. Projections are analysis, not
   guarantees, and this page is not legal advice. NFL data: nflverse (nflverse-data), CC-BY-4.0.
-  Not affiliated with the NFL.</footer>
-</div>
+  Not affiliated with the NFL.</div></footer>
 <script>
 "use strict";
 // A cookie-free source tag (?via=<channel>), carried onto the links below.
@@ -499,7 +581,10 @@ function weekPhase(w) {
         const clock = weekPhase(w);
         if (clock.closed && CHECKOUT_OPEN) setCheckoutCta(false);
         if (!(clock.phase === "season" && clock.current)) return;
-        if (!(Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call)) return;
+        // cards: the page is in the report's current card layout (written
+        // by the Tuesday build); an older page waits for its rebuild.
+        if (!(Number.isInteger(w.odds) && w.odds >= 3 && w.closest_call &&
+              w.cards === true)) return;
         document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
         document.querySelectorAll("[data-pinned-week]").forEach((el) => { el.hidden = true; });
       })

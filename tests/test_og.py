@@ -8,6 +8,7 @@ would be invisible here and public everywhere.
 
 from __future__ import annotations
 
+import html
 import re
 import struct
 from pathlib import Path
@@ -118,7 +119,7 @@ def test_the_card_quotes_the_landing_page_rather_than_inventing_numbers() -> Non
     assert len(rows) >= 3, "too few rows to be the real card"
     flat = re.sub(r"<[^>]+>", " ", SAMPLE)
     for row in rows:
-        assert row["name"] in LANDING
+        assert row["name"] in LANDING or html.escape(row["name"]) in LANDING
         if row["pct"]:
             assert f'{row["pct"]}%' in flat or f'{row["pct"]}%' in SAMPLE, (
                 f'{row["name"]} is shown at {row["pct"]}% on the card, and that '
@@ -138,9 +139,26 @@ def test_the_headline_is_the_landing_pages_own() -> None:
     assert og.headline(LANDING) == "Know who to start."
 
 
-def test_the_built_page_carries_every_row_and_no_stray_markup() -> None:
+def test_the_card_names_the_season_and_week_it_shows() -> None:
+    """Review BUYER-7: the card every page shares labelled 2024 Week 10 odds
+    only "Real output", so posted on X in 2026 it read as this week's odds on
+    current players. It now says the season and week, read from the hero
+    card's own data-real marker, and refuses to build without one."""
+    year, week = re.search(r'<div class="filecard"[^>]*data-real="(\d{4})-w(\d+)"',
+                           LANDING).groups()
     page = og.build_html(LANDING)
-    for row in og.hero_rows(LANDING):
+    assert f"Real report · {year}, Week {int(week)}" in page and "Real output" not in page
+    with pytest.raises(og.OgError):
+        og.real_label(LANDING.replace("data-real=", "data-x="))
+
+
+def test_the_built_page_carries_every_row_and_no_stray_markup() -> None:
+    """The card shows the phone's odds rows and its first flagged row
+    (og_rows) — the decided lineup at a glance, the honesty included."""
+    page = og.build_html(LANDING)
+    rows = og.og_rows(og.hero_rows(LANDING))
+    assert [r["pct"] for r in rows if r["pct"]] and any(r["tone"] == "flag" for r in rows)
+    for row in rows:
         assert row["slot"] in page
         # The name is escaped on the way in — Ja'Marr Chase has an apostrophe.
         assert row["name"].replace("'", "&#x27;") in page or row["name"] in page
@@ -170,7 +188,8 @@ def test_the_alt_text_describes_what_is_actually_on_the_card() -> None:
     deleted from the landing page.
     """
     alt = re.search(r'og:image:alt" content="([^"]+)"', SOCIAL_IMAGE_TAGS).group(1)
-    rows = og.hero_rows(LANDING)
+    # The rows the CARD shows (og_rows of the phone's nine).
+    rows = og.og_rows(og.hero_rows(LANDING))
     called = [r for r in rows if r["pct"]]
     nocall = [r for r in rows if r["nocall"]]
     assert alt == (

@@ -71,7 +71,8 @@ def test_a_recorded_first_build_puts_the_ledgers_closest_call_on_the_clock(
     assert (closest["start_id"], closest["over_id"], closest["slot"]) == (
         held["pick_id"], held["over_id"], held["slot"])
     page = out.read_text(encoding="utf-8")
-    assert f'<div class="num">{closest["pct"]}%</div>' in page
+    # Card 02's % (contract C3: <b class="cpct">, was <div class="num">).
+    assert f'<b class="cpct">{closest["pct"]}%</b>' in page
     before, joiner, after = regret_verdict(regret)
     assert f'{live.esc(before)} <span class="over">{joiner}</span> {live.esc(after)}' in page
     assert closest["tossup"] is (joiner == "or")
@@ -524,8 +525,8 @@ KIT_MARKUP = """  <!-- The commissioner kit (G4): two things a commissioner can 
   </div>
 """
 KIT_CSS = """  /* The commissioner kit (G4): the ask's own chatline and share button. */
-  .kit-lead{margin-top:6px;font-size:14px;line-height:1.55;color:var(--dusk2);}
-  .kit-item + .kit-item{margin-top:18px;}
+  .kit-lead{margin-top:8px;font-size:15px;line-height:1.55;color:var(--dusk2);}
+  .kit-item + .kit-item{margin-top:20px;}
 """
 # Inside the page's script, after the ask's handler.
 KIT_SHARE_JS = """// The commissioner kit (G4): each line goes to the group chat through the
@@ -750,7 +751,7 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert "$" not in visible and not re.search(r"better than|more accurate|grade", visible, re.I)
     assert f"<title>{name} fantasy football start/sit report for your roster — Beat Your League</title>" in page
     assert (f'<meta name="description" content="Copy your {name} fantasy roster and paste it, no '
-            f"login: every Tuesday a report sets your lineup — every slot decided, close calls "
+            f"login: every Tuesday a report decides your lineup — every slot decided, close calls "
             f'explained, byes checked through Week 17.">') in page
     assert f"<h1>Your {name} roster, decided every Tuesday</h1>" in page
     assert f'<link rel="canonical" href="https://beatyourleague.com/{slug}/">' in page

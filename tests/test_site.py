@@ -283,9 +283,12 @@ def test_the_seat_page_says_a_claim_waits_for_its_inbox() -> None:
     submit = _js_function(JOIN, "submitSeat")
     assert '$("done-head").textContent = "Next: confirm your seat from your inbox.";' in submit
     assert "Your seat request is in" not in JOIN
-    for fn in ("firstChipText", "drawFirst"):
-        assert "matched" not in _js_function(JOIN, fn), fn
-    assert "A report the day it's confirmed" in _js_function(JOIN, "firstChipText")
+    # The header chips went in the truth pass (the button already says what
+    # is open); the sidebar line still times a seat's report from its
+    # confirmation, never a match.
+    draw = _js_function(JOIN, "drawFirst")
+    assert "matched" not in draw
+    assert 'SEAT_MODE ? "the day your seat is confirmed" : "the day you join"' in draw
 
 
 def test_the_week_2_promise_names_exactly_the_setups_that_get_early_odds() -> None:
@@ -334,9 +337,12 @@ def test_the_terms_define_the_file_the_refund_window_counts() -> None:
 
 
 def test_cancellation_is_promised_and_never_obstructed() -> None:
-    """Subscribers must be told they can leave, in plain words."""
-    assert re.search(r"cancel yourself any time|cancel any time", JOIN, re.I), \
+    """Subscribers must be told they can leave, in plain words. (Read as a
+    reader meets it: the monthly terms say "Cancel yourself any time" across a
+    JS string join, now that the header chip that also said it is gone.)"""
+    assert re.search(r"cancel yourself any time|cancel any time", JOIN_PROSE, re.I), \
         "join page must tell subscribers they can cancel themselves"
+    assert re.search(r"nothing to cancel", JOIN_PROSE, re.I), "the one-payment pass says so"
     # 2026's one-time passes have nothing to cancel, and the card says so.
     assert re.search(r"cancel any time|nothing to cancel", LANDING, re.I)
     # No copy anywhere that gates leaving behind contacting us.
@@ -363,7 +369,7 @@ def test_the_launch_waitlist_states_exactly_what_it_will_send() -> None:
         "the waitlist promises a one-click unsubscribe nothing provides"
     assert re.search(r"no card", LANDING, re.I)
     # The volume promise is the part that must not go missing.
-    assert re.search(r"exactly one message|one email when signups open",
+    assert re.search(r"exactly one message|one email when (?:signups|checkout) open",
                      LANDING_PROSE, re.I), \
         "the waitlist must state how many emails it will send"
 
@@ -1582,9 +1588,17 @@ def test_league_pass_makes_no_win_promise() -> None:
 def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     """People buy a habit, not a document. The page must say what the week
     actually looks like: when it arrives, how long it takes, what you do."""
-    assert re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
+    # "About a minute" to set the lineup, as How it works and every welcome
+    # email say (review F8: the landing said "Ninety seconds" for the same
+    # Tuesday act, a figure EMAILS-90 had retired as the game plan's).
+    assert re.search(r"set it in about a minute", LANDING_PROSE, re.I)
+    assert not re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
     assert re.search(r"tuesday morning", LANDING_PROSE, re.I)
-    assert re.search(r"tick the boxes|three-box checklist", LANDING_PROSE, re.I)
+    # What you do, in the three steps (Oct 28 2026): paste once, the email
+    # decides every slot, Sunday you play ("tick off the game plan" went
+    # with the week strip it belonged to).
+    assert re.search(r"one email decides every slot", LANDING_PROSE, re.I)
+    assert re.search(r"Sunday, just play", LANDING_PROSE)
 
 
 def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
@@ -1630,9 +1644,13 @@ def test_bid_advice_never_exceeds_what_the_reader_can_pay() -> None:
 
 
 def test_sample_report_explains_what_to_do_with_it() -> None:
-    """The buyer's decisive question is 'what do I actually do on Tuesday?'"""
-    assert re.search(r"30-second game plan", SAMPLE_REPORT, re.I)
-    assert re.search(r"set (the|your|this) lineup", SAMPLE_REPORT, re.I)
+    """The buyer's decisive question is 'what do I actually do on Tuesday?'
+    The sample answers it with its game plan card and the lineup's own box
+    to tick. (This once matched "30-second game plan" — a CSS comment in the
+    page's style, not anything a reader sees.)"""
+    shown = re.sub(r"<style\b.*?</style>|<[^>]+>", " ", SAMPLE_REPORT, flags=re.S)
+    assert re.search(r"Your Game Plan", shown, re.I)
+    assert re.search(r"set (the|your|this) lineup", shown, re.I)
 
 
 # --------------------------------------------------------------------- #
@@ -2235,13 +2253,16 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     """A seat holder must never read a price for something their commissioner
     already paid; a pass or monthly buyer must never read the season price.
     The static header stays the season default — the rewrites are JS, so we
-    pin their presence and their key phrases."""
-    assert 'id="header-pitch"' in JOIN and 'id="header-chips"' in JOIN
-    assert "League Pass seat — nothing to pay" in JOIN
+    pin their presence and their key phrases. (The header chips that repeated
+    the pitch were removed in the truth pass: the pitch carries the price with
+    its terms, and the button says what is open.)"""
+    assert 'id="header-pitch"' in JOIN and 'id="header-chips"' not in JOIN
+    seat = prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1].split("} else if (WANTS_MONTHLY)")[0])
+    assert "Nothing to pay." in seat and not re.search(r"\$\d", seat), "a seat reads a price"
     assert "already paid" not in prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1]
                                        .split("} else if (WANTS_MONTHLY)")[0])
     assert "every manager in your league" in prose(JOIN) and "claims their seat" in prose(JOIN)
-    assert f"${MONTHLY_PRICE} / month" in JOIN
+    assert f"${MONTHLY_PRICE} a month" in prose(_js_function(JOIN, "monthlyPlan"))
     # The pass buyer is told, on the way to Stripe, where the seat link will
     # come from: the welcome email, which carries a link naming THIS pass
     # (contract C4). The page itself no longer hands out the generic ?pass=1
@@ -2543,13 +2564,18 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
     anchored on the old markup) and passed while checking nothing. So: the
     guard sweeps every `.filecard`, requires that it found the cards it
     expects to exist, and pins every figure — integers and decimals — to the
-    published sample."""
+    published sample. Since the phone and the inbox cards became GENERATED
+    (contract C11, render/phone.py) the guard sweeps the generated markup:
+    the phone's card and the three that follow it, and a kickoff time counts
+    as a figure. Since Oct 28 2026 the page carries exactly two: the phone's
+    card and the "What you get" close-up (masthead, card 01, card 04)."""
     import html as _html
     # Re-anchored Sep 29 2026: the redesign states "Real file" once, not on
     # every card, so the cards carry a data marker and a closing comment.
-    cards = re.findall(r'<div class="filecard[^"]*" data-real="[^"]+">(.*?)<!--/card-->',
+    # Oct 25 2026: the phone's card carries an id before its marker.
+    cards = re.findall(r'<div class="filecard[^"]*"[^>]*\bdata-real="[^"]+"[^>]*>(.*?)<!--/card-->',
                        LANDING, re.S)
-    assert len(cards) >= 3, (
+    assert len(cards) >= 2 and 'id="shot-card"' in LANDING, (
         "the landing lost its Real-output cards, or the markup moved and this "
         "guard went blind again — re-anchor it, never delete it")
     flat_sample = _html.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
@@ -2561,6 +2587,7 @@ def test_every_real_stamped_figure_still_exists_in_the_report() -> None:
         figures |= {m for m in re.findall(r"\d+%", body)}
         figures |= {m for m in re.findall(r"\d+ targets \([\d.]+ a game\)", body)}
         figures |= {m for m in re.findall(r"last \d games", body)}
+        figures |= {m for m in re.findall(r"\d{1,2}:\d\d [AP]M ET", body)}
         assert figures, "a Real-output card with no figures is not this guard's card"
         for figure in sorted(figures):
             assert figure in flat_sample or figure in SAMPLE_REPORT, (
@@ -2595,7 +2622,7 @@ def test_the_scouting_cards_quote_the_report_verbatim() -> None:
         # spans a whole row — never into the next player's.
         assert re.search(rf"{re.escape(name)}.{{0,420}}?{pct}", sample_rows), \
             f"the sample no longer publishes {pct} on {name}"
-        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", flat(LANDING))
+        assert re.search(rf"{re.escape(name)}.{{0,160}}{pct}", _html.unescape(flat(LANDING)))
 
 
 def test_the_seat_link_is_not_handed_out_before_checkout() -> None:
@@ -2970,10 +2997,10 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     charges."""
     pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
     assert "header-pitch" in pass_branch and "$69" in pass_branch
-    # The chips are drawn by setChips (one builder for every mode, so the
-    # first-report chip follows the season clock — PC-02).
-    assert 'setChips(["$69 / league · rest of season"' in pass_branch
-    assert '$("header-chips")' in _js_function(JOIN, "setChips")
+    # The header chips are gone (truth pass): the price lives in the pitch,
+    # beside its terms, so no stale chip can name another mode's price.
+    assert "setChips" not in JOIN and 'id="header-chips"' not in JOIN
+    assert "$69 for your whole league, rest of season — one payment" in prose(pass_branch)
     # Monthly is a function since Oct 9 2026, because the buyer can now switch
     # to it on the page as well as arrive with ?plan=monthly.
     monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
@@ -3088,9 +3115,14 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     # tighten and a name wraps rather than truncating. Measured at 360-430px.
     assert re.search(r"\.phone\{[^}]*max-width:320px", LANDING), \
         "the phone frame lost its cap — re-measure the hero card's columns"
-    assert "@media (max-width:430px)" in LANDING, "the hero card's narrow treatment is gone"
-    compact = LANDING.split("@media (max-width:430px)")[1].split("\n  }")[0]
-    assert ".frow{" in compact, "the hero card's columns no longer tighten on a phone"
+    # Oct 25 2026 (contract C8): every size inside the phone's email is in
+    # cqw, so the columns tighten with the phone at EVERY width (measured at
+    # 266 and 300px screens: all nine names on one line) instead of at one
+    # breakpoint, and the name column is the one that may shrink.
+    grid = re.search(r"\.screen \.ghead,\.screen \.frow\{[^}]*grid-template-columns:([^;]+);",
+                     LANDING)
+    assert grid and "cqw" in grid.group(1) and "minmax(0,1fr)" in grid.group(1), \
+        "the hero card's columns no longer scale with the phone"
     # Launch review D5, measured in Chrome: the wrap rule lived only in that
     # 430px block, so from 431px to 880px — where the phone is 286px wide —
     # "Amon-Ra St. Brown" truncated to "Amon-Ra St. …" (scrollWidth 117 >
@@ -3101,14 +3133,12 @@ def test_the_proof_cards_survive_a_narrow_screen() -> None:
     assert re.search(r"\.screen \.fname\{white-space:normal;overflow:visible", base), \
         "names truncate again inside the phone at some width — the one card " \
         "whose job is to be believed"
+    assert "text-overflow:ellipsis" not in re.search(r"\.screen \.fname\{([^}]*)\}", base).group(1)
 
-    # Grid children must be allowed to shrink, or nowrap text forces the row
-    # wider than the viewport again.
-    assert re.search(r"\.urow > \*\{min-width:0;\}", LANDING), \
-        "grid items can grow past their column again (min-width:auto)"
-    ucount = re.search(r"\.ucount\{([^}]*)\}", LANDING).group(1)
-    assert "nowrap" not in ucount, \
-        ".ucount is nowrap again — that is what pushed the page sideways"
+    # The usage widget (.urow/.ucount, whose nowrap pushed the page sideways)
+    # went with "Who's getting the ball"; its counts now live in the
+    # generated Slot by Slot card, whose lines wrap.
+    assert ".ucount" not in LANDING and ".urow" not in LANDING
 
 
 def test_the_policy_discloses_the_address_stripe_now_collects() -> None:
@@ -3826,8 +3856,11 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     in the red alert box, and each further press posted another row (two
     recorded). Now the label and the action come from one decision
     (closedAction): "switch" switches, "list" keeps the email once and then
-    stops, "none" looks switched off."""
-    fns = _js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
+    stops, "none" looks switched off — and names the plan that is not open
+    yet (closedChipText, the words the header chip carried until the truth
+    pass removed the chips)."""
+    fns = (_js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
+           + _js_function(JOIN, "closedChipText"))
     states = [  # notify, pass, own plan open, monthly chosen, other plan's link
         ("https://f", False, "", False, "https://buy.stripe.com/m"),
         ("", False, "", True, "https://buy.stripe.com/s"),
@@ -3839,7 +3872,8 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     ]
     import json as _json
     got = _node(
-        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n" + fns +
+        "let NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
+        "const FIRST = null, SEAT_MODE = false;\n" + fns +
         "\nconsole.log(JSON.stringify(" + _json.dumps(states) + ".map(([n, p, o, m, other]) => {"
         " NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o; monthlyChosen = m;"
         " const a = closedAction(other); return [a, closedLabel(a)]; })));")
@@ -3847,7 +3881,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
         ["switch", "Switch to monthly — open now"],
         ["switch", "Switch to the season pass — open now"],
         ["list", "Email me when checkout opens"],
-        ["none", "Checkout opens soon"],
+        ["none", "Rest-of-Season Pass opens soon"],
         ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
         ["list", "Email me when checkout opens"],
         ["none", "League Pass opens soon"],
@@ -4178,9 +4212,11 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     2027" — for a purchase nobody could make that day (the same in
     ?plan=monthly, ?plan=pass and seat mode with no backend). The chip, the
     sidebar, the first-note and the renewal date all ask canStartToday()
-    first; run under node for every mode."""
-    for fn in ("firstChipText", "renewalDate"):
+    first; run under node for every mode. (The chip itself went in the truth
+    pass; a closed plan's name now labels its button, closedChipText.)"""
+    for fn in ("renewalDate",):
         assert "canStartToday()" in _js_function(JOIN, fn), fn
+    assert "header-chips" not in JOIN and "firstChipText" not in JOIN
     draw = _js_function(JOIN, "drawFirst")
     assert draw.index("if (!canStartToday()) {") < draw.index('FIRST.when === "before"')
     assert "once checkout opens" in prose(draw)
@@ -4191,7 +4227,7 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     assert "drawFirst();" in _js_function(JOIN, "monthlyPlan")
     assert re.search(r"\ndrawShapeNote\(\);\nfillRenewalDates\(\);\ndrawFirst\(\);\n", JOIN)
     src = "\n".join(_js_function(JOIN, f) for f in
-                    ("canStartToday", "closedChipText", "firstChipText", "renewalDate",
+                    ("canStartToday", "closedChipText", "renewalDate",
                      "renewsOn", "monthlyLink", "seasonLink")) + (
         "\nvar MONTHLY_PAUSED = false; var MONTHLY_OFFERED = true;"
         " var PLAYOFF_ACTIVE = false; var STRIPE_LINK_PLAYOFF = \"\";")
@@ -4211,12 +4247,12 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
         "  globalThis.monthlyChosen = c[2]; globalThis.STRIPE_LINK_SEASON = c[3];\n"
         "  globalThis.STRIPE_LINK_MONTHLY = c[4]; globalThis.PASS_LINK = c[5];\n"
         "  globalThis.FORM_ENDPOINT = c[6];\n"
-        "  out.push([firstChipText(), renewalDate() ? 'dated' : '']);\n}\n"
+        "  out.push([canStartToday() ? 'open' : closedChipText(),"
+        " renewalDate() ? 'dated' : '']);\n}\n"
         "console.log(JSON.stringify(out));")
     assert got == [["Rest-of-Season Pass opens soon", ""], ["Monthly opens soon", ""],
                    ["League Pass opens soon", ""], ["Seats open soon", ""],
-                   ["Weekly reports from Tue, Oct 20", "dated"],
-                   ["Weekly reports from Tue, Oct 20", "dated"]]
+                   ["open", "dated"], ["open", "dated"]]
 
 
 def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
@@ -4395,8 +4431,11 @@ def test_a_seat_confirmation_says_seat_on_the_confirm_page() -> None:
 
 
 def test_the_chips_are_a_thumb_tall_on_touch() -> None:
-    """I10: the first controls in the funnel measured 35px on touch."""
-    assert "@media (pointer:coarse){.opts label{min-height:44px;" in JOIN
+    """I10: the first controls in the funnel measured 35px on touch. Since the
+    truth pass every option is 44px tall at every pointer (contract C7's one
+    option shape), not only on touch."""
+    rule = re.search(r"\n  \.opts label\{([^}]*)\}", _style(JOIN)).group(1)
+    assert "min-height:44px" in rule and "border-radius:8px" in rule
 
 
 @pytest.mark.parametrize("page,name", [(JOIN, "join"), (CONFIRM, "confirm")])
@@ -4633,15 +4672,17 @@ def test_reduced_motion_never_glides_the_page() -> None:
 
 def test_the_closest_call_card_keeps_one_numeral_and_says_what_the_bar_starts_at() -> None:
     """Panel review BE-I11: on a phone the tick label "TOSS-UP" sat right above
-    "70%" and read as one phrase. The tick's meaning is a legend line under the
-    figure, and the card says what the call IS (PC-03): the closest call that
-    carries odds on that roster, not a coin flip."""
+    "70%" and read as one phrase. The tick's meaning is a legend line, and the
+    card says what the call IS (PC-03): the closest call that carries odds on
+    that roster, not a coin flip. Since contract C11 the page's one closest
+    call is the phone's card 02 — the report's own, with its own label — and
+    the legend is card 01's, which says the bar starts at 50%."""
     assert "fliptoss" not in LANDING and "toss-up</span>" not in LANDING
+    closest = LANDING.split('data-sec="closest"')[1].split("</section>")[0]
+    assert len(re.findall(r'class="cpct"', closest)) == 1, "the card prints one numeral"
+    assert '<p class="clabel">Closest call with odds</p>' in closest
     # Pre-launch review D12: the bar is drawn from 50%, as the report draws it.
-    assert '<div class="fliplegend">The bar starts at 50%, a toss-up.</div>' in LANDING
-    assert ".fliplegend{font-size:12px;color:var(--slate);margin-top:2px;}" in LANDING
-    note = prose(LANDING).split("The close one, called")[1][:300]
-    assert "The week's closest call with odds on this roster, decided:" in note
+    assert "and the bar starts at 50% (a toss-up)." in prose(LANDING)
     assert "go back and forth" not in prose(LANDING)
 
 
@@ -4655,9 +4696,18 @@ def test_the_closest_call_is_named_with_the_reports_own_label() -> None:
     from engine import solo_report
     import inspect
     assert '"Closest call with odds"' in inspect.getsource(solo_report)
-    landing = prose(markup_only(LANDING))
-    assert "closest call with odds on this roster" in landing
-    assert "Closest call with odds: Kittle over LaPorta, 72%." in landing
+    import html as _html
+    import json as _json
+    from render.email import preheader_for
+    landing = _html.unescape(prose(markup_only(LANDING)))
+    assert '<p class="clabel">Closest call with odds</p>' in landing
+    # The phone's notification is the email's own preview (contract C11),
+    # which names the call in the report's words.
+    fixture = _json.loads((SITE.parent / "tests" / "fixtures" / "sample-report-w10.json")
+                          .read_text(encoding="utf-8"))
+    preview = preheader_for(fixture)
+    assert preview.startswith("Closest call with odds: start George Kittle over Sam LaPorta, 72%.")
+    assert f'<span class="lpre">{preview}</span>' in landing
     assert "The week's closest call on this roster" not in landing
     how = prose(HOW)
     assert "<dt>The week's closest call with odds</dt>" in how
@@ -4678,22 +4728,25 @@ def test_the_landing_sells_without_a_comparison_essay() -> None:
         assert not re.search(claim, page, re.I), f"a results claim: {claim}"
     rendered = re.sub(r"<script.*?</script>|<style.*?</style>|<head>.*?</head>", "", LANDING, flags=re.S)
     words = len(re.sub(r"<[^>]+>", " ", rendered).split())
-    assert words < 1300, f"the landing grew back to {words} words"
+    assert words <= 1250, f"the landing grew back to {words} words"
 
 
 def test_the_faq_is_short_and_its_heading_stays_in_view() -> None:
     """I8: twelve questions read as a stock section; the three that compared
     tools now live in the comparison, and the heading column is sticky beside
     the answers on a wide screen."""
+    # Five since the owner's Oct 28 2026 plan: the rankings question became
+    # its own table, the League Pass its own line under the price.
     questions = re.findall(r"<summary>(.*?)</summary>", LANDING.split('<section id="faq">')[1])
-    assert 6 <= len(questions) <= 7, questions
+    assert 4 <= len(questions) <= 5, questions
     assert re.search(r"@media \(min-width:881px\)\{\.faqgrid > div:first-child\{position:sticky",
                      LANDING)
 
 
 def _live_week_gate(page: str) -> bool:
-    return "w.odds >= 3 && w.closest_call" in page and \
-        'querySelectorAll("[data-live-week]")' in page
+    # And the page is in the card layout the phone shows (review BUYER-1).
+    return re.search(r"w\.odds >= 3 && w\.closest_call &&\s*w\.cards === true", page) \
+        is not None and 'querySelectorAll("[data-live-week]")' in page
 
 
 @pytest.mark.parametrize("name", ("index.html", "how-it-works.html", "404.html"))
@@ -4802,10 +4855,12 @@ def test_who_built_it_agrees_with_the_terms() -> None:
     """Panel review BE-D4: the FAQ and its JSON-LD said "built by fantasy
     players" while terms §15 and privacy §11 say "an independent solo
     project". Anonymous, and singular."""
+    # The landing's FAQ dropped "Who's behind this?" for a product question
+    # (owner, Oct 28 2026); How it works still answers it, singular.
     for page in (LANDING, HOW):
         text = prose(page)
         assert "built by fantasy players" not in text and "We built it because we" not in text
-        assert "one fantasy player built it" in text
+    assert "one fantasy player built it" in prose(HOW)
     assert "an independent solo project" in prose(TERMS)
 
 
@@ -4959,9 +5014,7 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
 def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     """Launch review I4: both cards said "Leave your email above" while, at
     390px, the form sat ~3,000px above them. The prompt is a link to the form
-    now, and every #watch-form link puts the cursor in the field. The open
-    state's finance rewrite keeps the League Pass link by its href, because the
-    closed line's FIRST link is now the capture link it retires."""
+    now, and every #watch-form link puts the cursor in the field."""
     # Pre-launch review D4: the closed card's control is a real gold button
     # into the form, not a dashed box holding a link.
     for cta in ("season-cta",):
@@ -4971,7 +5024,11 @@ def test_the_closed_pricing_cards_take_you_into_the_form() -> None:
     assert "closest('a[href=\"#watch-form\"]')" in handler
     assert "field.focus({ preventScroll: true })" in handler
     assert "form.hidden" in handler, "a hidden form must not swallow the click"
-    assert "finance.querySelector('a[href=\"league-pass.html\"]')" in LANDING
+    # Review BUYER-4: the finance line no longer pitches the League Pass (its
+    # own section follows), so the open state writes it whole and shows it.
+    finance = LANDING.split('const finance = document.getElementById("finance-note");')[1]
+    finance = finance.split("\n    }")[0]
+    assert "finance.hidden = false;" in finance and "league-pass" not in finance
 
 
 # thanks.html is reached by paying, so its nav offers no Pricing (launch
@@ -5057,3 +5114,16 @@ def test_the_glossary_defines_the_realistic_range_in_the_reports_words() -> None
     entry = re.sub(r"<[^>]+>", "", entry).strip()
     assert entry == RANGE_DEFINITION[0].upper() + RANGE_DEFINITION[1:]
     assert not re.search(r"\d", entry)
+
+
+def test_the_home_page_names_the_site_for_search() -> None:
+    """Oct 28 2026: a Google search for "beat your league" led to the League
+    Pass page, not the home page. Google's site-name guidance asks for
+    WebSite structured data on the home page, its url the canonical one."""
+    block = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>',
+                                 LANDING, re.S).group(1))
+    site = next(n for n in block["@graph"] if n["@type"] == "WebSite")
+    canonical = re.search(r'<link rel="canonical" href="([^"]+)"', LANDING).group(1)
+    assert site["name"] == "Beat Your League" and site["url"] == canonical
+    org = next(n for n in block["@graph"] if n["@type"] == "Organization")
+    assert org["url"] == canonical

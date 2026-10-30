@@ -313,15 +313,16 @@ NEXT_TUESDAY = ("The week's report: the lineup we'd set for your roster under "
                 "your scoring, with odds on the close calls from Week 4 (Week 2 "
                 "for a 12-team PPR standard lineup), and any bye still ahead — "
                 "playoff weeks included — that leaves a spot nobody on your "
-                "roster can fill. The game plan at the top takes about a minute.")
+                "roster can fill. Your lineup comes first, and setting it takes "
+                "about a minute.")
 # From Week 4 on, odds already print in every setup, so "odds ... from Week 4"
 # told a Week-8 buyer about a start that is behind them (final review,
 # business #6). The pre-Week-4 promise above stays exactly as it was.
 NEXT_TUESDAY_LIVE = ("The week's report: the lineup we'd set for your roster "
                      "under your scoring, with odds on the close calls, and any "
                      "bye still ahead — playoff weeks included — that leaves a "
-                     "spot nobody on your roster can fill. The game plan at the "
-                     "top takes about a minute.")
+                     "spot nobody on your roster can fill. Your lineup comes "
+                     "first, and setting it takes about a minute.")
 ODDS_EVERYWHERE_FROM = 4
 NEXT_SATURDAY = ("A short final check, only when Friday's injury report "
                  "changes your lineup. No news, no email.")
@@ -386,29 +387,18 @@ _WRAP = "overflow-wrap:anywhere;word-break:break-word;"
 
 
 def _masthead(subhead: str) -> str:
-    """The weekly email's navy band (render/email._header), so the first email
-    after paying looks like the product it bought."""
-    return (
-        f'<tr><td style="background:{NAVY};padding:24px 26px;'
-        f'border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
-        f'Beat Your League</div>'
-        f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
-        f'letter-spacing:1px;text-transform:uppercase;color:{CARD};'
-        f'padding:6px 0 2px 0;">You&#x27;re in.</div>'
-        f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
-        f'color:{FLAG};padding:2px 0 0 0;">{esc(subhead)}</div></td></tr>')
+    """The weekly email's masthead (render.email.masthead_html), so the first
+    email after paying opens the way every report does."""
+    from render.email import masthead_html
+    return masthead_html("", "You're in.",
+                         f'<b style="color:#FFFFFF;">{esc(subhead)}</b>')
 
 
 def _block(title: str, inner: str) -> str:
-    """One titled block, in the weekly email's section style."""
-    return (
-        f'<tr><td style="padding:22px 26px 0 26px;">'
-        f'<div style="font-family:{DISPLAY};font-size:14px;font-weight:bold;'
-        f'letter-spacing:2.5px;text-transform:uppercase;color:{NAVY};'
-        f'border-bottom:2px solid {NAVY};padding-bottom:6px;">{esc(title)}</div>'
-        f'<div style="padding-top:10px;">{inner}</div></td></tr>')
+    """One titled block, as a card of the weekly email (render.email._card)."""
+    from render.email import _card, _section_row
+    return _section_row("welcome", _card(0, title, f'<div style="padding-top:10px;">'
+                                                   f'{inner}</div>'))
 
 
 def welcome_message(email: str, plan: str, slug: str, season: str,
@@ -517,7 +507,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
             inner += (
                 f'<table role="presentation" cellpadding="0" cellspacing="0" '
                 f'border="0" style="margin:4px 0 12px 0;"><tr>'
-                f'<td style="background:{FLAG};border-radius:3px;">'
+                f'<td style="background:{FLAG};border-radius:8px;">'
                 f'<a href="{esc(link)}" style="display:inline-block;padding:12px 20px;'
                 f'font-family:{DISPLAY};font-size:15px;font-weight:bold;'
                 f'letter-spacing:1.5px;text-transform:uppercase;color:{NAVY};'
@@ -525,8 +515,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                 f'</table>'
                 f'<p style="{SMALL}margin:0 0 6px 0;">Or paste this into your '
                 f'league chat:</p>'
-                f'<div style="{BASE}background:{FLAG_TINT};border-left:3px solid '
-                f'{FLAG};padding:10px 12px;{_WRAP}">{esc(paste)}</div>')
+                f'<div style="{BASE}background:{FLAG_TINT};border:1px solid #EBDDAE;'
+                f'border-radius:8px;padding:10px 12px;{_WRAP}">{esc(paste)}</div>')
         blocks.append(_block("Send your league this", inner))
     blocks.append(_block(
         "What happens next",
@@ -541,11 +531,11 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     blocks.append(_block("The terms, in writing", terms_html))
     blocks.append(_block(CANCEL_HEAD, f'{para}{stop_html}</p>'))
     footer = (
-        (f'<tr><td style="padding:18px 26px 0 26px;"><p style="{BASE}font-size:13px;'
+        (f'<tr><td style="padding:12px 4px 0 4px;"><p style="{BASE}font-size:13px;'
          f'color:{SLATE};margin:0;">{esc(roster_line)}</p></td></tr>'
          if roster_line else "")
         + f'<tr><td style="padding:12px;"></td></tr>'
-        f'<tr><td style="background:{PAPER};padding:18px 26px 24px 26px;">'
+        f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
         f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — questions? '
         f'Write to {esc(CONTACT)}.'
         + (f'<br>{esc(sender)}' if sender else "")
@@ -558,9 +548,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         f'{preheader_html(preheader)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;">'
+        f'style="padding:12px 8px 24px;">'
         f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
-        f'border="0" style="max-width:600px;width:100%;background:{CARD};">'
+        f'border="0" style="max-width:600px;width:100%;background:{PAPER};">'
         f'{_masthead(opener)}'
         + "".join(blocks) + footer
         + '</table></td></tr></table>\n</body>\n</html>\n'

@@ -250,7 +250,7 @@ def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
                           f"roster: if {plan['condition']}, {action}.",
                           "If/Then for Gameday"))
         tries.append((f"{head} Our sample roster's Tuesday report flags it: check "
-                      f"his status before then.", "The Lineup"))
+                      f"his status before then.", CARDS["Thursday night"]))
         return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
     return None
 
@@ -398,9 +398,9 @@ def sample_planner_url(site: str = SITE_ORIGIN) -> str:
 CARDS = {"The closest call": "The Week's Closest Call",
          "The if/then": "If/Then for Gameday",
          "Rising roles": "Rising Roles",
-         "Workloads": "The Lineup",
+         "Workloads": "Slot by Slot",
          "Bye check": "Your Game Plan",
-         "Thursday night": "The Lineup"}
+         "Thursday night": "Your Game Plan"}
 # A card on another page, by the heading that page prints over it, and the
 # page: "NFL byes left" is the planner's own bye table (contract C7).
 PAGE_CARDS = {"NFL byes left": ("Every {season} NFL bye week",

@@ -29,6 +29,8 @@ from typing import Any, Mapping
 from render.sender import sender_line
 from render.report import cancel_html, cancel_lines, is_seat, stop_route
 from render.report import SATURDAY_LINE, SATURDAY_LINE_HEAD, saturday_line
+from render.report import (NOT_CALLING_IT, ODDS_DEFINITION, RISING_HEAD,
+                           bar_from_even, rising_intro)
 from render.report import regret_tossup, regret_verdict
 # The row and section bodies (launch review, Oct 2026), one implementation each.
 from render.report import (NO_PIVOTS, SLOT_DISPLAY, call_bits, form_phrase,
@@ -80,19 +82,35 @@ from render.report import (
     who_can_cover,
 )
 
+from render import anatomy
+from render.anatomy import short_usage  # noqa: F401  (its long-standing home)
+
 # The template's palette (:root in rival-report-template.html), as literals —
-# email clients do not resolve var().
+# email clients do not resolve var(). Roles are fixed (contract C6): navy for
+# names, values, card heads and the masthead; ink2 for every fact line; slate
+# for labels only; gold is a FILL, never text on paper; brick flags and unmet
+# deadlines; turf met ones.
 NAVY = "#101E33"
 PAPER = "#F6F4EE"
 CARD = "#FFFFFF"
-LINE = "#D8D3C6"
+LINE = "#E2DDD0"          # a card's border
+DIVIDER = "#EEEAE1"       # rows inside a card
+TRACK = "#E9E5DA"         # a bar's empty half
+INK2 = "#33445C"
 SLATE = "#5A6B80"
 TURF = "#1E7A46"
 BRICK = "#B3402F"
 FLAG = "#F2C230"
 FLAG_TINT = "#FBF3D9"
+FLAG_EDGE = "#EBDDAE"
 BRICK_TINT = "#F7E3DE"
+BRICK_EDGE = "#E7BDB3"
 TURF_TINT = "#DFF0E4"
+CHIP_OK = "#E3F2E8"       # turf on this: 4.62:1
+CHIP_DUE = "#F9E6E1"      # brick on this: 4.72:1
+ON_NAVY = "#B9C2D0"       # text on navy: 9.31:1
+MUTED_ON_NAVY = "#8FA3BC" # the stamp on navy, as the web and the phone: 6.48:1
+LEAGUE_GOLD = "#F0B62A"   # only "League" in the lockup
 
 FONT = "Arial,Helvetica,sans-serif"
 # The condensed display face, from fonts the reader's device already has —
@@ -106,6 +124,19 @@ DISPLAY = ("'Arial Narrow','HelveticaNeue-CondensedBold','Helvetica Neue Condens
            "'Avenir Next Condensed','Roboto Condensed',Arial,Helvetica,sans-serif")
 BASE = f"font-family:{FONT};font-size:14px;line-height:1.55;color:{NAVY};"
 SMALL = f"font-family:{FONT};font-size:12px;line-height:1.5;color:{SLATE};"
+# A fact line: what the engine says about a row, in ink2 (contract C8).
+FACT = f"font-family:{FONT};font-size:13px;line-height:1.45;color:{INK2};"
+# The lockup, as the site's nav draws it (render.report.site_bar): "Beat Your"
+# in paper and "League" in the logo's gold, condensed italic capitals.
+LOCKUP = (f'<span style="font-family:{DISPLAY};font-size:15px;font-weight:bold;'
+          f'font-style:italic;letter-spacing:0.5px;text-transform:uppercase;'
+          f'color:{PAPER};">Beat Your <span style="color:{LEAGUE_GOLD};">League</span></span>')
+# A hairline between rows inside a card: a 1px cell, the one rule every
+# client draws (a border on a <tr> is dropped by Outlook).
+def _rule(cols: int = 1) -> str:
+    span = f' colspan="{cols}"' if cols > 1 else ""
+    return (f'<tr><td{span} style="height:1px;font-size:0;line-height:0;'
+            f'background:{DIVIDER};">&nbsp;</td></tr>')
 
 
 TRIAL_HEAD = "Your free report"
@@ -203,15 +234,15 @@ def _trial_cta(meta: Mapping[str, Any] | None = None) -> str:
         button = (
             f'<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
             f'align="center" style="margin:14px auto 0 auto;"><tr>'
-            f'<td style="background:{FLAG};border-radius:3px;">'
-            f'<a href="{esc(url)}" style="display:inline-block;padding:13px 24px;'
+            f'<td style="background:{FLAG};border-radius:8px;">'
+            f'<a href="{esc(url)}" style="display:inline-block;padding:14px 24px;'
             f'font-family:{DISPLAY};font-size:16px;font-weight:bold;'
-            f'letter-spacing:1.5px;text-transform:uppercase;color:{NAVY};'
+            f'letter-spacing:1px;text-transform:uppercase;color:{NAVY};'
             f'text-decoration:none;">{esc(label)}</a></td></tr></table>')
     return (
-        f'<tr><td style="padding:26px 28px 0 28px;">'
+        f'<tr><td style="padding:12px 0 0 0;">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'border="0" style="background:{NAVY};"><tr>'
+        f'border="0" style="background:{NAVY};border-radius:12px;"><tr>'
         f'<td style="padding:22px 20px 22px 20px;text-align:center;">'
         f'<div style="font-family:{DISPLAY};font-size:20px;font-weight:bold;'
         f'letter-spacing:1px;text-transform:uppercase;color:{CARD};">'
@@ -234,54 +265,81 @@ def _trial_cta_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
 
 
 def tick_box() -> str:
-    """The checklist's empty box. A table cell rather than a sized <div>:
-    Outlook's Word engine ignores a div's height and draws it a line tall."""
-    return (f'<table role="presentation" width="14" height="14" cellpadding="0" '
+    """The checklist's empty box: an 18px square, 2px navy, corners of 4. A
+    table cell rather than a sized <div>: Outlook's Word engine ignores a
+    div's height and draws it a line tall. The 14px cell inside plus the 2px
+    border either side is the 18px box."""
+    return (f'<table role="presentation" width="18" height="18" cellpadding="0" '
             f'cellspacing="0" border="0" style="border:2px solid {NAVY};'
-            f'background:{CARD};margin-top:2px;"><tr><td width="14" height="14" '
+            f'border-radius:4px;background:{CARD};"><tr><td width="14" height="14" '
             f'style="font-size:0;line-height:0;">&nbsp;</td></tr></table>')
 
 
-def _sec(number: int, title: str, body: str) -> str:
-    """One report section: numbered case-file title bar, then the body.
+def _chip(text: str, tone: str) -> str:
+    """A deadline as a chip: turf once it is in hand, brick while it is still
+    to meet (the web report's .chip.ok / .chip.due)."""
+    color, ground = (TURF, CHIP_OK) if tone == "ok" else (BRICK, CHIP_DUE)
+    return (f'<span style="display:inline-block;font-family:{FONT};font-size:11px;'
+            f'font-weight:bold;line-height:1.4;text-transform:uppercase;'
+            f'letter-spacing:.5px;color:{color};background:{ground};border-radius:4px;'
+            f'padding:2px 6px;">{esc(text)}</span>')
 
-    ``number`` says only WHETHER the section is numbered; the value is filled
-    in positionally by number_sections() once the page is assembled, so the
-    two surfaces cannot disagree and a merged section cannot leave a hole.
-    """
-    marker = (f'<span style="color:{SLATE};">{SECTION_MARK}</span> · '
-              if number else "")
+
+def _section_row(key: str, html: str) -> str:
+    """One block of the email, on the paper between cards. The comment names
+    the block for the phone↔email parity check; Gmail strips it harmlessly."""
+    return f'<tr><td style="padding:12px 0 0 0;"><!--sec:{key}-->{html}</td></tr>'
+
+
+def _card(number: int, title: str, body: str) -> str:
+    """A numbered card: a navy head with the title and its number, a white
+    body. ``number`` says only WHETHER the card is numbered; the value is
+    filled in positionally by number_sections() once the page is assembled,
+    so the two surfaces cannot disagree and a merged section cannot leave a
+    hole."""
+    mark = (f'<td align="right" valign="middle" style="font-family:{DISPLAY};'
+            f'font-size:13px;font-weight:bold;letter-spacing:1.5px;color:{FLAG};'
+            f'white-space:nowrap;padding-left:12px;">{SECTION_MARK}</td>'
+            if number else "")
     return (
-        f'<tr><td style="padding:26px 28px 0 28px;">'
-        f'<div style="font-family:{DISPLAY};font-size:14px;font-weight:bold;'
-        f'letter-spacing:2.5px;text-transform:uppercase;color:{NAVY};'
-        f'border-bottom:2px solid {NAVY};padding-bottom:6px;">'
-        f'{marker}{esc(title)}</div></td></tr>'
-        f'<tr><td style="padding:12px 28px 0 28px;">{body}</td></tr>'
-    )
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{CARD};border:1px solid {LINE};border-radius:12px;">'
+        f'<tr><td style="background:{NAVY};border-radius:11px 11px 0 0;padding:10px 14px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0"><tr><td valign="middle" style="font-family:{DISPLAY};font-size:13px;'
+        f'font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;color:{PAPER};">'
+        f'{esc(title)}</td>{mark}</tr></table></td></tr>'
+        f'<tr><td style="padding:6px 14px 14px 14px;">{body}</td></tr></table>')
+
+
+def _sec(number: int, title: str, body: str, key: str = "") -> str:
+    """One report section: a card, as a row of the email."""
+    return _section_row(key or re.sub(r"[^a-z]+", "-", title.lower()).strip("-"),
+                        _card(number, title, body))
 
 
 def _gate(reason: str) -> str:
     """A withheld number, in the one honest form (principle 3)."""
     return (
         f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
-        f'border-left:3px solid {FLAG};padding:10px 12px;margin:8px 0 0 0;">'
-        f'<b>{esc(NOT_CALLING_IT)}:</b> {esc(reason)}</div>'
+        f'border:1px solid {FLAG_EDGE};border-radius:8px;padding:10px 12px;'
+        f'margin:10px 0 0 0;"><b>{esc(NOT_CALLING_IT)}:</b> {esc(reason)}</div>'
     )
 
 
 def _bar(fill_pct: float, width: str, height: int = 6, align: str = "") -> str:
-    """A bar as a two-cell table — the one bar every mail client draws.
-
-    ``fill_pct`` is the filled share, 0-100. Callers decide the scale: the
-    lineup's odds run from 50 (a coin flip) like the site's, the closest call
-    shows the pick's whole share of the head-to-head."""
+    """A bar as a two-cell table — the one bar every mail client draws: solid
+    gold for the share, the track for the rest, rounded ends. ``fill_pct`` is
+    the filled share, 0-100 (render.report.bar_from_even of the printed %)."""
     fill = max(0, min(100, round(fill_pct)))
     cell = f'height:{height}px;font-size:0;line-height:0;'
-    filled = (f'<td width="{fill}%" style="{cell}background:{FLAG};">&nbsp;</td>'
-              if fill else "")
-    rest = (f'<td style="{cell}background:{LINE};">&nbsp;</td>'
-            if fill < 100 else "")
+    end = height // 2
+    filled = (f'<td width="{fill}%" style="{cell}background:{FLAG};'
+              f'border-radius:{end}px {"0 0" if fill < 100 else f"{end}px {end}px"} '
+              f'{end}px;">&nbsp;</td>' if fill else "")
+    rest = (f'<td style="{cell}background:{TRACK};border-radius:'
+            f'{"0" if fill else f"{end}px"} {end}px {end}px {"0" if fill else f"{end}px"};">'
+            f'&nbsp;</td>' if fill < 100 else "")
     side = f' align="{align}"' if align else ""
     return (f'<table role="presentation"{side} width="{width}" cellpadding="0" '
             f'cellspacing="0" border="0" style="width:{width};"><tr>'
@@ -290,122 +348,138 @@ def _bar(fill_pct: float, width: str, height: int = 6, align: str = "") -> str:
 
 def _note(inner_html: str) -> str:
     return (
-        f'<div style="{BASE}font-size:13px;background:{PAPER};'
-        f'border-left:3px solid {LINE};padding:10px 12px;margin:10px 0 0 0;">'
-        f'{inner_html}</div>'
+        f'<div style="{FACT}margin:10px 0 0 0;">{inner_html}</div>'
     )
 
 
+def _band(head: str, text_html: str) -> str:
+    """A notice above the cards — the sample's, the free report's, the
+    season's end: the task tint, a 1px edge, round corners. Information,
+    never an alarm."""
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0" style="background:{FLAG_TINT};border:1px solid {FLAG_EDGE};'
+            f'border-radius:12px;"><tr><td style="font-family:{FONT};font-size:13px;'
+            f'line-height:1.5;color:{NAVY};padding:12px 14px;">'
+            + (f'<b>{esc(head)}</b> ' if head else "") + f'{text_html}</td></tr></table>')
+
+
 # --------------------------------------------------------------------- #
-# sections
+# the masthead every email opens with
 # --------------------------------------------------------------------- #
 
-def _header(meta: Mapping[str, Any], team: str | None = None,
-            tagline: str = "Your lineup, decided.") -> str:
-    """The navy masthead. ``team`` names a subscriber's roster
-    (render.report.team_name) so two teams' emails can be told apart;
-    ``tagline`` is the subject's promise, said again under the week."""
-    scoring = f' · {esc(meta["scoring"])}' if meta.get("scoring") else ""
-    lines = [
-        f'<b>{esc(team or meta["league_name"])}</b> · {esc(meta["num_teams"])} '
-        f'teams{scoring}',
-    ]
-    # A solo report has no opponent, so there is nothing to name here. The line
-    # used to render "This week: None" — an absent value printed as a word.
-    if not meta.get("solo"):
-        lines.append(f'This week: <b>{esc(meta["rival_label"])}</b>')
-    if meta.get("rivalry_week"):
-        lines.insert(1, f'<span style="color:{FLAG};font-weight:bold;'
-                        f'letter-spacing:1px;">RIVALRY WEEK</span>')
-    elif meta.get("named_rival_label"):
-        lines.append(f'Rival: <b>{esc(meta["named_rival_label"])}</b>')
-    lines.append(esc(_generated_stamp(meta)))
-    banner = ""
-    if meta.get("trial"):
-        banner = (
-            f'<tr><td style="padding:0 28px;">'
-            f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
-            f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
-            f'<b>{esc(TRIAL_HEAD)}.</b> {esc(TRIAL_INTRO)}'
-            + (f'<br><br>{esc(trial_price_line(meta))}'
-               + (f' <a href="{esc(trial_join_url(meta))}" style="color:{NAVY};'
-                  f'font-weight:bold;">{esc(TRIAL_BUTTON)}</a>'
-                  if trial_join_url(meta) else "")
-               if trial_price_line(meta) else "")
-            + '</div></td></tr>')
-    season_end = season_end_lines(meta)
-    if season_end:
-        banner += (
-            f'<tr><td style="padding:0 28px;">'
-            f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
-            f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
-            f'<b>{esc(SEASON_END_HEAD)}.</b> {esc(" ".join(season_end))}'
-            f'</div></td></tr>')
-    if meta.get("historical_demo"):
-        banner = (
-            f'<tr><td style="padding:0 28px;">'
-            f'<div style="{BASE}font-size:13px;background:{FLAG_TINT};'
-            f'border-left:3px solid {FLAG};padding:10px 12px;margin-top:16px;">'
-            f'SAMPLE REPORT — real data from the {esc(meta["season"])} season of '
-            f'{esc(meta["league_name"])}, built to show exactly what lands in your '
-            f'inbox on a Tuesday.</div></td></tr>'
-        )
+def masthead_html(label: str, big: str, meta_html: str, stamp: str | None = None,
+                  big_size: int = 30) -> str:
+    """The navy masthead (contract C4/C8): the lockup with what this email is
+    at its right, the big line, one meta line, and a stamp. Shared by every
+    email the product sends, so the report, the Saturday check and the roster
+    report open the same way. ``meta_html`` is escaped by the caller."""
+    right = (f'<td align="right" valign="middle" style="padding-left:12px;">'
+             f'<div style="font-family:{DISPLAY};font-size:12px;font-weight:bold;'
+             # No nowrap: with a wide fallback font (DejaVu on Linux and
+             # some Androids) lockup + label on one line made every email
+             # 325px wide on a 320px phone (CI, Oct 25 2026). The label wraps.
+             f'letter-spacing:1px;text-transform:uppercase;line-height:1.2;'
+             f'color:{ON_NAVY};">{esc(label)}</div></td>' if label else "")
     return (
-        f'<tr><td style="background:{NAVY};padding:26px 28px;'
-        f'border-left:4px solid {FLAG};">'
-        f'<div style="font-family:{DISPLAY};font-size:13px;font-weight:bold;'
-        f'letter-spacing:4px;text-transform:uppercase;color:{FLAG};">'
-        f'Beat Your League</div>'
-        # "Week 7" alone on the big line and the report's name on its own
-        # beneath it: as one 32px line it wrapped mid-phrase on a phone.
-        f'<div style="font-family:{DISPLAY};font-size:32px;font-weight:bold;'
-        f'letter-spacing:1px;text-transform:uppercase;line-height:1.1;'
-        f'color:{CARD};padding:6px 0 0 0;">Week {esc(meta["week"])}</div>'
-        f'<div style="font-family:{DISPLAY};font-size:16px;font-weight:bold;'
-        f'letter-spacing:2.5px;text-transform:uppercase;white-space:nowrap;'
-        f'color:{CARD};padding:2px 0 6px 0;">'
-        f'{"Your Report" if meta.get("solo") else "Rival Report"}</div>'
-        + (f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
-           f'color:{FLAG};padding:0 0 10px 0;">{esc(tagline)}</div>'
-           if meta.get("solo") else '<div style="padding:0 0 8px 0;"></div>')
-        + f'<div style="font-family:{FONT};font-size:12px;color:#B9C2D0;">'
-        f'{" &nbsp;—&nbsp; ".join(lines)}</div></td></tr>{banner}'
-    )
+        f'<tr><td style="background:{NAVY};border-radius:12px;padding:18px;">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0"><tr><td valign="middle" style="white-space:nowrap;">{LOCKUP}</td>'
+        f'{right}</tr></table>'
+        f'<div style="font-family:{DISPLAY};font-size:{big_size}px;font-weight:bold;'
+        f'text-transform:uppercase;line-height:1.05;color:#FFFFFF;padding:12px 0 6px;">'
+        f'{esc(big)}</div>'
+        f'<div style="font-family:{FONT};font-size:13px;line-height:1.45;color:{ON_NAVY};">'
+        f'{meta_html}</div>'
+        + (f'<div style="font-family:{FONT};font-size:12px;line-height:1.45;'
+           f'color:{MUTED_ON_NAVY};padding-top:2px;">{esc(stamp)}</div>' if stamp else "")
+        + '</td></tr>')
+
+
+def _header(meta: Mapping[str, Any], team: str | None = None) -> str:
+    """The masthead and the notices under it (render.anatomy.masthead,
+    .bands). ``team`` names a subscriber's roster (render.report.team_name) so
+    two teams' emails can be told apart."""
+    head = anatomy.masthead({"meta": meta, "lineup": []})
+    extra = "".join(f' · {esc(lead)}<b style="color:#FFFFFF;">{esc(value)}</b>'
+                    if lead else f' · <b style="color:{FLAG};">{esc(value)}</b>'
+                    for lead, value in head["extra"])
+    meta_html = (f'<b style="color:#FFFFFF;">{esc(team or head["team"])}</b> · '
+                 f'{esc(head["meta"])}{extra}')
+    out = [masthead_html(head["label"], head["week"], meta_html, head["stamp"])]
+    for band in anatomy.bands({"meta": meta}):
+        words = esc(band["text"])
+        if band.get("price"):
+            words += f'<br><br>{esc(band["price"])}'
+            if band.get("link"):
+                href, label = band["link"]
+                words += (f' <a href="{esc(href)}" style="color:{NAVY};'
+                          f'font-weight:bold;">{esc(label)}</a>')
+        out.append(_section_row(f"band-{band['kind']}", _band(band["head"], words)))
+    return "".join(out)
+
+
+# --------------------------------------------------------------------- #
+# the plan: one item, every surface's anatomy (render.anatomy.item)
+# --------------------------------------------------------------------- #
+
+def _item_cells(model: Mapping[str, Any], *, detail: bool = True,
+                head_color: str = NAVY) -> str:
+    """An item's words: the bold head and its plain rest, why, the chip."""
+    return (
+        f'<div style="font-family:{FONT};font-size:15px;line-height:1.4;color:{head_color};">'
+        f'<b>{esc(model["head"])}</b>{esc(model["rest"])}</div>'
+        + (f'<div style="{FACT}padding-top:3px;">{esc(model["detail"])}</div>'
+           if detail and model.get("detail") else "")
+        + (f'<div style="padding-top:6px;">{_chip(model["deadline"], model["tone"])}</div>'
+           if model.get("deadline") else ""))
+
+
+def _item_row(model: Mapping[str, Any], *, rule: bool, head_color: str = NAVY) -> str:
+    """One plan item as two cells: the tick box, then its words. An item with
+    nothing to do has no box, and its words take both columns."""
+    out = _rule(2) if rule else ""
+    if model.get("box", True):
+        return out + (
+            f'<tr><td width="18" valign="top" style="padding:12px 10px 10px 0;">'
+            f'{tick_box()}</td><td valign="top" style="padding:10px 0;">'
+            f'{_item_cells(model, head_color=head_color)}</td></tr>')
+    return out + (f'<tr><td colspan="2" valign="top" style="padding:10px 0;">'
+                  f'{_item_cells(model, head_color=head_color)}</td></tr>')
+
+
+def _items_table(models: list[Mapping[str, Any]], head_color: str = NAVY) -> str:
+    rows = "".join(_item_row(m, rule=i > 0, head_color=head_color)
+                   for i, m in enumerate(models))
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0">{rows}</table>')
+
+
+def _plan_body(model: Mapping[str, Any]) -> str:
+    body = _items_table(model["items"])
+    if model.get("saturday"):
+        body += (f'<table role="presentation" width="100%" cellpadding="0" '
+                 f'cellspacing="0" border="0">{_rule()}<tr><td style="{FACT}'
+                 f'padding:10px 0 0 0;"><b style="color:{NAVY};">'
+                 f'{esc(SATURDAY_LINE_HEAD)}:</b> {esc(model["saturday"])}</td></tr></table>')
+    return body
+
+
+def _alert(model: Mapping[str, Any]) -> str:
+    """An empty spot, above the lineup: still a task to tick, in the alert
+    tint, its head in brick."""
+    return _section_row("alert", (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'border="0" style="background:{BRICK_TINT};border:1px solid {BRICK_EDGE};'
+        f'border-radius:12px;"><tr><td style="padding:2px 14px;">'
+        f'{_items_table([model], head_color=BRICK)}</td></tr></table>'))
 
 
 def _checklist(items: list[Mapping[str, Any]],
                meta: Mapping[str, Any] | None = None) -> str:
-    # A box to tick beside every item: the site promises "tick the boxes,
-    # done in ninety seconds", so the file carries the boxes.
-    rows = []
-    for i, item in enumerate(items, 1):
-        # The web report's .task .dl: bold capitals, brick for a deadline
-        # still to meet, turf once it is in hand (D13 — the email's were slate
-        # lowercase, so the same plan read calmer in the inbox than online).
-        color = TURF if item.get("urgency") in ("now", "done") else BRICK
-        rule = f'border-top:1px solid {LINE};' if i > 1 else ""
-        rows.append(
-            f'<tr><td style="padding:10px 12px 10px 0;vertical-align:top;width:18px;'
-            f'{rule}">{tick_box()}</td>'
-            f'<td style="{BASE}padding:10px 0;{rule}">'
-            f'<b>{esc(item["action"])}</b><br>'
-            + (f'<span style="{SMALL}color:{NAVY};">{esc(item["detail"])}</span><br>'
-               if item.get("detail") else "")
-            + f'<span style="{SMALL}font-weight:bold;text-transform:uppercase;'
-            f'letter-spacing:.5px;color:{color};">{esc(item["deadline"])}</span>'
-            f'</td></tr>'
-        )
-    body = (f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0" style="background:{FLAG_TINT};'
-            f'border-left:4px solid {FLAG};"><tr><td style="padding:4px 14px;">'
-            f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{"".join(rows)}</table>'
-            f'</td></tr></table>')
-    standing = saturday_line(meta)
-    if standing:
-        body += (f'<p style="{SMALL}color:{NAVY};margin:10px 0 0 0;">'
-                 f'<b>{esc(SATURDAY_LINE_HEAD)}:</b> {esc(SATURDAY_LINE)}</p>')
-    return _sec(1, "Your Game Plan", body)
+    """The game plan as the league product's emails carry it: every item."""
+    model = {"items": [anatomy.item(i) for i in items],
+             "saturday": SATURDAY_LINE if saturday_line(meta) else None}
+    return _sec(1, "Your Game Plan", _plan_body(model), "plan")
 
 
 def _last_week(last: Mapping[str, Any] | None) -> str:
@@ -638,60 +712,69 @@ def _fragility(items: list[Mapping[str, Any]], rival_label: str) -> str:
     return _sec(5, f"Where {rival_label} Is Fragile", body)
 
 
+def _closest_body(model: Mapping[str, Any]) -> str:
+    """Card 02: the label, the verdict, a full-width bar with the big % (drawn
+    from 50%, like every bar in the report), the drivers, why, and the closer
+    after a hairline. No title inside the card: its head already says "The
+    Week's Closest Call" (panel review D8). With no call, one plain line."""
+    if "gate" in model:
+        return f'<p style="{BASE}margin:10px 0 0 0;">{esc(model["gate"])}</p>'
+    before, joiner, after = model["verdict"]
+    drivers = " · ".join(f'{esc(label)} <b style="color:{NAVY};">{esc(value)}</b>'
+                         for label, value in model.get("drivers") or [])
+    return (
+        (f'<div style="{SMALL}font-size:11px;font-weight:bold;letter-spacing:1px;'
+         f'text-transform:uppercase;padding-top:8px;">{esc(model["label"])}</div>'
+         if model.get("label") else "")
+        + f'<div style="font-family:{FONT};font-size:17px;font-weight:bold;line-height:1.35;'
+          f'color:{NAVY};padding-top:4px;">{esc(before)} <span style="font-weight:normal;'
+          f'color:{SLATE};">{esc(joiner)}</span> {esc(after)}</div>'
+        + f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+          f'border="0"><tr><td valign="middle" style="padding:6px 12px 0 0;">'
+          f'{_bar(model["bar"], "100%", 8)}</td>'
+          f'<td width="64" align="right" valign="middle" style="font-family:{DISPLAY};'
+          f'font-size:28px;font-weight:bold;font-style:normal;color:{NAVY};'
+          f'white-space:nowrap;padding-top:4px;">{model["pct"]}%</td></tr></table>'
+        + (f'<div style="{FACT}padding-top:6px;">{drivers}</div>' if drivers else "")
+        + "".join(f'<div style="{FACT}padding-top:6px;">{esc(line)}</div>'
+                  for line in model.get("lines") or [])
+        + (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+           f'border="0" style="margin-top:10px;">{_rule()}<tr><td style="{FACT}'
+           f'padding-top:10px;">{esc(model["closer"])}</td></tr></table>'
+           if model.get("closer") else ""))
+
+
 def _regret(regret: Mapping[str, Any]) -> str:
-    if "gate" in regret:
-        # One plain line, no Heads-up box (RQ-19): no call, then the closest
-        # decision and why it has no odds (RQ-06).
-        return _sec(6, "The Week's Closest Call",
-                    f'<p style="{BASE}margin:0;">{esc(no_call_line(regret))}</p>')
-    confidence = _pct(regret["confidence"])
-    drivers = " · ".join(
-        f'{esc(d["label"])} <b>{esc(d["value"])}</b>' for d in regret["drivers"])
-    # No title bar inside the card: the section title right above it already
-    # says "The Week's Closest Call", and the email printed it twice, stacked
-    # (panel review D8). The browser report prints it once.
-    # SS-D2: what the card IS — the closest call WITH ODDS — rides as a small
-    # label inside it, because a dead-even decision with no odds can sit in
-    # the lineup above it; a narrower decision is named in ``closer``.
-    label = (f'<div style="{SMALL}font-weight:bold;letter-spacing:1px;'
-             f'text-transform:uppercase;color:{SLATE};margin:0 0 4px 0;">'
-             f'{esc(regret["label"])}</div>' if regret.get("label") else "")
-    extra = "".join(f'<p style="{SMALL}margin:6px 0 0 0;">{esc(regret[key])}</p>'
-                    for key in ("reason", "closer") if regret.get(key))
-    body = (
-        f'<div style="background:{PAPER};border:1px solid {LINE};'
-        f'border-top:3px solid {NAVY};">'
-        f'<div style="padding:14px 16px;">{label}'
-        f'<div style="font-family:{FONT};font-size:18px;font-weight:bold;'
-        f'color:{NAVY};">{esc(regret_verdict(regret)[0])} '
-        f'<span style="color:{SLATE};font-weight:normal;">'
-        f'{esc(regret_verdict(regret)[1])}</span> '
-        f'{esc(regret_verdict(regret)[2])}</div>'
-        f'<div style="padding:12px 0 4px 0;">{_bar((confidence - 50) * 2, "100%", 10)}</div>'
-        f'<div style="font-family:{DISPLAY};font-size:26px;font-weight:bold;'
-        f'font-style:italic;color:{NAVY};padding:2px 0 6px 0;">{confidence}%</div>'
-        f'<p style="{SMALL}margin:0 0 6px 0;">{drivers}</p>'
-        f'<p style="{SMALL}margin:0;">{esc(regret["definition"])}</p>{extra}</div></div>'
-    )
-    return _sec(6, "The Week's Closest Call", body)
+    return _sec(6, "The Week's Closest Call",
+                _closest_body(anatomy.closest({"regret": regret})), "closest")
+
+
+def _ifthen_body(model: Mapping[str, Any]) -> str:
+    """Card 04: "If …" in brick capitals, then the move in bold, then why."""
+    if not model["plans"]:
+        return f'<p style="{BASE}margin:10px 0 0 0;">{esc(model["empty"])}</p>'
+    rows = []
+    for i, plan in enumerate(model["plans"]):
+        if i:
+            rows.append(_rule())
+        rows.append(
+            f'<tr><td style="padding:10px 0;">'
+            f'<div style="font-family:{FONT};font-size:12px;font-weight:bold;'
+            f'letter-spacing:.5px;text-transform:uppercase;color:{BRICK};">'
+            f'{esc(plan["if"])}</div>'
+            f'<div style="font-family:{FONT};font-size:15px;font-weight:bold;'
+            f'line-height:1.4;color:{NAVY};padding-top:3px;">{esc(plan["then"])}</div>'
+            + (f'<div style="{FACT}padding-top:3px;">{esc(plan["rest"])}</div>'
+               if plan.get("rest") else "") + '</td></tr>')
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0">{"".join(rows)}</table>')
 
 
 def _pivots(plans: list[Mapping[str, Any]],
             meta: Mapping[str, Any] | None = None,
             note: str | None = None) -> str:
-    if not plans:
-        body = _gate(note or NO_PIVOTS)
-    else:
-        rows = "".join(
-            f'<tr><td style="{BASE}font-weight:bold;color:{SLATE};'
-            f'padding:7px 10px 7px 0;vertical-align:top;">If</td>'
-            f'<td style="{BASE}padding:7px 0;border-bottom:1px solid {LINE};">'
-            f'{esc(p["condition"])}<br><b>→ {esc(pivot_action(p, meta))}</b></td></tr>'
-            for p in plans
-        )
-        body = (f'<table role="presentation" width="100%" cellpadding="0" '
-                f'cellspacing="0" border="0">{rows}</table>')
-    return _sec(7, "If/Then for Gameday", body)
+    model = anatomy.ifthen({"pivots": plans, "meta": meta or {}, "pivots_note": note})
+    return _sec(7, "If/Then for Gameday", _ifthen_body(model), "ifthen")
 
 
 def _bid_line(entry: Mapping[str, Any]) -> str:
@@ -787,42 +870,44 @@ def _waiver_market(market: Mapping[str, Any] | None) -> str:
     return _sec(0, "The Waiver Market In Your League", "".join(parts))
 
 
+def _rising_body(model: Mapping[str, Any]) -> str:
+    """Card 06: the intro, then one player a row — the name set apart, what
+    he is getting beneath it — split by hairlines."""
+    rows = []
+    for i, (who, what) in enumerate(model["rows"]):
+        if i:
+            rows.append(_rule())
+        rows.append(f'<tr><td style="{FACT}padding:9px 0;">'
+                    + (f'<span style="font-size:14px;color:{NAVY};"><b>{esc(who)}</b>'
+                       f'</span><br>' if who else "")
+                    + f'{esc(what)}</td></tr>')
+    return (f'<p style="{FACT}margin:10px 0 2px 0;">{esc(model["intro"])}</p>'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0">{"".join(rows)}</table>')
+
+
 def _rising(rows) -> str:
-    """The template's ``.rising`` card, inline: one bordered row per player
-    with the name set apart (launch audit W7). A table, because a div's
-    border-left is one of the things Outlook's Word engine drops."""
-    if not rows:
-        return ""
-    from render.report import RISING_HEAD, rising_intro
-    items = []
-    for row in rows:
-        who, what = rising_parts(row)
-        items.append(
-            f'<tr><td style="{BASE}font-size:13px;background:{CARD};'
-            f'border:1px solid {LINE};border-left:4px solid {TURF};'
-            f'padding:8px 12px;">'
-            + (f'<b>{esc(who)}</b><br>' if who else "")
-            + f'{esc(what)}</td></tr>'
-            f'<tr><td style="height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>')
-    table = (f'<table role="presentation" width="100%" cellpadding="0" '
-             f'cellspacing="0" border="0">{"".join(items)}</table>')
-    return _sec(8, RISING_HEAD,
-                f'<p style="{BASE}margin:0 0 10px 0;">{esc(rising_intro(rows))}</p>{table}')
+    model = anatomy.rising({"rising": rows})
+    return _sec(8, RISING_HEAD, _rising_body(model), "rising") if model else ""
 
 
-def _receipts(receipts: Mapping[str, Any]) -> str:
+def _receipts_body(receipts: Mapping[str, Any]) -> str:
+    """Card 07, content as it has always been."""
+    stamp_style = (f'display:inline-block;font-family:{FONT};font-size:11px;'
+                   f'font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
+                   f'color:{SLATE};background:{DIVIDER};border-radius:4px;padding:2px 6px;')
     record = receipts.get("record")
     if not record:
         # D12: the stamp only where this report has odds and a next report.
         stamp = receipts.get("stamp", "Results · from next week")
         inner = (f'{esc(receipts.get("note", ""))}'
-                 + (f'<br><span style="{SMALL}text-transform:uppercase;'
-                    f'letter-spacing:1px;">{esc(stamp)}</span>' if stamp else ""))
+                 + (f'<br><span style="{stamp_style}margin-top:8px;">{esc(stamp)}</span>'
+                    if stamp else ""))
     elif receipts.get("last_week_calls") is not None:
         from engine.own_record import HIT, MISS, call_line
         mark = {HIT: (TURF, "✓"), MISS: (BRICK, "✗")}
         rows = "".join(
-            f'<div style="{SMALL}color:{NAVY};padding:3px 0;">'
+            f'<div style="{FACT}color:{NAVY};padding:3px 0;">'
             f'<b style="color:{mark.get(c["outcome"], (NAVY, "–"))[0]};">'
             f'{mark.get(c["outcome"], (NAVY, "–"))[1]}</b> {esc(call_line(c))}</div>'
             for c in receipts["last_week_calls"])
@@ -830,8 +915,7 @@ def _receipts(receipts: Mapping[str, Any]) -> str:
                if receipts.get("ask") else "")
         inner = (f'{esc(receipts.get("note", ""))}'
                  f'<div style="margin-top:8px;">{rows}</div>'
-                 f'<span style="{SMALL}text-transform:uppercase;letter-spacing:1px;">'
-                 f'Graded on real box scores</span>{ask}')
+                 f'<span style="{stamp_style}">Graded on real box scores</span>{ask}')
     else:
         parts = [esc(receipts.get("note", ""))]
         best, worst = receipts.get("best_call"), receipts.get("worst_call")
@@ -846,9 +930,13 @@ def _receipts(receipts: Mapping[str, Any]) -> str:
                 f'(week {esc(worst["week"])}, {worst["margin"]:.1f}). '
                 f'Both stay on the ledger.')
         inner = ("".join(parts)
-                 + f'<br><span style="{SMALL}text-transform:uppercase;'
-                   f'letter-spacing:1px;">Graded on real box scores</span>')
-    return _sec(9, "The Receipts", f'<p style="{BASE}margin:0;">{inner}</p>')
+                 + f'<br><span style="{stamp_style}margin-top:8px;">Graded on real box '
+                   f'scores</span>')
+    return f'<p style="{BASE}margin:10px 0 0 0;">{inner}</p>'
+
+
+def _receipts(receipts: Mapping[str, Any]) -> str:
+    return _sec(9, "The Receipts", _receipts_body(receipts), "receipts")
 
 
 # --------------------------------------------------------------------- #
@@ -882,7 +970,171 @@ def _forward_lines(meta: Mapping[str, Any] | None = None) -> list[str]:
 
 @buyer_slots
 def text_summary(report: Mapping[str, Any]) -> str:
-    """Plain-text digest of the report — the text half of every email."""
+    """Plain-text digest of the report — the text half of every email.
+
+    Same order, same rows and same words as the HTML (contract C1/C2,
+    render.anatomy): the masthead, the notices, any empty spot, then the
+    seven cards. Flags travel on every surface or none."""
+    if not report["meta"].get("solo"):
+        return _league_text(report)
+    return _solo_text(report)
+
+
+def _closest_text(regret: Mapping[str, Any]) -> list[str]:
+    """The closest call's plain-text lines, today's words."""
+    if "gate" in regret:
+        return [f"THE WEEK'S CLOSEST CALL: {no_call_line(regret)}"]
+    before, joiner, after = regret_verdict(regret)
+    if not regret_tossup(regret):
+        # "Start X" reads "start X" after the colon; a toss-up's head is
+        # the bare NAME, which keeps its capital ("george Pickens or ...").
+        before = before[:1].lower() + before[1:]
+    lines = [f"THE WEEK'S CLOSEST CALL: {before} {joiner} "
+             f"{after} ({regret['confidence']:.0%})"
+             + (f" — {regret['label'].lower()}" if regret.get("label") else "")]
+    drivers = " · ".join(f"{d['label']} {d['value']}" for d in regret.get("drivers") or [])
+    if drivers:
+        lines.append(f"  {drivers}")
+    for key in ("definition", "reason", "closer"):
+        if regret.get(key):
+            lines.append(f"  {regret[key]}")
+    return lines
+
+
+def _solo_text(report: Mapping[str, Any]) -> str:
+    meta = report["meta"]
+    head = anatomy.masthead(report)
+    lines = [f"BEAT YOUR LEAGUE — {head['week'].upper()} — {head['label'].upper()}",
+             f"{head['team']} · {head['meta']}", head["stamp"], ""]
+    if meta.get("trial"):
+        lines += [f"{TRIAL_HEAD.upper()}. {TRIAL_INTRO}"]
+        if trial_price_line(meta):
+            lines.append(trial_price_line(meta)
+                         + (f" {TRIAL_BUTTON}: {trial_join_url(meta)}"
+                            if trial_join_url(meta) else ""))
+        lines.append("")
+    if season_end_lines(meta):
+        lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
+    for item in report.get("checklist") or []:
+        if anatomy.is_certain_zero(item):
+            lines.append(f"[ ] {item['action']}  ({item['deadline']})")
+            if item.get("detail"):
+                lines.append(f"    {item['detail']}")
+            lines.append("")
+    # 01 — every starter, decided.
+    lineup = anatomy.lineup(report)
+    lines.append(lineup["title"].upper())
+    if lineup["week"]:
+        week = lineup["week"]
+        lines.append(f"  {week['total']} projected · {week['range_label']} {week['range']}")
+    elif lineup["gate"]:
+        lines.append(f"  {NOT_CALLING_IT}: {lineup['gate']}")
+    for extra in (lineup["basis"], lineup["note"]):
+        if extra:
+            lines.append(f"  {extra}")
+    if lineup["heads"]:
+        lines.append(f"  {'':<6} {'':<24} {'PROJ':>5}"
+                     + ("  ODDS" if lineup["heads"] == "proj+odds" else ""))
+    for row in lineup["rows"]:
+        call = f"{row['pct']}%" if row["pct"] is not None else (row["label"] or "")
+        lines.append(f"  {row['slot']:<6} {row['name']:<24} {row['proj'] or '—':>5}  "
+                     f"{call}".rstrip())
+    set_item = next((i for i in report.get("checklist") or [] if anatomy.is_set_lineup(i)),
+                    None)
+    if set_item:
+        # The lineup's own list stays here: plain text has no rows to tick.
+        lines.append(f"  [ ] {set_item['action']}  ({set_item['deadline']})")
+        if set_item.get("detail"):
+            lines.append(f"      {set_item['detail']}")
+    if any(r["pct"] is not None for r in lineup["rows"]):
+        # Plain text draws no bars, so the clause about the bar goes.
+        lines.append("  " + ODDS_DEFINITION.replace(
+            ", and the bar starts at 50% (a toss-up)", ""))
+    if lineup["week"]:
+        lines.append(f"  {RANGE_LABEL.capitalize()}: {RANGE_DEFINITION}")
+    checked = anatomy.checked_line(report)
+    if checked:
+        lines.append(f"  {anatomy.CHECKED_HEAD} {checked}")
+    # 02 — the closest call.
+    lines += ["", *_closest_text(report.get("regret") or {})]
+    # 03 — what to do and by when.
+    plan = anatomy.plan(report)
+    plan_items = [i for i in report.get("checklist") or []
+                  if not anatomy.is_set_lineup(i) and not anatomy.is_certain_zero(i)]
+    if plan_items or plan["saturday"]:
+        lines += ["", "YOUR GAME PLAN"]
+        for item, model in zip(plan_items, plan["items"]):
+            lines.append(f"  {'[ ]' if model['box'] else ' - '} {item['action']}  "
+                         f"({item['deadline']})")
+            if item.get("detail"):
+                lines.append(f"      {item['detail']}")
+        if saturday_line(meta):
+            lines.append(f"  {saturday_line(meta)}")
+    # 04 — the if/then. The game plan's late-news line says "your if/then
+    # below already has the answer" — so it is always here, plans or not.
+    lines += ["", "IF/THEN FOR GAMEDAY"]
+    if report.get("pivots"):
+        for entry in report["pivots"]:
+            lines.append(f"  If {entry['condition']}: {pivot_action(entry, meta)}")
+    else:
+        lines.append(f"  {anatomy.ifthen(report)['empty']}")
+    # 05 — the reasoning behind every slot, and the rest of the roster.
+    slots = anatomy.slots(report)
+    lines += ["", "SLOT BY SLOT"]
+    for row in slots["rows"]:
+        # Name first, so a slot code starts only the lineup's own rows above.
+        lines.append(f"  {row['name']} ({row['slot']}) · proj {row['proj'] or '—'}")
+        for extra in (row["game"], " · ".join(row["flags"]) or None, row["call"],
+                      row["form"], row["usage"], row["reason"]):
+            if extra:
+                lines.append(f"    {extra}")
+    if slots["bench"]:
+        lines += ["", BENCH_HEAD.upper()]
+        for entry in slots["bench"]:
+            said = " · ".join(t for t in (entry["form"], entry["note"], entry["rank"]) if t)
+            lines.append(f"  {entry['position']:<6} {entry['name']:<24} "
+                         f"{entry['proj'] or '—':>5}  {said}".rstrip())
+            if entry["game"]:
+                lines.append(f"  {'':<6} {entry['game']}")
+    for note in slots["notes"]:
+        lines.append("  " + (f"{note['head']} " if note["head"] else "") + note["text"])
+    # 06 — rising roles.
+    if report.get("rising"):
+        lines += ["", RISING_HEAD.upper(), f"  {rising_intro(report['rising'])}"]
+        lines += [f"  - {r['line']}" for r in report["rising"]]
+    if meta.get("trial"):
+        # The free report is the one email that reaches a non-customer and it
+        # ends on how to buy, so it carries who sent it like every other
+        # commercial email (CAN-SPAM, CASL; launch audit C14). The ask comes
+        # BEFORE the fine print (panel review I2), and the data-age sentence
+        # (principle 3) rides the text half too (final review PIPE-7).
+        lines += [*_trial_cta_lines(meta),
+                  "", NO_BETTING_LINE,
+                  source_line(meta),
+                  availability_basis(meta),
+                  *([sender_line()] if sender_line() else [])]
+        return "\n".join(lines) + "\n"
+    # 07 — the receipts.
+    lines += ["", f"RECEIPTS: {report['receipts'].get('note', '')}"]
+    if report["receipts"].get("last_week_calls"):
+        from engine.own_record import call_line
+        lines += [f"  - {call_line(c)}" for c in report["receipts"]["last_week_calls"]]
+    if report["receipts"].get("ask"):
+        lines.append(report["receipts"]["ask"])
+    lines += ["", NO_BETTING_LINE,
+              source_line(meta),
+              availability_basis(meta),
+              *read_lines(meta),
+              *update_lines(meta),
+              *_forward_lines(meta),
+              "",
+              *cancel_lines(stop_route(meta)),
+              *([sender_line()] if sender_line() else [])]
+    return "\n".join(lines) + "\n"
+
+
+def _league_text(report: Mapping[str, Any]) -> str:
+    """The retired league product's text half, as it was."""
     meta = report["meta"]
     # A solo report has no opponent and never will (PLAN §0). Both renderers
     # already branch on this; the plain-text half did not, and it is the half
@@ -1150,6 +1402,18 @@ def preheader_for(report: Mapping[str, Any]) -> str:
         return (f"{label}: start {regret['start_name']} over "
                 f"{regret['over_name']}, {_pct(regret['confidence'])}%. "
                 f"Your whole lineup is inside.")
+    # The first thing to DO, never the lineup itself (the preview would only
+    # repeat the subject) and never an item with nothing to do (Week 1's
+    # basis line is a paragraph, not an action).
+    first = next((item.get("action") for item in report.get("checklist") or []
+                  if item.get("action") and not anatomy.is_set_lineup(item)
+                  and item.get("urgency") != "done"), None)
+    if first:
+        return f"{str(first).rstrip('.')}. Your whole lineup is inside."
+    if not anatomy.any_projection(report):
+        # True by the engine's own placement rule (engine.solo_report:
+        # Week 1 places by last season's points per appearance).
+        return "Your opening lineup, every slot filled in last season's scoring order."
     first = next((item.get("action") for item in report.get("checklist") or []
                   if item.get("action")), None)
     if first:
@@ -1193,15 +1457,14 @@ def _footer(meta: Mapping[str, Any]) -> str:
         # Sender identity on the free report too (launch audit C14): it is
         # the one email to a non-customer, and it ends on how to buy.
         return (
-            f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;">'
+            f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
             f'<p style="{SMALL}margin:0;"><b>Beat Your League</b> — '
             f'{esc(BRAND_LINE)}<br>{esc(basis)}<br>'
             f'{esc(NO_BETTING_LINE)}<br>{esc(source_line(meta))}'
             + (f'<br>{esc(sender_line())}' if sender_line() else "")
             + '</p></td></tr>')
     return (
-        f'<tr><td style="background:{PAPER};padding:20px 28px 26px 28px;'
-        f'margin-top:24px;">'
+        f'<tr><td style="background:{PAPER};padding:20px 4px 8px 4px;">'
         # A seat link is one long unbroken string: it wraps rather than
         # widening a phone's email.
         f'<p style="{SMALL}margin:0;overflow-wrap:anywhere;word-break:break-word;">'
@@ -1219,271 +1482,219 @@ def _footer(meta: Mapping[str, Any]) -> str:
     )
 
 
-def _your_week(matchup: Mapping[str, Any], no_opponent: str | None) -> str:
-    """Your projected week. Half a scoreboard reads as a broken scoreboard, so
-    a solo report shows one number and its range rather than an empty VS."""
-    you = matchup["you"]
-    gate = matchup.get("range_gate")
-    if gate:
-        body = _gate(gate)
-    else:
-        body = (
-            f'<div style="{BASE}"><b>{esc(you["label"])}</b></div>'
-            f'<div style="font-family:{DISPLAY};font-size:34px;font-weight:bold;'
-            f'color:{TURF};line-height:1.1;">{you["projected_total"]:.1f}'
-            f'<span style="{SMALL}font-size:12px;color:{SLATE};"> PROJ</span></div>'
-            f'<div style="{BASE}font-weight:bold;color:#33445C;">{range_text(you)} '
-            f'<span style="{SMALL}">{esc(RANGE_LABEL)}</span></div>'
-            f'<p style="{SMALL}color:#33445C;margin:8px 0 0 0;">'
-            f'<b style="color:{NAVY};">{esc(RANGE_LABEL.capitalize())}:</b> '
-            f'{esc(RANGE_DEFINITION)}</p>')
-        if matchup.get("range_basis"):
-            body += f'<div style="{SMALL}margin-top:6px;">{esc(matchup["range_basis"])}</div>'
-    if no_opponent:
-        body += f'<p style="{SMALL}margin:12px 0 0 0;">{esc(no_opponent)}</p>'
-    return _sec(2, "Your Week", body)
+def _lineup_body(model: Mapping[str, Any]) -> str:
+    """Card 01, every starter decided: the week's total and range on top,
+    then one line a slot — slot, name, projection, the bar and the % where
+    odds print — then the one box to tick, then what the % and the range
+    mean.
 
-
-_USAGE_LINE = re.compile(r"last (\d+) games?: (.+)")
-
-
-# A clause below this per-game rate is dropped from the SHORT line when
-# another clause remains: "1 carry" over four games printed "0.2 car/g" on a
-# receiver's row, clutter that reads as a role (panel review I11). The full
-# line, every clause, stays on the browser report.
-MIN_SHOWN_RATE = 0.5
-
-
-def short_usage(text: str | None) -> str | None:
-    """engine.usage.usage_line, said in a phone's width and a buyer's words:
-    "last 4 games: 34 targets (8.5 a game), 21 carries" ->
-    "last 4: 8.5 targets · 5.2 carries a game".
-
-    The same counts over the same window, as per-game rates (launch audit F6),
-    spelled out: "tgt/g" and "car/g" were our shorthand, not the reader's
-    (panel review I11). A clause it does not recognise returns the whole line
-    unchanged. A clause under MIN_SHOWN_RATE goes only when another stays, so
-    a line never empties. Week 1's "last season: ..." basis is not a usage
-    line and passes through untouched."""
-    match = _USAGE_LINE.fullmatch(text or "")
-    if not match:
-        return text
-    games = int(match.group(1))
-    parts: list[tuple[float, str]] = []
-    for clause in match.group(2).split(", "):
-        targets = re.fullmatch(r"\d+ targets? \(([\d.]+) a game\)", clause)
-        attempts = re.fullmatch(r"\d+ pass attempts? \(([\d.]+) a game\)", clause)
-        carries = re.fullmatch(r"(\d+) carr(?:y|ies)", clause)
-        if targets:
-            rate = float(targets.group(1))
-            parts.append((rate, f"{targets.group(1)} targets"))
-        elif attempts:
-            # A quarterback's volume (RQ-07): his throws, not a trick-play target.
-            rate = float(attempts.group(1))
-            parts.append((rate, f"{attempts.group(1)} pass attempts"))
-        elif carries and games:
-            rate = int(carries.group(1)) / games
-            parts.append((rate, f"{rate:.1f} carries"))
-        else:
-            return text
-    shown = [words for rate, words in parts if rate >= MIN_SHOWN_RATE]
-    if not shown:
-        shown = [max(parts)[1]]
-    return f"last {games}: " + " · ".join(shown) + " a game"
-
-
-# Fixed widths for the narrow columns, so the PLAYER column gets whatever is
-# left. The call column used to be nowrap with "start · waiting on Rashid
-# Shaheed" in it, which pushed the table past a phone's width and squeezed
-# every name onto four to eight lines at 390px (launch audit F6).
-_SLOT_W, _PROJ_W, _CALL_W = 40, 44, 60
-
-
-def _your_lineup(report: Mapping[str, Any]) -> str:
-    """The solo lineup: slot, player, projection, call. No tint, because a tint
-    is a comparison and there is no opponent to compare against.
-
-    Built for a phone first (launch audit F6). The call column carries only a
-    percentage and its bar, never a sentence; the scan line is slot, name,
-    projection, odds; and everything else — opponent and kickoff, any
-    availability flag, why a row has no odds, the bench gap and usage — runs
-    in a sub-row beneath the name that spans the projection and call columns
-    too, instead of wrapping four to eight lines deep inside the player cell."""
-    slots = report["lineup"]
-    mixed = any(s.get("confidence") is not None for s in slots)
-    shown_marker = False
+    Built for a phone first. The scan line is slot, name, projection, odds;
+    a reason a row has no % rides a short second line under the name, never
+    a column (launch audit F6: a sentence in a nowrap call cell pushed the
+    email to 413px on a 390px phone). Lean inline styles on purpose: these
+    rows repeat per player, and the email has to stay far under Gmail's
+    ~102 KB clip."""
+    out = []
+    week = model.get("week")
+    if week:
+        out.append(
+            f'<div style="padding:10px 0 4px 0;font-family:{FONT};color:{NAVY};">'
+            f'<b style="font-family:{DISPLAY};font-size:28px;line-height:1;">'
+            f'{esc(week["total"])}</b>'
+            # The same lowercase unit as "realistic range" beside it, as the
+            # web report and the landing's phone print it (contract C8).
+            f'<span style="font-size:12px;color:{SLATE};"> proj</span>&nbsp; '
+            f'<b style="font-size:15px;color:{INK2};white-space:nowrap;">{esc(week["range"])}</b>'
+            f'<span style="font-size:12px;color:{SLATE};"> {esc(week["range_label"])}</span></div>')
+    elif model.get("gate"):
+        out.append(f'<p style="{FACT}margin:10px 0 4px 0;"><b style="color:{NAVY};">'
+                   f'{esc(NOT_CALLING_IT)}:</b> {esc(model["gate"])}</p>')
+    if model.get("basis"):
+        out.append(f'<p style="{SMALL}margin:4px 0 0 0;">{esc(model["basis"])}</p>')
+    if model.get("note"):
+        out.append(f'<p style="{FACT}font-size:12px;margin:6px 0 0 0;">'
+                   f'{esc(model["note"])}</p>')
+    heads = model.get("heads")
+    cols = 5 if heads == "proj+odds" else 3 if heads == "proj" else 2
     rows = []
-    for slot in slots:
-        name = slot.get("player_name") or "—"
-        proj = f'{slot["projected"]:.1f}' if slot.get("projected") is not None else "—"
-        bits = call_bits(slot)
-        # His games and his usage on lines of their own: joined, the row read
-        # "2026: 20.4 a game · last 3: 15.4, 25.8, 14.6 · last 3: 8.3 targets"
-        # — two "last 3"s, one of points and one of a usage window.
-        record = form_phrase(slot)
-        usage = short_usage(slot.get("usage"))
-        flags = [esc(f["text"]) for f in (slot.get("flags") or [])]
-        confidence = slot.get("confidence")
-        label = ""
-        if confidence is not None:
-            # The number with the site's bar under it: 50% (a coin flip)
-            # is the empty end, because every call is a head-to-head.
-            call = (f'<b style="font-size:16px;color:{NAVY};">{_pct(confidence)}%</b>'
-                    f'<div style="padding-top:4px;">'
-                    f'{_bar((_pct(confidence) - 50) * 2, f"{_CALL_W - 8}px", align="right")}'
-                    f'</div>')
-        else:
-            call = ""
-            if slot.get("player_name") and row_marked(slot, mixed):
-                shown_marker = True
-                label = row_label(slot)
-        # Everything but the name runs full width beneath it, one fact a line:
-        # kickoff, availability, why no odds, the bench gap, his games and
-        # usage, and a reason where one is owed.
-        details = [
-            (f'<span style="color:{NAVY};">{esc(slot["game"])}</span>'
-             if slot.get("game") else ""),
-            (f'<span style="color:{BRICK};font-weight:bold;">{" · ".join(flags)}</span>'
-             if flags else ""),
-            f'<b>{esc(label)}</b>' if label else "",
-            esc(" · ".join(bits)) if bits else "",
-            esc(record) if record else "",
-            esc(usage) if usage else "",
-            esc(slot["reason"]) if slot.get("reason") else "",
-        ]
-        details = [d for d in details if d]
-        # Lean inline styles on purpose: these rows repeat per player, and a
-        # 30-player roster has to stay far under Gmail's ~102 KB clip.
-        line = f'border-bottom:1px solid {LINE};'
-        pad = (f'padding:7px 8px {"1px" if details else "7px"} 8px;'
-               f'{"" if details else line}vertical-align:top;')
-        # The call spans the name row AND the detail row (launch review D7):
-        # in the name row alone, the % and its bar made that row taller than
-        # every other, opening a gap between a player's name and his kickoff
-        # on exactly the rows that carry odds.
-        span = call and details
-        call_cell = (f'<td width="{_CALL_W}" rowspan="2" style="{BASE}padding:7px 8px '
-                     f'7px 8px;{line}vertical-align:top;text-align:right;">{call}</td>'
-                     if span else
-                     f'<td width="{_CALL_W}" style="{BASE if call else ""}{pad}'
-                     f'text-align:right;">{call}</td>')
+    if heads:
+        # 11px, the smallest any email text is drawn (a phone's legibility
+        # floor in the launch check's probe).
+        th = (f'font-family:{FONT};font-size:11px;font-weight:bold;letter-spacing:1px;'
+              f'text-transform:uppercase;color:{SLATE};padding:8px 0 4px 0;')
         rows.append(
-            f'<tr><td width="{_SLOT_W}" style="{SMALL}{pad}font-weight:bold;'
-            f'white-space:nowrap;">{esc(slot["slot"])}</td>'
-            f'<td style="{BASE}{pad}"><b>{esc(name)}</b></td>'
-            f'<td width="{_PROJ_W}" style="{BASE}{pad}text-align:right;'
-            f'font-weight:bold;white-space:nowrap;">{proj}</td>'
-            f'{call_cell}</tr>')
-        if details:
-            rows.append(
-                f'<tr><td style="{line}"></td>'
-                f'<td colspan="{2 if span else 3}" style="{SMALL}padding:0 8px 7px 8px;'
-                f'{line}">{"<br>".join(details)}</td></tr>')
-    th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
-          f'color:{NAVY};padding:0 8px 5px 8px;border-bottom:2px solid {NAVY};')
-    head = (f'<tr><td width="{_SLOT_W}" style="{th}"></td>'
-            f'<td style="{th}">Your lineup</td>'
-            f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
-            f'<td width="{_CALL_W}" style="{th}text-align:right;">Call</td></tr>')
-    note = ""
-    gates = note_gates(slots)
-    if gates:
-        head_text = no_call_head(shown_marker and mixed, mixed)
-        note = _note(f'<b>{esc(head_text)}</b> '
-                     f'{esc(no_call_explainer(gate_list(gates)))}')
-    if projection_note(slots):
-        note += _note(esc(projection_note(slots)))
-    table = (f'<table role="presentation" width="100%" cellpadding="0" '
-             f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
-    seeded_note = (_note(esc(SEEDED_SECTION_LINE))
-                   if report["meta"].get("seeded") else "")
-    return _sec(3, "The Lineup", table + _bench(report) + seeded_note + note)
+            f'<tr><td width="34"></td><td></td>'
+            f'<td width="38" align="right" style="{th}">Proj</td>'
+            + (f'<td colspan="2" align="right" style="{th}">Odds</td>'
+               if cols == 5 else "") + '</tr>')
+    for row in model["rows"]:
+        label = row.get("label") if row.get("pct") is None else None
+        below = "1px" if label else "9px"
+        rows.append(_rule(cols))
+        cells = [
+            f'<td width="34" valign="top" style="font-family:{FONT};font-size:11px;'
+            f'font-weight:bold;letter-spacing:1px;color:{SLATE};padding:11px 0 {below} 0;">'
+            f'{esc(row["slot"])}</td>',
+            f'<td valign="top" style="font-family:{FONT};font-size:15px;font-weight:bold;'
+            f'line-height:1.3;color:{NAVY};padding:9px 8px {below} 0;">{esc(row["name"])}</td>',
+        ]
+        if cols >= 3:
+            cells.append(
+                f'<td width="38" align="right" valign="top" style="font-family:{FONT};'
+                f'font-size:14px;color:{INK2};padding:10px 0 {below} 0;">'
+                f'{esc(row["proj"] or "—")}</td>')
+        if cols == 5:
+            if row.get("pct") is not None:
+                cells.append(f'<td width="34" valign="top" style="padding:16px 0 0 6px;">'
+                             f'{_bar(row["bar"], "100%")}</td>'
+                             f'<td width="40" align="right" valign="top" style="font-family:'
+                             f'Arial,Helvetica,sans-serif;font-size:16px;font-weight:bold;'
+                             f'color:{NAVY};'
+                             f'padding:8px 0 9px 0;white-space:nowrap;">{row["pct"]}%</td>')
+            else:
+                cells.append('<td width="34"></td><td width="40"></td>')
+        rows.append(f'<tr>{"".join(cells)}</tr>')
+        if label:
+            if row.get("tone") == "basis":
+                style = f'{FACT}padding:1px 0 9px 0;'
+            else:
+                style = (f'font-family:{FONT};font-size:11px;font-weight:bold;line-height:1.4;'
+                         f'letter-spacing:.5px;text-transform:uppercase;'
+                         f'color:{BRICK if row.get("tone") == "flag" else SLATE};'
+                         f'padding:1px 0 9px 0;')
+            rows.append(f'<tr><td></td><td colspan="{cols - 1}" style="{style}">'
+                        f'{esc(label)}</td></tr>')
+    out.append(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+               f'border="0">{"".join(rows)}</table>')
+    task = model.get("task")
+    if task:
+        # The rows ARE the lineup the task names, so its list is not repeated
+        # here (the plain-text half, which has no rows to point at, keeps it).
+        out.append(
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0" style="background:{FLAG_TINT};border:1px solid {FLAG_EDGE};'
+            f'border-radius:8px;margin-top:10px;"><tr>'
+            f'<td width="18" valign="top" style="padding:12px 10px 10px 12px;">{tick_box()}</td>'
+            f'<td valign="top" style="padding:10px 12px 10px 0;">'
+            f'{_item_cells(task, detail=False)}</td></tr></table>')
+    for line in model.get("legend") or []:
+        head = (f'<b style="color:{NAVY};">{esc(line["head"])}</b> '
+                if line.get("head") else "")
+        out.append(f'<p style="font-family:{FONT};font-size:12px;line-height:1.5;'
+                   f'color:{INK2};margin:8px 0 0 0;">{head}{esc(line["text"])}</p>')
+    return "".join(out)
+
+
+# Fixed widths for the narrow columns, so the detail column gets whatever is
+# left. Nothing but the detail cell carries words (launch audit F6).
+_SLOT_W, _PROJ_W = 40, 40
+
+
+def _slots_body(model: Mapping[str, Any]) -> str:
+    """Card 05, the reasoning behind every slot: the slot, then one fact a
+    line — name, game, availability, the call, his games, his usage, why —
+    then the projection. No % here: the odds are card 01's."""
+    rows = []
+    for i, row in enumerate(model["rows"]):
+        if i:
+            rows.append(_rule(3))
+        lines = [f'<b style="font-size:15px;color:{NAVY};">{esc(row["name"])}</b>']
+        if row.get("game"):
+            lines.append(f'<span style="color:{NAVY};">{esc(row["game"])}</span>')
+        if row.get("flags"):
+            lines.append(f'<b style="color:{BRICK};">{esc(" · ".join(row["flags"]))}</b>')
+        if row.get("call"):
+            lines.append(f'<b style="color:{NAVY};">{esc(row["call"])}</b>')
+        lines += [esc(row[key]) for key in ("form", "usage", "reason") if row.get(key)]
+        rows.append(
+            f'<tr><td width="{_SLOT_W}" valign="top" style="font-family:{FONT};font-size:11px;'
+            f'font-weight:bold;letter-spacing:1px;color:{SLATE};padding:12px 0 10px 0;">'
+            f'{esc(row["slot"])}</td>'
+            f'<td valign="top" style="{FACT}padding:9px 8px 10px 0;">{"<br>".join(lines)}</td>'
+            f'<td width="{_PROJ_W}" align="right" valign="top" style="font-family:{FONT};'
+            f'font-size:14px;font-weight:bold;color:{NAVY};padding:10px 0;">'
+            f'{esc(row["proj"] or "—")}</td></tr>')
+    out = [f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+           f'border="0">{"".join(rows)}</table>']
+    bench = _bench_rows(model.get("bench") or [], model.get("bench_head") or BENCH_HEAD)
+    if bench:
+        out.append(bench)
+    for note in model.get("notes") or []:
+        head = (f'<b style="color:{NAVY};">{esc(note["head"])}</b> '
+                if note.get("head") else "")
+        out.append(f'<p style="{FACT}margin:10px 0 0 0;">{head}{esc(note["text"])}</p>')
+    return "".join(out)
+
+
+def _bench_rows(bench: list[Mapping[str, Any]], head: str = BENCH_HEAD) -> str:
+    """The rest of the roster under its own subhead: every rostered player is
+    named. An OUT player takes the brick flag the lineup rows use, a benched
+    starter-calibre player navy: a star the report chose to sit must not read
+    as an injury."""
+    if not bench:
+        return ""
+    rows = [f'<tr><td colspan="3" style="font-family:{FONT};font-size:11px;'
+            f'font-weight:bold;letter-spacing:1px;text-transform:uppercase;'
+            f'white-space:nowrap;color:{SLATE};border-top:2px solid {NAVY};'
+            f'padding:14px 0 4px 0;">{esc(head)}</td></tr>']
+    for i, entry in enumerate(bench):
+        if i:
+            rows.append(_rule(3))
+        said = " · ".join(t for t in (
+            esc(entry["form"]) if entry.get("form") else "",
+            f'<b style="color:{BRICK};">{esc(entry["note"])}</b>' if entry.get("note") else "",
+            (f'<b style="color:{NAVY};text-transform:uppercase;">{esc(entry["rank"])}</b>'
+             if entry.get("rank") else "")) if t)
+        lines = [f'<span style="font-size:14px;color:{NAVY};">{esc(entry["name"])}</span>']
+        if entry.get("game"):
+            lines.append(esc(entry["game"]))
+        if said:
+            lines.append(said)
+        rows.append(
+            f'<tr><td width="{_SLOT_W}" valign="top" style="font-family:{FONT};font-size:11px;'
+            f'font-weight:bold;letter-spacing:1px;color:{SLATE};padding:10px 0 8px 0;">'
+            f'{esc(entry["position"])}</td>'
+            f'<td valign="top" style="{FACT}padding:8px 8px 8px 0;">{"<br>".join(lines)}</td>'
+            f'<td width="{_PROJ_W}" align="right" valign="top" style="font-family:{FONT};'
+            f'font-size:14px;color:{INK2};padding:8px 0;">'
+            f'{esc(entry["proj"] or "—")}</td></tr>')
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'border="0" style="margin-top:6px;">{"".join(rows)}</table>')
 
 
 def _bench(report: Mapping[str, Any]) -> str:
-    """The rest of the roster — the email twin of render.report._bench_table.
+    """The rest of the roster, on its own (render.anatomy.slots)."""
+    model = anatomy.slots({"lineup": [], "bench": report.get("bench") or [],
+                           "meta": report.get("meta") or {}})
+    return _bench_rows(model["bench"], model["bench_head"])
 
-    Every rostered player is named. Muted against the lineup so the starters
-    stay what the eye lands on, and an OUT player takes the brick flag the
-    lineup rows use, while a benched starter-calibre player takes navy: a star
-    the file chose to sit must not read as an injury.
-    """
-    bench = report.get("bench") or []
-    if not bench:
-        return ""
-    rows = []
-    for entry in bench:
-        proj = (f'{entry["projected"]:.1f}' if entry.get("projected") is not None
-                else "—")
-        line = f'border-bottom:1px solid {LINE};'
-        rank = entry.get("last_season_rank")
-        tag = ""
-        if entry.get("out"):
-            tag = (f'<span style="color:{BRICK};font-weight:bold;">'
-                   f'{esc(bench_phrase(entry))}</span>')
-        else:
-            # Dated questionable or the practice squad (BE-D3), then the rank.
-            tag = " · ".join(t for t in (
-                (f'<span style="color:{BRICK};font-weight:bold;">'
-                 f'{esc(entry["note"])}</span>' if entry.get("note") else ""),
-                (f'<span style="color:{NAVY};font-weight:bold;text-transform:'
-                 f'uppercase;">{esc(rank)} last season</span>'
-                 if entry.get("notable") and rank else "")) if t)
-        game = (f'<span style="color:{NAVY};">{esc(entry["game"])}</span>'
-                if entry.get("game") else "")
-        sub = esc(bench_form(entry)) if bench_shows_form(entry) else ""
-        details = [d for d in (game, tag, sub) if d]
-        # Same shape as the lineup above (F6): the name on the scan line, the
-        # why underneath at full width rather than four lines deep in a cell.
-        pad = (f'padding:6px 8px {"1px" if details else "6px"} 8px;'
-               f'{"" if details else line}vertical-align:top;')
-        rows.append(
-            f'<tr><td width="{_SLOT_W}" style="{SMALL}{pad}font-weight:bold;'
-            f'white-space:nowrap;">{esc(entry["position"])}</td>'
-            f'<td style="{SMALL}{pad}">{esc(entry["name"])}</td>'
-            f'<td width="{_PROJ_W}" style="{SMALL}{pad}text-align:right;'
-            f'white-space:nowrap;">{proj}</td><td width="{_CALL_W}" style="{pad}"></td></tr>')
-        if details:
-            rows.append(
-                f'<tr><td style="{line}"></td>'
-                f'<td colspan="3" style="{SMALL}padding:0 8px 6px 8px;{line}">'
-                f'{"<br>".join(details)}</td></tr>')
-    th = (f'{SMALL}font-weight:bold;text-transform:uppercase;letter-spacing:1px;'
-          f'color:{SLATE};padding:14px 8px 5px 8px;border-bottom:1px solid {LINE};')
-    head = (f'<tr><td width="{_SLOT_W}" style="{th}"></td>'
-            # "Bench", one word that never wraps: "ON YOUR / BENCH" broke over
-            # two lines in the narrow header at 390px (D13).
-            f'<td style="{th}white-space:nowrap;">Bench</td>'
-            f'<td width="{_PROJ_W}" style="{th}text-align:right;">Proj</td>'
-            f'<td width="{_CALL_W}" style="{th}"></td></tr>')
-    return (f'<table role="presentation" width="100%" cellpadding="0" '
-            f'cellspacing="0" border="0">{head}{"".join(rows)}</table>')
+
+_BODIES = {"lineup": _lineup_body, "closest": _closest_body, "plan": _plan_body,
+           "ifthen": _ifthen_body, "slots": _slots_body, "rising": _rising_body,
+           "receipts": lambda model: _receipts_body(model["data"])}
+
+
+def card_rows(report: Mapping[str, Any]) -> list[str]:
+    """Any empty spot, then the numbered cards, as rows of the email — in the
+    order every surface draws them (contract C1)."""
+    return ([_alert(a) for a in anatomy.alerts(report)]
+            + [_section_row(key, _card(1, model.get("title") or anatomy.TITLES[key],
+                                       _BODIES[key](model)))
+               for key, model in anatomy.cards(report)])
 
 
 def _compose(report: Mapping[str, Any]) -> list[str]:
     """Sections in order, per product — the email twin of render.report.compose.
 
-    Kept as a mirror rather than shared code because the two renderers speak
-    different dialects (one has CSS, the other cannot), but the SECTION LIST
-    must not diverge: a subscriber's email dropping a section the archived HTML
-    carries is the drift `test_the_email_carries_what_the_browser_report_carries`
-    exists to catch.
+    One model (render.anatomy) and one order (contract C1): the masthead and
+    its notices, any empty spot, then 01 Your Lineup, Decided · 02 The Week's
+    Closest Call · 03 Your Game Plan · 04 If/Then for Gameday · 05 Slot by Slot
+    · 06 Rising Roles · 07 The Receipts. The phone on the landing page is a
+    copy of this email's first screens.
     """
     meta = report["meta"]
     if meta.get("solo"):
-        team = team_name(report)
-        promise = solo_promise(report)
-        return [
-            _header(meta, team, f"{team}: {promise}." if team
-                    else f"{promise[:1].upper()}{promise[1:]}."),
-            _checklist(report["checklist"], meta),
-            _your_week(report["matchup"], report.get("no_opponent")),
-            _your_lineup(report),
-            _regret(report["regret"]),
-            _pivots(report["pivots"], report["meta"], report.get("pivots_note")),
-            _rising(report.get("rising") or []),
-            "" if meta.get("trial") else _receipts(report["receipts"]),
-        ]
+        return [_header(meta, team_name(report)), *card_rows(report)]
     return [
         _header(meta),
         _checklist(report["checklist"], meta),
@@ -1512,13 +1723,13 @@ def render_email(report: Mapping[str, Any]) -> str:
     sections = "".join(_compose(report) + [
         # The free report's ask sits ABOVE the footer, never in it.
         _trial_cta(meta) if meta.get("trial") else "",
-        # breathing room between the last section and the footer band
-        '<tr><td style="padding:12px;"></td></tr>',
         _footer(meta),
     ])
     sections = number_sections(sections)
     title = (f'Beat Your League — Week {esc(meta["week"])} '
              f'{"Report" if meta.get("solo") else "Rival Report"}')
+    # Cards on paper (contract C4): no white page wrapper, a 12px gap between
+    # cards, an 8px side gutter on a phone.
     return (
         f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
@@ -1527,8 +1738,9 @@ def render_email(report: Mapping[str, Any]) -> str:
         f'{preheader_html(preheader)}'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
         f'border="0" style="background:{PAPER};"><tr><td align="center" '
-        f'style="padding:18px 8px;">'
+        f'style="padding:12px 8px 24px;">'
         f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
-        f'border="0" style="max-width:600px;width:100%;background:{CARD};">'
+        f'border="0" style="max-width:600px;width:100%;background:{PAPER};">'
         f'{sections}</table></td></tr></table>\n</body>\n</html>\n'
     )
+

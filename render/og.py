@@ -6,10 +6,11 @@ link somebody is wary of clicking. This is the one asset that is seen by more
 people than the site itself.
 
 **The figures on it are READ from the landing page, never typed here.** The hero
-file card already quotes the published sample verbatim and a test pins it there
-(`test_site.py`, the `.filecard` sweep), so lifting the rows out of the page
-inherits that pin: an OG card cannot advertise a number the product stopped
-producing. Typing them again would be a third copy of the same four numbers, and
+phone's card 01 is generated from the published sample (render/phone.py) and
+tests hold it there (`test_site.py`'s `.filecard` sweep, `test_truth_landing.py`'s
+staleness check), so lifting the rows out of the page inherits that pin: an OG
+card cannot advertise a number the product stopped producing. The card shows
+`og_rows` of them — every row with odds and the first flagged row. Typing them again would be a third copy of the same four numbers, and
 this repo keeps finding that the third copy is the one that goes stale. If the
 rows cannot be found the build REFUSES rather than falling back to something
 invented — an unfindable card is a missing image, a wrong one is a false claim.
@@ -120,36 +121,64 @@ def embedded_fonts(faces=CARD_FACES, font_dir: Path | None = None) -> str:
 # --------------------------------------------------------------------- #
 
 _ROW = re.compile(
-    r'<div class="frow">'
+    r'<div class="frow"(?: data-i="\d+")?>'
     r'<span class="fslot">([^<]+)</span>'
-    r'<span class="fname">([^<]+)</span>\s*'
-    r'(?:<span class="fbar"><i(?: data-w="\d+")? style="width:(\d+)%"></i></span>'
-    r'<span class="fpct"(?: data-n="\d+")?>([\d.]+)%</span>'
+    r'<span class="fname">([^<]+)</span>'
     r'(?:<span class="fproj">([\d.]+)</span>)?'
-    r'|<span class="fnc">([^<]+)</span>)',
+    r'(?:<span class="fbar"><i style="width:(\d+)%"></i></span>'
+    r'<span class="fpct">(\d+)%</span>'
+    r'|<span class="fnc(?: (flag|basis))?">([^<]+)</span>)?'
+    r'</div>',
     re.S)
 
 
-def hero_rows(page: str) -> list[dict[str, str]]:
-    """The hero file card's rows, exactly as the landing page states them.
-
-    Fails closed. A card whose rows we cannot read is not quietly replaced with
-    plausible-looking ones: those numbers are the product's own output and
-    inventing them here would be the fabrication principle 3 forbids, on the
-    single most-forwarded surface we own.
-    """
-    # The hero card is the page's first file card; since the Sep 29 2026
-    # redesign it carries a class list and a data marker, not a bare class.
+def _lineup_card(page: str) -> str:
+    """Card 01 of the hero phone: the first real-report file card on the
+    page, and in it the section the report itself calls the lineup."""
     start = page.find('<div class="filecard')
     if start < 0:
         raise OgError("no hero file card on the landing page — refusing to "
                       "invent rows for the social card")
-    body = page[start:page.find("</div>", page.find('class="fcap"', start))]
+    end = page.find("<!--/card-->", start)
+    card = page[start:end if end > 0 else len(page)]
+    lineup = card.find('data-sec="lineup"')
+    if lineup < 0:
+        raise OgError("the hero file card carries no lineup card")
+    close = card.find("</section>", lineup)
+    return card[lineup:close if close > 0 else len(card)]
+
+
+def real_label(page: str) -> str:
+    """"Real report · 2024, Week 10": the season and week of the hero's file
+    card, read from its data-real marker (render.phone.real_tag) and said the
+    way the landing's caption says it. The card read only "Real output", so
+    posted on X in 2026 it passed 2024 odds off as this week's (review
+    BUYER-7). No marker, no card: the year is never guessed."""
+    found = re.search(r'<div class="filecard"[^>]*data-real="(\d{4})-w(\d{1,2})"', page)
+    if not found:
+        raise OgError("the hero file card names no season and week (data-real) — "
+                      "refusing to draw a card that cannot say which week it shows")
+    return f"Real report · {found.group(1)}, Week {int(found.group(2))}"
+
+
+def hero_rows(page: str) -> list[dict[str, str]]:
+    """The hero phone's lineup rows, exactly as the landing page states them.
+
+    The phone is generated from the pinned sample (render/phone.py), and its
+    card 01 is the report's own: every starter, his projection, and either
+    his odds or the reason a row carries none. Fails closed. A card whose rows
+    we cannot read is not quietly replaced with plausible-looking ones: those
+    numbers are the product's own output and inventing them here would be the
+    fabrication principle 3 forbids, on the single most-forwarded surface we
+    own.
+    """
+    body = _lineup_card(page)
     rows: list[dict[str, str]] = []
-    for slot, name, width, pct, proj, nocall in _ROW.findall(body):
-        rows.append({"slot": slot.strip(), "name": name.strip(),
-                     "width": width, "pct": pct, "proj": proj,
-                     "nocall": nocall.strip()})
+    for slot, name, proj, width, pct, tone, nocall in _ROW.findall(body):
+        rows.append({"slot": html.unescape(slot.strip()),
+                     "name": html.unescape(name.strip()),
+                     "proj": proj, "width": width, "pct": pct,
+                     "nocall": html.unescape(nocall.strip()), "tone": tone})
     if not rows:
         raise OgError("the hero file card carried no rows we could read")
     # A regex that stops matching drops a row SILENTLY, and a card showing
@@ -159,13 +188,33 @@ def hero_rows(page: str) -> list[dict[str, str]]:
     # fallen behind the markup into a refusal instead of a quieter lie. The
     # no-call row is the one most likely to go: it is the only row with a
     # different shape, and it is the row that carries the honesty.
-    declared = body.count('<div class="frow">')
+    declared = len(re.findall(r'<div class="frow"', body))
     if len(rows) != declared:
         raise OgError(
             f"the hero file card declares {declared} rows and only "
             f"{len(rows)} could be read — refusing to publish a card that "
             f"drops one")
     return rows
+
+
+def og_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The rows the share card shows: every row with odds, and the first row
+    the report flags (the questionable starter) — the decided lineup at a
+    glance, honesty included, in a card a timeline renders at ~500px. Order
+    is the report's own. Refuses a selection with no odds: a share card of
+    reasons alone would sell nothing the product does."""
+    picked: list[dict[str, str]] = []
+    flagged = False
+    for row in rows:
+        if row["pct"]:
+            picked.append(row)
+        elif row["nocall"] and row["tone"] == "flag" and not flagged:
+            picked.append(row)
+            flagged = True
+    if not any(row["pct"] for row in picked):
+        raise OgError("the hero card prints no odds — nothing for the share "
+                      "card to show")
+    return picked
 
 
 def _h1(page: str) -> str:
@@ -208,19 +257,22 @@ def headline_html(page: str) -> str:
 def _row_html(row: dict[str, str]) -> str:
     slot = html.escape(row["slot"])
     name = html.escape(row["name"])
+    proj = (f'<span class="fproj">{html.escape(row["proj"])}</span>'
+            if row.get("proj") else "")
     if row["nocall"]:
+        tone = " flag" if row.get("tone") == "flag" else ""
         return (f'<div class="frow"><span class="fslot">{slot}</span>'
-                f'<span class="fname">{name}</span>'
-                f'<span class="fnc">{html.escape(row["nocall"])}</span></div>')
+                f'<span class="fname">{name}</span>{proj}'
+                f'<span class="fnc{tone}">{html.escape(row["nocall"])}</span></div>')
     return (f'<div class="frow"><span class="fslot">{slot}</span>'
-            f'<span class="fname">{name}</span>'
+            f'<span class="fname">{name}</span>{proj}'
             f'<span class="fbar"><i style="width:{html.escape(row["width"])}%"></i></span>'
             f'<span class="fpct">{html.escape(row["pct"])}%</span></div>')
 
 
 def build_html(page: str) -> str:
     """The card, in the site's own palette and type."""
-    rows = "\n        ".join(_row_html(row) for row in hero_rows(page))
+    rows = "\n        ".join(_row_html(row) for row in og_rows(hero_rows(page)))
     head = headline_html(page)
     # The logo, from the one drawing every page uses (imported here, not at the
     # top, so render.og stays importable on its own).
@@ -233,13 +285,13 @@ def build_html(page: str) -> str:
   *{{margin:0;padding:0;box-sizing:border-box;}}
   html,body{{width:{WIDTH}px;height:{HEIGHT}px;overflow:hidden;}}
   body{{background:#05090F;color:#F6F4EE;font-family:'Barlow',Arial,sans-serif;
-    display:flex;align-items:center;gap:46px;padding:0 60px;position:relative;}}
+    display:flex;align-items:center;gap:40px;padding:0 60px;position:relative;}}
   /* One warm source of light behind the card, so the paper reads as lit rather
      than pasted on. Same gold as the accent, nothing new introduced. */
   body::before{{content:"";position:absolute;inset:0;
     background:radial-gradient(1100px 620px at 74% 40%,rgba(242,194,48,.14),transparent 62%),
                radial-gradient(760px 520px at 6% 96%,rgba(30,122,70,.16),transparent 68%);}}
-  .left{{position:relative;width:556px;flex:none;}}
+  .left{{position:relative;width:540px;flex:none;}}
   .mark{{display:flex;align-items:center;gap:12px;margin-bottom:26px;}}
   .mark svg.ogmark{{display:block;width:40px;height:40px;flex:none;margin:0;}}
   /* The official lockup (render/brand.py logo_html, contract C2): heavy
@@ -249,40 +301,42 @@ def build_html(page: str) -> str:
     font-style:italic;letter-spacing:.01em;text-transform:uppercase;color:#F6F4EE;}}
   .mark span .lg{{color:#F0B62A;}}
   /* The landing hero's own treatment (launch review I13): heavy italic
-     capitals, the payoff phrase on the tilted gold slab. */
+     capitals, the payoff phrase on the tilted slab — flat gold, as the page
+     draws it now (contract C6: no gradient, no glow). */
   h1{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:96px;
-    line-height:.92;text-transform:uppercase;text-shadow:0 20px 46px rgba(0,0,0,.45);}}
+    line-height:.92;text-transform:uppercase;}}
   h1 em{{font-style:italic;color:#101E33;display:inline-block;margin-top:10px;
-    background:linear-gradient(180deg,#FFD75E,#F2C230 60%,#D9A81B);padding:0 16px 5px;
-    transform:rotate(-1.5deg);box-shadow:0 12px 30px -14px rgba(242,194,48,.6);
-    text-shadow:none;}}
+    background:#F2C230;padding:0 16px 5px;transform:rotate(-1.5deg);}}
   h1 em span{{display:inline-block;}}
   .sub{{margin-top:24px;font-size:26px;line-height:1.42;color:#BCC9DB;font-weight:500;
     max-width:520px;}}
   .sub b{{color:#F6F4EE;font-weight:700;}}
   .right{{position:relative;flex:none;}}
-  .filecard{{width:452px;background:#F6F4EE;color:#101E33;border:1px solid #D8D3C6;
-    box-shadow:0 40px 90px -28px rgba(0,0,0,.9),0 0 0 1px rgba(242,194,48,.22);
-    transform:rotate(1.4deg);}}
+  /* The report's own card 01 (render.report.card_html, contract C3): white
+     paper, a navy head, hairline rows, flat gold bars drawn from 50%,
+     upright numerals — the same object as the phone on the page. */
+  .filecard{{width:500px;background:#FFFFFF;color:#101E33;border:1px solid #E2DDD0;
+    border-radius:16px;overflow:hidden;box-shadow:0 40px 90px -28px rgba(0,0,0,.9);}}
   .filehead{{display:flex;justify-content:space-between;align-items:center;gap:10px;
-    background:linear-gradient(180deg,#182A45,#101E33);color:#F6F4EE;padding:15px 20px;
-    font-family:'Barlow Condensed';font-weight:800;font-size:17px;letter-spacing:.14em;
+    background:#101E33;color:#F6F4EE;padding:16px 22px;
+    font-family:'Barlow Condensed';font-weight:800;font-size:18px;letter-spacing:.08em;
     text-transform:uppercase;}}
-  .filehead span{{color:#F2C230;font-size:13px;letter-spacing:.1em;}}
-  .fbody{{padding:8px 20px 16px;}}
-  .frow{{display:grid;grid-template-columns:40px 1fr 84px 56px;gap:12px;align-items:center;
-    padding:13px 0;border-bottom:1px solid #EDEAE1;font-size:20px;}}
+  .filehead span{{color:#F2C230;font-size:14px;letter-spacing:.08em;}}
+  .fbody{{padding:6px 22px 14px;}}
+  .frow{{display:grid;grid-template-columns:40px minmax(0,1fr) 46px 60px 58px;column-gap:12px;
+    align-items:center;padding:14px 0;border-bottom:1px solid #EEEAE1;font-size:21px;}}
   .frow:last-child{{border-bottom:0;}}
-  .fslot{{font-family:'Barlow Condensed';font-weight:800;font-size:17px;color:#5A6B80;
+  .fslot{{font-family:'Barlow Condensed';font-weight:800;font-size:16px;color:#5A6B80;
     letter-spacing:.06em;}}
   .fname{{font-weight:700;white-space:nowrap;}}
-  .fbar{{height:10px;background:#EDEAE1;border-radius:99px;overflow:hidden;}}
-  .fbar i{{display:block;height:100%;border-radius:99px;
-    background:linear-gradient(90deg,#D9A81B,#F2C230);}}
-  .fpct{{font-family:'Barlow Condensed';font-weight:900;font-style:italic;font-size:25px;
+  .fproj{{font-size:19px;color:#33445C;text-align:right;font-variant-numeric:tabular-nums;}}
+  .fbar{{height:9px;background:#E9E5DA;border-radius:999px;overflow:hidden;}}
+  .fbar i{{display:block;height:100%;border-radius:999px;background:#F2C230;}}
+  .fpct{{font-family:'Barlow Condensed';font-weight:800;font-size:27px;
     text-align:right;font-variant-numeric:tabular-nums;}}
-  .fnc{{grid-column:3 / 5;font-size:14px;font-weight:700;letter-spacing:.05em;
-    color:#5A6B80;text-align:right;text-transform:uppercase;}}
+  .fnc{{grid-column:2 / -1;grid-row:2;font-size:14px;font-weight:700;letter-spacing:.06em;
+    color:#5A6B80;text-transform:uppercase;margin-top:2px;}}
+  .fnc.flag{{color:#B3402F;}}
 </style></head>
 <body>
   <div class="left">
@@ -293,7 +347,7 @@ def build_html(page: str) -> str:
   </div>
   <div class="right">
     <div class="filecard">
-      <div class="filehead">Your lineup · decided <span>Real output</span></div>
+      <div class="filehead">Your lineup, decided <span>{html.escape(real_label(page))}</span></div>
       <div class="fbody">
         {rows}
       </div>
@@ -527,13 +581,18 @@ def week_card_problems(clock: dict, page: str) -> list[str]:
     section = _closest_section(page)
     if section is None:
         return ["this-week.html has no closest-call card"]
-    need = [f"Start {html.escape(closest['start'])} <span class=\"over\">over</span> "
-            f"{html.escape(closest['over'])}",
-            f'<div class="num">{closest["pct"]}%</div>']
+    # Each figure as the card prints it: the card stack (contract C3) prints
+    # the percentage as <b class="cpct">; a page built before it, which a
+    # --restamp leaves in its own markup until Tuesday's rebuild, as
+    # <div class="num">. Either is the page's own number.
+    need = [(f"Start {html.escape(closest['start'])} <span class=\"over\">over</span> "
+             f"{html.escape(closest['over'])}",),
+            (f'<b class="cpct">{closest["pct"]}%</b>',
+             f'<div class="num">{closest["pct"]}%</div>')]
     if closest.get("proj"):
-        need.append(f"proj <b>{html.escape(str(closest['proj']))}</b>")
-    return [f"this-week.html's closest-call card does not print {figure!r}"
-            for figure in need if figure not in section]
+        need.append((f"proj <b>{html.escape(str(closest['proj']))}</b>",))
+    return [f"this-week.html's closest-call card does not print {forms[0]!r}"
+            for forms in need if not any(f in section for f in forms)]
 
 
 def _built_day(clock: dict) -> str | None:

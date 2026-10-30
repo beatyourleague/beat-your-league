@@ -130,3 +130,27 @@ def demo_report() -> dict:
     if not DEMO_REPORT.is_file():
         pytest.skip("demo report not built — run `make demo`")
     return json.loads(DEMO_REPORT.read_text(encoding="utf-8"))
+
+
+
+def _annotate(text: str) -> str:
+    """A GitHub workflow-command message: one line, % and newlines escaped."""
+    return text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")[:900]
+
+
+def pytest_terminal_summary(terminalreporter, exitstatus) -> None:
+    """In CI, name each failure as a GitHub annotation. Job logs AND step
+    summaries sit behind a sign-in even on a public repo; annotations do not,
+    so a red run used to say only "exit code 1" (Oct 25 2026). Test names and
+    the first assertion lines only; this job holds no secrets."""
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return
+    stats = terminalreporter.stats
+    failed = stats.get("failed", []) + stats.get("error", [])
+    for report in failed[:10]:
+        text = str(getattr(report, "longreprtext", "") or "")
+        tail = [ln for ln in text.splitlines() if ln.startswith("E ")][:4] or text.splitlines()[-3:]
+        print(f"::error title={_annotate(report.nodeid)}::{_annotate(chr(10).join(tail))}")
+    if exitstatus:
+        counts = {k: len(v) for k, v in stats.items() if k in ("passed", "failed", "error", "skipped")}
+        print(f"::error title=pytest exit status {int(exitstatus)}::{_annotate(str(counts))}")

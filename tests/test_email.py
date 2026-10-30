@@ -138,8 +138,12 @@ def test_the_email_carries_the_design_system(tmp_path: Path) -> None:
     assert "fonts.googleapis" not in html_out
     # green-you / red-them, the coding every fantasy platform trains readers on
     assert "#1E7A46" in html_out and "#B3402F" in html_out
-    # the masthead rule that carries the identity where SVG cannot go
-    assert "border-left:4px solid #F2C230" in html_out
+    # The identity where SVG cannot go (contract C11, Oct 2026): the lockup —
+    # "League" in the logo's gold — and the rounded card every surface shares.
+    # (Was the masthead's 4px gold rule, retired with the side bars.)
+    assert 'Beat Your <span style="color:#F0B62A;">League</span>' in html_out
+    assert "border-radius:12px" in html_out
+    assert "border-left:4px" not in html_out and "border-left:3px" not in html_out
 
 
 def test_the_email_gap_never_ships_without_its_swing(tmp_path: Path) -> None:
@@ -287,7 +291,7 @@ def test_a_row_says_start_when_only_the_bench_option_is_in_doubt() -> None:
     q = "availability in doubt (designated Questionable)"
     assert row_label({"confidence_gate": q, "status": "active",
                       "alternative_name": "Tony Pollard"}) \
-        == "start · Tony Pollard was questionable"
+        == "start · Tony Pollard (bench) was questionable"
     assert row_label({"confidence_gate": q, "status": "questionable",
                       "alternative_name": "Tony Pollard"}) \
         == "questionable · see if/then"
@@ -377,9 +381,17 @@ def test_the_two_surfaces_carry_the_same_solo_sections() -> None:
     email = render_email(report)
 
     in_browser = _re.findall(r'<span class="tag">([^<]+)</span>', browser)
+    # The email's card head: the title in paper on navy (render.email._card).
     in_email = _re.findall(
-        r'padding-bottom:6px;">(?:<span[^>]*>\d+</span> · )?([^<]+)</div>', email)
+        r'text-transform:uppercase;color:#F6F4EE;">([^<]+)</td>', email)
     assert in_browser == in_email, f"browser {in_browser} vs email {in_email}"
+    # One order on every surface (contract C1): the lineup first, the
+    # closest call second, then the plan, the if/then, slot by slot.
+    from render.anatomy import TITLES
+    import html as _html
+    order = [TITLES[k] for k in ("lineup", "closest", "plan", "ifthen", "slots")]
+    assert [_html.unescape(t) for t in in_email if _html.unescape(t) in order] == \
+        [t for t in order if _html.escape(t) in email or t in email]
     # and the sections that need a league are in neither
     for gone in ("Is Fragile", "Waiver Hype Meter", "How It Ended", "The Tape"):
         assert gone not in browser and gone not in email, gone

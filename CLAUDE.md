@@ -245,7 +245,7 @@ volume. See PLAN.md §3 for dates. Design decisions (verified against the live A
 - After each phase, update the "Status" line below and note anything learned about the data.
 - If an endpoint or assumption in this file turns out wrong, fix the file — it is the spec.
 
-**Status (Oct 24 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (2,117 tests passing after the pre-launch review, below). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
+**Status (Oct 24 2026):** Phases 1-6 were built on the Sleeper architecture; the nflverse rebuild (PLAN §0) now runs end to end — roster paste → Stripe → registry → report → inbox, with no league read anywhere (2,494 tests passing after the one-design pass, below). **No payment has ever been processed.** The join page's payment links were live from Aug 27 to Sep 29 with no Stripe key in the crons, so a buyer could pay and receive nothing; they were emptied on Sep 29 and checkout stays closed until the GitHub secrets are set. Any payment from that window is swept by the first intake run once the key exists. What is left is owner setup, not code, in `LAUNCH.md`; "Still missing between payment and inbox" below lists the same from the code's side.
 Phase 5 content system: published-calls ledger (`engine/ledger.py` — records every published
 probability at report time, grades only after both players' games are final, RULES L1-L4:
 never premature, never edited after, 0.0-0.0 = void not tie, append-only under flock),
@@ -1489,6 +1489,69 @@ skeptic re-ran every one; four fix branches and an integration followed. Rules i
 - **The weekend checklist is the top of LAUNCH.md** ("This weekend, in order"). The page counter
   and the forms share `forms.beatyourleague.com` (`/e` and `/rows`); the free rate-limit rule
   is URI Path `/rows`, 10 per 10 s.
+
+**The polish and growth pass (Oct 24–25 2026) — two design leads, four builders, an
+integrator, three reviewers, a fixer.** Checkout stays closed while the owner wires payments, so
+everything here works closed AND open. Rules it left:
+- **The hero is a hardware iPhone (pure CSS/SVG) running a "Tuesday morning" story** built only
+  from the pinned 2024 W10 sample's rows (lock screen → notification → email → bars → closest
+  call → if/then → Rising roles). Every frame quotes the sample verbatim; a pause toggle and a
+  three-loop cap (WCAG 2.2.2); **one motion at a time** — the float, floor and glow hold while the
+  story plays and when offscreen or paused; reduced motion = the complete rest state. The
+  landing inlines its @font-face rules (LCP 1.58 → ~1.2 s); `test_the_landing_inlines_fonts_css_
+  rule_for_rule` fails when fonts.css changes until the block is re-pasted.
+- **Free bye-week planner at `/byes/`** (contract C7 hrefs: `byes/`, `../byes/` from a
+  subfolder): the roster is checked in the browser by `site/byes/byes.js`, the same rule as
+  `engine.preseason.bye_collisions` (node-tested against Python), from `site/join/byes.json`
+  (`render/bye_index.py`, rebuilt by the Tuesday cron; the reserve list is dated from the data's
+  own fetch time; the season is rewritten in title/description/noscript). No projection, no %,
+  no email needed; its waitlist row is optional and privacy §§1–3 say so. Its flags
+  (`CHECKOUT_CAN_COMPLETE`, `TRIAL_OPEN`, `NOTIFY_LIST_ENDPOINT`) flip with the landing's and
+  join's — a launch-check gate and a test fail if they drift.
+- **Contract C6, the recorded closest call:** `render/live_sample.py` writes `site/week.json`
+  `closest` only from RECORDED odds, never after first kickoff, and the published page prints
+  through `recorded_only`; the landing strip shows it only in season, before first kickoff,
+  never a toss-up; `closest_gate` checks it against the ledger (names included). `run/drops.py`
+  drafts only from the report the live sample saved (`data/processed/live-sample-report.json`).
+- **A weekly share card** (`render/og.py --week` → `site/og/this-week-<season>-wNN.png`, a
+  secretless weekly.yml job; every pushing step disables git hooks and fsmonitor), **league-app
+  pages** (`site/espn|yahoo|sleeper|cbs/`, `python -m render.platforms`, `--check` in CI; their
+  join links carry the app's default lineup), **a commissioner kit** on league-pass, and the
+  waitlist's League Pass line only while that page is open.
+- `carryVia`'s funnel regex now includes the planner and the app pages, in every copy at once;
+  count.js keys the planner as `planner` and the app pages as `other`.
+
+**One design for the phone, the email and the web report (Oct 25 2026).** The hero phone used
+to be a hand-drawn summary the product never sent. Now the email sets the content and the phone
+sets the look: the real email (`render/email.py`), the web report and the phone share one card
+model (`render/anatomy.py`) and one card markup (`render.report.card_html`), in the order 01 Your
+Lineup, Decided (every slot, projection, odds where earned, the week total and range, one task) →
+02 The Week's Closest Call → 03 Your Game Plan → 04 If/Then for Gameday → 05 Slot by Slot. The
+game plan sits at 03 so "Your if/then below already has the answer" stays true. The phone is
+GENERATED by `render/phone.py` from the pinned sample (no word or figure typed by hand): its
+notification is `subject_for` + `preheader_for`, its body the email's masthead, card 01 and card 02,
+in the email's own fonts (Arial and its display stack); a pytest staleness check against
+`tests/fixtures/sample-report-w10.json` fails when they drift. Numerals are upright, cards are
+12px hairline-bordered, gold bars start at 50%. No number, gate or seat moved (sample JSON
+identical apart from a presentation key). The phone's scroll tilt is 2D only: a 3D tilt made Chrome
+draw the screen at 1x on phones. A bench player named on a starter's row reads "(bench)". The
+landing story: one email decides your lineup → your team, not a ranking → read a real one first
+→ one refundable payment; "about a minute", never "ninety seconds".
+
+**The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
+self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
+Mac from read-only sources (the counter, Stripe, the Worker, Resend, the public Actions API, the
+fast launch gates, the ledger, PLAN §6): what needs you now, traffic, funnel, money, customers,
+issues with the step that fixes each, the record and plain insights, by 7/30 days/all, light and
+dark. No server and no login (security principle); refuses in CI (public repo) and any path that
+isn't gitignored; counts and dollars only, every string scrubbed of addresses and secret values.
+`make dashboard-live` rebuilds every 15 minutes (10 is the floor: GitHub's 60 unsigned requests an
+hour), the tab reloads itself and turns amber when updates stop. **Profit and posts** come from
+the owner's books (`run/books.py`, `data/costs.csv|hours.csv|posts.csv`): `make cost`, `make
+hours`, `make link TAG=reddit-oct28 WHERE=…` (prints the tagged link, refuses a reused tag). A
+post tag uses the site's own `?via=` rule, counts under its channel (the part before the first
+hyphen) and on its own row, and is pinned on the traffic chart. A line the books can't read is
+a low issue, never a guess.
 
 **The push token never shares a job with installed code (SEC-1, Oct 25–26 2026).**
 Every step of a job shares one runner and one checkout, so a step that runs pip packages or

@@ -43,7 +43,9 @@ const chrome = spawn(chromePath, [
 
 async function devtoolsPort() {
   const file = join(profile, "DevToolsActivePort");
-  for (let i = 0; i < 100; i++) {
+  // 30 s: a cold Chrome on a shared CI runner can take longer than 10 s
+  // to write its port file (CI, Oct 25 2026).
+  for (let i = 0; i < 300; i++) {
     if (existsSync(file)) {
       const port = readFileSync(file, "utf8").split("\n")[0].trim();
       if (port) return port;

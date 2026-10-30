@@ -792,6 +792,40 @@ step 5b pair in `.env` for traffic and, for payments, the `owner-stats` key from
 `STRIPE_API_KEY` (the cron key can't read refunds). The Stripe Dashboard's phone app is the
 live view of money; `make stats` is the funnel around it. It never runs in CI.
 
+**The dashboard.** `make dashboard` is the same data as `make stats`, plus the cron health
+from GitHub, the launch check's quick gates and this season's record, as one private page that
+opens in your browser: what needs you now at the top, then traffic, the funnel, money against
+PLAN §6's gates, customers, issues (each with the step that fixes it), the record and plain
+insights, switchable between 7 days, 30 days and all. It reads the same `.env` and shell
+(`STRIPE_STATS_KEY` if you keep the read-only key under its own name, else `STRIPE_API_KEY`;
+`RESEND_READ_KEY` adds bounces), changes nothing anywhere, and writes only
+`data/dashboard.html`, which is gitignored: don't commit it, share it or post a screenshot of
+it in public. A source you haven't connected shows its LAUNCH step instead of numbers.
+`make dashboard-registry` adds subscribers and seats the way `make stats-registry` does. It
+never runs in CI.
+
+**Keep it fresh.** `make dashboard-live` does the same, then rebuilds every 15 minutes while
+it runs, and the open tab reloads itself after each rebuild without losing your place. Leave
+it running in a Terminal tab and press Ctrl-C to stop. `make dashboard-live EVERY=30`
+changes the interval (10 minutes is the floor, set by GitHub's limit for unsigned requests).
+It only updates while your Mac is awake, and the page turns amber when its numbers are more
+than two rounds old.
+
+**Profit and posts.** The dashboard turns revenue into profit once you record what the business
+costs, and shows which post sold once each post has its own link. All of it is kept in three
+small files in the `data/` folder, which is never committed:
+- `make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly` records a cost (`once`, `monthly` or
+  `yearly`; add `DATE=2026-08-01` for a past one). A recurring cost counts on each day it's
+  charged. The Money section shows profit, how many $29 passes until you break even, what's due
+  in the next 30 days, and, if you log your time with `make hours H=1.5`, what you earn per hour.
+- `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
+  `PAGE=byes/` to send people to another page) and logs it. Start the tag with the channel:
+  `reddit-…`, `x-…`, `discord-…`. The Funnel section then lists each post with its views, rosters,
+  buy presses and sales, the traffic chart pins the day it went out, and the channel totals add
+  it under its channel. One tag per post: reusing one merges two posts' numbers, so it's refused.
+- `make books` prints what's recorded. You can also edit the files in any text editor; a line the
+  dashboard can't read shows as a low issue and the rest still counts.
+
 Seats filled per League Pass and free report → paid also need the subscriber list, which
 lives only in the runs' encrypted storage. `make stats-registry` reads a copy: it downloads
 the newest sealed backup, opens it outside the repo folder with `CACHE_KEY`, runs the same

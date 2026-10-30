@@ -270,7 +270,9 @@ def test_odds_against_a_rising_bench_player_are_withheld_and_the_seat_kept() -> 
         if before["alternative_id"] == target["alternative_id"]:
             assert after["confidence"] is None
             assert after["confidence_gate"].startswith(RISING_GATE)
-            assert row_label(after) == f"start · {target['alternative_name']} rising"
+            # Named as the bench player (review BUYER-3): "start · Chase
+            # Brown rising" on Barkley's row read as "start Chase Brown".
+            assert row_label(after) == f"start · {target['alternative_name']} (bench) rising"
         else:
             assert after["confidence"] == before["confidence"]
     assert "more of the ball" in gate_phrase(RISING_GATE)
@@ -547,11 +549,13 @@ def test_the_free_report_states_the_price_and_refund_terms_up_top(monkeypatch) -
     assert line == ("Every Tuesday through your title game: the $29 Rest-of-Season "
                     "Pass, one payment, nothing renews. Full refund, no questions, "
                     "until your second weekly report's week kicks off. One per person.")
+    # Above the report's first card (contract C1: the lineup leads now, and a
+    # free report whose only task is setting the lineup carries no plan card).
     page = render_email(report).replace("&#x27;", "'")
-    assert page.index("one payment, nothing renews") < page.index("Your Game Plan")
+    assert page.index("one payment, nothing renews") < page.index("Your Lineup, Decided")
     text = text_summary(report)
-    assert text.index("$29") < text.index("GAME PLAN")
-    assert "https://example.com/join/?via=trial" in text.split("GAME PLAN")[0]
+    assert text.index("$29") < text.index("YOUR LINEUP, DECIDED")
+    assert "https://example.com/join/?via=trial" in text.split("YOUR LINEUP, DECIDED")[0]
     # The week before the Playoff Pass may be sold: no price the join page may
     # not charge. The season's last week: no offer at all.
     assert "$" not in trial_price_line({"week": 12, "last_week": 18})
@@ -922,8 +926,16 @@ def test_the_email_deadline_wears_the_web_reports_colour_and_bench_never_wraps()
          "urgency": "deadline"},
         {"action": "Done thing", "deadline": "nothing to change", "urgency": "done"}]
     page = render_email(report)
-    assert (f"text-transform:uppercase;letter-spacing:.5px;color:{BRICK};\">before "
+    # The deadline is a chip now (contract C6): brick on its tint while due,
+    # turf on its tint once in hand — the web report's .chip.due / .chip.ok.
+    assert (f"text-transform:uppercase;letter-spacing:.5px;color:{BRICK};"
+            f"background:#F9E6E1;border-radius:4px;padding:2px 6px;\">before "
             f"the Thursday kickoff") in page
-    assert f"color:{TURF};\">nothing to change" in page
-    assert "white-space:nowrap;\">Bench</td>" in page
-    assert ">On your bench<" not in page
+    assert (f"color:{TURF};background:#E3F2E8;border-radius:4px;padding:2px 6px;\">"
+            f"nothing to change") in page
+    # "ON YOUR / BENCH" broke in a narrow header cell at 390px (D13). The
+    # bench's head is a full-width subhead now, spanning all three columns,
+    # and still never wraps.
+    import re
+    assert re.search(r'<td colspan="3" style="[^"]*white-space:nowrap;[^"]*">'
+                     r'On your bench</td>', page)

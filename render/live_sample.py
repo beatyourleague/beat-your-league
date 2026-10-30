@@ -714,7 +714,7 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
                     first_kickoff: str | None = None, *, recorded: bool = False,
                     after_kickoff: bool = False, phase: str = "season",
                     closest: Mapping[str, Any] | None = None,
-                    byes_left: bool | None = None) -> None:
+                    byes_left: bool | None = None, cards: bool = False) -> None:
     """The season clock the landing page reads (site/week.json): the week this
     report covers, the season's last week, and the day the next report lands,
     so the hero can say "Week 7's report lands Tuesday" from the schedule
@@ -738,7 +738,11 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
     ``closest`` (``closest_for_clock``) is written ONLY when this week is
     recorded and the page was built before kickoff (contract C9): absent, the
     landing's strip and the share card show nothing. ``byes_left`` is
-    written when known."""
+    written when known. ``cards``: the page this build wrote is in the
+    report's card layout (contract C3); every link to it waits for that, so a
+    page kept from before the card stack is never offered beside the phone
+    that shows the cards (review BUYER-1). Written only when true: an older
+    clock lacks it, and the links stay on the pinned sample."""
     import json
     meta = report["meta"]
     odds = sum(1 for slot in report.get("lineup") or []
@@ -758,6 +762,7 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
         "phase": phase,
         **({"closest": dict(closest)} if keep_closest else {}),
         **({"byes_left": bool(byes_left)} if byes_left is not None else {}),
+        **({"cards": True} if cards else {}),
     }, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
@@ -1038,8 +1043,17 @@ def restamp_style(page: str, template: str) -> str:
     """The page's <style> swapped for the template's current design, so the
     restamped nav is drawn with the CSS it was written for. The page's own
     style is the template's extract plus the mark rules (render.report.render),
-    so this changes presentation only."""
+    so this changes presentation only.
+
+    Only onto a page built in the card markup the style is written for
+    (contract C3, Oct 2026). A page built before it — this week's page until
+    Tuesday's cron rebuilds it — keeps the style it was drawn with: the new
+    sheet has none of the old page's rules (the tape's columns, the sheet
+    frame), and a rebuild to fix the look would move numbers (a forced rebuild
+    after kickoff drops odds). Idempotent on both."""
     from render.report import MARK_CSS, extract_design
+    if 'class="card"' not in page:
+        return page
     style, _links = extract_design(template)
     return re.sub(r"<style>.*?</style>", lambda _m: f"<style>{style + MARK_CSS}</style>",
                   page, count=1, flags=re.S)
@@ -1215,7 +1229,8 @@ def main(argv: list[str] | None = None) -> int:
         built = built if built.tzinfo else built.replace(tzinfo=timezone.utc)
         page = with_thin_week(page, after_kickoff_line(report, built, first)
                               if kicked_off else rebuilt_line(report, built))
-    args.out.write_text(with_via_carry(page), encoding="utf-8")
+    page = with_via_carry(page)
+    args.out.write_text(page, encoding="utf-8")
     if not kicked_off:
         # The drafts are written from this, the page's own report (CRON-1).
         write_published_report(report, args.processed_dir)
@@ -1232,7 +1247,8 @@ def main(argv: list[str] | None = None) -> int:
                if recorded and not kicked_off else None)
     write_week_json(report, week_json, lands_on, first_kickoff,
                     recorded=recorded, after_kickoff=kicked_off,
-                    closest=closest, byes_left=byes_left)
+                    closest=closest, byes_left=byes_left,
+                    cards='class="card"' in page)
     called = sum(1 for s in report["lineup"] if s.get("confidence") is not None)
     print(f"this week's sample -> {args.out} · {report['meta']['season']} week "
           f"{report['meta']['week']} · {called}/{len(report['lineup'])} with odds")
