@@ -969,6 +969,9 @@ def test_signup_degrades_honestly_without_a_contact_route() -> None:
     line = prose(re.sub(r'"\s*\+\s*"', "", _js_function(JOIN, "mailLineWords")))
     assert "Press below to open your mail app with a request to us filled in" in line
     assert "Send it and we'll email you once, the morning it opens" in line
+    # The header says checkout isn't open; the line above the button says what
+    # the button does. Saying it twice there read as a third refusal.
+    assert "isn't open" not in line
     # No instruction anywhere on the page sends a buyer back to the front page.
     assert "front page" not in prose(markup_only(JOIN)) + prose(code)
     assert "watch-form" not in JOIN

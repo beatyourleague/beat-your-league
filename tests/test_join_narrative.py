@@ -105,7 +105,7 @@ def test_a_free_report_that_is_not_open_asks_for_nothing() -> None:
     closed = branch.split("if (FORM_ENDPOINT && TRIAL_OPEN) {")[1].split("} else {", 1)[1]
     said = _flat(closed)
     assert "It isn't open yet, so there's nothing to fill in today." in said
-    assert "Free reports aren't open yet." in said
+    assert "Until then, " in said and "Free reports aren't open yet." not in said
     assert 'link("../sample-report.html", "read a real report")' in closed
     assert 'link("../byes/", "free bye-week planner")' in closed
     assert 'for (const child of $("main").children) child.style.display = "none";' in closed

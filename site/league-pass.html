@@ -73,7 +73,7 @@
   .lede{margin-top:20px;font-size:18px;line-height:1.6;color:var(--dusk2);max-width:640px;}
   h2{font-family:var(--display);font-weight:800;font-size:clamp(28px,3.6vw,40px);line-height:1.05;
     text-transform:uppercase;margin:56px 0 12px;text-wrap:balance;}
-  p{font-size:16px;line-height:1.65;color:var(--dusk2);margin:10px 0;}
+  p{font-size:16px;line-height:1.65;color:var(--dusk2);margin:10px 0;text-wrap:pretty;}
   b{color:var(--paper);}
   /* Why one manager buys it: four dark cards, a hairline each — no gold
      side bars, no glow. */
@@ -112,12 +112,13 @@
   /* Numbered steps as gold pins: the landing's .callouts numbers. */
   .steps ol{list-style:none;counter-reset:pin;margin:16px 0 0;font-size:16px;line-height:1.6;
     color:var(--dusk2);display:grid;gap:16px;}
-  .steps ol li{counter-increment:pin;position:relative;padding-left:52px;}
+  .steps ol li{counter-increment:pin;position:relative;padding-left:52px;min-height:40px;}
   .steps ol li::before{content:counter(pin);position:absolute;left:0;top:-3px;display:grid;
     place-items:center;width:34px;height:34px;border-radius:50%;background:var(--flag);
     color:var(--navy);font-family:var(--display);font-weight:800;font-size:18px;line-height:1;
     outline:6px solid rgba(242,194,48,.14);}
   .steps li b{color:var(--paper);}
+  .see a{display:inline-block;padding:3px 0;}
   /* Where the ask sits — the price card and the closer. Closed (the static
      markup, fail closed) it is a real button to the landing's email capture,
      never the dashed "opens soon" box that read as a wireframe (contract C2);
@@ -146,10 +147,10 @@
      chat is an app on that phone), a copy everywhere else (LP-I5, LP-I9).
      A secondary (contract C2: the ghost), never a second gold: three gold
      slabs here outweighed the page's one real ask (LOOK-5). */
-  .sharebtn{display:flex;align-items:center;justify-content:center;width:100%;max-width:420px;
+  .sharebtn{display:inline-flex;align-items:center;justify-content:center;
     margin-top:12px;min-height:48px;font-family:var(--display);font-weight:800;font-size:16px;
     letter-spacing:.06em;line-height:1;text-transform:uppercase;color:var(--paper);cursor:pointer;
-    padding:0 18px;border-radius:8px;
+    padding:0 28px;border-radius:8px;
     background:transparent;border:1.5px solid rgba(246,244,238,.4);}
   .sharebtn:hover{border-color:var(--flag);}
   .ask .chatline{margin-top:12px;}
@@ -231,7 +232,7 @@
     .price{padding:22px 18px;}
     .closer{padding:28px 18px;}
     .closer .btn{width:100%;min-height:52px;}
-    .sharebtn{max-width:none;min-height:52px;}
+    .sharebtn{display:flex;width:100%;padding:0 18px;min-height:52px;}
   }
   /* ---- one feel with the paper pages (PAGES-FOUNDATION), on a dark ground ----
      The same easing and press; no shadows on a dark page (a hairline

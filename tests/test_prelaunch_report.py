@@ -272,7 +272,7 @@ def test_odds_against_a_rising_bench_player_are_withheld_and_the_seat_kept() -> 
             assert after["confidence_gate"].startswith(RISING_GATE)
             # Named as the bench player (review BUYER-3): "start · Chase
             # Brown rising" on Barkley's row read as "start Chase Brown".
-            assert row_label(after) == f"start · {target['alternative_name']} (bench) rising"
+            assert row_label(after) == f"start · {target['alternative_name']} (bench) is getting more work"
         else:
             assert after["confidence"] == before["confidence"]
     assert "more of the ball" in gate_phrase(RISING_GATE)

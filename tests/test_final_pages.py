@@ -404,7 +404,8 @@ def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     hero = LANDING.split('<header class="hero">', 1)[1].split("</header>", 1)[0]
     punch = re.search(r'<p class="punch">(.*?)</p>\s*$', hero, re.S)
     assert punch, "the Sunday scene is not the hero's last line"
-    assert "He was on your bench. He went for 30. You lost by four." in _flat(punch.group(1))
+    words = re.sub(r"<[^>]+>", "", punch.group(1))  # each sentence wraps as a unit
+    assert "He was on your bench. He went for 30. You lost by four." in _flat(words)
     assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
 
 

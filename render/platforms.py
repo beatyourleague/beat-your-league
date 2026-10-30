@@ -151,6 +151,7 @@ STYLE = """
 @@SITEBAR@@  /* Full-bleed paper (contract C2 of the truth pass): a flat navy band, then
      the page on the paper, edge to edge at every width — no sheet, no frame,
      no double rules. */
+  p,li{text-wrap:pretty;}
   body{background:var(--paper);font-family:var(--sans);color:var(--navy);padding:0;
     -webkit-font-smoothing:antialiased;}
   .wrap{max-width:760px;margin:0 auto;padding:0 24px;}

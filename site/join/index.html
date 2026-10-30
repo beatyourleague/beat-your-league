@@ -269,6 +269,7 @@
   .side .proof{margin-top:20px;padding-top:18px;border-top:1px solid rgba(246,244,238,.14);
     font-size:14px;line-height:1.55;color:#B9C2D0;}
   /* Uppercase like every display head on the site (D14). */
+  .side .proof .links{display:block;margin-top:4px;}
   .side .proof b{display:block;font-family:var(--display);font-weight:800;font-size:28px;
     color:#FFFFFF;line-height:1;margin-bottom:6px;text-transform:uppercase;letter-spacing:.01em;}
   .side a{color:#FFFFFF;text-decoration:underline;text-underline-offset:3px;
@@ -279,6 +280,7 @@
   .side .trust span{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:start;}
   .side .trust span::before{content:"";width:12px;height:12px;margin-top:3px;
     background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3 7.4 6 10.2l5-6' fill='none' stroke='%238FA3BC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat;}
+  #header-pitch{text-wrap:pretty;}
   /* Checkout isn't open: a dark notice in the band, above step 1. */
   header #closed-note{margin-top:20px;max-width:640px;padding:14px 16px;font-size:15px;line-height:1.55;
     color:#F6F4EE;background:rgba(246,244,238,.06);border:1px solid rgba(242,194,48,.35);
@@ -631,7 +633,7 @@ Baltimore Ravens
     <li><span>Your lineup set in <b>about a minute</b></span></li>
   </ul>
   <div class="proof"><b>Your team.</b>Not a list written for everybody.
-  <a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></div>
+  <span class="links"><a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></span></div>
   <div class="trust">
     <span>Full refund, no questions, until your first weekly report's week kicks off
       (or a week after it reaches you, if we send it late). One per person (one per
@@ -1655,12 +1657,11 @@ $("form-email").addEventListener("submit", (event) => {
 // never that anything was sent or saved.
 function mailLineWords() {
   if (seasonOver()) {
-    return "Checkout isn't open yet. Press below to open your mail app with a " +
-      "request to us filled in. Send it and we'll email you once, when it opens.";
+    return "Press below to open your mail app with a request to us filled in. " +
+      "Send it and we'll email you once, when it opens.";
   }
-  return "Checkout isn't open yet. Press below to open your mail app with a " +
-    "request to us filled in. Send it and we'll email you once, the morning it " +
-    "opens, with your roster.";
+  return "Press below to open your mail app with a request to us filled in. " +
+    "Send it and we'll email you once, the morning it opens, with your roster.";
 }
 function askByMail(email, tagged) {
   const lines = ["Email me once, the morning checkout opens.", "", "Reports go to: " + email];
@@ -2327,8 +2328,8 @@ if (TRY_MODE) {
       a.textContent = words;
       return a;
     };
-    note.replaceChildren(document.createTextNode("Free reports aren't open yet. Until " +
-      "they are, "), link("../sample-report.html", "read a real report"),
+    note.replaceChildren(document.createTextNode("Until then, "),
+      link("../sample-report.html", "read a real report"),
       document.createTextNode(", or check the byes ahead on your roster with the "),
       link("../byes/", "free bye-week planner"), document.createTextNode("."));
     note.style.display = "block";

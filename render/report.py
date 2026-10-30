@@ -721,7 +721,7 @@ def row_label(slot: Mapping[str, Any]) -> str:
         return f"{who} on practice squad" if who else "practice squad"
     if gate.startswith("held: the bench option's role is growing"):
         # The starter starts either way; the row says who the odds wait on.
-        return f"start · {bench(alt)} rising" if alt else "held this week"
+        return f"start · {bench(alt)} is getting more work" if alt else "held this week"
     if gate.startswith(("held: the lineup changed", "held: the bench changed")):
         return "held this week"
     if gate.startswith("nobody on your bench"):

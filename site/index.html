@@ -148,7 +148,7 @@
      the form at 1440 (pre-launch review D7). */
   .creds{list-style:none;display:grid;gap:6px;margin-top:18px;
     font-size:14px;font-weight:600;color:var(--dusk2);}
-  .creds li{display:flex;align-items:center;gap:8px;}
+  .creds li{display:flex;align-items:center;gap:8px;text-wrap:balance;}
   .creds li::before{content:"";width:14px;height:14px;flex:none;border-radius:50%;
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   /* One colour, the clock alone in gold: the line mixed gold-bold, white-bold
@@ -631,6 +631,8 @@
     mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
   .punch b{font-family:var(--display);font-weight:800;font-size:clamp(22px,2.6vw,30px);
     line-height:1.1;text-transform:uppercase;letter-spacing:.01em;color:#fff;}
+  /* Each sentence whole: a phone breaks between them, never mid-sentence. */
+  .punch b i{display:inline-block;font-style:normal;}
   .punch span{font-size:16px;font-weight:600;color:var(--flag);}
 
   /* ------------------------------------------------ how it works: three pictures */
@@ -650,7 +652,7 @@
     color:var(--flag);}
   .step h3{margin-top:4px;font-family:var(--display);font-weight:800;font-size:26px;line-height:1.05;
     text-transform:uppercase;letter-spacing:.01em;color:#fff;}
-  .step p{margin-top:8px;font-size:16px;line-height:1.5;color:var(--dusk2);}
+  .step p{margin-top:8px;font-size:16px;line-height:1.5;color:var(--dusk2);text-wrap:pretty;}
   /* Step 01 shows the paste: a slice of the ESPN page's own example
      (render/platforms.py), the copied line beside what the roster box reads
      it as. At rest the copied lines sit at 40% and the names are ticked. */
@@ -668,6 +670,17 @@
     line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .paste .ok::before{content:"";width:13px;height:13px;flex:none;border-radius:50%;
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
+  /* Three columns: the paste runs under all three steps, centred on the
+     page, so 02 and 03 don't sit over empty space. It stays in step 01's
+     markup, so a phone still reads it between 01 and 02. The margin is 150%
+     of the column less half the card, with the step's padding taken back. */
+  @media (min-width:881px){
+    .paste{width:640px;max-width:none;margin:32px 0 0 calc(150% - 288px);padding:12px 18px 10px;}
+    .paste .phd{font-size:12px;}
+    .paste .prow{padding:6px 0;}
+    .paste .raw{font-size:12px;}
+    .paste .ok{font-size:14px;}
+  }
   /* The entrance, once, in order: each picture rises, its own part moves
      (the roster lines slide in, the check lands, the ball goes through), the
      line draws to the next. Armed by the script only when the list starts
@@ -745,8 +758,9 @@
     border:1.5px dashed rgba(242,194,48,.7);box-shadow:none;font-size:22px;}
   .callouts h3{font-family:var(--display);font-weight:800;font-size:24px;line-height:1.1;
     text-transform:uppercase;letter-spacing:.01em;color:#fff;}
-  .callouts p{margin-top:6px;font-size:16px;line-height:1.55;color:var(--dusk2);max-width:46ch;}
-  .callouts a.go{display:inline-block;padding:3px 0;color:var(--flag);font-weight:600;
+  .callouts p{margin-top:6px;font-size:16px;line-height:1.55;color:var(--dusk2);max-width:46ch;
+    text-wrap:pretty;}
+  .callouts a.go{display:inline-block;padding:3px 0;margin:-3px 0;color:var(--flag);font-weight:600;
     text-decoration:none;}
   .callouts a.go::after{content:"\00a0→";}
   .callouts a.go:hover{text-decoration:underline;}
@@ -810,7 +824,7 @@
   .plan ul{list-style:none;display:grid;gap:8px;margin:16px 0 24px;font-size:15px;
     line-height:1.5;color:var(--ink2);}
   /* The hero's own check, not the browser's disc (review D6). */
-  .plan li{position:relative;padding-left:24px;}
+  .plan li{position:relative;padding-left:24px;text-wrap:pretty;}
   .plan li::before{content:"";position:absolute;left:0;top:.2em;width:15px;height:15px;
     border-radius:50%;background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   .plan ul a{color:var(--turf);}
@@ -979,8 +993,10 @@
        The sticky bar keeps the action in reach until the form scrolls in. The
        phone's caption names 2024, so its "Week 10" never reads as the season
        clock's week. This week's link and its call stay with the button row
-       (one secondary group, sales review); their room is reserved, so their
-       late arrival moves nothing.
+       (one secondary group, sales review). They sit far below the first
+       screen here, so their arrival moves nothing a visitor can see, and no
+       room is held for them: in a week without them it read as a blank gap
+       above the punch line.
        With checkout open the hero's own button row takes the form's place,
        the clock just above it (equal orders keep source order).
        `order` takes integers only. */
@@ -996,6 +1012,7 @@
     .hero .cta-row{order:9;margin-top:12px;} .hero .riskline{order:9;}
     .hero .livepill{order:9;justify-self:start;}
     .hero .livecall{order:9;}
+    .livepill[hidden],.livecall[hidden]{display:none!important;}
     .hero .phone{max-width:286px;}
     .hero .phone-float{max-width:286px;}
     /* The caption row is centred under the phone but may run wider than it:
@@ -1235,15 +1252,16 @@
          once left it with nothing to show); the season clock's script fills
          in the day it was built. It says "this week's", never a week number:
          the clock above names one week and the 2024 sample another, and a
-         third number in the hero read as three weeks at once. Its room is
-         reserved, so its late arrival moves nothing. -->
+         third number in the hero read as three weeks at once. Beside the phone
+         its room is reserved, so its late arrival moves nothing; stacked, it
+         sits below the first screen and no room is held. -->
     <a class="livepill" id="this-week-link" data-live-week hidden href="this-week.html"><span
     class="dot" aria-hidden="true"></span><span id="this-week-label">or this week's live report</span><span
     class="go" aria-hidden="true">→</span></a>
     <!-- This week's closest call with odds, quoted from the live sample's
          recorded build (the clock file's "closest", contract C6): shown only in a
          season week whose odds are on the record, and only until that week's
-         first kickoff. Its room is reserved either way. -->
+         first kickoff. Its room is held only where the link's is. -->
     <p class="livecall" id="live-call" hidden></p>
   </div>
   <div class="phonewrap">
@@ -1261,7 +1279,7 @@
       class="hw hw-cam" aria-hidden="true"></span>
       <div class="screen" aria-hidden="true">
 <!-- phone:start -->
-<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Rebuilt Oct 30, 2026 from the 2024 season archive</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">Your only QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">Start · Chase Brown (bench) rising</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">Start · Chase Brown (bench) rising</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">Questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">Your only K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">Defenses: projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p><p class="legend"><b>Checked for you:</b> 15 players, 9 slots, every kickoff time and the Week 9 injury report.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="glass"><i></i></div><div class="homebar"></div>
+<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Rebuilt Oct 30, 2026 from the 2024 season archive</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">Your only QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">Start · Chase Brown (bench) is getting more work</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">Start · Chase Brown (bench) is getting more work</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">Questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">Your only K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">Defenses: projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p><p class="legend"><b>Checked for you:</b> 15 players, 9 slots, every kickoff time and the Week 9 injury report.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="glass"><i></i></div><div class="homebar"></div>
 <!-- phone:end -->
       </div>
       <span class="edge" aria-hidden="true"></span>
@@ -1279,7 +1297,7 @@
   </div>
   <!-- The page's sharpest scene, as the hero's last line (owner plan, Oct
        28 2026: the separate 12:55 section went). -->
-  <p class="punch"><b>He was on your bench. He went for 30. You lost by four.</b>
+  <p class="punch"><b><i>He was on your bench.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
   <span>Your Tuesday report makes that call.</span></p>
 </header>
 

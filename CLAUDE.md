@@ -1428,7 +1428,7 @@ adversarial reviewer per branch, a fix round, and one integration. Rules it left
   without it one OWNER line per run). Never refund a disputed payment (LAUNCH §8).
 - **The report withholds more, moves nothing (F1–F3, P8–P11):** odds are held on any slot whose
   bench alternative is a riser (`engine.solo_report.hold_rising_alternatives`; the seat stands and
-  the row reads "start · <name> rising"; measured on 240 rosters: 965 → 874 odds, a strict subset);
+  the row reads "start · <name> (bench) is getting more work"; measured on 240 rosters: 965 → 874 odds, a strict subset);
   a build refuses until EVERY regular-season game of week W−1 has both scores and stat rows
   (`run.solo.assert_week_is_complete`; `POSTPONED_GAMES=AWAY@HOME` for a game the schedule still
   shows at its old kickoff); Saturday counts a team as filed only on a report_status row; every
