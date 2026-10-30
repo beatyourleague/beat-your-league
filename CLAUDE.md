@@ -1570,6 +1570,20 @@ on the landing. On phones the hero runs headline, sentence, apps line, phone, fo
 stays above the phone (M6), and the sticky bar watches the hero's action, not the hero, so the
 action stays in reach while the report fills the screen.
 
+**The check pays off (Oct 30 2026, `drawPayoff` in site/join/index.html, tests/test_join_payoff.py).**
+"Check my roster" used to end on "Looks right." It now ends in a panel of FACTS, drawn in the
+browser from the roster, the lineup chosen, site/join/byes.json and today: no projection, no %,
+no recommendation, no ordering of anybody's players, nothing recorded. The calls (a position is
+listed only if somebody at it can sit without emptying a spot, tried with the tally's own
+`emptySpots`; reserve-list players marked, not counted; names in pasted order), Byes ahead
+(byes.js's `describe` and `byeCollisions`, never a copy, starting at the first lineup left so the
+boxes match the count), Can't play right now, and a locked preview with real names by position,
+no seat, no digit and bars of one fixed width. Lineups left is the landing's clock, on week.json.
+One entrance per visit, only after a real press, transform and opacity only; a redraw is still.
+Seat and update get the byes and can't-play only; a free report and a finished season get none.
+Closed step 3 is "Save your team" with the value line first; the button's words moved
+("Save my team and tell me when it opens") and "isn't saved until you send that email" did not.
+
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
 Mac from read-only sources (the counter, Stripe, the Worker, Resend, the public Actions API, the
