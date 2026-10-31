@@ -157,6 +157,9 @@ def settings_params(roster) -> list[str]:
     code = template_code(roster.slots)
     if code:
         params.append(f"t={code}")
+    league = getattr(roster, "league_type", "redraft")
+    if league != "redraft":
+        params.append(f"league={league}")
     return params
 
 
@@ -581,8 +584,8 @@ def same_roster(ref_a: str, ref_b: str) -> bool:
         a, b = decode_roster(ref_a), decode_roster(ref_b)
     except RefError:
         return False
-    return ((a.player_ids, a.slots, a.scoring, a.league_size)
-            == (b.player_ids, b.slots, b.scoring, b.league_size))
+    return ((a.player_ids, a.slots, a.scoring, a.league_size, a.league_type)
+            == (b.player_ids, b.slots, b.scoring, b.league_size, b.league_type))
 
 
 def roster_content(roster) -> tuple:
@@ -590,7 +593,8 @@ def roster_content(roster) -> tuple:
     league apps list a roster in lineup order, which moves week to week, so a
     reordered paste is not a change) under the same lineup, scoring and size."""
     return (tuple(sorted(roster.player_ids)), tuple(roster.slots),
-            roster.scoring, int(roster.league_size))
+            roster.scoring, int(roster.league_size),
+            getattr(roster, "league_type", "redraft"))
 
 
 def _parse_ts(ts: str) -> datetime | None:

@@ -112,8 +112,9 @@ PLATFORMS = (
 # Dynasty is a kind of league, not an app, so it is not in PLATFORMS: no copy
 # format of its own, and the app pages link to it. Everything it says is true
 # of the weekly report today (a 30-player superflex roster with no K or DEF
-# built a full report with odds, Oct 31 2026). It sells the season only: there
-# is no off-season report yet, and the page says so.
+# built a full report with odds, Oct 31 2026). It sells the season only, at no
+# extra charge: there is no off-season report yet, and the page says so. Its
+# link opens join/ with Dynasty already picked.
 DYNASTY = Platform(slug="dynasty", name="dynasty", lineup="", paste="", pastes=(),
                    example=(), reads=(), shape="")
 DYNASTY_TITLE = "Dynasty fantasy football start/sit report for your roster — Beat Your League"
@@ -135,6 +136,7 @@ DYNASTY_ROOKIES = ("Rookies can start. Their odds wait until they have enough ga
 DYNASTY_STEPS = ("Copy your roster from any app, or type each name into “Add a player”. "
                  "Paste it into the roster box. Extra text rides along fine.",
                  "More than {limit} players? Leave out your IR and taxi players.",
+                 "Dynasty is already picked. In a keeper league, choose Keeper.",
                  "Pick your lineup: Superflex, Two FLEX, Three WR or Standard, with or without "
                  "a K and a DEF.",
                  "Pick your scoring and league size: full PPR, half PPR or standard, in a "
@@ -148,6 +150,7 @@ DYNASTY_NO_SYNC = ("It doesn't connect to your league or set your lineup there. 
                    "moves. Roster changed? Update it from the link in any report, or reply "
                    "with it.")
 DYNASTY_LINK = "Dynasty or keeper league? See what you get"
+DYNASTY_PASS = "Everyone in your league in? The League Pass gives every manager their own report."
 
 TITLE = "{name} fantasy football start/sit report for your roster — Beat Your League"
 DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login. Every Wednesday a "
@@ -315,7 +318,10 @@ def path_for(platform: Platform, site: Path = SITE) -> Path:
 
 
 def join_href(platform: Platform) -> str:
-    """join/, one folder down, on this app's default lineup when it has one."""
+    """join/, one folder down, on this app's default lineup when it has one.
+    The dynasty page opens it with Dynasty picked."""
+    if platform is DYNASTY:
+        return "../join/index.html?league=dynasty"
     code = SHAPE_CODES.get(platform.shape)
     return "../join/index.html" + (f"?t={code}" if code else "")
 
@@ -494,6 +500,7 @@ def dynasty_page() -> str:
     <p>{esc(DYNASTY_NO_SYNC)}</p>
 
     <div class="cta">{_ask(DYNASTY)}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
+    <p><a href="../league-pass.html">{esc(DYNASTY_PASS)}</a></p>
     <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
     <p>Works with rosters from {apps} or any other app.</p>
   </div>

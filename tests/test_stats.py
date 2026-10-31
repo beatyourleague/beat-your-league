@@ -211,6 +211,7 @@ def test_payments_are_counted_from_the_price_and_the_windows(monkeypatch) -> Non
         "  Checkouts, last 7 days: 4 created — 1 complete, 2 expired, 1 still open",
         "  Refunds, last 30 days: 1",
         "  Paid signups by channel (ever): none yet",
+        "  Paid signups by league type (ever): none yet",
     ]
     windows = [(urlsplit(u).path, parse_qs(urlsplit(u).query).get("created[gte]"))
                for u in fake.urls]
@@ -287,5 +288,6 @@ def test_paid_signups_are_counted_by_the_channel_their_payment_carried(
                                                      "has_more": False}})
     monkeypatch.setattr(subscriptions, "_stripe_get", fake)
     lines = stats.stripe_summary("rk_test_x", NOW)
-    assert lines[-1] == "  Paid signups by channel (ever): reddit 2, x 1, (no tag) 1"
+    assert lines[-2] == "  Paid signups by channel (ever): reddit 2, x 1, (no tag) 1"
+    assert lines[-1] == "  Paid signups by league type (ever): redraft 4"
     assert "@" not in "\n".join(lines)

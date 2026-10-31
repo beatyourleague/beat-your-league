@@ -149,6 +149,8 @@ def masthead(report: Mapping[str, Any]) -> dict[str, Any]:
     bits = [f"{meta.get('num_teams')} teams"]
     if meta.get("scoring"):
         bits.append(str(meta["scoring"]))
+    if meta.get("league_type") in ("keeper", "dynasty"):
+        bits.append(str(meta["league_type"]).capitalize())
     extra: list[tuple[str, str]] = []
     if not solo:
         # The retired league product's lines, kept for its archive renders.

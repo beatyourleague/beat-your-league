@@ -473,6 +473,8 @@ def main(argv: list[str] | None = None) -> int:
             # processed_dir=None: nothing reaches the ledger (module rule).
             report = report_for(spec_from_ref(roster), data,
                                 league_size=roster.league_size)
+            if roster.league_type != "redraft":
+                report["meta"]["league_type"] = roster.league_type
         except Exception as exc:  # noqa: BLE001 — one request, not the run
             skipped.append(trial_key(season, email)[-12:])
             print(f"  trial not built ({type(exc).__name__}: {exc})")

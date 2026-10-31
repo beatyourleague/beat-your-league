@@ -24,7 +24,7 @@
   // *.workers.dev address (blockers treat another site's beacon as a tracker).
   const ENDPOINT = "";
   const LIVE = "beatyourleague.com";
-  const EVENTS = ["view", "roster", "checkout", "waitlist", "trial"];
+  const EVENTS = ["view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper"];
   // The Worker drops a line any field of which fails this; so does this file.
   const FIELD = /^[a-z0-9.-]{0,40}$/;
   // Page keys by path, with "index.html", ".html" and a trailing slash taken

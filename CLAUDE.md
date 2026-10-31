@@ -1388,6 +1388,18 @@ roster with no K or DEF built a full report with odds, so the page may say so; t
 is `run.refs.MAX_ROSTER`. It must keep saying what isn't there: no trade values, rookie rankings or
 draft help, no off-season report, not tuned for dynasty, TE premium and six-point passing touchdowns
 not scored. No price on it, like the app pages. The footer's "Your app" is now "Your league".
+**Dynasty is a setting, not a product (owner decision, Oct 31 2026).** It's included in the plan and in
+the League Pass, at no extra charge, because it's the same report. An add-on would put a second
+decision at checkout. The buy page shows Redraft, Keeper or Dynasty as one row of choices, Redraft
+by default, and the dynasty page opens it with `?league=dynasty`. The kind of league rides the ref
+as one optional letter after the count (`[kd]`, `run.refs.LEAGUE_TYPES`), so a redraft ref is
+byte-identical to before. It labels the masthead and counts demand (the `dynasty` and `keeper` page
+events, `_paid_by_league_line`). It moves no number and is not part of ledger identity. Update and
+seat links carry it (`league=`), and a change of type alone is a real roster update.
+`MAX_ROSTER` is 40: 160 characters, about 180 with the header, inside Stripe's 200, and a long
+channel tag gives way before the roster does. A 40-player report built at about 81 KB. Paid
+off-season products come later: a one-off rookie report after the NFL Draft is the test, folded
+into the membership once there are enough months to bill for.
 
 **Plain words, again (owner review, Oct 31 2026).** The bench line is "You benched him. He went for
 30. You lost by four." and its answer is "Don't make that call alone.": it names the decision we

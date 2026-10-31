@@ -536,7 +536,7 @@ const SCORING_CODE = { ppr: "p", half_ppr: "h", standard: "s" };
 const SLOT_CODE = { QB: "Q", RB: "R", WR: "W", TE: "T", FLEX: "F", K: "K",
                     DEF: "D", SUPER_FLEX: "S" };
 const DEFENSE_FLAG = 0xff0000;
-const MAX_ROSTER = 30;
+const MAX_ROSTER = 40;
 const REF_RE = /^[A-Za-z0-9_-]{1,200}$/;
 
 function packOne(playerId) {
@@ -571,9 +571,12 @@ const SIZE_CODE = { 8: "a", 10: "b", 12: "c", 14: "d" };
 const VIA_SEPARATOR = "_via-";
 const VIA_RE = /^[a-z0-9-]{1,24}$/;
 const VIA_TAIL = /^(.+)_via-([a-z0-9-]{1,24})$/;
-const V4_SETTINGS = /^([a-z])([a-z])([A-Z]+)(\d{2})$/;
+const V4_SETTINGS = /^([a-z])([a-z])([A-Z]+)(\d{2})([kd]?)$/;
+// The kind of league, as one letter after the count: mirrors run/refs.py
+// LEAGUE_TYPES. Redraft writes none, so a redraft ref reads as it always did.
+const LEAGUE_CODE = { keeper: "k", dynasty: "d" };
 
-function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
+function encodeRoster(plan, scoring, slots, playerIds, leagueSize, leagueType) {
   const prefix = { season: "s", monthly: "m", league_pass: "p" }[plan];
   if (!prefix) throw new Error("unknown plan " + plan);
   const scoringCode = SCORING_CODE[scoring];
@@ -602,7 +605,9 @@ function encodeRoster(plan, scoring, slots, playerIds, leagueSize) {
     bytes.push((value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
   }
   const count = String(playerIds.length).padStart(2, "0");
-  const ref = prefix + "4-" + scoringCode + sizeCode + slotCodes + count + "-" +
+  const leagueCode = !leagueType || leagueType === "redraft" ? "" : LEAGUE_CODE[leagueType];
+  if (leagueCode === undefined) throw new Error("unknown league type " + leagueType);
+  const ref = prefix + "4-" + scoringCode + sizeCode + slotCodes + count + leagueCode + "-" +
               base64url(bytes);
   // Stripe SILENTLY drops an invalid client_reference_id while still showing a
   // working payment page, so this is the only place the failure can be made
@@ -690,11 +695,12 @@ function decodeCore(core) {
   const scoring = { p: "ppr", h: "half_ppr", s: "standard" }[settings[0]];
   if (!scoring) throw new Error("unknown scoring code");
   const sizes = { a: 8, b: 10, c: 12, d: 14 };
-  let leagueSize = 12, slotCodes, count = null;
+  let leagueSize = 12, slotCodes, count = null, leagueType = "redraft";
   if (head[1] === "4") {
     const m = V4_SETTINGS.exec(settings);
     if (!m || !(m[2] in sizes)) throw new Error("unreadable v4 settings");
     leagueSize = sizes[m[2]]; slotCodes = m[3]; count = Number(m[4]);
+    if (m[5]) leagueType = m[5] === "k" ? "keeper" : "dynasty";
     if (packed.length !== 4 * count) throw new Error("the roster is not the players its count says");
   } else if (head[1] === "3") {
     if (!(settings[1] in sizes)) throw new Error("unknown league-size code");
@@ -716,7 +722,7 @@ function decodeCore(core) {
   if (new Set(playerIds).size !== playerIds.length) throw new Error("the same player appears twice");
   if (n < slotCodes.length) throw new Error("more starting slots than players");
   return { plan, scoring, slots: [...slotCodes].map((c) => slotNames[c]), playerIds,
-           leagueSize, via: null };
+           leagueSize, leagueType, via: null };
 }
 
 // ---------------------------------------------------------------- //

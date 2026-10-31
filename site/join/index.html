@@ -593,6 +593,17 @@ Baltimore Ravens
          "Change" (owner review, Oct 31 2026: the page opened on settings, a
          chore before any payoff). Most leagues keep the defaults. -->
     <div id="step-league">
+    <!-- What kind of league: one tap, Redraft by default, and the dynasty page
+         opens here on Dynasty. It labels the report and counts the demand; the
+         report's numbers are the same for every league. -->
+    <div class="optlabel" id="lbl-league">League type</div>
+    <div class="opts" id="opt-league" role="radiogroup" aria-labelledby="lbl-league">
+      <label><input type="radio" name="league" value="redraft" checked>Redraft</label>
+      <label><input type="radio" name="league" value="keeper">Keeper</label>
+      <label><input type="radio" name="league" value="dynasty">Dynasty</label>
+    </div>
+    <div class="note" id="league-note" hidden>Your report covers weekly lineups during the
+    season. It doesn't cover trades or rookie drafts.</div>
     <div class="note" id="seat-settings" style="display:none"></div>
     <!-- A roster update REPLACES the settings on file with these: the intake
          reads scoring, size and lineup from the new roster code. The page sat
@@ -796,7 +807,7 @@ Baltimore Ravens
     analysis, not betting picks. Must be 18+. NFL data: nflverse (nflverse-data), CC-BY-4.0.
   </div>
 </footer>
-<script src="roster.js?v=090a3d4026"></script>
+<script src="roster.js?v=0aa69a7874"></script>
 <!-- The bye rule, the planner's own copy (held equal to the Python by
      tests/test_polish_tool.py): the panel after a check reuses it, and a page
      where it failed to load simply leaves the byes out. -->
@@ -1236,6 +1247,10 @@ $("resolve").addEventListener("click", () => {
   }
   state.matches = R.resolveAll(state.directory, $("roster-text").value);
   if (window.bylCount) window.bylCount("roster", PLAN_LINK ? "open" : "closed");
+  const leagueKind = radio("league");
+  if (leagueKind !== "redraft") {
+    if (window.bylCount) window.bylCount(leagueKind);
+  }
   state.stale = false;
   // Only a real check cascades the rows in; a later remove or pick redraws still.
   const rows = $("rows");
@@ -1861,7 +1876,8 @@ $("defenses-ok").addEventListener("click", () => {
 function checkoutRef() {
   return R.encodeRoster(
     WANTS_PASS ? "league_pass" : (buyingMonthly() ? "monthly" : "season"),
-    radio("scoring"), template(), state.matches.map((m) => m.player.id), leagueSize());
+    radio("scoring"), template(), state.matches.map((m) => m.player.id), leagueSize(),
+    radio("league"));
 }
 
 // BE-I3: a checked roster is kept in this page's own address (?ref=), so a
@@ -1989,8 +2005,12 @@ $("settings-change").addEventListener("click", () => {
   }
 });
 
+function drawLeagueNote() {
+  $("league-note").hidden = radio("league") === "redraft";
+}
 $("step-league").addEventListener("change", () => {
   closeEmailCheck();
+  drawLeagueNote();
   drawShapeNote();
   drawSettingsLine();
   // The tally counts starting spots and the kept address encodes the
@@ -3097,6 +3117,7 @@ function prefillUpdateSettings() {
 if (RESTORED) {
   setRadio("scoring", RESTORED.scoring);
   setRadio("size", String(RESTORED.leagueSize));
+  setRadio("league", RESTORED.leagueType || "redraft");
   applyShape(R.shapeOfSlots(RESTORED.slots));
 } else if (SEAT_MODE) {
   const told = settingsFromLink();
@@ -3113,6 +3134,12 @@ if (RESTORED) {
   settingsFromLink();
 }
 if (UPDATE_MODE) prefillUpdateSettings();
+// ?league= — the dynasty page's link, and a report's update or seat link. A
+// roster restored from the address already says what it is.
+if (!RESTORED && ["keeper", "dynasty"].includes(QUERY.get("league"))) {
+  setRadio("league", QUERY.get("league"));
+}
+drawLeagueNote();
 drawSettingsLine();
 drawShapeNote();
 fillRenewalDates();

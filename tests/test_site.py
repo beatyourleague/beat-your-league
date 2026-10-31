@@ -1845,7 +1845,7 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
     A question we ask and discard is worse than one we never ask: it tells the
     buyer their answer matters, and it is checkable in one click."""
     groups = set(re.findall(r'<input type="radio" name="(\w+)"', JOIN))
-    assert groups == {"scoring", "size", "template", "kicker", "defense", "plan"}, \
+    assert groups == {"scoring", "size", "template", "kicker", "defense", "plan", "league"}, \
         f"the picker's question set changed: {groups}"
     call = re.search(r"R\.encodeRoster\((.*?)\);", JOIN, re.S)
     assert call, "the picker no longer builds a ref"

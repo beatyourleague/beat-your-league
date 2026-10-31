@@ -51,7 +51,7 @@ TAG = '<script src="/count.js" defer></script>'
 FIELD = re.compile(r"^[a-z0-9.-]{0,40}$")
 PAGE_KEYS = {"index", "join", "join-pass", "join-try", "league-pass", "how-it-works",
              "thanks", "sample", "this-week", "first-week", "planner", "404", "other"}
-EVENTS = ("view", "roster", "checkout", "waitlist", "trial")
+EVENTS = ("view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper")
 # The three generated pages this branch may not rebuild: the lead runs `make
 # sample` after merging, and this-week.html is rebuilt by the Tuesday cron.
 # Their generator carries COUNT_TAG (pinned below); DELETE THIS SET once they

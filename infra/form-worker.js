@@ -316,7 +316,7 @@ function siteOrigin(request, env) {
 // ── the visit counter (contract C1) ──────────────────────────────────────
 
 const COUNT_FIELD = /^[a-z0-9.-]{0,40}$/;
-const COUNT_EVENTS = ["view", "roster", "checkout", "waitlist", "trial"];
+const COUNT_EVENTS = ["view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper"];
 const COUNT_PAGES = ["index", "join", "join-pass", "join-try", "league-pass",
   "how-it-works", "thanks", "sample", "this-week", "first-week", "planner", "404", "other"];
 const MAX_COUNT_BODY = 512;

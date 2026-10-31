@@ -156,7 +156,7 @@ def test_every_proof_and_tool_page_ends_with_the_same_next_step(name: str) -> No
     page = markup_only(_page(name))
     main = page.split("<footer", 1)[0]
     assert re.search(r'<a class="(?:btn gold|golink)"[^>]*href="(?:\.\./)?join/index\.html'
-                     r'(?:\?t=[a-z0-9-]+)?"[^>]*>Check my team free</a>', main), name
+                     r'(?:\?(?:t=[a-z0-9-]+|league=dynasty))?"[^>]*>Check my team free</a>', main), name
 
 
 @pytest.mark.parametrize("name", NEXT_STEP + ("index.html",))

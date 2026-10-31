@@ -140,6 +140,8 @@ def subscriber_meta(subscriber: RosterSubscriber,
       own seat link, so a report forwarded to the group chat points a
       leaguemate at the seat already paid for, never the $39 checkout."""
     meta: dict = {"plan": subscriber.report_plan}
+    if subscriber.league_type != "redraft":
+        meta["league_type"] = subscriber.league_type   # the masthead's label
     if subscriber.one_time:
         # A one-time pass (or a seat on one): nothing renews, nothing to cancel.
         meta["one_time"] = True

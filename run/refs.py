@@ -194,7 +194,14 @@ ROSTER_MARKER_V4 = "4"
 VIA_SEPARATOR = "_via-"
 VIA_RE = re.compile(r"^[a-z0-9-]{1,24}$")
 _VIA_TAIL = re.compile(r"^(?P<ref>.+)_via-(?P<via>[a-z0-9-]{1,24})$")
-_V4_SETTINGS_RE = re.compile(r"^([a-z])([a-z])([A-Z]+)(\d{2})$")
+_V4_SETTINGS_RE = re.compile(r"^([a-z])([a-z])([A-Z]+)(\d{2})([kd]?)$")
+# A v4 ref's settings may end in one letter for the kind of league (added Oct
+# 31 2026). Redraft writes none, so every redraft ref reads as it always did.
+# It changes the report's label and the demand counts, never a number: the
+# weekly model is the same for every league, so the ledger store ignores it.
+REDRAFT = "redraft"
+LEAGUE_TYPES = {"k": "keeper", "d": "dynasty"}
+_LEAGUE_TYPE_TO_CODE = {v: k for k, v in LEAGUE_TYPES.items()}
 
 # One char, at a FIXED position (settings[1]), so slots stay unambiguous:
 # scoring codes are lowercase, slot codes uppercase, size codes lowercase.
@@ -224,7 +231,10 @@ _DEFENSE_FLAG = 0xFF0000
 # test_a_player_number_can_never_reach_the_defense_flag pins the gap.
 _MAX_PLAYER = 9_999_999
 
-MAX_ROSTER = 30          # a deep dynasty bench; 30 entities is 120 ref chars
+# A deep dynasty roster: 40 players is 160 ref chars, about 180 with the header,
+# inside Stripe's 200. A long channel tag on a roster this size is dropped by
+# with_via, never the roster.
+MAX_ROSTER = 40
 
 
 @dataclass(frozen=True)
@@ -239,6 +249,7 @@ class RosterRef:
     # The channel tag a v4 ref carried (contract C5), or None. Attribution
     # only: nothing about the roster, the plan or the report depends on it.
     via: str | None = None
+    league_type: str = REDRAFT   # redraft | keeper | dynasty
 
     @property
     def is_league_pass(self) -> bool:
@@ -283,7 +294,7 @@ def _unpack_one(value: int) -> str:
 def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
                   player_ids: list[str] | tuple[str, ...],
                   league_size: int = DEFAULT_LEAGUE_SIZE,
-                  via: str | None = None) -> str:
+                  via: str | None = None, league_type: str = REDRAFT) -> str:
     """Build the v4 ref the intake page puts on the checkout URL, with the
     source tag appended when one is usable (``with_via``)."""
     if plan not in _PLAN_TO_PREFIX:
@@ -292,6 +303,8 @@ def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
         raise RefError(f"unknown scoring {scoring!r}")
     if league_size not in _SIZE_TO_CODE:
         raise RefError(f"unsupported league size {league_size!r}")
+    if league_type != REDRAFT and league_type not in _LEAGUE_TYPE_TO_CODE:
+        raise RefError(f"unknown league type {league_type!r}")
     slot_codes = ""
     reverse = {v: k for k, v in SLOTS.items()}
     for slot in slots:
@@ -315,7 +328,7 @@ def encode_roster(plan: str, scoring: str, slots: list[str] | tuple[str, ...],
     packed = base64.urlsafe_b64encode(blob).decode("ascii").rstrip("=")
     ref = (f"{_PLAN_TO_PREFIX[plan]}{ROSTER_MARKER_V4}-"
            f"{_SCORING_TO_CODE[scoring]}{_SIZE_TO_CODE[league_size]}{slot_codes}"
-           f"{len(player_ids):02d}-{packed}")
+           f"{len(player_ids):02d}{_LEAGUE_TYPE_TO_CODE.get(league_type, '')}-{packed}")
     if not STRIPE_REF_RE.match(ref):
         raise RefError(f"encoded ref is not Stripe-safe: {ref!r}")
     return with_via(ref, via)
@@ -406,12 +419,14 @@ def _decode_core(ref: str) -> RosterRef:
     if scoring_code not in SCORING:
         raise RefError(f"unknown scoring code {scoring_code!r} in {ref!r}")
     count: int | None = None
+    league_type = REDRAFT
     if version == ROSTER_MARKER_V4:
         match = _V4_SETTINGS_RE.match(settings)
         if not match or match.group(2) not in SIZES:
             raise RefError(f"unreadable v4 settings in {ref!r}")
         league_size, slot_codes = SIZES[match.group(2)], match.group(3)
         count = int(match.group(4))
+        league_type = LEAGUE_TYPES.get(match.group(5), REDRAFT)
         if len(packed) != 4 * count:
             # Anything after the counted payload that is not a well-formed tag
             # (split_via took that off already) — or a payload cut short — is
@@ -450,4 +465,5 @@ def _decode_core(ref: str) -> RosterRef:
         slots=tuple(SLOTS[c] for c in slot_codes),
         player_ids=ids,
         league_size=league_size,
+        league_type=league_type,
     )

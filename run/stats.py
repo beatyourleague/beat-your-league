@@ -246,6 +246,28 @@ def _paid_by_channel_line(sessions: list[dict]) -> str:
             + ", ".join(f"{tag} {n}" for tag, n in ranked))
 
 
+def _paid_by_league_line(sessions: list[dict]) -> str:
+    """Paid roster signups, ever, by the kind of league the roster said it is:
+    the number that says whether dynasty earns its own off-season product."""
+    from run.checkout import is_paid
+    from run.refs import RefError, decode_roster, is_roster_ref
+    counts: Counter[str] = Counter()
+    for session in sessions:
+        ref = session.get("client_reference_id")
+        if (session.get("status") != "complete" or not is_paid(session)
+                or not isinstance(ref, str) or not is_roster_ref(ref)):
+            continue
+        try:
+            counts[decode_roster(ref).league_type] += 1
+        except RefError:
+            continue
+    if not counts:
+        return "  Paid signups by league type (ever): none yet"
+    return ("  Paid signups by league type (ever): "
+            + ", ".join(f"{kind} {counts[kind]}" for kind in ("redraft", "keeper", "dynasty")
+                        if counts[kind]))
+
+
 def season_2027_end() -> "date | None":
     """The 2027 season's last game, from the cached schedule; None until there
     is one, which reads as not delivered."""
@@ -345,6 +367,7 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
         ("refunds", "refunds", [("created[gte]", str(month_ago))], _refunds_line),
         # Every session ever, not the week: a channel's worth is its total.
         ("paid signups by channel", "checkout/sessions", [], _paid_by_channel_line),
+        ("paid signups by league type", "checkout/sessions", [], _paid_by_league_line),
     )
     links = frozenset(season_2027)
     if links:
@@ -527,12 +550,14 @@ TRAFFIC_SQL = ("SELECT blob1 AS e, blob2 AS p, blob3 AS v, blob4 AS r, blob5 AS 
                "blob6 AS s, blob7 AS c, SUM(_sample_interval) AS n FROM {dataset} "
                "WHERE timestamp > NOW() - INTERVAL '{days}' DAY "
                "GROUP BY e, p, v, r, d, s, c ORDER BY n DESC LIMIT 10000 FORMAT JSON")
-COUNT_EVENTS = ("view", "roster", "checkout", "waitlist", "trial")
+COUNT_EVENTS = ("view", "roster", "checkout", "waitlist", "trial", "dynasty", "keeper")
 BUY_PAGES = ("join", "join-pass")
 FUNNEL = (
     ("Landing views", lambda r: r["e"] == "view" and r["p"] == "index"),
     ("Buy-page views", lambda r: r["e"] == "view" and r["p"] in BUY_PAGES),
     ("Rosters checked on the buy page", lambda r: r["e"] == "roster" and r["p"] in BUY_PAGES),
+    ("Of those, dynasty teams", lambda r: r["e"] == "dynasty"),
+    ("Of those, keeper teams", lambda r: r["e"] == "keeper"),
     ("Buy pressed, checkout open", lambda r: r["e"] == "checkout" and r["s"] == "open"),
     ("Buy pressed, checkout closed", lambda r: r["e"] == "checkout" and r["s"] == "closed"),
     # Both captures count it: the landing's hero form and the join page's

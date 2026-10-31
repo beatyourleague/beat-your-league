@@ -184,6 +184,14 @@ class RosterSubscriber:
     def key(self) -> tuple[str, str]:
         return (self.email.lower(), self.ref)
 
+    @property
+    def league_type(self) -> str:
+        """redraft | keeper | dynasty: read off the ref, never stored twice."""
+        try:
+            return decode_roster(self.ref).league_type
+        except RefError:
+            return "redraft"
+
     def spec(self) -> RosterSpec:
         return RosterSpec(player_ids=self.player_ids, slots=self.slots,
                           scoring=self.scoring, label=self.label)
