@@ -25,8 +25,8 @@ surface:
 
 The amount and the date come from Stripe, never from our own price
 constants: the buyer is owed the figure that will actually be charged, and a
-founding subscriber renews at the price they joined at (legal §3), which our
-constants do not know. A 2027 Season Pass is no exception: it is first charged
+subscriber renews at the price on their own subscription, which our constants
+do not know. A 2027 Season Pass is no exception: it is first charged
 when its trial ends, in August 2028, and run/renewals.charge_date hands that
 date to the same notice, so its 15-to-45-day window is counted from the charge.
 """

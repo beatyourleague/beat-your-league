@@ -1396,11 +1396,14 @@ elasticity, and nobody has measured ours. Rules it left:
 - **The free report opens with checkout.** `make launch-check` fails when `CHECKOUT_CAN_COMPLETE`
   is on with `TRIAL_OPEN` off. Both flip in one push on opening morning (LAUNCH step 6). Until the
   Worker is live neither can.
-- **"Founding rate" must be true.** New buyers pay $49 in 2027 (`SEASON_NEW_BUYER_PRICE`, terms §3,
-  `run/economics.SEASON_NEW_BUYER`); the landing says "New buyers pay more." and names no figure,
-  because a selling page never compares prices. That is a promise: 2027 must really sell at $49.
-  **Monthly moves with it:** 3 × $14.99 = $44.97 is under $49, so `MONTHLY_2027` is $16.99 before
-  the pass goes on sale.
+- **One price for everyone, and no 2027 price on any page (owner decision, same day).** A founding
+  rate with a $49 regular price went live and came off within the day. Two prices needed a private
+  link, a way to spot a past buyer and answers nobody had (how long it lasts, what a League Pass
+  buyer gets), forced Monthly to $16.99, and set 2027's price before a graded season exists. Nobody
+  had bought, so it cost nothing; after a first sale it is a contract. The working plan is $14.99
+  and $39 for everyone, decided next summer, and terms §3 already reserves prices for future terms.
+  `run/economics.SEASON` is that plan, not a promise. `tests/test_pricing_review.py` sweeps every
+  page for it. The hidden 2027 pass keeps its $39 renewal figure.
 - **The compare page dates what was checked.** Its stamp names the four rows rechecked Oct 31
   rather than re-dating rows nobody read. The rest still need a by-hand check.
 - **$34.99 is low on purpose:** 2.3 times Monthly for up to 14 reports. At two sales $49.99 adds
@@ -1679,7 +1682,7 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
 - **The 2027 Season Pass is built switched off:** `SEASON_2027_READY` on landing and join,
   `STRIPE_LINK_2027` on join, which must agree. Off, no word of it renders: the card and join's
   radio are built by script (`season2027Card`, the `PLAN_CHOICE` block), so all that ships is the
-  founding-rate line. On: two cards, the $49 one ("$49 / this season and next") holding the one
+  no 2027 price at all. On: two cards, the $49 one ("$49 / this season and next") holding the one
   gold button, renewal terms directly under its price at full size.
   Join starts on it unless the link said `?plan=monthly`, so a click on $14.99 never lands on $49; both write an `s` ref (the plan
   comes from the link that took the money), so `keepInAddress` carries the choice in `?plan=`.
@@ -1698,11 +1701,10 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
 
 **The 2027 Season Pass backend (Oct 30 2026): built, switched off, waiting on the lawyer.** $49 for
 the rest of 2026 and all of 2027 (raised from $39, owner's call, Oct 31), a yearly subscription at
-the $39 founding rate whose first renewal is `run.checkout.SEASON_2027_FIRST_RENEWAL` (August 15,
+$39 whose first renewal is `run.checkout.SEASON_2027_FIRST_RENEWAL` (August 15,
 2028, fixed: a buyer consents to the date and no 2028 schedule can exist while it sells). The $49
 is two items on one Payment Link, the yearly $39 price and a $10 one-time item, so RULE B2 and
-every renewal still read $39; `check_season_2027_stripe` checks both figures. It renews at $39
-because a buyer who commits for two seasons must not renew above a $29 buyer's founding rate.
+every renewal still read $39; `check_season_2027_stripe` checks both figures.
 Stripe documents that mix for Checkout; a Payment Link taking it is LAUNCH §13 step 3's first proof. `tests/test_season_2027.py`; turning it on is LAUNCH §13.
 - **`y:` in `STRIPE_PAYMENT_LINKS` is the only switch in the code.** Absent, a purchase, welcome and
   billing run are unchanged. The ref stays `s`; the plan comes from the link that took the money,

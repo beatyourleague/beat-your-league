@@ -57,6 +57,8 @@ LANDING_PROSE, JOIN_PROSE = prose(LANDING), prose(JOIN)
 GATE_CLAUSE = ("only where both players are playing, off the injury report and have "
                "enough games on record (never on team defenses)")
 
+from render.welcome import SEASON_PRICE as render_welcome_season  # noqa: E402
+
 
 def _price(pattern: str) -> str:
     """Read a price off the landing page's own pricing card.
@@ -74,10 +76,10 @@ def _price(pattern: str) -> str:
     return match.group(1)
 
 
-# 2026 sells a monthly plan (owner decision, Oct 31 2026). The season pass is the
-# founding rate's, from 2027.
+# 2026 sells a monthly plan (owner decision, Oct 31 2026). The season pass is
+# 2027's working plan, and no page names it.
 MONTHLY_PRICE = _price(r'id="pass-price">\$(\d+\.\d\d) <small>/ month')
-SEASON_PRICE = _price(r"your 2027 season pass is \$(\d+)")
+SEASON_PRICE = render_welcome_season.lstrip("$")
 
 
 # --------------------------------------------------------------------- #
@@ -1485,12 +1487,10 @@ def test_the_contract_describes_the_product_actually_sold() -> None:
     assert re.search(r"complete list of what we hold", legal, re.I)
     assert re.search(r"never connect to your league", legal, re.I)
     assert re.search(r"public NFL data", legal, re.I)
-    # The pitch says the founding rate is locked for every renewal; the
-    # contract has to say it too, or the 'legal wins' clause makes the pitch
-    # a deceptive-pricing pattern.
-    assert re.search(r"Founding subscribers renew at their founding price", legal)
-    # 2026 sells one-time passes; the founding promise is the 2027 price.
-    assert re.search(r"Founding rate", LANDING) and re.search(r"\$39 USD</b> when the 2027 season opens", legal)
+    # One price for everyone (owner decision, Oct 31 2026): no founding rate,
+    # and no 2027 price in the contract to be held to.
+    assert not re.search(r"Founding", LANDING + legal)
+    assert "$39" not in legal and "$49" not in legal
 
 
 def test_renewal_terms_are_in_sight_of_the_checkout_button() -> None:
@@ -1592,7 +1592,6 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     would have caught it if either had been missed.
     """
     monthly = re.match(r"(.*)", MONTHLY_PRICE)
-    season = re.match(r"(.*)", SEASON_PRICE)
     legal = (SITE / "terms.html").read_text(encoding="utf-8")
     compare = (SITE / "compare" / "index.html").read_text(encoding="utf-8")
     # The compare table quotes NINE competitors' real prices, so only our own
@@ -1601,7 +1600,6 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     ours = re.search(r'<tr class="us">.*?</tr>', compare, re.S)
     assert ours, "the comparison table no longer marks our own row"
 
-    assert f"${season.group(1)}" in legal, "terms.html lost the founding season price"
     for page, name in ((legal, "terms.html"), (ours.group(0), "compare, our row")):
         assert f"${monthly.group(1)}" in page, (
             f"{name} does not state the monthly price the landing charges "

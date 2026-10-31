@@ -271,8 +271,6 @@
       <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
       <li><b>Saturday, if needed</b>The Saturday check, when injury news changes your lineup
       or a starting spot still has nobody to fill it.</li>
-      <li id="step-founding"><b>Next season</b>You have the founding rate. Your 2027 season
-      pass is $39.</li>
     </ol>
 
     <!-- Hidden on the League Pass view (?plan=pass), whose one job is the
@@ -347,7 +345,6 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 // The 2027 Season Pass renews, so "stops on its own" is the plan's line, not its.
 // The payment link's success URL carries ?plan=2027.
 if (new URLSearchParams(location.search).get("plan") === "2027") {
-  document.getElementById("step-founding").hidden = true;
   document.getElementById("thanks-renew").textContent =
     "Nothing more until August 15, 2028, when it renews at $39, then each August. " +
     "We email you before it bills.";

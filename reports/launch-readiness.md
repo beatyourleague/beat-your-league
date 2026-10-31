@@ -131,10 +131,9 @@ passes ($29, $19, $69) from an Oct 26 opening and came to about $727.
 | GST/HST | not until C$30,000 of sales in four quarters |
 
 **Pricing:** a 2026 plan bills monthly and stops on its own; a 2026 buyer coming back in
-2027 is a new purchase at the founding $39, so the model calls it a re-buy rate, never a
-renewal rate. For 2027: $39 for 2026 buyers, $49 for new buyers (terms §3), Monthly at $16.99
-so three charges still pass the $49 pass, and never prorate; the pass earns more than monthly
-in every join week. Don't advertise a pass's 12-month coverage until rosters roll to a new
+2027 is a new purchase, so the model calls it a re-buy rate, never a renewal rate. The working
+plan for 2027 is $14.99 and $39 for everyone, with no price promised on any page, and never
+prorate; the pass earns more than monthly in every join week. Don't advertise a pass's 12-month coverage until rosters roll to a new
 season (IDEAS.md), or 2027 reports would be built from 2026 rosters.
 
 ## What was deliberately not done

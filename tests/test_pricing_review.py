@@ -3,8 +3,7 @@ things they rested on were made true.
 
 - no plan renews after Week 16's report, and every report still arrives;
 - every sentence about billing says so, in words true of a late buyer too;
-- "founding rate" has a higher price beside it, and Monthly moves to keep the
-  ladder above it;
+- one price for everyone: no founding rate and no 2027 price on any page;
 - the compare page says what was checked, and when;
 - the free report opens with checkout.
 """
@@ -157,37 +156,33 @@ def test_the_card_still_links_straight_to_the_cancellation_steps() -> None:
 
 
 # --------------------------------------------------------------------- #
-# the founding rate
+# one price for everyone, and no 2027 price promised
 # --------------------------------------------------------------------- #
 
-def test_the_founding_rate_has_a_higher_price_beside_it() -> None:
+@pytest.mark.parametrize("name", sorted(BUYER_TEXTS))
+def test_no_surface_promises_a_founding_rate(name) -> None:
+    """Dropped the day after it went up: two prices needed a private link, a
+    way to spot a past buyer, and an answer to how long the rate lasted, and it
+    forced Monthly up. Nobody had bought, so it cost nothing to remove."""
+    assert not re.search(r"founding|new buyers (will )?pay", BUYER_TEXTS[name], re.I), name
+
+
+def test_the_contract_names_no_2027_price() -> None:
     terms = _words(_page("terms.html"))
-    assert "$39 USD when the 2027 season opens. New buyers will pay $49 USD ." in terms
-    assert welcome.SEASON_PRICE == f"${economics.SEASON:.0f}"
-    assert welcome.SEASON_NEW_BUYER_PRICE == f"${economics.SEASON_NEW_BUYER:.0f}"
+    assert "$39" not in terms and "$49" not in terms
+    assert "We may change prices for future terms" in terms
 
 
-def test_the_landing_says_so_without_comparing_two_prices() -> None:
-    """Money is disclosure, never argument: the figure is in the contract."""
-    assert "Founding rate: your 2027 season pass is $39. New buyers pay more." in _words(
-        _page("index.html"))
+def test_the_last_report_promises_no_price() -> None:
+    from render.report import ONCE_END, SEASON_END_BILLING
+    for words in (ONCE_END, SEASON_END_BILLING["monthly"], SEASON_END_BILLING["pass"]):
+        assert "2027" not in words and "$39" not in words
 
 
-def test_the_terms_do_not_price_every_2027_pass_at_39() -> None:
-    assert "$39 USD at the founding rate, $49 USD for new buyers" in _words(_page("terms.html"))
-    assert "A yearly season pass ($39 USD)" not in _words(_page("terms.html"))
-
-
-def test_monthly_moves_before_the_new_buyers_price_goes_on_sale() -> None:
-    """The ladder rule: three charges (the elimination cliff) must pass the pass.
-    $14.99 fails it against $49, which is why 2027's Monthly is $16.99."""
-    assert 3 * economics.MONTHLY < economics.SEASON_NEW_BUYER
-    assert 3 * economics.MONTHLY_2027 > economics.SEASON_NEW_BUYER
-
-
-def test_nothing_promises_todays_monthly_price_for_2027() -> None:
-    terms = _words(_page("terms.html"))
-    assert not re.search(r"2027[^.]{0,80}14\.99", terms)
+def test_the_working_2027_plan_keeps_the_ladder() -> None:
+    """Three charges (the elimination cliff) must pass the season pass, and at
+    today's prices they do, so nothing had to move."""
+    assert 3 * economics.MONTHLY > economics.SEASON
 
 
 # --------------------------------------------------------------------- #

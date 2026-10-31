@@ -206,7 +206,7 @@ still open one. Make three new links and switch the old ones off.
    | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
    | Include a free trial | Off | The refund window is the trial |
    | Limit the number of payments | Off | |
-   | Promotion codes | Off | The founding rate is the discount |
+   | Promotion codes | Off | One price for everyone |
    | After payment | Redirect to `https://beatyourleague.com/thanks.html` — **League Pass link only:** `https://beatyourleague.com/thanks.html?plan=pass` | |
 
    Two account settings the links follow:
@@ -935,13 +935,10 @@ new season yet). *Recommend:* anchor every 2027 pass to one late-August renewal 
 on the card and in the terms, and build the roster roll — hold reports until a post-draft
 roster is confirmed — before July 2027.
 
-**The founding price, and how 2026 buyers hear about 2027.** The site promises a 2026 buyer
-"your 2027 season pass is $39", but nothing says how long that price lasts, what a
-2026 League Pass buyer gets, or that we may email them when 2027 opens — the privacy page
-lists no such email, and a monthly buyer gets no renewal notice. *Recommend:* section 12's
-proposed sentences, before the first sale. Stripe already holds every 2026 buyer, so the
-2027 link can honour the price without new code now. Terms §3 also says new buyers will pay
-$49, so 2027 needs that price on sale, and Monthly at $16.99 beside it (PLAN §4).
+**How 2026 buyers hear about 2027.** No page names a 2027 price (owner decision, Oct 31 2026:
+one price for everyone, set next summer). Nothing yet says we may email a 2026 buyer when 2027
+opens: the privacy page lists no such email, and a monthly buyer gets no renewal notice.
+*Recommend:* section 12's proposed sentence, before the first sale.
 
 **A price for a second team.** Each team is its own pass today, so a manager with three
 leagues stops at one. *Recommend:* not before the first ten buyers, and never at checkout
@@ -1135,9 +1132,7 @@ have a statutory cancellation right on top of our refund.
    rules add disclosures. Sell to Quebec with a French version, or exclude it? Until
    answered, *recommend* treating a Quebec postal code (starting G, H or J) like a buyer from
    outside the US and Canada: refund, with an apology.
-5. **The founding price and the 2027 email.** Is the proposed wording below enough to make
-   the $39 price definite, does "new buyers will pay $49" in terms §3 bind us to that price
-   in 2027, and is one email to 2026 buyers when 2027 opens covered by CASL's
+5. **The 2027 email.** Is one email to 2026 buyers when 2027 opens covered by CASL's
    two-year existing business relationship (Canadians) and CAN-SPAM's opt-out (US)? And CASL
    express consent for the planned "Email me when 2027 opens" box: the sender's name, mailing
    address, a contact and a withdrawal statement beside it.
@@ -1149,11 +1144,8 @@ a change notice (section 8) if it reaches anyone who has already bought.
   and Canada [outside Quebec, until a French version is published]. If you buy from anywhere
   else, we refund the full amount and send nothing further." The join page's terms line gets
   the same first sentence.
-- **Terms §3 (the founding price):** "If you bought a 2026 pass, your 2027 season pass is $39
-  USD, and stays $39 for every season you renew without a gap. [A 2026 League Pass buyer's
-  2027 League Pass is $___ — your decision.]"
 - **Privacy §1, a reason we email:** "If you bought a pass: one email when next season's pass
-  opens, with your founding price. Reply stop to skip it."
+  opens. Reply stop to skip it."
 - **Privacy, if checkout stops collecting addresses (step 1):** "Your country, and the postal
   code where your card needs it, entered on Stripe's checkout page" in place of "your billing
   address".
@@ -1162,7 +1154,7 @@ a change notice (section 8) if it reaches anyone who has already bought.
 
 **Off until a lawyer has seen it (owner decision, Oct 30 2026).** $49 today covers the rest of
 2026 and all of 2027; it's a subscription that first renews on **August 15, 2028**, before the
-2028 season, and each August after that at the $39 founding rate. The code is in and does nothing: with no `y:`
+2028 season, and each August after that at $39. The code is in and does nothing: with no `y:`
 in `STRIPE_PAYMENT_LINKS` every path behaves exactly as it does today. Nothing below is urgent
 and nothing else depends on it. Do these in order.
 

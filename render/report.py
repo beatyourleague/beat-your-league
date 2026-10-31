@@ -2246,8 +2246,7 @@ SEASON_END_BILLING = {
     # D1: billing has already stopped (run/billing, LAST_CHARGE_WEEK), so this report
     # is the last and nothing bills after it.
     "monthly": "Your monthly plan has stopped billing on its own, so there's "
-               "nothing to cancel. You have the founding rate. Your 2027 season "
-               "pass is $39.",
+               "nothing to cancel.",
     # D8: a derived Week 1 is never built before run.solo.week_one_due (9 days
     # before its first kickoff), so Week 1 arrives in kickoff week, September.
     "season": "Your season pass renews once a year, on the day you bought it, "
@@ -2273,8 +2272,7 @@ SEASON_END_BILLING = {
 
 
 ONCE_END = ("Your pass covered this season through this report: nothing renews "
-            "and nothing more is charged. You have the founding rate. Your 2027 "
-            "season pass is $39.")
+            "and nothing more is charged.")
 ONCE_SEAT_END = ("Your seat came with your league's pass for this season, and "
                  "this is its last report.")
 

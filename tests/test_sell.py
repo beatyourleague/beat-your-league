@@ -241,10 +241,8 @@ def test_with_the_switch_off_no_offer_text_ships_in_the_page(name: str, page: st
         assert [o["price"] for o in offers] == ["14.99"]
 
 
-def test_the_only_rendered_39_is_the_founding_line() -> None:
-    assert _flat(_markup(LANDING)).count("$39") == 1
-    assert "Founding rate: your 2027 season pass is $39." in _flat(_markup(LANDING))
-    assert "$39" not in _flat(_markup(JOIN))
+def test_no_2027_price_renders_while_its_pass_is_off() -> None:
+    assert "$39" not in _flat(_markup(LANDING)) + _flat(_markup(JOIN))
     assert "$49" not in _flat(_markup(LANDING)) + _flat(_markup(JOIN))
 
 
@@ -372,14 +370,13 @@ def test_the_closed_state_keeps_its_honest_lines() -> None:
 # long-term profit, words only
 # --------------------------------------------------------------------- #
 
-def test_the_last_report_and_the_thanks_page_make_the_founding_rate_plain() -> None:
-    assert "Your 2027 season pass is $39." in ONCE_END
-    assert "$39" not in ONCE_SEAT_END, "a seat bought nothing"
+def test_the_last_report_and_the_thanks_page_name_no_2027_price() -> None:
+    assert "$39" not in ONCE_END + ONCE_SEAT_END
     meta = {"solo": True, "week": 18, "last_week": 18, "plan": "season", "one_time": True}
-    assert "Your 2027 season pass is $39." in " ".join(season_end_lines(meta))
+    assert not any("$39" in line for line in season_end_lines(meta))
     assert not any("$39" in line for line in season_end_lines({"solo": True, "week": 18,
                                                                "last_week": 18}))
-    assert "Your 2027 season pass is $39." in _flat(_markup(THANKS))
+    assert "$39" not in _flat(_markup(THANKS))
 
 
 def test_the_group_chat_lines_are_short() -> None:

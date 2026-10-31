@@ -325,7 +325,7 @@ an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 own page). Each stops on its own: it won't renew after Week 16's report goes out, and
 reports run through the season's last. They replace the one-time passes of Oct 18 ($29, $19,
 $69), which never sold: a fixed price buys less every week, so the pass grew harder to sell and
-needed a price drop at Week 13. 2026 buyers' 2027 season pass is the founding $39. Everything
+needed a price drop at Week 13. Everything
 below about $39 / $99 subscriptions, renewals and the ladder invariant is the **2027** design
 and stays as written for it. What the 2026 prices leave, and the base case (about $513 after
 fixed costs for 30 Monthly buyers + 2 League Passes, opening Nov 9, with 30% leaving before a
@@ -348,11 +348,13 @@ annual billing; its monthly price is $19.99). Three decisions came out of it:
 - **The free report opens with checkout.** The Aug 17 decision below was "$39 with a free first
   week", and that door was still shut. `make launch-check` now fails if checkout completes with
   `TRIAL_OPEN` off.
-- **2027: $39 is a founding rate because new buyers pay $49.** Terms §3 now says so, which commits
-  us: it must really be $49 in 2027. **Monthly has to move with it.** The ladder rule below
-  (monthly × 3 above the season pass) fails at 3 × $14.99 = $44.97 against $49, so Monthly goes to
-  $16.99 (3 × = $50.97) before 2027's pass goes on sale. That is `run/economics.MONTHLY_2027`,
-  and nothing on the site promises $14.99 for 2027.
+- **One price for everyone, and no 2027 price on any page.** A founding rate went up on Oct 31 and
+  came off the same day. Two prices needed a private $39 link, a way to spot a past buyer, and
+  answers to how long the rate lasts and what a League Pass buyer gets; making it true with a $49
+  regular price forced Monthly to $16.99; and it set 2027's price before there is a graded season
+  to set it from. Nobody had bought, so it cost nothing. The working plan for 2027 is $14.99 and
+  $39 for everyone (3 × $14.99 = $44.97, so the ladder holds), decided next summer. Terms §3
+  already says prices may change for future terms.
 
 **REVISED Aug 17 2026 — the price rises and a free door opens.** The Aug 13 decision was "charge
 from day one, no free tier," with the public ledger and the Week-2 refund as the risk-reversal.
@@ -376,8 +378,8 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
 
 **The 2027 Season Pass (owner decision, Oct 30 2026; built and switched off until a lawyer has
 seen it, LAUNCH.md section 13).** $49 today covers the rest of 2026 and all of 2027, as a
-subscription that first renews on August 15, 2028 and each August after that at the $39
-founding rate (raised from $39 today on Oct 31 2026). Once switched on, a **two-card offer
+subscription that first renews on August 15, 2028 and each August after that at $39
+(raised from $39 today on Oct 31 2026). Once switched on, a **two-card offer
 replaces "one decision at checkout"**: $14.99 a month, or $49 for this season and next. Forget-to-cancel stays banned: the renewal is stated at the point of
 sale, a notice goes out 15 to 45 days before every charge, and cancelling is self-serve. Monthly
 is not sold in 2026. This takes 2027 money now, so `make stats` and the dashboard show what is
@@ -385,7 +387,7 @@ held for a season not yet delivered. `run/economics.py`'s honest view: the prepa
 a $39 2027 re-buy below a re-buy rate of about 77%, above the model's own 30–70%; watch
 it against that.
 
-**At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
+**At checkout, still exactly one decision:** Season Pass **$39** shown beside **$14.99/mo**.
 Refunds no-questions until the buyer's first weekly report's week kicks off (the second report's
 until Oct 30 2026, "through Week 2" until Sep 29 2026 — see the refund-cycling note below). Monthly moved from $9.99 to $14.99 because
 $9.99 inverted the ladder at $39; the corrections below record how.
@@ -993,7 +995,7 @@ Week 10, the base case — 30 Monthly buyers and 2 League Passes, 1.3 charges a 
 about $513 after Stripe, refunds, disputes and fixed costs, for about 49 owner-hours
 (`run/economics.py`; the launch check fails if `reports/launch-readiness.md` stops agreeing).
 2026 is a proof season worth a few hundred dollars; whether this is profitable is a 2027
-question, decided by the four open items in IDEAS.md (2027 price and founder link, a second
+question, decided by the four open items in IDEAS.md (2027 price, a second
 team on its own link, League Pass as the channel, the season roll).
 
 If the threshold for "makes money" is higher than that, no strategy in five research lenses reaches

@@ -12,9 +12,9 @@ year's gets its own.
 What this refuses to do, deliberately:
 
 - **It never invents the amount or the date.** Both come from the Stripe
-  subscription that will actually be charged. A founding subscriber renews at
-  the price they joined at (legal §3), which our own price constants do not
-  know, and a reminder quoting the wrong figure is worse than none.
+  subscription that will actually be charged. A subscriber renews at the price
+  on their own subscription, which our own price constants do not know, and a
+  reminder quoting the wrong figure is worse than none.
 - **It skips subscriptions already set to cancel.** They are ending, not
   renewing; telling that person we are about to charge them is a false
   statement about their money.

@@ -42,9 +42,9 @@ TERMS_VERSIONS = [
     # Monthly plans replace the one-time passes (owner decision, Oct 31 2026): §3-§5
     # and the liability figure. No buyer had ever paid, so no change notice was owed.
     # Then the same day, the pricing review: no renewal after Week 16's report, and
-    # new buyers' $49 beside the founding rate. No buyer had accepted any version,
-    # and a date can only move forward, so the digest was replaced, not appended.
-    ("2026-10-31", "7f1b40525fba82e8"),
+    # no founding rate or 2027 price. No buyer had accepted any version, and a date
+    # can only move forward, so the digest was replaced, not appended.
+    ("2026-10-31", "33112ce6ea3b7719"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")

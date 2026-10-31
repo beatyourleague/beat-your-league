@@ -1465,7 +1465,6 @@
         <li>Read your first weekly report before its games. Not for you? Full refund, no
         questions, until your first weekly report's week kicks off. One per person
         (<a href="terms.html#refunds">details</a>).</li>
-        <li>Founding rate: your 2027 season pass is $39. New buyers pay more.</li>
       </ul>
       <a class="btn gold" id="season-cta" href="#watch-form" data-to-capture>Tell me when it opens</a>
       <p class="soonnote" id="season-note">One email the morning checkout opens.</p>
@@ -1629,11 +1628,11 @@ const TRIAL_OPEN = false;
 // until its payment link is on the join page: SEASON_2027_READY must equal
 // Boolean(join's STRIPE_LINK_2027), and the join page carries the same flag.
 // While it is false no trace of the offer reaches the page: the card is built
-// by season2027Card() below, never shipped in the markup, so all that is
-// rendered about 2027 is the founding-rate line.
+// by season2027Card() below, never shipped in the markup, so no 2027 price is
+// rendered at all (owner decision, Oct 31 2026).
 const SEASON_2027_READY = false;
 const SEASON_2027_PRICE = 49;     // today, for this season and next
-const SEASON_2027_RENEWAL = 39;   // the founding rate, from the first renewal on
+const SEASON_2027_RENEWAL = 39;   // from the first renewal on
 const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by test
 // One verb on every buy button (sales review): the card adds its price.
 var PASS_LABEL = "Get my lineups — $14.99/mo";

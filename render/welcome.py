@@ -38,17 +38,15 @@ from run.delivery import Message
 # One test asserts these equal the landing page's own numbers.
 # 2026 prices (owner decision, Oct 31 2026): monthly plans that stop on their
 # own. The one-time passes are retired; PLAYOFF_PRICE words a purchase that was
-# never made. SEASON_PRICE is the founding full-season pass, from 2027, and
-# SEASON_NEW_BUYER_PRICE what anyone else pays for it (terms §3): without a
-# higher price beside it, "founding rate" would claim a discount from nothing.
+# never made. SEASON_PRICE is the working plan for 2027's full-season pass, one
+# price for everyone, and no page promises it (owner decision, Oct 31 2026).
 SEASON_PRICE = "$39"
-SEASON_NEW_BUYER_PRICE = "$49"
 PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$34.99"
 # The 2027 Season Pass (owner decision, Oct 30 2026): off until the lawyer has
 # seen it, and a test ties these to run/checkout's two cents figures. It renews
-# at the founding rate every other 2026 buyer has.
+# at the season pass's price.
 SEASON_2027_PRICE = "$49"
 SEASON_2027_RENEWAL = "$39"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on

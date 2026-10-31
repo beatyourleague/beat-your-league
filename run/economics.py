@@ -42,17 +42,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # What 2026 sells (owner decision, Oct 31 2026): monthly plans that don't renew
 # after Week 16's report. render/welcome.py's MONTHLY_PRICE and
 # PASS_PRICE are these (tests/test_economics.py ties them). SEASON is the
-# founding full-season pass from 2027, and LEAGUE_PASS the figure PLAN.md
+# planned full-season pass from 2027, and LEAGUE_PASS the figure PLAN.md
 # records for a yearly League Pass.
 MONTHLY = 14.99
 LEAGUE_MONTHLY = 34.99
 SEASON = 39.00
 SEASON_2027_PASS = 49.00    # this season and next, then renewing at SEASON
-# 2027's price for anyone who didn't buy in 2026 (owner decision, Oct 31 2026;
-# terms §3 promises it, which is what makes SEASON a founding rate at all).
-# Monthly has to move with it: three charges must still pass the pass.
-SEASON_NEW_BUYER = 49.00
-MONTHLY_2027 = 16.99
 LEAGUE_PASS = 99.00
 # Retired Oct 31 2026, before anything was sold. A one-time link has no Billing
 # fee; run/stats reads these so a price from one still gets a name.
@@ -90,7 +85,7 @@ SUBSTACK_CUT = 0.10
 # customers yet, so every one of these is a scenario to read across, never a
 # number to sell with.
 # A one-time 2026 pass does not renew: 2027 is a RE-BUY (a new purchase at the
-# founding $39), so these are re-buy rates, never renewal rates.
+# $39), so these are re-buy rates, never renewal rates.
 REBUY_RATES = (0.30, 0.50, 0.70)      # share of 2026 buyers who buy again in 2027
 RENEWAL_RATES = REBUY_RATES           # the name older callers use
 # The launch audit's base case for 2026: about 30 individual buyers and 2
@@ -300,7 +295,7 @@ def ltv(price: float, renewal: float) -> float:
 def rebuy_value(first: float, then: float, rate: float) -> float:
     """Net over two seasons for a 2026 buyer: the plan they bought
     (``first``, its net this season), plus — at re-buy rate ``rate`` — the 2027
-    plan ``then`` bought again at the founding price. A monthly plan stops with
+    plan ``then`` bought again at the season pass's price. A monthly plan stops with
     the season, so this is a second purchase, never a renewal."""
     return round(first + rate * net_per_sale(then), 2)
 
@@ -521,10 +516,6 @@ def summary_lines() -> list[tuple[str, str, str]]:
     rows.append(("2027: three monthly charges cost more than the season pass",
                  "PASS" if 3 * MONTHLY > SEASON else "FAIL",
                  f"3 × ${MONTHLY} = ${3 * MONTHLY:.2f} vs ${SEASON:.0f}"))
-    rows.append(("2027: new buyers' pass needs Monthly at its 2027 price",
-                 "PASS" if 3 * MONTHLY_2027 > SEASON_NEW_BUYER else "FAIL",
-                 f"3 × ${MONTHLY_2027} = ${3 * MONTHLY_2027:.2f} vs "
-                 f"${SEASON_NEW_BUYER:.0f}; ${MONTHLY} would be ${3 * MONTHLY:.2f}"))
     plans = " · ".join(
         f"{name} ${price}: Stripe ${stripe_fee(price):.2f} a charge, "
         f"${net_per_buyer(price):.2f} a buyer"

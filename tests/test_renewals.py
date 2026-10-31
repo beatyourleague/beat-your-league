@@ -108,7 +108,7 @@ def test_a_monthly_subscription_gets_no_annual_notice(stripe) -> None:
 
 
 def test_an_unreadable_price_or_address_is_reported_not_guessed(stripe) -> None:
-    """The amount is what will actually be charged. A founding subscriber
+    """The amount is what will actually be charged. A subscriber
     renews at the price they joined at, which our own constants do not know,
     so a reminder we cannot price is one we do not send."""
     no_price = _subscription()
@@ -123,7 +123,7 @@ def test_an_unreadable_price_or_address_is_reported_not_guessed(stripe) -> None:
 
 
 def test_the_amount_and_date_come_from_stripe_not_from_our_constants(stripe) -> None:
-    """A founding subscriber renewing at a locked rate must see THAT rate, on
+    """A subscriber renewing at an older rate must see THAT rate, on
     the date Stripe will actually charge it."""
     stripe["subs"] = [_subscription()]
     stripe["subs"][0]["items"]["data"][0]["price"]["unit_amount"] = 2900
