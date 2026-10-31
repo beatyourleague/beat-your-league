@@ -1388,7 +1388,7 @@
     <div class="faq">
       <details>
         <summary>Does it work with my league?</summary>
-        <div class="a">Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF.</div>
+        <div class="a">Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard, two FLEX, three WR or superflex lineups, with or without a K and DEF. <a href="dynasty/">Dynasty and keeper leagues</a> too.</div>
       </details>
       <details>
         <summary>Is it worth joining mid-season?</summary>
@@ -1433,7 +1433,7 @@
 </main>
 
 <footer>
-  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your app</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
+  <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your league</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a><a href="dynasty/">Dynasty</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
   <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
   Samples shown are real reports.
   NFL data: nflverse (nflverse-data), CC-BY-4.0. Projections are analysis, not guarantees.
@@ -1470,7 +1470,7 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
+        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard, two FLEX, three WR or superflex lineups, with or without a K and DEF. Dynasty and keeper leagues too."}},
         {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Playoff weeks are where one bad call ends a season. Your first report usually lands within the hour."}},
         {"@type": "Question", "name": "Why Wednesday, and what if news breaks later?", "acceptedAnswer": {"@type": "Answer", "text": "Waivers have cleared, so you can update your roster first, and you still have a day before Thursday's game. Every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. Confirm by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night (ET) for Saturday's check. Your roster is only used for your report and is never sold."}},
@@ -1501,7 +1501,7 @@ function carryVia(href, via) {
   const cut = href.indexOf("#");
   const base = cut < 0 ? href : href.slice(0, cut);
   const hash = cut < 0 ? "" : href.slice(cut);
-  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
+  const funnel = /^(?:\.\.\/)?(?:index\.html|join\/(?:index\.html)?|byes\/(?:index\.html)?|(?:espn|yahoo|sleeper|cbs|dynasty)\/(?:index\.html)?|this-week\.html|league-pass\.html|how-it-works\.html|sample-report\.html|sample-first-week\.html)(?:\?|$)/;
   if (!funnel.test(base) || /[?&]via=/.test(base)) return href;
   return base + (base.indexOf("?") < 0 ? "?" : "&") + "via=" + via + hash;
 }

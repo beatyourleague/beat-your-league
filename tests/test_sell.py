@@ -399,7 +399,7 @@ def test_the_closed_league_pass_leads_to_the_roster_check() -> None:
 
 SELLING = ("index.html", "join/index.html", "league-pass.html", "thanks.html", "how-it-works.html",
            "byes/index.html", "espn/index.html", "yahoo/index.html", "sleeper/index.html",
-           "cbs/index.html")
+           "cbs/index.html", "dynasty/index.html")
 CHEESE = (r"limited time", r"act now", r"\bhurry\b", r"don'?t miss", r"last chance", r"only \d+ (spots|left)",
           r"spots left", r"while supplies", r"\bexclusive\b", r"game[- ]chang", r"\bunbeatable\b",
           r"\brevolution", r"\bultimate\b", r"\binsane\b", r"\bguarantee[sd]? (you|a win)\b",

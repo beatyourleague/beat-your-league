@@ -71,6 +71,7 @@ NAV_PAGES = {
     "yahoo/index.html": ("../", None, None),
     "sleeper/index.html": ("../", None, None),
     "cbs/index.html": ("../", None, None),
+    "dynasty/index.html": ("../", None, None),
 }
 
 
@@ -411,7 +412,7 @@ def test_cards_are_radius_12_and_only_what_you_can_press_moves() -> None:
 
 PAPER_FULL_BLEED = ("how-it-works.html", "thanks.html", "404.html", "join/confirm.html",
                     "join/index.html", "byes/index.html", "espn/index.html", "yahoo/index.html",
-                    "sleeper/index.html", "cbs/index.html")
+                    "sleeper/index.html", "cbs/index.html", "dynasty/index.html")
 
 
 @pytest.mark.parametrize("name", PAPER_FULL_BLEED)

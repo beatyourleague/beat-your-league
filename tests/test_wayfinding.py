@@ -39,12 +39,12 @@ FOOTED = {
     "sample-report.html": "", "sample-first-week.html": "", "this-week.html": "",
     "404.html": "/", "join/index.html": "../", "byes/index.html": "../",
     "espn/index.html": "../", "yahoo/index.html": "../", "sleeper/index.html": "../",
-    "cbs/index.html": "../",
+    "cbs/index.html": "../", "dynasty/index.html": "../",
 }
 # Their next step, closed or open, goes to join/ under the site's label.
 NEXT_STEP = ("how-it-works.html", "sample-report.html", "sample-first-week.html",
              "this-week.html", "espn/index.html", "yahoo/index.html", "sleeper/index.html",
-             "cbs/index.html", "byes/index.html")
+             "cbs/index.html", "dynasty/index.html", "byes/index.html")
 
 
 def _page(name: str) -> str:
@@ -70,10 +70,10 @@ def test_every_selling_page_carries_the_one_footer_map(name: str, prefix: str) -
 def test_the_map_names_the_sites_routes_and_they_exist() -> None:
     block = rr.site_footer()
     heads = re.findall(r"<p>([^<]+)</p>", block)
-    assert heads == ["Product", "Free tools", "Your app", "About"]
+    assert heads == ["Product", "Free tools", "Your league", "About"]
     labels = [label for _href, label in re.findall(r'<a href="([^"]+)"[^>]*>([^<]+)</a>', block)]
     assert labels == ["How it works", "Sample report", "This week&#x27;s report", "League Pass",
-                      "Check my team", "Bye planner", "ESPN", "Yahoo", "Sleeper", "CBS",
+                      "Check my team", "Bye planner", "ESPN", "Yahoo", "Sleeper", "CBS", "Dynasty",
                       "Terms &amp; refunds", "Privacy", "Contact"]
     for href in re.findall(r'<a href="([^"]+)"', block):
         if href.startswith("mailto:"):

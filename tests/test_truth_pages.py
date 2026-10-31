@@ -31,7 +31,7 @@ SITE = ROOT / "site"
 
 PAGES = ("join/index.html", "join/confirm.html", "how-it-works.html", "thanks.html", "404.html",
          "byes/index.html", "league-pass.html", "espn/index.html", "yahoo/index.html",
-         "sleeper/index.html", "cbs/index.html")
+         "sleeper/index.html", "cbs/index.html", "dynasty/index.html")
 PAPER = tuple(p for p in PAGES if p != "league-pass.html")
 GOLDS = r"(?:--flag|--flag-deep|#F2C230|#D9A81B|#FFDA5E|#FFD75E|#F0B62A)"
 

@@ -1069,8 +1069,9 @@ def site_footer(prefix: str = "") -> str:
                      ("league-pass.html", SITE_NAV_LEAGUE_PASS, ""))),
         ("Free tools", (("join/index.html", CHECK_FOOT_LABEL, ""),
                         ("byes/", SITE_NAV_PLANNER, ""))),
-        ("Your app", (("espn/", "ESPN", ""), ("yahoo/", "Yahoo", ""),
-                      ("sleeper/", "Sleeper", ""), ("cbs/", "CBS", ""))),
+        ("Your league", (("espn/", "ESPN", ""), ("yahoo/", "Yahoo", ""),
+                         ("sleeper/", "Sleeper", ""), ("cbs/", "CBS", ""),
+                         ("dynasty/", "Dynasty", ""))),
         ("About", (("terms.html", "Terms & refunds", ""), ("privacy.html", "Privacy", ""))),
     )
     columns = []

@@ -72,7 +72,7 @@ SELLING = ("index.html", "join/index.html", "league-pass.html", "how-it-works.ht
            # The free bye-week planner (contract C7) hands a roster to join/,
            # and the four league-app pages (render/platforms.py) sell it too.
            "byes/index.html", "espn/index.html", "yahoo/index.html",
-           "sleeper/index.html", "cbs/index.html")
+           "sleeper/index.html", "cbs/index.html", "dynasty/index.html")
 # Every page whose browser behaviour matters, at phone and desktop width.
 BROWSER_PAGES = (
     ("index.html", (360, 390, 1280)), ("join/index.html", (390, 1280)),
@@ -84,6 +84,7 @@ BROWSER_PAGES = (
     ("thanks.html", (390,)), ("terms.html", (390,)), ("privacy.html", (390,)),
     ("compare/index.html", (390,)), ("404.html", (390,)),
     ("byes/index.html", (320, 390, 1280)), ("espn/index.html", (320, 390)),
+    ("dynasty/index.html", (320, 390)),
 )
 BANNED = r"\b(calibrated|tested|proven|accurate)\b"
 BETTING = r"\b(parlay|sportsbook|against the spread|bet now|odds boost|wager|bookmaker)\b"

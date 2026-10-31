@@ -1,7 +1,8 @@
-"""The league-app help pages — site/espn/, site/yahoo/, site/sleeper/, site/cbs/.
+"""The league-app help pages — site/espn/, site/yahoo/, site/sleeper/, site/cbs/ —
+and the dynasty page, site/dynasty/, which shares their design.
 
 Usage:
-    python -m render.platforms            # write the four pages
+    python -m render.platforms            # write the pages
     python -m render.platforms --check    # fail if any page is stale (the suite does)
 
 "espn start sit tool", "yahoo sit start suggestions" and "sleeper start sit"
@@ -107,6 +108,46 @@ PLATFORMS = (
                "Denver Broncos", "Jake Bates"),
         shape=""),
 )
+
+# Dynasty is a kind of league, not an app, so it is not in PLATFORMS: no copy
+# format of its own, and the app pages link to it. Everything it says is true
+# of the weekly report today (a 30-player superflex roster with no K or DEF
+# built a full report with odds, Oct 31 2026). It sells the season only: there
+# is no off-season report yet, and the page says so.
+DYNASTY = Platform(slug="dynasty", name="dynasty", lineup="", paste="", pastes=(),
+                   example=(), reads=(), shape="")
+DYNASTY_TITLE = "Dynasty fantasy football start/sit report for your roster — Beat Your League"
+DYNASTY_DESCRIPTION = ("Paste your dynasty or keeper roster, no login. Every Wednesday a report "
+                       "decides who starts from your whole roster, up to {limit} players, "
+                       "superflex lineups included.")
+DYNASTY_KICKER = "For dynasty and keeper leagues"
+DYNASTY_H1 = ("You built for next year.", "You still have to win this Sunday.")
+DYNASTY_LEDE = ("Paste your roster from any app, no login. Every Wednesday a report decides "
+                "who starts from your whole roster, deep bench included.")
+DYNASTY_DOES = ("every slot decided from your whole roster, up to {limit} players",
+                "each close call naming the bench player and the points gap",
+                "players getting more of the ball lately, yours first",
+                "an if/then for questionable starters",
+                "the Saturday check, only if Friday's injury report changes your lineup",
+                "every bye ahead checked through the playoffs")
+DYNASTY_ROOKIES = ("Rookies can start. Their odds wait until they have enough games on record, "
+                   "and the row says so.")
+DYNASTY_STEPS = ("Copy your roster from any app, or type each name into “Add a player”. "
+                 "Paste it into the roster box. Extra text rides along fine.",
+                 "More than {limit} players? Leave out your IR and taxi players.",
+                 "Pick your lineup: Superflex, Two FLEX, Three WR or Standard, with or without "
+                 "a K and a DEF.",
+                 "Pick your scoring and league size: full PPR, half PPR or standard, in a "
+                 "league of 8, 10, 12 or 14 teams.")
+DYNASTY_LIMIT_NOTE = "TE premium and six-point passing touchdowns aren't scored yet. Pick the closest."
+DYNASTY_DOESNT = ("It sets up this week's lineup. It doesn't value trades, rank rookies or help "
+                  "with your startup or rookie draft. It uses the same weekly model as every "
+                  "league, so it isn't tuned for dynasty. Reports run during the NFL season, "
+                  "not the off-season.")
+DYNASTY_NO_SYNC = ("It doesn't connect to your league or set your lineup there. You make the "
+                   "moves. Roster changed? Update it from the link in any report, or reply "
+                   "with it.")
+DYNASTY_LINK = "Dynasty or keeper league? See what you get"
 
 TITLE = "{name} fantasy football start/sit report for your roster — Beat Your League"
 DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login. Every Wednesday a "
@@ -378,6 +419,7 @@ def page(platform: Platform) -> str:
     <p class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></p>
     <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
     <p class="apps">Other league apps: {others}</p>
+    <p class="apps"><a href="../dynasty/">{esc(DYNASTY_LINK)}</a></p>
   </div>
 </main>
 <footer><div class="wrap">{site_footer("../")}
@@ -389,8 +431,86 @@ def page(platform: Platform) -> str:
     return with_counter(with_via_carry(body))
 
 
+def dynasty_page() -> str:
+    """What a dynasty manager gets from the weekly report, and what it isn't."""
+    from render.live_sample import with_via_carry
+    from run.refs import MAX_ROSTER
+    limit = MAX_ROSTER
+    desc = DYNASTY_DESCRIPTION.format(limit=limit)
+    steps = []
+    for i, step in enumerate(DYNASTY_STEPS):
+        text = esc(step.format(limit=limit))
+        if i == 0:
+            text = text.replace("the roster box",
+                                f'<a href="{join_href(DYNASTY)}">the roster box</a>', 1)
+        steps.append(f"<li>{text}</li>")
+    does = "".join(f"<li>{esc(item.format(limit=limit))}</li>" for item in DYNASTY_DOES)
+    apps = ", ".join(f'<a href="../{p.slug}/">{esc(p.name)}</a>' for p in PLATFORMS)
+    preloads = font_preloads().replace('href="fonts/', 'href="../fonts/')
+    style = STYLE.replace("@@SITEBAR@@", SITE_BAR_CSS + SITE_FOOTER_CSS)
+    body = f"""<!DOCTYPE html>
+<!-- GENERATED by `python -m render.platforms` from render/platforms.py's DYNASTY
+     words. Do not edit by hand: `python -m render.platforms --check` (and the
+     suite) fail when a page is stale. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{esc(DYNASTY_TITLE)}</title>
+<link rel="canonical" href="{url_for(DYNASTY)}">
+<meta name="description" content="{esc(desc)}">
+<meta property="og:title" content="{esc(DYNASTY_TITLE)}">
+<meta property="og:description" content="{esc(desc)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Beat Your League">
+{SOCIAL_IMAGE_TAGS}{FAVICON_LINK}
+{PAGE_META}{preloads}<link rel="stylesheet" href="../fonts/fonts.css">
+<style>{style}</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+  <div class="wrap">
+    {site_bar("../")}
+    <p class="kicker">{esc(DYNASTY_KICKER)}</p>
+    <h1>{"<br>".join(esc(line) for line in DYNASTY_H1)}</h1>
+    <p>{esc(DYNASTY_LEDE)}</p>
+    <div class="cta">{_ask(DYNASTY)}<span class="free"><a href="../sample-report.html">See a real report</a></span></div>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+    <h2><span class="n">01</span>What you get every Wednesday</h2>
+    <ul class="does">{does}</ul>
+    <p>{esc(DYNASTY_ROOKIES)}</p>
+
+    <h2><span class="n">02</span>Set it up for your league</h2>
+    <ol class="how">{"".join(steps)}</ol>
+    {_shapes(DYNASTY)}
+    <p class="note">{esc(DYNASTY_LIMIT_NOTE)}</p>
+
+    <h2><span class="n">03</span>What it doesn't do</h2>
+    <p>{esc(DYNASTY_DOESNT)}</p>
+    <p>{esc(DYNASTY_NO_SYNC)}</p>
+
+    <div class="cta">{_ask(DYNASTY)}<a class="btn ghost" href="../sample-report.html">See a real report</a></div>
+    <p><a href="../how-it-works.html">How the report works</a>, section by section.</p>
+    <p>Works with rosters from {apps} or any other app.</p>
+  </div>
+</main>
+<footer><div class="wrap">{site_footer("../")}
+  <b>Beat Your League</b> — analysis, not betting picks. Not affiliated with ESPN, Yahoo,
+  Sleeper or CBS. NFL data: nflverse (nflverse-data), CC-BY-4.0. Not affiliated with the NFL.</div></footer>
+</body>
+</html>
+"""
+    return with_counter(with_via_carry(body))
+
+
 def build(site: Path = SITE) -> dict[Path, str]:
-    return {path_for(p, site): page(p) for p in PLATFORMS}
+    pages = {path_for(p, site): page(p) for p in PLATFORMS}
+    pages[path_for(DYNASTY, site)] = dynasty_page()
+    return pages
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -406,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"STALE {path.relative_to(REPO_ROOT)} — run `python -m render.platforms`",
                   file=sys.stderr)
         if not stale:
-            print(f"{len(pages)} league-app pages are current.")
+            print(f"{len(pages)} league-app and dynasty pages are current.")
         return 1 if stale else 0
     for path, text in pages.items():
         path.parent.mkdir(parents=True, exist_ok=True)

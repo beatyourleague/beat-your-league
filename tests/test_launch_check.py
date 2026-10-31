@@ -812,7 +812,7 @@ def test_the_planner_and_league_app_pages_are_held_to_the_selling_rules() -> Non
     it), so the copy, accessibility and speed gates read them; the planner
     with a restored roster is an accessibility page of its own."""
     for page in ("byes/index.html", "espn/index.html", "yahoo/index.html",
-                 "sleeper/index.html", "cbs/index.html"):
+                 "sleeper/index.html", "cbs/index.html", "dynasty/index.html"):
         assert page in lc.SELLING and page in lc.A11Y_PAGES
     assert any(p.startswith("byes/index.html?ref=") for p in lc.A11Y_PAGES)
     assert ("byes/index.html", (320, 390, 1280)) in lc.BROWSER_PAGES
