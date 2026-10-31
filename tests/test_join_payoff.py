@@ -484,9 +484,13 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     # Only where pressing can save anything: a closed League Pass whose own
     # team's plan is open has nothing to keep, so it stays what it was.
     assert 'step3Action === "list" || step3Action === "mail"' in step
-    assert "Every lineup from now to your title game. " in flat
-    assert 'PLAYOFF_ACTIVE ? "$19" : "$29"' in step and '", one payment."' in step
-    assert "$69, one payment." in flat
+    # The line itself is valueWords now: the count and the per-lineup figure
+    # when the clock can say them, this sentence when it can't.
+    assert "value.textContent = valueWords();" in step
+    words = re.sub(r'"\s*\+\s*"', "", _function("valueWords"))
+    assert "Every lineup from now to your title game. $" in words
+    assert "const price = PLAYOFF_ACTIVE ? 19 : 29;" in words and '", one payment' in words
+    assert "$69, one payment." in words
     label = _function("closedLabel")
     assert '"Save my team and tell me when it opens"' in label
     assert '"Save my team by email"' in label, "the mail route saves nothing until it's sent"
@@ -507,7 +511,10 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
 
 
 def test_an_open_checkout_keeps_the_button_the_purchase() -> None:
-    assert '<button id="submit" type="submit">Continue to checkout — $29</button>' in JOIN
+    # "Unlock" once they have built something (owner brief, Oct 30 2026); the
+    # read-back's button is the one that says it leaves for checkout.
+    assert '<button id="submit" type="submit">Unlock my lineups — $29</button>' in JOIN
+    assert '<button type="button" id="check-yes">Continue to checkout — $29</button>' in JOIN
     assert "const SEASON_SUBMIT = $(\"submit\").textContent;" in JOIN
     # The open path through the handler is untouched by the panel.
     handler = JOIN.split('$("form-email").addEventListener')[1].split("\n});")[0]

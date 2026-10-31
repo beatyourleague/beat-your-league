@@ -350,7 +350,7 @@ def test_the_pass_card_promises_a_first_report_not_a_first_weekly_one() -> None:
         r'<script type="application/ld\+json">(.*?)</script>', LANDING, re.S).group(1))["@graph"]
         if n["@type"] == "Product")
     surfaces = {
-        "card": _flat(BODY.split('id="pass-span">')[1].split("</li>")[0]),
+        "card": _flat(BODY.split('id="pass-card"')[1].split("</ul>")[0]),
         "playoff swap": prose(_js_function(LANDING, "showPlayoffPass")),
         "JSON-LD": product["offers"][0]["description"],
     }

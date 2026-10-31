@@ -693,8 +693,9 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     sub = _flat(re.search(r'<p class="sub">(.*?)</p>', HERO, re.S).group(1))
     # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
     # their own app, and "sets your lineup" read as automation.
-    assert sub == ("Every Tuesday, one email decides your lineup for your roster, all the "
-                   "way to your title game.")
+    # Oct 30 2026: it opens on what a wrong call costs, then what the email does.
+    assert sub == ("One wrong call can cost you the week. Every Tuesday, one email decides "
+                   "your lineup for your team, through your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     # The comparison contrasts a rankings list with the report (Oct 25
     # 2026: the weakest answer was "why pay when rankings are free"), now

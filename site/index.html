@@ -127,7 +127,7 @@
   h1 em{font-style:italic;color:var(--navy);background:var(--flag);
     padding:0 14px 4px;display:inline-block;transform:rotate(-1.5deg);}
   h1 em span{display:inline-block;}
-  .sub{font-size:18px;line-height:1.55;color:var(--dusk2);max-width:48ch;}
+  .sub{font-size:18px;line-height:1.55;color:var(--dusk2);max-width:48ch;text-wrap:pretty;}
   .watchform{display:flex;gap:10px;margin-top:26px;max-width:460px;}
   .watchform input{flex:1;min-width:0;height:48px;padding:0 14px;font:inherit;font-size:16px;
     background:rgba(255,255,255,.06);border:1px solid rgba(246,244,238,.28);
@@ -821,14 +821,16 @@
   @media (min-width:881px){
     .plans.one{grid-template-columns:minmax(0,1fr);}
     .plans.one .plan.founder{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
-      grid-template-rows:auto auto 1fr auto auto auto;column-gap:48px;align-items:start;}
+      grid-template-rows:auto auto auto auto 1fr auto auto auto;column-gap:48px;align-items:start;}
     .plans.one .plan.founder > *{grid-column:1;}
     .plans.one .plan.founder > .head{grid-row:1;}
     .plans.one .plan.founder > .price{grid-row:2;}
-    .plans.one .plan.founder > .btn{grid-row:4;margin-top:24px;}
-    .plans.one .plan.founder > .soonnote{grid-row:5;}
-    .plans.one .plan.founder > .cardlink{grid-row:6;justify-self:center;}
-    .plans.one .plan.founder > ul{grid-column:2;grid-row:1 / 7;margin:0;align-self:center;
+    .plans.one .plan.founder > .passlead{grid-row:3;}
+    .plans.one .plan.founder > .passclock{grid-row:4;}
+    .plans.one .plan.founder > .btn{grid-row:6;margin-top:24px;}
+    .plans.one .plan.founder > .soonnote{grid-row:7;}
+    .plans.one .plan.founder > .cardlink{grid-row:8;justify-self:center;}
+    .plans.one .plan.founder > ul{grid-column:2;grid-row:1 / 9;margin:0;align-self:center;
       padding-left:48px;border-left:1px solid var(--line);}
   }
   .plan.founder{border:1px solid rgba(242,194,48,.55);}
@@ -843,6 +845,20 @@
   .price{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;margin-top:8px;
     font-variant-numeric:tabular-nums;}
   .price small{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--slate);}
+  /* Under the price: what it buys, then what that comes to. The season clock
+     writes the second line; what ships in the markup is true with no script,
+     and it goes when no lineups are left. */
+  .plan .passlead{margin-top:12px;font-size:19px;font-weight:700;line-height:1.3;
+    text-wrap:balance;}
+  .plan .passclock{margin-top:6px;font-size:15px;line-height:1.45;color:var(--ink2);
+    text-wrap:pretty;}
+  .plan .passclock b{color:var(--navy);font-weight:800;}
+  .plan .passclock[hidden]{display:none;}
+  /* The renewal beside the price, the same size as the rest of the card:
+     only the 2027 pass renews, and that may never be small print. */
+  .plan .passterms{margin-top:10px;font-size:15px;font-weight:600;line-height:1.45;
+    color:var(--navy);}
+  .plan .btn.ghost{color:var(--navy);border-color:var(--navy);}
   .plan ul{list-style:none;display:grid;gap:8px;margin:16px 0 24px;font-size:15px;
     line-height:1.5;color:var(--ink2);}
   /* The hero's own check, not the browser's disc (review D6). */
@@ -1264,8 +1280,8 @@
     <h1>Know who <em><span>to start.</span></em></h1>
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
-    <p class="sub">Every Tuesday, one email decides your lineup for your roster, all the way
-    to your title game.</p>
+    <p class="sub">One wrong call can cost you the week. Every Tuesday, one email decides your
+    lineup for your team, through your title game.</p>
     <ul class="creds" aria-label="Works with">
       <li><span><a href="espn/">ESPN</a>, <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a>,
       <a href="cbs/">CBS</a>: paste your roster, no login</span></li>
@@ -1398,17 +1414,15 @@
       <a href="sample-report.html">read it all</a></figcaption>
     </figure>
     <ol class="callouts">
-      <li class="on-phone" data-pin="01"><h3>Your lineup, decided</h3><p>Every slot, under
-        your scoring, QB to DEF. Rows without odds say why.</p></li>
+      <li class="on-phone" data-pin="01"><h3>Your lineup, decided</h3><p>Every spot, QB to
+        DEF, under your scoring.</p></li>
       <li class="on-phone" data-pin="02"><h3>The week's closest call</h3><p>The % is the chance
         your starter outscores your best bench player at that spot, printed only where both
         players are playing, off the injury report and have enough games on record (never on
         team defenses).</p></li>
-      <li data-pin="03"><h3>Your game plan</h3><p>What to change and check, and by
-        when.</p></li>
-      <li data-pin="04"><h3>If/then for gameday</h3><p>A plan for every questionable
-        starter. If Friday's injury report changes your lineup, the Saturday check brings the
-        swap.</p></li>
+      <li data-pin="03"><h3>Your game plan</h3><p>What to change, and by when.</p></li>
+      <li data-pin="04"><h3>If/then for gameday</h3><p>A plan for every questionable starter,
+        and a Saturday email if Friday's injury report changes your lineup.</p></li>
       <li class="off-pic"><h3>Byes ahead</h3><p>Any week a bye empties a starting
         spot, through your title game.
         <a class="go" href="byes/" data-planner>Check yours free</a></p></li>
@@ -1444,14 +1458,16 @@
     <div class="plan founder" id="pass-card">
       <div class="head"><div class="tag" id="pass-tag">Rest-of-Season Pass · 2026</div><span class="stamp50">One payment</span></div>
       <div class="price" id="pass-price">$29 <small>/ rest of season</small></div>
+      <p class="passlead" id="pass-lead">Every lineup through your title game.</p>
+      <p class="passclock" id="pass-clock">A new lineup decided every Tuesday.</p>
       <ul>
-        <li id="pass-span">Your lineup every Tuesday through your title game. Your first
-        report usually lands within the hour.</li>
         <li>One payment. Nothing renews, nothing to cancel
-        (<a href="terms.html#cancel">how it ends</a>)</li>
-        <li>Full refund, no questions, until your first weekly report's week kicks off.
-        One per person (<a href="terms.html#refunds">details</a>).</li>
-        <li>Founding rate: your 2027 season pass is $39</li>
+        (<a href="terms.html#cancel">how it ends</a>).</li>
+        <li>Your first report usually lands within the hour.</li>
+        <li>Read your first weekly report before its games. Not for you? Full refund, no
+        questions, until your first weekly report's week kicks off. One per person
+        (<a href="terms.html#refunds">details</a>).</li>
+        <li>Founding rate: your 2027 season pass is $39.</li>
       </ul>
       <a class="btn gold" id="season-cta" href="#watch-form" data-to-capture>Tell me when it opens</a>
       <p class="soonnote" id="season-note">One email the morning checkout opens.</p>
@@ -1474,19 +1490,19 @@
     <div class="faq">
       <details>
         <summary>Does it work with my league?</summary>
-        <div class="a">Yes: ESPN, Yahoo, Sleeper, CBS or any app. Paste your roster, no login. Full PPR, half-PPR or standard (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF.</div>
+        <div class="a">Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF.</div>
       </details>
       <details>
         <summary>Is it worth joining mid-season?</summary>
-        <div class="a">Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and the Saturday check catches Friday's injury news.</div>
+        <div class="a">Yes. It's built for the playoff push. Your first report usually lands within the hour, and every report checks the byes ahead, playoff weeks included.</div>
       </details>
       <details>
         <summary>What if news breaks after Tuesday?</summary>
-        <div class="a">Your report already plans for it: every questionable starter comes with an if/then and the backup who can still play in time. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email.</div>
+        <div class="a">Your report already plans for it: every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email.</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after. Your roster is used only to build your report and is never sold.</div>
+        <div class="a">Update it from the link in any report, or reply with it. Confirm by Friday night (ET) and that Saturday's check uses it. Your roster is used only to build your report and is never sold.</div>
       </details>
       <details>
         <summary>Can I check how it decides?</summary>
@@ -1550,16 +1566,16 @@
       "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds only where both players are playing, off the injury report and have enough games on record (never on team defenses), and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "29", "priceCurrency": "USD",
-         "description": "Rest-of-Season Pass: one payment, no subscription. Every weekly report from now through your title game. Your first report usually lands within the hour. No-questions refund until your first weekly report's week kicks off."}
+         "description": "Rest-of-Season Pass: one payment, no subscription. Every lineup through your title game. Your first report usually lands within the hour. No-questions refund until your first weekly report's week kicks off."}
       ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
-        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes: ESPN, Yahoo, Sleeper, CBS or any app. Paste your roster, no login. Full PPR, half-PPR or standard (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
-        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Your first report usually lands within the hour, every report checks the byes ahead, playoff weeks included, and the Saturday check catches Friday's injury news."}},
-        {"@type": "Question", "name": "What if news breaks after Tuesday?", "acceptedAnswer": {"@type": "Answer", "text": "Your report already plans for it: every questionable starter comes with an if/then and the backup who can still play in time. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email."}},
-        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. A change confirmed by Friday night (ET) is in that Saturday's check and every report after. Your roster is used only to build your report and is never sold."}},
+        {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
+        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Your first report usually lands within the hour, and every report checks the byes ahead, playoff weeks included."}},
+        {"@type": "Question", "name": "What if news breaks after Tuesday?", "acceptedAnswer": {"@type": "Answer", "text": "Your report already plans for it: every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email."}},
+        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. Confirm by Friday night (ET) and that Saturday's check uses it. Your roster is used only to build your report and is never sold."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection behind it and the player's recent games. Each report after your first also lists the calls with odds from the one before it, and how each one finished. How it works has the detail."}}
       ]
     }
@@ -1618,10 +1634,39 @@ const TRIAL_OPEN = false;
 // check), so this page never shows a price the join page can't charge.
 const PLAYOFF_PASS_READY = false;
 const PLAYOFF_FROM_WEEK = 13;
+// The 2027 Season Pass: all of 2027 with the rest of this season included. Off
+// until its payment link is on the join page: SEASON_2027_READY must equal
+// Boolean(join's STRIPE_LINK_2027), and the join page carries the same flag.
+// While it is false no trace of the offer reaches the page: the card is built
+// by season2027Card() below, never shipped in the markup, so all that is
+// rendered about 2027 is the founding-rate line.
+const SEASON_2027_READY = false;
+const SEASON_2027_PRICE = 39;
 // One verb on every buy button (sales review): the card adds its price.
 var PASS_LABEL = "Get my lineups — $29";
+// The price on offer right now, in dollars: the first card's, the Playoff
+// Pass's once it swaps in. Everything worked out from a price starts here.
+var PASS_AMOUNT = 29;
+// What a pass comes to per lineup, in whole cents. Used on the price card and
+// the join page's step 3 only (owner decision, Oct 30 2026): never the hero.
+// The join page's perLineup is this function, character for character.
+function perLineup(price, lineups) {
+  if (!Number.isInteger(lineups) || lineups < 1 || !(price > 0)) return "";
+  return "$" + (Math.round(price * 100 / lineups) / 100).toFixed(2) + " a lineup";
+}
+// The count a buyer gets, and when it drops. It drops when the buyer's first
+// week kicks off: until then they still get that week's report, so "next
+// Tuesday" would be two days early (a report that goes out on Tuesday can
+// still be bought until Thursday night's game).
+function lineupsLeft(next, left) {
+  if (!Number.isInteger(left) || left < 1) return "";
+  if (left === 1) return "1 lineup left to a Week 17 title game.";
+  return left + " lineups left to a Week 17 title game. After Week " + next +
+    " kicks off, " + (left - 1) + ".";
+}
 function showPlayoffPass(week) {
   PASS_LABEL = "Get my lineups — $19";
+  PASS_AMOUNT = 19;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
   set("pass-tag", "Playoff Pass · 2026");
   const price = document.getElementById("pass-price");
@@ -1631,8 +1676,7 @@ function showPlayoffPass(week) {
     small.textContent = "/ rest of season";
     price.appendChild(small);
   }
-  set("pass-span", "Your lineup every Tuesday from Week " + week + " through your " +
-      "title game. Your first report usually lands within the hour.");
+  set("pass-lead", "Every lineup from Week " + week + " through your title game.");
   // Only the BUY button takes the price: the closed state is a link too now
   // (a real button to the email capture), and must keep saying what it does.
   const cta = document.getElementById("season-cta");
@@ -1646,10 +1690,81 @@ function showPlayoffPass(week) {
       if (offer.price !== "29") return;
       offer.price = "19";
       offer.description = "Playoff Pass: one payment, no subscription. Every " +
-        "weekly report from Week " + week + " through your title game. Your first " +
+        "lineup from Week " + week + " through your title game. Your first " +
         "report usually lands within the hour. No-questions refund " +
         "until your first weekly report's week kicks off.";
     }));
+    ld.textContent = JSON.stringify(data);
+  } catch (e) { /* unreadable structured data: the visible page is still right */ }
+  if (document.getElementById("pass-2027")) season2027Lines();
+}
+// The offer as two facts about the price on the card beside it, worked out
+// from that price: what the step up costs, and what it saves against buying
+// the pass now and the 2027 pass after (the pass's own price, whichever is on
+// offer: $29 + $39 is $68, $19 + $39 is $58).
+function season2027Words(price) {
+  return { more: "$" + (SEASON_2027_PRICE - price) + " more gets you all of next season.",
+           saved: "Saved: $" + price + " against buying both." };
+}
+function season2027Lines() {
+  const line = document.getElementById("pass-2027-more");
+  if (!line) return;
+  const words = season2027Words(PASS_AMOUNT);
+  const more = document.createElement("b");
+  more.textContent = words.more;
+  line.replaceChildren(more, document.createTextNode(" " + words.saved));
+}
+// Two cards, the 2027 pass the preferred one. Text nodes only, and the renewal
+// terms directly under the price at full size. Its button carries ?plan=2027
+// so join opens on it; the $29 button carries ?plan=season so a buyer who chose
+// the cheaper card never lands on the dearer one.
+function season2027Card() {
+  const first = document.getElementById("pass-card");
+  if (!first) return;
+  const plans = first.parentNode;
+  const part = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  };
+  const card = part("div", "plan founder");
+  card.id = "pass-2027";
+  const head = part("div", "head");
+  head.append(part("div", "tag", "2027 Season Pass"), part("span", "stamp50", "This season included"));
+  const price = part("div", "price", "$" + SEASON_2027_PRICE + " ");
+  price.appendChild(part("small", "", "/ year"));
+  const list = part("ul");
+  ["Your first report usually lands within the hour.",
+   "Read your first weekly report before its games. Not for you? Full refund, no " +
+   "questions, until your first weekly report's week kicks off. One per person."]
+    .forEach((text) => list.appendChild(part("li", "", text)));
+  const buy = part("a", "btn gold", "Get my lineups — $" + SEASON_2027_PRICE);
+  buy.id = "season-2027-cta";
+  buy.href = CHECKOUT_OPEN ? "join/index.html?plan=2027" : "#watch-form";
+  if (!CHECKOUT_OPEN) buy.textContent = "Tell me when it opens";
+  const more = part("p", "passclock");
+  more.id = "pass-2027-more";
+  card.append(head, price,
+    part("p", "passterms", "Renews each August at $" + SEASON_2027_PRICE +
+         ". Cancel any time. We email you before it bills."),
+    part("p", "passlead", "All of 2027, with the rest of this season included."),
+    more, list, buy);
+  first.classList.remove("founder");
+  plans.classList.remove("one");
+  plans.appendChild(card);
+  season2027Lines();
+  // The structured data follows the page, as the Playoff Pass does.
+  try {
+    const ld = document.querySelector('script[type="application/ld+json"]');
+    const data = JSON.parse(ld.textContent);
+    (data["@graph"] || []).forEach((node) => {
+      if (!node.offers) return;
+      node.offers.push({ "@type": "Offer", price: String(SEASON_2027_PRICE), priceCurrency: "USD",
+        description: "2027 Season Pass: all of 2027, with the rest of this season included. " +
+          "Renews each August at $" + SEASON_2027_PRICE + ". Cancel any time. We email you " +
+          "before it bills." });
+    });
     ld.textContent = JSON.stringify(data);
   } catch (e) { /* unreadable structured data: the visible page is still right */ }
 }
@@ -1796,7 +1911,7 @@ if (CHECKOUT_OPEN) {
     risk.className = "riskline";
     risk.id = "risk-line";
     risk.textContent = "Full refund, no questions, until your first weekly report's " +
-      "week kicks off. One payment, nothing renews.";
+      "week kicks off." + (SEASON_2027_READY ? "" : " One payment, nothing renews.");
     heroRow.after(risk);
   }
   const nav = document.getElementById("nav-cta");
@@ -1813,6 +1928,12 @@ if (CHECKOUT_OPEN) {
     link.id = "season-cta";
     link.setAttribute("data-buy", "");
     link.textContent = PASS_LABEL;
+    // Two cards: the button goes to the plan it names, and the 2027 card holds
+    // the one gold button.
+    if (SEASON_2027_READY) {
+      link.href = "join/index.html?plan=season";
+      link.className = "btn ghost";
+    }
     season.replaceWith(link);
   }
   // The closed button's caption ("one email the morning checkout opens")
@@ -1892,7 +2013,8 @@ if (CHECKOUT_OPEN) {
       // The League Pass has its own section right below, so this line no
       // longer pitches it a second time (review BUYER-4).
       finance.textContent = "Payment runs on Stripe's own page. Your roster " +
-        "and scoring ride into checkout with you. One payment, nothing renews.";
+        "and scoring ride into checkout with you." +
+        (SEASON_2027_READY ? "" : " One payment, nothing renews.");
       finance.hidden = false;
     }
   } else {
@@ -1947,10 +2069,14 @@ function closeForSeason(line) {
   }
   const watchLabel = document.getElementById("watch-label");
   if (watchLabel) watchLabel.textContent = "One email when checkout opens, nothing else.";
-  ["try-cta", "risk-line", "hero-promise", "closer-cta"].forEach((id) => {
+  // pass-clock: no lineup is left to count, and its fallback line says a new
+  // one is coming. The 2027 card leaves with checkout.
+  ["try-cta", "risk-line", "hero-promise", "closer-cta", "pass-clock"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
+  const next2027 = document.getElementById("pass-2027");
+  if (next2027) next2027.remove();
   [["hero-open", "Tell me when it opens"], ["sticky-cta", "Tell me when it opens"],
    ["nav-cta", "Notify me"]].forEach(([id, label]) => {
     const el = document.getElementById(id);
@@ -1964,6 +2090,8 @@ function closeForSeason(line) {
   const clock = document.getElementById("season-clock");
   if (clock) clock.textContent = line;
 }
+
+if (SEASON_2027_READY) season2027Card();
 
 // AFTER every href this script writes: the open state's CTAs are rewritten or
 // built above, and a tag that skipped them dropped exactly the visitors who
@@ -2407,6 +2535,23 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           }
         }
         if (!shows) return;
+        // The price card's value line (owner decision, Oct 30 2026), in a live
+        // season week only: the count to a Week 17 title game and the price on
+        // offer divided by it. Past Week 17's kickoff there is no count to
+        // give, so the line goes; a stale or missing file leaves the card's
+        // generic sentence.
+        const passClock = document.getElementById("pass-clock");
+        if (passClock && phase === "season") {
+          const lineups = 17 - next + 1;
+          const count = lineupsLeft(next, lineups);
+          if (count) {
+            const figure = document.createElement("b");
+            figure.textContent = perLineup(PASS_AMOUNT, lineups) + ".";
+            passClock.replaceChildren(figure, document.createTextNode(" " + count));
+          } else {
+            passClock.hidden = true;
+          }
+        }
         // On a Tuesday after that day's report went out, the next one is a
         // week away: "lands Tuesday" would read as today.
         const when = buyerToday || today ? "today." : now.getDay() === 2 ? "next Tuesday." : "Tuesday.";

@@ -696,9 +696,9 @@ Baltimore Ravens
       we send it late). One per person, and a second purchase after a refund is final.</p>
       <p class="terms-line" id="mail-line" hidden></p>
       <p class="terms-line" id="list-line" hidden></p>
-      <button id="submit" type="submit">Continue to checkout — $29</button>
+      <button id="submit" type="submit">Unlock my lineups — $29</button>
       <a class="see-real" id="see-real" href="../sample-report.html" hidden>See a real report</a>
-      <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe — we never see your card</div>
+      <div class="secure"><svg viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="6" width="10" height="7.5" rx="1.5" fill="currentColor"/><path d="M3.3 6V4.2a2.7 2.7 0 0 1 5.4 0V6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Secure checkout on Stripe. We never see your card.</div>
       <!-- The address, read back before it is locked at Stripe
            (locked_prefilled_email) — a typo there was a paid pass and an
            empty inbox, found by nobody (critique #1). Filled as text only. -->
@@ -707,7 +707,7 @@ Baltimore Ravens
         <p id="check-fix" hidden>Did you mean <b id="check-suggest"></b>?</p>
         <div class="checkbtns">
           <button type="button" class="addr" id="check-use" hidden></button>
-          <button type="button" id="check-yes">Yes, continue to checkout</button>
+          <button type="button" id="check-yes">Continue to checkout — $29</button>
           <button type="button" class="alt" id="check-edit">Edit</button>
         </div>
       </div>
@@ -756,8 +756,8 @@ Baltimore Ravens
         until your first weekly report's week kicks off (or a week after it reaches
         you, if we send it late). One per person, and a
         second purchase after a refund is final.
-        Nothing to cancel: your pass is one payment and
-        <a href="../terms.html#cancel">ends on its own</a> after the season's last report.</li>
+        <span id="first-tail">Nothing to cancel: your pass is one payment and
+        <a href="../terms.html#cancel">ends on its own</a> after the season's last report.</span></li>
       </ol>
     </div>
   </section>
@@ -778,7 +778,7 @@ Baltimore Ravens
     <span>Full refund, no questions, until your first weekly report's week kicks off
       (or a week after it reaches you, if we send it late). One per person (one per
       league for a League Pass)</span>
-    <span>One payment. Nothing renews, nothing to cancel</span>
+    <span id="side-renew">One payment. Nothing renews, nothing to cancel</span>
     <span>No league login, no password</span>
   </div>
 </aside>
@@ -857,6 +857,13 @@ const STRIPE_LINK_PASS = "";  // $69 League Pass, rest of season, one payment
 const STRIPE_LINK_PLAYOFF = "";  // $19 Playoff Pass, one payment
 const PLAYOFF_FROM_WEEK = 13;
 const MONTHLY_OFFERED = false;
+// The 2027 Season Pass: all of 2027 with the rest of this season included,
+// renewing each August. The same switch as the landing's SEASON_2027_READY, and
+// it goes on only with STRIPE_LINK_2027 (launch check). Off, nothing on this
+// page knows about it: ?plan=2027 is an ordinary visit. The ref stays "s" either
+// way, because the plan comes from the link that took the money (run/intake.py).
+const STRIPE_LINK_2027 = "";  // $39 2027 Season Pass, renews yearly
+const SEASON_2027_READY = false;
 
 // League Pass SEATS only. A seat holder pays nothing, so there is no payment to
 // carry their picks — the one path that still needs a form backend. PLAN §0
@@ -965,6 +972,12 @@ const SEAT_LINK_MISSING = SEAT_MODE && !PASS_TOKEN;
 // the hero used to see only the $39 season pass, with monthly reachable only
 // from the landing's other card. The submit handler reads this, never the URL.
 let monthlyChosen = WANTS_MONTHLY;
+// With the 2027 pass on sale a buyer chooses between it and the pass: it starts
+// selected unless their link named the cheaper card (?plan=season), so a click
+// on $29 never lands on $39. Only a purchase has this choice.
+const PLAN_CHOICE = SEASON_2027_READY && !WANTS_PASS && !WANTS_MONTHLY && !SEAT_MODE &&
+  !QUERY.has("update") && QUERY.get("try") !== "1";
+let chose2027 = PLAN_CHOICE && QUERY.get("plan") !== "season";
 
 // Say checkout is closed BEFORE someone pastes fifteen names, not after. The
 // end-of-flow message stays (nothing is saved and the page must say so), but
@@ -979,7 +992,8 @@ let monthlyChosen = WANTS_MONTHLY;
 // that nothing had been saved. Exactly the disappointment this note exists to
 // move earlier.
 const PLAN_LINK = WANTS_PASS ? PASS_LINK
-                : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY : STRIPE_LINK_SEASON;
+                : WANTS_MONTHLY ? STRIPE_LINK_MONTHLY
+                : chose2027 ? STRIPE_LINK_2027 : STRIPE_LINK_SEASON;
 if (!PLAN_LINK) {
   const note = document.getElementById("closed-note");
   // A seat holder is not buying anything, so a payment link has no bearing on
@@ -1737,8 +1751,8 @@ function lockedPreview(index, players, slots, out) {
     card.appendChild(line);
   });
   card.appendChild(panelNode("p", "pf-lockline", WANTS_PASS
-    ? "Locked until you join. Each manager's report fills this in for their own team, every Tuesday."
-    : "Locked until you join. Your report fills this in every Tuesday: who starts at every spot, with the close calls explained."));
+    ? "Locked. Each manager's report fills this in for their own team, every Tuesday."
+    : "Locked. Your report fills this in every Tuesday: who starts, and why."));
   block.appendChild(card);
   return block;
 }
@@ -1885,6 +1899,9 @@ function keepInAddress() {
   // The ref carries the plan, so a stale ?plan= beside it is dropped rather
   // than left to disagree with it (FUNNEL F8).
   if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) params.delete("plan");
+  // Both passes write the same "s" ref, so a choice between them is the one
+  // thing the ref can't bring back.
+  if (PLAN_CHOICE) params.set("plan", chose2027 ? "2027" : "season");
   history.replaceState(null, "", location.pathname + "?" + params.toString() + location.hash);
 }
 
@@ -2223,12 +2240,20 @@ function askAboutEmail(email, go) {
   $("check-suggest").textContent = fix;
   $("check-use").hidden = !fix;
   $("check-use").textContent = fix ? "Use " + fix : "";
-  $("check-yes").textContent = go ? "Yes, continue to checkout" : "Keep " + email;
+  $("check-yes").textContent = go ? checkoutWords() : "Keep " + email;
   // One gold button: the suggestion when there is one, otherwise the yes.
   $("check-yes").classList.toggle("alt", Boolean(fix));
   $("check-yes").classList.toggle("addr", !go);
   $("check-email").hidden = false;
   (fix ? $("check-use") : $("check-yes")).focus();
+}
+// The last press before Stripe: it says it leaves for checkout, and for how
+// much. The button before it says what the buyer gets.
+function checkoutWords() {
+  return WANTS_PASS ? "Continue to checkout — $69"
+       : monthlyChosen ? "Continue to checkout — $14.99/mo"
+       : chose2027 ? "Continue to checkout — $39"
+       : PLAYOFF_ACTIVE ? "Continue to checkout — $19" : "Continue to checkout — $29";
 }
 function closeEmailCheck() {
   $("check-email").hidden = true;
@@ -2447,7 +2472,9 @@ var MONTHLY_PAUSED = false;
 function monthlyLink() { return MONTHLY_PAUSED || !MONTHLY_OFFERED ? "" : STRIPE_LINK_MONTHLY; }
 // The season plan's link: the Playoff Pass once it applies (week.json).
 var PLAYOFF_ACTIVE = false;
-function seasonLink() { return PLAYOFF_ACTIVE ? STRIPE_LINK_PLAYOFF : STRIPE_LINK_SEASON; }
+function seasonLink() {
+  return chose2027 ? STRIPE_LINK_2027 : PLAYOFF_ACTIVE ? STRIPE_LINK_PLAYOFF : STRIPE_LINK_SEASON;
+}
 function firstReportTiming(w, now) {
   if (!w || !Number.isInteger(w.week) || typeof w.first_kickoff !== "string") return null;
   const kickoff = new Date(w.first_kickoff);
@@ -2533,6 +2560,7 @@ function closedChipText() {
   if (FIRST && FIRST.when === "over") return "Back next season";
   if (SEAT_MODE) return "Seats open soon";
   if (WANTS_PASS) return "League Pass opens soon";
+  if (chose2027) return "2027 Season Pass opens soon";
   return monthlyChosen ? "Monthly opens soon" : "Rest-of-Season Pass opens soon";
 }
 function drawFirst() {
@@ -2583,7 +2611,7 @@ function fillRenewalDates() {
 // Kept as node copies (never markup strings) so switching back restores it
 // exactly, including the bold price in the pitch.
 const SEASON_STATE = {};
-["header-pitch", "terms-line", "renew-note"].forEach((id) => {
+["header-pitch", "terms-line", "renew-note", "first-tail", "side-renew"].forEach((id) => {
   SEASON_STATE[id] = [...$(id).childNodes].map((n) => n.cloneNode(true));
 });
 const SEASON_SUBMIT = $("submit").textContent;
@@ -2649,6 +2677,28 @@ function closedLabel(action) {
   }
   return closedChipText();
 }
+// What a pass comes to per lineup, in whole cents: the landing's function,
+// character for character (tests/test_sell.py). On the price card and this
+// step only (owner decision, Oct 30 2026).
+function perLineup(price, lineups) {
+  if (!Number.isInteger(lineups) || lineups < 1 || !(price > 0)) return "";
+  return "$" + (Math.round(price * 100 / lineups) / 100).toFixed(2) + " a lineup";
+}
+// The line over the step: what the price buys, with the count and the figure
+// once week.json can say them. The price is the one this button charges, so
+// the Playoff Pass divides 19. The landing's season clock counts the same way.
+function valueWords() {
+  if (WANTS_PASS) {
+    return "Your whole league, every lineup from now to the title game. $69, one payment.";
+  }
+  if (chose2027) return "All of 2027, with the rest of this season included. $39, renews each August.";
+  const price = PLAYOFF_ACTIVE ? 19 : 29;
+  const ahead = lineupsAhead(state.week, new Date(), canStartToday());
+  const each = ahead ? perLineup(price, ahead.left) : "";
+  if (!each) return "Every lineup from now to your title game. $" + price + ", one payment.";
+  return ahead.left + (ahead.left === 1 ? " lineup" : " lineups") + " left to a Week 17 " +
+    "title game. $" + price + ", one payment: " + each + ".";
+}
 // Step 3 leads with what they get, and while checkout is closed it is a next
 // step, not a refusal: "Save your team". ``step3Action`` is closedAction's for
 // the plan on screen, or "open"; only "list" and "mail" can save anything.
@@ -2656,16 +2706,13 @@ let step3Action = "open";
 function drawStep3() {
   if (SEAT_MODE || UPDATE_MODE || TRY_MODE) return;
   const saves = !seasonOver() && (step3Action === "list" || step3Action === "mail");
-  if (!MONTHLY_OFFERED) {
+  if (!MONTHLY_OFFERED && !PLAN_CHOICE) {
     const name = saves ? "3 · Save your team" : "3 · Checkout";
     $("step3-head").textContent = name;
     document.querySelector(".progress .s3").textContent = name;
   }
   const value = $("value-line");
-  value.textContent = WANTS_PASS
-    ? "Your whole league, every lineup from now to the title game. $69, one payment."
-    : "Every lineup from now to your title game. " +
-      (PLAYOFF_ACTIVE ? "$19" : "$29") + ", one payment.";
+  value.textContent = valueWords();
   value.hidden = seasonOver() || monthlyChosen;
   $("see-real").hidden = step3Action === "open";
 }
@@ -2786,6 +2833,49 @@ function seasonPlan() {
   });
   $("submit").textContent = SEASON_SUBMIT;
   fillRenewalDates();
+  if (PLAYOFF_ACTIVE) drawPlayoffPass();
+  drawFirst();
+  noteClosedFor(seasonLink(), monthlyLink());
+}
+
+// The Playoff Pass's own words, over the season pass's.
+let playoffWeek = 0;
+function drawPlayoffPass() {
+  const terms = "The Playoff Pass is $19, one payment: nothing renews and " +
+    "nothing more is charged. Refunds are no-questions until your first " +
+    "weekly report's week kicks off (or a week after it reaches you, if " +
+    "we send it late). One per person.";
+  $("terms-line").textContent = terms;
+  $("renew-note").textContent = terms;
+  $("submit").textContent = "Unlock my lineups — $19";
+  $("header-pitch").textContent = "Every lineup from Week " + playoffWeek +
+    " to your title game, decided for your roster and in your inbox every " +
+    "Tuesday. $19 for the Playoff Pass: one payment, no subscription, and a " +
+    "full refund until your first weekly report's week kicks off.";
+}
+
+// The 2027 Season Pass, drawn only when SEASON_2027_READY has made it a choice.
+// Its renewal terms replace the pass's everywhere the pass says "nothing
+// renews": the button's terms line, the sidebar and the confirmation.
+function draw2027Plan() {
+  const terms = () => {
+    const bold = document.createElement("b");
+    bold.textContent = "$39, and it renews each August at $39 until you cancel";
+    return [document.createTextNode("The 2027 Season Pass is "), bold, document.createTextNode(
+      ": all of 2027, with the rest of this season included. Cancel any time. We email " +
+      "you before it bills. Refunds are no-questions until your first weekly report's " +
+      "week kicks off (or a week after it reaches you, if we send it late). One per " +
+      "person, and a second purchase after a refund is final.")];
+  };
+  $("submit").textContent = "Unlock my lineups — $39";
+  $("header-pitch").textContent = "All of 2027, with the rest of this season included, " +
+    "decided for your roster and in your inbox every Tuesday. $39, renewing each August. " +
+    "Cancel any time, and a full refund until your first weekly report's week kicks off.";
+  $("terms-line").replaceChildren(...terms());
+  $("renew-note").replaceChildren(...terms());
+  $("first-tail").textContent = "Cancel any time. We email you before it bills.";
+  $("side-renew").textContent = "Renews each August at $39. Cancel any time. We email " +
+    "you before it bills";
   drawFirst();
   noteClosedFor(seasonLink(), monthlyLink());
 }
@@ -2981,10 +3071,13 @@ if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {
 function applyPlan() {
   closeEmailCheck();
   monthlyChosen = radio("plan") === "monthly";
+  chose2027 = radio("plan") === "2027";
   showError("err-email", "");
   showOk("");
   relistIfChanged();
-  if (monthlyChosen) { monthlyPlan(); } else { seasonPlan(); }
+  if (monthlyChosen) { monthlyPlan(); }
+  else if (chose2027) { draw2027Plan(); }
+  else { seasonPlan(); }
   keepInAddress();
 }
 // Whether the button on screen is the closed plan's "Switch to …": a buyer
@@ -3011,13 +3104,28 @@ function switchPlan() {
 // A plan that takes money names its step 3 as the progress bar does (D14).
 if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) $("step3-head").textContent = "3 · Checkout";
 drawStep3();
-if (MONTHLY_OFFERED && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
+if ((MONTHLY_OFFERED || PLAN_CHOICE) && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS) {
   $("lbl-plan").style.display = "block";
   $("lbl-email").style.display = "block";
   $("opt-plan").style.display = "flex";
   $("step3-head").textContent = "3 · Your plan and email";
-  document.querySelector(
-    'input[name="plan"][value="' + (monthlyChosen ? "monthly" : "season") + '"]').checked = true;
+  if (PLAN_CHOICE) {
+    // Built here, so the page ships no word of it while the switch is off.
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "plan";
+    input.value = "2027";
+    input.autocomplete = "off";
+    label.append(input, "2027 Season Pass · $39");
+    $("opt-plan").prepend(label);
+    if (!MONTHLY_OFFERED) {
+      const monthly = document.querySelector('input[name="plan"][value="monthly"]');
+      if (monthly) monthly.closest("label").remove();
+    }
+  }
+  document.querySelector('input[name="plan"][value="' +
+    (chose2027 ? "2027" : monthlyChosen ? "monthly" : "season") + '"]').checked = true;
   $("opt-plan").addEventListener("change", applyPlan);
   // A page brought back from the browser's history can have its radios
   // restored AFTER this script ran: draw whatever is actually checked.
@@ -3092,6 +3200,7 @@ drawSettingsLine();
 drawShapeNote();
 fillRenewalDates();
 drawFirst();
+if (chose2027) draw2027Plan();
 
 // When the first report lands — see firstReportTiming. For a purchase and a
 // seat (whose first email follows the same rules, LP-I4); an update and a
@@ -3119,18 +3228,13 @@ drawFirst();
             (w.phase === undefined || w.phase === "season") && landsEnd && now < landsEnd &&
             firstWeek >= PLAYOFF_FROM_WEEK) {
           PLAYOFF_ACTIVE = true;
+          playoffWeek = firstWeek;
           drawStep3();
-          const terms = "The Playoff Pass is $19, one payment: nothing renews and " +
-            "nothing more is charged. Refunds are no-questions until your first " +
-            "weekly report's week kicks off (or a week after it reaches you, if " +
-            "we send it late). One per person.";
-          $("terms-line").textContent = terms;
-          $("renew-note").textContent = terms;
-          $("submit").textContent = "Continue to checkout — $19";
-          $("header-pitch").textContent = "Every lineup from Week " + firstWeek +
-            " to your title game, decided for your roster and in your inbox every " +
-            "Tuesday. $19 for the Playoff Pass: one payment, no subscription, and a " +
-            "full refund until your first weekly report's week kicks off.";
+          if (PLAN_CHOICE) {
+            const pass = document.querySelector('input[name="plan"][value="season"]');
+            if (pass) pass.closest("label").lastChild.textContent = "Playoff Pass · $19";
+          }
+          if (!chose2027) drawPlayoffPass();
           drawFirst();
         }
         if (w && w.phase === "preseason" && STRIPE_LINK_MONTHLY && !SEAT_MODE && !WANTS_PASS) {
@@ -3155,7 +3259,7 @@ drawFirst();
           noteClosedFor("", "");
         }
       })
-      .then(drawPayoff)
+      .then(() => { drawStep3(); drawPayoff(); })
       .catch(() => {});
   } catch (e) { /* the sentence true either way stays */ }
 })();

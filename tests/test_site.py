@@ -3333,8 +3333,9 @@ def test_a_configured_tier_can_take_money_while_the_others_cannot() -> None:
     Only the tiers still missing a link say checkout is closed."""
     live = re.findall(r'const (STRIPE_LINK_\w+) = "(https://buy\.stripe\.com/[^"]+)"', JOIN)
     empty = re.findall(r'const (STRIPE_LINK_\w+) = ""', JOIN)
-    # Season, monthly, League Pass and (Oct 18 2026) the $19 Playoff Pass.
-    assert len(live) + len(empty) == 4, "a payment-link constant went missing"
+    # Season, monthly, League Pass, (Oct 18 2026) the $19 Playoff Pass and
+    # (Oct 30 2026) the 2027 Season Pass, built switched off.
+    assert len(live) + len(empty) == 5, "a payment-link constant went missing"
     for _name, url in live:
         assert "?" not in url, (
             f"{url} carries a query string; the picker appends "
@@ -3972,7 +3973,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     import json as _json
     got = _node(
         "let CONTACT_EMAIL, NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
-        "const FIRST = null, SEAT_MODE = false;\n" + fns +
+        "const FIRST = null, SEAT_MODE = false, chose2027 = false;\n" + fns +
         "\nconsole.log(JSON.stringify(" + _json.dumps(states) +
         ".map(([c, n, p, o, m, other]) => {"
         " CONTACT_EMAIL = c; NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o;"
@@ -4339,7 +4340,8 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
                     ("canStartToday", "closedChipText", "renewalDate",
                      "renewsOn", "monthlyLink", "seasonLink")) + (
         "\nvar MONTHLY_PAUSED = false; var MONTHLY_OFFERED = true;"
-        " var PLAYOFF_ACTIVE = false; var STRIPE_LINK_PLAYOFF = \"\";")
+        " var PLAYOFF_ACTIVE = false; var STRIPE_LINK_PLAYOFF = \"\";"
+        " var chose2027 = false; var STRIPE_LINK_2027 = \"\";")
     cases = [  # seat, pass, monthly, season link, monthly link, pass link, form
         [False, False, False, "", "", "", ""],
         [False, False, True, "x", "", "", ""],

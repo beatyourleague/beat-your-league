@@ -257,8 +257,8 @@ LEAGUE_PASS = REPO_ROOT / "site" / "league-pass.html"
 # The pages, in the stack's order front to back.
 STACK_SOURCES = ("this-week.html", "sample-report.html", "sample-first-week.html")
 STACK_CAPTION = ("Real reports from our samples, mastheads up. With the League Pass, "
-                 "every manager who claims a seat gets one like these, built from "
-                 "their own roster.")
+                 "every manager who joins gets one like these, built from their "
+                 "own roster.")
 
 
 def stack_entry(report: Mapping[str, Any], source: str) -> dict[str, str]:

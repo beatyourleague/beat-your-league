@@ -271,6 +271,8 @@
       <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
       <li><b>Saturday, if needed</b>The Saturday check, when injury news changes your lineup
       or a starting spot still has nobody to fill it.</li>
+      <li id="step-founding"><b>Next season</b>You have the founding rate. Your 2027 season
+      pass is $39.</li>
     </ol>
 
     <!-- Hidden on the League Pass view (?plan=pass), whose one job is the
@@ -287,8 +289,8 @@
         <p>Buy it with this same email and reply to any report while your own pass's refund
         window is open: we'll refund your pass, so you haven't paid twice.</p></div>
       <div class="nextcard"><b>Know a manager in another league?</b>
-        <p id="friend-line">Beat Your League sends a lineup report for your own roster every
-        Tuesday, every slot decided: https://beatyourleague.com/?via=friend</p>
+        <p id="friend-line">One email every Tuesday decides your lineup for your own roster:
+        https://beatyourleague.com/?via=friend</p>
         <button type="button" class="btn gold" id="friend-share">Send it to them</button>
         <p class="msg" id="friend-msg" role="status"></p></div>
     </div>
@@ -301,7 +303,7 @@
       your lineup, the Saturday check tells you the swap. If a starting spot still
       has nobody to fill it, it says so. Nothing to change, no email.</li>
       <li><b>A separate email, usually within the hour:</b> a short receipt from us with
-      your terms, to keep. Your pass was one payment: nothing renews.</li>
+      your terms, to keep. <span id="thanks-renew">Your pass was one payment: nothing renews.</span></li>
     </ol>
 
     <h2><span class="n">02</span>If your roster changes</h2>
@@ -313,9 +315,9 @@
     <p>Full refund, no questions, any time until your first weekly report's week kicks off
     (or a week after it reaches you, if we send it late):
     <span id="refund-limit">one per person</span> (<a href="terms.html#refunds">the exact terms</a>).
-    Reply to any of our emails to ask. There is
+    Reply to any of our emails to ask. <span id="thanks-end">There is
     nothing to cancel: your pass was one payment and ends on its own after the season's
-    last report. To stop the emails before then, reply &quot;stop&quot;
+    last report. To stop the emails before then, reply &quot;stop&quot;</span>
     (<a href="terms.html#cancel">details</a>).</p>
 
     <h2><span class="n">04</span>Anything else</h2>
@@ -340,6 +342,14 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 // has the seat link to send instead, and is already covering their league.
 if (new URLSearchParams(location.search).get("plan") === "pass") {
   document.getElementById("next-steps").hidden = true;
+}
+// The 2027 Season Pass renews, so "nothing renews" and "nothing to cancel" are
+// the pass's words, not its. The payment link's success URL carries ?plan=2027.
+if (new URLSearchParams(location.search).get("plan") === "2027") {
+  document.getElementById("step-founding").hidden = true;
+  document.getElementById("thanks-renew").textContent =
+    "It renews each August at $39, and we email you before it bills.";
+  document.getElementById("thanks-end").textContent = "Cancel any time";
 }
 // The share for a manager in ANOTHER league: the phone's share sheet, a copy,
 // or failing both the line selected. Its own function, because shareLine's

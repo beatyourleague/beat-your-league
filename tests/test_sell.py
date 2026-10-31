@@ -1,0 +1,526 @@
+"""The sell pass (owner brief, Oct 30 2026): a price card that reads like a good
+deal in five seconds, and every value line on it literally true.
+
+What these hold:
+- the per-lineup figure is the price on offer ÷ the lineups left, in cents, and
+  it goes when no lineups are left; the count is the one a buyer really gets;
+- the $39 2027 Season Pass is built switched off: no word of it renders while
+  the flag is false, and with the flag on its renewal terms sit under the price;
+- the narrowed money rule: a per-lineup figure on the price card and the join
+  page's step 3, never the hero;
+- no hype on a selling page (the owner's "don't be cheesy", as a sweep).
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from render.report import ONCE_END, ONCE_SEAT_END, season_end_lines
+
+ROOT = Path(__file__).resolve().parent.parent
+SITE = ROOT / "site"
+LANDING = (SITE / "index.html").read_text(encoding="utf-8")
+JOIN = (SITE / "join" / "index.html").read_text(encoding="utf-8")
+THANKS = (SITE / "thanks.html").read_text(encoding="utf-8")
+LEAGUE_PASS = (SITE / "league-pass.html").read_text(encoding="utf-8")
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
+
+
+def _fn(page: str, name: str) -> str:
+    start = page.index(f"function {name}(")
+    return page[start:page.index("\n}\n", start) + 2]
+
+
+def _node(script: str) -> object:
+    done = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60,
+                          env={**os.environ, "TZ": "America/New_York"})
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)
+
+
+def _markup(page: str) -> str:
+    """What is rendered with no script: no scripts, styles or comments."""
+    return re.sub(r"<script\b.*?</script>|<style\b.*?</style>|<!--.*?-->", "", page, flags=re.S)
+
+
+def _flat(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text)).strip()
+
+
+# --------------------------------------------------------------------- #
+# the value line
+# --------------------------------------------------------------------- #
+
+@needs_node
+@pytest.mark.parametrize("price,lineups,figure", [
+    (29, 9, "$3.22 a lineup"), (29, 8, "$3.63 a lineup"), (29, 7, "$4.14 a lineup"),
+    (29, 5, "$5.80 a lineup"), (29, 2, "$14.50 a lineup"), (29, 1, "$29.00 a lineup"),
+    (19, 5, "$3.80 a lineup"), (19, 4, "$4.75 a lineup"), (19, 3, "$6.33 a lineup"),
+])
+def test_the_per_lineup_figure_is_the_price_over_the_lineups(price, lineups, figure) -> None:
+    assert figure == "$%.2f a lineup" % (math.floor(price * 100 / lineups + 0.5) / 100)
+    got = _node(_fn(LANDING, "perLineup") + f"\nconsole.log(JSON.stringify(perLineup({price}, {lineups})));")
+    assert got == figure
+
+
+@needs_node
+def test_no_figure_without_a_count() -> None:
+    got = _node(_fn(LANDING, "perLineup") + _fn(LANDING, "lineupsLeft") + """
+console.log(JSON.stringify([perLineup(29, 0), perLineup(29, -1), perLineup(29, null),
+                            perLineup(0, 9), lineupsLeft(18, 0), lineupsLeft(17, null)]));""")
+    assert got == ["", "", "", "", "", ""]
+
+
+def test_the_two_pages_divide_the_same_way() -> None:
+    assert _fn(LANDING, "perLineup") == _fn(JOIN, "perLineup")
+
+
+@needs_node
+def test_the_count_says_when_it_drops_and_one_left_reads_right() -> None:
+    """The brief's example was "9 lineups left. Next Tuesday, 8." It isn't true:
+    run/intake.py sends a buyer that week's report up to its first kickoff, so
+    on the Tuesday a buyer still gets all nine, until Thursday night's game. The
+    line names the moment the count really drops."""
+    got = _node(_fn(LANDING, "lineupsLeft") + """
+console.log(JSON.stringify([lineupsLeft(9, 9), lineupsLeft(16, 2), lineupsLeft(17, 1)]));""")
+    assert got == ["9 lineups left to a Week 17 title game. After Week 9 kicks off, 8.",
+                   "2 lineups left to a Week 17 title game. After Week 16 kicks off, 1.",
+                   "1 lineup left to a Week 17 title game."]
+
+
+def _clock(week: dict, now: str, open_: bool, amount: int = 29) -> dict:
+    iife = LANDING.split("// The season clock.")[1]
+    iife = iife[iife.index("(function () {"):iife.index("})();") + 5]
+    start = {"season-clock": "A new report every Tuesday of the season.",
+             "pass-clock": "A new lineup decided every Tuesday.", "hero-open": "", "closer-cta": "",
+             "sticky-cta": "", "this-week-label": ""}
+    script = """
+const FIXED = Date.parse(%(now)s);
+const RealDate = Date;
+class FakeDate extends RealDate {
+  constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); }
+  static now() { return FIXED; }
+}
+FakeDate.parse = RealDate.parse; FakeDate.UTC = RealDate.UTC;
+globalThis.Date = FakeDate;
+const els = {};
+function node(text) { return { textContent: text, hidden: false, className: "",
+  replaceChildren(...kids) { this.textContent = kids.map((k) => k.textContent).join(""); },
+  appendChild(kid) { this.textContent += kid.textContent; } }; }
+for (const [id, text] of Object.entries(%(start)s)) els[id] = node(text);
+globalThis.window = globalThis;
+globalThis.document = { getElementById: (id) => els[id] || null, querySelectorAll: () => [],
+  createElement: () => node(""), createTextNode: (t) => node(t) };
+const W = %(week)s;
+window.fetch = globalThis.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(W) });
+const CHECKOUT_OPEN = %(open)s, PLAYOFF_PASS_READY = false, PLAYOFF_FROM_WEEK = 13;
+var PASS_AMOUNT = %(amount)s;
+let closed = null;
+function closeForSeason(line) { closed = line; }
+function showPlayoffPass() {}
+%(helpers)s
+%(iife)s
+setTimeout(() => console.log(JSON.stringify({ closed, line: els["pass-clock"].textContent,
+  hidden: els["pass-clock"].hidden })), 50);
+""" % {"now": json.dumps(now), "start": json.dumps(start), "week": json.dumps(week),
+       "open": "true" if open_ else "false", "amount": amount, "iife": iife,
+       "helpers": _fn(LANDING, "perLineup") + _fn(LANDING, "lineupsLeft")}
+    return _node(script)
+
+
+W8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-03",
+      "first_kickoff": "2026-10-30T00:15:00Z", "phase": "season", "odds": 3, "cards": True,
+      "closest_call": True}
+
+
+@needs_node
+@pytest.mark.parametrize("week,lands,kickoff,now,open_,words", [
+    # After Week 8 kicked off, a buyer's first week is 9, open or closed.
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False,
+     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True,
+     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+    # Tuesday, Week 9's report out, its games not started: open, it still counts.
+    (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", True,
+     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+    # Closed, the clock's own calendar: the next report to go out.
+    (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", False,
+     "$3.63 a lineup. 8 lineups left to a Week 17 title game. After Week 10 kicks off, 7."),
+    (15, "2026-12-29", "2026-12-25T18:00:00Z", "2026-12-26T20:00:00Z", True,
+     "$14.50 a lineup. 2 lineups left to a Week 17 title game. After Week 16 kicks off, 1."),
+    (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True,
+     "$29.00 a lineup. 1 lineup left to a Week 17 title game."),
+])
+def test_the_card_divides_the_price_by_what_a_buyer_gets(week, lands, kickoff, now, open_, words) -> None:
+    got = _clock({**W8, "week": week, "lands_on": lands, "first_kickoff": kickoff}, now, open_)
+    assert got["line"] == words and not got["hidden"]
+
+
+@needs_node
+def test_the_playoff_pass_divides_its_own_price() -> None:
+    got = _clock({**W8, "week": 13, "lands_on": "2026-12-08",
+                  "first_kickoff": "2026-12-04T01:15:00Z"}, "2026-12-01T20:00:00Z", True, amount=19)
+    assert got["line"].startswith("$3.80 a lineup. 5 lineups left")
+    # And the swap really sets that price, before the clock divides by it.
+    assert "PASS_AMOUNT = 19;" in _fn(LANDING, "showPlayoffPass")
+    clock = LANDING.split("// The season clock.")[1]
+    assert clock.index("showPlayoffPass(firstWeek)") < clock.index("perLineup(PASS_AMOUNT, lineups)")
+
+
+@needs_node
+def test_the_line_goes_when_no_lineups_are_left() -> None:
+    # Past Week 17's first kickoff: nothing to count, and the fallback says a
+    # new lineup is coming.
+    got = _clock({**W8, "week": 17, "lands_on": "2027-01-12",
+                  "first_kickoff": "2027-01-08T01:15:00Z"}, "2027-01-09T20:00:00Z", True)
+    assert got["hidden"] is True
+    # Over: the clock hands off to closeForSeason, which hides it.
+    over = _clock({**W8, "phase": "over"}, "2027-02-01T20:00:00Z", True)
+    assert over["closed"]
+    assert '"pass-clock"' in _fn(LANDING, "closeForSeason")
+    assert 'getElementById("pass-2027")' in _fn(LANDING, "closeForSeason")
+
+
+@needs_node
+@pytest.mark.parametrize("week", [
+    {**W8, "phase": "preseason"},                             # not a season week
+    {**W8, "lands_on": "2026-10-01"},                         # a stale build
+    {"week": 8},                                              # a file that can't say
+])
+def test_a_clock_that_cannot_say_leaves_the_true_generic_line(week) -> None:
+    got = _clock(week, "2026-10-30T20:00:00Z", True)
+    assert got["line"] == "A new lineup decided every Tuesday." and not got["hidden"]
+
+
+def test_the_cards_generic_line_ships_in_the_markup() -> None:
+    card = LANDING.split('id="pass-card"')[1].split("</ul>")[0]
+    assert '<p class="passclock" id="pass-clock">A new lineup decided every Tuesday.</p>' in card
+
+
+@needs_node
+def test_step_three_carries_the_count_and_the_price_the_button_charges() -> None:
+    """Join's value line, with its real lineupsAhead: the Playoff Pass divides 19,
+    and an unknown clock says the sentence that is true either way."""
+    fns = _fn(JOIN, "perLineup") + _fn(JOIN, "lineupsAhead") + _fn(JOIN, "valueWords")
+    got = _node(fns + """
+const RealDate = Date;
+const FIXED = Date.parse("2026-10-30T20:00:00Z");
+class FakeDate extends RealDate {
+  constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); }
+}
+FakeDate.parse = RealDate.parse;
+globalThis.Date = FakeDate;
+var WANTS_PASS = false, chose2027 = false, PLAYOFF_ACTIVE = false;
+var state = { week: { week: 8, last_week: 18, lands_on: "2026-11-03", phase: "season",
+                      first_kickoff: "2026-10-30T00:15:00Z" } };
+function canStartToday() { return true; }
+const out = [valueWords()];
+PLAYOFF_ACTIVE = true;
+state.week = { week: 12, last_week: 18, lands_on: "2026-11-24", phase: "season",
+               first_kickoff: "2026-11-20T01:15:00Z" };
+out.push(valueWords());
+state.week = null;
+out.push(valueWords());
+PLAYOFF_ACTIVE = false;
+out.push(valueWords());
+WANTS_PASS = true;
+out.push(valueWords());
+WANTS_PASS = false; chose2027 = true;
+out.push(valueWords());
+console.log(JSON.stringify(out));""")
+    assert got[0] == "9 lineups left to a Week 17 title game. $29, one payment: $3.22 a lineup."
+    assert got[2] == "Every lineup from now to your title game. $19, one payment."
+    assert got[3] == "Every lineup from now to your title game. $29, one payment."
+    assert got[4] == "Your whole league, every lineup from now to the title game. $69, one payment."
+    assert "a lineup" not in got[5] and "renews each August" in got[5]
+
+
+def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
+    assert ".then(() => { drawStep3(); drawPayoff(); })" in JOIN
+
+
+# --------------------------------------------------------------------- #
+# the money rule, narrowed (owner decision, Oct 30 2026)
+# --------------------------------------------------------------------- #
+
+def test_the_per_lineup_figure_is_never_in_the_hero() -> None:
+    """The Aug 15 rule still holds everywhere but two places: the figure is
+    written only to the price card's line, and the hero carries no price, no
+    figure and no "a lineup" in any state."""
+    hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
+    hero = re.sub(r"<!-- phone:start -->.*?<!-- phone:end -->", "", hero, flags=re.S)
+    assert "$" not in _flat(_markup(hero)) and "a lineup" not in _flat(_markup(hero))
+    open_state = LANDING.split("if (CHECKOUT_OPEN) {")[1].split("// Checkout closes with the season")[0]
+    assert "perLineup(" not in open_state
+    assert LANDING.count("perLineup(") == 2, "one definition, one use: the card's line"
+    clock = LANDING.split("// The season clock.")[1]
+    use = clock[:clock.index("perLineup(")]
+    assert 'getElementById("pass-clock")' in use[use.rindex("const passClock"):]
+    assert JOIN.count("perLineup(") == 2, "one definition, one use: step 3"
+    assert "perLineup(" in _fn(JOIN, "valueWords")
+
+
+@pytest.mark.parametrize("name", ["league-pass.html", "thanks.html", "how-it-works.html",
+                                  "byes/index.html", "espn/index.html", "sample-report.html"])
+def test_the_figure_appears_nowhere_else(name: str) -> None:
+    page = (SITE / name).read_text(encoding="utf-8")
+    assert not re.search(r"\$\d+\.\d\d a lineup", page), name
+
+
+def test_no_former_price_is_ever_struck_or_compared() -> None:
+    for name in ("index.html", "join/index.html", "league-pass.html", "thanks.html"):
+        page = (SITE / name).read_text(encoding="utf-8")
+        assert "<s>" not in page and "<del>" not in page and "line-through" not in page, name
+        assert not re.search(r"\bwas \$\d|\bregular(ly)? \$\d|\bnormally \$\d", page, re.I), name
+
+
+# --------------------------------------------------------------------- #
+# the 2027 Season Pass, switched off
+# --------------------------------------------------------------------- #
+
+OFFER_WORDS = ("2027 Season Pass", "renews each August", "Renews each August", "more gets you",
+               "against buying both", "this season included", "This season included")
+
+
+def test_the_switch_is_off_on_both_pages() -> None:
+    assert re.search(r"^const SEASON_2027_READY = false;$", LANDING, re.M)
+    assert re.search(r"^const SEASON_2027_READY = false;$", JOIN, re.M)
+    assert re.search(r'^const STRIPE_LINK_2027 = "";', JOIN, re.M)
+
+
+@pytest.mark.parametrize("name,page", [("landing", LANDING), ("join", JOIN)])
+def test_with_the_switch_off_no_offer_text_ships_in_the_page(name: str, page: str) -> None:
+    rendered = _markup(page)
+    for words in OFFER_WORDS:
+        assert words not in rendered, (name, words)
+    # Structured data is markup a crawler reads: it stays one offer at $29.
+    ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', page, re.S)
+                    .group(1)) if name == "landing" else None
+    if ld:
+        offers = next(n for n in ld["@graph"] if n["@type"] == "Product")["offers"]
+        assert [o["price"] for o in offers] == ["29"]
+
+
+def test_the_only_rendered_39_is_the_founding_line() -> None:
+    assert _flat(_markup(LANDING)).count("$39") == 1
+    assert "Founding rate: your 2027 season pass is $39." in _flat(_markup(LANDING))
+    assert "$39" not in _flat(_markup(JOIN))
+
+
+def test_every_offer_word_is_behind_the_switch() -> None:
+    """The code that writes the offer runs only with the flag on: the landing's
+    card from one guarded call, join's radio inside its guarded block."""
+    assert "if (SEASON_2027_READY) season2027Card();" in LANDING
+    assert LANDING.count("season2027Card();") == 1, "one call"
+    assert "const PLAN_CHOICE = SEASON_2027_READY &&" in JOIN
+    assert "let chose2027 = PLAN_CHOICE &&" in JOIN
+    block = JOIN[JOIN.index("if ((MONTHLY_OFFERED || PLAN_CHOICE)"):]
+    assert block.index("if (PLAN_CHOICE) {") < block.index('"2027 Season Pass · $39"')
+
+
+class _Dom:
+    """Just enough DOM to run the landing's card builder under node."""
+    SCRIPT = r"""
+class El {
+  constructor(tag) { this.tag = tag; this.children = []; this.className = ""; this.id = "";
+    this.textContent = ""; this.href = ""; this.classes = new Set();
+    this.classList = { remove: (c) => this.classes.delete(c), add: (c) => this.classes.add(c) }; }
+  append(...kids) { this.children.push(...kids); }
+  appendChild(kid) { this.children.push(kid); return kid; }
+  replaceChildren(...kids) { this.children = kids; }
+  text() { return this.textContent + this.children.map((k) => k.text ? k.text() : k.textContent).join(" "); }
+}
+const plans = new El("div"); plans.classes.add("one");
+const first = new El("div"); first.id = "pass-card"; first.classes.add("founder"); first.parentNode = plans;
+const ldEl = { textContent: JSON.stringify({ "@graph": [{ "@type": "Product", offers: [{ price: "29" }] }] }) };
+const found = {};
+globalThis.document = {
+  createElement: (t) => new El(t),
+  createTextNode: (t) => ({ textContent: t }),
+  getElementById: (id) => id === "pass-card" ? first : found[id] || null,
+  querySelector: () => ldEl,
+};
+const realAppend = plans.appendChild.bind(plans);
+plans.appendChild = (card) => {
+  const walk = (n) => { if (n.id) found[n.id] = n; (n.children || []).forEach(walk); };
+  walk(card); return realAppend(card);
+};
+"""
+
+
+@needs_node
+@pytest.mark.parametrize("open_", [True, False])
+def test_with_the_switch_on_the_renewal_sits_beside_the_price(open_: bool) -> None:
+    fns = (_fn(LANDING, "season2027Words") + _fn(LANDING, "season2027Lines")
+           + _fn(LANDING, "season2027Card"))
+    got = _node(_Dom.SCRIPT + f"""
+const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 39;
+var PASS_AMOUNT = 29;
+""" + fns + """
+season2027Card();
+const card = plans.children[0];
+const parts = card.children.map((n) => [n.className, n.text()]);
+console.log(JSON.stringify({ parts, id: card.id, firstFounder: first.classes.has("founder"),
+  gridOne: plans.classes.has("one"), offers: JSON.parse(ldEl.textContent)["@graph"][0].offers,
+  buy: card.children[card.children.length - 1].href,
+  label: card.children[card.children.length - 1].textContent }));""")
+    names = [p[0] for p in got["parts"]]
+    assert names.index("price") + 1 == names.index("passterms"), "the terms sit under the price"
+    terms = dict(got["parts"])["passterms"]
+    assert terms == "Renews each August at $39. Cancel any time. We email you before it bills."
+    assert "All of 2027, with the rest of this season included." in dict(got["parts"])["passlead"]
+    assert got["firstFounder"] is False and got["gridOne"] is False, "the $39 card is the preferred one"
+    assert [o["price"] for o in got["offers"]] == ["29", "39"]
+    assert "Renews each August at $39" in got["offers"][1]["description"]
+    if open_:
+        assert got["buy"] == "join/index.html?plan=2027" and got["label"] == "Get my lineups — $39"
+    else:
+        assert got["buy"] == "#watch-form" and got["label"] == "Tell me when it opens"
+
+
+def test_the_plain_css_keeps_the_renewal_at_full_size() -> None:
+    assert re.search(r"\.plan \.passterms\{[^}]*font-size:15px", LANDING), "the card's own size"
+
+
+@needs_node
+@pytest.mark.parametrize("price,more,saved", [
+    (29, "$10 more gets you all of next season.", "Saved: $29 against buying both."),
+    (19, "$20 more gets you all of next season.", "Saved: $19 against buying both."),
+])
+def test_the_step_up_and_the_saving_are_worked_out_from_the_price_on_offer(price, more, saved) -> None:
+    """$29 + $39 is $68 against $39; with the Playoff Pass on offer it is $58."""
+    got = _node("const SEASON_2027_PRICE = 39;\n" + _fn(LANDING, "season2027Words")
+                + f"\nconsole.log(JSON.stringify(season2027Words({price})));")
+    assert got == {"more": more, "saved": saved}
+
+
+def test_the_cheaper_cards_button_never_lands_on_the_dearer_plan() -> None:
+    assert 'link.href = "join/index.html?plan=season";' in LANDING
+    assert '!QUERY.has("update") && QUERY.get("try") !== "1";' in JOIN
+    assert 'let chose2027 = PLAN_CHOICE && QUERY.get("plan") !== "season";' in JOIN
+    # Both passes write an "s" ref, so the choice is the one thing the address
+    # has to carry across a reload.
+    assert 'if (PLAN_CHOICE) params.set("plan", chose2027 ? "2027" : "season");' in JOIN
+
+
+def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
+    """A buyer on the renewing plan must never read "nothing renews": the
+    button's terms, the sidebar, the confirmation, the hero's risk line and the
+    finance note all change with the flag or the choice."""
+    fn = _fn(JOIN, "draw2027Plan")
+    for target in ('$("terms-line")', '$("renew-note")', '$("first-tail")', '$("side-renew")',
+                   '$("header-pitch")', '$("submit")'):
+        assert target in fn, target
+    assert 'textContent = "Unlock my lineups — $39";' in fn
+    assert "We email you before it bills" in re.sub(r'"\s*\+\s*"', "", fn)
+    assert 'SEASON_2027_READY ? "" : " One payment, nothing renews."' in re.sub(
+        r'"\s*\+\s*\n?\s*"', "", LANDING)
+    assert "(SEASON_2027_READY ? \"\" : \" One payment, nothing renews.\")" in LANDING
+
+
+def test_the_ref_prefix_stays_s() -> None:
+    """The plan comes from the link that took the money, never the ref."""
+    fn = _fn(JOIN, "checkoutRef")
+    assert 'WANTS_PASS ? "league_pass" : (monthlyChosen ? "monthly" : "season")' in fn
+    assert "2027" not in fn
+
+
+# --------------------------------------------------------------------- #
+# the buy page
+# --------------------------------------------------------------------- #
+
+def test_the_read_back_names_what_the_next_press_costs() -> None:
+    fn = _fn(JOIN, "checkoutWords")
+    for price in ("$29", "$19", "$39", "$69", "$14.99/mo"):
+        assert f"Continue to checkout — {price}" in fn
+    assert '$("check-yes").textContent = go ? checkoutWords()' in JOIN
+    assert 'textContent = "Unlock my lineups — $19";' in _fn(JOIN, "drawPlayoffPass")
+
+
+def test_the_closed_state_keeps_its_honest_lines() -> None:
+    label = _fn(JOIN, "closedLabel")
+    assert '"Save my team by email"' in label and '"Unlock' not in label
+
+
+# --------------------------------------------------------------------- #
+# long-term profit, words only
+# --------------------------------------------------------------------- #
+
+def test_the_last_report_and_the_thanks_page_make_the_founding_rate_plain() -> None:
+    assert "Your 2027 season pass is $39." in ONCE_END
+    assert "$39" not in ONCE_SEAT_END, "a seat bought nothing"
+    meta = {"solo": True, "week": 18, "last_week": 18, "plan": "season", "one_time": True}
+    assert "Your 2027 season pass is $39." in " ".join(season_end_lines(meta))
+    assert not any("$39" in line for line in season_end_lines({"solo": True, "week": 18,
+                                                               "last_week": 18}))
+    assert "Your 2027 season pass is $39." in _flat(_markup(THANKS))
+
+
+def test_the_group_chat_lines_are_short() -> None:
+    ask = _flat(re.search(r'<p id="ask-text">(.*?)</p>', LEAGUE_PASS, re.S).group(1))
+    friend = _flat(re.search(r'<p id="friend-line">(.*?)</p>', THANKS, re.S).group(1))
+    assert len(ask) <= 210 and len(friend) <= 110, (len(ask), len(friend))
+
+
+def test_the_closed_league_pass_leads_to_the_roster_check() -> None:
+    slots = re.findall(r'<div class="ctaslot"[^>]*data-lp-cta>(.*?)</div>', LEAGUE_PASS, re.S)
+    assert len(slots) == 2
+    for slot in slots:
+        assert 'class="btn gold" href="join/index.html?plan=pass"' in slot
+        assert '<a href="index.html#watch-form">' in slot
+
+
+# --------------------------------------------------------------------- #
+# the sweep: not cheesy
+# --------------------------------------------------------------------- #
+
+SELLING = ("index.html", "join/index.html", "league-pass.html", "thanks.html", "how-it-works.html",
+           "byes/index.html", "espn/index.html", "yahoo/index.html", "sleeper/index.html",
+           "cbs/index.html")
+CHEESE = (r"limited time", r"act now", r"\bhurry\b", r"don'?t miss", r"last chance", r"only \d+ (spots|left)",
+          r"spots left", r"while supplies", r"\bexclusive\b", r"game[- ]chang", r"\bunbeatable\b",
+          r"\brevolution", r"\bultimate\b", r"\binsane\b", r"\bguarantee[sd]? (you|a win)\b",
+          r"win more", r"make the playoffs", r"\bsportsbook\b")
+
+
+def _strings(page: str) -> str:
+    """Every string literal in a page's inline scripts: buyer copy lives there too."""
+    scripts = "\n".join(re.findall(r"<script>(.*?)</script>", page, re.S))
+    code = "\n".join(line for line in scripts.splitlines() if not line.lstrip().startswith("//"))
+    return " ".join(re.findall(r'"((?:[^"\\\n]|\\.)*)"', code))
+
+
+@pytest.mark.parametrize("name", SELLING)
+def test_no_selling_page_shouts(name: str) -> None:
+    page = (SITE / name).read_text(encoding="utf-8")
+    rendered = _flat(_markup(page))
+    words = rendered + " " + _strings(page)
+    for pattern in CHEESE:
+        assert not re.search(pattern, words, re.I), (name, pattern)
+    assert "!" not in rendered, f"an exclamation mark on {name}"
+    assert not re.search(r"[A-Za-z]!(\s|$)", _strings(page)), f"an exclamation mark in {name}'s script"
+
+
+@pytest.mark.parametrize("name", SELLING)
+def test_no_selling_page_uses_a_banned_word(name: str) -> None:
+    rendered = _flat(_markup((SITE / name).read_text(encoding="utf-8")))
+    for word in ("calibrated", "tested", "proven", "accurate"):
+        assert not re.search(rf"\b{word}\b", rendered, re.I), (name, word)
+
+
+def test_the_refund_line_is_a_promise_and_keeps_the_pinned_words() -> None:
+    card = _flat(LANDING.split('id="pass-card"')[1].split("</ul>")[0])
+    assert ("Read your first weekly report before its games. Not for you? Full refund, no "
+            "questions, until your first weekly report's week kicks off. One per person") in card
+    # "weekly", not "first report": a buyer after a week's first game gets the
+    # roster report first, and it has no games to read it before (terms §5).
+    assert "Read your first report before" not in card

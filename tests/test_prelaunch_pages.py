@@ -326,7 +326,9 @@ def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one(
     with no closing action, its one ask was the dashed box, and the group-chat
     placeholder "[your league's link, from your welcome email]" rendered as
     gold bracketed text — a link that had failed to load. Both asks are gold
-    buttons to the landing's capture while checkout is closed, the closer sits
+    buttons while checkout is closed, to the roster check on the League Pass
+    plan (owner brief, Oct 30 2026: it works closed, and it is the better next
+    step), with the landing's capture one link under them; the closer sits
     last in <main> with the price beside its one-payment and refund terms.
     (The placeholder's own style is the seat line's, the WORKER's: C3.)
     Once checkout opens, the closer's ask follows the price card's: it is
@@ -335,8 +337,9 @@ def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one(
     slots = re.findall(r'<div class="ctaslot"[^>]*data-lp-cta>(.*?)</div>', LEAGUE_PASS, re.S)
     assert len(slots) == 2
     for slot in slots:
-        assert re.match(r'<a class="btn gold" href="index\.html#watch-form">Tell\s+me when it opens</a>',
-                        slot)
+        assert re.match(r'<a class="btn gold" href="join/index\.html\?plan=pass">Try it\s+on my '
+                        r'team</a>', slot)
+        assert '<a href="index.html#watch-form">' in slot and "isn't open yet" in slot
     main = LEAGUE_PASS.split('<main id="main">')[1].split("</main>")[0]
     closer = main.rsplit('<div class="closer" data-reveal>', 1)[1]
     assert main.rstrip().endswith("</div>") and "data-lp-cta" in closer

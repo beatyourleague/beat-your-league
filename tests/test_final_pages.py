@@ -154,7 +154,8 @@ def test_the_one_time_offer_carries_no_subscription_leftovers() -> None:
                  "league-pass.html"):
         text = _flat((SITE / name).read_text(encoding="utf-8"))
         assert not re.search(r"re-?subscri", text, re.I), name
-    assert _flat(JOIN).count("a second purchase after a refund is final") == 2
+    # Twice for the pass, once for the 2027 pass's own terms (built switched off).
+    assert _flat(JOIN).count("a second purchase after a refund is final") == 3
     assert '"Rest-of-Season Pass opens soon"' in _js_function(JOIN, "closedChipText")
     assert "Season pass opens soon" not in JOIN
     assert "yearly plan" not in HOW
@@ -443,11 +444,14 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
 def test_the_price_cards_first_line_is_the_outcome() -> None:
     """Copy review: the card led with the delivery mechanics ("Every weekly
     report from now…"); it leads with what the buyer gets, and the Playoff
-    swap says the same."""
-    span = _flat(LANDING.split('id="pass-span">')[1].split("</li>")[0])
-    assert span.startswith("Your lineup every Tuesday through your title game")
-    assert "Your lineup every Tuesday from Week " in _flat(
-        _js_function(LANDING, "showPlayoffPass"))
+    swap says the same. Oct 30 2026: that line sits straight under the price,
+    so the card reads "$29. Every lineup through your title game.\""""
+    card = LANDING.split('id="pass-price">')[1]
+    lead = _flat(card.split('id="pass-lead">')[1].split("</p>")[0])
+    assert lead == "Every lineup through your title game."
+    assert card.index('id="pass-lead"') < card.index("<ul>"), "the lead comes before the list"
+    assert '"Every lineup from Week " + week + " through your title game."' in _js_function(
+        LANDING, "showPlayoffPass")
 
 
 def test_the_pricing_band_is_not_half_empty_at_1440() -> None:

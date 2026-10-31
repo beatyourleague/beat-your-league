@@ -2264,7 +2264,8 @@ SEASON_END_BILLING = {
 
 
 ONCE_END = ("Your pass covered this season through this report: nothing renews "
-            "and nothing more is charged.")
+            "and nothing more is charged. You have the founding rate. Your 2027 "
+            "season pass is $39.")
 ONCE_SEAT_END = ("Your seat came with your league's pass for this season, and "
                  "this is its last report.")
 
