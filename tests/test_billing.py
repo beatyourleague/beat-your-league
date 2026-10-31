@@ -31,7 +31,7 @@ needs_schedule = pytest.mark.skipif(
 
 # The instant the last report a charge may pay for is due: Week 17's, Tue Dec 29
 # 2026 (owner decision, Oct 31 2026; Week 18's goes out a week later, unbilled).
-FINAL = datetime(2026, 12, 29, 12, 17, tzinfo=timezone.utc)
+FINAL = datetime(2026, 12, 22, 12, 17, tzinfo=timezone.utc)
 AFTER = int(FINAL.timestamp()) + 6 * 86400       # a period ending after it
 BEFORE = int(FINAL.timestamp()) - 3600            # a period ending before it
 
@@ -103,8 +103,8 @@ def test_every_billing_day_pays_through_the_last_report_and_never_after(
         bought: date) -> None:
     """The whole promise, simulated against the real 2026 calendar for every
     billing day a month has: the daily run is applied at each renewal, and
-    then (a) the last charge starts a period the last report falls in, and
-    (b) no charge ever starts after the last report is due. The old design
+    then (a) the last charge starts a period Week 16's report falls in, and
+    (b) no charge ever starts after that report is due. The old design
     failed (b) for billing days Jan 11-12 and its stamp failed the Cancel
     button for all of them."""
     final, season = final_send(CACHE, bought, live=False)
@@ -124,9 +124,9 @@ def test_every_billing_day_pays_through_the_last_report_and_never_after(
             assert len(charges) < 8, "never stopped"
         renewals = charges[1:]
         assert all(c <= final for c in renewals), (
-            f"billing day {day}: a renewal on {renewals[-1]:%b %d} started a "
-            f"period with no weekly report in it")
-        assert end > final, f"billing day {day}: cut off before the last report"
+            f"billing day {day}: a renewal on {renewals[-1]:%b %d} landed after "
+            f"Week 16's report")
+        assert end > final, f"billing day {day}: cut off before Week 16's report"
 
 
 # --------------------------------------------------------------------- #
@@ -310,7 +310,7 @@ def test_the_last_send_is_the_first_tuesday_that_mails_the_last_week() -> None:
 @needs_schedule
 def test_the_cutoff_is_the_tuesday_runs_due_minute() -> None:
     at, season = final_send(CACHE, date(2026, 10, 18), live=False)
-    assert at == tuesday_due_at(billing.title_send(CACHE, season, live=False))
+    assert at == tuesday_due_at(billing.last_charge_send(CACHE, season, live=False))
 
 
 @needs_schedule

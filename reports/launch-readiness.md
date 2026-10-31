@@ -120,20 +120,21 @@ passes ($29, $19, $69) from an Oct 26 opening and came to about $727.
 |---|---|
 | Stripe on a $14.99 charge (Canadian account, US card, CAD payout) | about 7.9% — $1.18, kept by Stripe on a refund |
 | With a USD payout account | about $0.88 |
-| Net per buyer after Stripe, 8% refunds and disputes | Monthly about $17.74 · League Pass about $41.89, at 1.4 charges a buyer |
+| Net per buyer after Stripe, 8% refunds and disputes | Monthly about $15.98 · League Pass about $37.76, at 1.3 charges a buyer |
 | Break-even on this season's fixed costs | three Monthly buyers (mailbox, domain) |
-| Base case for 2026, opening Mon Nov 9 (first report Week 10) | about 30 Monthly buyers + 2 League Passes (30% leave before a second charge, Weeks 13–17 assumed to sell at half a regular week, to the half of a league still alive): about $574 after fixed costs |
-| Owner time for that base case | about 49 hours — PLAN §5's own budget of ~35 min a day for 9 weeks (37 h), the weekly QA-and-refunds hour (9 h) and setup (3 h) — so about $12 an hour. `run/economics.py` holds this line to the model |
+| Base case for 2026, opening Mon Nov 9 (first report Week 10) | about 30 Monthly buyers + 2 League Passes (30% leave before a second charge, Weeks 13–17 assumed to sell at half a regular week, to the half of a league still alive): about $513 after fixed costs |
+| Owner time for that base case | about 49 hours — PLAN §5's own budget of ~35 min a day for 9 weeks (37 h), the weekly QA-and-refunds hour (9 h) and setup (3 h) — so about $11 an hour. `run/economics.py` holds this line to the model |
 | 100 subscribers by Week 10 | would need 5,000–20,000 visitors in 2–3 weeks: not organic |
-| Paid ads | cost $50–$300 per buyer against about $28 of value (a Monthly buyer plus a 30% chance of a 2027 re-buy at $39): none this season |
+| Paid ads | cost $50–$300 per buyer against about $26 of value (a Monthly buyer plus a 30% chance of a 2027 re-buy at $39): none this season |
 | Biggest lever | the refund rate: 15% costs about $48, 25% about $117 per 50 Monthly buyers |
 | Free email capacity | Resend's free tier lasts to about 85 recipients a send day |
 | GST/HST | not until C$30,000 of sales in four quarters |
 
 **Pricing:** a 2026 plan bills monthly and stops on its own; a 2026 buyer coming back in
 2027 is a new purchase at the founding $39, so the model calls it a re-buy rate, never a
-renewal rate. For 2027 keep $14.99 and $39, never prorate; the pass earns more than monthly in
-every join week. Don't advertise a pass's 12-month coverage until rosters roll to a new
+renewal rate. For 2027: $39 for 2026 buyers, $49 for new buyers (terms §3), Monthly at $16.99
+so three charges still pass the $49 pass, and never prorate; the pass earns more than monthly
+in every join week. Don't advertise a pass's 12-month coverage until rosters roll to a new
 season (IDEAS.md), or 2027 reports would be built from 2026 rosters.
 
 ## What was deliberately not done

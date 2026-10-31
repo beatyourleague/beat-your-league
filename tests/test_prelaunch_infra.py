@@ -1325,7 +1325,7 @@ def test_the_2026_base_case_is_priced_as_2026_sells(monkeypatch) -> None:
     expected = (30 * econ.net_per_buyer(14.99) + 2 * econ.net_per_buyer(34.99)
                 - sum(econ.FIXED_SEASON_COSTS.values()))
     assert econ.base_case_net() == round(expected, 2)
-    assert 540 < econ.base_case_net() < 610
+    assert 480 < econ.base_case_net() < 550
     before = econ.base_case_net()
     monkeypatch.setattr(econ, "SEASON", 1000.0)
     monkeypatch.setattr(econ, "LEAGUE_PASS", 1000.0)

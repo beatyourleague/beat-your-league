@@ -55,7 +55,7 @@ def test_the_monthly_welcome_never_claims_an_annual_renewal() -> None:
         assert f"{MONTHLY_PRICE} USD" in doc
         assert SEASON_PRICE + " USD" not in doc
         assert not re.search(r"renews once a year", doc, re.I)
-        assert re.search(r"billing stops on its own after your title game", doc, re.I)
+        assert re.search(r"billing stops on its own", doc, re.I)
 
 
 def test_the_pass_payer_is_welcomed_at_the_price_they_paid() -> None:

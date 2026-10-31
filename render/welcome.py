@@ -38,8 +38,11 @@ from run.delivery import Message
 # One test asserts these equal the landing page's own numbers.
 # 2026 prices (owner decision, Oct 31 2026): monthly plans that stop on their
 # own. The one-time passes are retired; PLAYOFF_PRICE words a purchase that was
-# never made. SEASON_PRICE is the founding full-season pass, from 2027.
+# never made. SEASON_PRICE is the founding full-season pass, from 2027, and
+# SEASON_NEW_BUYER_PRICE what anyone else pays for it (terms §3): without a
+# higher price beside it, "founding rate" would claim a discount from nothing.
 SEASON_PRICE = "$39"
+SEASON_NEW_BUYER_PRICE = "$49"
 PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$34.99"
@@ -126,10 +129,12 @@ SEAT_RESET_NOTE = ("If whoever paid for your league's pass resets its seats, "
                    "share.")
 
 
-# What stops a monthly plan, and why it isn't a surprise (run/billing, TITLE_WEEK).
-BILLING_STOPS = ("billing stops on its own after your title game: nothing is "
-                 "charged after Week 17's report goes out, and your reports run "
-                 "through the season's last week.")
+# What stops a monthly plan, and why it isn't a surprise (run/billing,
+# LAST_CHARGE_WEEK). "Won't renew", never "nothing is charged": a buyer after
+# that report still pays once, at purchase.
+BILLING_STOPS = ("billing stops on its own: it won't renew after Week 16's report "
+                 "goes out, and your reports still run through the season's last "
+                 "week.")
 
 
 def first_renewal_words() -> str:

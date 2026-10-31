@@ -80,11 +80,11 @@ def test_the_tuesday_row_says_what_a_report_is() -> None:
 
 
 def test_the_monthly_terms_match_the_stop() -> None:
-    """EMAILS-94 / D1: no charge after Week 17's report, reports to the last."""
+    """EMAILS-94 / D1: no renewal after Week 16's report, reports to the last."""
     text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
-    assert "billing stops on its own after your title game" in text
-    assert "nothing is charged after Week 17's report goes out" in text
-    assert "your reports run through the season's last week" in text
+    assert "billing stops on its own" in text
+    assert "it won't renew after Week 16's report goes out" in text
+    assert "your reports still run through the season's last week" in text
     assert "when the season ends" not in text
 
 

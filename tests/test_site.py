@@ -1387,8 +1387,8 @@ def test_every_report_carries_a_way_out() -> None:
 def test_monthly_billing_never_outlives_the_product() -> None:
     """Monthly stops at season end, and run/billing.py is what makes it true."""
     legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
-    assert re.search(r"Billing stops on its own after your title game", legal, re.I)
-    assert re.search(r"nothing is charged after Week 17's report goes out", legal, re.I)
+    assert re.search(r"Billing stops on its own", legal, re.I)
+    assert re.search(r"it does not renew after Week 16's report goes out", legal, re.I)
     assert re.search(r"Your reports still run through the season's last weekly report", legal, re.I)
 
 
@@ -3354,7 +3354,7 @@ def test_the_pay_button_disclosure_quotes_the_price_the_page_charges() -> None:
     stamp = _dt.date.fromisoformat(TERMS_VERSION)
     assert f"Last updated {stamp.day} {stamp:%B %Y}" in terms, \
         "terms.html's Last updated date must equal TERMS_VERSION, the version consent is recorded against"
-    assert "Billing stops on its own after your title game" in MESSAGES["monthly"], (
+    assert "Billing stops on its own" in MESSAGES["monthly"], (
         "the monthly disclosure omits the season-end stop, which is the one "
         "promise a monthly buyer most needs at the moment of paying")
     for plan, text in MESSAGES.items():

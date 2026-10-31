@@ -465,6 +465,14 @@ def check_funnel_config() -> list[Gate]:
                        not (trial and not open_),
                        "TRIAL_OPEN is on while CHECKOUT_OPEN is off: each free report's "
                        "'Get next Tuesday's report' button would land on a closed page"))
+    # Owner decision, Oct 31 2026: the price rests on a free door. With no record
+    # to read and FantasyPros' free trial a tab away, a buyer gets one report on
+    # their own roster first. The two switches flip together on opening morning.
+    gates.append(_gate("Funnel", "The free report opens with checkout",
+                       not (can and not trial),
+                       "CHECKOUT_CAN_COMPLETE is on while TRIAL_OPEN is off: the $14.99 "
+                       "price was set on the basis of a free first report — open it "
+                       "too (LAUNCH.md step 6)"))
     waitlist = landing.get("WAITLIST_ENDPOINT", "")
     if not waitlist and not can:
         gates.append(Gate("Funnel", "Waitlist sign-ups are collected automatically", "OWNER",

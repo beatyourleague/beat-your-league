@@ -1353,18 +1353,18 @@ never needs new words. The site sells the **$14.99 Monthly plan** and the **$34.
 (a month, up to 14 teams), both Stripe Payment Links in subscription mode:
 `STRIPE_PAYMENT_LINKS` is `m:<$14.99>,p:<$34.99>` (`y:` beside them once the 2027 pass is on).
 No price drop at Week 13 and no Playoff Pass; the pages carry no `o:` or `s:` path. $14.99 was
-kept over $9.99 deliberately: at about 1.4 charges a buyer $9.99 needs about 50% more buyers to
-match it, $14.99 sits with paid products (FootClan $11.99, FantasyPros up to $22.99) rather than
-the $4.99–$9.99 AI tools, and it keeps the $39 season pass and the $49 offer reading as deals. A
-price can be cut later; raising one is harder. Rules it left:
-- **Billing ends with Week 17's report** (`run/billing.TITLE_WEEK`, `title_send`; `final_send`
-  and `stop_for` now answer that date): a renewal after it would take $14.99 on title-game
-  weekend for the one report left. `needs_stop` gives a plan `cancel_at_period_end` once its
-  period ends after that instant, so no renewal follows it. "Stops on its own after your title
-  game" is the line on every surface; terms §3 says nothing is charged after Week 17's report.
-- **A plan WE stopped still gets the season's last report** (`run/subscriptions`,
-  `stopped_for_season`, `SEASON_STOP_GRACE_DAYS`): its paid period can end before Week 18's
-  report. It carries `SEASON_STOP_KEY`; a plan its buyer cancelled does not, and ends when it ends.
+kept over $9.99 deliberately (the pricing review below has the reasoning, and corrects two
+claims first recorded here). A price can be cut later; raising one is harder. Rules it left:
+- **No plan renews after Week 16's report** (`run/billing.LAST_CHARGE_WEEK`, `last_charge_send`;
+  `final_send` and `stop_for` answer that date). `needs_stop` gives a plan
+  `cancel_at_period_end` once its period ends after that instant, so no renewal follows it.
+  "Stops on its own after your title game" is the PLAN's line on every card; a sentence about
+  BILLING says "it won't renew after Week 16's report", never "nothing is charged", because a
+  buyer after that report still pays once, at purchase. Terms §3 is the operative wording.
+- **A plan WE stopped still gets every report to the season's last** (`run/subscriptions`,
+  `stopped_for_season`, `SEASON_STOP_GRACE_DAYS` = 21): its paid period can end before Week 17's
+  and Week 18's reports. It carries `SEASON_STOP_KEY`; a plan its buyer cancelled does not, and
+  ends when it ends.
 - **A refund ends the plan, in one click.** Refunded alone, a subscription keeps billing for
   reports that have stopped, so `needs_stop` gives a refunded or lost plan its stop too
   (`returned`, `money_returned`). The owner presses Refund and nothing else; seats end with it.
@@ -1376,10 +1376,35 @@ price can be cut later; raising one is harder. Rules it left:
 - **Money:** `run/stats` and the dashboard count subscription sessions and read renewals from
   paid invoices, which have no checkout session (`owner-stats` needs Invoices Read).
   `run/economics` models it: `LEAVE_AFTER_FIRST` 30% (stated, not measured), `expected_charges`
-  about 1.4, `net_per_buyer` about $17.74 and $41.89, base case about $574 for about 49 hours
+  about 1.3, `net_per_buyer` about $15.98 and $37.76, base case about $513 for about 49 hours
   from a Nov 9 opening. A League Pass's seats end if its buyer cancels or a payment fails.
 - **Before next preseason:** `MONTHLY_PAUSED` closes Monthly while `week.json` says preseason, and
   no other plan is on sale then, so the 2027 season pass needs its link before August.
+
+**The pricing review (owner decision, Oct 31 2026).** Asked whether the prices were right, the
+answer was to hold both, with four changes. Read from each vendor's own page that day:
+month-to-month paid tiers are PFF+ $9.99, FantasyPros $11.99/$16.99/$22.99, FootClan $7.99/$15.99,
+Draft Sharks $16/$22/$44, STACKED $19.99. So $14.99 is mid-market, and near the top of what a
+product with no record and no sync can charge: FantasyPros Pro, $3 cheaper, syncs and has a free
+trial. Two earlier claims were wrong: FootClan's $11.99 is its annual-only top tier, and the
+"$4.99–$9.99 AI tools" were never a confirmed floor. "$9.99 needs 50% more buyers" is true and
+settles nothing: a third off paying for itself at half again the buyers is close to unit
+elasticity, and nobody has measured ours. Rules it left:
+- **No renewal after Week 16's report** (above). A Nov 24 buyer paid $29.98 for seven reports and
+  a Dec 1 buyer $14.99 for six, on a charge landing Dec 24 with two reports left and the refund
+  window closed. About $61 off the base case; worth it to remove the likeliest chargeback.
+- **The free report opens with checkout.** `make launch-check` fails when `CHECKOUT_CAN_COMPLETE`
+  is on with `TRIAL_OPEN` off. Both flip in one push on opening morning (LAUNCH step 6). Until the
+  Worker is live neither can.
+- **"Founding rate" must be true.** New buyers pay $49 in 2027 (`SEASON_NEW_BUYER_PRICE`, terms §3,
+  `run/economics.SEASON_NEW_BUYER`); the landing says "New buyers pay more." and names no figure,
+  because a selling page never compares prices. That is a promise: 2027 must really sell at $49.
+  **Monthly moves with it:** 3 × $14.99 = $44.97 is under $49, so `MONTHLY_2027` is $16.99 before
+  the pass goes on sale.
+- **The compare page dates what was checked.** Its stamp names the four rows rechecked Oct 31
+  rather than re-dating rows nobody read. The rest still need a by-hand check.
+- **$34.99 is low on purpose:** 2.3 times Monthly for up to 14 reports. At two sales $49.99 adds
+  about $36, and each sale reaches a league. Revisit with 2027's pass.
 
 **2026 pricing: one-time passes (owner decision, Oct 18 2026; replaced Oct 31, above).** For the mid-season launch the
 site sells a **$29 Rest-of-Season Pass**, a **$19 Playoff Pass** (automatic once a buyer's first
@@ -1700,8 +1725,8 @@ Stripe documents that mix for Checkout; a Payment Link taking it is LAUNCH §13 
   all a portal Cancel on a trialing subscription, which the pass rests on. The word "trial" can
   reach buyers (billing page, 0 USD invoice, `* TRIAL OVER` on a 2028 statement); the welcome
   explains it and it's a lawyer question.
-- **The money case.** $49 beats a monthly buyer plus a $39 re-buy if under about 72% of buyers
-  would have come back anyway (`run/economics.py`), near the top of PLAN's 30–70%.
+- **The money case.** $49 beats a monthly buyer plus a $39 re-buy if under about 77% of buyers
+  would have come back anyway (`run/economics.py`), above PLAN's 30–70%.
 
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's

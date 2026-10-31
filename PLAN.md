@@ -322,15 +322,37 @@ an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 
 **2026 SELLS MONTHLY PLANS (owner decision, Oct 31 2026; CLAUDE.md "Monthly pricing").** The
 **$14.99 Monthly plan** and the **$34.99 League Pass** (a month, for the whole league, on its
-own page). Each stops on its own: nothing is charged after Week 17's report goes out, and
+own page). Each stops on its own: it won't renew after Week 16's report goes out, and
 reports run through the season's last. They replace the one-time passes of Oct 18 ($29, $19,
 $69), which never sold: a fixed price buys less every week, so the pass grew harder to sell and
 needed a price drop at Week 13. 2026 buyers' 2027 season pass is the founding $39. Everything
 below about $39 / $99 subscriptions, renewals and the ladder invariant is the **2027** design
-and stays as written for it. What the 2026 prices leave, and the base case (about $574 after
+and stays as written for it. What the 2026 prices leave, and the base case (about $513 after
 fixed costs for 30 Monthly buyers + 2 League Passes, opening Nov 9, with 30% leaving before a
 second charge), is `run/economics.py`; a 2026 buyer coming back in 2027 is a
 **re-buy**, never a renewal, and the model counts it that way.
+
+**The pricing review (owner decision, Oct 31 2026).** Prices hold: $14.99 and $34.99. Read from
+each vendor's own page that day, month-to-month paid tiers run PFF+ $9.99, FantasyPros
+$11.99/$16.99/$22.99, FootClan $7.99/$15.99, Draft Sharks $16/$22/$44 and STACKED $19.99, so
+$14.99 is mid-market and near the top of what a product with no record and no sync can charge.
+The real cost this season is $14.99–$29.98, because the plan stops by itself. $34.99 is low on
+purpose: at two sales a higher price adds about $36, and each sale reaches up to 14 managers.
+Two things this file said were wrong. FootClan's $11.99 is its top tier on annual billing only,
+and "AI entrants at $4.99–$9.99" could not be confirmed as a market floor (STACKED's $4.99 is
+annual billing; its monthly price is $19.99). Three decisions came out of it:
+- **No plan renews after Week 16's report.** A Nov 24 buyer paid $29.98 for seven reports while a
+  Dec 1 buyer paid $14.99 for six, on a second charge landing Dec 24 with two reports left and the
+  refund window long closed. Those reports are now free. It costs about $61 on the base case
+  ($574 → $513) and removes the charge most likely to come back as a chargeback.
+- **The free report opens with checkout.** The Aug 17 decision below was "$39 with a free first
+  week", and that door was still shut. `make launch-check` now fails if checkout completes with
+  `TRIAL_OPEN` off.
+- **2027: $39 is a founding rate because new buyers pay $49.** Terms §3 now says so, which commits
+  us: it must really be $49 in 2027. **Monthly has to move with it.** The ladder rule below
+  (monthly × 3 above the season pass) fails at 3 × $14.99 = $44.97 against $49, so Monthly goes to
+  $16.99 (3 × = $50.97) before 2027's pass goes on sale. That is `run/economics.MONTHLY_2027`,
+  and nothing on the site promises $14.99 for 2027.
 
 **REVISED Aug 17 2026 — the price rises and a free door opens.** The Aug 13 decision was "charge
 from day one, no free tier," with the public ledger and the Week-2 refund as the risk-reversal.
@@ -360,7 +382,7 @@ replaces "one decision at checkout"**: $14.99 a month, or $49 for this season an
 sale, a notice goes out 15 to 45 days before every charge, and cancelling is self-serve. Monthly
 is not sold in 2026. This takes 2027 money now, so `make stats` and the dashboard show what is
 held for a season not yet delivered. `run/economics.py`'s honest view: the prepaid pass earns more per buyer than a monthly buyer plus
-a $39 2027 re-buy below a re-buy rate of about 72%, near the top of the model's own 30–70%; watch
+a $39 2027 re-buy below a re-buy rate of about 77%, above the model's own 30–70%; watch
 it against that.
 
 **At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
@@ -395,7 +417,8 @@ Nothing about the pricing decision changes — the gap moved in the pass's favou
 figure was quoted on the strength of arithmetic nobody had run against the calendar. *(Oct 18 2026: superseded — a monthly subscription now ends at the close of the period that contains the season's last report, so there is no part-month and nothing after the season; `make economics` prints the current figures.)* Charm pricing on monthly and round numbers
 on the season tiers is deliberate, not drift — it is each price wearing its own category's
 clothes, and it matches the verified monthly field on the compare page (FootClan $11.99,
-Scoutcast $5.99, FantasyPros $3.99–$22.99).
+Scoutcast $5.99, FantasyPros $3.99–$22.99). *(Oct 31 2026: FootClan's $11.99 is its annual-only
+top tier; see the pricing review above.)*
 
 **DONE (Aug 2026). Code consequences of the price change**, recorded: `site/index.html`,
 `site/join/index.html`, `site/league-pass.html`, the renewal-disclosure strings, and the
@@ -966,8 +989,8 @@ three League Passes is $297; infra ~$15. **A realistic good outcome is $1,500–
 season, essentially all of it from channels that are people, not pages.**
 
 **Revised again Oct 31 2026, for what 2026 actually sells.** At the monthly prices, opening in
-Week 10, the base case — 30 Monthly buyers and 2 League Passes, 1.4 charges a buyer — leaves
-about $574 after Stripe, refunds, disputes and fixed costs, for about 49 owner-hours
+Week 10, the base case — 30 Monthly buyers and 2 League Passes, 1.3 charges a buyer — leaves
+about $513 after Stripe, refunds, disputes and fixed costs, for about 49 owner-hours
 (`run/economics.py`; the launch check fails if `reports/launch-readiness.md` stops agreeing).
 2026 is a proof season worth a few hundred dollars; whether this is profitable is a 2027
 question, decided by the four open items in IDEAS.md (2027 price and founder link, a second

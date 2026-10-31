@@ -169,14 +169,15 @@ class PaidList:
 # succeeds. Sending during that window is giving away the product on a card
 # that bounced.
 _ENTITLED_STATUSES = ("active", "trialing")
-# A plan WE ended for the season (run/billing, SEASON_STOP_KEY) stops billing
-# with Week 17's report, and its paid period can end before Week 18's report
-# goes out. Those days are owed: "stops on its own" must not cost a subscriber
-# the last report. Two weeks from the day it ended covers Week 18's Tuesday and
-# Saturday from the earliest possible end, and lapses by itself. A plan its
-# buyer cancelled carries no key, so it ends when it ends.
+# A plan WE ended for the season (run/billing, SEASON_STOP_KEY) does not renew
+# after Week 16's report, so its paid period can end before Week 17's and Week
+# 18's reports go out. Those reports are owed: "stops on its own" must not cost
+# a subscriber the end of their season. Three weeks from the day it ended covers
+# Week 18's Tuesday and Saturday from the earliest possible end (18 days and a
+# few hours), and lapses by itself. A plan its buyer cancelled carries no key,
+# so it ends when it ends.
 SEASON_STOP_KEY = "byl_offseason_stop"
-SEASON_STOP_GRACE_DAYS = 14
+SEASON_STOP_GRACE_DAYS = 21
 
 # RULE E1 — A REFUND ENDS ENTITLEMENT, EVEN WHILE THE SUBSCRIPTION IS ACTIVE.
 #

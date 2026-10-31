@@ -15,15 +15,14 @@ call was a read plus one customer-metadata write. So in February a monthly
 subscriber would have been charged for a product that sends nothing,
 which is precisely the forgot-to-cancel pattern PLAN §4 bans outright.
 
-**What the subscriber is charged (D1, Oct 18 2026).** Monthly bills on the
-anniversary of the purchase, and billing stops on its own AFTER THE SEASON'S
-LAST WEEKLY REPORT: the last charge is the month that report falls in. No
-charge ever starts a period with no weekly report in it, there is no part-month
-stub, and nothing is charged after the season. Mechanically: a monthly
+**What the subscriber is charged (D1, Oct 18 2026; moved twice on Oct 31).**
+Monthly bills on the anniversary of the purchase, and a plan never renews after
+LAST_CHARGE_WEEK's report is due. Reports still run through the season's last
+(run/subscriptions, SEASON_STOP_GRACE_DAYS). No charge ever starts a period with
+no weekly report in it, and there is no part-month stub. Mechanically: a monthly
 subscription is stamped ``cancel_at_period_end`` only once its CURRENT period
-ends after the season's last weekly send — that is its final paid period — and
-until then it carries nothing, so the billing page keeps its normal Cancel
-button.
+ends after that report is due — that is its final paid period — and until then
+it carries nothing, so the billing page keeps its normal Cancel button.
 
 That replaced a ``cancel_at`` written months ahead (the last send plus a retry
 week), which was wrong twice over, both reproduced in the promises audit:
@@ -53,14 +52,13 @@ them. Same reasoning as STRIPE_PAYMENT_LINKS being authoritative over a ref
 prefix. `run/renewals.py` already reads intervals this way.
 
 RULE B3 — THE FINAL PERIOD, AND NOT ONE DAY BEFORE IT. The stop is written only
-when the subscription's current period ends after the last weekly send is DUE
-(the Tuesday run's scheduled minute, `run.watchdog.tuesday_due_at`, of the
-first Tuesday `current_week` answers the last week — derived from the send
-calendar, not from "the finale is a Sunday", which is true of 24 of 28 cached
-seasons and is not a rule). A period that ends before that instant renews into
-the period the last report falls in, which is the month the subscriber is
-owed; one that ends after it would renew into a month with no report. Written
-any earlier, the stop takes the Cancel button away (above).
+when the subscription's current period ends after LAST_CHARGE_WEEK's report is
+DUE (the Tuesday run's scheduled minute, `run.watchdog.tuesday_due_at`, counted
+back from the first Tuesday `current_week` answers the last week — derived from
+the send calendar, not from "the finale is a Sunday", which is true of 24 of 28
+cached seasons and is not a rule). A period that ends before that instant
+renews; one that ends after it would take a month's money with at most two
+reports left. Written any earlier, the stop takes the Cancel button away (above).
 
 RULE B4 — OUR SUBSCRIPTIONS ONLY. Scoped to customers carrying `byl_roster_ref`.
 A sweep over every non-yearly subscription in the account would attach a
@@ -233,24 +231,28 @@ def last_send(cache_dir: Path, season: str, *,
     return None
 
 
-# The week a title game is played under ESPN's, Yahoo's and Sleeper's default
-# playoffs. Billing ends with that week's report (owner decision, Oct 31 2026):
-# a renewal after it would take $14.99 on title-game weekend for the one report
-# left, which most leagues don't play. Reports still run to the season's last:
-# run/subscriptions keeps a plan we stopped entitled for SEASON_STOP_GRACE_DAYS.
-TITLE_WEEK = 17
+# No plan renews after this week's report (owner decision, Oct 31 2026). A
+# renewal after it took $14.99 with two reports left: a Nov 24 buyer paid
+# $29.98 for seven reports while a Dec 1 buyer paid $14.99 for six, on a charge
+# that landed around Christmas, after most teams were knocked out and weeks
+# after the refund window closed. That is the charge most likely to come back as
+# a chargeback, which costs more than it earned. Reports still run to the
+# season's last: run/subscriptions keeps a plan we stopped entitled for
+# SEASON_STOP_GRACE_DAYS.
+LAST_CHARGE_WEEK = 16
 
 
-def title_send(cache_dir: Path, season: str, *, live: bool = False) -> date | None:
-    """The Tuesday TITLE_WEEK's report goes out, or the season's last report in
-    a season too short to reach it. None when the schedule cannot say."""
+def last_charge_send(cache_dir: Path, season: str, *,
+                     live: bool = False) -> date | None:
+    """The Tuesday LAST_CHARGE_WEEK's report goes out, or the season's last
+    report in a season too short to reach it. None when the schedule cannot say."""
     send = last_send(cache_dir, season, live=live)
     if send is None:
         return None
     games = _weeks(_schedule(cache_dir, live=live), str(season))
-    if TITLE_WEEK not in games or max(games) <= TITLE_WEEK:
+    if LAST_CHARGE_WEEK not in games or max(games) <= LAST_CHARGE_WEEK:
         return send
-    return send - timedelta(weeks=max(games) - TITLE_WEEK)
+    return send - timedelta(weeks=max(games) - LAST_CHARGE_WEEK)
 
 
 def final_send(cache_dir: Path, today: date | None = None, *,
@@ -262,7 +264,7 @@ def final_send(cache_dir: Path, today: date | None = None, *,
     is (None, None), which the caller reports and acts on in no way whatsoever.
     Reaching for `current_season` here would answer the season that just ended.
 
-    That report is TITLE_WEEK's. The instant may already be past: every monthly
+    That report is LAST_CHARGE_WEEK's. The instant may already be past: every monthly
     subscription's current period then ends after it, which is exactly right —
     none of them may renew again.
 
@@ -282,7 +284,7 @@ def final_send(cache_dir: Path, today: date | None = None, *,
         return None, None
     season = upcoming[0]
     try:
-        send = title_send(cache_dir, season, live=live)
+        send = last_charge_send(cache_dir, season, live=live)
     except (NflverseError, SoloError, OSError, ValueError):
         return None, None
     if send is None:
@@ -369,7 +371,7 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
                returned: Callable[[Mapping[str, Any]], str | None] = lambda _s: None,
                ) -> tuple[list[dict], list[str]]:
     """(the subscriptions in their final paid period, things worth saying out
-    loud), against ``final`` — the instant TITLE_WEEK's report is due.
+    loud), against ``final`` — the instant LAST_CHARGE_WEEK's report is due.
 
     Everything the filter drops is dropped for a stated reason, and the two
     live-but-untouched statuses are REPORTED rather than skipped in silence: a
@@ -419,9 +421,9 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
             notes.append(f"subscription {subscription.get('id')} has no readable "
                          f"period end — left alone rather than guessed at")
             continue
-        # RULE B3. Ends before TITLE_WEEK's report is due: the next renewal
-        # starts the period that report falls in, which is owed. Ends after it:
-        # this is the final paid period, and no renewal comes after it.
+        # RULE B3. Ends before LAST_CHARGE_WEEK's report is due: it renews once
+        # more. Ends after it: this is the final paid period, and the reports
+        # after it are covered by SEASON_STOP_GRACE_DAYS, never by a charge.
         if period_end > cutoff:
             due.append(dict(subscription))
     return due, notes
@@ -746,8 +748,9 @@ def _monthly_stop(args: argparse.Namespace, api_key: str) -> int:
     lookup = DisputeLookup(api_key)
     due, notes = needs_stop(subscriptions, at,
                             lambda sub: money_returned(sub, api_key, lookup))
-    print(f"Season {season}: the last weekly report is due {at:%Y-%m-%d %H:%M} "
-          f"UTC; a monthly period ending after it is the final one")
+    print(f"Season {season}: Week {LAST_CHARGE_WEEK}'s report is due "
+          f"{at:%Y-%m-%d %H:%M} UTC; a monthly period ending after it is the "
+          f"final one")
     print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly, "
           f"{len(due)} in their final paid period")
 
@@ -773,8 +776,8 @@ def _monthly_stop(args: argparse.Namespace, api_key: str) -> int:
               f"subscription(s) at the end of their final paid period.)")
     if failures:
         print(f"{len(failures)} subscription(s) in their final period could "
-              f"not be stopped. Each renews into a month with no report unless "
-              f"a later run succeeds before its period ends.", file=sys.stderr)
+              f"not be stopped. Each renews after Week {LAST_CHARGE_WEEK}'s report "
+              f"unless a later run succeeds before its period ends.", file=sys.stderr)
     print(line)
     return 1 if (failures or notes) else 0
 

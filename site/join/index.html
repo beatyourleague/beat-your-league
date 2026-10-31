@@ -690,8 +690,9 @@ Baltimore Ravens
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
       <p class="terms-line" id="terms-line">The Monthly plan is <b>$14.99 USD a month until
-      you cancel, and billing stops on its own after your title game</b>: nothing is charged
-      after Week 17's report goes out. Cancel any time from your billing page. Refunds are
+      you cancel, and billing stops on its own</b>: it won't renew after Week 16's report
+      goes out, and your reports still run through the season's last week. Cancel any time
+      from your billing page. Refunds are
       no-questions until your first weekly report's week kicks off (or a week after it
       reaches you, if we send it late). One per person, and a second purchase after a
       refund is final.</p>
@@ -752,7 +753,7 @@ Baltimore Ravens
         <li id="pay-note">Stripe handles the payment. We never see, transmit or store
         your card details.</li>
         <li id="renew-note">The Monthly plan is <b>$14.99 a month</b> until you cancel, and
-        billing stops on its own after your title game.</li>
+        it won't renew after Week 16's report.</li>
         <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
         until your first weekly report's week kicks off (or a week after it reaches
         you, if we send it late). One per person, and a
@@ -848,7 +849,7 @@ if (!window.R) {
 // nothing — no welcome, no report — until somebody set the key. The URLs are in
 // git history; they come back after LAUNCH.md steps 1–3 and 5 (the Worker first).
 // 2026 (owner decision, Oct 31 2026): monthly plans, Payment Links in
-// subscription mode, that stop on their own after Week 17's report.
+// subscription mode, that don't renew after Week 16's report.
 const STRIPE_LINK_MONTHLY = "";  // $14.99 a month
 const STRIPE_LINK_PASS = "";  // League Pass, $34.99 a month for the whole league
 // The 2027 Season Pass: all of 2027 with the rest of this season included,
@@ -2977,8 +2978,9 @@ if (TRY_MODE) {
 }
 function passTermsText() {
   return "The League Pass is $34.99 USD a month for your whole league until you " +
-    "cancel, and billing stops on its own after the title game: nothing is charged " +
-    "after Week 17's report goes out. Cancel any time from your billing page. If you " +
+    "cancel, and billing stops on its own: it won't renew after Week 16's report goes " +
+    "out, and reports still run through the season's last week. Cancel any time from " +
+    "your billing page. If you " +
     "cancel or a payment fails, every seat's reports stop too. Refunds are " +
     "no-questions until your first weekly report's week kicks off (or a week after " +
     "it reaches you, if we send it late). One per league.";

@@ -2,7 +2,7 @@
 one-time passes, because a fixed price buys less every week.
 
 What these hold:
-- billing ends with Week 17's report, and no renewal follows it;
+- no plan renews after Week 16's report (tests/test_pricing_review.py has why);
 - a plan WE stopped still gets the season's last report, and one its buyer
   cancelled does not;
 - a refund ends the plan, so a buyer is never billed for reports that stopped;
@@ -23,7 +23,7 @@ from render.report import SEASON_END_BILLING
 from render.welcome import MONTHLY_PRICE, PASS_PRICE, welcome_message
 from run import economics
 from run.billing import (ROSTER_METADATA_KEY, STOP_METADATA_KEY, final_send, last_send,
-                         needs_stop, title_send)
+                         needs_stop, last_charge_send)
 from run.checkout import link_map_problems, parse_link_plans
 from run.subscriptions import (SEASON_STOP_GRACE_DAYS, SEASON_STOP_KEY, load_paid_from_stripe,
                                stopped_for_season)
@@ -33,7 +33,7 @@ SITE = ROOT / "site"
 CACHE = ROOT / "data" / "raw" / "nflverse"
 needs_schedule = pytest.mark.skipif(not (CACHE / "games.csv").is_file(),
                                     reason="no cached nflverse schedule (data/ is gitignored)")
-TITLE_DUE = datetime(2026, 12, 29, 12, 17, tzinfo=timezone.utc)
+CHARGE_DUE = datetime(2026, 12, 22, 12, 17, tzinfo=timezone.utc)
 
 
 def sub(period_end: datetime, **over) -> dict:
@@ -46,37 +46,38 @@ def sub(period_end: datetime, **over) -> dict:
 
 
 # --------------------------------------------------------------------- #
-# billing ends with Week 17's report
+# no renewal after Week 16's report
 # --------------------------------------------------------------------- #
 
 @needs_schedule
-def test_billing_ends_with_week_17s_report_not_the_last() -> None:
+def test_billing_ends_with_week_16s_report_not_the_last() -> None:
     assert last_send(CACHE, "2026") == date(2027, 1, 5)
-    assert title_send(CACHE, "2026") == date(2026, 12, 29)
+    assert last_charge_send(CACHE, "2026") == date(2026, 12, 22)
     at, season = final_send(CACHE, date(2026, 11, 1))
-    assert season == "2026" and at.date() == date(2026, 12, 29)
+    assert season == "2026" and at.date() == date(2026, 12, 22)
 
 
 def test_a_january_renewal_never_happens() -> None:
     """The fix the owner approved: a Dec 1 buyer's period ends Jan 1. Renewing
     there took $14.99 just before the one report left."""
-    due, notes = needs_stop([sub(datetime(2027, 1, 1, 15, tzinfo=timezone.utc))], TITLE_DUE)
+    due, notes = needs_stop([sub(datetime(2027, 1, 1, 15, tzinfo=timezone.utc))], CHARGE_DUE)
     assert [s["id"] for s in due] == ["sub_1"] and not notes
 
 
-def test_a_renewal_before_week_17s_report_still_happens() -> None:
-    due, _ = needs_stop([sub(datetime(2026, 12, 10, 15, tzinfo=timezone.utc))], TITLE_DUE)
+def test_a_renewal_before_week_16s_report_still_happens() -> None:
+    due, _ = needs_stop([sub(datetime(2026, 12, 10, 15, tzinfo=timezone.utc))], CHARGE_DUE)
     assert due == []
 
 
 @pytest.mark.parametrize("joined,charges", [
     (date(2026, 11, 3), 2),     # used to be 3, the last on title-game weekend
     (date(2026, 11, 10), 2),
+    (date(2026, 11, 24), 1),    # used to be 2, the last on Dec 24
     (date(2026, 12, 1), 1),     # used to be 2, the last on Jan 1
     (date(2026, 12, 29), 1),
 ])
 def test_what_a_buyer_pays_by_the_day_they_join(joined, charges) -> None:
-    assert economics.monthly_charges(joined, date(2026, 12, 29))[0] == charges
+    assert economics.monthly_charges(joined, date(2026, 12, 22))[0] == charges
 
 
 # --------------------------------------------------------------------- #
@@ -118,7 +119,7 @@ def test_the_grace_runs_out_by_itself() -> None:
 
 def test_grace_covers_week_18s_tuesday_and_saturday_from_the_earliest_end() -> None:
     assert SEASON_STOP_GRACE_DAYS * 86400 >= (
-        datetime(2027, 1, 9, 17, tzinfo=timezone.utc) - TITLE_DUE).total_seconds()
+        datetime(2027, 1, 9, 17, tzinfo=timezone.utc) - CHARGE_DUE).total_seconds()
 
 
 def _stripe(monkeypatch, plans: list[dict]) -> None:
@@ -170,20 +171,20 @@ def test_a_refund_beats_the_grace(monkeypatch) -> None:
 def test_a_refunded_plan_gets_its_stop_whatever_the_calendar_says(state) -> None:
     """Refund alone stops the reports and leaves Stripe billing next month."""
     plan = sub(datetime(2026, 12, 10, 15, tzinfo=timezone.utc))
-    due, _ = needs_stop([plan], TITLE_DUE, lambda _s: state)
+    due, _ = needs_stop([plan], CHARGE_DUE, lambda _s: state)
     assert [s["id"] for s in due] == ["sub_1"]
 
 
 @pytest.mark.parametrize("state", [None, "disputed"])
 def test_an_open_dispute_or_a_paid_plan_is_left_alone(state) -> None:
     plan = sub(datetime(2026, 12, 10, 15, tzinfo=timezone.utc))
-    assert needs_stop([plan], TITLE_DUE, lambda _s: state)[0] == []
+    assert needs_stop([plan], CHARGE_DUE, lambda _s: state)[0] == []
 
 
 def test_a_plan_already_ending_is_not_read_again() -> None:
     asked = []
     plan = sub(datetime(2026, 12, 10, 15, tzinfo=timezone.utc), cancel_at_period_end=True)
-    needs_stop([plan], TITLE_DUE, lambda s: asked.append(s) or "refunded")
+    needs_stop([plan], CHARGE_DUE, lambda s: asked.append(s) or "refunded")
     assert asked == []
 
 
@@ -252,8 +253,8 @@ def test_the_buy_page_discloses_above_the_button() -> None:
     join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
     block = re.sub(r"\s+", " ", join.split('id="terms-line"')[1].split("</p>")[0])
     assert f"{MONTHLY_PRICE} USD a month until you cancel" in block
-    assert "billing stops on its own after your title game" in block
-    assert "nothing is charged after Week 17's report goes out" in block
+    assert "billing stops on its own" in block
+    assert "it won't renew after Week 16's report goes out" in block
     assert "Refunds are no-questions" in block
     assert f'Unlock my lineups — {MONTHLY_PRICE}/mo' in join
 
@@ -262,7 +263,7 @@ def test_the_buy_page_discloses_above_the_button() -> None:
 def test_the_welcome_states_the_charge_and_when_it_stops(plan, price) -> None:
     text = welcome_message("x@example.com", plan, "abcdef0123", "2026").text
     flat = re.sub(r"\s+", " ", text)
-    assert f"{price} USD" in flat and "billing stops on its own after your title game" in flat
+    assert f"{price} USD" in flat and "billing stops on its own" in flat
     assert "renews once a year" not in flat and "one payment" not in flat
 
 

@@ -39,8 +39,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# What 2026 sells (owner decision, Oct 31 2026): monthly plans that stop on
-# their own after Week 17's report. render/welcome.py's MONTHLY_PRICE and
+# What 2026 sells (owner decision, Oct 31 2026): monthly plans that don't renew
+# after Week 16's report. render/welcome.py's MONTHLY_PRICE and
 # PASS_PRICE are these (tests/test_economics.py ties them). SEASON is the
 # founding full-season pass from 2027, and LEAGUE_PASS the figure PLAN.md
 # records for a yearly League Pass.
@@ -48,6 +48,11 @@ MONTHLY = 14.99
 LEAGUE_MONTHLY = 34.99
 SEASON = 39.00
 SEASON_2027_PASS = 49.00    # this season and next, then renewing at SEASON
+# 2027's price for anyone who didn't buy in 2026 (owner decision, Oct 31 2026;
+# terms §3 promises it, which is what makes SEASON a founding rate at all).
+# Monthly has to move with it: three charges must still pass the pass.
+SEASON_NEW_BUYER = 49.00
+MONTHLY_2027 = 16.99
 LEAGUE_PASS = 99.00
 # Retired Oct 31 2026, before anything was sold. A one-time link has no Billing
 # fee; run/stats reads these so a price from one still gets a name.
@@ -105,9 +110,11 @@ WEEK1_REPORT = date(2026, 9, 8)
 LAST_WEEK = 18
 # From Week 13 only about half a league is still alive, so a playoff week sells
 # about half what a regular week does, through Week 17 (the title game under the
-# platforms' defaults, and run/billing's TITLE_WEEK). Stated, not measured.
+# platforms' defaults). Stated, not measured. No plan renews after
+# LAST_CHARGE_WEEK's report, run/billing's constant of the same name.
 PLAYOFF_FROM_WEEK = 13
 LAST_SELLING_WEEK = 17
+LAST_CHARGE_WEEK = 16
 PLAYOFF_DEMAND = 0.5
 
 
@@ -142,7 +149,7 @@ def expected_charges(opens: date = None) -> float:
     weeks = selling_weeks(opens)
     if not weeks:
         return 1.0
-    stop = report_tuesday(LAST_SELLING_WEEK)
+    stop = report_tuesday(LAST_CHARGE_WEEK)
     paid = sum(share * (1 + (1 - LEAVE_AFTER_FIRST)
                         * (monthly_charges(report_tuesday(week), stop)[0] - 1))
                for week, share in weeks.items())
@@ -230,7 +237,7 @@ def _add_month(day: date) -> date:
 
 def monthly_charges(joined: date, stop: date) -> tuple[int, float]:
     """(monthly charges, 0.0) for a monthly buyer who joins on ``joined`` when
-    Week 17's report is due on ``stop``. The first month is charged at signup;
+    Week 16's report is due on ``stop``. The first month is charged at signup;
     Stripe then bills in advance on each anniversary, and run/billing.py ends
     the subscription at the close of the period that contains that report
     (cancel_at_period_end), so an anniversary renews only while it falls on or
@@ -335,8 +342,9 @@ def customer_lines(calendar=None) -> list[str]:
     if cal is None:
         lines.append("  Monthly by join week: the schedule can't say (offseason or cold cache).")
     else:
-        lines.append(f"  Monthly, by the week they join (no charge after Week 17's "
-                     f"report, {cal[1]:%b %-d}; joins on the report Tuesday):")
+        lines.append(f"  Monthly, by the week they join (no renewal after Week "
+                     f"{LAST_CHARGE_WEEK}'s report, {cal[1]:%b %-d}; joins on the "
+                     f"report Tuesday):")
         for row in monthly_by_join_week(cal):
             plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
             lines.append(f"    Week {row['week']:>2}: {plural(row['charges'], 'charge')}, "
@@ -513,6 +521,10 @@ def summary_lines() -> list[tuple[str, str, str]]:
     rows.append(("2027: three monthly charges cost more than the season pass",
                  "PASS" if 3 * MONTHLY > SEASON else "FAIL",
                  f"3 × ${MONTHLY} = ${3 * MONTHLY:.2f} vs ${SEASON:.0f}"))
+    rows.append(("2027: new buyers' pass needs Monthly at its 2027 price",
+                 "PASS" if 3 * MONTHLY_2027 > SEASON_NEW_BUYER else "FAIL",
+                 f"3 × ${MONTHLY_2027} = ${3 * MONTHLY_2027:.2f} vs "
+                 f"${SEASON_NEW_BUYER:.0f}; ${MONTHLY} would be ${3 * MONTHLY:.2f}"))
     plans = " · ".join(
         f"{name} ${price}: Stripe ${stripe_fee(price):.2f} a charge, "
         f"${net_per_buyer(price):.2f} a buyer"

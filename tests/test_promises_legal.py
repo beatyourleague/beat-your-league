@@ -41,7 +41,10 @@ TERMS_VERSIONS = [
     ("2026-10-30", "1e54e86e1716742f"),
     # Monthly plans replace the one-time passes (owner decision, Oct 31 2026): §3-§5
     # and the liability figure. No buyer had ever paid, so no change notice was owed.
-    ("2026-10-31", "83f1f1bb4620b0b2"),
+    # Then the same day, the pricing review: no renewal after Week 16's report, and
+    # new buyers' $49 beside the founding rate. No buyer had accepted any version,
+    # and a date can only move forward, so the digest was replaced, not appended.
+    ("2026-10-31", "7f1b40525fba82e8"),
 ]
 
 _DATE = re.compile(r"Last updated (\d{1,2} [A-Z][a-z]+ \d{4})\.")
@@ -96,12 +99,12 @@ def test_the_short_version_restates_the_body() -> None:
 
 
 def test_monthly_billing_words_match_the_season_end_stop() -> None:
-    """LEGAL-28..31/139 under D1: nothing is charged after Week 17's report;
+    """LEGAL-28..31/139 under D1: no renewal after Week 16's report;
     no 'offseason' or part-month stub claim."""
     from infra.stripe_paylink_text import MESSAGES, TOS_MESSAGES
     terms = _visible("terms.html")
     for text in (terms, MESSAGES["monthly"], TOS_MESSAGES["monthly"]):
-        assert "after Week 17's report" in text
+        assert "after Week 16's report" in text
     assert "through the offseason" not in terms + MESSAGES["monthly"]
     assert "when the season ends" not in MESSAGES["monthly"]
 

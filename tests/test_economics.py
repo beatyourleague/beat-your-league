@@ -110,9 +110,9 @@ def test_selling_time_is_plans_own_budget_and_the_audit_agrees(tmp_path, monkeyp
     the audit's base case stops matching it."""
     assert econ.SELLING_MIN_PER_DAY == 35
     assert econ.owner_hours() == 48.8          # 9 weeks from a Nov 9 opening
-    assert econ.base_case_figures() == ("about $574", "about 49 hours", "about $12 an hour")
+    assert econ.base_case_figures() == ("about $513", "about 49 hours", "about $11 an hour")
     stale = tmp_path / "launch-readiness.md"
-    stale.write_text("about $574 after fixed costs; about 43 hours, so about $26 an hour",
+    stale.write_text("about $513 after fixed costs; about 43 hours, so about $26 an hour",
                      encoding="utf-8")
     missing = econ.readiness_base_case_mismatches(stale)
     assert len(missing) == 2 and "about 49 hours" in missing[0], missing
@@ -121,7 +121,7 @@ def test_selling_time_is_plans_own_budget_and_the_audit_agrees(tmp_path, monkeyp
     [row] = [r for r in econ.summary_lines() if "base-case" in r[0]]
     assert row[1] == "FAIL" and "about 49 hours" in row[2], row
     wrapped = tmp_path / "wrapped.md"
-    wrapped.write_text("about $574 after costs. Owner time: about\n49 hours, so about $12\n"
+    wrapped.write_text("about $513 after costs. Owner time: about\n49 hours, so about $11\n"
                        "an hour.", encoding="utf-8")
     assert econ.readiness_base_case_mismatches(wrapped) == []
 

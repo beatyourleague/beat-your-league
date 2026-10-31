@@ -59,8 +59,10 @@ CANCEL = ("you can cancel any time from your billing page")
 # refund term sits beside every price, the Pay button included).
 # 2026 sells monthly plans now (owner decision, Oct 31 2026): the one-payment
 # words above stand only for a one-time link, and none is sold.
-STOPS = ("Billing stops on its own after your title game: nothing is charged after "
-         "Week 17's report goes out.")
+# "Won't renew", never "nothing is charged": a buyer after Week 16's report still
+# pays once, at purchase.
+STOPS = ("Billing stops on its own: it won't renew after Week 16's report goes out, "
+         "and your reports still run through the season's last week.")
 ONE_TIME_COVERS = ("It covers every weekly report from today through the "
                    "season's last")
 REFUND = ("Full refund, no questions, until your first weekly report's week "
@@ -100,10 +102,10 @@ TOS_MESSAGES = {
                f"is one payment that does not renew, and I am 18 or older."),
     "monthly": (f"I agree to the [Terms]({TERMS_URL}), including that this plan "
                 f"bills {MONTHLY_PRICE} USD every month until I cancel or it stops "
-                f"on its own after Week 17's report, and I am 18 or older."),
+                f"renewing after Week 16's report, and I am 18 or older."),
     "league_pass": (f"I agree to the [Terms]({TERMS_URL}), including that this "
                     f"League Pass bills {PASS_PRICE} USD every month until I cancel "
-                    f"or it stops on its own after Week 17's report, and I am 18 or "
+                    f"or it stops renewing after Week 16's report, and I am 18 or "
                     f"older."),
 }
 # The box the law wants ticked for a renewal: the amount, the date, the cycle.

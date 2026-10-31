@@ -3,7 +3,7 @@
 Every owner action left before a stranger's payment becomes a Tuesday email, in order, with
 the exact strings. The code is done and tested; nothing here is engineering. Updated Oct 31
 2026: 2026 sells **monthly plans** ($14.99 Monthly, $34.99 League Pass for the whole league),
-each ending by itself so that nothing is charged after Week 17's report goes out, and every
+each ending by itself so that it won't renew after Week 16's report goes out, and every
 step below is written for them. The yearly steps that come back in 2027 keep their own
 "2027" headings.
 
@@ -48,8 +48,9 @@ section with the exact strings and clicks.
     [step 4](#4-the-proving-run-1-hour): the Monthly plan on your own card, every email read in
     your mail apps.
 11. **Opening** (~20 min, the day after your purchase checks out) — [step 6](#6-opening-morning): I switch
-    checkout fully on; the waitlist gets its one email if the sender address exists and the
-    count fits the day.
+    checkout and the free report on together, you set the Worker's `TRIAL_OPEN` the same
+    minute, and the waitlist gets its one email if the sender address exists and the count
+    fits the day.
 12. **Before the first launch post** (~30 min) —
     [section 11, A1](#a1-before-the-first-launch-post): the site moves to Cloudflare Pages,
     and `www` redirects to the bare domain.
@@ -312,7 +313,7 @@ $20/month plan the week a Tuesday nears 85 (PLAN §2), then:
    purchase like a refund; without it a disputed payment shows as "status unknown" and the
    run goes red until you look), Customers **Write**, Subscriptions **Write**, everything
    else None. Subscriptions must be Write: `run/billing.py` ends each monthly plan so that
-   nothing is charged after Week 17's report, and ends a refunded plan so it can't bill again.
+   it won't renew after Week 16's report, and ends a refunded plan so it can't bill again.
 2. **Make your own read-only key.** Same page → **Create restricted key** → name
    `owner-stats` → **Read** on Checkout Sessions, Payment Intents, Charges, Refunds, Invoices
    and Subscriptions, everything else None → **Create**. Keep it in your password manager. It is
@@ -370,7 +371,8 @@ Nobody else's money moves until you've watched your own go all the way through.
 2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should go green, and
    its log should say the sealed registry was saved (the "Seal the registry" step).
 3. **The emails:**
-   - **The welcome:** $14.99 a month, **billing stops on its own after your title game**,
+   - **The welcome:** $14.99 a month, **billing stops on its own** (no renewal after Week
+     16's report, reports through the season's last week),
      refunds until your first weekly report's week kicks off, and how to cancel (the billing
      page).
    - **Bought Tuesday to Thursday before kickoff:** this week's report, too.
@@ -395,7 +397,7 @@ In Stripe **test** mode, make a $14.99 monthly link and buy it with a test card 
 4242), then open the test billing page. It must show **Cancel plan** — not "Cancels on…" and
 Reactivate. Then, with the test key in your shell, `.venv/bin/python -m run.billing --today
 2026-12-20` (dry): it lists the subscription as in its final paid period only when that period
-ends after Week 17's report. Press Cancel on the test page and confirm "no further charges".
+ends after Week 16's report. Press Cancel on the test page and confirm "no further charges".
 
 ## 5. The form Worker (~25 min) — do this first
 
@@ -454,12 +456,8 @@ nothing: every row is checked before it reaches the subscriber list.
    (`SITE_URL`, from step 3, builds the seat links.)
 7. **Tell me it's live.** I wire `https://forms.beatyourleague.com/rows` into the homepage
    form, the bye-week planner (`site/byes/`, its `NOTIFY_LIST_ENDPOINT`) and the join,
-   confirm and League Pass pages, switch on the League Pass button and the
-   FAQ's roster answer, and — once email sends (step 2) — the "Try it free" button
-   (`TRIAL_OPEN`, on the homepage and the join page). **The day I tell you that button is on,
-   set the Worker's own switch:** Worker → **Settings → Variables → Add** `TRIAL_OPEN` =
-   `true` (plain text). The Worker refuses every free-report request while it is unset, and
-   the launch check fails if the site and the Worker disagree.
+   confirm and League Pass pages, and switch on the League Pass button and the
+   FAQ's roster answer. The "Try it free" button comes on with checkout, in step 6.
 8. **Start the crons on time (5 min, same Worker).** GitHub started the Tuesday runs 5–7
    hours late on Oct 6 and 13, so the Worker starts them and GitHub's own schedules stay as
    the backup.
@@ -541,7 +539,13 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
 ## 6. Opening morning
 
 1. **After step 4's two emails arrive,** I turn on `CHECKOUT_CAN_COMPLETE`: the "leave your
-   email" box retires and the page says the first report lands today.
+   email" box retires and the page says the first report lands today. **The free report opens
+   in the same push** (`TRIAL_OPEN`, on the homepage, the join page and the bye planner),
+   because the $14.99 price was set on the basis of a free first report, and the launch check
+   fails if checkout completes without it. **When I tell you it's pushed, set the Worker's own
+   switch:** Worker → **Settings → Variables → Add** `TRIAL_OPEN` = `true` (plain text). The
+   Worker refuses every free-report request while it is unset, and the launch check fails if
+   the site and the Worker disagree.
 2. **The same morning, the waitlist's one email.**
    - Copy every sign-up that came in by email (to hello@, subject about the launch) into a
      file `signups.csv` with one column headed `email`.
@@ -936,7 +940,8 @@ roster is confirmed — before July 2027.
 2026 League Pass buyer gets, or that we may email them when 2027 opens — the privacy page
 lists no such email, and a monthly buyer gets no renewal notice. *Recommend:* section 12's
 proposed sentences, before the first sale. Stripe already holds every 2026 buyer, so the
-2027 link can honour the price without new code now.
+2027 link can honour the price without new code now. Terms §3 also says new buyers will pay
+$49, so 2027 needs that price on sale, and Monthly at $16.99 beside it (PLAN §4).
 
 **A price for a second team.** Each team is its own pass today, so a manager with three
 leagues stops at one. *Recommend:* not before the first ten buyers, and never at checkout
@@ -1131,7 +1136,8 @@ have a statutory cancellation right on top of our refund.
    answered, *recommend* treating a Quebec postal code (starting G, H or J) like a buyer from
    outside the US and Canada: refund, with an apology.
 5. **The founding price and the 2027 email.** Is the proposed wording below enough to make
-   the $39 price definite, and is one email to 2026 buyers when 2027 opens covered by CASL's
+   the $39 price definite, does "new buyers will pay $49" in terms §3 bind us to that price
+   in 2027, and is one email to 2026 buyers when 2027 opens covered by CASL's
    two-year existing business relationship (Canadians) and CAN-SPAM's opt-out (US)? And CASL
    express consent for the planned "Email me when 2027 opens" box: the sender's name, mailing
    address, a contact and a withdrawal statement beside it.
@@ -1304,5 +1310,5 @@ report and the next day's move, and refund it the way section 8 says.
 dollars collected for a 2027 season not yet delivered. That figure is yours to deliver on, so
 leave it in the bank until the 2027 season is played. A Monthly buyer who wants the pass pays
 $49 and cancels their plan, and there's no upgrade link. `run/economics.py` models the trade:
-the prepaid pass earns more than a monthly buyer plus a $39 re-buy if under about 72% of buyers
+the prepaid pass earns more than a monthly buyer plus a $39 re-buy if under about 77% of buyers
 would have bought again in 2027, against the model's 30–70% re-buy rates.

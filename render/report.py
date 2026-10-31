@@ -2243,7 +2243,7 @@ SEASON_END_HEAD = "The season's end"
 # season's roster — so a seat is never told its reports simply start again
 # (panel review LP-D3, LP-D5).
 SEASON_END_BILLING = {
-    # D1: billing has already stopped (run/billing, TITLE_WEEK), so this report
+    # D1: billing has already stopped (run/billing, LAST_CHARGE_WEEK), so this report
     # is the last and nothing bills after it.
     "monthly": "Your monthly plan has stopped billing on its own, so there's "
                "nothing to cancel. You have the founding rate. Your 2027 season "
