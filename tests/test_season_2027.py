@@ -826,14 +826,20 @@ def test_an_unreadable_invoice_list_is_not_an_empty_one(monkeypatch) -> None:
 
 def test_the_last_report_says_nothing_false_about_the_renewal() -> None:
     """"Renews once a year, on the day you bought it" is the season plan's
-    sentence, and false of this pass. Its word has no sentence yet, so it
-    prints none; the true one is the report's to add (handed over)."""
+    sentence, and false of this pass, which has its own."""
     meta = {"solo": True, "week": 18, "last_week": 18, "plan": _row().report_plan}
     assert meta["plan"] == "season"
     pass_meta = {**meta, "plan": _row(season_2027=True).report_plan}
     assert pass_meta["plan"] == SEASON_2027
     assert "on the day you bought it" in " ".join(season_end_lines(meta))
-    assert "on the day you bought it" not in " ".join(season_end_lines(pass_meta))
+    words = " ".join(season_end_lines({**pass_meta, "update_url": "https://x.test/u"}))
+    assert "on the day you bought it" not in words
+    assert "Unless you cancel, your pass renews each August 15, starting in 2028" in words
+    assert "This is the season's last report" in words and "After your draft" in words
+    from render.report import PASS_2027_PLAN
+    assert PASS_2027_PLAN == SEASON_2027
+    # One-time wording is a one-time pass's: this one renews.
+    assert "nothing renews" not in words
 
 
 def test_a_pass_payers_plan_word_is_not_taken_over() -> None:

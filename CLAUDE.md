@@ -1631,8 +1631,8 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
   comes from the link that took the money), so `keepInAddress` carries the choice in `?plan=`.
   Every "nothing renews" line follows the choice or the flag (terms line, sidebar, confirmation,
   hero risk line, finance note), and thanks.html reads `?plan=2027`. **Terms and the Playoff
-  swap:** terms.html still sells only one-time passes for 2026, so flipping the flag needs a
-  terms change and a `TERMS_VERSION` bump first; the flipped state was checked in Chrome on a
+  swap:** terms.html still sells only one-time passes for 2026, so flipping the flag needs the
+  terms change LAUNCH §13 drafts and a `TERMS_VERSION` bump first; the flipped state was checked in Chrome on a
   scratch copy at 390 and 1440, never committed.
 - **The buy button says what it unlocks; the next one says it leaves.** Open, step 3 reads
   "Unlock my lineups — $29" and the address read-back's button reads "Continue to checkout —
@@ -1641,6 +1641,35 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
 - **The closed League Pass leads to the roster check** (`join/index.html?plan=pass`, "Try it on
   my team"), the email capture one link under it.
 - **The landing's word cap only goes down:** 1,241 total and 876 by hand, pinned at those numbers.
+
+**The 2027 Season Pass backend (Oct 30 2026): built, switched off, waiting on the lawyer.** $39 for
+the rest of 2026 and all of 2027, a yearly subscription whose first renewal is
+`run.checkout.SEASON_2027_FIRST_RENEWAL` (August 15, 2028, fixed: a buyer consents to the date and
+no 2028 schedule can exist while it sells). `tests/test_season_2027.py`; turning it on is LAUNCH §13.
+- **`y:` in `STRIPE_PAYMENT_LINKS` is the only switch in the code.** Absent, a purchase, welcome and
+  billing run are unchanged. The ref stays `s`; the plan comes from the link that took the money,
+  and a `y:` session gets `season_2027` on its row and `report_plan`.
+- **One Stripe write moves the renewal:** `trial_end` plus `proration_behavior=none` (Stripe's own
+  "change the billing period using a trial period"; the default prorates). It charges nothing,
+  sets `trialing`, moves the anchor. `run/billing.py`, dry by default, idempotent, chosen from the
+  `y:` link's own sessions, never deleting. Not a Subscription Schedule: a scheduled subscription
+  can't be cancelled by its customer. A pass cancelled before the sweep reaches it is reported and
+  left for a human.
+- **The 0 USD invoice hid the payment.** After the move `latest_invoice` carries no charge, so a
+  refund or lost dispute left the buyer entitled to 2028. `purchase_view` reads the paid invoice.
+  A refunded pass would still bill in 2028, so the owner cancels it Immediately (LAUNCH §8) and
+  the daily run stays red with `REFUNDED-STILL-LIVE` until they do.
+- **Every page says the date, not just "each August":** landing, join and thanks print
+  "Nothing more until August 15, 2028" beside the price, held to the constant by test, and the
+  last report has its own sentence (`PASS_2027_PLAN`). The $39 is owed service, so `make stats`
+  and the dashboard show what's collected for 2027 seasons not yet delivered.
+- **What only ran against stubs: all of Stripe.** LAUNCH §13 step 3 is the first real test, above
+  all a portal Cancel on a trialing subscription, which the pass rests on. The word "trial" can
+  reach buyers (billing page, 0 USD invoice, `* TRIAL OVER` on a 2028 statement); the welcome
+  explains it and it's a lawyer question.
+- **The money case is not margin.** $39 beats $29 plus a $39 re-buy only if under about a quarter
+  of buyers would have come back anyway, and PLAN's re-buy range is 30–70%. Its case is winning
+  buyers who wouldn't return, and a higher price is the open owner decision (PLAN §4).
 
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's

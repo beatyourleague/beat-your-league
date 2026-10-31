@@ -1642,6 +1642,7 @@ const PLAYOFF_FROM_WEEK = 13;
 // rendered about 2027 is the founding-rate line.
 const SEASON_2027_READY = false;
 const SEASON_2027_PRICE = 39;
+const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by test
 // One verb on every buy button (sales review): the card adds its price.
 var PASS_LABEL = "Get my lineups — $29";
 // The price on offer right now, in dollars: the first card's, the Playoff
@@ -1739,6 +1740,10 @@ function season2027Card() {
    "Read your first weekly report before its games. Not for you? Full refund, no " +
    "questions, until your first weekly report's week kicks off. One per person."]
     .forEach((text) => list.appendChild(part("li", "", text)));
+  // Nobody should read "each August" as next August: the date sits by the price.
+  const SEASON_2027_TERMS = "Nothing more until " + SEASON_2027_FIRST_RENEWAL + ", when it " +
+    "renews at $" + SEASON_2027_PRICE + ", then each August. Cancel any time. We email you " +
+    "before it bills.";
   const buy = part("a", "btn gold", "Get my lineups — $" + SEASON_2027_PRICE);
   buy.id = "season-2027-cta";
   buy.href = CHECKOUT_OPEN ? "join/index.html?plan=2027" : "#watch-form";
@@ -1746,8 +1751,7 @@ function season2027Card() {
   const more = part("p", "passclock");
   more.id = "pass-2027-more";
   card.append(head, price,
-    part("p", "passterms", "Renews each August at $" + SEASON_2027_PRICE +
-         ". Cancel any time. We email you before it bills."),
+    part("p", "passterms", SEASON_2027_TERMS),
     part("p", "passlead", "All of 2027, with the rest of this season included."),
     more, list, buy);
   first.classList.remove("founder");
@@ -1762,8 +1766,7 @@ function season2027Card() {
       if (!node.offers) return;
       node.offers.push({ "@type": "Offer", price: String(SEASON_2027_PRICE), priceCurrency: "USD",
         description: "2027 Season Pass: all of 2027, with the rest of this season included. " +
-          "Renews each August at $" + SEASON_2027_PRICE + ". Cancel any time. We email you " +
-          "before it bills." });
+          SEASON_2027_TERMS });
     });
     ld.textContent = JSON.stringify(data);
   } catch (e) { /* unreadable structured data: the visible page is still right */ }

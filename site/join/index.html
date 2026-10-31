@@ -864,6 +864,7 @@ const MONTHLY_OFFERED = false;
 // way, because the plan comes from the link that took the money (run/intake.py).
 const STRIPE_LINK_2027 = "";  // $39 2027 Season Pass, renews yearly
 const SEASON_2027_READY = false;
+const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by test
 
 // League Pass SEATS only. A seat holder pays nothing, so there is no payment to
 // carry their picks — the one path that still needs a form backend. PLAN §0
@@ -2691,7 +2692,10 @@ function valueWords() {
   if (WANTS_PASS) {
     return "Your whole league, every lineup from now to the title game. $69, one payment.";
   }
-  if (chose2027) return "All of 2027, with the rest of this season included. $39, renews each August.";
+  if (chose2027) {
+    return "All of 2027, with the rest of this season included. $39 today, nothing more until " +
+      SEASON_2027_FIRST_RENEWAL + ".";
+  }
   const price = PLAYOFF_ACTIVE ? 19 : 29;
   const ahead = lineupsAhead(state.week, new Date(), canStartToday());
   const each = ahead ? perLineup(price, ahead.left) : "";
@@ -2860,7 +2864,8 @@ function drawPlayoffPass() {
 function draw2027Plan() {
   const terms = () => {
     const bold = document.createElement("b");
-    bold.textContent = "$39, and it renews each August at $39 until you cancel";
+    bold.textContent = "$39 today, nothing more until " + SEASON_2027_FIRST_RENEWAL +
+      ", when it renews at $39, then each August until you cancel";
     return [document.createTextNode("The 2027 Season Pass is "), bold, document.createTextNode(
       ": all of 2027, with the rest of this season included. Cancel any time. We email " +
       "you before it bills. Refunds are no-questions until your first weekly report's " +
@@ -2869,13 +2874,14 @@ function draw2027Plan() {
   };
   $("submit").textContent = "Unlock my lineups — $39";
   $("header-pitch").textContent = "All of 2027, with the rest of this season included, " +
-    "decided for your roster and in your inbox every Tuesday. $39, renewing each August. " +
+    "decided for your roster and in your inbox every Tuesday. $39 today, renewing at $39 on " +
+    SEASON_2027_FIRST_RENEWAL + ", then each August. " +
     "Cancel any time, and a full refund until your first weekly report's week kicks off.";
   $("terms-line").replaceChildren(...terms());
   $("renew-note").replaceChildren(...terms());
   $("first-tail").textContent = "Cancel any time. We email you before it bills.";
-  $("side-renew").textContent = "Renews each August at $39. Cancel any time. We email " +
-    "you before it bills";
+  $("side-renew").textContent = "Renews at $39 on " + SEASON_2027_FIRST_RENEWAL + ", then " +
+    "each August. Cancel any time. We email you before it bills";
   drawFirst();
   noteClosedFor(seasonLink(), monthlyLink());
 }

@@ -348,7 +348,8 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 if (new URLSearchParams(location.search).get("plan") === "2027") {
   document.getElementById("step-founding").hidden = true;
   document.getElementById("thanks-renew").textContent =
-    "It renews each August at $39, and we email you before it bills.";
+    "Nothing more until August 15, 2028, when it renews at $39, then each August. " +
+    "We email you before it bills.";
   document.getElementById("thanks-end").textContent = "Cancel any time";
 }
 // The share for a manager in ANOTHER league: the phone's share sheet, a copy,

@@ -2075,6 +2075,9 @@ def demo_band(meta: Mapping[str, Any]) -> str:
 # Before Oct 2026 a payer's row was flattened to "season" and their report
 # could not tell (panel review LP-D3); SEAT_PLAN above is the seat.
 PASS_PLAN = "pass"
+# The 2027 Season Pass (run.rosters.SEASON_2027). It renews every August 15
+# from 2028, so the season plan's "on the day you bought it" is false of it.
+PASS_2027_PLAN = "season_2027"
 
 
 def in_pass_league(meta: Mapping[str, Any]) -> bool:
@@ -2248,6 +2251,11 @@ SEASON_END_BILLING = {
     "season": "Your season pass renews once a year, on the day you bought it, "
               "and we email you before it does. Reports start again with "
               "Week 1 next September.",
+    # True in every year it prints: the first renewal is the fixed date in
+    # run.checkout. "Unless you cancel" because a report can't see a cancel.
+    PASS_2027_PLAN: "Unless you cancel, your pass renews each August 15, starting "
+                    "in 2028, and we email you before it does. Reports start again "
+                    "with Week 1 next September.",
     PASS_PLAN: "Your League Pass renews once a year, on the day you bought it, "
                "and we email you before it does. Your league's seats come back "
                "with it: each manager claims theirs again next season, with "
@@ -2313,7 +2321,8 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
     if billing:
         # Renewing plans start again next season from the roster on file
         # (EMAILS-62): the update link is how a new one reaches us.
-        if (meta.get("plan") in ("season", PASS_PLAN) and meta.get("update_url")
+        if (meta.get("plan") in ("season", PASS_2027_PLAN, PASS_PLAN)
+                and meta.get("update_url")
                 and not meta.get("one_time")):
             billing += " " + NEW_ROSTER
         lines.append("This is the season's last report. Thanks for playing it "

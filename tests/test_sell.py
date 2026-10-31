@@ -210,7 +210,8 @@ def test_the_cards_generic_line_ships_in_the_markup() -> None:
 def test_step_three_carries_the_count_and_the_price_the_button_charges() -> None:
     """Join's value line, with its real lineupsAhead: the Playoff Pass divides 19,
     and an unknown clock says the sentence that is true either way."""
-    fns = _fn(JOIN, "perLineup") + _fn(JOIN, "lineupsAhead") + _fn(JOIN, "valueWords")
+    fns = ('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n' + _fn(JOIN, "perLineup")
+           + _fn(JOIN, "lineupsAhead") + _fn(JOIN, "valueWords"))
     got = _node(fns + """
 const RealDate = Date;
 const FIXED = Date.parse("2026-10-30T20:00:00Z");
@@ -241,7 +242,7 @@ console.log(JSON.stringify(out));""")
     assert got[2] == "Every lineup from now to your title game. $19, one payment."
     assert got[3] == "Every lineup from now to your title game. $29, one payment."
     assert got[4] == "Your whole league, every lineup from now to the title game. $69, one payment."
-    assert "a lineup" not in got[5] and "renews each August" in got[5]
+    assert "a lineup" not in got[5] and "nothing more until August 15, 2028" in got[5]
 
 
 def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
@@ -287,7 +288,7 @@ def test_no_former_price_is_ever_struck_or_compared() -> None:
 # the 2027 Season Pass, switched off
 # --------------------------------------------------------------------- #
 
-OFFER_WORDS = ("2027 Season Pass", "renews each August", "Renews each August", "more gets you",
+OFFER_WORDS = ("2027 Season Pass", "then each August", "Nothing more until", "more gets you",
                "against buying both", "this season included", "This season included")
 
 
@@ -364,6 +365,7 @@ def test_with_the_switch_on_the_renewal_sits_beside_the_price(open_: bool) -> No
            + _fn(LANDING, "season2027Card"))
     got = _node(_Dom.SCRIPT + f"""
 const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 39;
+const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";
 var PASS_AMOUNT = 29;
 """ + fns + """
 season2027Card();
@@ -376,11 +378,12 @@ console.log(JSON.stringify({ parts, id: card.id, firstFounder: first.classes.has
     names = [p[0] for p in got["parts"]]
     assert names.index("price") + 1 == names.index("passterms"), "the terms sit under the price"
     terms = dict(got["parts"])["passterms"]
-    assert terms == "Renews each August at $39. Cancel any time. We email you before it bills."
+    assert terms == ("Nothing more until August 15, 2028, when it renews at $39, then each "
+                     "August. Cancel any time. We email you before it bills.")
     assert "All of 2027, with the rest of this season included." in dict(got["parts"])["passlead"]
     assert got["firstFounder"] is False and got["gridOne"] is False, "the $39 card is the preferred one"
     assert [o["price"] for o in got["offers"]] == ["29", "39"]
-    assert "Renews each August at $39" in got["offers"][1]["description"]
+    assert "renews at $39, then each August" in got["offers"][1]["description"]
     if open_:
         assert got["buy"] == "join/index.html?plan=2027" and got["label"] == "Get my lineups — $39"
     else:
@@ -524,3 +527,16 @@ def test_the_refund_line_is_a_promise_and_keeps_the_pinned_words() -> None:
     # "weekly", not "first report": a buyer after a week's first game gets the
     # roster report first, and it has no games to read it before (terms §5).
     assert "Read your first report before" not in card
+
+
+def test_the_first_renewal_date_is_the_one_the_code_bills_on() -> None:
+    """The welcome, the terms and Stripe all say the code's date. Every page that
+    sells or confirms the pass says the same one, or "each August" reads as
+    next August and a buyer is surprised by nothing happening, then by a charge."""
+    from render.welcome import first_renewal_words
+    date = first_renewal_words()
+    assert date == "August 15, 2028"
+    for name in ("index.html", "join/index.html"):
+        page = (SITE / name).read_text(encoding="utf-8")
+        assert f'const SEASON_2027_FIRST_RENEWAL = "{date}";' in page, name
+    assert f"Nothing more until {date}" in (SITE / "thanks.html").read_text(encoding="utf-8")

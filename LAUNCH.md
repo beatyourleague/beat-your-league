@@ -1309,7 +1309,9 @@ mode**, with test keys in your shell:
 ### Step 5: the live link
 
 1. Make the same Price and Payment Link in **live** mode. Keep it unpublished until step 7.
-2. Run `infra/stripe_paylink_text.py`. It writes the words above the Pay button and on the
+2. Set **After payment** to redirect to `https://beatyourleague.com/thanks.html?plan=2027`. The
+   plain thanks page says nothing renews, which is false of this pass.
+3. Run `infra/stripe_paylink_text.py`. It writes the words above the Pay button and on the
    tick-box from `render/welcome.py` and `run/checkout.py`; a `y:` link gets the renewal, its
    date and its amount, and never the one-payment text.
 
