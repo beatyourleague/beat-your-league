@@ -2013,16 +2013,17 @@ def audit_portal_for_trials(config: dict) -> list[str]:
 
 def check_season_2027_stripe() -> list[Gate]:
     """What Stripe itself must say before the pass is sold: the ``y:`` link is
-    live and sells the yearly $39 price, the billing page can't end a trial,
+    live and takes $49 today on the yearly $39 price, the billing page can't end a trial,
     and this key can read invoices (without which RULE E1 cannot see a refund
     on a deferred pass and the entitlement read fails). Read only; asked only
     when a ``y:`` link is in this shell."""
-    from run.checkout import SEASON_2027_PRICE_CENTS, season_2027_links
+    from run.checkout import (SEASON_2027_FIRST_PAYMENT_CENTS, SEASON_2027_PRICE_CENTS,
+                              season_2027_links)
     links = sorted(season_2027_links(os.environ.get("STRIPE_PAYMENT_LINKS", "")))
     key = os.environ.get("STRIPE_API_KEY", "")
     if not links:
         return []
-    name = "The 2027 Season Pass link sells the yearly $39 price"
+    name = "The 2027 Season Pass link takes $49 today on the yearly $39 price"
     if not key:
         return [Gate("Owner", name, "OWNER", "STRIPE_API_KEY is not in this shell — check the "
                      "link in the Dashboard (LAUNCH.md, \"Turning on the 2027 Season Pass\")")]
@@ -2034,11 +2035,17 @@ def check_season_2027_stripe() -> list[Gate]:
             gates.append(Gate("Owner", name, "SKIP", f"Stripe answered HTTP {status} — this key "
                               f"can't read payment links; check {link[:12]}… by hand"))
             continue
-        price = (data[0].get("price") or {}) if isinstance(data[0], dict) else {}
+        items = [i for i in data if isinstance(i, dict)]
+        total = sum(int(i.get("amount_total") or 0) for i in items)
+        recurring = [i.get("price") or {} for i in items
+                     if (i.get("price") or {}).get("recurring")]
+        price = recurring[0] if len(recurring) == 1 else {}
         interval = (price.get("recurring") or {}).get("interval")
         gates.append(_gate("Owner", name, interval == "year"
-                           and price.get("unit_amount") == SEASON_2027_PRICE_CENTS,
-                           f"{link[:12]}… sells {price.get('unit_amount')} cents every {interval}",
+                           and price.get("unit_amount") == SEASON_2027_PRICE_CENTS
+                           and total == SEASON_2027_FIRST_PAYMENT_CENTS,
+                           f"{link[:12]}… takes {total} cents today and renews at "
+                           f"{price.get('unit_amount')} cents every {interval}",
                            fail="FAIL"))
     status, body = _get_json(f"{STRIPE}/billing_portal/configurations?is_default=true&limit=1", key)
     data = (body or {}).get("data") if isinstance(body, dict) else None

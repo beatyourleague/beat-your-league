@@ -111,10 +111,8 @@ def test_italic_only_in_the_lockup_and_the_league_pass_slab(name: str) -> None:
 def test_gold_is_never_text_on_the_paper(name: str) -> None:
     """Contract C6: gold is a FILL (buttons, bars, the step track). As text it
     is a report card's number on its navy head and an app page's step numeral
-    in its navy circle — never words on the paper, where it measured under 2:1.
-    join/'s panel adds one more numeral on navy: the lineups left, in its head."""
-    allowed = {".card .eyebrow .n", "ol.how li::before", ".sitebar .brand .lg",
-               ".pf-stat.left b"}
+    in its navy circle — never words on the paper, where it measured under 2:1."""
+    allowed = {".card .eyebrow .n", "ol.how li::before", ".sitebar .brand .lg"}
     for sel, body in _rules(_style(_page(name))):
         if re.search(r"(?<![-\w])color:\s*(?:var\(--flag\)|#F2C230|#F0B62A)", body):
             assert sel in allowed, (name, sel)

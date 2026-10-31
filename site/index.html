@@ -845,9 +845,7 @@
   .price{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;margin-top:8px;
     font-variant-numeric:tabular-nums;}
   .price small{font-family:var(--sans);font-size:14px;font-weight:700;color:var(--slate);}
-  /* Under the price: what it buys, then what that comes to. The season clock
-     writes the second line; what ships in the markup is true with no script,
-     and it goes when no lineups are left. */
+  /* Under the price: what it buys, in words that stay the same all season. */
   .plan .passlead{margin-top:12px;font-size:19px;font-weight:700;line-height:1.3;
     text-wrap:balance;}
   .plan .passclock{margin-top:6px;font-size:15px;line-height:1.45;color:var(--ink2);
@@ -1641,23 +1639,14 @@ const PLAYOFF_FROM_WEEK = 13;
 // by season2027Card() below, never shipped in the markup, so all that is
 // rendered about 2027 is the founding-rate line.
 const SEASON_2027_READY = false;
-const SEASON_2027_PRICE = 39;
+const SEASON_2027_PRICE = 49;     // today, for this season and next
+const SEASON_2027_RENEWAL = 39;   // the founding rate, from the first renewal on
 const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by test
 // One verb on every buy button (sales review): the card adds its price.
 var PASS_LABEL = "Get my lineups — $29";
 // The price on offer right now, in dollars: the first card's, the Playoff
 // Pass's once it swaps in. Everything worked out from a price starts here.
 var PASS_AMOUNT = 29;
-// The count a buyer gets, and when it drops. It drops when the buyer's first
-// week kicks off: until then they still get that week's report, so "next
-// Tuesday" would be two days early (a report that goes out on Tuesday can
-// still be bought until Thursday night's game).
-function lineupsLeft(next, left) {
-  if (!Number.isInteger(left) || left < 1) return "";
-  if (left === 1) return "1 lineup left to a Week 17 title game.";
-  return left + " lineups left to a Week 17 title game. After Week " + next +
-    " kicks off, " + (left - 1) + ".";
-}
 function showPlayoffPass(week) {
   PASS_LABEL = "Get my lineups — $19";
   PASS_AMOUNT = 19;
@@ -1723,7 +1712,7 @@ function season2027Card() {
   const head = part("div", "head");
   head.append(part("div", "tag", "2027 Season Pass"), part("span", "stamp50", "This season included"));
   const price = part("div", "price", "$" + SEASON_2027_PRICE + " ");
-  price.appendChild(part("small", "", "/ year"));
+  price.appendChild(part("small", "", "/ this season and next"));
   const list = part("ul");
   ["Your first report usually lands within the hour.",
    "Read your first weekly report before its games. Not for you? Full refund, no " +
@@ -1731,7 +1720,7 @@ function season2027Card() {
     .forEach((text) => list.appendChild(part("li", "", text)));
   // Nobody should read "each August" as next August: the date sits by the price.
   const SEASON_2027_TERMS = "Nothing more until " + SEASON_2027_FIRST_RENEWAL + ", when it " +
-    "renews at $" + SEASON_2027_PRICE + ", then each August. Cancel any time. We email you " +
+    "renews at $" + SEASON_2027_RENEWAL + ", then each August. Cancel any time. We email you " +
     "before it bills.";
   const buy = part("a", "btn gold", "Get my lineups — $" + SEASON_2027_PRICE);
   buy.id = "season-2027-cta";
@@ -1978,8 +1967,7 @@ if (CHECKOUT_OPEN) {
       // week's report to anyone who buys before that week's kickoff, the roster
       // report otherwise — so the old sentence told a buyer to wait for something
       // they already have, on the one screen where impatience loses the sale.
-      // The season clock writes into #season-clock, so the open state keeps
-      // one: the clock is honest urgency exactly when a visitor can act on it.
+      // The season clock writes into #season-clock, so the open state keeps one.
       const lead = document.createElement("b");
       lead.id = "season-clock";
       lead.textContent = "Checkout is open.";
@@ -2061,8 +2049,7 @@ function closeForSeason(line) {
   }
   const watchLabel = document.getElementById("watch-label");
   if (watchLabel) watchLabel.textContent = "One email when checkout opens, nothing else.";
-  // pass-clock: no lineup is left to count, and its fallback line says a new
-  // one is coming. The 2027 card leaves with checkout.
+  // pass-clock says a new lineup is coming. The 2027 card leaves with checkout.
   ["try-cta", "risk-line", "hero-promise", "closer-cta", "pass-clock"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
@@ -2527,17 +2514,6 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           }
         }
         if (!shows) return;
-        // The price card's value line, in a live season week only: the count
-        // to a Week 17 title game. Past Week 17's kickoff there is no count to
-        // give, so the line goes; a stale or missing file leaves the card's
-        // generic sentence.
-        const passClock = document.getElementById("pass-clock");
-        if (passClock && phase === "season") {
-          const lineups = 17 - next + 1;
-          const count = lineupsLeft(next, lineups);
-          if (count) passClock.textContent = count;
-          else passClock.hidden = true;
-        }
         // On a Tuesday after that day's report went out, the next one is a
         // week away: "lands Tuesday" would read as today.
         const when = buyerToday || today ? "today." : now.getDay() === 2 ? "next Tuesday." : "Tuesday.";
@@ -2548,16 +2524,6 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
         strong.className = "clock";
         strong.textContent = "Week " + next + "'s report lands " + when;
         target.appendChild(strong);
-        // A calendar fact, not a count of anybody's reports. Week 17 is
-        // championship week under ESPN's, Yahoo's and Sleeper's defaults
-        // (render.report.season_end_lines), so the count runs to "a Week 17
-        // title game"; past it, the season's own weeks.
-        const toTitle = 17 - next + 1;
-        target.appendChild(document.createTextNode(toTitle >= 1
-          ? " " + toTitle + (toTitle === 1 ? " lineup" : " lineups") +
-            " to a Week 17 title game, every one decided."
-          : " " + left + (left === 1 ? " regular-season week" : " regular-season weeks") +
-            " to go."));
       })
       .catch(() => {});
   } catch (e) { /* the static sentence stays */ }

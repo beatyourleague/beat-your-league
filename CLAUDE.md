@@ -1335,8 +1335,7 @@ confirmed mismatches, all fixed (by the product or by the words). Rules it left:
 is sold as a rest-of-season, playoff-push product: "every lineup from here to your title game".
 The landing title, kicker, hero, pricing heading and FAQ ("Is it worth joining mid-season?",
 which absorbed "When do the numbers start?" — the FAQ is capped at seven) and the join pitch
-say so; the season clock counts "N lineups to a Week 17 title game" (Week 17 = championship
-week under ESPN/Yahoo/Sleeper defaults, the same claim `season_end_lines` makes). The entity
+say so; the season clock names the next report and counts nothing (see the sell pass). The entity
 sentence is deliberately unchanged (identical phrasing is its whole mechanism). One feature
 backs it: **byes ahead** — every LIVE weekly report checks the weeks after this one through the
 season's last (`run.solo._byes_ahead` → `engine.preseason.bye_collisions`, the roster report's
@@ -1601,7 +1600,7 @@ listed only if somebody at it can sit without emptying a spot, tried with the ta
 `emptySpots`; reserve-list players marked, not counted; names in pasted order), Byes ahead
 (byes.js's `describe` and `byeCollisions`, never a copy, starting at the first lineup left so the
 boxes match the count), Can't play right now, and a locked preview with real names by position,
-no seat, no digit and bars of one fixed width. Lineups left is the landing's clock, on week.json.
+no seat, no digit and bars of one fixed width. `firstWeekAhead` is the landing's clock, on week.json.
 One entrance per visit, only after a real press, transform and opacity only; a redraw is still.
 Seat and update get the byes and can't-play only; a free report and a finished season get none.
 Closed step 3 is "Save your team" with the value line first; the button's words moved
@@ -1609,23 +1608,21 @@ Closed step 3 is "Save your team" with the value line first; the button's words 
 
 **The sell pass (Oct 30 2026) — the owner's brief: direct, simple, a good deal, not cheesy.**
 Tests in `tests/test_sell.py`, including a sweep for hype on every selling page. Rules it left:
-- **The price card leads with the value:** "$29 / rest of season", "Every lineup through your
-  title game.", then the line the season clock writes, `9 lineups left to a Week 17 title game.
-  After Week 9 kicks off, 8.` (`lineupsLeft`). In a live season week only: a stale or missing
-  file leaves "A new lineup decided every Tuesday.", and with no lineup left the line goes.
-- **The count drops at the buyer's first week's kickoff, never on a Tuesday.** The brief's
-  "Next Tuesday, 8" was a day or two early: run/intake.py still sends that week's report until
-  its first kickoff, so a Tuesday buyer gets all nine. An urgency line must be true on the day
-  it is read.
+- **The price card never changes (owner decision, Oct 31 2026):** "$29 / rest of season", "Every
+  lineup through your title game.", "A new lineup decided every Tuesday." No page counts the
+  weeks or lineups left: a falling count makes a buyer do the math and wait for the price to
+  fall with it. The hero line says only "Week 9's report lands Tuesday."; the buy page says
+  "Every lineup from now to your title game. $29, one payment."
+  `test_no_page_counts_the_season_down` sweeps every page, script-built text included.
 - **"Read your first weekly report before its games", with "weekly".** A buyer after a week's
   first game gets the roster report first, which has no games; terms §5 is about the weekly one.
 - **The 2027 Season Pass is built switched off:** `SEASON_2027_READY` on landing and join,
   `STRIPE_LINK_2027` on join, which must agree. Off, no word of it renders: the card and join's
   radio are built by script (`season2027Card`, the `PLAN_CHOICE` block), so all that ships is the
-  founding-rate line. On: two cards, the $39 one holding the one gold button, renewal terms
-  directly under its price at full size, and "$10 more gets you all of next season.", worked out
-  from the price on offer (`PASS_AMOUNT`: $20 from the Playoff Pass). Join starts on it unless the
-  link said `?plan=season`, so a click on $29 never lands on $39; both write an `s` ref (the plan
+  founding-rate line. On: two cards, the $49 one ("$49 / this season and next") holding the one
+  gold button, renewal terms directly under its price at full size, and "$20 more gets you all of
+  next season.", worked out from the price on offer (`PASS_AMOUNT`: $30 from the Playoff Pass).
+  Join starts on it unless the link said `?plan=season`, so a click on $29 never lands on $49; both write an `s` ref (the plan
   comes from the link that took the money), so `keepInAddress` carries the choice in `?plan=`.
   Every "nothing renews" line follows the choice or the flag (terms line, sidebar, confirmation,
   hero risk line, finance note), and thanks.html reads `?plan=2027`. **Terms and the Playoff
@@ -1640,10 +1637,14 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
   my team"), the email capture one link under it.
 - **The landing's word cap only goes down:** 1,241 total and 876 by hand, pinned at those numbers.
 
-**The 2027 Season Pass backend (Oct 30 2026): built, switched off, waiting on the lawyer.** $39 for
-the rest of 2026 and all of 2027, a yearly subscription whose first renewal is
-`run.checkout.SEASON_2027_FIRST_RENEWAL` (August 15, 2028, fixed: a buyer consents to the date and
-no 2028 schedule can exist while it sells). `tests/test_season_2027.py`; turning it on is LAUNCH §13.
+**The 2027 Season Pass backend (Oct 30 2026): built, switched off, waiting on the lawyer.** $49 for
+the rest of 2026 and all of 2027 (raised from $39, owner's call, Oct 31), a yearly subscription at
+the $39 founding rate whose first renewal is `run.checkout.SEASON_2027_FIRST_RENEWAL` (August 15,
+2028, fixed: a buyer consents to the date and no 2028 schedule can exist while it sells). The $49
+is two items on one Payment Link, the yearly $39 price and a $10 one-time item, so RULE B2 and
+every renewal still read $39; `check_season_2027_stripe` checks both figures. It renews at $39
+because a buyer who commits for two seasons must not renew above a $29 buyer's founding rate.
+Stripe documents that mix for Checkout; a Payment Link taking it is LAUNCH §13 step 3's first proof. `tests/test_season_2027.py`; turning it on is LAUNCH §13.
 - **`y:` in `STRIPE_PAYMENT_LINKS` is the only switch in the code.** Absent, a purchase, welcome and
   billing run are unchanged. The ref stays `s`; the plan comes from the link that took the money,
   and a `y:` session gets `season_2027` on its row and `report_plan`.
@@ -1665,9 +1666,8 @@ no 2028 schedule can exist while it sells). `tests/test_season_2027.py`; turning
   all a portal Cancel on a trialing subscription, which the pass rests on. The word "trial" can
   reach buyers (billing page, 0 USD invoice, `* TRIAL OVER` on a 2028 statement); the welcome
   explains it and it's a lawyer question.
-- **The money case is not margin.** $39 beats $29 plus a $39 re-buy only if under about a quarter
-  of buyers would have come back anyway, and PLAN's re-buy range is 30–70%. Its case is winning
-  buyers who wouldn't return, and a higher price is the open owner decision (PLAN §4).
+- **The money case.** $49 beats $29 plus a $39 re-buy if under about 51% of buyers would have come
+  back anyway (`run/economics.py`; about 26% at $39), and PLAN's re-buy range is 30–70%.
 
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
@@ -2576,9 +2576,10 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   at decision points and in the legally required disclosures (renewal amounts, refund
   terms), and are never argued, itemized per-unit, or compared. **Tested by the owner, Oct 30
   2026:** "$3.22 a lineup" went on the price card and came off the same day, because it makes
-  a buyer calculate and think about the money, not the value. Saying what's left to get is
-  fine ("9 lineups left") and so is one line between two prices on the same card ("$10 more
-  gets you all of next season."); working a price out for the buyer is not, and
+  a buyer calculate and think about the money, not the value. "9 lineups left" came off the
+  next day for the same reason (Oct 31): pricing stays simple and the words stay the same all
+  season. One line between two prices on the same card is fine ("$20 more gets you all of next
+  season."); working a price out for the buyer is not, and
   `test_no_page_breaks_a_price_down_for_the_buyer` sweeps every page. The League Pass page
   keeps its own exception: a commissioner justifying spend to eleven leaguemates is a
   genuinely deliberative buyer, and the $348-vs-$69 arithmetic is their language. Emotional

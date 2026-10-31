@@ -36,7 +36,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_2027_PRICE,  # noqa: E402
-                            SEASON_PRICE, TERMS_VERSION, first_renewal_words)
+                            SEASON_2027_RENEWAL, SEASON_PRICE, TERMS_VERSION,
+                            first_renewal_words)
 from run.checkout import (SEASON_2027_LINK_PREFIX, link_map_problems,  # noqa: E402
                           parse_link_plans, parse_link_prefixes)
 
@@ -81,7 +82,7 @@ MESSAGES = {
 SEASON_2027_PLAN = "season_2027"
 SEASON_2027 = (f"{SEASON_2027_PRICE} USD today covers every weekly report for the rest "
                f"of the 2026 season and all of the 2027 season. It renews at "
-               f"{SEASON_2027_PRICE} USD on {first_renewal_words()}, and each August after "
+               f"{SEASON_2027_RENEWAL} USD on {first_renewal_words()}, and each August after "
                f"that, until you cancel. We email you 15 to 45 days before each renewal, "
                f"and {CANCEL}. {REFUND} — one per person.")
 # Stripe's limit on both custom_text messages (Payment Links API).
@@ -106,7 +107,7 @@ TOS_MESSAGES = {
 }
 # The box the law wants ticked for a renewal: the amount, the date, the cycle.
 SEASON_2027_TOS = (f"I agree to the [Terms]({TERMS_URL}), including that this pass "
-                   f"renews at {SEASON_2027_PRICE} USD on {first_renewal_words()} and "
+                   f"renews at {SEASON_2027_RENEWAL} USD on {first_renewal_words()} and "
                    f"each August after that until I cancel, and I am 18 or older.")
 SUBMIT_TEXT = {**MESSAGES, SEASON_2027_PLAN: SEASON_2027}
 TOS_TEXT = {**TOS_MESSAGES, SEASON_2027_PLAN: SEASON_2027_TOS}

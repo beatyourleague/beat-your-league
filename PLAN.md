@@ -352,15 +352,15 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
    the thing arriving in the inbox and on the published test.
 
 **The 2027 Season Pass (owner decision, Oct 30 2026; built and switched off until a lawyer has
-seen it, LAUNCH.md section 13).** $39 today covers the rest of 2026 and all of 2027, as a
-subscription that first renews on August 15, 2028 and each August after that at $39. Once
-switched on, a **two-card offer replaces "one decision at checkout"**: $29 this season, or $39
-for this season and next. Forget-to-cancel stays banned: the renewal is stated at the point of
+seen it, LAUNCH.md section 13).** $49 today covers the rest of 2026 and all of 2027, as a
+subscription that first renews on August 15, 2028 and each August after that at the $39
+founding rate (raised from $39 today on Oct 31 2026). Once switched on, a **two-card offer
+replaces "one decision at checkout"**: $29 this season, or $49 for this season and next. Forget-to-cancel stays banned: the renewal is stated at the point of
 sale, a notice goes out 15 to 45 days before every charge, and cancelling is self-serve. Monthly
 is not sold in 2026. This takes 2027 money now, so `make stats` and the dashboard show what is
-held for a season not yet delivered. `run/economics.py`'s honest view: at the model's own 30–70%
-re-buy rates the prepaid pass earns less per buyer than $29 plus a 2027 re-buy, so it is a bet on
-buyers who would not otherwise return; watch it against that.
+held for a season not yet delivered. `run/economics.py`'s honest view: the prepaid pass earns more per buyer than $29 plus a $39
+2027 re-buy only below a re-buy rate of about 51% (about 26% at $39), inside the model's own 30–70%,
+so it stops being a pure bet on buyers who would not otherwise return; watch it against that.
 
 **At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
 Refunds no-questions until the buyer's first weekly report's week kicks off (the second report's

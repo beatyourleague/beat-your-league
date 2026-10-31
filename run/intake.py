@@ -199,7 +199,7 @@ class RosterSignup:
     # row in every other respect; its welcome names the Playoff Pass and its
     # price. Logged only when true, so every other log line is unchanged.
     playoff: bool = False
-    # Paid through the $39 2027 Season Pass link (``y:``): a season row whose
+    # Paid through the 2027 Season Pass link (``y:``): a season row whose
     # welcome states the two seasons it covers and its August renewal, and
     # whose first renewal run/billing.py moves. Logged only when true.
     season_2027: bool = False
@@ -207,9 +207,9 @@ class RosterSignup:
     @property
     def key(self) -> tuple[str, str]:
         # The join page's ref is "s" on both season links, so a $29 buyer who
-        # takes the $39 pass with the same roster has the SAME ref: the second
+        # takes the $49 pass with the same roster has the SAME ref: the second
         # purchase vanished at append_log, and the row kept naming a payment
-        # that ends with 2026 while a $39 subscription billed for nothing. The
+        # that ends with 2026 while a $49 subscription billed for nothing. The
         # pass is its own purchase; merge_same_roster folds the two into one
         # row (LP2-D1), which is how "bought it twice" already works.
         if self.season_2027:
@@ -409,7 +409,7 @@ def _one_row_per_ref(signups: list[RosterSignup],
     $29 pass, and the registry loader refuses the whole file on a repeat. The
     two normally fold above; they stay apart when one of them is dead, and then
     the live purchase is the row, whichever came first, so a refunded $29 pass
-    never costs a paid $39 one its reports. Rows with no pass among them are
+    never costs a paid $49 one its reports. Rows with no pass among them are
     returned exactly as they came."""
     seen: dict[tuple[str, str], int] = {}
     out: list[RosterSignup] = []
@@ -513,7 +513,7 @@ def sweep(api_key: str, since: int | None = None,
     buyer who used it early bought every report through Week 18 for $10 less
     (final review SEC-3).
 
-    ``season_2027`` names the $39 2027 Season Pass link(s) (``y:``). A purchase
+    ``season_2027`` names the 2027 Season Pass link(s) (``y:``). A purchase
     through one must have started a subscription: that is the whole offer. One
     that did not (the link was made in payment mode) is PAID-UNATTRIBUTED
     rather than welcomed, because its welcome would promise a season and a
@@ -2099,7 +2099,7 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
         # loudly rather than tell a $19 buyer they bought the $29 pass.
         extra["playoff"] = True
     if signup.season_2027:
-        # The $39 pass's own disclosures. Without this a season row with a
+        # The 2027 pass's own disclosures. Without this a season row with a
         # subscription falls through to "renews at $29 on the anniversary":
         # the wrong price and the wrong date, in the notice the law requires.
         extra["season_2027"] = True

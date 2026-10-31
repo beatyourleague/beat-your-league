@@ -317,5 +317,5 @@ Nothing here starts until football has proved itself. In order, each step earnin
   file (the report prints the year beside it). `NEW_ROSTER` in `render/report.py` says so only
   on the season's last report, and only for the plans it names. Build one email in August 2027:
   "here's the link, send your new roster", before the first report of the season they prepaid.
-- **An upgrade link.** A $29 buyer who wants the $39 pass pays $39 more, and there's no credit
+- **An upgrade link.** A $29 buyer who wants the $49 pass pays $49 more, and there's no credit
   for the $29. Stripe could do it with a coupon on a link; decide once there's demand.

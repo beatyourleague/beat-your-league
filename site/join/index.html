@@ -413,10 +413,9 @@
   .pf-stats{display:flex;flex-wrap:wrap;align-items:flex-start;gap:10px 28px;margin-top:12px;}
   .pf-stat{min-width:0;font-size:14px;line-height:1.3;color:var(--dusk);white-space:nowrap;}
   /* The long label takes what is left, and its own line when that is too little. */
-  .pf-stat.left{flex:1 1 130px;white-space:normal;}
+  .pf-promise{margin:12px 0 0;font-size:15px;font-weight:600;line-height:1.35;color:var(--paper);}
   .pf-stat b{display:block;font-family:var(--display);font-weight:800;font-size:46px;line-height:1;
     color:#FFFFFF;font-variant-numeric:tabular-nums;margin-bottom:2px;}
-  .pf-stat.left b{color:var(--flag);}
   .pf-body{padding:0 24px 24px;}
   .pf-block{padding-top:20px;}
   .pf-block + .pf-block{margin-top:20px;border-top:1px solid var(--rule);}
@@ -862,7 +861,7 @@ const MONTHLY_OFFERED = false;
 // it goes on only with STRIPE_LINK_2027 (launch check). Off, nothing on this
 // page knows about it: ?plan=2027 is an ordinary visit. The ref stays "s" either
 // way, because the plan comes from the link that took the money (run/intake.py).
-const STRIPE_LINK_2027 = "";  // $39 2027 Season Pass, renews yearly
+const STRIPE_LINK_2027 = "";  // 2027 Season Pass: $49 today, renews yearly at $39
 const SEASON_2027_READY = false;
 const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";  // run.checkout, held by test
 
@@ -975,7 +974,7 @@ const SEAT_LINK_MISSING = SEAT_MODE && !PASS_TOKEN;
 let monthlyChosen = WANTS_MONTHLY;
 // With the 2027 pass on sale a buyer chooses between it and the pass: it starts
 // selected unless their link named the cheaper card (?plan=season), so a click
-// on $29 never lands on $39. Only a purchase has this choice.
+// on $29 never lands on $49. Only a purchase has this choice.
 const PLAN_CHOICE = SEASON_2027_READY && !WANTS_PASS && !WANTS_MONTHLY && !SEAT_MODE &&
   !QUERY.has("update") && QUERY.get("try") !== "1";
 let chose2027 = PLAN_CHOICE && QUERY.get("plan") !== "season";
@@ -1592,10 +1591,10 @@ function lockedRows(players, slots, out) {
     .map((row) => ({ position: row.position, names: row.names }));
 }
 
-// The week a buyer's lineups start and how many are left to a Week 17 title
-// game: the landing's season clock, on the same file (week.json), with the same
-// rules. Null when the file can't say: a stale build names no count.
-function lineupsAhead(w, now, open) {
+// The week a buyer's lineups start: the landing's season clock, on the same file
+// (week.json), with the same rules. Null when the file can't say, or when Week
+// 17's title game has gone. The byes plan starts here; no page counts the weeks.
+function firstWeekAhead(w, now, open) {
   if (!w || !Number.isInteger(w.week) || !Number.isInteger(w.last_week)) return null;
   const phase = w.phase || "season";
   if (phase !== "season" && phase !== "preseason") return null;
@@ -1605,14 +1604,13 @@ function lineupsAhead(w, now, open) {
   const kicked = !!w.first_kickoff && now.getTime() >= Date.parse(w.first_kickoff);
   const sameDay = phase === "season" && w.week > 1 && !kicked;
   const next = phase === "preseason" ? w.week : open && sameDay ? w.week : w.week + 1;
-  const toTitle = 17 - next + 1;
-  return toTitle >= 1 ? { next, left: toTitle } : null;
+  return next <= 17 ? next : null;
 }
 
 // byes.js decides everything here: its describe() and byeCollisions() are the
 // planner's, held equal to the weekly report's rule by test. ``start`` moves the
-// plan's first week up to the first lineup still ahead, so the boxes and the
-// count of lineups agree; describe() reads that from a date in the week.
+// plan's first week up to the first lineup still ahead; describe() reads that
+// from a date in the week.
 function byePlan(players, slots, byes, todayIso, start) {
   const rows = B.rosterRows(players, byes);
   const current = B.currentWeek(byes, todayIso);
@@ -1758,21 +1756,18 @@ function lockedPreview(index, players, slots, out) {
   return block;
 }
 
-function payoffTop(count, spots, ahead) {
+function payoffTop(count, spots) {
   const top = panelNode("div", "pf-top pf-rise");
   const stats = panelNode("div", "pf-stats");
-  const stat = (number, words, className) => {
-    const box = panelNode("div", "pf-stat" + (className ? " " + className : ""));
+  const stat = (number, words) => {
+    const box = panelNode("div", "pf-stat");
     box.append(panelNode("b", "", String(number)), words);
     stats.appendChild(box);
   };
   stat(count, "players");
   stat(spots, "starting spots");
-  if (ahead) {
-    stat(ahead.left, (ahead.left === 1 ? "lineup" : "lineups") + " left to a Week 17 title game",
-         "left");
-  }
-  top.append(panelNode("h2", "", "Your team from here"), stats);
+  top.append(panelNode("h2", "", "Your team from here"), stats,
+             panelNode("p", "pf-promise", "Every lineup through your title game."));
   return top;
 }
 
@@ -1821,16 +1816,16 @@ function drawPayoff() {
   const players = state.matches.map((m) => m.player);
   const slots = template();
   const out = window.B ? reserveList() : {};
-  const ahead = SALES_PANEL ? lineupsAhead(state.week, new Date(), canStartToday()) : null;
+  const first = SALES_PANEL ? firstWeekAhead(state.week, new Date(), canStartToday()) : null;
   const body = panelNode("div", "pf-body");
   const blocks = [];
   panel.setAttribute("aria-label", SALES_PANEL ? "Your team from here" : "Your team ahead");
   if (SALES_PANEL) {
-    panel.appendChild(payoffTop(players.length, slots.length, ahead));
+    panel.appendChild(payoffTop(players.length, slots.length));
     blocks.push(callsBlock(1, players, slots, out));
   }
   if (window.B && state.byes) {
-    blocks.push(byesBlock(2, players, slots, ahead && ahead.next));
+    blocks.push(byesBlock(2, players, slots, first));
     blocks.push(outBlock(3, players, out));
   }
   if (SALES_PANEL) blocks.push(lockedPreview(4, players, slots, out));
@@ -2253,7 +2248,7 @@ function askAboutEmail(email, go) {
 function checkoutWords() {
   return WANTS_PASS ? "Continue to checkout — $69"
        : monthlyChosen ? "Continue to checkout — $14.99/mo"
-       : chose2027 ? "Continue to checkout — $39"
+       : chose2027 ? "Continue to checkout — $49"
        : PLAYOFF_ACTIVE ? "Continue to checkout — $19" : "Continue to checkout — $29";
 }
 function closeEmailCheck() {
@@ -2678,22 +2673,18 @@ function closedLabel(action) {
   }
   return closedChipText();
 }
-// The line over the step: what the price buys, with the count once week.json
-// can say it. The price is the one this button charges. The landing's season
-// clock counts the same way.
+// The line over the step: what the price buys, in words that never change. The
+// price is the one this button charges.
 function valueWords() {
   if (WANTS_PASS) {
     return "Your whole league, every lineup from now to the title game. $69, one payment.";
   }
   if (chose2027) {
-    return "All of 2027, with the rest of this season included. $39 today, nothing more until " +
+    return "All of 2027, with the rest of this season included. $49 today, nothing more until " +
       SEASON_2027_FIRST_RENEWAL + ".";
   }
-  const price = PLAYOFF_ACTIVE ? 19 : 29;
-  const ahead = lineupsAhead(state.week, new Date(), canStartToday());
-  if (!ahead) return "Every lineup from now to your title game. $" + price + ", one payment.";
-  return ahead.left + (ahead.left === 1 ? " lineup" : " lineups") + " left to a Week 17 " +
-    "title game. $" + price + ", one payment.";
+  return "Every lineup from now to your title game. $" + (PLAYOFF_ACTIVE ? 19 : 29) +
+    ", one payment.";
 }
 // Step 3 leads with what they get, and while checkout is closed it is a next
 // step, not a refusal: "Save your team". ``step3Action`` is closedAction's for
@@ -2856,7 +2847,7 @@ function drawPlayoffPass() {
 function draw2027Plan() {
   const terms = () => {
     const bold = document.createElement("b");
-    bold.textContent = "$39 today, nothing more until " + SEASON_2027_FIRST_RENEWAL +
+    bold.textContent = "$49 today, nothing more until " + SEASON_2027_FIRST_RENEWAL +
       ", when it renews at $39, then each August until you cancel";
     return [document.createTextNode("The 2027 Season Pass is "), bold, document.createTextNode(
       ": all of 2027, with the rest of this season included. Cancel any time. We email " +
@@ -2864,9 +2855,9 @@ function draw2027Plan() {
       "week kicks off (or a week after it reaches you, if we send it late). One per " +
       "person, and a second purchase after a refund is final.")];
   };
-  $("submit").textContent = "Unlock my lineups — $39";
+  $("submit").textContent = "Unlock my lineups — $49";
   $("header-pitch").textContent = "All of 2027, with the rest of this season included, " +
-    "decided for your roster and in your inbox every Tuesday. $39 today, renewing at $39 on " +
+    "decided for your roster and in your inbox every Tuesday. $49 today, renewing at $39 on " +
     SEASON_2027_FIRST_RENEWAL + ", then each August. " +
     "Cancel any time, and a full refund until your first weekly report's week kicks off.";
   $("terms-line").replaceChildren(...terms());
@@ -3115,7 +3106,7 @@ if ((MONTHLY_OFFERED || PLAN_CHOICE) && !SEAT_MODE && !UPDATE_MODE && !TRY_MODE 
     input.name = "plan";
     input.value = "2027";
     input.autocomplete = "off";
-    label.append(input, "2027 Season Pass · $39");
+    label.append(input, "2027 Season Pass · $49");
     $("opt-plan").prepend(label);
     if (!MONTHLY_OFFERED) {
       const monthly = document.querySelector('input[name="plan"][value="monthly"]');

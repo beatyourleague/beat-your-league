@@ -67,7 +67,7 @@ def _harness() -> str:
     takes = re.search(r"^const SLOT_TAKES = .*?;$", JOIN, re.M).group(0)
     positions = re.search(r"^const PF_POSITIONS = .*?;$", JOIN, re.M).group(0)
     names = ("emptySpots", "lineupWords", "fieldPosition", "contestedCalls", "lockedRows",
-             "lineupsAhead", "byePlan", "byeHitWords")
+             "firstWeekAhead", "byePlan", "byeHitWords")
     return (f"globalThis.B = require({json.dumps(str(BYES_JS))});\n{takes}\n{positions}\n" +
             "\n".join(_function(n) for n in names))
 
@@ -225,8 +225,8 @@ def test_a_flagged_bye_is_the_one_the_python_flags(tmp_path) -> None:
 
 @needs_node
 def test_the_strip_starts_with_the_first_lineup_left(tmp_path) -> None:
-    """Nine lineups left is nine boxes: the plan moves up to the week the count
-    starts from, and never back behind the week being played."""
+    """The plan moves up to the first lineup a buyer still gets, and never back
+    behind the week being played."""
     byes = json.loads((SITE / "join" / "byes.json").read_text(encoding="utf-8"))
     current_ends = byes["weeks"][7]["ends"]
     got = _node(tmp_path, _harness() + f"""
@@ -322,11 +322,11 @@ def test_the_locked_preview_decides_nothing(tmp_path) -> None:
 
 
 # --------------------------------------------------------------------- #
-# E. lineups left
+# E. the week the plan starts
 # --------------------------------------------------------------------- #
 
 @needs_node
-def test_lineups_left_is_the_landings_clock(tmp_path) -> None:
+def test_the_first_week_ahead_is_the_landings_clock(tmp_path) -> None:
     now = "2026-10-30T15:00:00Z"
     season = {"week": 8, "last_week": 18, "phase": "season", "lands_on": "2026-11-03",
               "first_kickoff": "2026-10-30T00:15:00Z"}
@@ -341,17 +341,19 @@ def test_lineups_left_is_the_landings_clock(tmp_path) -> None:
     ]
     got = _node(tmp_path, _harness() + f"""
       console.log(JSON.stringify({json.dumps(cases)}.map(([w, open]) =>
-        lineupsAhead(w, new Date({json.dumps(now)}), open))));""")
-    assert got == [{"next": 9, "left": 9}, {"next": 9, "left": 9}, {"next": 8, "left": 10},
-                   {"next": 9, "left": 9}, None, None, None, None, None, {"next": 1, "left": 17}]
-    # The same arithmetic as the landing's season clock, on the same file.
-    assert "const toTitle = 17 - next + 1;" in LANDING
-    assert "const toTitle = 17 - next + 1;" in _function("lineupsAhead")
+        firstWeekAhead(w, new Date({json.dumps(now)}), open))));""")
+    assert got == [9, 9, 8, 9, None, None, None, None, None, 1]
+    # The same rule as the landing's season clock, on the same file.
     flat = re.sub(r"\s+", " ", LANDING)
     assert 'phase === "preseason" ? w.week : CHECKOUT_OPEN && sameDay ? w.week : w.week + 1' in flat
     assert 'phase === "preseason" ? w.week : open && sameDay ? w.week : w.week + 1' in \
-        _function("lineupsAhead")
-    assert '" left to a Week 17 title game"' in _function("payoffTop")
+        _function("firstWeekAhead")
+
+
+def test_the_panel_head_counts_nothing_ahead() -> None:
+    top = _function("payoffTop")
+    assert "Every lineup through your title game." in top
+    assert " left to a Week 17" not in top and "lineups" not in top
 
 
 # --------------------------------------------------------------------- #
@@ -464,7 +466,7 @@ def test_each_mode_gets_its_own_panel() -> None:
     draw = _function("drawPayoff")
     assert "blocks.push(callsBlock(1, players, slots, out));" in draw.split("if (SALES_PANEL) {")[1]
     assert "if (SALES_PANEL) blocks.push(lockedPreview(4, players, slots, out));" in draw
-    assert "const ahead = SALES_PANEL ?" in draw
+    assert "const first = SALES_PANEL ?" in draw
     calls = re.sub(r'"\s*\+\s*"', "", _function("callsBlock"))
     assert "WANTS_PASS ? \"Every manager's report decides these" in calls
 
@@ -484,12 +486,11 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     # Only where pressing can save anything: a closed League Pass whose own
     # team's plan is open has nothing to keep, so it stays what it was.
     assert 'step3Action === "list" || step3Action === "mail"' in step
-    # The line itself is valueWords now: the count when the clock can say it,
-    # this sentence when it can't.
+    # The line itself is valueWords: the same sentence every week.
     assert "value.textContent = valueWords();" in step
     words = re.sub(r'"\s*\+\s*"', "", _function("valueWords"))
     assert "Every lineup from now to your title game. $" in words
-    assert "const price = PLAYOFF_ACTIVE ? 19 : 29;" in words and '", one payment' in words
+    assert "(PLAYOFF_ACTIVE ? 19 : 29)" in words and '", one payment' in words
     assert "$69, one payment." in words
     label = _function("closedLabel")
     assert '"Save my team and tell me when it opens"' in label

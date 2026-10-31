@@ -126,7 +126,8 @@ LINK_PREFIX_TO_PLAN = {**_PREFIX_TO_PLAN, PLAYOFF_LINK_PREFIX: _PREFIX_TO_PLAN["
 # to. The launch check holds it against the schedule the day one exists: a date
 # that stopped being true is an alarm for a human, never a silent move.
 SEASON_2027_FIRST_RENEWAL = datetime(2028, 8, 15, 16, 0, tzinfo=timezone.utc)
-SEASON_2027_PRICE_CENTS = 3900
+SEASON_2027_PRICE_CENTS = 3900           # the yearly price: every renewal
+SEASON_2027_FIRST_PAYMENT_CENTS = 4900   # today: that price + a $10 one-time item
 # The join page's PLAYOFF_FROM_WEEK (and run/economics.py's): the $19 pass is
 # sold once a buyer's first weekly report would be this week or later — that
 # is, from the first kickoff of the week BEFORE it (tests pin all three).

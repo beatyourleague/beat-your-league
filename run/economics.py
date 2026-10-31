@@ -42,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Subscription prices — the renewing plans 2027 brings back, and the figures
 # PLAN.md, LAUNCH.md and launch-readiness.md quote (checked below).
 SEASON = 39.00
+SEASON_2027_PASS = 49.00    # this season and next, then renewing at SEASON
 MONTHLY = 14.99
 LEAGUE_PASS = 99.00
 # What 2026 sells (owner decision, Oct 18 2026): ONE-TIME passes, no renewal.
@@ -280,7 +281,7 @@ def rebuy_value(first: float, then: float, rate: float) -> float:
 
 
 def season_2027_prepay() -> dict[str, float]:
-    """The 2027 Season Pass ($39 now, off until the lawyer has seen it) against
+    """The 2027 Season Pass ($49 now, off until the lawyer has seen it) against
     selling the same buyer the $29 pass and hoping they come back. It is a
     subscription charge, so it pays the Billing fee a one-time pass does not.
 
@@ -290,11 +291,11 @@ def season_2027_prepay() -> dict[str, float]:
     that season away for ``extra``. Nothing here counts the service owed: a
     prepaid buyer is owed all of 2027 whether or not sales do what this says,
     which is the obligation `make stats` keeps in view."""
-    pass_net = net_per_sale(SEASON)
+    pass_net = net_per_sale(SEASON_2027_PASS)
     today_net = net_per_sale(REST_OF_SEASON, one_time=True)
     return {"net": pass_net, "rest_of_season_net": today_net,
             "extra": round(pass_net - today_net, 2),
-            "break_even": round((pass_net - today_net) / pass_net, 3)}
+            "break_even": round((pass_net - today_net) / net_per_sale(SEASON), 3)}
 
 
 def owner_hours(opens: date = None) -> float:
@@ -507,7 +508,7 @@ def summary_lines() -> list[tuple[str, str, str]]:
                  f"with a USD payout account)"))
     prepay = season_2027_prepay()
     rows.append(("The 2027 Season Pass, if it opens: prepaid money against a 2027 re-buy", "PASS",
-                 f"${prepay['net']:.2f} of ${SEASON:.0f} today, ${prepay['extra']:.2f} more than "
+                 f"${prepay['net']:.2f} of ${SEASON_2027_PASS:.0f} today, ${prepay['extra']:.2f} more than "
                  f"a ${REST_OF_SEASON:.0f} pass; earns more only if under "
                  f"{prepay['break_even']:.0%} of those buyers would have bought again, and "
                  f"all of 2027 is owed either way"))

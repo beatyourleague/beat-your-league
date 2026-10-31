@@ -1187,9 +1187,9 @@ a change notice (section 8) if it reaches anyone who has already bought.
 
 ## 13. Turning on the 2027 Season Pass
 
-**Off until a lawyer has seen it (owner decision, Oct 30 2026).** $39 today covers the rest of
+**Off until a lawyer has seen it (owner decision, Oct 30 2026).** $49 today covers the rest of
 2026 and all of 2027; it's a subscription that first renews on **August 15, 2028**, before the
-2028 season, and each August after that at $39. The code is in and does nothing: with no `y:`
+2028 season, and each August after that at the $39 founding rate. The code is in and does nothing: with no `y:`
 in `STRIPE_PAYMENT_LINKS` every path behaves exactly as it does today. Nothing below is urgent
 and nothing else depends on it. Do these in order.
 
@@ -1206,7 +1206,7 @@ Book it with the section 12 consult if you can; these are the questions, not ans
 1. **Prepayment for a future season.** We take money in October 2026 for a season that starts
    in September 2027. Does either country treat that differently from an ordinary
    subscription? Does Ontario treat it as a future-performance agreement, given a total of
-   about C$53 today (over the C$50 line in section 12, question 1), with more to come each
+   about C$67 today (over the C$50 line in section 12, question 1), with more to come each
    August? Any rule on holding prepaid money, or on what we owe if we stop?
 2. **The first term's length.** It runs about 22 months, from purchase to August 15, 2028, then
    renews a year at a time. Does a first term that long change anything under the auto-renewal
@@ -1216,7 +1216,7 @@ Book it with the section 12 consult if you can; these are the questions, not ans
    and the welcome enough, when the date isn't an anniversary of the purchase? Must every
    later renewal be stated the same way ("each August after that")?
 4. **Cancelling and refunding a prepaid term.** Our draft says cancelling stops the renewal and
-   keeps the reports through 2027, and that after the refund window the $39 isn't refundable,
+   keeps the reports through 2027, and that after the refund window the $49 isn't refundable,
    including the part for a season not yet played. Is that enforceable against a buyer who
    cancels in November 2026, with ten months to go? Must we refund the unplayed part on
    request? Does Ontario's cooling-off or cancellation regime reach it?
@@ -1235,7 +1235,7 @@ Book it with the section 12 consult if you can; these are the questions, not ans
 `site/terms.html` is what buyers consent to and its text is digest-pinned to its date, so
 nothing here is published. This is the wording for the lawyer to mark up.
 
-- **§3, a new paragraph after the first:** "**2027 Season Pass.** $39 USD, charged when you
+- **§3, a new paragraph after the first:** "**2027 Season Pass.** $49 USD, charged when you
   buy. It covers every weekly report from your purchase through the last week of the 2026
   season, and every weekly report of the 2027 season. It is a subscription: it renews at $39 USD
   on August 15, 2028, before the 2028 season, and on August 15 of each year after that, until
@@ -1267,9 +1267,14 @@ nothing here is published. This is the wording for the lawyer to mark up.
 answers, written from Stripe's documentation, so this is where the path is proved. In **test
 mode**, with test keys in your shell:
 
-1. Make a yearly **$39** Price on its own Product, called `2027 Season Pass`, and a Payment
-   Link on it. Same settings as section 1's table, except it **is** a subscription. Don't reuse
-   a Price from any other link.
+1. Make a yearly **$39** Price on its own Product, called `2027 Season Pass`, and a one-time
+   **$10** Price on a second Product, called `Rest of this season`. Make one Payment Link
+   carrying both, so the page shows **$49 due today** and $39 a year after. The $10 lands on the
+   first invoice only, so every renewal is $39. Same settings as section 1's table, except it
+   **is** a subscription. Don't reuse a Price from any other link. Stripe's Checkout documents
+   this mix; its Payment Links pages don't say so outright, so this step is what proves it. If
+   the link won't take both, stop and tell me: the fallback is one yearly $49 Price that
+   `run/billing.py` swaps to the $39 Price in the same write that moves the renewal.
 2. Put `y:` in a test `STRIPE_PAYMENT_LINKS`, set the text with `infra/stripe_paylink_text.py`,
    and buy one with card `4242 4242 4242 4242`.
 3. Run `.venv/bin/python -m run.intake`, then `.venv/bin/python -m run.billing` (dry: it lists
@@ -1281,7 +1286,7 @@ mode**, with test keys in your shell:
    15, 2028 and it must stay Trialing with nothing charged. **This is the behaviour the whole
    pass rests on and Stripe's documents only imply it.** If cancelling ends it at once, or
    charges anything, stop here and tell me.
-5. **A refund.** On a second purchase: refund the $39, run `run.intake`, and check the daily run
+5. **A refund.** On a second purchase: refund the $49, run `run.intake`, and check the daily run
    goes red with `REFUNDED-STILL-LIVE` and the row stops being entitled. Then cancel it
    Immediately and check the alarm clears. Do this after the move, not before: the 0 USD
    invoice is the whole reason this path exists.
@@ -1308,7 +1313,7 @@ mode**, with test keys in your shell:
 
 ### Step 5: the live link
 
-1. Make the same Price and Payment Link in **live** mode. Keep it unpublished until step 7.
+1. Make the same two Prices and Payment Link in **live** mode. Keep it unpublished until step 7.
 2. Set **After payment** to redirect to `https://beatyourleague.com/thanks.html?plan=2027`. The
    plain thanks page says nothing renews, which is false of this pass.
 3. Run `infra/stripe_paylink_text.py`. It writes the words above the Pay button and on the
@@ -1332,7 +1337,7 @@ report and the next day's move, and refund it the way section 8 says.
 **Once it's on:** `make stats` and the dashboard's Money section show passes held and the
 dollars collected for a 2027 season not yet delivered. That figure is yours to deliver on, so
 leave it in the bank until the 2027 season is played. A $29 buyer who wants the upgrade pays
-$39 on top today; if that's a problem, a refund of the $29 inside its window and a fresh $39
+$49 on top today; if that's a problem, a refund of the $29 inside its window and a fresh $49
 purchase is the clean route, and there's no upgrade link. `run/economics.py` models the trade:
-the prepaid pass earns more only if under about 25% of buyers would have bought again in 2027,
-so its case is winning buyers who wouldn't come back, not squeezing the ones who would.
+the prepaid pass earns more if under about half of buyers would have bought again in 2027
+(about a quarter at $39, which is why it's $49), against the model's 30–70% re-buy rates.

@@ -75,9 +75,10 @@ the first money-mutating call in the repo, and a misconfigured cron must not
 cancel real subscriptions by accident.
 
 **The 2027 Season Pass: the first renewal, moved (owner decision, Oct 30 2026).**
-$39 today covers the rest of 2026 and all of 2027, and the pass renews each
-August from 2028. A yearly subscription's own anniversary would bill in late
-2027, mid-season, for a period the $39 already paid for, so a second, separate
+$49 today covers the rest of 2026 and all of 2027, and the pass renews at $39
+each August from 2028. The link carries the yearly $39 price plus a $10 one-time
+item, so the subscription itself only ever holds the $39. A yearly subscription's own anniversary would bill in late
+2027, mid-season, for a period the $49 already paid for, so a second, separate
 step moves it. Only a ``y:`` entry in STRIPE_PAYMENT_LINKS switches it on; with
 none, this file does exactly what it did.
 
@@ -491,7 +492,7 @@ def needs_deferral(subscriptions: Iterable[Mapping[str, Any]], sold: Iterable[st
         if back in ("refunded", "lost"):
             if not _already_stopping(subscription):
                 plan.notes.append(
-                    f"REFUNDED-STILL-LIVE subscription {label}: its $39 went back "
+                    f"REFUNDED-STILL-LIVE subscription {label}: its $49 went back "
                     f"({back}) but the subscription is still set to bill. Reports have "
                     f"stopped; cancel it in the Stripe Dashboard, Immediately "
                     f"(LAUNCH.md section 8)")

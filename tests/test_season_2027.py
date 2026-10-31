@@ -1,4 +1,4 @@
-"""The 2027 Season Pass: $39 now for the rest of 2026 and all of 2027, a
+"""The 2027 Season Pass: $49 now for the rest of 2026 and all of 2027, a
 subscription whose first renewal is moved to August 2028.
 
 Off until a lawyer has seen it, so the first thing held true here is that with
@@ -27,11 +27,12 @@ import run.stats as stats
 import run.subscriptions as subscriptions
 from render.renewal import renewal_day
 from render.report import season_end_lines
-from render.welcome import (ONCE_BESIDE_2027, SEASON_2027_PRICE, SEASON_2027_TWICE,
-                            first_renewal_words, welcome_message)
+from render.welcome import (ONCE_BESIDE_2027, SEASON_2027_PRICE, SEASON_2027_RENEWAL,
+                            SEASON_2027_TWICE, first_renewal_words, welcome_message)
 from run.billing import (DEFER_METADATA_KEY, MAX_TRIAL_DAYS, ROSTER_METADATA_KEY, YEARLY,
                          apply_deferral, money_returned, needs_deferral, needs_stop)
-from run.checkout import (SEASON_2027_FIRST_RENEWAL, SEASON_2027_PRICE_CENTS,
+from run.checkout import (SEASON_2027_FIRST_PAYMENT_CENTS, SEASON_2027_FIRST_RENEWAL,
+                          SEASON_2027_PRICE_CENTS,
                           link_map_problems, parse_link_plans, playoff_links,
                           season_2027_links)
 from run.rosters import SEASON_2027, RosterSubscriber, load_rosters
@@ -50,12 +51,12 @@ FINAL = datetime(2027, 1, 5, 12, 17, tzinfo=timezone.utc)
 
 
 def _charge(**over) -> dict:
-    return {"id": "ch_1", "amount": 3900, "amount_refunded": 0, "refunded": False,
+    return {"id": "ch_1", "amount": 4900, "amount_refunded": 0, "refunded": False,
             "disputed": False, **over}
 
 
 def bought(**over) -> dict:
-    """A pass as the checkout leaves it: active, its $39 on the latest invoice."""
+    """A pass as the checkout leaves it: active, its $49 on the latest invoice."""
     row = {
         "id": SUB, "status": "active", "cancel_at": None, "cancel_at_period_end": False,
         "billing_cycle_anchor": BOUGHT, "schedule": None, "trial_end": None,
@@ -64,7 +65,7 @@ def bought(**over) -> dict:
                      "metadata": {ROSTER_METADATA_KEY: REF, "byl_plan": "season"}},
         "items": {"data": [{"price": {"unit_amount": SEASON_2027_PRICE_CENTS, "currency": "usd",
                                       "recurring": {"interval": YEARLY}}}]},
-        "latest_invoice": {"id": "in_paid", "amount_paid": 3900, "charge": _charge()},
+        "latest_invoice": {"id": "in_paid", "amount_paid": 4900, "charge": _charge()},
     }
     row.update(over)
     return row
@@ -256,7 +257,7 @@ def test_an_unpaid_session_is_nobody(tmp_path, sold_2027) -> None:
 
 def test_a_y_link_in_payment_mode_is_unattributed_not_welcomed(tmp_path, sold_2027,
                                                                capsys) -> None:
-    """A $39 payment with no subscription behind it: the welcome would promise
+    """A $49 payment with no subscription behind it: the welcome would promise
     2027 and a renewal, and entitlement would end with 2026. Nothing assumed."""
     session = {**_session(REF, sid="cs_bad", link=PASS_2027_LINK, created=BOUGHT),
                "mode": "payment", "payment_intent": "pi_abcd1234"}
@@ -284,7 +285,7 @@ def test_two_s_links_still_fail_the_run(tmp_path, sold_2027, monkeypatch, capsys
 
 
 def test_the_pass_is_not_a_league_pass_and_carries_no_seats(tmp_path, sold_2027) -> None:
-    """Seats are entitled through a pass subscription (RULE E2). A $39 row must
+    """Seats are entitled through a pass subscription (RULE E2). A $49 row must
     not start offering them."""
     sold_2027["sessions"] = [_pass_session()]
     _run(tmp_path)
@@ -323,7 +324,7 @@ def test_a_29_buyer_who_takes_the_39_pass_keeps_one_row_on_both(tmp_path, sold_2
                                                                 monkeypatch) -> None:
     """The natural upgrade, and it collided twice: (email, ref, plan) is equal,
     so append_log dropped the second purchase, and the row went on naming a
-    payment that ends with 2026 while a $39 subscription billed for nothing;
+    payment that ends with 2026 while a $49 subscription billed for nothing;
     then two rows on one ref fail the whole registry load. Either order, one
     row on both purchases, so losing one never loses the other."""
     sold_2027["sessions"] = [_rest_of_season(first), _pass_session(created=second)]
@@ -349,7 +350,7 @@ def test_a_refunded_29_never_costs_the_paid_39_its_row(tmp_path, sold_2027, caps
 
 def test_a_refunded_39_never_costs_the_paid_29_its_row(tmp_path, sold_2027, capsys,
                                                        monkeypatch) -> None:
-    """The other way round, with the $39 the newer of the two."""
+    """The other way round, with the $49 the newer of the two."""
     sold_2027["sessions"] = [_rest_of_season(BOUGHT), _pass_session(created=BOUGHT + 86400)]
     _live(monkeypatch, PI)
     assert _run(tmp_path) == 0, capsys.readouterr().err
@@ -373,7 +374,7 @@ def test_the_welcome_states_what_the_law_wants_on_both_halves(monkeypatch) -> No
     for half in (message.text, message.html):
         half = half.replace("&#x27;", "'")
         assert "2027 Season Pass" in half
-        assert "$39 USD" in half and SEASON_2027_PRICE == "$39"
+        assert "$49 USD" in half and "$39 USD" in half and SEASON_2027_PRICE == "$49"
         assert "the rest of the 2026 season and all of the 2027 season" in half
         assert "August 15, 2028" in half and "each August after that" in half
         assert "15 to 45 days before" in half
@@ -399,14 +400,14 @@ def test_the_marker_reaches_the_welcome_from_the_signup(tmp_path, sold_2027, mon
     signup = intake.load_log(tmp_path / intake.SIGNUP_LOG_NAME)[0]
     assert signup.season_2027
     text = intake._welcome(signup, "2026").text
-    assert "$39 USD" in text and "August 15, 2028" in text and "$29" not in text
+    assert "$49 USD" in text and "$39 USD" in text and "August 15, 2028" in text and "$29" not in text
 
 
 def test_a_seat_never_gets_it() -> None:
     """Only a season purchase. A seat pays nothing and has no renewal."""
     seat = welcome_message("fan@example.com", "seat", "abcdef0123", "2026", now=NOW,
                            season_2027=True)
-    assert "$39" not in seat.text and "2028" not in seat.text
+    assert "$39" not in seat.text and "$49" not in seat.text and "2028" not in seat.text
 
 
 def test_the_pair_of_purchases_gets_the_true_sentence() -> None:
@@ -598,8 +599,8 @@ def test_a_disputed_pass_waits() -> None:
 
 
 @pytest.mark.parametrize("charge, answer", [
-    (_charge(refunded=True, amount_refunded=3900), "refunded"),
-    (_charge(amount_refunded=3900), "refunded"),
+    (_charge(refunded=True, amount_refunded=4900), "refunded"),
+    (_charge(amount_refunded=4900), "refunded"),
     (_charge(amount_refunded=1000), None),
     (_charge(disputed=True), "lost"),
 ])
@@ -643,7 +644,7 @@ def test_a_moved_pass_stays_in_view_after_its_session_ages_out(monkeypatch, caps
 
 def test_the_daily_workflow_hands_the_step_the_map() -> None:
     """Without it the step sees no y: link, moves nothing and stays green, and
-    a buyer is charged again mid-2027 for a season the $39 covers."""
+    a buyer is charged again mid-2027 for a season the $49 covers."""
     text = (Path(__file__).resolve().parent.parent
             / ".github/workflows/daily.yml").read_text(encoding="utf-8")
     step = text[text.index("id: billing"):]
@@ -748,7 +749,7 @@ def test_a_refund_ends_it_even_with_the_zero_invoice_on_top(monkeypatch) -> None
     """The bug this offer would have shipped. The 0 USD invoice the move leaves
     is `latest_invoice`, RULE E1 read a charge-less invoice and said "not
     refunded", and a refunded buyer stayed `trialing` and served until 2028."""
-    _stripe_reads(monkeypatch, [moved()], _charge(refunded=True, amount_refunded=3900))
+    _stripe_reads(monkeypatch, [moved()], _charge(refunded=True, amount_refunded=4900))
     paid = load_paid_from_stripe("sk")
     assert SUB not in paid.subscription_ids and SUB in paid.refunded
     assert not paid.entitles(_row())
@@ -757,7 +758,7 @@ def test_a_refund_ends_it_even_with_the_zero_invoice_on_top(monkeypatch) -> None
 
 def test_a_refund_before_the_move_ends_it_too(monkeypatch) -> None:
     pass_ = bought(latest_invoice={"id": "in_paid",
-                                   "charge": _charge(refunded=True, amount_refunded=3900)})
+                                   "charge": _charge(refunded=True, amount_refunded=4900)})
     _stripe_reads(monkeypatch, [pass_])
     assert not load_paid_from_stripe("sk").entitles(_row())
 
@@ -871,7 +872,7 @@ def test_a_y_link_gets_the_renewal_words_never_the_one_payment_words() -> None:
     form = fields(links[PASS_2027_LINK])
     words = form["custom_text[submit][message]"]
     assert words != MESSAGES["season"] and "Nothing renews" not in words
-    for needed in ("$39 USD", "August 15, 2028", "each August", "15 to 45 days",
+    for needed in ("$49 USD", "$39 USD", "August 15, 2028", "each August", "15 to 45 days",
                    "cancel any time", "one per person"):
         assert needed in words
     tick = form["custom_text[terms_of_service_acceptance][message]"]
@@ -895,7 +896,8 @@ def test_the_map_without_y_targets_what_it_did() -> None:
 def test_the_price_on_every_surface_is_one_figure() -> None:
     from run.economics import SEASON
     assert SEASON_2027_PRICE_CENTS == round(SEASON * 100)
-    assert SEASON_2027_PRICE == f"${SEASON_2027_PRICE_CENTS // 100}"
+    assert SEASON_2027_PRICE == f"${SEASON_2027_FIRST_PAYMENT_CENTS // 100}"
+    assert SEASON_2027_RENEWAL == f"${SEASON_2027_PRICE_CENTS // 100}"
 
 
 # --------------------------------------------------------------------- #
@@ -1042,6 +1044,44 @@ def test_stripes_side_is_read_only_when_a_y_link_is_here(monkeypatch) -> None:
     assert launch_check.check_season_2027_stripe() == []
 
 
+def _link_items(*items):
+    def get(url, key):
+        if "line_items" in url:
+            return 200, {"data": list(items)}
+        if "configurations" in url:
+            return 200, {"data": [{"features": {}}]}
+        return 200, {"data": []}
+    return get
+
+
+YEARLY_39 = {"amount_total": 3900, "price": {"unit_amount": 3900,
+                                             "recurring": {"interval": "year"}}}
+ONE_TIME_10 = {"amount_total": 1000, "price": {"unit_amount": 1000, "recurring": None}}
+GATE_NAME = "The 2027 Season Pass link takes $49 today on the yearly $39 price"
+
+
+@pytest.mark.parametrize("items", [(YEARLY_39, ONE_TIME_10), (ONE_TIME_10, YEARLY_39)])
+def test_stripes_side_passes_49_today_on_the_39_price_in_either_order(monkeypatch, items) -> None:
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", MAP_2027)
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(launch_check, "_get_json", _link_items(*items))
+    assert _statuses(launch_check.check_season_2027_stripe())[GATE_NAME] == "PASS"
+
+
+@pytest.mark.parametrize("items", [
+    (YEARLY_39,),                                                     # $39 today
+    ({"amount_total": 4900, "price": {"unit_amount": 4900,            # renews at $49
+                                      "recurring": {"interval": "year"}}},),
+    (dict(YEARLY_39, price={"unit_amount": 3900, "recurring": {"interval": "month"}}),
+     ONE_TIME_10),
+])
+def test_stripes_side_fails_any_other_shape(monkeypatch, items) -> None:
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", MAP_2027)
+    monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
+    monkeypatch.setattr(launch_check, "_get_json", _link_items(*items))
+    assert _statuses(launch_check.check_season_2027_stripe())[GATE_NAME] == "FAIL"
+
+
 def test_stripes_side_fails_a_link_at_the_wrong_price(monkeypatch) -> None:
     monkeypatch.setenv("STRIPE_PAYMENT_LINKS", MAP_2027)
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
@@ -1056,7 +1096,7 @@ def test_stripes_side_fails_a_link_at_the_wrong_price(monkeypatch) -> None:
 
     monkeypatch.setattr(launch_check, "_get_json", get)
     gates = _statuses(launch_check.check_season_2027_stripe())
-    assert gates["The 2027 Season Pass link sells the yearly $39 price"] == "FAIL"
+    assert gates["The 2027 Season Pass link takes $49 today on the yearly $39 price"] == "FAIL"
     assert gates["Stripe's billing page cannot end a 2027 Season Pass's trial"] == "PASS"
     assert gates["This key can read invoices, which a deferred pass's refund needs"] == "FAIL"
 
@@ -1073,7 +1113,7 @@ def test_the_gate_is_registered_in_every_run() -> None:
 
 def _sold(sid: str, charge: dict | None = None, **over) -> dict:
     return {"id": sid, "status": "complete", "payment_status": "paid", "payment_link": PASS_2027_LINK,
-            "client_reference_id": REF, "currency": "usd", "amount_total": 3900,
+            "client_reference_id": REF, "currency": "usd", "amount_total": 4900,
             "invoice": {"id": "in_1", "charge": charge or _charge()}, **over}
 
 
@@ -1082,17 +1122,17 @@ TODAY = date(2026, 11, 1)
 
 def test_the_obligation_counts_what_is_still_owed() -> None:
     sessions = [_sold("cs_1"), _sold("cs_2"),
-                _sold("cs_3", _charge(refunded=True, amount_refunded=3900)),
+                _sold("cs_3", _charge(refunded=True, amount_refunded=4900)),
                 _sold("cs_4", _charge(amount_refunded=1000)),
                 _sold("cs_5", payment_link=SEASON_LINK),
                 _sold("cs_6", payment_status="unpaid"),
                 _sold("cs_7", currency="cad")]
     summary = stats.season_2027_summary(sessions, {PASS_2027_LINK}, TODAY)
-    assert summary == {"held": 4, "refunded": 1, "other_currency": 1, "collected": 107.0,
-                       "deferred": 107.0, "delivered": False}
+    assert summary == {"held": 4, "refunded": 1, "other_currency": 1, "collected": 137.0,
+                       "deferred": 137.0, "delivered": False}
     line = stats.season_2027_line(summary)
     assert "4 held, 1 refunded" in line
-    assert "$107.00 collected for 2027 seasons not yet delivered" in line
+    assert "$137.00 collected for 2027 seasons not yet delivered" in line
     assert "@" not in line
 
 
@@ -1105,14 +1145,14 @@ def test_a_lost_chargeback_owes_nothing() -> None:
 def test_the_obligation_ends_when_the_season_has_been_played() -> None:
     summary = stats.season_2027_summary([_sold("cs_1")], {PASS_2027_LINK}, date(2028, 2, 1),
                                         ended=date(2028, 1, 9))
-    assert summary["deferred"] == 0.0 and summary["collected"] == 39.0
+    assert summary["deferred"] == 0.0 and summary["collected"] == 49.0
     assert "nothing deferred" in stats.season_2027_line(summary)
 
 
 def test_an_unknown_end_stays_owed() -> None:
     """No schedule means not delivered, never a quiet zero."""
     summary = stats.season_2027_summary([_sold("cs_1")], {PASS_2027_LINK}, date(2030, 1, 1))
-    assert summary["deferred"] == 39.0 and not summary["delivered"]
+    assert summary["deferred"] == 49.0 and not summary["delivered"]
 
 
 def test_none_sold_says_so() -> None:
@@ -1137,7 +1177,7 @@ def _summary(monkeypatch, links) -> tuple[list[str], list[str]]:
 
 def test_make_stats_shows_it_only_when_the_offer_is_on(monkeypatch) -> None:
     lines, asked = _summary(monkeypatch, {PASS_2027_LINK})
-    assert any("$39.00 collected for 2027 seasons" in line for line in lines)
+    assert any("$49.00 collected for 2027 seasons" in line for line in lines)
     lines, asked = _summary(monkeypatch, ())
     assert not any("2027 Season Pass" in line for line in lines)
     assert not any("data.invoice.charge" in url for url in asked)
@@ -1153,7 +1193,7 @@ def test_the_dashboard_card_appears_only_with_the_offer() -> None:
     assert season_2027_card({"stripe": source({"sessions": []})}) == ""
     summary = stats.season_2027_summary([_sold("cs_1")], {PASS_2027_LINK}, TODAY)
     card = season_2027_card({"stripe": source({"season_2027": summary})})
-    assert "$39.00 collected for 2027 seasons not yet delivered" in card
+    assert "$49.00 collected for 2027 seasons not yet delivered" in card
     failed = season_2027_card({"stripe": source({"season_2027": {"error": "HTTP 403"}})})
     assert "Invoices: Read" in failed and "HTTP 403" in failed
 
@@ -1161,12 +1201,13 @@ def test_the_dashboard_card_appears_only_with_the_offer() -> None:
 def test_the_model_states_the_trade() -> None:
     """Prepaid, the pass adds a little today and gives up a year if the buyer
     would have come back, so the break-even is the number worth keeping."""
-    from run.economics import (REBUY_RATES, REST_OF_SEASON, SEASON, net_per_sale, rebuy_value,
-                               season_2027_prepay, summary_lines)
+    from run.economics import (REBUY_RATES, REST_OF_SEASON, SEASON, SEASON_2027_PASS, net_per_sale,
+                               rebuy_value, season_2027_prepay, summary_lines)
     prepay = season_2027_prepay()
-    assert prepay["net"] == net_per_sale(SEASON)
+    assert prepay["net"] == net_per_sale(SEASON_2027_PASS)
     assert prepay["rest_of_season_net"] == net_per_sale(REST_OF_SEASON, one_time=True)
-    assert prepay["extra"] > 0 and 0 < prepay["break_even"] < min(REBUY_RATES)
+    # $49 (Oct 31 2026): inside the model's own re-buy range, where $39 sat below it.
+    assert prepay["extra"] > 0 and min(REBUY_RATES) < prepay["break_even"] < max(REBUY_RATES)
     # At exactly the break-even rate the two are worth the same, to the cent.
     even = rebuy_value(REST_OF_SEASON, SEASON, prepay["break_even"])
     assert abs(even - prepay["net"]) < 0.02

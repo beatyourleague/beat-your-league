@@ -2,9 +2,9 @@
 deal in five seconds, and every value line on it literally true.
 
 What these hold:
-- the count on the card is the one a buyer really gets, and it goes when no
-  lineups are left;
-- the $39 2027 Season Pass is built switched off: no word of it renders while
+- no page counts the weeks or lineups left: the card and the buy page say the
+  same words all season (owner decision, Oct 31 2026);
+- the $49 2027 Season Pass is built switched off: no word of it renders while
   the flag is false, and with the flag on its renewal terms sit under the price;
 - the money rule: a price is stated, never broken down, on any page;
 - no hype on a selling page (the owner's "don't be cheesy", as a sweep).
@@ -58,26 +58,6 @@ def _flat(text: str) -> str:
 # the value line
 # --------------------------------------------------------------------- #
 
-@needs_node
-def test_no_count_when_no_lineups_are_left() -> None:
-    got = _node(_fn(LANDING, "lineupsLeft") + """
-console.log(JSON.stringify([lineupsLeft(18, 0), lineupsLeft(17, null)]));""")
-    assert got == ["", ""]
-
-
-@needs_node
-def test_the_count_says_when_it_drops_and_one_left_reads_right() -> None:
-    """The brief's example was "9 lineups left. Next Tuesday, 8." It isn't true:
-    run/intake.py sends a buyer that week's report up to its first kickoff, so
-    on the Tuesday a buyer still gets all nine, until Thursday night's game. The
-    line names the moment the count really drops."""
-    got = _node(_fn(LANDING, "lineupsLeft") + """
-console.log(JSON.stringify([lineupsLeft(9, 9), lineupsLeft(16, 2), lineupsLeft(17, 1)]));""")
-    assert got == ["9 lineups left to a Week 17 title game. After Week 9 kicks off, 8.",
-                   "2 lineups left to a Week 17 title game. After Week 16 kicks off, 1.",
-                   "1 lineup left to a Week 17 title game."]
-
-
 def _clock(week: dict, now: str, open_: bool) -> dict:
     iife = LANDING.split("// The season clock.")[1]
     iife = iife[iife.index("(function () {"):iife.index("})();") + 5]
@@ -107,13 +87,11 @@ const CHECKOUT_OPEN = %(open)s, PLAYOFF_PASS_READY = false, PLAYOFF_FROM_WEEK = 
 let closed = null;
 function closeForSeason(line) { closed = line; }
 function showPlayoffPass() {}
-%(helpers)s
 %(iife)s
 setTimeout(() => console.log(JSON.stringify({ closed, line: els["pass-clock"].textContent,
-  hidden: els["pass-clock"].hidden })), 50);
+  hidden: els["pass-clock"].hidden, hero: els["season-clock"].textContent })), 50);
 """ % {"now": json.dumps(now), "start": json.dumps(start), "week": json.dumps(week),
-       "open": "true" if open_ else "false", "iife": iife,
-       "helpers": _fn(LANDING, "lineupsLeft")}
+       "open": "true" if open_ else "false", "iife": iife}
     return _node(script)
 
 
@@ -123,49 +101,43 @@ W8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-03",
 
 
 @needs_node
-@pytest.mark.parametrize("week,lands,kickoff,now,open_,words", [
-    # After Week 8 kicked off, a buyer's first week is 9, open or closed.
-    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False,
-     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
-    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True,
-     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
-    # Tuesday, Week 9's report out, its games not started: open, it still counts.
-    (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", True,
-     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
-    # Closed, the clock's own calendar: the next report to go out.
-    (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", False,
-     "8 lineups left to a Week 17 title game. After Week 10 kicks off, 7."),
-    (15, "2026-12-29", "2026-12-25T18:00:00Z", "2026-12-26T20:00:00Z", True,
-     "2 lineups left to a Week 17 title game. After Week 16 kicks off, 1."),
-    (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True,
-     "1 lineup left to a Week 17 title game."),
+@pytest.mark.parametrize("week,lands,kickoff,now,open_,hero", [
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False, "Week 9's report lands Tuesday."),
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True, "Week 9's report lands Tuesday."),
+    (13, "2026-12-08", "2026-12-04T01:15:00Z", "2026-12-01T20:00:00Z", True, "Week 13's report lands today."),
+    (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True, "Week 17's report lands Tuesday."),
+    # Past Week 17's kickoff: Week 18 still goes out, and the card says the same.
+    (17, "2027-01-12", "2027-01-08T01:15:00Z", "2027-01-09T20:00:00Z", True, "Week 18's report lands Tuesday."),
 ])
-def test_the_card_counts_what_a_buyer_gets(week, lands, kickoff, now, open_, words) -> None:
+def test_the_card_says_the_same_words_every_week(week, lands, kickoff, now, open_, hero) -> None:
+    """Owner decision, Oct 31 2026: a falling count makes a buyer do the math and
+    wait for the price to fall with it. The hero names the next report and
+    counts nothing; the card's line is the one in the markup."""
     got = _clock({**W8, "week": week, "lands_on": lands, "first_kickoff": kickoff}, now, open_)
-    assert got["line"] == words and not got["hidden"]
+    assert got["line"] == "A new lineup decided every Tuesday." and not got["hidden"]
+    assert got["hero"] == hero
 
 
 @needs_node
-def test_the_playoff_pass_counts_the_lineups_it_buys() -> None:
-    got = _clock({**W8, "week": 13, "lands_on": "2026-12-08",
-                  "first_kickoff": "2026-12-04T01:15:00Z"}, "2026-12-01T20:00:00Z", True)
-    assert got["line"].startswith("5 lineups left") and "$" not in got["line"]
-    # The 2027 card's step up reads this price.
-    assert "PASS_AMOUNT = 19;" in _fn(LANDING, "showPlayoffPass")
-
-
-@needs_node
-def test_the_line_goes_when_no_lineups_are_left() -> None:
-    # Past Week 17's first kickoff: nothing to count, and the fallback says a
-    # new lineup is coming.
-    got = _clock({**W8, "week": 17, "lands_on": "2027-01-12",
-                  "first_kickoff": "2027-01-08T01:15:00Z"}, "2027-01-09T20:00:00Z", True)
-    assert got["hidden"] is True
-    # Over: the clock hands off to closeForSeason, which hides it.
+def test_a_season_that_is_over_hands_the_card_to_close_for_season() -> None:
     over = _clock({**W8, "phase": "over"}, "2027-02-01T20:00:00Z", True)
     assert over["closed"]
     assert '"pass-clock"' in _fn(LANDING, "closeForSeason")
     assert 'getElementById("pass-2027")' in _fn(LANDING, "closeForSeason")
+
+
+def test_no_page_counts_the_season_down() -> None:
+    """Every page, the text a script builds included. The count came off on Oct
+    31 2026; this stops it coming back in another shape."""
+    pages = sorted(SITE.rglob("*.html"))
+    assert len(pages) > 15
+    counted = re.compile(r"\b\d+ (more )?(lineups?|weeks?|reports?) (left|to go|remaining)\b", re.I)
+    for path in pages:
+        page = path.read_text(encoding="utf-8")
+        assert not counted.search(page), path.name
+        for built_by_script in ('" lineups"', '"lineups"', "left to a Week", "lineups to a Week",
+                                "lineupsLeft", "lineupsAhead", "regular-season weeks"):
+            assert built_by_script not in page, (path.name, built_by_script)
 
 
 @needs_node
@@ -174,7 +146,7 @@ def test_the_line_goes_when_no_lineups_are_left() -> None:
     {**W8, "lands_on": "2026-10-01"},                         # a stale build
     {"week": 8},                                              # a file that can't say
 ])
-def test_a_clock_that_cannot_say_leaves_the_true_generic_line(week) -> None:
+def test_a_clock_that_cannot_say_leaves_the_static_lines(week) -> None:
     got = _clock(week, "2026-10-30T20:00:00Z", True)
     assert got["line"] == "A new lineup decided every Tuesday." and not got["hidden"]
 
@@ -185,42 +157,24 @@ def test_the_cards_generic_line_ships_in_the_markup() -> None:
 
 
 @needs_node
-def test_step_three_carries_the_count_and_the_price_the_button_charges() -> None:
-    """Join's value line, with its real lineupsAhead: the Playoff Pass says $19,
-    and an unknown clock says the sentence that is true either way."""
-    fns = ('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n'
-           + _fn(JOIN, "lineupsAhead") + _fn(JOIN, "valueWords"))
-    got = _node(fns + """
-const RealDate = Date;
-const FIXED = Date.parse("2026-10-30T20:00:00Z");
-class FakeDate extends RealDate {
-  constructor(...a) { if (a.length === 0) super(FIXED); else super(...a); }
-}
-FakeDate.parse = RealDate.parse;
-globalThis.Date = FakeDate;
+def test_step_three_states_the_price_the_button_charges() -> None:
+    """Join's value line says the same words whatever the week: the Playoff Pass
+    says $19, and no plan counts anything."""
+    got = _node('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n' + _fn(JOIN, "valueWords") + """
 var WANTS_PASS = false, chose2027 = false, PLAYOFF_ACTIVE = false;
-var state = { week: { week: 8, last_week: 18, lands_on: "2026-11-03", phase: "season",
-                      first_kickoff: "2026-10-30T00:15:00Z" } };
-function canStartToday() { return true; }
 const out = [valueWords()];
 PLAYOFF_ACTIVE = true;
-state.week = { week: 12, last_week: 18, lands_on: "2026-11-24", phase: "season",
-               first_kickoff: "2026-11-20T01:15:00Z" };
 out.push(valueWords());
-state.week = null;
-out.push(valueWords());
-PLAYOFF_ACTIVE = false;
-out.push(valueWords());
-WANTS_PASS = true;
+PLAYOFF_ACTIVE = false; WANTS_PASS = true;
 out.push(valueWords());
 WANTS_PASS = false; chose2027 = true;
 out.push(valueWords());
 console.log(JSON.stringify(out));""")
-    assert got[0] == "9 lineups left to a Week 17 title game. $29, one payment."
-    assert got[2] == "Every lineup from now to your title game. $19, one payment."
-    assert got[3] == "Every lineup from now to your title game. $29, one payment."
-    assert got[4] == "Your whole league, every lineup from now to the title game. $69, one payment."
-    assert "lineup left" not in got[5] and "nothing more until August 15, 2028" in got[5]
+    assert got == ["Every lineup from now to your title game. $29, one payment.",
+                   "Every lineup from now to your title game. $19, one payment.",
+                   "Your whole league, every lineup from now to the title game. $69, one payment.",
+                   "All of 2027, with the rest of this season included. $49 today, nothing "
+                   "more until August 15, 2028."]
 
 
 def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
@@ -292,6 +246,7 @@ def test_the_only_rendered_39_is_the_founding_line() -> None:
     assert _flat(_markup(LANDING)).count("$39") == 1
     assert "Founding rate: your 2027 season pass is $39." in _flat(_markup(LANDING))
     assert "$39" not in _flat(_markup(JOIN))
+    assert "$49" not in _flat(_markup(LANDING)) + _flat(_markup(JOIN))
 
 
 def test_every_offer_word_is_behind_the_switch() -> None:
@@ -302,7 +257,7 @@ def test_every_offer_word_is_behind_the_switch() -> None:
     assert "const PLAN_CHOICE = SEASON_2027_READY &&" in JOIN
     assert "let chose2027 = PLAN_CHOICE &&" in JOIN
     block = JOIN[JOIN.index("if ((MONTHLY_OFFERED || PLAN_CHOICE)"):]
-    assert block.index("if (PLAN_CHOICE) {") < block.index('"2027 Season Pass · $39"')
+    assert block.index("if (PLAN_CHOICE) {") < block.index('"2027 Season Pass · $49"')
 
 
 class _Dom:
@@ -341,7 +296,7 @@ def test_with_the_switch_on_the_renewal_sits_beside_the_price(open_: bool) -> No
     fns = (_fn(LANDING, "season2027More") + _fn(LANDING, "season2027Lines")
            + _fn(LANDING, "season2027Card"))
     got = _node(_Dom.SCRIPT + f"""
-const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 39;
+const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 49, SEASON_2027_RENEWAL = 39;
 const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";
 var PASS_AMOUNT = 29;
 """ + fns + """
@@ -358,11 +313,12 @@ console.log(JSON.stringify({ parts, id: card.id, firstFounder: first.classes.has
     assert terms == ("Nothing more until August 15, 2028, when it renews at $39, then each "
                      "August. Cancel any time. We email you before it bills.")
     assert "All of 2027, with the rest of this season included." in dict(got["parts"])["passlead"]
-    assert got["firstFounder"] is False and got["gridOne"] is False, "the $39 card is the preferred one"
-    assert [o["price"] for o in got["offers"]] == ["29", "39"]
+    assert dict(got["parts"])["price"] == "$49 / this season and next"
+    assert got["firstFounder"] is False and got["gridOne"] is False, "the $49 card is the preferred one"
+    assert [o["price"] for o in got["offers"]] == ["29", "49"]
     assert "renews at $39, then each August" in got["offers"][1]["description"]
     if open_:
-        assert got["buy"] == "join/index.html?plan=2027" and got["label"] == "Get my lineups — $39"
+        assert got["buy"] == "join/index.html?plan=2027" and got["label"] == "Get my lineups — $49"
     else:
         assert got["buy"] == "#watch-form" and got["label"] == "Tell me when it opens"
 
@@ -373,11 +329,11 @@ def test_the_plain_css_keeps_the_renewal_at_full_size() -> None:
 
 @needs_node
 @pytest.mark.parametrize("price,more", [
-    (29, "$10 more gets you all of next season."),
-    (19, "$20 more gets you all of next season."),
+    (29, "$20 more gets you all of next season."),
+    (19, "$30 more gets you all of next season."),
 ])
 def test_the_step_up_is_worked_out_from_the_price_on_offer(price, more) -> None:
-    got = _node("const SEASON_2027_PRICE = 39;\n" + _fn(LANDING, "season2027More")
+    got = _node("const SEASON_2027_PRICE = 49;\n" + _fn(LANDING, "season2027More")
                 + f"\nconsole.log(JSON.stringify(season2027More({price})));")
     assert got == more
 
@@ -399,7 +355,7 @@ def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
     for target in ('$("terms-line")', '$("renew-note")', '$("first-tail")', '$("side-renew")',
                    '$("header-pitch")', '$("submit")'):
         assert target in fn, target
-    assert 'textContent = "Unlock my lineups — $39";' in fn
+    assert 'textContent = "Unlock my lineups — $49";' in fn
     assert "We email you before it bills" in re.sub(r'"\s*\+\s*"', "", fn)
     assert 'SEASON_2027_READY ? "" : " One payment, nothing renews."' in re.sub(
         r'"\s*\+\s*\n?\s*"', "", LANDING)
@@ -419,7 +375,7 @@ def test_the_ref_prefix_stays_s() -> None:
 
 def test_the_read_back_names_what_the_next_press_costs() -> None:
     fn = _fn(JOIN, "checkoutWords")
-    for price in ("$29", "$19", "$39", "$69", "$14.99/mo"):
+    for price in ("$29", "$19", "$49", "$69", "$14.99/mo"):
         assert f"Continue to checkout — {price}" in fn
     assert '$("check-yes").textContent = go ? checkoutWords()' in JOIN
     assert 'textContent = "Unlock my lineups — $19";' in _fn(JOIN, "drawPlayoffPass")

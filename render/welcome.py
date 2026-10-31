@@ -43,8 +43,10 @@ PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$69"
 # The 2027 Season Pass (owner decision, Oct 30 2026): off until the lawyer has
-# seen it, and a test ties this figure to run/checkout.SEASON_2027_PRICE_CENTS.
-SEASON_2027_PRICE = "$39"
+# seen it, and a test ties these to run/checkout's two cents figures. It renews
+# at the founding rate every other 2026 buyer has.
+SEASON_2027_PRICE = "$49"
+SEASON_2027_RENEWAL = "$39"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
@@ -163,7 +165,7 @@ def _season_2027_terms() -> tuple[str, list[str]]:
             [f"You paid {price} USD today. That covers every weekly report for the "
              "rest of the 2026 season and all of the 2027 season, and nothing more "
              f"is charged before {when}.",
-             f"It renews at {price} USD on {when}, before the 2028 season, and each "
+             f"It renews at {SEASON_2027_RENEWAL} USD on {when}, before the 2028 season, and each "
              "August after that, until you cancel. We email you 15 to 45 days before "
              "each renewal, with the date and the amount.",
              "Cancelling takes about a minute from the link at the bottom of any "

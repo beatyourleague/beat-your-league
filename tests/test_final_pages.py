@@ -535,11 +535,11 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     case fails."""
     mid = {**WEEK7, "week": 8, "lands_on": "2026-11-03", "first_kickoff": "2026-10-30T00:15:00Z"}
     got = _clock(mid, "2026-10-28T16:00:00Z", open_=True)
-    assert got["clock"] == "Week 8's report lands today. 10 lineups to a Week 17 title game, every one decided."
+    assert got["clock"] == "Week 8's report lands today."
     assert got["open"] == " Set up now and your first report lands today."
     assert got["hero"] == got["closer"] == "Get my lineups"
     closed = _clock(mid, "2026-10-28T16:00:00Z", open_=False)
-    assert closed["clock"].startswith("Week 9's report lands Tuesday. 9 lineups")
+    assert closed["clock"] == "Week 9's report lands Tuesday."
     assert closed["hero"] == closed["closer"] == "Check my team"
 
 
@@ -552,7 +552,7 @@ def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     has never heard of): it says the one thing true at every hour — "Set up
     now and your first report lands today." — and the clock names the week."""
     got = _clock(WEEK7, "2026-10-24T16:00:00Z", open_=True)
-    assert got["clock"].startswith("Week 8's report lands Tuesday. 10 lineups")
+    assert got["clock"] == "Week 8's report lands Tuesday."
     assert got["open"] == " Set up now and your first report lands today."
     assert got["hero"] == "Get my lineups"
     tuesday = _clock(WEEK7, "2026-10-27T11:00:00Z", open_=True)
