@@ -863,7 +863,11 @@ next. After the last game every weekly job exits quietly until the next schedule
    hourly run drops them and the reports stop by themselves (a League Pass refund ends its
    seats the same way). Reply saying it's refunded and that cards take 5–10 days to show it.
    Stripe keeps its fee (about $1.87 on a $29 pass). *2027:* a subscription is cancelled
-   (**Immediately**) and every paid invoice on it refunded.
+   (**Immediately**) and every paid invoice on it refunded. A **2027 Season Pass**, if that
+   offer is on, is a subscription, so it takes both clicks: **Refund**, then **Subscriptions**
+   → theirs → **Cancel subscription → Immediately**. The refund alone stops the reports by
+   itself, but the subscription would still bill in August 2028; the daily run goes red with
+   `REFUNDED-STILL-LIVE` until it is cancelled. Cancelling alone refunds nothing.
 
 | Week | First kickoff (ET) |
 |---|---|
@@ -1180,3 +1184,153 @@ a change notice (section 8) if it reaches anyone who has already bought.
 - **Privacy, if checkout stops collecting addresses (step 1):** "Your country, and the postal
   code where your card needs it, entered on Stripe's checkout page" in place of "your billing
   address".
+
+## 13. Turning on the 2027 Season Pass
+
+**Off until a lawyer has seen it (owner decision, Oct 30 2026).** $39 today covers the rest of
+2026 and all of 2027; it's a subscription that first renews on **August 15, 2028**, before the
+2028 season, and each August after that at $39. The code is in and does nothing: with no `y:`
+in `STRIPE_PAYMENT_LINKS` every path behaves exactly as it does today. Nothing below is urgent
+and nothing else depends on it. Do these in order.
+
+**What the buyer gets, in Stripe's terms.** A daily step (`run/billing.py`, `--send` in the
+daily cron) moves each pass's first renewal to August 15, 2028 with Stripe's own recipe: it
+sets `trial_end` with `proration_behavior=none`. Nothing is charged, and the subscription reads
+**trialing** until that date. The word is Stripe's, not ours, and it shows on their billing
+page and on a 0 USD invoice; the welcome tells them why.
+
+### Step 1: the lawyer
+
+Book it with the section 12 consult if you can; these are the questions, not answers.
+
+1. **Prepayment for a future season.** We take money in October 2026 for a season that starts
+   in September 2027. Does either country treat that differently from an ordinary
+   subscription? Does Ontario treat it as a future-performance agreement, given a total of
+   about C$53 today (over the C$50 line in section 12, question 1), with more to come each
+   August? Any rule on holding prepaid money, or on what we owe if we stop?
+2. **The first term's length.** It runs about 22 months, from purchase to August 15, 2028, then
+   renews a year at a time. Does a first term that long change anything under the auto-renewal
+   rules? California's 15-to-45-day notice is built for it. Does any state cap a first term, or
+   treat a term over a year differently?
+3. **The August renewal date.** Is a stated date in the terms, the Pay-button text, the tick-box
+   and the welcome enough, when the date isn't an anniversary of the purchase? Must every
+   later renewal be stated the same way ("each August after that")?
+4. **Cancelling and refunding a prepaid term.** Our draft says cancelling stops the renewal and
+   keeps the reports through 2027, and that after the refund window the $39 isn't refundable,
+   including the part for a season not yet played. Is that enforceable against a buyer who
+   cancels in November 2026, with ten months to go? Must we refund the unplayed part on
+   request? Does Ontario's cooling-off or cancellation regime reach it?
+5. **Ontario and US auto-renewal rules.** Ontario: is the 2002 Act or the 2023 Act in force for
+   these sales, and what does either require of a renewal? US: ROSCA at the federal level,
+   California's ARL, and the states with their own rules (New York among them). Is our
+   disclosure and tick-box enough, and is the record we keep (section 3's consent metadata)
+   the record they want?
+6. **The word "trial".** Stripe's own label will read "trial" and a card statement may end in
+   `* TRIAL OVER` in August 2028 (Stripe appends it to the descriptor when a trial converts).
+   Stripe also says card-network rules apply to trials. Is a paid-up period held as a trial a
+   problem for any of that, or does explaining it in the welcome settle it?
+
+### Step 2: the terms (I do this, from the lawyer's answer)
+
+`site/terms.html` is what buyers consent to and its text is digest-pinned to its date, so
+nothing here is published. This is the wording for the lawyer to mark up.
+
+- **§3, a new paragraph after the first:** "**2027 Season Pass.** $39 USD, charged when you
+  buy. It covers every weekly report from your purchase through the last week of the 2026
+  season, and every weekly report of the 2027 season. It is a subscription: it renews at $39 USD
+  on August 15, 2028, before the 2028 season, and on August 15 of each year after that, until
+  you cancel. Nothing is charged between your purchase and August 15, 2028. We email you
+  between 15 and 45 days before each renewal, telling you the date and the amount."
+- **§3, the first line under "From 2027":** "None of this applies to a 2026 one-time pass. It
+  does not set the renewal date of a 2027 Season Pass, which is stated above."
+- **§4, the first sentence becomes:** "A one-time 2026 pass has nothing to cancel."
+- **§4, a new paragraph after the seat paragraph:** "**A 2027 Season Pass** is cancelled the
+  same way as the yearly plans below. Cancelling stops the renewal. It does not end the pass
+  early and it does not refund it: your reports continue through the 2027 season, then stop,
+  and nothing is charged on August 15, 2028."
+- **§5, a new paragraph before "One refund per person":** "**A 2027 Season Pass** has the same
+  window, counted from your purchase. A refund ends the pass: your reports stop, the renewal is
+  cancelled, and nothing more is charged. After the window the pass is non-refundable,
+  including the part that covers the 2027 season, except as section 7 says if we can't deliver
+  or stop the service, and except where the law where you live says otherwise."
+- **§7 stands as it is,** and matters more now: "if we discontinue it mid-term, we refund the
+  unused part" is what a prepaid 2027 season leans on.
+
+**The version steps, in one commit:** the words above, then the "Last updated" date on
+`site/terms.html`; `TERMS_VERSION` in `render/welcome.py` to that date; the date appended to
+`TERMS_HISTORY` in `run/intake.py`; and a new (date, digest) pair in
+`tests/test_promises_legal.py`. Anyone who has already bought gets a change notice (section 8).
+
+### Step 3: Stripe, in test mode first (~45 min)
+
+**None of this has ever run against real Stripe.** Every test here uses a stand-in for Stripe's
+answers, written from Stripe's documentation, so this is where the path is proved. In **test
+mode**, with test keys in your shell:
+
+1. Make a yearly **$39** Price on its own Product, called `2027 Season Pass`, and a Payment
+   Link on it. Same settings as section 1's table, except it **is** a subscription. Don't reuse
+   a Price from any other link.
+2. Put `y:` in a test `STRIPE_PAYMENT_LINKS`, set the text with `infra/stripe_paylink_text.py`,
+   and buy one with card `4242 4242 4242 4242`.
+3. Run `.venv/bin/python -m run.intake`, then `.venv/bin/python -m run.billing` (dry: it lists
+   `[would move]`), then with `--send`. In the Dashboard check, one at a time: status
+   **Trialing**; trial end **Aug 15, 2028**; a **0 USD** invoice; **no credit** on the customer's
+   balance and no charge; next invoice **$39**. Run it again: it must say "already moved" and
+   write nothing.
+4. **The billing page.** Open it as the buyer. Press **Cancel**. It must say the plan ends Aug
+   15, 2028 and it must stay Trialing with nothing charged. **This is the behaviour the whole
+   pass rests on and Stripe's documents only imply it.** If cancelling ends it at once, or
+   charges anything, stop here and tell me.
+5. **A refund.** On a second purchase: refund the $39, run `run.intake`, and check the daily run
+   goes red with `REFUNDED-STILL-LIVE` and the row stops being entitled. Then cancel it
+   Immediately and check the alarm clears. Do this after the move, not before: the 0 USD
+   invoice is the whole reason this path exists.
+6. **The August charge.** Make a subscription for a Test Clock customer on the same price, apply
+   the same trial end, and advance the clock past Aug 15, 2028. Check a $39 invoice, a yearly
+   period from that date, status Active, and the card line (the `* TRIAL OVER` text, if any).
+   Run `.venv/bin/python -m run.renewals --today 2028-07-01` beforehand: it must list that
+   date and $39.
+7. Note what Stripe emailed the test buyer at each step, and tell me anything that mentions a
+   free trial.
+
+### Step 4: the settings, live
+
+1. **Settings → Billing → Customer portal:** cancellation **At end of billing period** (section
+   1 has it). **Switch plans: Off.** Stripe: "customer modifications to a `trialing` subscription
+   end the free trial and create an invoice for immediate payment." On, it charges a buyer $39
+   a second time in 2026. `make launch-check` reads this with a key that can.
+2. **Settings → Billing → Subscriptions and emails:** **Send a reminder email 7 days before a
+   free trial ends: Off.** Our own notice goes out 15 to 45 days before, and says it's the only
+   one; Stripe's would call a paid pass a free trial.
+3. **Edit `github-actions-crons`:** add **Invoices: Read**. A refund on a moved pass can only be
+   seen on its paid invoice; without this the hourly run goes red naming `rak_invoice_read` and
+   Tuesday's send can't read who has paid. Add it to `owner-stats` too, for `make stats`.
+
+### Step 5: the live link
+
+1. Make the same Price and Payment Link in **live** mode. Keep it unpublished until step 7.
+2. Run `infra/stripe_paylink_text.py`. It writes the words above the Pay button and on the
+   tick-box from `render/welcome.py` and `run/checkout.py`; a `y:` link gets the renewal, its
+   date and its amount, and never the one-payment text.
+
+### Step 6: the secret
+
+Add `y:plink_…` to the `STRIPE_PAYMENT_LINKS` secret, after the other three. Only one. The
+daily step starts reading from then on; a purchase through a link that isn't in the secret is
+PAID-UNATTRIBUTED and goes unserved until it is.
+
+### Step 7: send me the link
+
+I set `STRIPE_LINK_2027` on the join page and `SEASON_2027_READY` on the landing and join page.
+`make launch-check` must pass first: it fails while the switches disagree, while `y:` is in the
+secret with no link on the page, and while the flag is on and `terms.html` doesn't name the
+pass and its date. Then buy one yourself with a real card and watch the welcome, the first
+report and the next day's move, and refund it the way section 8 says.
+
+**Once it's on:** `make stats` and the dashboard's Money section show passes held and the
+dollars collected for a 2027 season not yet delivered. That figure is yours to deliver on, so
+leave it in the bank until the 2027 season is played. A $29 buyer who wants the upgrade pays
+$39 on top today; if that's a problem, a refund of the $29 inside its window and a fresh $39
+purchase is the clean route, and there's no upgrade link. `run/economics.py` models the trade:
+the prepaid pass earns more only if under about 25% of buyers would have bought again in 2027,
+so its case is winning buyers who wouldn't come back, not squeezing the ones who would.

@@ -344,8 +344,22 @@ def collect_stripe(ctx: Context) -> Source:
                            or s.get("customer_email")),
             })
         sessions.append(entry)
-    return _source("stripe", data={"sessions": sessions, "link_map": bool(plans),
-                                   "dispute_errors": len(lookup.errors)}, read_at=ctx.now)
+    data = {"sessions": sessions, "link_map": bool(plans),
+            "dispute_errors": len(lookup.errors)}
+    from run.checkout import season_2027_links
+    links = season_2027_links(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
+    if links:
+        # Read apart from the pass sessions above, which are one-time payments:
+        # a subscription's refund is on its invoice. A key without Invoices:
+        # Read costs this one block, never the rest of the Money section.
+        try:
+            data["season_2027"] = stats.season_2027_summary(
+                stats._stripe_list("checkout/sessions",
+                                   [("expand[]", "data.invoice.charge")], key),
+                links, ctx.now.date(), stats.season_2027_end(), lookup)
+        except Exception as exc:  # noqa: BLE001 — fail soft, say why
+            data["season_2027"] = {"error": redact(exc)}
+    return _source("stripe", data=data, read_at=ctx.now)
 
 
 def collect_intake(ctx: Context) -> Source:
@@ -355,12 +369,12 @@ def collect_intake(ctx: Context) -> Source:
     key = stripe_key(ctx.env)
     if not key:
         return off("intake", "Needs the Stripe key to run the intake's sweep read-only.")
-    from run.checkout import parse_link_plans, playoff_links
+    from run.checkout import parse_link_plans, playoff_links, season_2027_links
     from run.intake import STATE_NAME, _SESSION_IN, read_state, sweep
     raw_links = ctx.env.get("STRIPE_PAYMENT_LINKS", "")
     signups, _newest, problems = sweep(
         key, stats._season_start(_season(ctx)), parse_link_plans(raw_links), promote=False,
-        playoff=playoff_links(raw_links))
+        playoff=playoff_links(raw_links), season_2027=season_2027_links(raw_links))
     state = read_state(ctx.root / "data" / "registry" / STATE_NAME)
     acknowledged = set(state.get("acknowledged") or [])
     remembered = [p for p in state.get("unresolved") or [] if isinstance(p, str)]
@@ -407,7 +421,7 @@ def collect_registry(ctx: Context) -> Source:
     except RosterRegistryError as exc:
         return _source("registry", status="error", note=redact(exc))
     names = {"season": "Pass holders", "monthly": "Monthly", "pass": "League Pass buyers",
-             "league_pass": "League Pass seats"}
+             "league_pass": "League Pass seats", "season_2027": "2027 Season Pass holders"}
     plans = Counter(names.get(s.report_plan, s.report_plan) for s in rows)
     payers = {s.pass_key: s for s in rows if s.is_pass_payer and s.pass_key}
     seats = Counter(s.pass_key for s in rows if s.is_league_seat and s.pass_key)
@@ -2143,6 +2157,20 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
             f'30 days</h3><span class="unit">Recurring</span></div><ul class="due">{due_html}</ul></div></div>')
 
 
+def season_2027_card(S: Mapping[str, Source]) -> str:
+    """What the 2027 Season Pass has the owner holding for a season not yet
+    played. Nothing at all unless a ``y:`` link is configured."""
+    summary = S["stripe"].data.get("season_2027") if S["stripe"].ok else None
+    if not summary:
+        return ""
+    if summary.get("error"):
+        body = (f'<p class="muted small">Could not read them ({h(summary["error"])}). A '
+                f'restricted key needs Invoices: Read.</p>')
+    else:
+        body = (f'<p class="muted small">{h(stats.season_2027_line(summary).strip())}</p>')
+    return f'<div class="card"><div class="cardhead"><div><h3>2027 Season Passes</h3>{body}</div></div></div>'
+
+
 def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetime,
                   sends: dict | None, ledger: dict | None, ftp) -> str:
     gates = gates_html(S, now, sends, ledger, S["registry"])
@@ -2204,7 +2232,7 @@ def money_section(S: Mapping[str, Source], M: Mapping[str, Metrics], now: dateti
                                 "channel (the Posts table has each post).")
                 + '</div>')
     return section("money", "Money", "Passes sold, what they left after Stripe, profit and the "
-                   "plan's gates.", by_period(one) + profit + gates)
+                   "plan's gates.", by_period(one) + season_2027_card(S) + profit + gates)
 
 
 def customers_section(S: Mapping[str, Source], sends: dict | None, now: datetime) -> str:

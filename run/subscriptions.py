@@ -183,9 +183,17 @@ _ENTITLED_STATUSES = ("active", "trialing")
 # that as "no longer a customer" would cut off somebody we had just apologised
 # to. Read from the latest invoice's own charge, expanded in the same list call,
 # so this costs no extra request per subscriber.
+#
+# A DEFERRED renewal moves the charge off the latest invoice. Stripe issues a 0
+# USD invoice when a trial starts on an existing subscription, and that invoice
+# is `latest_invoice` from then on — so on a 2027 Season Pass in its long trial
+# the rule read a charge-less invoice, answered "not refunded", and a refunded
+# or charged-back buyer stayed `trialing`, and entitled, until August 2028.
+# ``purchase_view`` puts the invoice that took the money back in front of it.
 REFUND_REVOKES = True
 
 STRIPE_API = "https://api.stripe.com/v1/subscriptions"
+INVOICES_API = "https://api.stripe.com/v1/invoices"
 
 # Customer-metadata keys written by run/sync.py. Namespaced so we never collide
 # with anything the operator sets by hand in the Stripe dashboard.
@@ -327,6 +335,37 @@ def fully_refunded(subscription: Mapping[str, Any]) -> bool:
     if isinstance(amount, int) and isinstance(returned, int) and amount > 0:
         return returned >= amount
     return False
+
+
+def purchase_view(subscription: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    """``subscription`` with the invoice that took the money as its
+    ``latest_invoice``, for everything that reads a refund or a dispute.
+
+    Only a TRIALING subscription whose latest invoice has no charge costs a
+    request: that is the shape a deferred renewal leaves (RULE E1, above), so
+    an account with no 2027 Season Pass makes no extra call at all. A
+    subscription with no paid invoice is returned as it came: a real free
+    trial took no money, so there is nothing to have refunded.
+
+    A failed read RAISES, like every page of the entitlement read: a run that
+    cannot tell whether a pass was refunded does not get to guess it was not,
+    and a missing Invoices: Read names itself in the 403 (run/intake.py
+    dispute_alarm)."""
+    invoice = subscription.get("latest_invoice")
+    if (subscription.get("status") != "trialing" or not isinstance(invoice, dict)
+            or isinstance(invoice.get("charge"), dict)):
+        return subscription
+    query = urllib.parse.urlencode([("subscription", str(subscription.get("id"))),
+                                    ("status", "paid"), ("limit", "100"),
+                                    ("expand[]", "data.charge")])
+    page = _stripe_get(f"{INVOICES_API}?{query}", key)
+    data = page.get("data") if isinstance(page, dict) else None
+    if not isinstance(data, list):
+        raise SubscriptionError("Stripe returned invoices in a shape we could not read")
+    for paid in data:                       # newest first, the way Stripe lists
+        if isinstance(paid, dict) and isinstance(paid.get("charge"), dict):
+            return {**subscription, "latest_invoice": paid}
+    return subscription
 
 
 SESSIONS_API = "https://api.stripe.com/v1/checkout/sessions"
@@ -483,6 +522,9 @@ def load_paid_from_stripe(api_key: str | None = None,
                 # fully refunded subscriber must not reach `emails`,
                 # `customer_ids` OR `covered_leagues` — a League Pass payer who
                 # was refunded would otherwise keep eleven other people served.
+                # The purchase, not the 0 USD invoice a deferred renewal leaves
+                # on top of it (RULE E1).
+                subscription = purchase_view(subscription, key)
                 invoice = subscription.get("latest_invoice")
                 # A LOST chargeback ends entitlement like a full refund; its
                 # status is read only for a charge Stripe marks disputed.

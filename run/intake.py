@@ -87,7 +87,7 @@ from run.digest import address as keyed_address, keyed
 from run.checkout import (CUSTOMERS_API, PLAYOFF_FROM_WEEK,
                           customer_id as _customer_id, is_paid,
                           parse_link_plans, parse_link_prefixes, playoff_links,
-                          post as _stripe_post,
+                          post as _stripe_post, season_2027_links,
                           session_email as _session_email, sweep_sessions)
 from run.refs import (LEAGUE_PASS, RefError, RosterRef, decode_roster,
                       is_roster_ref)
@@ -96,7 +96,7 @@ from run.updates import (UPDATE_LOG_NAME, PendingRequest, append_update_log,
                          confirmation_key, confirmed_updates, latest_per_target,
                          load_update_log, seat_token, seat_url, slug_of,
                          validate_requests, validate_updates)
-from run.rosters import (_EMAIL_RE, MONTHLY, PASS_BILLING, SEASON,
+from run.rosters import (_EMAIL_RE, MONTHLY, PASS_BILLING, SEASON, SEASON_2027,
                          RosterRegistryError, drop_unloadable, load_rosters)
 from render.welcome import welcome_message
 from run.delivery import DRY_PROVIDER, build_provider, send_all
@@ -199,9 +199,21 @@ class RosterSignup:
     # row in every other respect; its welcome names the Playoff Pass and its
     # price. Logged only when true, so every other log line is unchanged.
     playoff: bool = False
+    # Paid through the $39 2027 Season Pass link (``y:``): a season row whose
+    # welcome states the two seasons it covers and its August renewal, and
+    # whose first renewal run/billing.py moves. Logged only when true.
+    season_2027: bool = False
 
     @property
     def key(self) -> tuple[str, str]:
+        # The join page's ref is "s" on both season links, so a $29 buyer who
+        # takes the $39 pass with the same roster has the SAME ref: the second
+        # purchase vanished at append_log, and the row kept naming a payment
+        # that ends with 2026 while a $39 subscription billed for nothing. The
+        # pass is its own purchase; merge_same_roster folds the two into one
+        # row (LP2-D1), which is how "bought it twice" already works.
+        if self.season_2027:
+            return (self.email.lower(), f"{self.ref}#2027")
         return (self.email.lower(), self.ref)
 
     @property
@@ -249,18 +261,20 @@ def load_log(path: Path) -> list[RosterSignup]:
 
 
 def append_log(signups: Iterable[RosterSignup], path: Path) -> int:
-    """Append the events not already logged. Idempotent by (email, ref, plan)."""
-    known = {(s.email.lower(), s.ref, s.plan) for s in load_log(path)}
+    """Append the events not already logged. Idempotent by (email, ref, plan),
+    plus whether the purchase was the 2027 Season Pass (``RosterSignup.key``)."""
+    known = {(s.email.lower(), s.ref, s.plan, s.season_2027) for s in load_log(path)}
     fresh = [s for s in signups
-             if (s.email.lower(), s.ref, s.plan) not in known]
+             if (s.email.lower(), s.ref, s.plan, s.season_2027) not in known]
     if not fresh:
         return 0
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with Path(path).open("a", encoding="utf-8") as handle:
         for signup in fresh:
             row = asdict(signup)
-            if not row.get("playoff"):
-                row.pop("playoff", None)
+            for marker in ("playoff", "season_2027"):
+                if not row.get(marker):
+                    row.pop(marker, None)
             handle.write(json.dumps(row, separators=(",", ":")) + "\n")
     return len(fresh)
 
@@ -373,11 +387,42 @@ def merge_same_roster(signups: Iterable[RosterSignup],
         out.signups.append(replace(
             keep, origin=oldest.slug, seen_at=oldest.seen_at,
             group_subscriptions=tuple(dict.fromkeys(
-                s.subscription_id for s in held if s.subscription_id))))
+                s.subscription_id for s in held if s.subscription_id)),
+            season_2027=any(s.season_2027 for s in held)))
         others = [s for s in held if s is not newest]
-        out.duplicates[newest.key] = min(
-            (s.plan for s in others), key=lambda p: _KEEP_ORDER.get(p, 3))
+        # The older purchase's name, for the sentence the newer welcome owes.
+        # The 2027 Season Pass is its own word: it renews, so "both were one
+        # payment" and "it keeps billing" each misdescribe half of a pair.
+        out.duplicates[newest.key] = (
+            SEASON_2027 if any(s.season_2027 for s in others) else
+            min((s.plan for s in others), key=lambda p: _KEEP_ORDER.get(p, 3)))
         out.groups.append(held)
+    out.signups = _one_row_per_ref(out.signups, live)
+    return out
+
+
+def _one_row_per_ref(signups: list[RosterSignup],
+                     live: "set[str] | frozenset[str] | None") -> list[RosterSignup]:
+    """One row per (address, ref) where a 2027 Season Pass is one of the two.
+
+    The pass has its own identity (``RosterSignup.key``) on the same ref as a
+    $29 pass, and the registry loader refuses the whole file on a repeat. The
+    two normally fold above; they stay apart when one of them is dead, and then
+    the live purchase is the row, whichever came first, so a refunded $29 pass
+    never costs a paid $39 one its reports. Rows with no pass among them are
+    returned exactly as they came."""
+    seen: dict[tuple[str, str], int] = {}
+    out: list[RosterSignup] = []
+    for signup in signups:
+        slot = (signup.email.lower(), signup.ref)
+        held = out[seen[slot]] if slot in seen else None
+        if held is None or not (held.season_2027 or signup.season_2027):
+            seen.setdefault(slot, len(out))
+            out.append(signup)
+            continue
+        alive = (live is None or signup.subscription_id in live, _stamp(signup))
+        if alive > (live is None or held.subscription_id in live, _stamp(held)):
+            out[seen[slot]] = signup
     return out
 
 
@@ -451,6 +496,7 @@ def sweep(api_key: str, since: int | None = None,
           promote: bool = True, *,
           playoff: Iterable[str] = (),
           opens: "Callable[[int], datetime | None] | None" = None,
+          season_2027: Iterable[str] = (),
           ) -> tuple[list[RosterSignup], int | None, list[str]]:
     """Completed sessions -> roster signups, newest watermark, problems.
 
@@ -466,8 +512,15 @@ def sweep(api_key: str, since: int | None = None,
     exits the run non-zero: the $19 link sits in the page source, and a
     buyer who used it early bought every report through Week 18 for $10 less
     (final review SEC-3).
+
+    ``season_2027`` names the $39 2027 Season Pass link(s) (``y:``). A purchase
+    through one must have started a subscription: that is the whole offer. One
+    that did not (the link was made in payment mode) is PAID-UNATTRIBUTED
+    rather than welcomed, because its welcome would promise a season and a
+    renewal that nothing in Stripe will deliver.
     """
     playoff = frozenset(playoff or ())
+    season_2027 = frozenset(season_2027 or ())
     opens = opens or playoff_opens
     signups: list[RosterSignup] = []
     problems: list[str] = []
@@ -552,6 +605,14 @@ def sweep(api_key: str, since: int | None = None,
         customer = _customer_id(session)
         created = session.get("created")
         subscription = _subscription_id(session)
+        is_season_2027 = isinstance(paid_link, str) and paid_link in season_2027
+        if is_season_2027 and not (subscription or "").startswith("sub_"):
+            problems.append(
+                f"PAID-UNATTRIBUTED session {session.get('id')} paid the 2027 Season "
+                f"Pass link but started no subscription — that link must be a "
+                f"subscription link. Nothing was assumed and nobody was welcomed; "
+                f"fix the link and resolve this payment by hand")
+            continue
         if plan == LEAGUE_PASS and not subscription:
             # Seats are entitled through the pass SUBSCRIPTION (RULE E2), so a
             # pass that started none can never carry a seat. Said, because
@@ -567,7 +628,7 @@ def sweep(api_key: str, since: int | None = None,
             plan=plan,
             seen_at=str(created) if isinstance(created, int) else "",
             stripe_customer_id=customer, via=via, subscription_id=subscription,
-            playoff=is_playoff))
+            playoff=is_playoff, season_2027=is_season_2027))
         if promote and customer and customer not in promoted:
             promoted.add(customer)
             try:
@@ -1983,6 +2044,8 @@ def to_rows(signups: Iterable[RosterSignup]) -> list[dict]:
             # same address pays for another (run/subscriptions.entitles).
             **({"subscription_ids": signup.own_subscriptions}
                if plan != LEAGUE_PASS and signup.own_subscriptions else {}),
+            # Written only when true, so every other row is byte-identical.
+            **({"season_2027": True} if signup.season_2027 else {}),
         })
     return rows
 
@@ -2035,6 +2098,11 @@ def _welcome(signup: RosterSignup, season: str, duplicate: str | None = None,
         # never caught — a welcome_message without the keyword must fail
         # loudly rather than tell a $19 buyer they bought the $29 pass.
         extra["playoff"] = True
+    if signup.season_2027:
+        # The $39 pass's own disclosures. Without this a season row with a
+        # subscription falls through to "renews at $29 on the anniversary":
+        # the wrong price and the wrong date, in the notice the law requires.
+        extra["season_2027"] = True
     return welcome_message(signup.email, signup.plan, signup.slug, season,
                            purchased_at=str(signup.seen_at or ""), **extra)
 
@@ -2213,7 +2281,8 @@ def subscriber_for(signup: RosterSignup):
         covered_by=signup.covered_by if plan == LEAGUE_PASS else None,
         origin=signup.slug, roster_as_of=_purchase_day(signup.seen_at),
         pass_id=signup.pass_of if (plan == LEAGUE_PASS or billing == PASS_BILLING) else None,
-        pass_customer=signup.pass_customer if plan == LEAGUE_PASS else None)
+        pass_customer=signup.pass_customer if plan == LEAGUE_PASS else None,
+        season_2027=signup.season_2027)
 
 
 def _first_file(signup, data, season: str, processed_dir, record: bool = True,
@@ -2638,7 +2707,8 @@ def main(argv: list[str] | None = None) -> int:
         swept, newest, problems = sweep(api_key, since if isinstance(since, int) else None,
                                         link_plans, promote=not args.dry_run,
                                         playoff=playoff_links(raw_links),
-                                        opens=lambda created: playoff_opens(created, cache))
+                                        opens=lambda created: playoff_opens(created, cache),
+                                        season_2027=season_2027_links(raw_links))
     except SubscriptionError as exc:
         print(f"could not read Stripe: {exc}", file=sys.stderr)
         return 1

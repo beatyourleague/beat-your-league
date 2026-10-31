@@ -293,3 +293,29 @@ teams do you run.
   one test at a time; both arms pass every site copy test. Test order: hero headline/CTA, phone
   story vs static report shot, the roster-paste step's explanation, free report on/off. Never
   test price (fairness, refunds, law) — change it for everyone between seasons instead.
+
+## More sports (owner, Oct 30 2026) — a sequence, not a plan
+Nothing here starts until football has proved itself. In order, each step earning the next:
+- **Prove football first.** Paying subscribers, a season's graded record, renewals that hold.
+- **A season review in January** for every subscriber: the year's calls against what happened.
+  A reason to stay through the offseason, sold as nothing extra.
+- **Draft prep in August.** Their league's scoring, last season's record, byes. The season
+  pass's natural opener, and the same deterministic layer.
+- **Verify the data licence before any line of code.** nflverse's CC-BY-4.0, which permits
+  commercial use with attribution, is why the NFL product is allowed to exist at all (PLAN §0).
+  Do not assume a sport has an equivalent: MLB's terms look restrictive per a secondary source
+  (not read at the source yet), and NBA and NHL are unverified. Sleeper's terms are the
+  cautionary tale: the reading has to be the raw text, by exact match, never a summary.
+- **One sport tested before it's sold.** Its own preregistered backtest, graded under the same
+  rules; nothing carries over from football because it looks similar.
+- **Then an all-sports monthly plan,** the one version of monthly that bills for months with
+  something in them, which is why it comes last.
+
+## The 2027 Season Pass's second season (found building it, Oct 30 2026)
+- **A carried subscriber needs asking for their 2027 roster.** A pass buyer is the first
+  subscriber ever carried across a season, and Week 1 of 2027 builds from the 2026 roster on
+  file (the report prints the year beside it). `NEW_ROSTER` in `render/report.py` says so only
+  on the season's last report, and only for the plans it names. Build one email in August 2027:
+  "here's the link, send your new roster", before the first report of the season they prepaid.
+- **An upgrade link.** A $29 buyer who wants the $39 pass pays $39 more, and there's no credit
+  for the $29. Stripe could do it with a coupon on a link; decide once there's demand.

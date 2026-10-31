@@ -279,6 +279,24 @@ def rebuy_value(first: float, then: float, rate: float) -> float:
     return round(net_per_sale(first, one_time=True) + rate * net_per_sale(then), 2)
 
 
+def season_2027_prepay() -> dict[str, float]:
+    """The 2027 Season Pass ($39 now, off until the lawyer has seen it) against
+    selling the same buyer the $29 pass and hoping they come back. It is a
+    subscription charge, so it pays the Billing fee a one-time pass does not.
+
+    ``extra`` is what it adds today. ``break_even`` is the 2027 re-buy rate at
+    which the two are worth the same: below it the prepaid pass earns more,
+    above it the buyer would have paid again anyway and the prepayment gave
+    that season away for ``extra``. Nothing here counts the service owed: a
+    prepaid buyer is owed all of 2027 whether or not sales do what this says,
+    which is the obligation `make stats` keeps in view."""
+    pass_net = net_per_sale(SEASON)
+    today_net = net_per_sale(REST_OF_SEASON, one_time=True)
+    return {"net": pass_net, "rest_of_season_net": today_net,
+            "extra": round(pass_net - today_net, 2),
+            "break_even": round((pass_net - today_net) / pass_net, 3)}
+
+
 def owner_hours(opens: date = None) -> float:
     breakdown = OWNER_HOURS if opens is None else owner_hours_breakdown(weeks_left(opens))
     return round(sum(breakdown.values()), 1)
@@ -487,6 +505,12 @@ def summary_lines() -> list[tuple[str, str, str]]:
                  f"${net_per_sale(SEASON):.2f} of ${SEASON:.0f} (Stripe ${fee:.2f}, "
                  f"{fee / SEASON:.1%}; ${stripe_fee(SEASON, usd_payout=True):.2f} "
                  f"with a USD payout account)"))
+    prepay = season_2027_prepay()
+    rows.append(("The 2027 Season Pass, if it opens: prepaid money against a 2027 re-buy", "PASS",
+                 f"${prepay['net']:.2f} of ${SEASON:.0f} today, ${prepay['extra']:.2f} more than "
+                 f"a ${REST_OF_SEASON:.0f} pass; earns more only if under "
+                 f"{prepay['break_even']:.0%} of those buyers would have bought again, and "
+                 f"all of 2027 is owed either way"))
     rows.append(("Break-even on this season's fixed costs", "PASS",
                  f"{break_even_purchases()} Rest-of-Season Passes cover "
                  f"${sum(FIXED_SEASON_COSTS.values()):.0f}; Resend Pro "
