@@ -1136,6 +1136,11 @@ have a statutory cancellation right on top of our refund.
    two-year existing business relationship (Canadians) and CAN-SPAM's opt-out (US)? And CASL
    express consent for the planned "Email me when 2027 opens" box: the sender's name, mailing
    address, a contact and a withdrawal statement beside it.
+6. **The short terms line above the buy button (Oct 31 2026).** It now gives the price, that billing
+   runs until cancelled, when it stops, how to cancel, and the refund with its limit in about 50
+   words, and links the terms for the rest (the late-send clause and "a second purchase after a
+   refund is final" sit in the terms, the checkout text and the welcome email). Is that enough at
+   the point of consent under ROSCA and the California ARL?
 
 **Proposed wording, for you to approve or change — I have changed none of it.** Each needs a
 new `TERMS_VERSION` and `TERMS_HISTORY` entry and new page digests, which I add with it, and

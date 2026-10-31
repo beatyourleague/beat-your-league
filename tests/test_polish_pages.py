@@ -325,15 +325,14 @@ JOIN_CSS = _style(JOIN)
 def test_the_progress_bar_fills_instead_of_recolouring() -> None:
     """JOIN-SETTINGS: the 3-step bar recoloured in place. The border is now the
     dim track and each step FILLS it from the left (transform), on the same
-    three conditions that light it: step 2 once the roster box holds text,
-    step 3 once the email step opens. Gold is the FILL only (contract C6,
+    conditions that light it: step 2 once the check has answered, step 3 once
+    an address is going in. Gold is the FILL only (contract C6,
     truth pass): a reached step's label turns white, its 3px track gold."""
     assert ".progress .on{color:#FFFFFF;}" in JOIN_CSS
     assert "background:var(--flag);transform:scaleX(0);transform-origin:0 50%;" in JOIN_CSS
     fill = JOIN_CSS.split("  .progress .on::before,", 1)[1].split("{transform:none;}", 1)[0]
-    for when in ("body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before",
-                 "body:has(#step-email:not(.hidden)) .progress .s2::before",
-                 "body:has(#step-email:not(.hidden)) .progress .s3::before"):
+    for when in ("body:has(#step-email:not(.hidden)) .progress .s2::before",
+                 "body:has(#email:not(:placeholder-shown)) .progress .s3::before"):
         assert when in fill, when
 
 

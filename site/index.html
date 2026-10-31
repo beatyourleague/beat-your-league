@@ -170,7 +170,7 @@
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
   /* One colour, the clock alone in gold: the line mixed gold-bold, white-bold
      and dusk in three sentences (pre-launch review D7). */
-  .heroline{margin-top:14px;font-size:14px;color:var(--dusk2);max-width:52ch;line-height:1.55;
+  .heroline{margin-top:-2px;font-size:16px;color:var(--dusk2);max-width:52ch;line-height:1.55;
     text-wrap:pretty;}
   .heroline b{font-weight:600;}
   /* The season clock, written by the Tuesday build beside this-week.html:
@@ -180,18 +180,9 @@
      already is. Opacity only: an inline-block would rewrap the line. */
   .heroline .clock{animation:clockin .45s ease-out both;}
   @keyframes clockin{from{opacity:0}}
-  /* The season clock and this week's link both arrive with the Tuesday
-     build's week file, a beat after first paint on a slow phone. Their room is
-     reserved — two lines for the clock's sentence, the live report's link
-     its own line under it — so their arrival moves nothing (measured in Chrome on
-     Slow 4G at 1280px: CLS 0.10, the button row and the whole page below the
-     hero pushed down by one line each). */
-  .heroline{min-height:calc(2 * 1.55em);}
-  .livepill[hidden]{display:inline-flex!important;visibility:hidden;}
   .cta-row{display:flex;gap:12px;margin-top:22px;flex-wrap:wrap;align-items:center;}
-  /* What pressing the hero's button does, in one line under it. */
-  .promise{margin-top:12px;font-size:14px;color:var(--dusk2);line-height:1.5;max-width:52ch;}
-  .cta-row .textlink{color:var(--dusk2);font-size:15px;padding:10px 2px;}
+  .cta-row .textlink{color:var(--paper);font-size:16px;font-weight:600;padding:10px 6px;
+    text-underline-offset:4px;text-decoration-color:rgba(246,244,238,.4);}
   .cta-row .textlink:hover{color:var(--paper);}
   /* A phone's route to the price (review M13): the nav's Pricing is hidden
      below 600px (contract C2: the logo plus one link), so the hero and the
@@ -559,31 +550,10 @@
   /* Beside the pause toggle a small phone can't hold it on one line: two lines,
      and no line starts with a stray dot. */
   @media (max-width:359px){.realtag .sep{display:none;}.realtag .nw{display:block;}}
-  /* This week's live report, as prominent as is honest (review M4): shown
-     only in a week the Tuesday build says it carries 3+ odds and a closest
-     call, labelled with the week and the day it was built. A TEXT link with a
-     live dot — no border, no fill, no padded box (contract C2: one primary,
-     one secondary). Its 24px target comes from padding, not a box. */
-  .livepill{display:inline-flex;align-items:center;gap:9px;padding:5px 0;margin-top:8px;
-    color:var(--dusk2);font-size:13px;font-weight:500;text-decoration:none;
-    line-height:1.35;text-align:left;text-wrap:balance;}
-  .livepill #this-week-label{text-decoration:underline;text-underline-offset:3px;
-    text-decoration-color:rgba(242,194,48,.55);}
-  .livepill:hover #this-week-label{text-decoration-color:var(--flag);}
-  .livepill .dot{width:8px;height:8px;flex:none;border-radius:999px;background:var(--turf-glow);
-    box-shadow:0 0 0 3px rgba(46,169,104,.25);}
-  .livepill .go{color:var(--flag);}
-  .livepill:hover .go{transform:translateX(3px);transition:transform var(--t-hover) var(--ease-out);}
-  /* The live dot pulses four times once the link is shown, then holds. */
-  .livepill .dot{position:relative;}
-  .livepill .dot::after{content:"";position:absolute;inset:0;border-radius:999px;
-    background:var(--turf-glow);opacity:0;}
-  .livepill:not([hidden]) .dot::after{animation:livepulse 2.4s var(--ease-out) 4;}
-  @keyframes livepulse{0%{transform:scale(1);opacity:.55}70%,100%{transform:scale(2.6);opacity:0}}
-  /* This week's recorded closest call, one line under the live link: shown
+  /* This week's recorded closest call, one line under the hero's buttons: shown
      only from a recorded build, before the week's first kickoff (C6). Its
      room is reserved, so it moves nothing when it arrives. */
-  .livecall{margin:6px 0 0;padding-left:17px;font-size:13px;line-height:1.45;color:var(--dusk2);
+  .livecall{margin:6px 0 0;font-size:14px;line-height:1.45;color:var(--dusk2);
     min-height:1.45em;text-wrap:balance;transition:opacity .4s ease;}
   .livecall b{color:var(--flag);font-weight:800;font-variant-numeric:tabular-nums;}
   .livecall[hidden]{display:block!important;visibility:hidden;opacity:0;}
@@ -642,44 +612,47 @@
   .lede{font-size:18px;line-height:1.55;color:var(--dusk2);max-width:58ch;margin-bottom:32px;
     text-wrap:pretty;}
 
-  /* The Sunday scene, the hero's last line: a yard line with its hash
-     marks, the scene in white, the answer in gold. */
-  .punch{grid-column:1 / -1;position:relative;display:flex;flex-wrap:wrap;align-items:baseline;
-    justify-content:center;gap:6px 18px;margin-top:18px;padding:18px 0 0;text-align:center;
-    border-top:1px solid rgba(246,244,238,.12);text-wrap:balance;}
-  .punch::before{content:"";position:absolute;left:0;right:0;top:-1px;height:7px;
-    background:repeating-linear-gradient(90deg,rgba(242,194,48,.35) 0 1px,transparent 1px 28px);
-    -webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);
-    mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);}
-  .punch b{font-family:var(--display);font-weight:800;font-size:clamp(22px,2.6vw,30px);
-    line-height:1.1;text-transform:uppercase;letter-spacing:.01em;color:#fff;}
-  /* Each sentence whole: a phone breaks between them, never mid-sentence. */
-  .punch b i{display:inline-block;font-style:normal;}
-  .punch span{font-size:16px;font-weight:600;color:var(--flag);}
+  /* The Sunday scene gets the page to itself: a yard line with its hash marks,
+     three short sentences as big as the phone, the last in gold, the answer
+     under them. Each sentence stays whole on one line. */
+  .scene{position:relative;padding:clamp(72px,11vw,128px) 0 0;}
+  .scene::before{content:"";position:absolute;left:0;right:0;top:clamp(32px,5vw,56px);height:9px;
+    background:repeating-linear-gradient(90deg,rgba(242,194,48,.4) 0 1px,transparent 1px 28px);
+    border-top:1px solid rgba(246,244,238,.14);
+    -webkit-mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+    mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
+  .punch{display:grid;gap:clamp(18px,2.4vw,28px);}
+  .punch b{display:grid;font-family:var(--display);font-weight:800;
+    font-size:clamp(28px,9.4vw,104px);line-height:1;text-transform:uppercase;
+    letter-spacing:.005em;color:#fff;}
+  .punch b i{display:block;font-style:normal;white-space:nowrap;}
+  .punch b i:last-child{color:var(--flag);}
+  .punch span{font-size:clamp(18px,2.2vw,24px);font-weight:600;line-height:1.3;color:var(--paper);}
+  /* One sentence at a time, once, when the scene comes into view. Armed by the
+     script only below the fold; the static page is the finished picture. */
+  .js .punch.armed b i,.js .punch.armed span{opacity:0;transform:translateY(14px);}
+  .js .punch.armed.go b i,.js .punch.armed.go span{opacity:1;transform:none;
+    transition:opacity .5s var(--ease-out),transform .5s var(--ease-out);}
+  .js .punch.armed.go b i:nth-child(2){transition-delay:.28s;}
+  .js .punch.armed.go b i:nth-child(3){transition-delay:.56s;}
+  .js .punch.armed.go span{transition-delay:.9s;}
 
-  /* ------------------------------------------------ how it works: three pictures */
-  .steps{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;}
-  .step{position:relative;text-align:center;padding:0 16px;}
-  .sicon{display:grid;place-items:center;width:128px;height:128px;margin:0 auto 22px;border-radius:50%;
-    background:radial-gradient(closest-side,rgba(242,194,48,.10),rgba(246,244,238,.03) 70%,transparent);
-    border:1px solid rgba(246,244,238,.12);}
-  .sicon svg{width:88px;height:88px;display:block;overflow:visible;}
-  .sicon svg g{transform-box:fill-box;transform-origin:50% 50%;}
-  /* The line from one picture to the next, ending in a gold dot. */
-  .wire{position:absolute;top:63px;left:calc(50% + 78px);width:calc(100% - 156px);height:2px;
-    border-radius:999px;background:rgba(246,244,238,.14);}
-  .wire i{position:absolute;inset:0;border-radius:999px;background:var(--flag);transform-origin:0 50%;}
-  .wire b{position:absolute;right:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--flag);}
+  /* ------------------------------------------------ how it works: three real things */
+  .steps{list-style:none;display:grid;grid-template-columns:1.32fr 1fr 1fr;gap:clamp(20px,3vw,36px);margin-top:44px;}
+  .step{display:grid;grid-template-rows:auto auto auto 1fr;padding-top:14px;
+    border-top:1px solid rgba(246,244,238,.16);}
   .step .sn{display:block;font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:.08em;
     color:var(--flag);}
   .step h3{margin-top:4px;font-family:var(--display);font-weight:800;font-size:26px;line-height:1.05;
     text-transform:uppercase;letter-spacing:.01em;color:#fff;}
-  .step p{margin-top:8px;font-size:16px;line-height:1.5;color:var(--dusk2);text-wrap:pretty;}
-  /* Step 01 shows the paste: a slice of the ESPN page's own example
-     (render/platforms.py), the copied line beside what the roster box reads
-     it as. At rest the copied lines sit at 40% and the names are ticked. */
-  .paste{margin:18px auto 0;max-width:318px;text-align:left;background:var(--paper);color:var(--navy);
-    border-radius:12px;padding:10px 12px 8px;box-shadow:0 18px 40px -24px rgba(0,0,0,.8);}
+  .step p{margin-top:6px;font-size:16px;line-height:1.5;color:var(--dusk2);text-wrap:pretty;}
+  /* Each step ends on the real thing: the same paper as the report, on the
+     same line across the three. */
+  .paste,.inboxrow,.taskrow{align-self:start;margin-top:20px;background:var(--paper);color:var(--navy);
+    border-radius:12px;box-shadow:0 18px 40px -24px rgba(0,0,0,.8);}
+  /* Step 01: a slice of the ESPN page's own example (render/platforms.py), the
+     copied line beside what the roster box reads it as. */
+  .paste{padding:10px 14px 8px;}
   .paste .phd,.paste .prow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);
     gap:10px;align-items:center;}
   .paste .phd{padding-bottom:6px;border-bottom:1px solid var(--line);font-family:var(--display);
@@ -687,77 +660,30 @@
   .paste .prow{padding:5px 0;border-bottom:1px solid var(--rule);}
   .paste .prow:last-child{border-bottom:0;}
   .paste .raw{font:500 10px/1.3 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    white-space:pre;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);opacity:.4;}
+    white-space:pre;overflow:hidden;text-overflow:ellipsis;color:var(--ink2);opacity:.55;}
   .paste .ok{display:flex;align-items:center;gap:6px;min-width:0;font-size:13px;font-weight:700;
     line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .paste .ok::before{content:"";width:13px;height:13px;flex:none;border-radius:50%;
     background:var(--turf) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M4 7.2l2 2 4-4.4' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;}
-  /* Three columns: the paste runs under all three steps, centred on the
-     page, so 02 and 03 don't sit over empty space. It stays in step 01's
-     markup, so a phone still reads it between 01 and 02. The margin is 150%
-     of the column less half the card, with the step's padding taken back. */
-  @media (min-width:881px){
-    .paste{width:640px;max-width:none;margin:32px 0 0 calc(150% - 288px);padding:12px 18px 10px;}
-    .paste .phd{font-size:12px;}
-    .paste .prow{padding:6px 0;}
-    .paste .raw{font-size:12px;}
-    .paste .ok{font-size:14px;}
-  }
-  /* The entrance, once, in order: each picture rises, its own part moves
-     (the roster lines slide in, the check lands, the ball goes through), the
-     line draws to the next. Armed by the script only when the list starts
-     below the fold; held while it is off screen. */
-  /* About 1.4s end to end (sales review): the steps .35s apart, each wire
-     .3s, the kick .6s; step 01's paste reads in, row by row, .08s apart. */
-  .js .steps.armed :is(.sicon,.ln,.env,.badge,.ball,.wire i,.wire b,.sn,.step h3,.step p,.paste .raw,.paste .ok){
-    animation-duration:.4s;animation-timing-function:var(--ease-out);animation-fill-mode:both;
-    animation-play-state:paused;}
-  .js .steps.armed.go:not(.off) :is(.sicon,.ln,.env,.badge,.ball,.wire i,.wire b,.sn,.step h3,.step p,.paste .raw,.paste .ok){
-    animation-play-state:running;}
-  .js .steps.armed .sicon{animation-name:hiw-rise;}
-  .js .steps.armed :is(.sn,.step h3,.step p){animation-name:hiw-text;}
-  .js .steps.armed .ln{animation-name:hiw-row;animation-duration:.3s;}
-  .js .steps.armed .env{animation-name:hiw-drop;}
-  .js .steps.armed .badge{animation-name:hiw-pop;animation-duration:.3s;}
-  .js .steps.armed .ball{animation-name:hiw-kick;animation-duration:.6s;
-    animation-timing-function:cubic-bezier(.3,.7,.4,1);}
-  .js .steps.armed .wire i{animation-name:hiw-line;animation-duration:.3s;
-    animation-timing-function:var(--ease-io);}
-  .js .steps.armed .wire b{animation-name:hiw-pop;animation-duration:.2s;}
-  .js .steps.armed .paste .raw{animation-name:hiw-dim;animation-duration:.25s;}
-  .js .steps.armed .paste .ok{animation-name:hiw-row;animation-duration:.25s;}
-  .js .steps.armed .step:nth-child(1) :is(.sn,h3,p){animation-delay:.1s;}
-  .js .steps.armed .step:nth-child(1) .ln:nth-of-type(1){animation-delay:.12s;}
-  .js .steps.armed .step:nth-child(1) .ln:nth-of-type(2){animation-delay:.17s;}
-  .js .steps.armed .step:nth-child(1) .ln:nth-of-type(3){animation-delay:.22s;}
-  .js .steps.armed .step:nth-child(1) .ln:nth-of-type(4){animation-delay:.27s;}
-  .js .steps.armed .prow:nth-child(2) :is(.raw,.ok){animation-delay:.25s;}
-  .js .steps.armed .prow:nth-child(3) :is(.raw,.ok){animation-delay:.33s;}
-  .js .steps.armed .prow:nth-child(4) :is(.raw,.ok){animation-delay:.41s;}
-  .js .steps.armed .prow:nth-child(5) :is(.raw,.ok){animation-delay:.49s;}
-  .js .steps.armed .step:nth-child(1) .wire i{animation-delay:.3s;}
-  .js .steps.armed .step:nth-child(1) .wire b{animation-delay:.55s;}
-  .js .steps.armed .step:nth-child(2) .sicon{animation-delay:.35s;}
-  .js .steps.armed .step:nth-child(2) :is(.sn,h3,p){animation-delay:.45s;}
-  .js .steps.armed .step:nth-child(2) .env{animation-delay:.45s;}
-  .js .steps.armed .step:nth-child(2) .badge{animation-delay:.6s;}
-  .js .steps.armed .step:nth-child(2) .wire i{animation-delay:.65s;}
-  .js .steps.armed .step:nth-child(2) .wire b{animation-delay:.9s;}
-  .js .steps.armed .step:nth-child(3) .sicon{animation-delay:.7s;}
-  .js .steps.armed .step:nth-child(3) :is(.sn,h3,p){animation-delay:.8s;}
-  .js .steps.armed .step:nth-child(3) .ball{animation-delay:.8s;}
-  @keyframes hiw-rise{from{opacity:0;transform:translateY(16px) scale(.92)}}
-  @keyframes hiw-text{from{opacity:0;transform:translateY(10px)}}
-  @keyframes hiw-row{from{opacity:0;transform:translateX(-10px)}}
-  @keyframes hiw-drop{from{opacity:0;transform:translateY(-14px)}}
-  @keyframes hiw-pop{0%{opacity:0;transform:scale(0)}65%{opacity:1;transform:scale(1.18)}100%{transform:none}}
-  @keyframes hiw-line{from{transform:scaleX(0)}}
-  @keyframes hiw-vline{from{transform:scaleY(0)}}
-  @keyframes hiw-dim{from{opacity:1}}
-  @keyframes hiw-kick{0%{opacity:0;transform:translate(-34px,40px) rotate(-150deg) scale(.55)}
-    25%{opacity:1}
-    65%{transform:translate(-6px,-10px) rotate(-25deg) scale(.95)}
-    100%{transform:none}}
+  /* Step 02: the row the email makes in an inbox. Step 03: the report's own task. */
+  .inboxrow{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:14px;}
+  .inboxrow .ia{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;
+    background:var(--navy);color:var(--flag);font-family:var(--display);font-weight:800;font-size:17px;}
+  .inboxrow .ib{display:grid;min-width:0;font-size:13px;line-height:1.3;color:var(--ink2);}
+  .inboxrow .ib b{font-size:14px;color:var(--navy);}
+  .inboxrow .ib span{text-wrap:balance;}
+  .inboxrow time{align-self:start;font-size:11px;color:var(--slate);white-space:nowrap;}
+  .taskrow{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:center;padding:14px;}
+  .taskrow .tbox{width:22px;height:22px;border:1.5px solid var(--navy);border-radius:4px;}
+  .taskrow .tt{display:grid;min-width:0;font-size:13px;line-height:1.3;color:var(--ink2);}
+  .taskrow .tt b{font-size:14px;color:var(--navy);}
+  /* The entrance, once, in order. Armed by the script only when the list
+     starts below the fold; held while it is off screen. */
+  .js .steps.armed .step{animation:hiw-text .5s var(--ease-out) backwards paused;}
+  .js .steps.armed.go:not(.off) .step{animation-play-state:running;}
+  .js .steps.armed .step:nth-child(2){animation-delay:.22s;}
+  .js .steps.armed .step:nth-child(3){animation-delay:.44s;}
+  @keyframes hiw-text{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 
   /* ------------------------------------------------ what you get */
   .anat{display:grid;grid-template-columns:minmax(0,460px) minmax(0,1fr);gap:40px 72px;
@@ -1007,11 +933,12 @@
     .faq summary::after{transition:none!important;}
     /* How it works and the report's bars: the finished picture, at once. */
     .js .steps.armed *{animation:none!important;}
+    .js .punch.armed b i,.js .punch.armed span{opacity:1!important;transform:none!important;}
     /* Every entrance below is drawn in its final state. */
-    .heroline .clock,.livepill .dot::after,.stamp50,.faq details[open] .a,
+    .heroline .clock,.stamp50,.faq details[open] .a,
     .watchnote.ok::before,.watchnote .fixmail,.watchform::after{animation:none!important;}
-    .livepill .dot::after,.watchform::after{display:none!important;}
-    .livepill:hover .go,.watchform input{opacity:1!important;
+    .watchform::after{display:none!important;}
+    .watchform input{opacity:1!important;
       transform:none!important;transition:none!important;}
     .livecall{transition:none!important;}
     .storytoggle,.realrow::before{display:none!important;}
@@ -1028,8 +955,9 @@
     .phone .screen *{animation:none!important;}
     .phonewrap::before,.js .hero .phone-float{animation:none!important;}
     .watchform::after{display:none!important;}
-    .heroline .clock,.livepill .dot::after,.faq details[open] .a{animation:none!important;}
+    .heroline .clock,.faq details[open] .a{animation:none!important;}
     .js .steps.armed *{animation:none!important;}
+    .js .punch.armed b i,.js .punch.armed span{opacity:1!important;transform:none!important;}
   }
 
   /* Below 960px the callouts go under the picture, the picture centred. */
@@ -1061,12 +989,9 @@
     .hero .kicker{order:1;} .hero h1{order:2;} .hero .sub{order:3;}
     .hero .creds{order:4;margin-top:12px;}
     .hero .phonewrap{order:5;margin:16px 0 8px;}
-    .hero .heroline{order:6;margin-top:12px;min-height:0;}
-    .hero .promise{order:6;margin-top:4px;}
     .hero .cta-row{order:9;margin-top:12px;} .hero .riskline{order:9;}
-    .hero .livepill{order:9;justify-self:start;}
     .hero .livecall{order:9;}
-    .livepill[hidden],.livecall[hidden]{display:none!important;}
+    .livecall[hidden]{display:none!important;}
     .hero .phone{max-width:286px;}
     .hero .phone-float{max-width:286px;}
     /* The caption row is centred under the phone but may run wider than it:
@@ -1074,25 +999,8 @@
        caption 202px and it broke mid-phrase ("2024, / Week 10") while the
        story played (review SLEEK-7). */
     .hero .realrow{max-width:100%;}
-    .hero .punch{order:12;margin-top:28px;}
-    /* How it works stacks: each picture beside its words, the line running
-       down from one picture to the next. */
-    .steps{grid-template-columns:1fr;gap:0;margin-top:32px;max-width:520px;}
-    .step{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:20px;align-items:center;
-      text-align:left;padding:0 0 36px;}
-    .step:last-child{padding-bottom:0;}
-    .sicon{grid-row:1 / span 3;width:96px;height:96px;margin:0;}
-    .sicon svg{width:66px;height:66px;}
-    .step .sn,.step h3,.step p{grid-column:2;}
-    /* The paste card takes the step's full width, over the line down to
-       step 02 (opaque, above it), so both its columns stay readable. */
-    .step .paste{grid-column:1 / -1;position:relative;z-index:1;margin:18px 0 0;max-width:420px;}
-    .step h3{font-size:24px;}
-    .step p{margin-top:4px;}
-    .wire{top:104px;left:47px;width:2px;height:calc(100% - 112px);}
-    .wire i{transform-origin:50% 0;}
-    .wire b{right:-3px;top:auto;bottom:-4px;}
-    .js .steps.armed .wire i{animation-name:hiw-vline;}
+    .steps{grid-template-columns:1fr;gap:28px;margin-top:32px;max-width:520px;}
+    .step{grid-template-rows:none;}
     .faqgrid{grid-template-columns:1fr;gap:16px;}
     .stickybar{display:block;}
     footer{padding-bottom:96px;}
@@ -1106,7 +1014,6 @@
     :root{--gap-section:72px;}
     .sub{font-size:17px;}
     .plan{padding:24px;}
-    .punch b{font-size:22px;}
     /* The comparison as rows of two: the row's label above its pair. */
     .vstable,.vstable thead,.vstable tbody{display:block;}
     .vstable tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
@@ -1267,8 +1174,8 @@
     <!-- The roster check works with checkout closed, so this button is true in
          every state and does what it says. CHECKOUT_OPEN relabels it the day
          checkout opens; if JS never runs, the honest label is what shows. -->
-    <a class="btn gold" id="nav-cta" href="join/index.html">Check my team</a>
-    <details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html">League Pass</a><a href="#pricing">Pricing</a></div></details>
+    <a class="btn gold" id="nav-cta" href="join/index.html">Check my team free</a>
+    <details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team free</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html">League Pass</a><a href="#pricing">Pricing</a></div></details>
   </div>
 </nav>
 
@@ -1280,35 +1187,22 @@
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
     <p class="sub">One wrong call can cost you the week. Every Tuesday, one email decides your
-    lineup for your team, through your title game.</p>
+    lineup, through your title game.</p>
     <ul class="creds" aria-label="Works with">
       <li><span><a href="espn/">ESPN</a>, <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a>,
       <a href="cbs/">CBS</a>: paste your roster, no login</span></li>
     </ul>
-    <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b></p>
-    <!-- One action, one secondary. The roster check is the best thing to do on
-         this site and it works with checkout closed, so it is the action either
-         way: the static label is the closed state, CHECKOUT_OPEN relabels it. -->
+    <!-- One action, one link (owner review, Oct 31 2026: a sentence, an apps
+         line, a date, two buttons, a reassurance line and a third link was too
+         much to read at the moment of deciding). The roster check works with
+         checkout closed, so it is the action either way: the static label is
+         the closed state, CHECKOUT_OPEN relabels it. "Free" carries what the
+         line under the button used to. -->
     <div class="cta-row">
-      <a class="btn gold" id="hero-open" href="join/index.html">Check my team</a>
+      <a class="btn gold" id="hero-open" href="join/index.html">Check my team free</a>
       <a class="btn ghost" id="try-cta" hidden href="join/index.html?try=1">Try it free on your roster</a>
-      <a class="btn ghost" id="hero-sample" href="sample-report.html">See a real report</a>
-      <a class="textlink onlysm" href="#pricing">See pricing</a>
+      <a class="textlink" id="hero-sample" href="sample-report.html">See a real report</a>
     </div>
-    <p class="promise" id="hero-promise">Paste your roster. See the calls on your team in seconds. No card.</p>
-    <!-- The one secondary group: "See a real report" above, and this week's
-         live report as one muted line straight under it (pre-launch review
-         M4, sales review). Shown only when the Tuesday build says this week's
-         page carries at least three odds and a closest call (a heavy bye week
-         once left it with nothing to show); the season clock's script fills
-         in the day it was built. It says "this week's", never a week number:
-         the clock above names one week and the 2024 sample another, and a
-         third number in the hero read as three weeks at once. Beside the phone
-         its room is reserved, so its late arrival moves nothing; stacked, it
-         sits below the first screen and no room is held. -->
-    <a class="livepill" id="this-week-link" data-live-week hidden href="this-week.html"><span
-    class="dot" aria-hidden="true"></span><span id="this-week-label">or this week's report</span><span
-    class="go" aria-hidden="true">→</span></a>
     <!-- This week's closest call with odds, quoted from the live sample's
          recorded build (the clock file's "closest", contract C6): shown only in a
          season week whose odds are on the record, and only until that week's
@@ -1330,7 +1224,7 @@
       class="hw hw-cam" aria-hidden="true"></span>
       <div class="screen" aria-hidden="true">
 <!-- phone:start -->
-<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Rebuilt Oct 30, 2026 from the 2024 season archive</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">Your only QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">Start · Chase Brown (bench) is getting more work</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">Start · Chase Brown (bench) is getting more work</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">Questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">Your only K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">Defenses: projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p><p class="legend"><b>Checked for you:</b> 15 players, 9 slots, every kickoff time and the Week 9 injury report.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="glass"><i></i></div><div class="homebar"></div>
+<div class="island"><i></i></div><div class="statusbar"><span>9:41</span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#000" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="mailview"><div class="mailrow"><span class="av">B</span><span class="mfrom"><b>Beat Your League</b><span class="subj">Week 10: your lineup, decided</span></span><time>9:41 AM</time></div><div class="filecard" id="hero-card" data-real="2024-w10"><div class="mh"><div class="mh-top"><span class="mh-brand">Beat Your <span class="lg">League</span></span><span class="mh-label">Your Report</span></div><div class="mh-week">Week 10</div><div class="mh-meta"><b>Your league</b> · 12 teams · Full PPR</div><div class="mh-stamp">Sample report · 2024 season</div></div><section class="card" data-sec="lineup"><div class="eyebrow"><span class="tag">Your Lineup, Decided</span><span class="n">01</span></div><div class="cbody"><p class="wk"><b class="wkn">126.1</b> <span class="wku">proj</span> <b class="wkr">94 – 158</b> <span class="wku">realistic range</span></p><div class="glance g5"><div class="ghead"><span>Proj</span><span>Odds</span></div><div class="frow" data-i="0"><span class="fslot">QB</span><span class="fname">Josh Allen</span><span class="fproj">19.8</span><span class="fnc">Your only QB</span></div><div class="frow" data-i="1"><span class="fslot">RB</span><span class="fname">Saquon Barkley</span><span class="fproj">17.6</span><span class="fnc">Start · Chase Brown (bench) is getting more work</span></div><div class="frow" data-i="2"><span class="fslot">RB</span><span class="fname">Bijan Robinson</span><span class="fproj">15.1</span><span class="fnc">Start · same as above</span></div><div class="frow" data-i="3"><span class="fslot">WR</span><span class="fname">Amon-Ra St. Brown</span><span class="fproj">16.9</span><span class="fbar"><i style="width:60%"></i></span><span class="fpct">80%</span></div><div class="frow" data-i="4"><span class="fslot">WR</span><span class="fname">Ja&#x27;Marr Chase</span><span class="fproj">16.0</span><span class="fbar"><i style="width:46%"></i></span><span class="fpct">73%</span></div><div class="frow" data-i="5"><span class="fslot">TE</span><span class="fname">George Kittle</span><span class="fproj">14.1</span><span class="fbar"><i style="width:44%"></i></span><span class="fpct">72%</span></div><div class="frow" data-i="6"><span class="fslot">FLEX</span><span class="fname">Tony Pollard</span><span class="fproj">10.3</span><span class="fnc flag">Questionable · see if/then</span></div><div class="frow" data-i="7"><span class="fslot">K</span><span class="fname">Jake Bates</span><span class="fproj">9.3</span><span class="fnc">Your only K</span></div><div class="frow" data-i="8"><span class="fslot">DEF</span><span class="fname">Denver Broncos</span><span class="fproj">6.9</span><span class="fnc">Defenses: projection only</span></div></div><div class="task"><span class="box"></span><span class="tb"><b class="do">Set this lineup</b><span class="chip due">before this week&#x27;s first kickoff</span></span></div><p class="legend">The % is the chance your starter outscores your best bench player at that spot, and the bar starts at 50% (a toss-up).</p><p class="legend"><b>Realistic range:</b> your projected total, give or take the week-to-week swing in your starters&#x27; scoring, combined. It shows how far the week can move, not where it will land.</p><p class="legend"><b>Checked for you:</b> 15 players, 9 slots, every kickoff time and the Week 9 injury report.</p></div></section><section class="card" data-sec="closest"><div class="eyebrow"><span class="tag">The Week&#x27;s Closest Call</span><span class="n">02</span></div><div class="cbody"><p class="clabel">Closest call with odds</p><p class="verdict">Start George Kittle <span class="over">over</span> Sam LaPorta</p><div class="cmeter"><span class="cbar"><i style="width:44%"></i></span><b class="cpct">72%</b></div><p class="drivers">proj <b>14.1 vs 9.5</b> · games this season <b>7 vs 8</b></p></div></section></div><!--/card--></div><div class="lock"><div class="lk-status"><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 11.5 5.6 9a3.4 3.4 0 0 1 4.8 0zM3.2 6.6a6.8 6.8 0 0 1 9.6 0l-1.4 1.4a4.8 4.8 0 0 0-6.8 0zM.8 4.2a10.2 10.2 0 0 1 14.4 0l-1.4 1.4a8.2 8.2 0 0 0-11.6 0z"/></svg><svg viewBox="0 0 27 12"><rect x=".5" y=".5" width="23" height="11" rx="3.2" fill="none" stroke="#fff" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="2"/><rect x="24.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></svg></span></div><div class="lk-fg"><span class="lk-pad"><i></i></span><div class="lk-day">Tuesday</div><div class="lk-time">9:41</div><div class="lnote"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M4 7l8 6 8-6"/></svg></span><span class="ltext"><b class="lfrom">Beat Your League</b><span class="lsub">Week 10: your lineup, decided</span><span class="lpre">Closest call with odds: start George Kittle over Sam LaPorta, 72%. Your whole lineup is inside.</span></span><time>now</time><span class="lk-tap"></span></div><div class="lk-tools"><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8l-1 5H9z"/><path d="M9 8h6v12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/><path d="M12 12v3"/></svg></span><span><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg></span></div></div></div><div class="glass"><i></i></div><div class="homebar"></div>
 <!-- phone:end -->
       </div>
       <span class="edge" aria-hidden="true"></span>
@@ -1346,22 +1240,26 @@
     <button type="button" class="storytoggle" id="story-toggle" aria-pressed="false" aria-label="Pause the phone animation"><svg class="pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="2.8" height="9" rx=".8"/><rect x="7.2" y="1.5" width="2.8" height="9" rx=".8"/></svg><svg class="play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.4 6z"/></svg></button>
     </div>
   </div>
-  <!-- The page's sharpest scene, as the hero's last line (owner plan, Oct
-       28 2026: the separate 12:55 section went). -->
-  <p class="punch"><b><i>He was on your bench.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
-  <span>Your Tuesday report makes that call.</span></p>
 </header>
 
-<!-- How it works, as three pictures (owner plan, Oct 28 2026). The steps
-     draw in once, one after another, joined by a gold line — transform and
-     opacity only, paused while off screen, never under reduced motion; the
-     static page is the finished picture. -->
+<!-- The page's sharpest line gets the page to itself, straight under the hero
+     (owner review, Oct 31 2026: it sat in a thin strip). -->
+<section class="scene" aria-label="The call that costs you the week">
+  <p class="punch" id="punch"><b><i>He was on your bench.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
+  <span>Your Tuesday report makes that call.</span></p>
+</section>
+
+<!-- How it works, as three real things: the paste the roster box reads, the
+     inbox row, the task the report ends on (owner review, Oct 31 2026: the
+     drawn clipboard, envelope and goalpost read as stock art). Step 02's and
+     03's words are the pinned sample's own, held to the phone by test. The
+     steps come in once, in order: transform and opacity only, held while off
+     screen, never under reduced motion; the static page is the finished
+     picture. -->
 <section class="how" id="how" aria-labelledby="how-head">
-  <h2 id="how-head">Paste once, then just play</h2>
+  <h2 id="how-head">Paste once, then play</h2>
   <ol class="steps">
     <li class="step">
-      <span class="sicon" aria-hidden="true"><svg viewBox="0 0 96 96"><rect x="23" y="17" width="50" height="64" rx="7" fill="#F6F4EE"/><rect x="35" y="11" width="26" height="13" rx="4" fill="#F2C230"/><rect x="42" y="15" width="12" height="4" rx="2" fill="#101E33"/><g class="ln"><rect x="30" y="32" width="9" height="6" rx="3" fill="#8FA3BC"/><rect x="43" y="32" width="23" height="6" rx="3" fill="#101E33"/></g><g class="ln"><rect x="30" y="44" width="9" height="6" rx="3" fill="#8FA3BC"/><rect x="43" y="44" width="18" height="6" rx="3" fill="#101E33"/></g><g class="ln"><rect x="30" y="56" width="9" height="6" rx="3" fill="#8FA3BC"/><rect x="43" y="56" width="21" height="6" rx="3" fill="#101E33"/></g><g class="ln"><rect x="30" y="68" width="9" height="6" rx="3" fill="#8FA3BC"/><rect x="43" y="68" width="15" height="6" rx="3" fill="#F2C230"/></g></svg></span>
-      <span class="wire" aria-hidden="true"><i></i><b></b></span>
       <span class="sn">01</span>
       <h3>Paste your roster</h3>
       <p>Any app. No login.</p>
@@ -1376,17 +1274,23 @@
       </div>
     </li>
     <li class="step">
-      <span class="sicon" aria-hidden="true"><svg viewBox="0 0 96 96"><g class="env"><rect x="15" y="31" width="60" height="42" rx="7" fill="#F6F4EE"/><path d="M18 35l27 21 27-21" fill="none" stroke="#101E33" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></g><g class="badge"><circle cx="72" cy="31" r="14" fill="#F2C230"/><path d="M65.5 31.2l4.4 4.4 8.2-8.6" fill="none" stroke="#101E33" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></g></svg></span>
-      <span class="wire" aria-hidden="true"><i></i><b></b></span>
       <span class="sn">02</span>
       <h3>Tuesday morning</h3>
       <p>One email decides every slot.</p>
+      <div class="inboxrow" aria-hidden="true">
+        <span class="ia">B</span>
+        <span class="ib"><b>Beat Your League</b><span>Week 10: your lineup, decided</span></span>
+        <time>9:41 AM</time>
+      </div>
     </li>
     <li class="step">
-      <span class="sicon" aria-hidden="true"><svg viewBox="0 0 96 96"><g fill="#F2C230"><rect x="24" y="18" width="5" height="44" rx="2.5"/><rect x="67" y="18" width="5" height="44" rx="2.5"/><rect x="24" y="57" width="48" height="5" rx="2.5"/><rect x="45.5" y="57" width="5" height="25" rx="2.5"/></g><g class="ball"><ellipse cx="48" cy="38" rx="13" ry="8" transform="rotate(-35 48 38)" fill="#F6F4EE"/><path d="M42.5 42.2l11-8.4M46 36.6l2 2.6M49.3 34.2l2 2.6" fill="none" stroke="#101E33" stroke-width="2.2" stroke-linecap="round"/></g></svg></span>
       <span class="sn">03</span>
-      <h3>Sunday, just play</h3>
+      <h3>Sunday, you're set</h3>
       <p>You set it in about a minute.</p>
+      <div class="taskrow" aria-hidden="true">
+        <span class="tbox"></span>
+        <span class="tt"><b>Set this lineup</b><span>before this week's first kickoff</span></span>
+      </div>
     </li>
   </ol>
 </section>
@@ -1401,7 +1305,7 @@
   <h2 id="inside-head">Everything Sunday needs, by Tuesday</h2>
   <div class="anat">
     <figure class="shotwrap">
-      <div class="scrollcue" aria-hidden="true"><svg viewBox="0 0 12 64" focusable="false"><circle cx="6" cy="5" r="4" fill="#F2C230"/><path d="M6 11v42" stroke="#F2C230" stroke-width="1.5" stroke-linecap="round"/><path d="M2 54l4 5 4-5" fill="none" stroke="#F2C230" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>01–02</b> above · keep scrolling the same email</span></div>
+      <div class="scrollcue" aria-hidden="true"><svg viewBox="0 0 12 64" focusable="false"><circle cx="6" cy="5" r="4" fill="#F2C230"/><path d="M6 11v42" stroke="#F2C230" stroke-width="1.5" stroke-linecap="round"/><path d="M2 54l4 5 4-5" fill="none" stroke="#F2C230" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Further down the same email</span></div>
       <div class="shot screen" role="img" aria-label="Cards 03 and 04 of the 2024 Week 10 sample report: the week's game plan, and an if/then for a questionable starter">
         <div aria-hidden="true">
 <!-- shot:start -->
@@ -1415,10 +1319,8 @@
     <ol class="callouts">
       <li class="on-phone" data-pin="01"><h3>Your lineup, decided</h3><p>Every spot, QB to
         DEF, under your scoring.</p></li>
-      <li class="on-phone" data-pin="02"><h3>The week's closest call</h3><p>The % is the chance
-        your starter outscores your best bench player at that spot, printed only where both
-        players are playing, off the injury report and have enough games on record (never on
-        team defenses).</p></li>
+      <li class="on-phone" data-pin="02"><h3>The week's closest call</h3><p>The chance your starter
+        outscores your best bench player at that spot. Rows without odds say why.</p></li>
       <li data-pin="03"><h3>Your game plan</h3><p>What to change, and by when.</p></li>
       <li data-pin="04"><h3>If/then for gameday</h3><p>A plan for every questionable starter,
         and a Saturday email if Friday's injury report changes your lineup.</p></li>
@@ -1438,16 +1340,16 @@
     <tbody>
       <tr><th scope="row">Made for</th><td class="no">Everyone at once</td><td class="yes">Your roster and scoring</td></tr>
       <tr><th scope="row">Your lineup</th><td class="no">You work it out</td><td class="yes">Every slot decided</td></tr>
-      <tr><th scope="row">Close calls</th><td class="no">A rank, no odds</td><td class="yes">Odds against your own bench</td></tr>
+      <tr><th scope="row">Close calls</th><td class="no">A rank, no odds</td><td class="yes">The odds, against your own bench</td></tr>
       <tr><th scope="row">Late news</th><td class="no">Check back yourself</td><td class="yes">An if/then and the Saturday check</td></tr>
       <tr><th scope="row">Bye weeks</th><td class="no">Yours to track</td><td class="yes">Checked to your title game</td></tr>
     </tbody>
   </table>
-  <p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a> checks your roster through Week 17.</p>
 </section>
 
 <section id="pricing">
   <h2>Take it through your title game.</h2>
+  <p class="heroline"><b id="season-clock">A new report every Tuesday of the season.</b></p>
   <!-- 2026 sells a monthly plan that stops on its own (owner decision, Oct 31
        2026): one price every week of the season, nothing to update. One
        decision at checkout (PLAN §4): the League Pass is a slim strip under the
@@ -1462,9 +1364,8 @@
         <li>Stops on its own after your title game
         (<a href="terms.html#price">how it ends</a>).</li>
         <li>Your first report usually lands within the hour.</li>
-        <li>Read your first weekly report before its games. Not for you? Full refund, no
-        questions, until your first weekly report's week kicks off. One per person
-        (<a href="terms.html#refunds">details</a>).</li>
+        <li>Read your first weekly report. Not for you? Full refund before its first
+        game. One per person (<a href="terms.html#refunds">details</a>).</li>
       </ul>
       <a class="btn gold" id="season-cta" href="#watch-form" data-to-capture>Tell me when it opens</a>
       <p class="soonnote" id="season-note">One email the morning checkout opens.</p>
@@ -1475,8 +1376,9 @@
   <!-- Filled when checkout opens. -->
   <p class="finance" id="finance-note" hidden></p>
   <p class="lpline"><svg class="lpicon" viewBox="0 0 26 26" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="9" r="4"/><path d="M5.5 22c.6-4.4 3.5-6.8 7.5-6.8s6.9 2.4 7.5 6.8"/><path d="M19.3 5.5a3.6 3.6 0 0 1 0 7M24 19.5c-.5-2.7-1.9-4.5-4.2-5.3M6.7 5.5a3.6 3.6 0 0 0 0 7M2 19.5c.5-2.7 1.9-4.5 4.2-5.3"/></g></svg><span class="lpbody"><b>Run the league?</b> The League Pass covers every manager, each with their own report, up to 14 teams.
-  <span class="lpterms">$34.99 a month for the whole league. Stops on its own. Full refund until your first weekly report's week kicks off. One per league.</span></span>
+  <span class="lpterms">$34.99 a month for the whole league. Stops on its own. Full refund before your first weekly report's first game. One per league.</span></span>
   <a href="league-pass.html">See the League Pass →</a></p>
+  <p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a> checks your roster through Week 17.</p>
 </section>
 
 <section id="faq">
@@ -1491,7 +1393,7 @@
       </details>
       <details>
         <summary>Is it worth joining mid-season?</summary>
-        <div class="a">Yes. It's built for the playoff push. Your first report usually lands within the hour, and every report checks the byes ahead, playoff weeks included.</div>
+        <div class="a">Yes. It's built for the playoff push. Every report checks the byes ahead, playoff weeks included.</div>
       </details>
       <details>
         <summary>What if news breaks after Tuesday?</summary>
@@ -1511,9 +1413,9 @@
 
 <section class="closer">
   <h2 id="closer-head">Your lineup, decided every Tuesday.</h2>
-  <p id="closer-note">Paste your roster. No card.</p>
+  <p id="closer-note">Paste your roster. See the calls on your team in seconds.</p>
   <div class="cta-row">
-    <a class="btn gold" id="closer-cta" href="join/index.html">Check my team</a>
+    <a class="btn gold" id="closer-cta" href="join/index.html">Check my team free</a>
     <a class="textlink onlysm" href="#pricing">See pricing</a>
   </div>
   <!-- The email capture, for whoever isn't ready to paste a roster: every
@@ -1527,7 +1429,7 @@
   <p class="watchnote" id="watch-note" role="status"></p>
 </section>
 
-<div class="stickybar" id="stickybar"><a class="btn gold" id="sticky-cta" href="join/index.html">Check my team</a></div>
+<div class="stickybar" id="stickybar"><a class="btn gold" id="sticky-cta" href="join/index.html">Check my team free</a></div>
 
 </main>
 
@@ -1563,14 +1465,14 @@
       "description": "Beat Your League is a weekly start/sit report for fantasy football: every Tuesday it emails the lineup it would set for your exact roster under full-PPR, half-PPR or standard scoring, with every slot decided, every close call explained, the odds only where both players are playing, off the injury report and have enough games on record (never on team defenses), and an if/then plan for late news.",
       "offers": [
         {"@type": "Offer", "price": "14.99", "priceCurrency": "USD",
-         "description": "Monthly plan: $14.99 a month, stopping on its own after your title game. Every lineup through your title game. Your first report usually lands within the hour. No-questions refund until your first weekly report's week kicks off."}
+         "description": "Monthly plan: $14.99 a month, stopping on its own after your title game. Every lineup through your title game. Your first report usually lands within the hour. Full refund before your first weekly report's first game."}
       ]
     },
     {
       "@type": "FAQPage",
       "mainEntity": [
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
-        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Your first report usually lands within the hour, and every report checks the byes ahead, playoff weeks included."}},
+        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push. Every report checks the byes ahead, playoff weeks included."}},
         {"@type": "Question", "name": "What if news breaks after Tuesday?", "acceptedAnswer": {"@type": "Answer", "text": "Your report already plans for it: every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap. No news, no email."}},
         {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. Confirm by Friday night (ET) and that Saturday's check uses it. Your roster is used only to build your report and is never sold."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection and the player's recent games. Each report after your first lists the calls with odds from the one before it, and how each finished. How it works has the detail."}}
@@ -1658,8 +1560,8 @@ function season2027Card() {
   price.appendChild(part("small", "", "/ this season and next"));
   const list = part("ul");
   ["Your first report usually lands within the hour.",
-   "Read your first weekly report before its games. Not for you? Full refund, no " +
-   "questions, until your first weekly report's week kicks off. One per person."]
+   "Read your first weekly report. Not for you? Full refund before its first game. " +
+   "One per person."]
     .forEach((text) => list.appendChild(part("li", "", text)));
   // Nobody should read "each August" as next August: the date sits by the price.
   const SEASON_2027_TERMS = "Nothing more until " + SEASON_2027_FIRST_RENEWAL + ", when it " +
@@ -1692,14 +1594,9 @@ function season2027Card() {
 if (TRIAL_OPEN) {
   const tryCta = document.getElementById("try-cta");
   if (tryCta) tryCta.hidden = false;
-  // Three buttons in one row wrap unevenly and dilute the two that matter, but
-  // the full report must stay one tap away from the hero: on a phone the next
-  // link to it is three screens down (launch audit). It becomes a text link.
+  // The full report stays one tap away from the hero (launch audit).
   const sample = document.getElementById("hero-sample");
-  if (sample) {
-    sample.className = "textlink";
-    sample.textContent = "or read a real report first";
-  }
+  if (sample) sample.textContent = "or read a real report first";
 }
 // The launch waitlist. One address, one message, when signups open. It posts to
 // the same Cloudflare Worker that takes League Pass seats and roster updates
@@ -1818,10 +1715,6 @@ if (CHECKOUT_OPEN) {
     .map(([sel, el]) => [sel, el.cloneNode(true)]);
   const heroOpen = document.getElementById("hero-open");
   if (heroOpen) heroOpen.textContent = "Get my lineups";
-  // "No card" belongs to the roster check; the line below the button now
-  // answers the question a buyer has (the risk line, next).
-  const promise = document.getElementById("hero-promise");
-  if (promise) promise.hidden = true;
   // The strongest true answer to "what if it's no good?", where the decision
   // is made rather only in the price card ~4,700px down on a phone (business
   // review #1). No price, so the no-price-in-hero rule holds; closeForSeason
@@ -1831,8 +1724,8 @@ if (CHECKOUT_OPEN) {
     const risk = document.createElement("p");
     risk.className = "riskline";
     risk.id = "risk-line";
-    risk.textContent = "Full refund, no questions, until your first weekly report's " +
-      "week kicks off." + (SEASON_2027_READY ? "" : " Stops on its own after your title game.");
+    risk.textContent = "Full refund before your first weekly report's first game." +
+      (SEASON_2027_READY ? "" : " Stops on its own after your title game.");
     heroRow.after(risk);
   }
   const nav = document.getElementById("nav-cta");
@@ -1990,7 +1883,7 @@ function closeForSeason(line) {
   const watchLabel = document.getElementById("watch-label");
   if (watchLabel) watchLabel.textContent = "One email when checkout opens, nothing else.";
   // pass-clock says a new lineup is coming. The 2027 card leaves with checkout.
-  ["try-cta", "risk-line", "hero-promise", "closer-cta", "pass-clock"].forEach((id) => {
+  ["try-cta", "risk-line", "closer-cta", "pass-clock"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
@@ -2294,6 +2187,23 @@ if (steps && !reduced && "IntersectionObserver" in window &&
   }, { threshold: 0.3 }).observe(steps);
   setTimeout(() => { if (!heard) steps.classList.remove("armed"); }, 6000);
 }
+// The Sunday scene: the same rule. Nothing on screen ever disappears, and an
+// observer that never reports leaves the finished picture.
+const punch = document.getElementById("punch");
+if (punch && !reduced && "IntersectionObserver" in window &&
+    punch.getBoundingClientRect().top >= window.innerHeight) {
+  let heardPunch = false;
+  punch.classList.add("armed");
+  const watchPunch = new IntersectionObserver((entries) => {
+    heardPunch = true;
+    if (entries.some((e) => e.isIntersecting)) {
+      punch.classList.add("go");
+      watchPunch.disconnect();
+    }
+  }, { threshold: 0.35 });
+  watchPunch.observe(punch);
+  setTimeout(() => { if (!heardPunch) punch.classList.remove("armed"); }, 6000);
+}
 // A thin gold line across the top for how far down the page you are. Where
 // the browser runs scroll-driven animations the CSS draws it off the main
 // thread; elsewhere, one transform per frame here, never a layout property.
@@ -2363,15 +2273,12 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
         if (phase === "season" && fresh && Number.isInteger(w.odds) &&
             w.odds >= 3 && w.closest_call && w.cards === true) {
           document.querySelectorAll("[data-live-week]").forEach((el) => { el.hidden = false; });
-          // The hero's link names the day the page was built, so it is
-          // plainly this week's report and not the 2024 sample beside it — and
-          // never a week number: the clock already names one (sales review).
-          const label = document.getElementById("this-week-label");
-          const built = Date.parse(w.built_at || "");
-          if (label) {
-            label.textContent = "or this week's report" + (isNaN(built) ? ""
-              : " (built " + new Date(built).toLocaleDateString("en-US", { weekday: "short",
-                month: "short", day: "numeric", timeZone: "America/New_York" }) + ")");
+          // The hero keeps one link: in a week like this it opens this week's
+          // real report rather than the 2024 sample, and never a third link.
+          const heroLink = document.getElementById("hero-sample");
+          if (heroLink && !TRIAL_OPEN) {
+            heroLink.setAttribute("href", carryVia("this-week.html", VIA));
+            heroLink.textContent = "See this week's report";
           }
           // That report's closest call with odds, one line under the link,
           // in the inbox preview's own words (contract C6). Every figure is

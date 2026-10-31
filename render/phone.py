@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Mapping
@@ -50,6 +51,10 @@ LOCK_DAY = "Tuesday"
 LOCK_TIME = "9:41"
 MAIL_TIME = "9:41 AM"
 SENDER = "Beat Your League"
+# A replayed report's stamp ("Rebuilt Oct 30, 2026 from the 2024 season archive")
+# is right on the sample's own page and reads like a build log in a phone's
+# masthead. The caption under the phone says which season it is.
+SAMPLE_STAMP = "Sample report · {season} season"
 
 # The plan items How it works and the landing annotate, and the one Slot by
 # Slot row How it works shows.
@@ -127,7 +132,8 @@ def masthead_html(report: Mapping[str, Any]) -> str:
             f'<span class="mh-label">{esc(m["label"])}</span></div>'
             f'<div class="mh-week">{esc(m["week"])}</div>'
             f'<div class="mh-meta"><b>{esc(m["team"])}</b> · {esc(m["meta"])}</div>'
-            f'<div class="mh-stamp">{esc(m["stamp"])}</div></div>')
+            f'<div class="mh-stamp">{esc(SAMPLE_STAMP.format(season=report["meta"]["season"]))}'
+            f'</div></div>')
 
 
 def closest_through_drivers(report: Mapping[str, Any]) -> dict:
@@ -290,6 +296,12 @@ def write_stack_entry(entry: Mapping[str, str], path: Path | None = None) -> Non
                     encoding="utf-8")
 
 
+def _stamp(stamp: str) -> str:
+    """A live report keeps its build stamp; a replayed one is a sample."""
+    replay = re.search(r"from the (\d{4}) season archive", stamp)
+    return SAMPLE_STAMP.format(season=replay.group(1)) if replay else stamp
+
+
 def pass_stack(entries: list[Mapping[str, str]]) -> str:
     """The stack's markup. Raises unless every source has its entry."""
     have = [e.get("source") for e in entries]
@@ -303,7 +315,7 @@ def pass_stack(entries: list[Mapping[str, str]]) -> str:
             f'<span class="mh-label">{esc(e["label"])}</span></div>'
             f'<div class="mh-week">{esc(e["week"])}</div>'
             f'<div class="mh-meta"><b>{esc(e["team"])}</b> · {esc(e["meta"])}</div>'
-            f'<div class="mh-stamp">{esc(e["stamp"])}</div></div>'
+            f'<div class="mh-stamp">{esc(_stamp(e["stamp"]))}</div></div>'
             '<div class="fpaper" aria-hidden="true"><span class="ftag">Your Lineup, '
             'Decided</span><i></i><i></i><i></i></div></div>')
     names = ", ".join(f'{e["team"]} ({e["week"]})' for e in entries)

@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Your League — set up your weekly fantasy football report</title>
+<title>Check your fantasy football team — Beat Your League</title>
 <link rel="canonical" href="https://beatyourleague.com/join/">
-<meta name="description" content="Paste your roster from any league app, pick your scoring and lineup — a start/sit report for your own team every Tuesday.">
-<meta property="og:title" content="Beat Your League — set up your weekly fantasy football report">
-<meta property="og:description" content="Paste your roster from any league app, pick your scoring and lineup — a start/sit report for your own team every Tuesday.">
+<meta name="description" content="Paste your roster from any league app and see the calls on your team in seconds. Free, no card.">
+<meta property="og:title" content="Check your fantasy football team — Beat Your League">
+<meta property="og:description" content="Paste your roster from any league app and see the calls on your team in seconds. Free, no card.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -105,7 +105,7 @@
     letter-spacing:.01em;text-transform:uppercase;color:var(--navy);margin-bottom:8px;}
   input[type=text], input[type=email]{width:100%;min-height:48px;padding:0 14px;font:inherit;font-size:16px;
     color:var(--navy);border:1px solid var(--field);border-radius:8px;background:var(--card);}
-  /* Contract C7: one primary style, the site's gold, flat — "Check my roster"
+  /* Contract C7: one primary style, the site's gold, flat — "Check my team"
      was the one green CTA on the site (launch review D3). */
   button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;
     font-family:var(--display);font-weight:800;font-size:16px;line-height:1;letter-spacing:.06em;
@@ -149,6 +149,7 @@
   /* The renewal terms, in sight of the button that leads to payment. They used
      to live only in the post-submit block, which the paid flow never shows. */
   .terms-line{margin:14px 0 10px;font-size:14px;color:var(--ink2);line-height:1.55;}
+  .terms-line a{color:inherit;}
   .addwrap{position:relative;margin:16px 0 10px;}
   .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;background:var(--card);
     border:1px solid var(--line);border-radius:12px;overflow:hidden;}
@@ -171,12 +172,14 @@
      sentence, not a list: a lone "1." sat in front of it (panel R5). */
   .done ol.single{list-style:none;margin-left:0;}
   /* The settings in one line, with "Change" opening the radios. */
-  .setsum{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;
-    flex-wrap:wrap;margin-top:14px;padding:8px 8px 8px 16px;background:var(--card);
+  .setsum{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 14px;
+    margin-top:14px;padding:8px 8px 8px 16px;background:var(--card);
     border:1px solid var(--line);border-radius:8px;}
-  .setsum b{font-size:15px;line-height:1.4;color:var(--navy);}
+  .setsum .setlead{grid-column:1;font-size:13px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--slate);}
+  .setsum b{grid-column:1;min-width:0;font-size:15px;line-height:1.4;color:var(--navy);}
   .setsum b span{white-space:nowrap;}
-  .setsum button{margin:0;}
+  .setsum button{grid-column:2;grid-row:1 / span 2;margin:0;}
   #settings-body[hidden]{display:none;}
   #settings-body > .note:first-child{margin-top:14px;}
   .settings-ok{display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:12px 14px;
@@ -329,13 +332,11 @@
     border-radius:2px;background:var(--flag);transform:scaleX(0);transform-origin:0 50%;
     transition:transform .5s var(--ease-out);}
   .progress .on{color:#FFFFFF;}
-  body:has(#roster-text:not(:placeholder-shown)) .progress .s2,
   body:has(#step-email:not(.hidden)) .progress .s2,
-  body:has(#step-email:not(.hidden)) .progress .s3{color:#FFFFFF;}
+  body:has(#email:not(:placeholder-shown)) .progress .s3{color:#FFFFFF;}
   .progress .on::before,
-  body:has(#roster-text:not(:placeholder-shown)) .progress .s2::before,
   body:has(#step-email:not(.hidden)) .progress .s2::before,
-  body:has(#step-email:not(.hidden)) .progress .s3::before{transform:none;}
+  body:has(#email:not(:placeholder-shown)) .progress .s3::before{transform:none;}
   @media (max-width:960px){
     .shell{grid-template-columns:minmax(0,1fr);max-width:688px;}
     .side{position:static;box-shadow:none;}
@@ -363,7 +364,7 @@
   }
   #rows .row .who{font-size:15px;line-height:1.25;}
   #rows .row .meta{font-size:12px;letter-spacing:.06em;}
-  /* Only a real "Check my roster" cascades (.fresh, set for 900ms); a
+  /* Only a real "Check my team" cascades (.fresh, set for 900ms); a
      remove or a pick redraws without moving. */
   #rows.fresh .row{animation:rowin .34s var(--ease-out) both;
     animation-delay:min(calc(var(--i,0) * 24ms),360ms);}
@@ -397,12 +398,15 @@
   .sugrow:focus-visible{outline:2px solid var(--navy);outline-offset:-2px;}
   /* Room for the field's focus ring: the note's last line sat on its border. */
   #step-roster > .note{margin-bottom:10px;}
+  #step-league{margin:14px 0;}
+  #step-league > .note:first-child{margin-top:0;}
+  #settings-intro{margin:6px 0 0;font-size:14px;}
   @media (prefers-reduced-motion:reduce){
     #rows.fresh .row,.tally.good::before,.ok::before,#step-email,.checkmail,.err,.ok,.suggest,
     .opts label{animation:none!important;}
     .progress span::before{transition:none;}
   }
-  /* ---- the payoff: what "Check my roster" found ----
+  /* ---- the payoff: what "Check my team" found ----
      Facts about this roster, drawn in the browser from files published with
      the site. Hidden until a check passes, then complete at rest: every
      entrance below runs only under .play, and only on transform and opacity. */
@@ -554,23 +558,41 @@
 <body>
 <header>
   <div class="wrap">
-    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidemd" href="../how-it-works.html">How it works</a><a class="hidexs" href="../sample-report.html">Sample report</a><a class="hidesm" href="../byes/">Bye planner</a><a class="hidemd" href="../league-pass.html">League Pass</a><a class="hidemd" href="../index.html#pricing">Pricing</a><details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="../join/index.html">Check my team</a><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../byes/">Bye planner</a><a href="../league-pass.html">League Pass</a><a href="../index.html#pricing">Pricing</a></div></details></nav></div>
-    <h1>Set Up Your Team</h1>
-    <div class="progress" aria-hidden="true"><span class="s1 on">1 · Settings</span><span class="s2">2 · Roster</span><span class="s3">3 · Checkout</span></div>
-    <p id="header-pitch">Every lineup from here to your title game, decided for your
-    roster and in your inbox every Tuesday. <b>$14.99 a month</b>: it stops on its own
-    after your title game, and there's a full refund until your first weekly report's
-    week kicks off.</p>
-    <div class="note" id="closed-note" style="display:none">Checkout isn't open
-    yet. You can set up now: once you check your roster it stays in this
-    page's address, so a bookmark brings it back.</div>
+    <div class="sitebar"><a class="brand" href="../index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidemd" href="../how-it-works.html">How it works</a><a class="hidexs" href="../sample-report.html">Sample report</a><a class="hidesm" href="../byes/">Bye planner</a><a class="hidemd" href="../league-pass.html">League Pass</a><a class="hidemd" href="../index.html#pricing">Pricing</a><details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="../join/index.html">Check my team free</a><a href="../how-it-works.html">How it works</a><a href="../sample-report.html">Sample report</a><a href="../byes/">Bye planner</a><a href="../league-pass.html">League Pass</a><a href="../index.html#pricing">Pricing</a></div></details></nav></div>
+    <h1>Check your team</h1>
+    <div class="progress" aria-hidden="true"><span class="s1 on">1 · Your roster</span><span class="s2">2 · Your calls</span><span class="s3">3 · Checkout</span></div>
+    <p id="header-pitch">See the calls on your team in seconds, free. The weekly report is
+    <b>$14.99 a month</b>: it stops on its own after your title game, with a full refund
+    before your first weekly report's first game.</p>
+    <div class="note" id="closed-note" style="display:none">Checkout opens soon.
+    Once you check your roster it stays in this page's address, so a bookmark
+    brings it back.</div>
   </div>
 </header>
 <div class="wrap shell">
 
 <main id="main">
-  <section id="step-league">
-    <div class="eyebrow">1 · Your league's settings</div>
+  <section id="step-roster">
+    <div class="eyebrow">1 · Your roster</div>
+    <div class="note">Paste it from ESPN, Yahoo, Sleeper or CBS, extra text and all. Or type a
+    name to add one player.</div>
+    <form id="form-roster" novalidate>
+      <div class="addwrap">
+        <input type="text" id="player-search" autocomplete="off"
+               placeholder="Add a player — start typing a name"
+               aria-label="Add a player by name">
+        <div class="suggest" id="suggest" role="group" aria-label="Matching players"></div>
+      </div>
+    <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
+Bijan Robinson
+Ja'Marr Chase
+Baltimore Ravens
+..."></textarea>
+    </form>
+    <!-- The league's settings as one line under the box, the radios behind
+         "Change" (owner review, Oct 31 2026: the page opened on settings, a
+         chore before any payoff). Most leagues keep the defaults. -->
+    <div id="step-league">
     <div class="note" id="seat-settings" style="display:none"></div>
     <!-- A roster update REPLACES the settings on file with these: the intake
          reads scoring, size and lineup from the new roster code. The page sat
@@ -579,22 +601,21 @@
          Prefilled from the report's link when it carries them; otherwise the
          subscriber says these are right before anything is sent. -->
     <div class="note" id="update-settings" style="display:none"></div>
-    <div class="note" id="settings-intro">Pick what your league uses. Six-point passing TDs or TE premium?
-    Pick the closest.</div>
     <!-- The settings as one line, the radios behind "Change" (the review's
          "settings wall before the roster"): most leagues keep the defaults,
          and a link that carried its league's settings shows them here. The
          line is drawn from the radios themselves (drawSettingsLine), so it
          can never say one thing while the ref encodes another. -->
     <div class="setsum" id="settings-summary">
+      <span class="setlead">Your league</span>
       <b id="settings-line"><span>Full PPR</span> · <span>12 teams</span> · <span>Standard lineup</span> · <span>K and DEF</span></b>
       <button type="button" class="retry" id="settings-change" aria-expanded="false"
               aria-controls="settings-body">Change</button>
     </div>
+    <div class="note" id="settings-intro">Six-point passing TDs or TE premium? Pick the closest.</div>
     <div id="settings-body" hidden>
-    <div class="note">Full PPR, half PPR or standard scoring with 4-point passing
-    touchdowns, in a league of 8, 10, 12 or 14 teams: every number in your report is worked
-    out that way. Six-point passing touchdowns and TE premium aren't scored yet.</div>
+    <div class="note">Full PPR, half PPR or standard with 4-point passing touchdowns, in a league
+    of 8, 10, 12 or 14 teams. Six-point passing touchdowns and TE premium aren't scored yet.</div>
     <div class="optlabel" id="lbl-scoring">Scoring</div>
     <div class="opts" id="opt-scoring" role="radiogroup" aria-labelledby="lbl-scoring">
       <label><input type="radio" name="scoring" value="ppr" checked>Full PPR</label>
@@ -635,26 +656,9 @@
     <label class="settings-ok" id="settings-ok-wrap" style="display:none"><input
       type="checkbox" id="settings-ok"> These are my league's settings now:
       scoring, league size and starting lineup.</label>
-  </section>
+    </div>
 
-  <section id="step-roster">
-    <div class="eyebrow">2 · Your roster</div>
-    <div class="note">Type a name and tap to add it, or paste your whole roster straight from
-    ESPN, Yahoo, Sleeper or CBS. Extra text like positions and bye weeks is fine.</div>
-    <form id="form-roster" novalidate>
-      <div class="addwrap">
-        <input type="text" id="player-search" autocomplete="off"
-               placeholder="Add a player — start typing a name"
-               aria-label="Add a player by name">
-        <div class="suggest" id="suggest" role="group" aria-label="Matching players"></div>
-      </div>
-    <textarea id="roster-text" spellcheck="false" placeholder="Josh Allen
-Bijan Robinson
-Ja'Marr Chase
-Baltimore Ravens
-..."></textarea>
-    <button id="resolve" type="submit">Check my roster</button>
-    </form>
+    <button id="resolve" type="submit" form="form-roster">Check my team</button>
     <div class="err" id="err-roster" role="alert"></div>
     <button type="button" id="retry-dir" class="retry" style="display:none">Try loading the player list again</button>
     <!-- Above the list, so a problem shows under the button that found it
@@ -689,13 +693,14 @@ Baltimore Ravens
       <label class="optlabel" id="lbl-email" for="email">Where reports go</label>
       <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
       <p class="terms-line" id="currency-note">All prices in US dollars.</p>
-      <p class="terms-line" id="terms-line">The Monthly plan is <b>$14.99 USD a month until
-      you cancel, and billing stops on its own</b>: it won't renew after Week 16's report
-      goes out, and your reports still run through the season's last week. Cancel any time
-      from your billing page. Refunds are
-      no-questions until your first weekly report's week kicks off (or a week after it
-      reaches you, if we send it late). One per person, and a second purchase after a
-      refund is final.</p>
+      <!-- The short form: price, renewal and how to stop, then the refund and
+           its limit. Every detail stays in terms.html, at Stripe and in the
+           welcome email. -->
+      <p class="terms-line" id="terms-line"><b>$14.99 USD a month until you cancel</b>, and
+      billing stops on its own: it won't renew after Week 16's report goes out, and your
+      reports still run through the season's last week. Cancel any time from your billing
+      page. Full refund before your first weekly report's first game, one per person
+      (<a href="../terms.html#refunds">terms</a>).</p>
       <p class="terms-line" id="mail-line" hidden></p>
       <p class="terms-line" id="list-line" hidden></p>
       <button id="submit" type="submit">Unlock my lineups — $14.99/mo</button>
@@ -754,10 +759,8 @@ Baltimore Ravens
         your card details.</li>
         <li id="renew-note">The Monthly plan is <b>$14.99 a month</b> until you cancel, and
         it won't renew after Week 16's report.</li>
-        <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Refunds are no-questions
-        until your first weekly report's week kicks off (or a week after it reaches
-        you, if we send it late). One per person, and a
-        second purchase after a refund is final.
+        <li id="first-note"><span class="first-when">A report lands <b>the day you join</b>.</span> Full refund
+        before your first weekly report's first game, one per person.
         <span id="first-tail">Cancel any time from your billing page, or let it
         <a href="../terms.html#cancel">end on its own</a>.</span></li>
       </ol>
@@ -777,9 +780,8 @@ Baltimore Ravens
   <div class="proof"><b>Your team.</b>Not a list written for everybody.
   <span class="links"><a href="../sample-report.html">See a real report</a> · <a href="../how-it-works.html">How it works</a></span></div>
   <div class="trust">
-    <span>Full refund, no questions, until your first weekly report's week kicks off
-      (or a week after it reaches you, if we send it late). One per person (one per
-      league for a League Pass)</span>
+    <span>Full refund before your first weekly report's first game. One per person (one
+      per league for a League Pass)</span>
     <span id="side-renew">Stops on its own after your title game. Cancel any time</span>
     <span>No league login, no password</span>
   </div>
@@ -1044,7 +1046,7 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // ``stale``: the box was typed in since the list on screen was read from it.
 // ``listed``: the launch list already has this visitor's email (one row a visit).
 // ``defensesOk``: the defense count the buyer confirmed as all theirs (BE-D1).
-// ``checked``: "Check my roster" has been pressed (a roster restored from the
+// ``checked``: "Check my team" has been pressed (a roster restored from the
 // address, or built by type-to-add, has not). ``payoffPlayed``: the panel's one
 // entrance is spent. ``freshCheck``: this draw comes from that press.
 const state = { directory: null, matches: [], ready: false, dirFailed: false,
@@ -1168,7 +1170,7 @@ function renderSuggestions() {
     suggestBox.appendChild(row);
   }
 }
-// The list is drawn OVER the paste box and the "Check my roster" button, so a
+// The list is drawn OVER the paste box and the "Check my team" button, so a
 // tap meant for either landed on whichever name sat there, and nothing but
 // clearing the field closed it (FUNNEL F2). It closes on Escape, when focus
 // leaves the field for anything but the list, and on a press anywhere outside
@@ -1245,7 +1247,7 @@ $("resolve").addEventListener("click", () => {
   state.freshCheck = false;
 });
 
-// An edit AFTER "Check my roster" makes the checked list stale, and encoding
+// An edit AFTER "Check my team" makes the checked list stale, and encoding
 // the stale list would silently drop the edit — RULE R3's failure wearing a
 // different hat. Typing in the box therefore takes the flow back a step until
 // it is re-checked. (addPlayer sets the value programmatically, which fires no
@@ -1260,7 +1262,7 @@ $("roster-text").addEventListener("input", () => {
   drawPayoff();
   const tally = $("tally");
   tally.className = "tally bad";
-  tally.textContent = 'Your roster changed — hit "Check my roster" again.';
+  tally.textContent = 'Your roster changed — hit "Check my team" again.';
 });
 
 // Why a row is not on the roster yet, in the buyer's words. Part of a name
@@ -1362,7 +1364,7 @@ function draw(focusAt) {
     // reader nothing (launch audit W4).
     drop.setAttribute("aria-label", "Remove " + (match.player ? match.player.name : match.typed));
     drop.addEventListener("click", () => {
-      // The box is what the next "Check my roster" re-reads (FUN-4): removed
+      // The box is what the next "Check my team" re-reads (FUN-4): removed
       // from the list alone, he came back on the first re-check after any
       // edit, with the tally saying all was well. So his own line leaves the box too — the
       // first line that reads as him — but only when the box then reads back
@@ -1786,7 +1788,7 @@ function bringPayoffIntoView(reduced) {
 }
 
 // Every draw rebuilds the panel at rest; only the first time it appears after a
-// press of "Check my roster" does it run its entrance, and only that press
+// press of "Check my team" does it run its entrance, and only that press
 // scrolls. So a remove, a re-check or a changed setting redraws still, and a
 // roster restored from the address arrives complete.
 let payoffClock = 0;
@@ -2709,7 +2711,7 @@ function closedNoteNodes(action) {
                       "to us filled in. Send it and we'll email you once, when it opens.")]
         : [over];
   }
-  const lead = WANTS_PASS ? "The League Pass isn't open yet" : "Checkout isn't open yet";
+  const lead = WANTS_PASS ? "The League Pass opens soon" : "Checkout opens soon";
   if (WANTS_PASS && OWN_PLAN_HREF) {
     return [text(lead + ". It opens the day your league can claim its seats, so " +
                  "nobody pays for a seat that can't be used. A plan for your own team " +
@@ -2717,9 +2719,8 @@ function closedNoteNodes(action) {
   }
   // The work is kept either way (BE-I3, I1): a checked roster stays in this
   // page's address, and with the list connected it is kept with the email.
-  const head = text(lead + ". You can set up now: once your roster is " +
-                    "checked it stays in this page's address, so a bookmark brings it " +
-                    "back. ");
+  const head = text(lead + ". Once your roster is checked it stays in this " +
+                    "page's address, so a bookmark brings it back. ");
   if (action === "list") {
     return [head, text("Then leave your email below, at step 3: we'll keep it with " +
                        "your roster and send one message when it opens, with " +
@@ -2728,9 +2729,8 @@ function closedNoteNodes(action) {
   // The roster rides in the request itself, so the bookmark advice is not
   // repeated: one sentence, about the one thing to do.
   if (action === "mail") {
-    return [text(lead + ". Set up now: at step 3, one press opens your mail app with " +
-                 "a request to us filled in. Send it and we'll email you once, the " +
-                 "morning it opens, with your roster ready to go.")];
+    return [text(lead + ". Check your team now, then save it at step 3 for the morning " +
+                 "it opens.")];
   }
   return [head];
 }
@@ -2797,15 +2797,14 @@ function draw2027Plan() {
       ", when it renews at $39, then each August until you cancel";
     return [document.createTextNode("The 2027 Season Pass is "), bold, document.createTextNode(
       ": all of 2027, with the rest of this season included. Cancel any time. We email " +
-      "you before it bills. Refunds are no-questions until your first weekly report's " +
-      "week kicks off (or a week after it reaches you, if we send it late). One per " +
-      "person, and a second purchase after a refund is final.")];
+      "you before it bills. Full refund before your first weekly report's first game, " +
+      "one per person.")];
   };
   $("submit").textContent = "Unlock my lineups — $49";
   $("header-pitch").textContent = "All of 2027, with the rest of this season included, " +
     "decided for your roster and in your inbox every Tuesday. $49 today, renewing at $39 on " +
     SEASON_2027_FIRST_RENEWAL + ", then each August. " +
-    "Cancel any time, and a full refund until your first weekly report's week kicks off.";
+    "Cancel any time, with a full refund before your first weekly report's first game.";
   $("terms-line").replaceChildren(...terms());
   $("renew-note").replaceChildren(...terms());
   $("first-tail").textContent = "Cancel any time. We email you before it bills.";
@@ -2964,11 +2963,10 @@ if (TRY_MODE) {
   // price on the page has to be the one this purchase actually costs.
   // Each manager claims their own seat, once, from the link in the buyer's
   // welcome email — nothing reaches anyone who doesn't (JOIN-7).
-  $("header-pitch").textContent = "Every manager in your league (up to 14 teams) " +
-    "gets their own report every Tuesday. You get a link to send them, and each manager " +
-    "claims their seat from it once, with their own roster. $34.99 a month for your whole " +
-    "league: it stops on its own after the title game, and there's a full refund until " +
-    "your first weekly report's week kicks off.";
+  $("header-pitch").textContent = "Every manager in your league (up to 14 teams) gets their own report every " +
+    "Tuesday. You get a link to send them, and each manager claims their seat from it " +
+    "once. $34.99 a month for your whole league: it stops on its own after the title " +
+    "game, with a full refund before your first weekly report's first game.";
   $("lbl-email").textContent = "Your email (your own report and the receipt go here)";
   // The disclosure must name the amount this plan bills, so a commissioner can
   // budget the dues (LP-I11).
@@ -2977,13 +2975,11 @@ if (TRY_MODE) {
   $("terms-line").textContent = passTerms;
 }
 function passTermsText() {
-  return "The League Pass is $34.99 USD a month for your whole league until you " +
-    "cancel, and billing stops on its own: it won't renew after Week 16's report goes " +
-    "out, and reports still run through the season's last week. Cancel any time from " +
-    "your billing page. If you " +
-    "cancel or a payment fails, every seat's reports stop too. Refunds are " +
-    "no-questions until your first weekly report's week kicks off (or a week after " +
-    "it reaches you, if we send it late). One per league.";
+  return "The League Pass is $34.99 USD a month for your whole league until you cancel, and " +
+    "billing stops on its own: it won't renew after Week 16's report goes out, and " +
+    "reports still run through the season's last week. Cancel any time from your billing " +
+    "page. If you cancel or a payment fails, every seat's reports stop too. Full refund " +
+    "before your first weekly report's first game, one per league.";
 }
 
 // Every paying mode, from the first paint: the button and the secure line say

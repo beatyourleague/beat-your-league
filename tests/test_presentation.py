@@ -555,8 +555,8 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
         # M5: the price is named once, near the top, with when it stops and
         # refund terms beside it — and nowhere else.
         assert re.findall(r"\$\d+", doc) == ["$14"]
-        assert ("$14.99 a month, and it stops on its own. Full refund, no questions, "
-                "until your first weekly report's week kicks off. One per person." in doc)
+        assert ("$14.99 a month, and it stops on its own. Full refund before your first "
+                "weekly report's first game. One per person." in doc)
     # No site, no button.
     monkeypatch.delenv("SITE_URL")
     assert "via=trial" not in render_email(trial) + text_summary(trial)

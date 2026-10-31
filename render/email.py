@@ -171,8 +171,7 @@ TRIAL_LAST_BUTTON = "Tell me when it opens"
 # sat after the whole report with no price, so a reader who stopped at the
 # lineup never learned what it costs. Worded as the landing's price card words
 # it. Nothing in the season's last week: there is no next one.
-TRIAL_REFUND = ("Full refund, no questions, until your first weekly report's "
-                "week kicks off. One per person.")
+TRIAL_REFUND = "Full refund before your first weekly report's first game. One per person."
 
 
 def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:

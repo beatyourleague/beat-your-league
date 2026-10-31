@@ -479,6 +479,10 @@ def test_the_panel_sits_straight_above_the_purchase() -> None:
     assert "<button" not in between and "<input" not in between
 
 
+def _flat_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", text)
+
+
 def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     step = _function("drawStep3")
     flat = re.sub(r'"\s*\+\s*"', "", step)
@@ -508,7 +512,7 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     assert '$("see-real").hidden = step3Action === "open";' in step
     # Terms and refund stay beside any price the step shows.
     markup = JOIN.split('id="value-line"')[1].split("</form>")[0]
-    assert 'id="terms-line"' in markup and "no-questions" in markup
+    assert 'id="terms-line"' in markup and "Full refund before" in _flat_ws(markup)
     assert "billing stops on its own" in markup
 
 

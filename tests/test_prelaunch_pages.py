@@ -269,7 +269,7 @@ def test_the_nav_is_the_lockup_and_on_a_phone_one_link() -> None:
     shown = [label for attrs, label in links if not any(hide in attrs for hide in phone)]
     assert shown == ["Sample report"], "a phone shows more than the lockup and one link"
     assert [label for _a, label in re.findall(r"<a([^>]*)>([^<]*)</a>", menu)] == [
-        "Check my team", "How it works", "Sample report", "Bye planner", "League Pass", "Pricing"]
+        rr.CHECK_LABEL, "How it works", "Sample report", "Bye planner", "League Pass", "Pricing"]
     assert "<script" not in bar, "the Menu needs no script"
     assert 'href="join/' not in rr.site_bar(check=False), "the retired study sells nothing"
     assert "@media (max-width:719px){.sitenav .hidemd{display:none;}.sitebar .sitemenu{display:block;}}" \
@@ -337,9 +337,9 @@ def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one(
     slots = re.findall(r'<div class="ctaslot"[^>]*data-lp-cta>(.*?)</div>', LEAGUE_PASS, re.S)
     assert len(slots) == 2
     for slot in slots:
-        assert re.match(r'<a class="btn gold" href="join/index\.html\?plan=pass">Try it\s+on my '
-                        r'team</a>', slot)
-        assert '<a href="index.html#watch-form">' in slot and "isn't open yet" in slot
+        assert slot.startswith('<a class="btn gold" href="join/index.html?plan=pass">'
+                               f'{rr.CHECK_LABEL}</a>')
+        assert '<a href="index.html#watch-form">' in slot and "Checkout opens soon" in slot
     main = LEAGUE_PASS.split('<main id="main">')[1].split("</main>")[0]
     closer = main.rsplit('<div class="closer" data-reveal>', 1)[1]
     assert main.rstrip().endswith("</div>") and "data-lp-cta" in closer

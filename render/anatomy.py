@@ -32,6 +32,7 @@ from typing import Any, Mapping
 
 from render import report as rr
 
+SAME_REASON = "Start · same as above"
 SECTION_ORDER = ("lineup", "closest", "plan", "ifthen", "slots", "rising", "receipts")
 
 TITLES = {
@@ -274,6 +275,7 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
                 "range": rr.range_text(you),
                 "range_label": rr.RANGE_LABEL}
     rows = []
+    said = None
     for i, slot in enumerate(rows_in):
         conf = slot.get("confidence")
         pct = rr._pct(conf) if conf is not None else None
@@ -302,6 +304,13 @@ def lineup(report: Mapping[str, Any]) -> dict[str, Any]:
             # used to print in tracked capitals ("NO BENCH QB") and read as an
             # error code. Casing only; the words are row_label's.
             label = label[:1].upper() + label[1:]
+            # Two starters held on one bench player printed one long sentence
+            # twice, which reads as a glitch. Words only: nothing about either
+            # row's seat, projection or odds changes.
+            if label.startswith("Start ·") and label == said:
+                label = SAME_REASON
+            else:
+                said = label
         rows.append({
             "i": i,
             "slot": rr.SLOT_DISPLAY.get(slot.get("slot"), slot.get("slot")),

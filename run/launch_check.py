@@ -2046,7 +2046,7 @@ def check_compliance() -> list[Gate]:
     gates.append(_gate("Compliance", "Price, billing-stop and refund terms sit above the pay button",
                        f"{MONTHLY_PRICE} USD a month" in join
                        and "billing stops on its own" in join
-                       and "Refunds are no-questions" in join,
+                       and "Full refund before your first weekly report's first game" in join,
                        "the join page's terms line lost a disclosure"))
     msg = welcome_message("x@example.com", "monthly", "abcdef0123", "2026")
     body = visible_text(msg.html)

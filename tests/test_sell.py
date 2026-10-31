@@ -433,8 +433,8 @@ def test_no_selling_page_uses_a_banned_word(name: str) -> None:
 
 def test_the_refund_line_is_a_promise_and_keeps_the_pinned_words() -> None:
     card = _flat(LANDING.split('id="pass-card"')[1].split("</ul>")[0])
-    assert ("Read your first weekly report before its games. Not for you? Full refund, no "
-            "questions, until your first weekly report's week kicks off. One per person") in card
+    assert ("Read your first weekly report. Not for you? Full refund before its first game. "
+            "One per person") in card
     # "weekly", not "first report": a buyer after a week's first game gets the
     # roster report first, and it has no games to read it before (terms §5).
     assert "Read your first report before" not in card

@@ -30,7 +30,7 @@ def test_the_season_end_puts_the_closed_state_back() -> None:
     assert 'phase === "over" ||' in SCRIPT and "closeForSeason(" in SCRIPT
     assert "last && ((landsOk && !fresh) || kicked)" in SCRIPT
     fn = LANDING.split("function closeForSeason(line) {")[1].split("\n}\n")[0]
-    for must in ('"watch-form", "watch-note"', '"try-cta", "risk-line", "hero-promise", "closer-cta"',
+    for must in ('"watch-form", "watch-note"', '"try-cta", "risk-line", "closer-cta"',
                  "el.hidden = true", "el.hidden = false", "carryVia("):
         assert must in fn, must
     # The roster check has no week left to check: the main buttons go to the
@@ -52,7 +52,7 @@ def test_the_day_one_line_names_what_actually_lands() -> None:
     for gone in ("Your first report the day you sign up", "the first on the day you join",
                  "Your first one comes the day you sign up"):
         assert gone not in LANDING, gone
-    assert TEXT.count("within the hour") >= 5
+    assert TEXT.count("within the hour") >= 3
     assert "Your first report usually lands within the hour" in TEXT
     assert "Set up now and your first report lands today." in LANDING
     # No string the page's scripts can write says it (comments may explain).

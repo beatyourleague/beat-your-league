@@ -925,7 +925,8 @@ SITE_NAV_PLANNER = "Bye planner"
 # The roster check: the site's main action, closed or open. join/ checks a
 # roster with checkout closed too, so this label is true in every state; the
 # buy label ("Get my lineups") is the landing's and the asks' to set.
-CHECK_LABEL = "Check my team"
+CHECK_LABEL = "Check my team free"
+CHECK_FOOT_LABEL = "Check my team"     # under "Free tools", where "free" is said
 SITE_MENU_CSS = (
     "  .sitemenu{display:none;position:relative;flex:none;font-family:var(--sans);\n"
     "    font-size:14px;font-weight:600;}\n"
@@ -1059,7 +1060,7 @@ def site_footer(prefix: str = "") -> str:
                      ("sample-report.html", "Sample report", ""),
                      ("this-week.html", "This week's report", " data-live-week hidden"),
                      ("league-pass.html", SITE_NAV_LEAGUE_PASS, ""))),
-        ("Free tools", (("join/index.html", CHECK_LABEL, ""),
+        ("Free tools", (("join/index.html", CHECK_FOOT_LABEL, ""),
                         ("byes/", SITE_NAV_PLANNER, ""))),
         ("Your app", (("espn/", "ESPN", ""), ("yahoo/", "Yahoo", ""),
                       ("sleeper/", "Sleeper", ""), ("cbs/", "CBS", ""))),

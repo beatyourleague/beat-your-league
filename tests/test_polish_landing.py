@@ -464,7 +464,7 @@ def test_reduced_motion_and_print_draw_every_new_motion_at_rest() -> None:
     neutralised under prefers-reduced-motion (the page is complete at rest,
     measured in Chrome: nothing runs, the scroll-linked progress bar
     included) and in print."""
-    for selector in (".heroline .clock", ".livepill .dot::after", ".stamp50",
+    for selector in (".heroline .clock", ".stamp50",
                      ".faq details[open] .a", ".watchnote.ok::before", ".watchform::after",
                      ".js .steps.armed *",
                      ".phone .screen *", ".js .reveal", ".js .stagger > *"):
@@ -533,14 +533,15 @@ function run(w) {
   const timers = [];
   global.setTimeout = (fn, ms) => { if (ms > 1000) { timers.push(ms); return 0; } return real(fn, ms); };
   const make = (id, hidden) => ({ id, hidden, textContent: "", kids: [],
-    replaceChildren(...k) { this.kids = k; }, appendChild(k) { this.kids.push(k); } });
+    replaceChildren(...k) { this.kids = k; }, appendChild(k) { this.kids.push(k); },
+    setAttribute() {} });
   const els = {};
-  for (const id of ["season-clock", "this-week-link", "this-week-label", "live-call",
+  for (const id of ["season-clock", "hero-sample", "live-call",
                     "realfoot"]) els[id] = make(id, true);
   for (const id of ["planner-link", "planner-band"]) els[id] = make(id, false);
   global.document = {
     getElementById: (id) => els[id] || null,
-    querySelectorAll: (sel) => sel === "[data-live-week]" ? [els["this-week-link"], els["realfoot"]]
+    querySelectorAll: (sel) => sel === "[data-live-week]" ? [els["realfoot"]]
       : sel === "[data-planner]" ? [els["planner-link"], els["planner-band"]] : [],
     createElement: (tag) => ({ tag, textContent: "" }), createTextNode: (t) => ({ t }),
   };
@@ -548,6 +549,7 @@ function run(w) {
   global.fetch = () => Promise.resolve({ ok: true, json: () => w });
   global.closeForSeason = () => {}; global.showPlayoffPass = () => {};
   global.PLAYOFF_PASS_READY = false; global.PLAYOFF_FROM_WEEK = 13; global.CHECKOUT_OPEN = false;
+  global.TRIAL_OPEN = false; global.VIA = undefined; global.carryVia = (href) => href;
   IIFE
   return new Promise((r) => real(() => {
     global.setTimeout = real;
@@ -630,8 +632,7 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
     line's room is reserved — two lines where two full names wrap — so its
     arrival moves nothing (CLS)."""
     assert "innerHTML" not in CLOCK_IIFE and "insertAdjacentHTML" not in CLOCK_IIFE
-    assert re.search(r'<a class="livepill"[^>]*>.*?</a>\s*<p class="livecall" id="live-call" hidden></p>',
-                     HERO, re.S)
+    assert '<p class="livecall" id="live-call" hidden></p>' in HERO
     assert ".livecall[hidden]{display:block!important;visibility:hidden;" in CSS
     assert "min-height:1.45em" in _rule(".livecall")
     assert "@media (max-width:600px){.livecall{min-height:2.9em;}}" in CSS
@@ -642,7 +643,7 @@ def test_the_live_call_is_written_as_text_into_reserved_room() -> None:
     # there: in a week without it the held room read as a gap.
     narrow = _blocks("@media (max-width:880px)")
     assert ".hero .phonewrap{order:5;" in narrow and ".hero .livecall{order:9;}" in narrow
-    assert ".livepill[hidden],.livecall[hidden]{display:none!important;}" in narrow
+    assert ".livecall[hidden]{display:none!important;}" in narrow
 
 
 def test_the_planner_is_linked_where_contract_c7_says_and_hides_with_the_season() -> None:
@@ -676,12 +677,12 @@ def test_the_landing_reads_in_impulse_buyer_order() -> None:
     report annotated, rankings against the report, the price, the FAQ and
     the closer."""
     heads = [_flat(h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", BODY, re.S)]
-    assert heads == ["Paste once, then just play", "Everything Sunday needs, by Tuesday",
+    assert heads == ["Paste once, then play", "Everything Sunday needs, by Tuesday",
                      "Rankings rank. Your report decides",
                      "Take it through your title game.",
                      "Before you ask the group chat", "Your lineup, decided every Tuesday."], heads
     # Six page sections; the report's own cards are <section class="card">.
-    assert len(re.findall(r'<section\b(?! class="card")', BODY)) == 6
+    assert len(re.findall(r'<section\b(?! class="card")', BODY)) == 7   # with the scene
 
 
 def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
@@ -695,7 +696,7 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     # their own app, and "sets your lineup" read as automation.
     # Oct 30 2026: it opens on what a wrong call costs, then what the email does.
     assert sub == ("One wrong call can cost you the week. Every Tuesday, one email decides "
-                   "your lineup for your team, through your title game.")
+                   "your lineup, through your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     # The comparison contrasts a rankings list with the report (Oct 25
     # 2026: the weakest answer was "why pay when rankings are free"), now

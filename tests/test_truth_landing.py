@@ -147,7 +147,12 @@ def test_the_phone_carries_the_emails_own_words_section_by_section() -> None:
     masthead = _squash(_phone_section("masthead"))
     assert masthead.startswith("BeatYourLeague") and "Week10" in masthead, masthead
     if "masthead" in email:
-        want = _squash(email["masthead"])
+        # One difference, on purpose: a phone's masthead says "Sample report"
+        # where a replayed report's own stamp reads like a build log.
+        from render.phone import SAMPLE_STAMP
+        want = _squash(email["masthead"]).replace(
+            _squash(anatomy.masthead(report)["stamp"]),
+            _squash(SAMPLE_STAMP.format(season=report["meta"]["season"])))
         assert want.startswith(masthead), (masthead, want)
         rest = want[len(masthead):]
         for part in band_parts:
@@ -156,7 +161,11 @@ def test_the_phone_carries_the_emails_own_words_section_by_section() -> None:
     else:
         # Unmarked, the masthead is the last thing before the first section:
         # only the hidden inbox preview comes ahead of it.
-        assert _squash(email["lead"]).endswith(masthead), (masthead, _squash(email["lead"]))
+        from render.phone import SAMPLE_STAMP
+        lead = _squash(email["lead"]).replace(
+            _squash(anatomy.masthead(report)["stamp"]),
+            _squash(SAMPLE_STAMP.format(season=report["meta"]["season"])))
+        assert lead.endswith(masthead), (masthead, lead)
     for key in ("lineup", "closest"):
         assert key in email, f"the email marks no {key} section"
         want = _squash(email[key])
@@ -266,7 +275,7 @@ def test_the_league_pass_teaser_has_no_price_and_no_chat_bubble() -> None:
     assert 'href="league-pass.html"' in text
     terms = re.sub(r"\s+", " ", re.search(r'class="lpterms">(.*?)</span>', text, re.S).group(1))
     assert terms == ("$34.99 a month for the whole league. Stops on its own. Full refund "
-                     "until your first weekly report's week kicks off. One per league.")
+                     "before your first weekly report's first game. One per league.")
     assert re.findall(r"\$\d+", text) == ["$34"]
     pricing = BODY.split('<section id="pricing">')[1].split("</section>")[0]
     assert '<p class="lpline">' in pricing and pricing.count('class="plan ') == 1
@@ -286,15 +295,16 @@ def test_the_landing_stays_inside_its_word_budget() -> None:
     words = count(LANDING)
     # Lowered Oct 30 2026 from 1,250: the mid-season narrative pass took it to
     # 1,241 while adding the value line, and the page may only get shorter:
-    # 1229 once the founding line came off (Oct 31 2026).
-    assert words <= 1229, f"the landing is {words} words"
+    # 1229 once the founding line came off (Oct 31 2026), 1187 after the
+    # owner's sell review the same day.
+    assert words <= 1187, f"the landing is {words} words"
     # The words somebody wrote by hand, without the generated report text
     # and without comments: 952 before the rebuild, 781 after it. 859 before
     # the owner's Oct 30 2026 League Pass strip and nav link, which added 33
     # words because a price carries its terms; the total cap did not move.
     hand = re.sub(r"<!-- (phone|shot):start -->.*?<!-- \1:end -->", "", LANDING, flags=re.S)
     hand = count(re.sub(r"<!--.*?-->", "", hand, flags=re.S))
-    assert hand <= 864, f"the landing's own copy is {hand} words"
+    assert hand <= 830, f"the landing's own copy is {hand} words"
 
 
 # --------------------------------------------------------------------- #

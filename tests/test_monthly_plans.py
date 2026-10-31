@@ -255,7 +255,7 @@ def test_the_buy_page_discloses_above_the_button() -> None:
     assert f"{MONTHLY_PRICE} USD a month until you cancel" in block
     assert "billing stops on its own" in block
     assert "it won't renew after Week 16's report goes out" in block
-    assert "Refunds are no-questions" in block
+    assert "Full refund before your first weekly report's first game" in block
     assert f'Unlock my lineups — {MONTHLY_PRICE}/mo' in join
 
 

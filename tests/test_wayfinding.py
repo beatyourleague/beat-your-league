@@ -112,17 +112,16 @@ def test_the_roster_check_is_the_main_action_with_checkout_closed() -> None:
     static = LANDING.split("<script>")[0]
     for cta in ("nav-cta", "hero-open", "closer-cta", "sticky-cta"):
         assert re.search(rf'<a class="btn gold" id="{cta}" href="join/index\.html">'
-                         r"Check my team</a>", static), cta
+                         r"Check my team free</a>", static), cta
     card = static.split('id="pass-card"')[1].split('<p class="finance"')[0]
     assert re.search(r'id="season-cta" href="#watch-form"[^>]*>Tell me when it opens</a>', card)
     assert "Check my team" not in card, "two decisions on the price card"
-    # The line under the hero's button says what happens, once.
-    promise = re.search(r'<p class="promise" id="hero-promise">(.*?)</p>', static).group(1)
-    assert promise == "Paste your roster. See the calls on your team in seconds. No card."
+    # The closer says what the button does; "free" on the button says the rest.
+    assert '<p id="closer-note">Paste your roster. See the calls on your team in seconds.</p>' \
+        in static
     # Open, every one of them turns into the buy label on the same page.
     opened = LANDING.split("if (CHECKOUT_OPEN) {", 1)[1].split("if (CHECKOUT_CAN_COMPLETE)")[0]
     assert 'heroOpen.textContent = "Get my lineups";' in opened
-    assert 'promise.hidden = true;' in opened
     for cta in ("nav-cta", "sticky-cta", "closer-cta"):
         assert f'"{cta}"' in opened
 
@@ -146,8 +145,9 @@ def test_the_apps_and_the_planner_have_a_visible_home_on_the_landing() -> None:
     for slug, name in (("espn", "ESPN"), ("yahoo", "Yahoo"), ("sleeper", "Sleeper"), ("cbs", "CBS")):
         assert f'<a href="{slug}/">{name}</a>' in creds, name
     # A standing line, gated with the callout: no byes left, no planner.
+    pricing = BODY.split('<section id="pricing">')[1].split("</section>")[0]
     assert re.search(r'<p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a>',
-                     BODY)
+                     pricing), "the planner line sits under the price, never before it"
 
 
 @pytest.mark.parametrize("name", NEXT_STEP)
@@ -156,7 +156,7 @@ def test_every_proof_and_tool_page_ends_with_the_same_next_step(name: str) -> No
     page = markup_only(_page(name))
     main = page.split("<footer", 1)[0]
     assert re.search(r'<a class="(?:btn gold|golink)"[^>]*href="(?:\.\./)?join/index\.html'
-                     r'(?:\?t=[a-z0-9-]+)?"[^>]*>Check my team</a>', main), name
+                     r'(?:\?t=[a-z0-9-]+)?"[^>]*>Check my team free</a>', main), name
 
 
 @pytest.mark.parametrize("name", NEXT_STEP + ("index.html",))
@@ -198,7 +198,7 @@ def test_a_season_that_is_over_sends_the_main_buttons_to_the_capture() -> None:
     fn = "function closeForSeason(line) {" + \
         LANDING.split("function closeForSeason(line) {")[1].split("\n}\n")[0] + "\n}"
     ids = ["hero-open", "nav-cta", "sticky-cta", "closer-cta", "try-cta", "risk-line",
-           "hero-promise", "closer-note", "season-clock", "watch-label"]
+           "closer-note", "season-clock", "watch-label"]
     script = LANDING_CLOSE % {"ids": json.dumps(ids), "fn": fn}
     out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
     got = json.loads(out.stdout)
@@ -206,7 +206,7 @@ def test_a_season_that_is_over_sends_the_main_buttons_to_the_capture() -> None:
                        ("nav-cta", "Notify me")):
         assert got[cta]["attrs"]["href"] == "#watch-form" and got[cta]["textContent"] == label
         assert got[cta]["hidden"] is False
-    assert got["closer-cta"]["hidden"] and got["hero-promise"]["hidden"]
+    assert got["closer-cta"]["hidden"]
     assert got["season-clock"]["textContent"].endswith("last report has gone out.")
     assert "checkout opens" in got["closer-note"]["textContent"]
     assert "Not ready" not in got["watch-label"]["textContent"]

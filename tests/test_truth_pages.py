@@ -153,7 +153,7 @@ def test_the_dark_page_draws_hairlines_not_shadows() -> None:
     card = page.split('<div class="price" data-reveal>')[1].split('<p class="see">')[0]
     words = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", card))
     for term in ("$34.99", "Stops on its own after the title game",
-                 "refund until your first weekly report"):
+                 "Full refund before its first game"):
         assert term in words, term
     # The group-chat line lives here, shareable: the one copy of it (the
     # landing's bubble is the landing builder's to retire).
@@ -192,10 +192,9 @@ def test_the_join_header_carries_the_price_with_its_terms_and_no_chips() -> None
     page = _page("join/index.html")
     assert 'id="header-chips"' not in page and "beta-chips" not in page
     pitch = re.sub(r"\s+", " ", re.search(r'<p id="header-pitch">(.*?)</p>', page, re.S).group(1))
-    assert pitch == ("Every lineup from here to your title game, decided for your roster and in "
-                     "your inbox every Tuesday. <b>$14.99 a month</b>: it stops on its own "
-                     "after your title game, and there's a full refund until your first weekly "
-                     "report's week kicks off.")
+    assert pitch == ("See the calls on your team in seconds, free. The weekly report is "
+                     "<b>$14.99 a month</b>: it stops on its own after your title game, with a "
+                     "full refund before your first weekly report's first game.")
     label = re.search(r"function closedLabel\(action\) \{.*?\n\}\n", page, re.S).group(0)
     assert label.rstrip().endswith('return closedChipText();\n}')
     note = re.search(r"\n  header #closed-note\{([^}]*)\}", _style(page)).group(1)
@@ -257,7 +256,7 @@ def test_thanks_holds_six_paper_cards_and_one_button() -> None:
     """The six 'what happens' cards had gold and navy 4px top bars; they are
     paper cards now (12px, a 1px border), a 13px slate kicker over a 15px
     title, and only "Send it to them" is a button. Its sections number
-    themselves 01-04, like every page and the report."""
+    themselves 01-03, like every page and the report."""
     page = _page("thanks.html")
     css = _style(page)
     for sel in (".steps li", ".nextcard"):
@@ -270,7 +269,7 @@ def test_thanks_holds_six_paper_cards_and_one_button() -> None:
     assert block.count("nextcard") == 3 and block.count('class="btn') == 1
     assert '<button type="button" class="btn gold" id="friend-share">Send it to them</button>' in block
     numbers = re.findall(r'<h2><span class="n">(\d\d)</span>', page)
-    assert numbers == ["01", "02", "03", "04"]
+    assert numbers == ["01", "02", "03"]
 
 
 def test_the_app_pages_steps_are_one_card_with_numbered_circles() -> None:

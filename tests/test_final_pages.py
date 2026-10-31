@@ -31,7 +31,7 @@ EMAIL_CHECK = (SITE / "email-check.js").read_text(encoding="utf-8")
 # Contract C5: the odds-gate clause, identical everywhere it appears.
 GATE_CLAUSE = ("only where both players are playing, off the injury report and have "
                "enough games on record (never on team defenses)")
-REFUND_BESIDE_PRICE = "a full refund until your first weekly report's week kicks off"
+REFUND_BESIDE_PRICE = "a full refund before your first weekly report's first game"
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node not available")
 
@@ -153,8 +153,8 @@ def test_the_one_time_offer_carries_no_subscription_leftovers() -> None:
                  "league-pass.html"):
         text = _flat((SITE / name).read_text(encoding="utf-8"))
         assert not re.search(r"re-?subscri", text, re.I), name
-    # Twice for the pass, once for the 2027 pass's own terms (built switched off).
-    assert _flat(JOIN).count("a second purchase after a refund is final") == 3
+    # The page says "one per person"; the terms and Stripe carry the full limit.
+    assert "second purchase" in _flat((SITE / "terms.html").read_text(encoding="utf-8"))
     assert '"Monthly opens soon"' in _js_function(JOIN, "closedChipText")
     assert "Season pass opens soon" not in JOIN
     assert "yearly plan" not in HOW
@@ -355,8 +355,10 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     # Review BUYER-2: the step defines the % in the report's own words
     # (render.report.ODDS_DEFINITION) before it says where it prints — the
     # landing's only readable definition of its one number.
-    assert ("The % is the chance your starter outscores your best bench player at that "
-            "spot, printed " + GATE_CLAUSE + ".") in step
+    # Owner review, Oct 31 2026: the definition stays and the where-it-prints
+    # clause leaves the callout (38 words), since every row without odds says why.
+    assert ("The chance your starter outscores your best bench player at that spot. "
+            "Rows without odds say why.") in step
     assert "odds" not in _flat(JOIN.split("<script")[0]).lower().replace("the odds " + GATE_CLAUSE, "")
     for name in ("index.html", "join/index.html", "how-it-works.html", "thanks.html",
                  "league-pass.html"):
@@ -387,23 +389,22 @@ def test_the_refund_sits_under_the_heros_buy_button_with_no_price() -> None:
     price in the hero line (the hero rule)."""
     block = LANDING.split("if (CHECKOUT_OPEN) {")[1].split("if (CHECKOUT_CAN_COMPLETE)")[0]
     risk = _flat(block[block.index('const heroRow'):block.index("heroRow.after(risk)")])
-    assert "Full refund, no questions, until your first weekly report's week kicks off" in risk
+    assert "Full refund before your first weekly report's first game" in risk
     assert "$" not in risk
     assert '"risk-line"' in _js_function(LANDING, "closeForSeason")
     card = _flat(LANDING.split('id="pass-card"')[1].split("</section>")[0])
-    assert "Full refund, no questions, until your first weekly report's week kicks off" in card
+    assert "Not for you? Full refund before its first game" in card
 
 
 def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
     """Copy review: the page's best hook ("He was on your bench. He went for
-    30. You lost by four.") sat after four feature tiles. It moved up to the
-    first section after the hero, and since the owner's Oct 28 2026 plan it
-    is the hero's own last line — the punchline under the headline and the
-    phone, before any section (the trust strip that shared its rule went
-    with contract B3)."""
-    hero = LANDING.split('<header class="hero">', 1)[1].split("</header>", 1)[0]
-    punch = re.search(r'<p class="punch">(.*?)</p>\s*$', hero, re.S)
-    assert punch, "the Sunday scene is not the hero's last line"
+    30. You lost by four.") sat after four feature tiles, then in a thin strip
+    at the hero's foot. Owner review, Oct 31 2026: it is the first section
+    after the hero, with the page to itself."""
+    after = LANDING.split("</header>", 1)[1].split('<section class="how"', 1)[0]
+    punch = re.search(r'<section class="scene"[^>]*>\s*<p class="punch" id="punch">(.*?)</p>',
+                      after, re.S)
+    assert punch, "the Sunday scene does not follow the hero"
     words = re.sub(r"<[^>]+>", "", punch.group(1))  # each sentence wraps as a unit
     assert "He was on your bench. He went for 30. You lost by four." in _flat(words)
     assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
@@ -436,7 +437,7 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     ld = next(q for q in faqs if q["name"] == "Is it worth joining mid-season?")
     assert ld["acceptedAnswer"]["text"] == answer
     assert answer.startswith("Yes. It's built for the playoff push.")
-    assert "usually lands within the hour" in answer
+    assert "Every report checks the byes ahead" in answer
     assert "Subscribers alone pay for it" not in LANDING
 
 
@@ -502,9 +503,9 @@ setTimeout(() => console.log(JSON.stringify({ closed,
   hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent })), 50);
 """
     start = {"season-clock": "Checkout is open." if open_ else "A new report every Tuesday of the season.",
-             "hero-open": "Get my lineups" if open_ else "Check my team",
-             "closer-cta": "Get my lineups" if open_ else "Check my team",
-             "sticky-cta": "Get my lineups" if open_ else "Check my team",
+             "hero-open": "Get my lineups" if open_ else "Check my team free",
+             "closer-cta": "Get my lineups" if open_ else "Check my team free",
+             "sticky-cta": "Get my lineups" if open_ else "Check my team free",
              "this-week-label": ""}
     if open_ and can:
         start["open-line"] = " Set up now and your first report lands today."
@@ -537,7 +538,7 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     assert got["hero"] == got["closer"] == "Get my lineups"
     closed = _clock(mid, "2026-10-28T16:00:00Z", open_=False)
     assert closed["clock"] == "Week 9's report lands Tuesday."
-    assert closed["hero"] == closed["closer"] == "Check my team"
+    assert closed["hero"] == closed["closer"] == "Check my team free"
 
 
 @needs_node

@@ -72,20 +72,19 @@ def test_the_phones_week_is_the_archived_sample() -> None:
     masthead = SCREEN.split('<div class="mh">')[1].split('<section class="card"')[0]
     assert "Week 10" in _flat(masthead)
     stamp = _flat(re.search(r'<div class="mh-stamp">(.*?)</div>', masthead, re.S).group(1))
-    assert "2024 season archive" in stamp, stamp
+    assert stamp == "Sample report · 2024 season", stamp
     tag = HERO.split('<p class="realtag">')[1].split("</p>")[0]
     assert "2024" in tag and "Week 10" in _flat(tag), "the sample's week left its caption"
     phones = CSS.split("@media (max-width:880px){\n")[1]
     assert _flat(tag).strip().startswith("2024"), "the caption no longer leads with the year"
     order = {name: int(re.search(r"\.hero \." + name + r"\{order:(\d+)", phones).group(1))
-             for name in ("heroline", "promise", "cta-row", "phonewrap", "livepill", "livecall")}
-    assert order["phonewrap"] < order["heroline"] <= order["promise"] < order["cta-row"], order
-    assert order["cta-row"] == order["livepill"] == order["livecall"], order
-    assert HERO.index('<div class="cta-row">') < HERO.index('<a class="livepill"') \
-        < HERO.index('<p class="livecall"')
-    # The clock stays above the row, closed and open (equal orders keep source
-    # order: the clock's line comes first in the markup).
-    assert HERO.index('<p class="heroline">') < HERO.index('<div class="cta-row">')
+             for name in ("cta-row", "phonewrap", "livecall")}
+    assert order["phonewrap"] < order["cta-row"] == order["livecall"], order
+    assert HERO.index('<div class="cta-row">') < HERO.index('<p class="livecall"')
+    # Owner review, Oct 31 2026: the clock names a week beside the price, never
+    # beside the phone's Week 10.
+    assert '<p class="heroline">' not in HERO
+    assert '<h2>Take it through your title game.</h2>\n  <p class="heroline">' in LANDING
     assert "can-buy" not in LANDING
 
 
@@ -185,62 +184,47 @@ def test_every_closest_call_bar_on_the_landing_is_drawn_from_fifty() -> None:
         assert int(row[0]) == (int(row[1]) - 50) * 2, row
 
 
-def test_the_live_report_chip_waits_for_the_heros_rule_and_names_its_week() -> None:
-    """M4, reproduced: this week's 2026 report was four words of small
-    underlined text ("see this week's") at the fold under a phone showing a
-    2024 week. It is a link of its own under the season clock now, still shown only by
-    the three-odds rule, and it names the day it was built — "this week's",
-    never a week number (sales review: with the clock's week and the
-    sample's, a third number read as three weeks at once).
-    Run under node: a week.json with 3 odds reveals it labelled from the
-    file; one with 2 leaves it hidden and untouched."""
-    chip = re.search(r'<a class="livepill"[^>]*>', HERO).group(0)
-    assert 'id="this-week-link"' in chip and "data-live-week" in chip and "hidden" in chip
-    assert 'href="this-week.html"' in chip
-    assert ".livepill[hidden]{display:inline-flex!important;visibility:hidden;}" in CSS, \
-        "the chip's room is not reserved, so its arrival shifts the hero (CLS)"
+def test_the_heros_one_link_opens_this_weeks_report_only_on_the_heros_rule() -> None:
+    """M4 wanted this week's 2026 report reachable from the hero; contract C2
+    wanted one secondary. Owner review, Oct 31 2026: a third link was one too
+    many, so the hero's one link IS it in a week that passes the three-odds
+    rule, and never otherwise. Run under node."""
     clock = LANDING.split("// The season clock.")[1]
     iife = clock[clock.index("(function () {"):clock.index("})();") + 5]
     harness = r"""
-const make = (id) => ({ id, hidden: true, textContent: "or this week's report",
-  replaceChildren() {}, appendChild() {} });
+const make = (id) => ({ id, hidden: true, textContent: "See a real report", attrs: {},
+  setAttribute(k, v) { this.attrs[k] = v; }, replaceChildren() {}, appendChild() {} });
 function run(w) {
-  const els = { "season-clock": make("season-clock"), "this-week-link": make("this-week-link"),
-                "this-week-label": make("this-week-label"), "realfoot": make("realfoot") };
+  const els = { "season-clock": make("season-clock"), "hero-sample": make("hero-sample"),
+                "realfoot": make("realfoot") };
   global.document = {
     getElementById: (id) => els[id] || null,
-    querySelectorAll: (sel) => sel === "[data-live-week]"
-      ? [els["this-week-link"], els["realfoot"]] : [],
+    querySelectorAll: (sel) => sel === "[data-live-week]" ? [els["realfoot"]] : [],
     createElement: () => make("x"), createTextNode: (t) => ({ t }),
   };
   global.window = { fetch: true, AbortSignal: null };
   global.fetch = () => Promise.resolve({ ok: true, json: () => w });
   global.closeForSeason = () => {}; global.showPlayoffPass = () => {};
   global.PLAYOFF_PASS_READY = false; global.PLAYOFF_FROM_WEEK = 13;
+  global.TRIAL_OPEN = false; global.VIA = undefined; global.carryVia = (href) => href;
   IIFE
   return new Promise((r) => setTimeout(() => r({
-    hidden: els["this-week-link"].hidden, label: els["this-week-label"].textContent }), 50));
+    text: els["hero-sample"].textContent, href: els["hero-sample"].attrs.href || "" }), 50));
 }
 const base = { season: "2026", week: 7, last_week: 18, lands_on: "2999-01-05",
   built_at: "2026-10-20T17:15:45+00:00", closest_call: true, cards: true,
   first_kickoff: "2999-01-01T00:15:00Z" };
-// One at a time: each run swaps the globals the page script reads.
 (async () => {
   const out = [];
   for (const w of [{ ...base, odds: 3 }, { ...base, odds: 2 },
-                   { ...base, odds: 3, built_at: "garbage" },
                    { ...base, odds: 3, cards: undefined },
                    { ...base, odds: 3, cards: "true" }]) out.push(await run(w));
   console.log(JSON.stringify(out));
 })();
 """.replace("IIFE", iife)
-    shown, held, undated, old_layout, loose = _node(harness)
-    assert shown == {"hidden": False, "label": "or this week's report (built Tue, Oct 20)"}
-    assert held == {"hidden": True, "label": "or this week's report"}
-    assert undated == {"hidden": False, "label": "or this week's report"}
-    # Review BUYER-1: a page built before the card stack (no `cards` on its
-    # clock, as the Oct 20 build wrote it) is not offered beside the phone.
-    assert old_layout == loose == {"hidden": True, "label": "or this week's report"}
+    shown, held, old_layout, loose = _node(harness)
+    assert shown == {"text": "See this week's report", "href": "this-week.html"}
+    assert held == old_layout == loose == {"text": "See a real report", "href": ""}
 
 
 # --------------------------------------------------------------------- #
@@ -264,7 +248,7 @@ def test_a_phone_sees_any_app_no_login_before_the_phone_mockup() -> None:
         assert re.fullmatch(r"-?\d+", value.strip()), f"{sel} order:{value} is not an integer"
     num = {k: int(v) for k, v in orders.items()}
     assert num[".hero .sub"] < num[".hero .creds"] < num[".hero .phonewrap"] \
-        < num[".hero .heroline"] < num[".hero .cta-row"], num
+        < num[".hero .cta-row"], num
     # The report, then the action: closed or open, the phone never sits under it.
 
 
@@ -479,7 +463,8 @@ def test_the_live_report_link_never_promotes_a_page_with_subscription_terms() ->
     from render import report as rr
     from test_site import SITE
 
-    link = re.search(r'<a class="livepill"[^>]*href="([^"]+)"', HERO).group(1)
+    link = "this-week.html"     # where the hero's one link goes in a week like this
+    assert re.search(r'heroLink\.setAttribute\("href", carryVia\("this-week\.html", VIA\)\)', LANDING)
     target = (SITE / link).read_text(encoding="utf-8")
     if rr.SELLING_ONE_TIME:
         for subscription in ("billing page", "does not stop a subscription",
@@ -493,24 +478,6 @@ def test_the_live_report_link_never_promotes_a_page_with_subscription_terms() ->
         for ask in re.findall(r'<a class="btn[^"]*" href="join/[^"]*">([^<]*)</a>',
                               markup_only(target)):
             assert ask == rr.CHECK_LABEL, f"{link} sends buyers into a closed checkout"
-
-
-def test_the_live_report_link_is_a_text_link_not_a_third_button() -> None:
-    """Review (low), contract C2: the live-report "chip" was bordered,
-    padded, bold and gold-tinted with an arrow — a third button-like control
-    stacked between the gold form button and the ghost "See a real report"
-    (measured at 1440: y=700, between the two). It is a text link with the
-    live dot: no border, no fill, no horizontal padding, its room still
-    reserved so its arrival moves nothing."""
-    rule = re.search(r"\n  \.livepill\{([^}]*)\}", CSS).group(1)
-    for prop in ("border:", "background:", "border-radius"):
-        assert prop not in rule, f"the live link is drawn as a box again ({prop})"
-    pad = re.search(r"padding:([^;]+);", rule).group(1).split()
-    assert len(pad) == 2 and pad[1] == "0", f"the live link has a padded box: {pad}"
-    assert not re.search(r"\.livepill:hover\{[^}]*(?:border|background)", CSS)
-    assert ".livepill[hidden]{display:inline-flex!important;visibility:hidden;}" in CSS
-    chip = re.search(r'<a class="livepill"[^>]*>', HERO).group(0)
-    assert "btn" not in chip
 
 
 def test_the_sticky_bar_hides_while_the_pricing_cards_button_is_on_screen() -> None:
@@ -626,8 +593,10 @@ def test_a_phone_has_a_route_to_the_price() -> None:
     where the nav's Pricing shows). A text link, never a third button, and no
     price figure in the hero."""
     closer = BODY.split('<section class="closer">')[1].split("</section>")[0]
-    for where, block in (("hero", HERO), ("closer", closer)):
-        assert re.search(r'<a class="textlink onlysm" href="#pricing">See pricing</a>', block), where
+    # Owner review, Oct 31 2026: the hero keeps one link; the Menu and the
+    # closer carry the route to the price on a phone.
+    assert re.search(r'<a class="textlink onlysm" href="#pricing">See pricing</a>', closer)
+    assert 'href="#pricing">Pricing</a>' in BODY.split('class="sitemenu-list"')[1]
     assert ".cta-row .onlysm{display:none;}" in CSS
     assert ".cta-row .onlysm{display:inline-block;}" in _block(CSS, "@media (max-width:599px)")
     assert "$" not in _flat(HERO)

@@ -1381,6 +1381,36 @@ claims first recorded here). A price can be cut later; raising one is harder. Ru
 - **Before next preseason:** `MONTHLY_PAUSED` closes Monthly while `week.json` says preseason, and
   no other plan is on sale then, so the 2027 season pass needs its link before August.
 
+**The sell review (owner decision, Oct 31 2026).** "Direct, fewer words, a lot better." The story
+held; the words and choices at the moments of deciding were too many. Landing 1,229 → 1,187 words
+(830 by hand), buy page 1,018 → 917, League Pass 1,127 → 1,071, thanks 685 → 559. Rules it left:
+- **One name for the first action.** `render.report.CHECK_LABEL` is "Check my team free" on every
+  way in; `CHECK_FOOT_LABEL` drops "free" under the footer's "Free tools"; the button on join/ itself
+  is "Check my team". `#season-clock` lives in the pricing section now, beside the price.
+- **The hero is a sentence, the apps line, one button and one link.** In a week that passes the
+  three-odds rule the one link IS this week's report (the script rewrites `#hero-sample`), so no
+  third link returns.
+- **The bench line has its own section** (`.scene`), straight after the hero. **How it works ends
+  on real things** (the paste, the inbox row, the report's own task), never drawn icons; steps 02
+  and 03 quote the sample's own words, held to the phone by test.
+- **join/ opens on the roster.** The settings are one line under the box, in `#step-league`
+  (a div now), the button after it with `form="form-roster"`. The steps read Your roster, Your
+  calls, Checkout. **The price stays in the page's first line, with its stop and refund beside it:**
+  a page that hides that it charges until someone has invested effort may not come back, which
+  is why the first draft's "Free, no card." alone failed the suite and was right to.
+- **The selling refund sentence is "Full refund before your first weekly report's first game."**
+  (the price card: "Not for you? Full refund before its first game."). Same window as terms §5:
+  "kicks off" is the first game of the week that report covers. terms.html, the welcome email and
+  Stripe's text keep the exact defined wording, the late-send clause and "a second purchase after
+  a refund is final"; every other surface carries "one per person/league". The short terms line
+  above the buy button is on LAUNCH §12's lawyer list.
+- **A phone's masthead says "Sample report · 2024 season"** (`render.phone.SAMPLE_STAMP`); the
+  sample's own page keeps its "Rebuilt …" stamp. **Two rows held on one bench player** print the
+  sentence once, then "Start · same as above" (`render.anatomy.SAME_REASON`): words only, in the
+  shared card model, so web, email and phone agree.
+- **The League Pass page keeps its "Ask the league first" line**; the worked example with blanks
+  below it went. The four reasons and all eight FAQ answers stayed.
+
 **The pricing review (owner decision, Oct 31 2026).** Asked whether the prices were right, the
 answer was to hold both, with four changes. Read from each vendor's own page that day:
 month-to-month paid tiers are PFF+ $9.99, FantasyPros $11.99/$16.99/$22.99, FootClan $7.99/$15.99,

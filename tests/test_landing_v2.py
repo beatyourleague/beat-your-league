@@ -76,11 +76,16 @@ def test_the_hero_has_one_action_one_secondary_and_ends_on_the_scene() -> None:
     gold = re.findall(r'<(?:a|button)\b[^>]*class="btn gold"[^>]*>', HERO)
     visible = [g for g in gold if " hidden" not in g]
     assert len(visible) == 1 and 'id="hero-open"' in visible[0], gold
-    assert re.search(r'<a class="btn gold" id="hero-open" href="join/index\.html">Check my team</a>',
+    assert re.search(r'<a class="btn gold" id="hero-open" href="join/index\.html">Check my team free</a>',
                      HERO)
-    assert re.search(r'<a class="btn ghost" id="hero-sample" href="sample-report.html">'
+    assert re.search(r'<a class="textlink" id="hero-sample" href="sample-report.html">'
                      r'See a real report</a>', HERO)
-    assert re.search(r'<p class="punch">.*?</p>\s*$', HERO, re.S)
+    # Owner review, Oct 31 2026: one button and one link; the rest moved or went.
+    assert len(re.findall(r"<a\b(?![^>]*hidden)[^>]*>", HERO.split('<div class="cta-row">')[1]
+                          .split("</div>")[0])) == 2
+    for gone in ('id="hero-promise"', 'id="this-week-link"', 'id="season-clock"',
+                 'class="punch"'):
+        assert gone not in HERO, gone
     assert "$" not in _flat(HERO)
     assert "<h1>Know who <em><span>to start.</span></em></h1>" in HERO
 
@@ -89,43 +94,34 @@ def test_the_hero_has_one_action_one_secondary_and_ends_on_the_scene() -> None:
 # how it works: three pictures
 # --------------------------------------------------------------------- #
 
-def test_how_it_works_is_three_pictures_in_a_few_words_each() -> None:
-    """Three steps, each a custom inline picture (decorative, so hidden from
-    assistive tech: the words carry the meaning), a title of at most four
-    words and a line of at most seven — about eight words a step, ten at most."""
+def test_how_it_works_is_three_real_things_in_a_few_words_each() -> None:
+    """Three steps, each ending on a real piece of the product rather than a
+    drawn icon (owner review, Oct 31 2026: they read as stock art): a title of
+    at most four words and a line of at most seven. Step 02 and 03 quote the
+    pinned sample's own words, the ones the phone above them shows."""
     how = _section("how")
     steps = re.findall(r'<li class="step">(.*?)</li>', how, re.S)
     assert len(steps) == 3
-    for step in steps:
-        assert re.search(r'<span class="sicon" aria-hidden="true"><svg viewBox="0 0 96 96">', step)
+    for step, piece in zip(steps, ('class="paste"', 'class="inboxrow"', 'class="taskrow"')):
+        assert piece in step and "<svg" not in step
         title = _flat(re.search(r"<h3>(.*?)</h3>", step).group(1))
         line = _flat(re.search(r"<p>(.*?)</p>", step).group(1))
         assert len(title.split()) <= 4 and len(line.split()) <= 7, (title, line)
-        assert len(title.split()) + len(line.split()) <= 10, (title, line)
         assert "<img" not in step and "url(" not in step
-    # The line to the next picture: on the first two only.
-    assert [("wire" in s) for s in steps] == [True, True, False]
+    subject = re.search(r'<span class="subj">(.*?)</span>', LANDING).group(1)
+    assert f"<span>{subject}</span>" in steps[1]
+    task = _flat(LANDING.split('id="hero-card"')[1].split('class="chip due">')[1].split("<")[0])
+    assert "Set this lineup" in steps[2] and html.unescape(task) in html.unescape(_flat(steps[2]))
 
 
 def test_how_it_works_moves_on_the_compositor_once_and_holds_offscreen() -> None:
-    """Transform and opacity only, every keyframe; played once (nothing
-    infinite); animations exist only on an ARMED list and stay paused until
-    it is in view (.go) and while it is out of it (.off). The script arms it
-    only when it starts below the fold, never under reduced motion, and an
-    observer that never reports leaves the finished picture."""
-    names = set(re.findall(r"@keyframes (hiw-[\w-]+)\{", CSS))
-    assert {"hiw-rise", "hiw-line", "hiw-vline", "hiw-pop", "hiw-kick"} <= names
-    for name in names:
-        props = set(re.findall(r"([a-z-]+)\s*:", _keyframes(name)))
-        assert props <= {"opacity", "transform"}, (name, props)
-    for sel, body in re.findall(r"\n  ([^{}@]+)\{([^}]*animation[^}]*)\}", CSS):
-        if "hiw-" in body or ".steps" in sel:
-            assert ".js .steps.armed" in sel, sel
-            assert "infinite" not in body, sel
-    assert "animation-play-state:paused;" in re.search(
-        r"\.js \.steps\.armed :is\([^)]*\)\{([^}]*)\}", CSS).group(1)
-    assert re.search(r"\.js \.steps\.armed\.go:not\(\.off\) :is\([^)]*\)\{\s*"
-                     r"animation-play-state:running;\}", CSS)
+    """Armed only below the fold, transform and opacity only, once, held while
+    off screen, and a failsafe if the observer never reports."""
+    assert set(re.findall(r"@keyframes (hiw-[\w-]+)\{", CSS)) == {"hiw-text"}
+    props = set(re.findall(r"([a-z-]+)\s*:", _keyframes("hiw-text")))
+    assert props <= {"opacity", "transform"}, props
+    assert ".js .steps.armed .step{animation:hiw-text .5s var(--ease-out) backwards paused;}" in CSS
+    assert ".js .steps.armed.go:not(.off) .step{animation-play-state:running;}" in CSS
     arm = SCRIPT.split('const steps = document.querySelector(".steps");')[1].split("\n}\n")[0]
     assert "!reduced" in arm and "getBoundingClientRect().top >= window.innerHeight" in arm
     assert 'steps.classList.toggle("off", !e.isIntersecting)' in arm
@@ -141,27 +137,15 @@ def test_reduced_motion_and_print_show_the_finished_pictures() -> None:
         block = _blocks(query)
         assert ".js .steps.armed *{animation:none!important;}" in block, query
     raw = re.search(r"\n  \.paste \.raw\{([^}]*)\}", CSS).group(1)
-    assert "opacity:.4" in raw
+    assert "opacity:.55" in raw
     assert "opacity" not in re.search(r"\n  \.paste \.ok\{([^}]*)\}", CSS).group(1)
 
 
-def test_how_it_works_plays_in_about_a_second_and_a_half() -> None:
-    """Sales review: the three steps took 3.3s to draw. Now the steps start
-    .35s apart, each wire draws in .3s and the kick lasts .6s, so the whole
-    picture is in by about 1.4s; step 01's paste reads in row by row, 80ms
-    apart, 250ms a row."""
-    ends = []
-    for sel, body in re.findall(r"\n  (\.js \.steps\.armed [^{]+)\{([^}]*)\}", CSS):
-        delay = re.search(r"animation-delay:([\d.]+)s", body)
-        if delay:
-            ends.append(float(delay.group(1)))
-    assert max(ends) <= 0.9, ends
-    assert ".js .steps.armed .ball{animation-name:hiw-kick;animation-duration:.6s;" in CSS
-    assert ".js .steps.armed .wire i{animation-name:hiw-line;animation-duration:.3s;" in CSS
-    rows = [float(d) for d in re.findall(
-        r"\.prow:nth-child\(\d\) :is\(\.raw,\.ok\)\{animation-delay:([\d.]+)s;\}", CSS)]
-    assert len(rows) == 4 and all(round(b - a, 2) == 0.08 for a, b in zip(rows, rows[1:])), rows
-    assert ".js .steps.armed .paste .ok{animation-name:hiw-row;animation-duration:.25s;}" in CSS
+def test_how_it_works_plays_in_about_a_second() -> None:
+    """The three steps arrive .22s apart and each takes .5s."""
+    delays = [float(d) for d in re.findall(
+        r"\.js \.steps\.armed \.step:nth-child\(\d\)\{animation-delay:([\d.]+)s;\}", CSS)]
+    assert delays == [0.22, 0.44]
 
 
 def test_step_one_shows_a_real_paste_from_the_espn_page() -> None:
@@ -218,7 +202,7 @@ def test_the_close_up_is_the_generated_report_with_numbered_pins() -> None:
                      r'<div aria-hidden="true">', LANDING)
     # The connector from the phone's cards to these two: static, drawn.
     cue = BODY.split('<div class="scrollcue" aria-hidden="true">')[1].split("</div>")[0]
-    assert "<svg" in cue and "keep scrolling the same email" in _flat(cue)
+    assert "<svg" in cue and "Further down the same email" in _flat(cue)
     assert "animation" not in re.search(r"\n  \.scrollcue\{([^}]*)\}", CSS).group(1)
 
 
@@ -279,8 +263,7 @@ def test_the_price_card_carries_its_risk_reversal_and_a_way_to_look_first() -> N
     card = BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]
     text = _flat(card)
     assert "$14.99" in text and "Stops on its own after your title game" in text
-    assert ("Full refund, no questions, until your first weekly report's week kicks off. "
-            "One per person") in text
+    assert "Not for you? Full refund before its first game. One per person" in text
     assert re.search(r'<a class="cardlink" href="sample-report.html">See a real report first</a>',
                      card)
     pricing = BODY.split('<section id="pricing">')[1].split("</section>")[0]

@@ -42,7 +42,7 @@ def test_every_visit_gets_its_own_heading() -> None:
     over a roster update, a free report, a League Pass and a seat claim. The
     markup keeps the default; the script names the visit where modes are
     resolved, from the same flags the submit handler reads."""
-    assert "<h1>Set Up Your Team</h1>" in JOIN
+    assert "<h1>Check your team</h1>" in JOIN
     decl = re.search(r"const HEADING = (.*?);\n", JOIN, re.S).group(1)
     for mode, words in (("SEAT_MODE", "Claim your seat"), ("UPDATE_MODE", "Update your roster"),
                         ("TRY_MODE", "Get a free report"), ("WANTS_PASS", "Cover your whole league")):
@@ -61,11 +61,14 @@ def test_the_settings_are_one_line_before_the_roster() -> None:
     line drawn from the radios, with "Change" opening them — a real button
     (keyboard, aria-expanded) — and every radio's name and value unchanged,
     so the ref the page encodes is exactly what it was."""
-    step = JOIN.split('<section id="step-league">')[1].split("</section>")[0]
+    step = JOIN.split('<div id="step-league">')[1].split('<button id="resolve"')[0]
     intro = _flat(re.search(r'<div class="note" id="settings-intro">(.*?)</div>', step, re.S)
                   .group(1))
-    assert intro == "Pick what your league uses. Six-point passing TDs or TE premium? " \
-                    "Pick the closest."
+    assert intro == "Six-point passing TDs or TE premium? Pick the closest."
+    # Owner review, Oct 31 2026: the roster comes first and the settings are a
+    # line under its box, above the button that checks both.
+    assert JOIN.index('id="roster-text"') < JOIN.index('id="step-league"') \
+        < JOIN.index('<button id="resolve" type="submit" form="form-roster">')
     line = re.sub(r"<[^>]+>", "", re.search(r'<b id="settings-line">(.*?)</b>', step).group(1))
     assert line == "Full PPR · 12 teams · Standard lineup · K and DEF"
     assert re.search(r'<button type="button" class="retry" id="settings-change" '

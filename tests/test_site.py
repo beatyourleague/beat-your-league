@@ -89,7 +89,7 @@ SEASON_PRICE = render_welcome_season.lstrip("$")
 def test_refund_promise_is_stated_where_money_is_asked_for() -> None:
     for page, name in ((LANDING, "landing"), (JOIN, "join")):
         assert re.search(r"refund", page, re.I), f"{name} page dropped the refund promise"
-    assert re.search(r"no-questions", LANDING, re.I)
+    assert re.search(r"Full refund", LANDING_PROSE)
 
 
 def test_refund_limit_is_disclosed_before_purchase_not_after() -> None:
@@ -222,6 +222,9 @@ def test_the_refund_window_closes_before_the_first_report_is_played() -> None:
         assert not loose.search(text), \
             f"{name} still promises a refund after the first report's games"
     kickoff = re.compile(r"first\s+weekly\s+report's\s+week\s+kicks\s+off", re.I)
+    # Selling pages say it in the buyer's words (owner review, Oct 31 2026);
+    # the terms and the welcome keep the defined one.
+    short = re.compile(r"first\s+weekly\s+report's\s+first\s+game", re.I)
     # COPY:F8: the selling pages used to say it shorter ("your second report's
     # week kicks off") beside a card that calls the day-one ROSTER report "your
     # first report" — so a mid-week joiner read a window a week shorter than
@@ -230,16 +233,13 @@ def test_the_refund_window_closes_before_the_first_report_is_played() -> None:
         text = re.sub(r"<!--.*?-->", "", prose(page), flags=re.S)
         assert not re.search(r"(?:second|first)\s+report's\s+week", text, re.I), \
             f"{name} counts the refund window in reports, not weekly reports"
-    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE)):
-        assert kickoff.search(page), f"{name} page does not say when the window closes"
-    for name, page in (
+    for name, page in (("landing", LANDING_PROSE), ("join", JOIN_PROSE),
                        ("league pass", prose((SITE / "league-pass.html")
                                              .read_text(encoding="utf-8"))),
                        ("thanks", prose((SITE / "thanks.html")
-                                        .read_text(encoding="utf-8"))),
-                       ("terms", prose((SITE / "terms.html")
-                                       .read_text(encoding="utf-8")))):
-        assert kickoff.search(page), f"{name} page does not say when the window closes"
+                                        .read_text(encoding="utf-8")))):
+        assert short.search(page), f"{name} page does not say when the window closes"
+    assert kickoff.search(prose((SITE / "terms.html").read_text(encoding="utf-8")))
     assert kickoff.search(welcome.REFUND_TERMS)
     assert kickoff.search(welcome.REFUND_TERMS_LEAGUE)
 
@@ -1643,7 +1643,7 @@ def test_league_pass_never_competes_with_the_single_checkout_decision() -> None:
 def test_league_pass_states_its_own_terms() -> None:
     prose_page = prose(LEAGUE_PASS)
     for required in (r"\$34\.99", r"a month", r"stops on its own",
-                     r"no-questions refund", r"18\+", r"not affiliated"):
+                     r"full refund", r"18\+", r"not affiliated"):
         assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
     # It must not promise a report to managers who never signed up.
     assert re.search(r"Managers who never sign up don't get a report", prose_page, re.I)
@@ -1672,7 +1672,7 @@ def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     # decides every slot, Sunday you play ("tick off the game plan" went
     # with the week strip it belonged to).
     assert re.search(r"one email decides every slot", LANDING_PROSE, re.I)
-    assert re.search(r"Sunday, just play", LANDING_PROSE)
+    assert re.search(r"Sunday, you're set|Sunday, you&#x27;re set", LANDING_PROSE)
 
 
 def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
@@ -3011,18 +3011,18 @@ def test_closed_checkout_shows_no_live_paid_cta_anywhere() -> None:
     Since Oct 30 2026 (owner review: the best thing on the site could not be
     reached) the closed gold buttons go to join/ again, and the rule's point
     stands: a gold button may not read as a purchase while none can be made.
-    "Check my team" says what the page does with checkout closed, and the
+    "Check my team free" says what the page does with checkout closed, and the
     price card, the one place a visitor is deciding to buy, keeps the capture."""
     static = LANDING.split("<script>")[0]
     golds = re.findall(r"<a\b[^>]*btn gold[^>]*>(?:<[^>]+>)*([^<]*)", static)
     assert golds, "no gold CTA in the static page"
     for anchor, label in re.findall(r"(<a\b[^>]*btn gold[^>]*>)(?:<[^>]+>)*([^<]*)", static):
         if "join/index.html" in anchor:
-            assert label == "Check my team", (
+            assert label == "Check my team free", (
                 f"a gold CTA into join/ reads as a purchase while checkout is closed: {anchor}")
     assert '<a class="btn gold" id="season-cta" href="#watch-form"' in static
     # What the button promises exists on the page it goes to, closed.
-    assert '<button id="resolve" type="submit">Check my roster</button>' in JOIN
+    assert '<button id="resolve" type="submit" form="form-roster">Check my team</button>' in JOIN
     # The open state still routes every paid CTA through the picker.
     rewrites = LANDING.split("if (CHECKOUT_OPEN)")[1]
     for cta in ("nav-cta", "season-cta", "closer-cta"):   # one card in 2026
@@ -3879,9 +3879,11 @@ def test_the_group_chat_line_is_an_example_and_never_the_generic_seat_page() -> 
     says where the link is, and neither offers a line to copy or asks for the
     buyer's address."""
     lp = (SITE / "league-pass.html").read_text(encoding="utf-8")
-    example = re.search(r'<div id="chat-example">(.*?)\n    </div>', lp, re.S).group(1)
-    assert "<button" not in example and "join/" not in example, \
-        "the example can be copied, or hands out a seat link before payment"
+    # The worked example left the page (owner review, Oct 31 2026): "Ask the
+    # league first" already gives the group chat its line, and it carries no link.
+    assert 'id="chat-example"' not in lp
+    ask = re.search(r'<p id="ask-text">(.*?)</p>', lp, re.S).group(1)
+    assert "join/" not in ask, "the ask hands out a seat link before payment"
     assert 'id="chat-live"' not in lp and 'id="chat-copy"' not in lp
     assert "chat-live" not in _js_code(lp)
     for name, page in (("league-pass", lp), ("thanks", THANKS)):
@@ -4130,7 +4132,7 @@ def test_the_lineup_choices_name_the_platform_defaults_and_say_what_an_ungraded_
     fitting option. The choices are a base named by the app whose default it
     is, plus a kicker and a defense answer — and a shape no arm has graded says,
     before anyone pays, that its report carries everything but the odds."""
-    step = JOIN.split('<section id="step-league">')[1].split("</section>")[0]
+    step = JOIN.split('<div id="step-league">')[1].split('<button id="resolve"')[0]
     # Yahoo's default is the standard shape (help.yahoo.com SLN6489, JOIN-36).
     for value, words in (("std", "ESPN's and Yahoo's default"), ("flex2", "Sleeper's default"),
                          ("wr3", "Three WR"), ("sf", "Superflex")):
@@ -4146,7 +4148,7 @@ def test_the_scoring_note_names_what_is_scored_and_what_is_not() -> None:
     """PC-10: "so every number matches your league" overclaimed — six-point
     passing touchdowns and TE premium are not scored. The note names the
     scoring that is, and says plainly that those two are not."""
-    step = prose(JOIN.split('<section id="step-league">')[1].split("</section>")[0])
+    step = prose(JOIN.split('<div id="step-league">')[1].split('<button id="resolve"')[0])
     assert "4-point passing touchdowns" in step
     assert "Six-point passing touchdowns and TE premium aren't scored yet" in step
     assert "every number matches your league" not in JOIN_PROSE
@@ -4207,7 +4209,7 @@ def test_a_roster_update_never_quietly_replaces_the_settings_on_file() -> None:
     # The box comes after the settings it vouches for, inside step 1: placed
     # above them it was ticked before a single setting was in view.
     assert (JOIN.index('id="shape-note"') < JOIN.index('id="settings-ok-wrap"')
-            < JOIN.index('<section id="step-roster">'))
+            < JOIN.index('<button id="resolve"'))
     prefill = _js_function(JOIN, "prefillUpdateSettings")
     assert "settingsFromLink()" in prefill and "told.length === 3" in prefill
     # A reload restores the roster (?ref=) with the settings chosen on this
