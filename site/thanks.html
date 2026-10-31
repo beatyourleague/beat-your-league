@@ -257,7 +257,7 @@
     league's seat link is on its way.</b>
       <p>It's in your welcome email, usually within the hour, and on your weekly
       reports. Send that link to your league's group chat: everyone who claims a seat gets
-      their own lineup report every Tuesday, built from their own roster. Each manager opens
+      their own lineup report every Wednesday, built from their own roster. Each manager opens
       the link and pastes their roster once, and their first report lands the day they
       confirm their seat (we email them a button).</p>
       <p class="small">That link is the only way to claim a seat, so nobody can take one by
@@ -268,7 +268,7 @@
     <ol class="steps">
       <li id="step-today"><b>Today</b><span id="step-today-text">Your first report, built from
       the roster you just entered.</span></li>
-      <li><b>Every Tuesday</b>The week's report: your lineup, decided.</li>
+      <li><b>Every Wednesday</b>The week's report, each evening after waivers clear: your lineup, decided.</li>
       <li><b>Saturday, if needed</b>The Saturday check, when injury news changes your lineup
       or a starting spot still has nobody to fill it.</li>
     </ol>
@@ -279,7 +279,7 @@
     <div class="nextsteps" id="next-steps" data-reveal="group">
       <div class="nextcard"><b>Keep it out of spam</b>
         <p>Reports come from <b>reports@beatyourleague.com</b>. Add it to your contacts and
-        Tuesday's report lands in your inbox.</p></div>
+        Wednesday's report lands in your inbox.</p></div>
       <div class="nextcard"><b>Run this league?</b>
         <p>The <a href="league-pass.html">League Pass</a> gives every manager their own weekly
         report: $34.99 a month for the whole league, stopping on its own after the title
@@ -287,7 +287,7 @@
         league). Buy it with this same email, cancel your Monthly plan, and reply to any
         report while its refund window is open: we'll refund it.</p></div>
       <div class="nextcard"><b>Know a manager in another league?</b>
-        <p id="friend-line">One email every Tuesday decides your lineup for your own roster:
+        <p id="friend-line">One email every Wednesday decides your lineup for your own roster:
         https://beatyourleague.com/?via=friend</p>
         <button type="button" class="btn gold" id="friend-share">Send it to them</button>
         <p class="msg" id="friend-msg" role="status"></p></div>
@@ -299,7 +299,8 @@
 
     <h2><span class="n">02</span>If your roster changes</h2>
     <p>Use the roster link at the bottom of any weekly report, or reply to one. We email you a
-    button to confirm. Press it by Friday night (ET) and Saturday's check uses it too.</p>
+    button to confirm. Press it by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night
+    (ET) for Saturday's check.</p>
 
     <h2><span class="n">03</span>Changed your mind</h2>
     <p>Full refund before your first weekly report's first game:
@@ -385,7 +386,7 @@ document.getElementById("friend-share").addEventListener("click", () => {
           // The Today card says which first report is coming, from the same
           // clock and the same rule as the landing and run/intake._first_file:
           // the week's report from Week 2 on before its first kickoff,
-          // otherwise the roster report and the Tuesday the next one lands.
+          // otherwise the roster report and the Wednesday the next one lands.
           // Only in a week still current; the static sentence stays otherwise.
           const today = document.getElementById("step-today-text");
           const landsOk = /^\d{4}-\d\d-\d\d$/.test(w.lands_on || "");

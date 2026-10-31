@@ -343,7 +343,7 @@ def build_html(page: str) -> str:
   <div class="left">
     <div class="mark">{mark}<span>Beat Your <span class="lg">League</span></span></div>
     <h1>{head}</h1>
-    <div class="sub">Your lineup, decided every Tuesday — from <b>your exact
+    <div class="sub">Your lineup, decided every Wednesday — from <b>your exact
       roster</b>, scored PPR, half-PPR or standard.</div>
   </div>
   <div class="right">

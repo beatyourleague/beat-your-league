@@ -320,7 +320,7 @@ the product's own `optimal_lineup`; every grade is the parent's `evaluate`.
 ## Star benchings (method §4c — reported, not a clause)
 
 A star ranked top 12 (QB, TE) or top 24 (RB, WR) at his position last season.
-Counted only when he was available (not OUT on the Tuesday report, not on bye).
+Counted only when he was available (not OUT on the Wednesday report, not on bye).
 
 | Model | Stars benched | Per 1,000 team-weeks | Benched star outscored the weakest starter he could have replaced |
 |---|---|---|---|

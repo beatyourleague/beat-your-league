@@ -109,10 +109,10 @@ PLATFORMS = (
 )
 
 TITLE = "{name} fantasy football start/sit report for your roster — Beat Your League"
-DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login. Every Tuesday a "
+DESCRIPTION = ("Copy your {name} fantasy roster and paste it, no login. Every Wednesday a "
                "report decides your lineup: every slot decided, close calls explained, byes "
                "checked through Week 17.")
-H1 = "Your {name} roster, decided every Tuesday"
+H1 = "Your {name} roster, decided every Wednesday"
 STEPS = (
     "On a computer, open your team's roster page on {name}. On a phone, skip to step 3.",
     "Select from your first starter down to your last bench player, copy it, and paste it "
@@ -120,7 +120,7 @@ STEPS = (
     "Or type each name into “Add a player” and tap him. Any part of his name finds him.",
     "Pick your scoring, league size and starting lineup. {lineup}",
 )
-DOES_LEAD = "Every Tuesday through your title game:"
+DOES_LEAD = "Every Wednesday through your title game:"
 DOES = ("every slot decided for that roster",
         "each close call naming the bench player and the points gap",
         "an if/then for questionable starters",
@@ -349,7 +349,7 @@ def page(platform: Platform) -> str:
     <p class="kicker">For {esc(name)} leagues</p>
     <h1>{esc(H1.format(name=name))}</h1>
     <p>Paste the roster you already have on {esc(name)}. No login, nothing to connect.
-    Every Tuesday a report built from it decides your lineup for your scoring.</p>
+    Every Wednesday a report built from it decides your lineup for your scoring.</p>
     <div class="cta">{_ask(platform)}<span class="free"><a href="{PLANNER_HREF}">{esc(PLANNER_LINK)}</a></span></div>
   </div>
 </header>

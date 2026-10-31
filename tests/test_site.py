@@ -298,7 +298,7 @@ def test_the_welcome_names_the_first_report_it_is_sending(tmp_path, monkeypatch)
     assert welcome.today_text("2030", at("2030-09-01T12:00")) == welcome.NEXT_TODAY_ROSTER
     assert welcome.today_text("2030", at("2030-09-17T12:00")) == welcome.NEXT_TODAY_WEEK
     after = welcome.today_text("2030", at("2030-09-21T12:00"))
-    assert after == f"{welcome.NEXT_TODAY_ROSTER} Tuesday, Sep 24: your Week 3 report."
+    assert after == f"{welcome.NEXT_TODAY_ROSTER} Wednesday, Sep 25: your Week 3 report."
     # The last week has no next report to name.
     assert welcome.today_text("2030", at("2030-09-27T12:00")) == welcome.NEXT_TODAY_ROSTER
     monkeypatch.setattr(solo, "CACHE_DIR", tmp_path / "none")
@@ -309,7 +309,7 @@ def test_the_welcome_names_the_first_report_it_is_sending(tmp_path, monkeypatch)
     msg = welcome.welcome_message("a@example.com", "season", "abcdef0123", "2030",
                                   one_time=True, now=at("2030-09-17T12:00"))
     assert welcome.NEXT_TODAY_WEEK in msg.text and welcome.NEXT_TODAY not in msg.text
-    assert ("Add reports@beatyourleague.com to your contacts so Tuesday's report lands "
+    assert ("Add reports@beatyourleague.com to your contacts so Wednesday's report lands "
             "in your inbox.") in msg.text
     assert "reports@beatyourleague.com" in (SITE.parent / "LAUNCH.md").read_text(encoding="utf-8")
 
@@ -1031,7 +1031,7 @@ def test_the_post_purchase_page_promises_only_what_gets_sent() -> None:
     assert re.search(r"roster report", visible, re.I), "the pre-season case"
     assert re.search(r"current week's report|week's report", visible, re.I), \
         "the mid-season case — a Wednesday buyer gets that week's report"
-    assert re.search(r"every tuesday", visible, re.I), "the recurring product"
+    assert re.search(r"every wednesday", visible, re.I), "the recurring product"
 
 
 def test_the_privacy_policy_stands_on_its_own() -> None:
@@ -1667,7 +1667,7 @@ def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     # Tuesday act, a figure EMAILS-90 had retired as the game plan's).
     assert re.search(r"set it in about a minute", LANDING_PROSE, re.I)
     assert not re.search(r"ninety seconds|90 seconds", LANDING_PROSE, re.I)
-    assert re.search(r"tuesday morning", LANDING_PROSE, re.I)
+    assert re.search(r"wednesday evening", LANDING_PROSE, re.I)
     # What you do, in the three steps (Oct 28 2026): paste once, the email
     # decides every slot, Sunday you play ("tick off the game plan" went
     # with the week strip it belonged to).
@@ -1694,6 +1694,9 @@ def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:
     for page, name in ((visible(LANDING), "landing"),
                        (visible(SAMPLE_REPORT), "sample report")):
         text = page
+        # Saying WHEN waivers clear is timing, not a waiver feature (owner
+        # decision, Oct 31 2026): the report goes out after them.
+        text = re.sub(r"After waivers|Waivers have cleared", "", text)
         for dead in (r"\brivals?\b", r"\bwaivers?\b", r"\bopponents?\b",
                      r"league's own record", r"\bFAAB\b"):
             assert not re.search(dead, text, re.I), (
@@ -3537,23 +3540,23 @@ def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) ->
     out = tmp_path / "week.json"
     write_week_json({"meta": {"season": "2026", "week": 6, "last_week": 18,
                               "generated_at": "2026-10-13T12:05:00+00:00"}}, out,
-                    "2026-10-20")
+                    "2026-10-21")
     assert _json.loads(out.read_text()) == {
-        "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-20",
+        "season": "2026", "week": 6, "last_week": 18, "lands_on": "2026-10-21",
         "built_at": "2026-10-13T12:05:00+00:00", "odds": 0, "closest_call": False,
         "first_kickoff": None, "phase": "season"}
     # The join page's "today" needs the week's first kickoff (panel review
     # PC-02): the build writes it when the schedule has it.
     write_week_json({"meta": {"season": "2026", "week": 6, "last_week": 18}}, out,
-                    "2026-10-20", "2026-10-16T00:15:00Z")
+                    "2026-10-21", "2026-10-16T00:15:00Z")
     assert _json.loads(out.read_text())["first_kickoff"] == "2026-10-16T00:15:00Z"
     try:
         day = next_report_day(CACHE_DIR, "2026", 5)
     except Exception:                                   # pragma: no cover
         day = None
     if day is not None:
-        # Week 5 of 2026 ends with Monday night (Oct 12): Week 6 lands Tue Oct 13.
-        assert day == "2026-10-13"
+        # Week 5 of 2026 ends with Monday night (Oct 12): Week 6 lands Wed Oct 14.
+        assert day == "2026-10-14"
     workflow = (SITE.parent / ".github" / "workflows" / "weekly.yml").read_text()
     assert "site/week.json" in workflow, "the cron builds the clock but never commits it"
     assert (SITE / "week.json").is_file(), \
@@ -3569,7 +3572,7 @@ def test_the_season_clock_is_derived_committed_and_quiet_when_stale(tmp_path) ->
     assert "textContent" in script and "innerHTML" not in script
     # The static sentence is what shows when the file can't be used, and the
     # open state keeps a target for the clock.
-    assert 'id="season-clock">A new report every Tuesday of the season.' in LANDING
+    assert 'id="season-clock">A new report every Wednesday of the season.' in LANDING
     assert 'lead.id = "season-clock"' in LANDING
 
 
@@ -4105,7 +4108,7 @@ def test_the_free_report_waits_from_the_weeks_first_kickoff_whatever_day() -> No
     but run/trials.py holds from the week's actual first kickoff — Week 1 and
     Week 12 of 2026 start on a Wednesday, Week 18 on a Sunday."""
     note = prose(re.search(r'<li id="trial-note"[^>]*>(.*?)</li>', JOIN, re.S).group(1))
-    assert "From the week's first kickoff until Tuesday" in note
+    assert "From the week's first kickoff until that week's games are done" in note
     assert "Thursday" not in note
 
 
@@ -4323,7 +4326,7 @@ def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
     report). Decided from site/week.json's first_kickoff; anything it cannot
     tell gives the sentence that is true either way."""
     fn = _js_function(JOIN, "firstReportTiming")
-    week = {"week": 6, "last_week": 18, "lands_on": "2026-10-20",
+    week = {"week": 6, "last_week": 18, "lands_on": "2026-10-21",
             "first_kickoff": "2026-10-16T00:15:00Z"}
     import json as _json
     cases = [

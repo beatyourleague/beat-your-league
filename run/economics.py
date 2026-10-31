@@ -101,7 +101,7 @@ LEAVE_AFTER_FIRST = 0.30
 # every hour and dollar below moves with it. Weekly reports go out on
 # consecutive Tuesdays from Sep 8 2026 (Week 1) to Jan 5 2027 (Week 18).
 OPENS = date(2026, 11, 9)
-WEEK1_REPORT = date(2026, 9, 8)
+WEEK1_REPORT = date(2026, 9, 9)
 LAST_WEEK = 18
 # From Week 13 only about half a league is still alive, so a playoff week sells
 # about half what a regular week does, through Week 17 (the title game under the
@@ -113,16 +113,16 @@ LAST_CHARGE_WEEK = 16
 PLAYOFF_DEMAND = 0.5
 
 
-def report_tuesday(week: int) -> date:
+def report_wednesday(week: int) -> date:
     return WEEK1_REPORT + timedelta(days=7 * (week - 1))
 
 
 def first_week_sold(opens: date = None) -> int:
     """The first weekly report a buyer on ``opens`` receives: this week's if
-    they buy before its Thursday kickoff (report Tuesday + 2 days)."""
+    they buy before its Thursday kickoff (report Wednesday + 1 day)."""
     opens = opens or OPENS
     for week in range(1, LAST_WEEK + 1):
-        if opens < report_tuesday(week) + timedelta(days=2):
+        if opens < report_wednesday(week) + timedelta(days=1):
             return week
     return LAST_WEEK + 1
 
@@ -144,9 +144,9 @@ def expected_charges(opens: date = None) -> float:
     weeks = selling_weeks(opens)
     if not weeks:
         return 1.0
-    stop = report_tuesday(LAST_CHARGE_WEEK)
+    stop = report_wednesday(LAST_CHARGE_WEEK)
     paid = sum(share * (1 + (1 - LEAVE_AFTER_FIRST)
-                        * (monthly_charges(report_tuesday(week), stop)[0] - 1))
+                        * (monthly_charges(report_wednesday(week), stop)[0] - 1))
                for week, share in weeks.items())
     return round(paid / sum(weeks.values()), 3)
 
@@ -180,7 +180,7 @@ def owner_hours_breakdown(weeks: int = None) -> dict[str, float]:
     weeks = WEEKS_LEFT if weeks is None else weeks
     return {
         "setup left (LAUNCH steps 1–5)": 3.0,
-        f"Tuesday QA, refunds, replies (1 h a week, {weeks} weeks)": 1.0 * weeks,
+        f"Wednesday QA, refunds, replies (1 h a week, {weeks} weeks)": 1.0 * weeks,
         f"selling: replies and one post ({SELLING_MIN_PER_DAY} min a day, PLAN §5)":
             SELLING_MIN_PER_DAY / 60 * 7 * weeks,
     }
@@ -263,7 +263,8 @@ def season_calendar(cache_dir: Path | None = None, today: date | None = None
     tuesdays = {}
     for week, days in weeks.items():
         first = date.fromisoformat(min(days))
-        tuesdays[week] = first - timedelta(days=(first.weekday() - 1) % 7 or 7)
+        days_back = (first.weekday() - 2) % 7       # a Wednesday game: that Wednesday
+        tuesdays[week] = first - timedelta(days=days_back)
     return tuesdays, stop.date()
 
 
@@ -339,7 +340,7 @@ def customer_lines(calendar=None) -> list[str]:
     else:
         lines.append(f"  Monthly, by the week they join (no renewal after Week "
                      f"{LAST_CHARGE_WEEK}'s report, {cal[1]:%b %-d}; joins on the "
-                     f"report Tuesday):")
+                     f"report Wednesday):")
         for row in monthly_by_join_week(cal):
             plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
             lines.append(f"    Week {row['week']:>2}: {plural(row['charges'], 'charge')}, "

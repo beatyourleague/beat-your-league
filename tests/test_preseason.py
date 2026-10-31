@@ -556,8 +556,8 @@ def test_the_first_card_promises_a_first_report_only_when_it_dates_one() -> None
     for page in (email_html(undated), render(undated, template)):
         assert FIRST_REPORT_HEAD not in page and ABOUT_HEAD in page
     dated = copy.deepcopy(undated)
-    dated["meta"]["next_report"] = {"week": 8, "lands_on": "2026-10-27"}
-    lede = "Your Week 8 report lands Tuesday, Oct 27."
+    dated["meta"]["next_report"] = {"week": 8, "lands_on": "2026-10-28"}
+    lede = "Your Week 8 report lands Wednesday, Oct 28."
     for page in (email_html(dated), render(dated, template)):
         assert FIRST_REPORT_HEAD in page and ABOUT_HEAD not in page and lede in page
     import html as html_lib

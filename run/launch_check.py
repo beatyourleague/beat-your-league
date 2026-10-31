@@ -464,7 +464,7 @@ def check_funnel_config() -> list[Gate]:
     gates.append(_gate("Funnel", "The free report's sign-up button lands on an open checkout",
                        not (trial and not open_),
                        "TRIAL_OPEN is on while CHECKOUT_OPEN is off: each free report's "
-                       "'Get next Tuesday's report' button would land on a closed page"))
+                       "'Get next Wednesday's report' button would land on a closed page"))
     # Owner decision, Oct 31 2026: the price rests on a free door. With no record
     # to read and FantasyPros' free trial a tab away, a buyer gets one report on
     # their own roster first. The two switches flip together on opening morning.
@@ -573,7 +573,7 @@ def check_week_json() -> list[Gate]:
     return [Gate("Site", "Season clock data (week.json) is current",
                  "WARN" if stale else "PASS",
                  f"week {w.get('week')}, next report lands {lands or 'unknown'}"
-                 + (" — stale until the next Tuesday build (the hero shows its static sentence)"
+                 + (" — stale until the next Wednesday build (the hero shows its static sentence)"
                     if stale else "")),
             recorded_odds_gate(w), closest_gate(w)]
 
@@ -673,7 +673,7 @@ def check_record(processed_dir: Path | None = None, today: date | None = None) -
     if calls == 0 and due:
         return [Gate("Record", name, "WARN",
                      f"{held}, though odds could be recorded from {first} (Week 2's report "
-                     f"Tuesday): the live sample and every delivered report record theirs, "
+                     f"Wednesday): the live sample and every delivered report record theirs, "
                      f"so nothing is being recorded")]
     return [Gate("Record", name, "PASS",
                  held + ("" if due or first is None else
@@ -1037,7 +1037,7 @@ def check_proving() -> list[Gate]:
                            cwd=REPO, capture_output=True, text=True, timeout=900,
                            env=_simulation_env())
     tail = (r.stdout.strip().splitlines() or [""])[-1]
-    return [_gate("Product", "Tuesday → Saturday → Monday run end to end (2025 weeks 4–5)",
+    return [_gate("Product", "Wednesday → Saturday → Monday run end to end (2025 weeks 4–5)",
                   r.returncode == 0, f"exit {r.returncode}: {tail or r.stderr[-300:]}", tail)]
 
 
@@ -2409,7 +2409,7 @@ def check_cron_timing() -> list[Gate]:
     did the intake run every hour this past week. GitHub started the Tuesday
     runs 5-7 hours late on Oct 6 and 13 (OPS-01); the watchdog only alarms
     when a run never happened."""
-    name = "The crons start on time (last two Tuesday and Saturday runs, a week of intake)"
+    name = "The crons start on time (last two Wednesday and Saturday runs, a week of intake)"
     runs = {w: _runs(w) for w in ("weekly.yml", "saturday.yml", "daily.yml")}
     if any(v is None for v in runs.values()):
         return [Gate("Owner", name, "SKIP", "needs `gh` signed in to this repo (gh auth login)")]
@@ -2707,11 +2707,11 @@ def check_volume() -> list[Gate]:
     counted = count_recipients()
     pro = os.environ.get("RESEND_PLAN", "").lower() == "pro"
     if isinstance(counted, str):
-        gates.append(Gate("Economics", "One Tuesday fits the email plan", "SKIP", counted))
+        gates.append(Gate("Economics", "One Wednesday fits the email plan", "SKIP", counted))
     else:
         subs, waiting = counted
         total = subs + waiting
-        gates.append(_gate("Economics", "One Tuesday fits the email plan",
+        gates.append(_gate("Economics", "One Wednesday fits the email plan",
                            total <= RESEND_FREE_RECIPIENTS or pro,
                            f"{subs} subscribers + {waiting} free reports waiting = {total}, over "
                            f"the free tier's ~{RESEND_FREE_RECIPIENTS} — move to Resend Pro "

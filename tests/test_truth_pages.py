@@ -209,7 +209,7 @@ def test_the_join_header_carries_the_price_with_its_terms_and_no_chips() -> None
 
 # Oct 30 2026 review: the intro names the report's four parts in their own
 # words; the paste-your-roster line moved to "What you get, and when".
-HOW_INTRO = ("Every Tuesday: your lineup decided, the week's closest call, your game plan and "
+HOW_INTRO = ("Every Wednesday: your lineup decided, the week's closest call, your game plan and "
              "an if/then for late news. Here's what each part means and how to check any call.")
 
 

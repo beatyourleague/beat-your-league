@@ -168,9 +168,9 @@ SOURCE_INFO = {
                "Whether each cron ran on time and passed."),
     "launch": ("Launch check", "`make launch-check` runs the full set",
                "The fast, local launch-check gates: failures and owner steps left."),
-    "ledger": ("Public record", "Grows from Week 2's report Tuesday",
+    "ledger": ("Public record", "Grows from Week 2's report Wednesday",
                "This season's published calls, graded and pending, by stated band."),
-    "site": ("Site data", "Rebuilt by the Tuesday cron",
+    "site": ("Site data", "Rebuilt by the Wednesday cron",
              "How old this week's sample and the player directory are."),
     "plan": ("PLAN.md §6", "PLAN.md §6 — the decision gates",
              "The pre-committed decision gates and where each stands."),
@@ -463,7 +463,7 @@ def collect_bounces(ctx: Context) -> Source:
 # --- GitHub Actions (public, unauthenticated) ------------------------- #
 
 WORKFLOWS = (
-    ("weekly.yml", "Tuesday reports"),
+    ("weekly.yml", "Wednesday reports"),
     ("saturday.yml", "Saturday check"),
     ("daily.yml", "Hourly intake"),
     ("monday.yml", "Monday grading"),
@@ -1213,7 +1213,7 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
             issues.append(Issue(
                 "high" if wf["file"] in ("weekly.yml", "daily.yml", "saturday.yml") else "medium",
                 f"{wf['label']} didn't run after its {slot:%a %-I:%M %p} ET slot.",
-                ("Actions → the workflow → Run workflow (Tuesday's: only before the week's "
+                ("Actions → the workflow → Run workflow (Wednesday's: only before the week's "
                  "first kickoff).",
                  "Check the Worker's Cron Trigger."),
                 actions, "Crons", "5.8"))
@@ -1265,7 +1265,7 @@ def build_issues(sources: Mapping[str, Source], now: datetime, health: list[dict
         age = _age(site["players_at"], now)
         if age and age > timedelta(days=8):
             issues.append(Issue("medium", f"The player directory the join page uses is {age.days} days old.",
-                                "It's rebuilt by the Tuesday run — check weekly-report is green, then git pull.",
+                                "It's rebuilt by the Wednesday run — check weekly-report is green, then git pull.",
                                 actions, "Site"))
 
     if ledger:

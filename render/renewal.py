@@ -134,13 +134,13 @@ def renewal_message(renewal: Renewal) -> Message:
             f"the card on file will be charged {renewal.amount} — it renews once "
             f"a year until you cancel. Nothing is due before then, and this is "
             f"the only notice we send about it.")
-    what = ("Renewing keeps the Tuesday report coming for the season ahead — "
+    what = ("Renewing keeps the Wednesday report coming for the season ahead — "
             "the lineup we'd set for your roster under your scoring, with "
             "the odds on the close calls.")
     if renewal.plan in PAYER_PLANS:
         # The seats ride on this charge, and each is claimed again with the
         # new season's roster rather than carried over (panel review LP-D5).
-        what = ("Renewing keeps the Tuesday report coming for the season ahead, "
+        what = ("Renewing keeps the Wednesday report coming for the season ahead, "
                 "for you and every manager in your league: each claims their "
                 "seat again with their new roster. Cancel, and every seat's "
                 "reports stop with yours.")

@@ -360,7 +360,7 @@ def share_text(report: Mapping[str, Any]) -> tuple[str, str]:
     meta = report["meta"]
     title = f"Beat Your League — this week's report, Week {meta['week']} of {meta['season']}"
     when = ("Rebuilt after this week's first kickoff." if meta.get("rebuilt_after_kickoff")
-            else "Rebuilt every Tuesday of the season.")
+            else "Rebuilt every Wednesday of the season.")
     desc = (f"Week {meta['week']} of the {meta['season']} NFL season, for a sample "
             f"roster: {_listed(share_facts(report))}. {when}")
     return title, desc
@@ -865,9 +865,9 @@ def write_week_json(report: dict, path: Path, lands_on: str | None = None,
 # the offseason (D9): no week to build, and the page says so
 # --------------------------------------------------------------------- #
 
-# The Tuesday run's last send of the day (weekly.yml's 16:17 UTC retry); a
-# derived Week 1 that becomes due later that Tuesday goes out a week later.
-LAST_TUESDAY_SEND = time(16, 17)
+# The weekly run's evening send (weekly.yml's 22:17 UTC cron); a derived Week 1
+# that becomes due later that Wednesday goes out a week later.
+LAST_TUESDAY_SEND = time(22, 17)
 
 
 def write_clock(path: Path, clock: Mapping[str, Any]) -> None:
@@ -877,14 +877,14 @@ def write_clock(path: Path, clock: Mapping[str, Any]) -> None:
 
 
 def week_one_lands_on(first_kickoff: datetime) -> str:
-    """The Tuesday a derived Week 1 report first goes out: the first Tuesday
+    """The Wednesday a derived Week 1 report first goes out: the first Wednesday
     send at or after ``run.solo.week_one_due`` turns true (WEEK_ONE_LEAD
-    before the first kickoff), as its date (the send is mid-morning ET, so
-    the UTC and ET dates agree)."""
+    before the first kickoff), as its date (the send is evening ET, before
+    midnight UTC, so the UTC and ET dates agree)."""
     from run.solo import WEEK_ONE_LEAD
     due = first_kickoff.astimezone(timezone.utc) - WEEK_ONE_LEAD
     day = due.date()
-    while day.weekday() != 1 or datetime.combine(
+    while day.weekday() != 2 or datetime.combine(
             day, LAST_TUESDAY_SEND, timezone.utc) < due:
         day += timedelta(days=1)
     return day.isoformat()
@@ -939,12 +939,12 @@ def last_report_text(season: str, week: str | int) -> tuple[str, str, str]:
     over (INFO-96, INFO-112): it is that season's last report, not this
     week's, and it is not rebuilt until the next season begins."""
     banner = (f"<b>THE {season} SEASON'S LAST REPORT</b> — Week {week}, for a "
-              f"sample roster. This page is rebuilt every Tuesday of the season, "
+              f"sample roster. This page is rebuilt every Wednesday of the season, "
               f"from Week 1 of the next one.")
     title = f"Beat Your League — the {season} season's last report"
     desc = (f"Week {week} of the {season} NFL season, the last of that season, "
             f"for a sample roster: the lineup we'd set. This page is rebuilt "
-            f"every Tuesday of the season, from Week 1 of the next one.")
+            f"every Wednesday of the season, from Week 1 of the next one.")
     return banner, title, desc
 
 
@@ -1086,8 +1086,8 @@ _NEW_SOURCE = ("Aggregated and scored by us under the scoring you chose (full PP
 # Retired chrome wording -> today's (review, Oct 30 2026): one name for the
 # Saturday email, "the Saturday check", and the footer's tagline. Words only.
 _RETIRED_CHROME = (
-    ("— the weekly scouting report for your fantasy roster, every Tuesday of the season.",
-     "— your lineup, decided every Tuesday of the season."),
+    ("— the weekly scouting report for your fantasy roster, every Wednesday of the season.",
+     "— your lineup, decided every Wednesday of the season."),
     ('<p class="standing"><b>Saturday:</b>', '<p class="standing"><b>The Saturday check:</b>'),
     ("If he is, Saturday&#x27;s final check will tell you.",
      "If he is, the Saturday check will tell you."),

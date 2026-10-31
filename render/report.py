@@ -289,7 +289,14 @@ MARK_CSS = (".brand svg.mark{width:22px;height:22px;flex:none;}"
 # here is a false claim on every surface at once. (The launch announcement
 # carried it too until Oct 24 2026; it now says what the pass does in its
 # own words — run/waitlist.BODY.)
-BRAND_LINE = ("your lineup, decided every Tuesday of the season.")
+# A buyer before Wednesday's run gets this week's report at once
+# (run.tuesday.run_subscriber early_look), so they hold something real the day
+# they pay. Wednesday's report still comes, after waivers.
+EARLY_LOOK_HEAD = "Your early look"
+EARLY_LOOK = ("Waivers haven't cleared yet, so this is built on the roster you gave us. "
+              "Your full report comes Wednesday evening. Change your roster before then "
+              "and it will use the new one.")
+BRAND_LINE = ("your lineup, decided every Wednesday of the season.")
 # Contract C5 (final review FUN-6/COPY-8): the one betting phrase any surface
 # may carry is "not betting picks". The old line denied a second betting term
 # by name on every report, both samples and every email. One constant; the
@@ -790,7 +797,7 @@ def availability_basis(meta: Mapping[str, Any]) -> str:
         # one before this report goes out" was false of it (INFO-117).
         return _with_box_scores(
             f"Injury and inactive data as of the week {rebuilt.group(1)} "
-            f"injury report, the one this week's Tuesday report was built on; "
+            f"injury report, the one this week's Wednesday report was built on; "
             f"this rebuild doesn't read later injury news.", meta)
     if availability:
         try:
@@ -2024,7 +2031,7 @@ def receipts_inner(receipts: Mapping[str, Any]) -> str:
 # things is "usually within the hour".
 JOIN_PROMISE = ("Yours is built from your own roster, under the scoring you pick "
                 "(full PPR, half PPR or standard). Your first report usually lands "
-                "within the hour of joining, then a new one every Tuesday of the "
+                "within the hour of joining, then a new one every Wednesday of the "
                 "season.")
 
 
@@ -2068,7 +2075,7 @@ def demo_band(meta: Mapping[str, Any]) -> str:
         '<div class="regret-note" style="margin:14px 0 0;text-align:center;">'
         'This file is from a 2018 sample league. Yours is about <b>your</b> rival — '
         '<a href="join/index.html" style="color:var(--brick);font-weight:700;">'
-        'pick them</a> and the first one lands Tuesday.</div>'
+        'pick them</a> and the first one lands Wednesday.</div>'
     )
 
 
@@ -2304,7 +2311,7 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
         # A free report's reader gets no Tuesday report (EMAILS-58).
         follow = (f"subscribers get a report for it too, the season's last."
                   if meta.get("trial") else
-                  f"next Tuesday's report covers it, and it's the season's last.")
+                  f"next Wednesday's report covers it, and it's the season's last.")
         return [f"Week {week} is championship week under ESPN's, Yahoo's and "
                 f"Sleeper's default settings. If your league plays Week {last}, "
                 + follow]
@@ -2335,8 +2342,9 @@ UPDATE_HEAD = "Roster changed?"
 # The Saturday check runs at 16:17 UTC with no intake of its own, and a change
 # takes two hourly intakes (the code out, the press in), so "by Saturday
 # morning" missed for anyone after about 10:47 AM ET (EMAILS-43/44).
-UPDATE_BODY = ("Update it here by Friday night (ET) — the Saturday check and "
-               "your next report use it. We'll email you a button to confirm:")
+UPDATE_BODY = ("Waivers changed your team? Update it here by Wednesday afternoon (ET) "
+               "and that evening's report uses it. After that, by Friday night (ET) for "
+               "the Saturday check. We'll email you a button to confirm:")
 UPDATE_REPLY = ("Reply to this email with your updated roster and your next report "
                 "follows it.")
 # The season's last report has no next report to follow a change, so the reply

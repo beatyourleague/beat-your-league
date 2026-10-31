@@ -39,6 +39,8 @@ from render.report import (
     EMAIL_META,
     sender_html,
     SEASON_END_HEAD,
+    EARLY_LOOK,
+    EARLY_LOOK_HEAD,
     season_end_lines,
     preheader_html,
     AS_SET_BODY,
@@ -151,10 +153,10 @@ TRIAL_ONLY = ("This is the only email we'll send you unless you sign up. Didn't 
 # the grey legal footer, after the data-source and no-betting lines, on the
 # email whose whole job is to convert. No price here: the join page states
 # the prices with their renewal terms beside them, which an email ask can't.
-TRIAL_ASK_HEAD = "Want this every Tuesday?"
-TRIAL_ASK = ("Your lineup decided like this one, every Tuesday, plus the "
+TRIAL_ASK_HEAD = "Want this every Wednesday?"
+TRIAL_ASK = ("Your lineup decided like this one, every Wednesday, plus the "
              "Saturday check when injury news changes it.")
-TRIAL_BUTTON = "Get next Tuesday's report"
+TRIAL_BUTTON = "Get next Wednesday's report"
 # The channel tag the join page reads (^[a-z0-9-]{1,24}$), so a signup that
 # came from a free report is counted as one (`make stats`).
 TRIAL_VIA = "trial"
@@ -163,7 +165,7 @@ TRIAL_VIA = "trial"
 # The season's last week (EMAILS-69): there is no next Tuesday's report, and
 # checkout closes once that week kicks off (D9), so the ask is next season's.
 TRIAL_LAST_ASK_HEAD = "Want this next season?"
-TRIAL_LAST_ASK = ("Your lineup decided like this one, every Tuesday from Week 1, "
+TRIAL_LAST_ASK = ("Your lineup decided like this one, every Wednesday from Week 1, "
                   "plus the Saturday check when injury news changes it.")
 TRIAL_LAST_BUTTON = "Tell me when it opens"
 
@@ -181,7 +183,7 @@ def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:
     if _is_final_week(meta):
         return None
     from render.welcome import MONTHLY_PRICE
-    return (f"Every Tuesday through your title game: {MONTHLY_PRICE} a month, and it "
+    return (f"Every Wednesday through your title game: {MONTHLY_PRICE} a month, and it "
             f"stops on its own. {TRIAL_REFUND}")
 
 
@@ -1000,6 +1002,8 @@ def _solo_text(report: Mapping[str, Any]) -> str:
                          + (f" {TRIAL_BUTTON}: {trial_join_url(meta)}"
                             if trial_join_url(meta) else ""))
         lines.append("")
+    if meta.get("early_look"):
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     for item in report.get("checklist") or []:
@@ -1144,6 +1148,8 @@ def _league_text(report: Mapping[str, Any]) -> str:
                          + (f" {TRIAL_BUTTON}: {trial_join_url(meta)}"
                             if trial_join_url(meta) else ""))
         lines.append("")
+    if meta.get("early_look"):
+        lines += [f"{EARLY_LOOK_HEAD.upper()}. {EARLY_LOOK}", ""]
     if season_end_lines(meta):
         lines += [f"{SEASON_END_HEAD.upper()}. " + " ".join(season_end_lines(meta)), ""]
     lines += ["GAME PLAN"]
@@ -1426,6 +1432,8 @@ def subject_for(report: Mapping[str, Any]) -> str:
         # with two teams got two identical subjects (panel review BE-I5).
         team = team_name(report)
         week = f"Week {meta['week']}" + (f" — {team}" if team else "")
+        if meta.get("early_look"):
+            return f"{week}: your early look, before waivers"
         # The subject leads with an empty spot when there is one (F6): it is
         # the one thing in the report that costs points if left unread.
         holes = empty_spots(report)

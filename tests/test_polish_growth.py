@@ -337,12 +337,12 @@ def test_the_share_card_job_holds_no_secret_and_commits_only_the_card() -> None:
     yaml = pytest.importorskip("yaml")
     text = (REPO / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
     jobs = yaml.safe_load(text)["jobs"]
-    assert list(jobs)[-2:] == ["share-card", "commit-card"]
+    assert list(jobs)[-3:-1] == ["share-card", "commit-card"]
     job, commit = jobs["share-card"], jobs["commit-card"]
     raw = text.split("\n  share-card:", 1)[1]           # both jobs, comments included
     assert "secrets." not in raw and "statebox" not in raw and "data/sealed" not in raw
     assert job["needs"] == ["week", "commit-record"]
-    assert job["if"] == ("always() && needs.week.result != 'cancelled' "
+    assert job["if"] == ("always() && needs.week.result != 'skipped' && needs.week.result != 'cancelled' "
                          "&& needs.commit-record.result != 'cancelled'")
     assert job["permissions"] == {"contents": "read"}
     runs = "\n".join(str(s.get("run", "")) for s in job["steps"])
@@ -677,9 +677,9 @@ def test_each_page_says_only_what_the_product_does(slug: str) -> None:
     assert "$" not in visible and not re.search(r"better than|more accurate|grade", visible, re.I)
     assert f"<title>{name} fantasy football start/sit report for your roster — Beat Your League</title>" in page
     assert (f'<meta name="description" content="Copy your {name} fantasy roster and paste it, no '
-            f"login. Every Tuesday a report decides your lineup: every slot decided, close calls "
+            f"login. Every Wednesday a report decides your lineup: every slot decided, close calls "
             f'explained, byes checked through Week 17.">') in page
-    assert f"<h1>Your {name} roster, decided every Tuesday</h1>" in page
+    assert f"<h1>Your {name} roster, decided every Wednesday</h1>" in page
     assert f'<link rel="canonical" href="https://beatyourleague.com/{slug}/">' in page
     assert "noindex" not in page and SOCIAL_IMAGE_TAGS in page
     # Twice in the page, then the bar, its Menu and the footer map.

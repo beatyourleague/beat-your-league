@@ -156,10 +156,10 @@ def week_has_kicked_off(cache_dir: Path, season: str, week: int,
 
 
 # A derived Week 1 is built no earlier than this before its first kickoff: the
-# Tuesday of kickoff week (Thursday opener) and the Tuesday before it, never
-# the first Tuesday after the schedule is published in May, months before
-# anybody drafts (promise audit EMAILS-62).
-WEEK_ONE_LEAD = timedelta(days=9)
+# Wednesday of kickoff week and never the one before it, nor the first
+# Wednesday after the schedule is published in May, months before anybody
+# drafts (promise audit EMAILS-62).
+WEEK_ONE_LEAD = timedelta(days=7)
 
 
 def week_first_kickoff(cache_dir: Path, season: str, week: int, *,
@@ -522,8 +522,8 @@ def season_over(cache_dir: Path, season: str, today: date | None = None, *,
 
 def next_report_day(cache_dir: Path, season: str, week: int, *,
                     live: bool = True) -> str | None:
-    """The Tuesday the NEXT weekly report goes out: the first Tuesday after the
-    last game of ``week``, as an ISO date. None when the schedule cannot say.
+    """The Wednesday the NEXT weekly report goes out: the first Wednesday after
+    the last game of ``week``, as an ISO date. None when the schedule cannot say.
 
     One rule for every surface that names that day — the season clock the
     live build writes (render/live_sample re-exports this) and the roster
@@ -532,7 +532,7 @@ def next_report_day(cache_dir: Path, season: str, week: int, *,
     if not days:
         return None
     last = date.fromisoformat(max(days))
-    ahead = (1 - last.weekday()) % 7 or 7            # Tuesday is weekday 1
+    ahead = (2 - last.weekday()) % 7 or 7            # Wednesday is weekday 2
     return (last + timedelta(days=ahead)).isoformat()
 
 

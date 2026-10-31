@@ -484,14 +484,14 @@ def final_check(plan: Mapping[str, Any], now: Mapping[str, Now]) -> list[Change]
               and current.final):
             changes.append(Change(
                 CLEARED, f"{name(pid)} is cleared — keep him at {slot}",
-                f"He was questionable on Tuesday and is off the injury report now."))
+                f"He was questionable on Wednesday and is off the injury report now."))
         elif (was == "out" and pid in starters and current.designation is None
               and current.final and not current.practice_squad):
             # Tuesday seated him only because nobody else could start there,
             # and said a zero was coming unless they added someone.
             changes.append(Change(
                 UNBLOCKED, f"{name(pid)} is cleared — keep him at {slot}",
-                f"He was out on last week's injury report, so Tuesday's report "
+                f"He was out on last week's injury report, so Wednesday's report "
                 f"said {slot} was a zero unless you added someone. He's off "
                 f"Friday's final report: no pickup needed."))
 

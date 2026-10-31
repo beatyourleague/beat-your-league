@@ -162,7 +162,7 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
     monkeypatch.setattr("run.solo.CACHE_DIR", _cache(tmp_path))
     reg = tmp_path / "rosters.json"
     reg.write_text("[]")
-    code = trials.main(["--registry", str(reg), "--now", "2026-01-01T00:00:00+00:00"])
+    code = trials.main(["--registry", str(reg), "--now", "2026-01-01T06:00:00+00:00"])
     out = capsys.readouterr()
     assert code == 0, out.err
     assert "skipped as unbuildable" in out.out
@@ -170,7 +170,7 @@ def test_a_bad_request_never_fails_the_run_and_the_free_report_carries_no_subscr
     assert all(m.unsubscribe is None for m in sent)
     # An unreadable registry fails CLOSED: nobody may be treated as a non-subscriber.
     reg.write_text("{not json")
-    assert trials.main(["--registry", str(reg), "--now", "2026-01-01T00:00:00+00:00"]) == 1
+    assert trials.main(["--registry", str(reg), "--now", "2026-01-01T06:00:00+00:00"]) == 1
 
 
 def test_the_free_report_says_what_it_is_and_asks_nothing_of_a_non_subscriber() -> None:
@@ -217,7 +217,7 @@ def test_the_try_mode_never_reaches_a_payment_and_the_contract_matches() -> None
 # --------------------------------------------------------------------- #
 
 THURSDAY = "2026-01-01T15:00:00+00:00"
-TUESDAY_1PM = "2026-01-06T13:00:00+00:00"
+TUESDAY_1PM = "2026-01-07T22:30:00+00:00"
 
 
 def _drive(tmp_path, monkeypatch, capsys, *, rows, now, registry="[]", sent=(),
@@ -335,8 +335,8 @@ def test_on_tuesday_paying_subscribers_go_first(tmp_path, monkeypatch, capsys) -
                         sent=finished)
     assert len(mailed) == 1
     *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows,
-                        now="2026-01-06T20:00:00+00:00")
-    assert len(mailed) == 1, "a Tuesday that never finished holds them all day"
+                        now="2026-01-08T02:00:00+00:00")
+    assert len(mailed) == 1, "a Wednesday that never finished holds them all day"
     *_, mailed = _drive(tmp_path, monkeypatch, capsys, rows=rows, now=TUESDAY_1PM,
                         registry=None)                          # before launch
     assert len(mailed) == 1

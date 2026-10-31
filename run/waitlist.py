@@ -86,7 +86,7 @@ BODY = """\
 {opening}
 
 Paste your roster from any app: no login, no league to connect. Your first
-report usually lands within the hour. Then every Tuesday through your title
+report usually lands within the hour. Then every Wednesday through your title
 game, one email sets your lineup for your scoring: every slot decided, every
 close call explained, an if/then for late news, and any bye still ahead that
 leaves a spot empty, playoff weeks included.

@@ -28,7 +28,7 @@ SITE = ROOT / "site"
 CACHE = ROOT / "data" / "raw" / "nflverse"
 needs_schedule = pytest.mark.skipif(not (CACHE / "games.csv").is_file(),
                                     reason="no cached nflverse schedule (data/ is gitignored)")
-CHARGE_DUE = datetime(2026, 12, 22, 12, 17, tzinfo=timezone.utc)
+CHARGE_DUE = datetime(2026, 12, 23, 22, 17, tzinfo=timezone.utc)
 
 
 def _page(name: str) -> str:
@@ -55,8 +55,8 @@ def _plan(period_end: datetime) -> dict:
 # --------------------------------------------------------------------- #
 
 @needs_schedule
-def test_the_cutoff_is_week_16s_tuesday() -> None:
-    assert last_charge_send(CACHE, "2026") == date(2026, 12, 22)
+def test_the_cutoff_is_week_16s_wednesday() -> None:
+    assert last_charge_send(CACHE, "2026") == date(2026, 12, 23)
 
 
 def test_a_renewal_landing_on_christmas_eve_never_happens() -> None:
@@ -73,7 +73,7 @@ def test_the_last_renewal_lands_before_week_16s_report() -> None:
 
 def test_a_week_later_never_costs_half_as_much() -> None:
     """Before: $29.98 for seven reports on Nov 24, $14.99 for six on Dec 1."""
-    stop = date(2026, 12, 22)
+    stop = date(2026, 12, 23)
     assert economics.monthly_charges(date(2026, 11, 24), stop)[0] == 1
     assert economics.monthly_charges(date(2026, 12, 1), stop)[0] == 1
     assert economics.monthly_charges(date(2026, 11, 17), stop)[0] == 2
@@ -81,12 +81,12 @@ def test_a_week_later_never_costs_half_as_much() -> None:
 
 def test_the_model_and_the_billing_run_agree_on_the_week() -> None:
     assert economics.LAST_CHARGE_WEEK == billing.LAST_CHARGE_WEEK
-    assert economics.report_tuesday(economics.LAST_CHARGE_WEEK) == date(2026, 12, 22)
+    assert economics.report_wednesday(economics.LAST_CHARGE_WEEK) == date(2026, 12, 23)
 
 
 @pytest.mark.parametrize("when", [
-    datetime(2026, 12, 29, 16, tzinfo=timezone.utc),    # Week 17's Tuesday
-    datetime(2027, 1, 5, 16, tzinfo=timezone.utc),      # Week 18's Tuesday
+    datetime(2026, 12, 30, 23, tzinfo=timezone.utc),    # Week 17's Wednesday
+    datetime(2027, 1, 6, 23, tzinfo=timezone.utc),      # Week 18's Wednesday
     datetime(2027, 1, 9, 17, tzinfo=timezone.utc),      # Week 18's Saturday check
 ])
 def test_the_earliest_plan_we_stop_keeps_every_report(when) -> None:

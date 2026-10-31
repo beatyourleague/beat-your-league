@@ -735,7 +735,7 @@ Baltimore Ravens
         is usually set up within the hour. Nothing is set up until it's pressed, and the
         button works for 7 days. Your first report lands the day you confirm:
         this week's report if it's Week 2 or later and the week's games haven't
-        started, otherwise a report on your roster as it stands. Then a new one every Tuesday. If
+        started, otherwise a report on your roster as it stands. Then a new one every Wednesday. If
         it can't be matched to an active League Pass, or your league's seats are all
         taken, we email you to say so.</li>
         <!-- What the intake actually does (run/updates.py validate_requests),
@@ -753,7 +753,7 @@ Baltimore Ravens
         <li id="trial-note" style="display:none">If this address hasn't had a free
         report this season and doesn't already have a plan, it's built from the roster you just
         entered and usually lands within the hour. From the week's first kickoff
-        until Tuesday it waits for the next week's report, so it's never about games
+        until that week's games are done it waits for the next week's report, so it's never about games
         already underway. One free report per person. Nothing to pay, no card.</li>
         <li id="pay-note">Stripe handles the payment. We never see, transmit or store
         your card details.</li>
@@ -770,7 +770,7 @@ Baltimore Ravens
 <aside class="side">
   <h2>What lands in your inbox</h2>
   <ul>
-    <li><span id="side-first"><b>A report the day you join</b>, then a new one every Tuesday morning</span></li>
+    <li><span id="side-first"><b>A report the day you join</b>, then a new one every Wednesday evening</span></li>
     <li><span>Every slot decided for <b>your roster</b> and scoring</span></li>
     <li><span>An <b>if/then plan</b> for injury news, and a <b>Saturday check</b> when it
       changes your lineup</span></li>
@@ -806,12 +806,12 @@ Baltimore Ravens
 <script>
 "use strict";
 // The intake. Name resolution and reference encoding live in roster.js, which
-// is tested against the Python that must decode them on Tuesday
+// is tested against the Python that must decode them on Wednesday
 // (tests/test_intake.py runs both). This file is the flow around them.
 //
 // Two rules the flow exists to enforce:
 //   RULE R3 — nothing is guessed. An unresolved line blocks checkout; the
-//   subscriber picks, because on Tuesday there is nobody to ask.
+//   subscriber picks, because on Wednesday there is nobody to ask.
 //   Nothing is DROPPED. A line we cannot read is shown back verbatim, as a
 //   text node. Pasting fifteen and silently getting thirteen is the same
 //   failure as guessing, wearing a different hat.
@@ -932,7 +932,7 @@ if (VIA) {
 // ?ref=<ref> — a roster checked here before, coming back (contract C6): the
 // launch email's "finish setting up" link, or this page's own address
 // bookmarked while checkout was closed (BE-I3). Decoded by roster.js, the
-// twin of what decodes it on Tuesday; anything unreadable is an ordinary
+// twin of what decodes it on Wednesday; anything unreadable is an ordinary
 // visit, never a half-restored roster.
 const RESTORED = (() => {
   try { return QUERY.get("ref") ? R.decodeRoster(QUERY.get("ref")) : null; }
@@ -1060,7 +1060,7 @@ function radio(name) {
 }
 // The lineup is the base plus the kicker and defense answers, built by
 // roster.js from the same table engine/subscriber.py holds (contract C8), so
-// the slots the ref carries are a shape Tuesday knows — graded or not.
+// the slots the ref carries are a shape Wednesday knows — graded or not.
 function shapeChoice() {
   const base = radio("template") in R.SHAPE_BASES ? radio("template") : "std";
   return { base, kicker: radio("kicker") !== "no", defense: radio("defense") !== "no" };
@@ -1628,7 +1628,7 @@ function callsBlock(index, players, slots, out) {
   block.appendChild(panelNode("p", "pf-lead", !calls.length
     ? "Everyone who can play starts, so no position has a choice to make right now."
     : WANTS_PASS ? "Every manager's report decides these for their own team, every week. These are yours."
-    : "Your Tuesday report decides these for your team, every week."));
+    : "Your Wednesday report decides these for your team, every week."));
   if (!calls.length) return block;
   const list = panelNode("ul", "pf-calls");
   calls.forEach((call) => {
@@ -1737,8 +1737,8 @@ function lockedPreview(index, players, slots, out) {
     card.appendChild(line);
   });
   card.appendChild(panelNode("p", "pf-lockline", WANTS_PASS
-    ? "Locked. Each manager's report fills this in for their own team, every Tuesday."
-    : "Locked. Your report fills this in every Tuesday: who starts, and why."));
+    ? "Locked. Each manager's report fills this in for their own team, every Wednesday."
+    : "Locked. Your report fills this in every Wednesday: who starts, and why."));
   block.appendChild(card);
   return block;
 }
@@ -2419,7 +2419,7 @@ function submitTrial(email, ref) {
 function showSeatLink() {
   // Only on the way to Stripe. Rendered earlier it is a shareable link before
   // any payment, so an abandoned checkout leaves a league of people each told
-  // their seat is claimed while every claim is dropped on Tuesday.
+  // their seat is claimed while every claim is dropped on Wednesday.
   // The link itself comes in the buyer's welcome email, after the payment
   // (contract C4): that one names THIS pass by a code, so a leaguemate types
   // no buyer's address and cannot mistype it (LP-D1). There is no other
@@ -2437,10 +2437,10 @@ function showSeatLink() {
 // ---- when the first report lands (PC-02) ------------------------------
 // "Today" is true only while this week's first kickoff is ahead: a buyer
 // before it is sent this week's report the same day, a buyer after it gets the
-// roster report today and the next weekly report on Tuesday
+// roster report today and the next weekly report on Wednesday
 // (run/intake.py _first_file; week 1 always starts with the roster report).
 // The page learns which from site/week.json — written from the NFL schedule by
-// the Tuesday build, never typed — and until it can tell, it says the sentence
+// the Wednesday build, never typed — and until it can tell, it says the sentence
 // that is true either way.
 let FIRST = null;                          // null | {when, tuesday}
 // Monthly is paused before the season (week.json phase "preseason"): each
@@ -2552,18 +2552,18 @@ function drawFirst() {
     // A seat has no checkout to wait for; it waits for seats to open.
     const day = SEAT_MODE ? "the day your seat is confirmed" : "the day you join";
     const opens = SEAT_MODE ? ", once seats open" : ", once checkout opens";
-    side.replaceChildren(b("A report " + day), t(opens + ", then a new one every Tuesday morning"));
+    side.replaceChildren(b("A report " + day), t(opens + ", then a new one every Wednesday evening"));
     note.replaceChildren(t("A report lands "), b(day), t(opens + "."));
   } else if (FIRST && FIRST.when === "before") {
-    side.replaceChildren(b("This week's report today"), t(", then a new one every Tuesday morning"));
+    side.replaceChildren(b("This week's report today"), t(", then a new one every Wednesday evening"));
     note.replaceChildren(t("This week's report lands "), b("today"), t("."));
   } else if (FIRST && FIRST.when === "after") {
     side.replaceChildren(b("Your first report today"),
-      t(", then your Tuesday report from " + FIRST.tuesday));
+      t(", then your Wednesday report from " + FIRST.tuesday));
     note.replaceChildren(t("Your first report lands "), b("today"),
-      t("; your Tuesday report starts " + FIRST.tuesday + "."));
+      t("; your Wednesday report starts " + FIRST.tuesday + "."));
   } else {
-    side.replaceChildren(b("A report the day you join"), t(", then a new one every Tuesday morning"));
+    side.replaceChildren(b("A report the day you join"), t(", then a new one every Wednesday evening"));
     note.replaceChildren(t("A report lands "), b("the day you join"), t("."));
   }
 }
@@ -2802,7 +2802,7 @@ function draw2027Plan() {
   };
   $("submit").textContent = "Unlock my lineups — $49";
   $("header-pitch").textContent = "All of 2027, with the rest of this season included, " +
-    "decided for your roster and in your inbox every Tuesday. $49 today, renewing at $39 on " +
+    "decided for your roster and in your inbox every Wednesday. $49 today, renewing at $39 on " +
     SEASON_2027_FIRST_RENEWAL + ", then each August. " +
     "Cancel any time, with a full refund before your first weekly report's first game.";
   $("terms-line").replaceChildren(...terms());
@@ -2831,7 +2831,7 @@ function drawTrial() {
   if (!(FORM_ENDPOINT && TRIAL_OPEN)) return;
   const what = TRIAL && TRIAL.when === "this" ? ["this week's report", "This week's report"]
              : TRIAL && TRIAL.when === "next"
-               ? ["next week's report, on " + TRIAL.tuesday, "Next week's report"]
+               ? ["next week's report, by " + TRIAL.tuesday, "Next week's report"]
                : ["your next weekly report", "Your next weekly report"];
   // M15: what arrives, in the visitor's words — the odds gate is How it
   // works' job, and a pitch that opened with it sold the exception.
@@ -2921,7 +2921,7 @@ if (TRY_MODE) {
     : "Seats open soon. Once your league's League Pass is live, your seat " +
       "costs you nothing.";
   // A matched seat is sent its first report the day it is confirmed, by the
-  // purchase's own rules (run/intake.py, LP-I4) — "next Tuesday" was the
+  // purchase's own rules (run/intake.py, LP-I4) — "next Wednesday" was the
   // promise before seats had a first email.
   $("submit").textContent = "Claim my seat";
   nothingToPay("3 · Claim");
@@ -2964,7 +2964,7 @@ if (TRY_MODE) {
   // Each manager claims their own seat, once, from the link in the buyer's
   // welcome email — nothing reaches anyone who doesn't (JOIN-7).
   $("header-pitch").textContent = "Every manager in your league (up to 14 teams) gets their own report every " +
-    "Tuesday. You get a link to send them, and each manager claims their seat from it " +
+    "Wednesday. You get a link to send them, and each manager claims their seat from it " +
     "once. $34.99 a month for your whole league: it stops on its own after the title " +
     "game, with a full refund before your first weekly report's first game.";
   $("lbl-email").textContent = "Your email (your own report and the receipt go here)";

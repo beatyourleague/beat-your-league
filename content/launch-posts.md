@@ -33,7 +33,7 @@ it. Never post a win-loss record, and no results or promises.
 
 Once checkout is open, add:
 
-> I also built the paid version: one email every Tuesday that decides your lineup for your roster.
+> I also built the paid version: one email every Wednesday that decides your lineup for your roster.
 > Happy to run you a free one this week if you want to see it first.
 
 ## 2. Discord: the message to the mod
@@ -60,14 +60,14 @@ First reply:
 
 > [link]
 
-## 5. X: Tuesday, from this week's real report
+## 5. X: Wednesday, from this week's real report
 
-`content/this-week.md` is rewritten every Tuesday with up to three posts from the live sample.
+`content/this-week.md` is rewritten every Wednesday with up to three posts from the live sample.
 Use those. They're the real report, and they fit a post.
 
 ## 6. A commissioner, once the League Pass is open
 
-> Running a league? The League Pass gives every manager their own lineup report every Tuesday
+> Running a league? The League Pass gives every manager their own lineup report every Wednesday
 > through the title game. $34.99 a month for the league, and it stops on its own.
 >
 > [link to the League Pass page]

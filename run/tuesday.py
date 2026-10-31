@@ -192,6 +192,12 @@ def league_seat_link(subscriber: RosterSubscriber,
                     payer_email, setup, pass_id=subscriber.pass_id or "")
 
 
+def early_look_key(season: str, week: int, slug: str) -> str:
+    """An early look in the send log: never the week's report key, which
+    would stop Wednesday's report going out."""
+    return f"{season}-w{int(week):02d}-early-{slug}"
+
+
 def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    template_html: str, out_dir: Path = SUBSCRIBER_REPORTS,
                    processed_dir: Path = PROCESSED_DIR,
@@ -200,8 +206,15 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
                    first_plans: Path | None = None,
                    seat_counts: Mapping[str, int] | None = None,
                    seat_link: str | None = None,
-                   seat_cap: int | None = None) -> RunResult:
+                   seat_cap: int | None = None,
+                   early_look: bool = False) -> RunResult:
     """One roster's week: build, write the archive, prepare the email.
+
+    ``early_look``: a buyer between Monday night's game and Wednesday's run.
+    They get the week's report at once, marked as early, under its own send
+    key so Wednesday's post-waiver report still reaches them. It is the free
+    report's rule for the record: nothing here is recorded and no plan is kept,
+    because Wednesday's is the report of record for that week.
 
     Writes nothing to the public ledger. ``record`` says whether this report's
     calls may EVER be recorded: False when nothing is being mailed, and then
@@ -229,6 +242,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         # payer's seat count and the day the roster was set.
         report["meta"].update(subscriber_meta(subscriber, seat_counts, seat_link,
                                               seat_cap))
+        if early_look:
+            report["meta"]["early_look"] = True
         # The link carries this subscription's own scoring, size and lineup
         # (FUNNEL F1): an update replaces the settings on file with the ones
         # the page posts, and a bare link opened on the page's defaults.
@@ -278,7 +293,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
         text=text,
         # Idempotent per (season, week, subscription), so a re-run, a resumed
         # workflow or a double-fired cron cannot mail the same week twice.
-        key=report_key(data.season, week, subscriber.slug),
+        key=(early_look_key if early_look else report_key)(
+            data.season, week, subscriber.slug),
         # Every commercial email needs a machine-readable way out, and this
         # product had none: a delivered draft carried only From/To/Subject/MIME.
         # For a PAID subscription there is no free list to leave — unsubscribing
@@ -296,7 +312,9 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     # an unreadable call must not sink this or anybody else's Tuesday.
     calls: list = []
     store: str | None = None
-    if not record:
+    if early_look:
+        ledger_note = " · nothing recorded (early look)"
+    elif not record:
         ledger_note = " · nothing recorded (not sending)"
     else:
         try:
@@ -328,6 +346,8 @@ def run_subscriber(subscriber: RosterSubscriber, data: WeekData,
     else:
         plan_note = ""
 
+    if early_look:
+        plan = None                     # Saturday reads Wednesday's plan
     published = sum(1 for slot in report["lineup"]
                     if slot.get("confidence") is not None)
     detail = (f"{published}/{len(report['lineup'])} confidences · "
@@ -418,7 +438,7 @@ def paid_subscribers(subscribers: list[RosterSubscriber], paid_list: Path,
               f"the paid check against {paid.source}.", file=sys.stderr)
         print("  If that is genuinely everyone cancelling, re-run with "
               "--no-paid-check to confirm. Otherwise the entitlement source "
-              "is wrong or stale — check it before next Tuesday.",
+              "is wrong or stale — check it before next Wednesday.",
               file=sys.stderr)
         return None
     return subscribers
@@ -441,10 +461,10 @@ def _mark_finished(season: str, week: int, summary: str = "") -> None:
     watchdog tomorrow, never a send, so it is said and the run carries on."""
     try:
         if mark_run(TUESDAY, season, week, summary=summary):
-            print(f"Marked {season} week {week}'s Tuesday run as having run"
+            print(f"Marked {season} week {week}'s Wednesday run as having run"
                   + (f" ({summary})." if summary else "."))
     except OSError as exc:
-        print(f"could not mark the Tuesday run as finished ({exc}); the "
+        print(f"could not mark the Wednesday run as finished ({exc}); the "
               f"watchdog may report this week as missed", file=sys.stderr)
 
 
@@ -533,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     # so the real one in September is skipped as already sent.
     if args.week is None and not _week_one_due(args):
         print("No reports this week: Week 1 isn't due yet — its reports go out "
-              "on the Tuesday before the season's first game.")
+              "on the Wednesday before the season's first game.")
         return 0
 
     # One load for the whole run. Everything in it is per-week rather than
@@ -600,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
     line = "=" * 62
     ok = [r for r in results if r.ok]
     failed = [r for r in results if not r.ok]
-    print(f"\n{line}\nTUESDAY RUN — {data.season} week {data.week}\n{line}")
+    print(f"\n{line}\nWEEKLY RUN — {data.season} week {data.week}\n{line}")
     print(f"Subscribers: {len(results) + len(already)}; {len(ok)} reports "
           f"written, {len(failed)} failed"
           + (f", {len(already)} already sent this week (not rebuilt)"

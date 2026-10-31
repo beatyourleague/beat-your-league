@@ -246,7 +246,7 @@ benched {benched[1]} ({beat[1]} outscored).
 
 ## What this is not
 
-The backtest reads CLOSING lines; the product reads Tuesday's (method §6). The
+The backtest reads CLOSING lines; the product reads Wednesday's (method §6). The
 harness never trades or drops.
 """
     args.output.write_text(text, encoding="utf-8")

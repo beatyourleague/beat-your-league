@@ -183,13 +183,13 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
             out.append({"kind": "sample", "head": "THIS WEEK'S REPORT", "text": (
                 f"— Week {meta['week']} of the {meta['season']} season for a "
                 f"sample roster, rebuilt {rr._built_on(meta)} from this week's "
-                f"Tuesday information (the week {int(meta['week']) - 1} injury "
+                f"Wednesday information (the week {int(meta['week']) - 1} injury "
                 f"report); later injury news is not in it.")})
         else:
             out.append({"kind": "sample", "head": "THIS WEEK'S REPORT", "text": (
                 f"— Week {meta['week']} of the {meta['season']} season, built "
                 f"{rr._built_on(meta)} for a sample roster, exactly the way yours "
-                f"is built. Rebuilt every Tuesday of the season.")})
+                f"is built. Rebuilt every Wednesday of the season.")})
     elif meta.get("historical_demo") and meta.get("solo"):
         scoring = str(meta.get("scoring") or "")
         scored = (f"scored {scoring[:1].lower()}{scoring[1:]}" if scoring
@@ -208,11 +208,14 @@ def bands(report: Mapping[str, Any]) -> list[dict[str, str]]:
         out.append({"kind": "sample", "head": "", "text": (
             f"SAMPLE REPORT — real data from the {meta['season']} season of "
             f"{meta['league_name']}, built to show exactly what lands in your inbox "
-            f"on a Tuesday. Because it's a past season we can't check who was hurt or "
+            f"on a Wednesday. Because it's a past season we can't check who was hurt or "
             f"inactive back then, so the confidence numbers are left off — in a live week "
             f"you get them on every slot where both players are confirmed active."
             + (" Team and manager names here are placeholders; every number is that "
                "league's real record." if meta.get("anonymized_demo") else ""))})
+    if meta.get("early_look"):
+        out.append({"kind": "early", "head": f"{rr.EARLY_LOOK_HEAD}.",
+                    "text": rr.EARLY_LOOK})
     if meta.get("trial") and not meta.get("historical_demo"):
         from render.email import (TRIAL_BUTTON, TRIAL_HEAD, TRIAL_INTRO,
                                   trial_join_url, trial_price_line)

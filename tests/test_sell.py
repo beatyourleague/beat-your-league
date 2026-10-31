@@ -61,8 +61,8 @@ def _flat(text: str) -> str:
 def _clock(week: dict, now: str, open_: bool) -> dict:
     iife = LANDING.split("// The season clock.")[1]
     iife = iife[iife.index("(function () {"):iife.index("})();") + 5]
-    start = {"season-clock": "A new report every Tuesday of the season.",
-             "pass-clock": "A new lineup decided every Tuesday.", "hero-open": "", "closer-cta": "",
+    start = {"season-clock": "A new report every Wednesday of the season.",
+             "pass-clock": "A new lineup decided every Wednesday.", "hero-open": "", "closer-cta": "",
              "sticky-cta": "", "this-week-label": ""}
     script = """
 const FIXED = Date.parse(%(now)s);
@@ -95,26 +95,26 @@ setTimeout(() => console.log(JSON.stringify({ closed, line: els["pass-clock"].te
     return _node(script)
 
 
-W8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-03",
+W8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-04",
       "first_kickoff": "2026-10-30T00:15:00Z", "phase": "season", "odds": 3, "cards": True,
       "closest_call": True}
 
 
 @needs_node
 @pytest.mark.parametrize("week,lands,kickoff,now,open_,hero", [
-    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False, "Week 9's report lands Tuesday."),
-    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True, "Week 9's report lands Tuesday."),
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False, "Week 9's report lands Wednesday."),
+    (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True, "Week 9's report lands Wednesday."),
     (13, "2026-12-08", "2026-12-04T01:15:00Z", "2026-12-01T20:00:00Z", True, "Week 13's report lands today."),
-    (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True, "Week 17's report lands Tuesday."),
+    (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True, "Week 17's report lands Wednesday."),
     # Past Week 17's kickoff: Week 18 still goes out, and the card says the same.
-    (17, "2027-01-12", "2027-01-08T01:15:00Z", "2027-01-09T20:00:00Z", True, "Week 18's report lands Tuesday."),
+    (17, "2027-01-12", "2027-01-08T01:15:00Z", "2027-01-09T20:00:00Z", True, "Week 18's report lands Wednesday."),
 ])
 def test_the_card_says_the_same_words_every_week(week, lands, kickoff, now, open_, hero) -> None:
     """Owner decision, Oct 31 2026: a falling count makes a buyer do the math and
     wait for the price to fall with it. The hero names the next report and
     counts nothing; the card's line is the one in the markup."""
     got = _clock({**W8, "week": week, "lands_on": lands, "first_kickoff": kickoff}, now, open_)
-    assert got["line"] == "A new lineup decided every Tuesday." and not got["hidden"]
+    assert got["line"] == "A new lineup decided every Wednesday." and not got["hidden"]
     assert got["hero"] == hero
 
 
@@ -148,12 +148,12 @@ def test_no_page_counts_the_season_down() -> None:
 ])
 def test_a_clock_that_cannot_say_leaves_the_static_lines(week) -> None:
     got = _clock(week, "2026-10-30T20:00:00Z", True)
-    assert got["line"] == "A new lineup decided every Tuesday." and not got["hidden"]
+    assert got["line"] == "A new lineup decided every Wednesday." and not got["hidden"]
 
 
 def test_the_cards_generic_line_ships_in_the_markup() -> None:
     card = LANDING.split('id="pass-card"')[1].split("</ul>")[0]
-    assert '<p class="passclock" id="pass-clock">A new lineup decided every Tuesday.</p>' in card
+    assert '<p class="passclock" id="pass-clock">A new lineup decided every Wednesday.</p>' in card
 
 
 @needs_node

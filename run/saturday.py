@@ -615,9 +615,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n{line}\nFINAL CHECK — {season} week {week} · as of "
           f"{at:%a %Y-%m-%d %H:%M} UTC\n{line}")
     print(f"Subscribers: {len(subscribers)}; {len(messages)} need a change, "
-          f"{len(quiet)} unchanged, {len(missing)} with no Tuesday plan")
+          f"{len(quiet)} unchanged, {len(missing)} with no Wednesday plan")
     if missing:
-        print("  no plan (joined after Tuesday, or Tuesday did not send): "
+        print("  no plan (joined after Wednesday, or Wednesday did not send): "
               + ", ".join(missing))
     for note in unreadable:
         print(f"  ROSTER CHANGED, NOT CHECKED: {note}", file=sys.stderr)
@@ -627,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         # Wednesday. That subscriber would never hear about Friday's news, and
         # nothing else would say so. (Nobody having a Tuesday send at all — a
         # lone late joiner — is a quiet Saturday, not an alarm.)
-        print(f"NO PLAN for {len(lost)} subscriber(s) Tuesday DID mail "
+        print(f"NO PLAN for {len(lost)} subscriber(s) Wednesday DID mail "
               f"({', '.join(lost[:5])}) — the plans cache is missing or a plan "
               f"failed to save. They were not checked.", file=sys.stderr)
 

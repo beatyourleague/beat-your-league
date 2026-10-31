@@ -374,7 +374,8 @@ const REPO = "beatyourleague/beat-your-league";
 const BRANCH = "main";
 
 // Each `cron` is the LITERAL string from that workflow's own `schedule:` block
-// (UTC). Only daily.yml takes an input: its once-a-day steps (stopping monthly
+// (UTC). weekly.yml's morning slot says which it is, as its cron does. daily.yml
+// takes an input too: its once-a-day steps (stopping monthly
 // billing at season's end, the missed-run watchdog) run on the 14:00 dispatch
 // and never on the hourly ones — a dispatch has no `github.event.schedule` to
 // tell them apart, so the input does.
@@ -384,10 +385,12 @@ const BRANCH = "main";
 // backups land off-peak, and the Worker's one trigger (17,47 * * * *) fires
 // at the same minutes so both sides keep one time per job. The half hour
 // between :17 and :47 is what keeps the hourly intake from ever starting
-// beside the Tuesday or Saturday runs.
+// beside the Wednesday or Saturday runs.
 const SCHEDULE = [
-  { cron: "17 12 * * 2", workflow: "weekly.yml" },     // Tuesday's reports
-  { cron: "17 16 * * 2", workflow: "weekly.yml" },     // ...the same-morning retry
+  { cron: "17 22 * * 3", workflow: "weekly.yml" },     // Wednesday's reports
+  { cron: "17 0 * * 4", workflow: "weekly.yml" },      // ...the same-evening retry
+  // Only a week with a game on Wednesday does anything in this slot.
+  { cron: "17 13 * * 3", workflow: "weekly.yml", inputs: { slot: "morning" } },
   { cron: "17 14 * * *", workflow: "daily.yml", inputs: { daily: "true" } },
   { cron: "47 * * * *", workflow: "daily.yml", inputs: { daily: "false" } },
   { cron: "17 16 * * 6", workflow: "saturday.yml" },   // the final check

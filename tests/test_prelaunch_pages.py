@@ -130,7 +130,7 @@ def test_every_published_sample_carries_the_sites_nav_and_day_one_line(name: str
 
 
 OLD_CHROME = """<!DOCTYPE html><html><head><title>Beat Your League — 2026 Week 7 Report</title>
-<meta name="description" content="Week 7 of the 2026 NFL season, for a sample roster: the lineup we&#x27;d set, with odds on 3 of its 9 slots. Rebuilt every Tuesday of the season.">
+<meta name="description" content="Week 7 of the 2026 NFL season, for a sample roster: the lineup we&#x27;d set, with odds on 3 of its 9 slots. Rebuilt every Wednesday of the season.">
 <style>.x{}</style></head><body><div class="report">
 <header class="bug"><div class="sitebar"><a class="brand" href="index.html"><span>Beat Your League</span></a><nav class="sitenav" aria-label="Site"><a href="how-it-works.html">How it works</a><a href="index.html#pricing">Pricing</a><a class="home" href="index.html">← Home</a></nav></div><h1>Week 7 · Your Report</h1><p class="headcta"><a class="btn" href="join/index.html">Get this for your team</a></p></header>
 <section><div class="v">Brock Purdy 21.5 · Zay Flowers 15.6 · 81% · 76 – 134</div></section>
@@ -177,7 +177,7 @@ def test_the_restamp_keeps_an_over_seasons_last_page_closed(monkeypatch) -> None
     over = live.restamp_last(OLD_CHROME.replace(
         "<h1>Week 7 · Your Report</h1>",
         '<div class="notice"><b>THIS WEEK&#x27;S REPORT</b> — Week 18 of the 2026 '
-        'season, built Tuesday.</div><h1>Week 18</h1>'), season_over=True)
+        'season, built Wednesday.</div><h1>Week 18</h1>'), season_over=True)
     assert over.count(closed) == 2, "restamp_last did not close the over page"
     out = live.restamp_chrome(over)
     assert out.count(closed) == 2 and not re.search(r'class="btn[^"]*" href="join/',
@@ -202,7 +202,7 @@ def test_the_share_preview_says_what_the_report_holds_never_an_odds_count() -> N
                           {"action": "Byes ahead: Week 9 leaves your K spot empty"}]}
     assert live.share_text(full)[1] == (
         "Week 7 of the 2026 NFL season, for a sample roster: every slot decided, the "
-        "week's closest call, who can't play and byes ahead. Rebuilt every Tuesday of "
+        "week's closest call, who can't play and byes ahead. Rebuilt every Wednesday of "
         "the season.")
 
 

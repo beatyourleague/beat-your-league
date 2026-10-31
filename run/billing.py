@@ -220,7 +220,7 @@ def last_send(cache_dir: Path, season: str, *,
     # Start a fortnight before the finale and walk forward: enough to cover the
     # makeup case above without assuming where in the week anything falls.
     day = final - timedelta(days=21)
-    day += timedelta(days=(1 - day.weekday()) % 7)          # next Tuesday
+    day += timedelta(days=(2 - day.weekday()) % 7)          # next Wednesday
     while day <= final + timedelta(days=14):
         try:
             if current_week(cache_dir, str(season), day, session=None) >= last_week:
@@ -244,7 +244,7 @@ LAST_CHARGE_WEEK = 16
 
 def last_charge_send(cache_dir: Path, season: str, *,
                      live: bool = False) -> date | None:
-    """The Tuesday LAST_CHARGE_WEEK's report goes out, or the season's last
+    """The Wednesday LAST_CHARGE_WEEK's report goes out, or the season's last
     report in a season too short to reach it. None when the schedule cannot say."""
     send = last_send(cache_dir, season, live=live)
     if send is None:

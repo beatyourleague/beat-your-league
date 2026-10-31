@@ -351,7 +351,7 @@ def test_the_mid_season_roster_report_is_a_useful_first_email(monkeypatch) -> No
         _spec(), _directory(), _prior({"p-rookie"}), "2026",
         REPO / "data" / "raw" / "nflverse", season_started=True, from_week=7,
         byes={"BAL": 13}, roster_out={"p-rb1": "on injured reserve"}, weekly=weekly)
-    report["meta"]["next_report"] = {"week": 8, "lands_on": "2026-10-27"}
+    report["meta"]["next_report"] = {"week": 8, "lands_on": "2026-10-28"}
     qb = next(r for r in report["roster"] if r["player_id"] == "p-qb")
     assert qb["season_so_far"]["games"] == 6, "an unfinished week counted"
     assert report["roster"][-1]["season_so_far"] is None        # rookie: absent, never 0
@@ -363,7 +363,7 @@ def test_the_mid_season_roster_report_is_a_useful_first_email(monkeypatch) -> No
                 "browser": render(report, template)}
     for name, page in surfaces.items():
         prose = re.sub(r"<style\b.*?</style>|<[^>]+>", " ", page, flags=re.S)
-        assert "Your Week 8 report lands Tuesday, Oct 27." in prose, name
+        assert "Your Week 8 report lands Wednesday, Oct 28." in prose, name
         assert "right now" in prose.lower() and "on injured reserve" in prose, name
         # A count is glued to its number on the HTML halves (a no-break space).
         assert re.search(r"2026: \d+\.\d a game over\s6", prose), name
@@ -380,7 +380,7 @@ def test_the_next_weekly_report_is_named_only_when_certain(tmp_path, monkeypatch
 
     cache = _games(tmp_path)
     saturday = datetime(2026, 10, 24, 15, 0, tzinfo=timezone.utc)
-    assert next_weekly_report(cache, "2026", 7, saturday) == {"week": 8, "lands_on": "2026-10-27"}
+    assert next_weekly_report(cache, "2026", 7, saturday) == {"week": 8, "lands_on": "2026-10-28"}
     before = datetime(2026, 10, 21, 15, 0, tzinfo=timezone.utc)
     assert next_weekly_report(cache, "2026", 7, before) is None
     assert next_weekly_report(cache, "2026", 18,
@@ -462,7 +462,7 @@ def test_odds_from_week_4_is_promised_only_before_week_4() -> None:
 # The launch email (copy improvements)
 # --------------------------------------------------------------------- #
 
-CLOCK = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-27",
+CLOCK = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-28",
          "first_kickoff": "2026-10-23T00:15:00Z", "phase": "season"}
 
 
@@ -478,7 +478,7 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
 
     sunday = datetime(2026, 10, 25, 15, 0, tzinfo=timezone.utc)
     subject, body, preview = wl.compose("https://x/join/", "S", CLOCK, sunday)
-    assert subject == "It's open: your Week 8 lineup lands Tuesday"
+    assert subject == "It's open: your Week 8 lineup lands Wednesday"
     assert "in time for Week 8" in body and "Week 8" in preview
     flat = " ".join(body.split())
     for term in ("$14.99 a month", "stops on its own after your title game",
@@ -491,7 +491,7 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
     for claim in wl.FORBIDDEN_CLAIMS:
         assert claim not in flat.lower(), claim
     # Before the week's kickoff the buyer gets THIS week's lineup.
-    tuesday = {**CLOCK, "week": 8, "lands_on": "2026-11-03",
+    tuesday = {**CLOCK, "week": 8, "lands_on": "2026-11-04",
                "first_kickoff": "2026-10-30T00:15:00Z"}
     assert wl.compose("u", "S", tuesday, datetime(2026, 10, 28, tzinfo=timezone.utc))[0] \
         == "It's open: get your Week 8 lineup before kickoff"
@@ -514,9 +514,9 @@ def test_the_launch_email_keeps_the_saved_roster_line(monkeypatch) -> None:
     sunday = datetime(2026, 10, 25, 15, 0, tzinfo=timezone.utc)
     plain, saved = wl.messages(["a@example.com", "b@example.com"], "https://x/join/",
                                {"b@example.com": ref}, clock=CLOCK, now=sunday)
-    assert plain.subject == saved.subject == "It's open: your Week 8 lineup lands Tuesday"
+    assert plain.subject == saved.subject == "It's open: your Week 8 lineup lands Wednesday"
     assert wl.SAVED_LINE in saved.text and wl.SAVED_LINE not in plain.text
-    assert "<title>It&#x27;s open: your Week 8 lineup lands Tuesday</title>" in saved.html
+    assert "<title>It&#x27;s open: your Week 8 lineup lands Wednesday</title>" in saved.html
     assert plain.unsubscribe.endswith("?subject=unsubscribe")
 
 

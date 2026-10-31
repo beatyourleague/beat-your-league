@@ -2230,6 +2230,7 @@ def _served_since_purchase(signup, entries: list[dict]) -> bool:
     slug = signup.slug
     shapes = (_re.compile(rf"^\d{{4}}-w\d\d-{slug}$"),
               _re.compile(rf"^\d{{4}}-w\d\d-final-{slug}$"),
+              _re.compile(rf"^\d{{4}}-w\d\d-early-{slug}$"),
               _re.compile(rf"^preseason-.*-{slug}$"))
     bought = (datetime.fromtimestamp(int(signup.seen_at), tz=timezone.utc)
               if str(signup.seen_at).isdigit() else None)
@@ -2316,9 +2317,15 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
 
     if getattr(data, "week", 1) > 1 and not week_has_kicked_off(
             CACHE_DIR, season, data.week):
-        from run.tuesday import (league_seat_link, pass_seat_cap, report_key,
-                                 run_subscriber)
+        from run.tuesday import (early_look_key, league_seat_link, pass_seat_cap,
+                                 report_key, run_subscriber)
+        from run.watchdog import tuesday_finished
         if report_key(data.season, data.week, signup.slug) in (sent or set()):
+            return None
+        # Before this week's run has gone out the buyer gets an early look now
+        # and the report of record on Wednesday, after waivers.
+        early = not tuesday_finished(sent or set(), data.season, data.week)
+        if early and early_look_key(data.season, data.week, signup.slug) in (sent or set()):
             return None
         # The same plan/billing mapping the registry row gets, so the first
         # report and every Tuesday after it describe the same purchase.
@@ -2334,7 +2341,8 @@ def _first_file(signup, data, season: str, processed_dir, record: bool = True,
                                 processed_dir=processed_dir, record=record,
                                 seat_counts=seat_counts,
                                 seat_link=league_seat_link(subscriber, payers or {}),
-                                seat_cap=pass_seat_cap(subscriber, payers or {}))
+                                seat_cap=pass_seat_cap(subscriber, payers or {}),
+                                early_look=early)
         if result.ok and result.message is not None:
             return result
         # Fall through to the roster file rather than sending nothing.
@@ -2353,8 +2361,10 @@ def _send_first_files(servable: list[RosterSignup], data, season: str,
     who signed up in draft season used to hold nothing for up to a fortnight.
     "I paid and got nothing" is the dominant refund driver at this size.
 
-    One file per purchase, never two — three emails at once (welcome, roster
-    file, weekly report) reads as a mailing list rather than a product.
+    One file per run, never two — three emails at once (welcome, roster file,
+    weekly report) reads as a mailing list rather than a product. A buyer
+    before Wednesday's run gets an early look, then that week's report with
+    everyone else (run.tuesday.run_subscriber).
 
     A League Pass SEAT is served by the same rules (LP-I4): a leaguemate who
     claims from the group chat on a Wednesday and presses the confirmation
@@ -2558,13 +2568,13 @@ def dispute_alarm(api_key: str) -> bool:
             named = sorted(set(getattr(exc, "permissions", ()) or ())
                            | set(re.findall(r"rak_[a-z_]+", str(exc))))
             print("STRIPE KEY IS MISSING A PERMISSION: reading who has paid "
-                  "(the same read the Tuesday run makes) got HTTP 403"
+                  "(the same read the Wednesday run makes) got HTTP 403"
                   + (f" — Stripe names {', '.join(named)}" if named else "")
                   + ". Edit the cron key (Stripe → Developers → API keys → "
                   "github-actions-crons → Edit) and give it Payment Intents: "
                   "Read, Charges: Read and Disputes: Read beside Checkout "
                   "Sessions: Read and Subscriptions (LAUNCH.md step 3); the key "
-                  "value does not change. Until then Tuesday's report goes to "
+                  "value does not change. Until then Wednesday's report goes to "
                   "nobody.", file=sys.stderr)
             return True
         print(f"Disputes: could not be checked this run ({exc}).", file=sys.stderr)
@@ -2676,7 +2686,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--clear-unresolved", action="store_true",
                         help="forget the payments reported every run as unattributable")
     parser.add_argument("--no-mail", action="store_true",
-                        help="write the registry and send nothing (the Tuesday "
+                        help="write the registry and send nothing (the Wednesday "
                              "run's intake; the daily run does the mailing)")
     args = parser.parse_args(argv)
 

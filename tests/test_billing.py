@@ -29,9 +29,9 @@ needs_schedule = pytest.mark.skipif(
     reason="no cached nflverse schedule (data/ is gitignored); "
            "run `python -m ingest.pull` to populate it")
 
-# The instant the last report a charge may pay for is due: Week 17's, Tue Dec 29
-# 2026 (owner decision, Oct 31 2026; Week 18's goes out a week later, unbilled).
-FINAL = datetime(2026, 12, 22, 12, 17, tzinfo=timezone.utc)
+# The instant the last report a charge may pay for is due: Week 16's, Wed Dec 23
+# 2026 (owner decision, Oct 31 2026; Weeks 17 and 18 go out unbilled).
+FINAL = datetime(2026, 12, 23, 22, 17, tzinfo=timezone.utc)
 AFTER = int(FINAL.timestamp()) + 6 * 86400       # a period ending after it
 BEFORE = int(FINAL.timestamp()) - 3600            # a period ending before it
 
@@ -301,7 +301,7 @@ def test_the_last_send_is_the_first_tuesday_that_mails_the_last_week() -> None:
         final = date.fromisoformat(ends[season])
         last_week = current_week(CACHE, season, final, session=None)
         send = last_send(CACHE, season, live=False)
-        assert send is not None and send.weekday() == 1, f"{season}: {send}"
+        assert send is not None and send.weekday() == 2, f"{season}: {send}"
         assert current_week(CACHE, season, send, session=None) >= last_week
         assert current_week(CACHE, season, send - timedelta(days=7),
                             session=None) < last_week

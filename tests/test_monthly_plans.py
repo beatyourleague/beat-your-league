@@ -51,10 +51,10 @@ def sub(period_end: datetime, **over) -> dict:
 
 @needs_schedule
 def test_billing_ends_with_week_16s_report_not_the_last() -> None:
-    assert last_send(CACHE, "2026") == date(2027, 1, 5)
-    assert last_charge_send(CACHE, "2026") == date(2026, 12, 22)
+    assert last_send(CACHE, "2026") == date(2027, 1, 6)
+    assert last_charge_send(CACHE, "2026") == date(2026, 12, 23)
     at, season = final_send(CACHE, date(2026, 11, 1))
-    assert season == "2026" and at.date() == date(2026, 12, 22)
+    assert season == "2026" and at.date() == date(2026, 12, 23)
 
 
 def test_a_january_renewal_never_happens() -> None:
@@ -77,7 +77,7 @@ def test_a_renewal_before_week_16s_report_still_happens() -> None:
     (date(2026, 12, 29), 1),
 ])
 def test_what_a_buyer_pays_by_the_day_they_join(joined, charges) -> None:
-    assert economics.monthly_charges(joined, date(2026, 12, 22))[0] == charges
+    assert economics.monthly_charges(joined, date(2026, 12, 23))[0] == charges
 
 
 # --------------------------------------------------------------------- #

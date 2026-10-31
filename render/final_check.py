@@ -30,7 +30,7 @@ KEEP_AN_EYE = (WATCH, REMINDER)
 PREHEADER = "Friday's injury report, applied to your lineup."
 # The one name every surface uses for this email (review, Oct 30 2026).
 CHECK_NAME = "The Saturday check"
-STANDS = ("Everything else in Tuesday's report stands. We only send this "
+STANDS = ("Everything else in Wednesday's report stands. We only send this "
           "when something changes.")
 HEADS = {"act": "Make these changes", "watch": "Keep an eye on",
          "good": "Good news"}

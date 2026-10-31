@@ -66,7 +66,7 @@ def test_the_tuesday_cron_runs_the_roster_pipeline() -> None:
     assert "run.intake" in commands and "run.tuesday" in commands
     for retired in ("run.batch", "run.sync", "run.week", "ingest.pull"):
         assert retired not in commands, (
-            f"the Tuesday cron still runs {retired}, which reads a league")
+            f"the Wednesday cron still runs {retired}, which reads a league")
 
 
 def test_no_cron_step_carries_a_sleeper_secret() -> None:
@@ -89,7 +89,7 @@ def test_the_artifact_never_publishes_subscriber_data() -> None:
     upload = [s for s in _steps("weekly.yml")
               if "upload-artifact" in str(s.get("uses", ""))
               and s.get("name") == "Upload reports"]
-    assert upload, "the Tuesday cron uploads no artifact at all"
+    assert upload, "the Wednesday cron uploads no artifact at all"
     paths = str(upload[0]["with"]["path"])
     assert "reports/" in paths
     assert "!reports/subscribers/" in paths, "subscriber reports would be published"
@@ -315,15 +315,15 @@ def test_only_the_daily_intake_mails() -> None:
                for name in ("weekly.yml", "daily.yml", "saturday.yml", "monday.yml")}
     [weekly] = intakes["weekly.yml"]
     assert re.search(r"-m run\.intake --no-mail\b", weekly["run"]), \
-        "the Tuesday intake can mail"
+        "the Wednesday intake can mail"
     env = weekly.get("env") or {}
     leaked = sorted(k for k in env if k.startswith("EMAIL_") or k in (
         "RESEND_API_KEY", "POSTMARK_TOKEN", "SENDER_POSTAL_ADDRESS"))
-    assert not leaked, f"the Tuesday intake still holds mail secrets: {leaked}"
+    assert not leaked, f"the Wednesday intake still holds mail secrets: {leaked}"
     # It still writes what Tuesday's send needs: payments, seats, updates.
     for needed in ("STRIPE_API_KEY", "STRIPE_PAYMENT_LINKS", "FORM_ENDPOINT",
                    "FORM_API_KEY", "UPDATE_SECRET"):
-        assert needed in env, f"the Tuesday intake lost {needed}"
+        assert needed in env, f"the Wednesday intake lost {needed}"
     [daily] = intakes["daily.yml"]
     assert "--no-mail" not in daily["run"], "nothing mails new buyers at all"
     assert not intakes["saturday.yml"] and not intakes["monday.yml"]
@@ -393,9 +393,9 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
 
     text = _text("weekly.yml")
     crons = re.findall(r'-\s*cron:\s*"([^"]+)"', text)
-    assert len(crons) == 2, f"the Tuesday retry is gone: {crons}"
-    main = "17 12 * * 2"
-    assert main in crons, f"the main Tuesday send moved: {crons}"
+    assert len(crons) == 3, f"the Wednesday retry is gone: {crons}"
+    main = "17 22 * * 3"
+    assert main in crons, f"the main Wednesday send moved: {crons}"
     # Never earlier than 12:00 UTC. Below that the November send drifts to
     # 06:00 ET, and more importantly it closes on nflverse's own publish
     # window — their stats_player release was observed stamped 03:35 ET, and a
@@ -403,23 +403,20 @@ def test_the_tuesday_send_gets_a_second_attempt_the_same_morning() -> None:
     # week. assert_week_is_complete now refuses rather than shipping that, so
     # the cost of being early is a failed run, not a wrong report — but there
     # is no reason to court it.
-    assert min(int(c.split()[1]) for c in crons) >= 12, \
-        f"a Tuesday run before 12:00 UTC risks nflverse not having published: {crons}"
+    assert min(int(c.split()[1]) for c in crons if c != "17 0 * * 4") >= 12, \
+        f"a Wednesday run before 12:00 UTC risks nflverse not having published: {crons}"
     retry = [c for c in crons if c != main]
-    assert retry and retry[0].endswith("* * 2"), \
-        f"the retry must land on the same weekday as the send, got {retry}"
+    # Wednesday evening ET is Thursday in UTC, hence the 4.
+    assert "17 0 * * 4" in retry, f"the same-evening retry is gone, got {retry}"
     # Same morning, not a different day: the product promises Tuesday.
-    hours = sorted(int(c.split()[1]) for c in crons)
-    assert hours[1] - hours[0] <= 8, \
-        f"the retry is {hours[1] - hours[0]}h later — subscribers expect Tuesday"
     # And it must be the SAME job, so the retry cannot drift from the send.
     # The other jobs send nothing: commit-record pushes the week job's record
     # (SEC-1), file-issue raises the failure issue, share-card draws a PNG
     # after the send (G2) and commit-card pushes only that.
     yaml = pytest.importorskip("yaml")
     jobs = yaml.safe_load(text)["jobs"]
-    assert list(jobs) == ["week", "commit-record", "file-issue", "share-card", "commit-card"] \
-        and text.count("runs-on:") == 5, \
+    assert list(jobs) == ["week", "commit-record", "file-issue", "share-card", "commit-card", "due"] \
+        and text.count("runs-on:") == 6, \
         "the retry became a second job — one definition, or they will diverge"
     for other in list(jobs)[1:]:
         assert "-m run.tuesday" not in str(jobs[other]), f"the {other} job must never send"

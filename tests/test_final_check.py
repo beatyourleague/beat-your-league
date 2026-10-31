@@ -641,6 +641,9 @@ def test_a_weeks_report_mailed_at_purchase_gets_its_own_plan(tmp_path, monkeypat
     monkeypatch.setattr("run.solo.week_has_kicked_off", lambda *a, **k: False)
     monkeypatch.setattr(intake, "CACHE_DIR", _cache(tmp_path))
     monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
+    # After Wednesday's run: its marker is what makes this the report of record.
+    (tmp_path / "sent.jsonl").write_text(
+        json.dumps({"key": f"run-tuesday-{SEASON}-w{WEEK:02d}"}) + "\n", encoding="utf-8")
     signup = RosterSignup(email="fan@example.com", ref=REF, plan="season",
                           seen_at="2026-10-07T15:00:00+00:00")
     first = tmp_path / "registry" / saturday.FIRST_PLANS_NAME
@@ -724,6 +727,9 @@ def test_the_hourly_intake_never_mails_an_existing_subscriber_their_week(tmp_pat
                        ref=encode_roster("monthly", "ppr", list(SLOTS), ROSTER_IDS),
                        plan="monthly", seen_at="1791500000")    # 2026-10-08
     assert new.slug != old.slug
+    # After Wednesday's run: its marker makes this week's report the one of record.
+    with (tmp_path / "sent.jsonl").open("a", encoding="utf-8") as log:
+        log.write(json.dumps({"key": f"run-tuesday-{SEASON}-w{WEEK:02d}"}) + "\n")
     intake._send_first_files([new], data, SEASON, processed_dir=tmp_path / "p",
                              first_plans=tmp_path / "first", out_dir=tmp_path / "out")
     assert len(sent) == 1 and sent[0].to == "new@example.com"

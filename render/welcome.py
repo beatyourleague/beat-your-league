@@ -99,7 +99,7 @@ PAYER_PLANS = ("league_pass", "pass")
 # untappable text. {link} is the league's own seat link (run/intake signs it,
 # C4) — with it nobody types anybody's address.
 SHARE_MESSAGE = ("I got us the League Pass from Beat Your League: everyone gets "
-                 "their own lineup report every Tuesday, built from their own "
+                 "their own lineup report every Wednesday, built from their own "
                  "roster. Nothing to pay. Claim your seat here: {link}")
 # Seats ride the pass: what the payer ends, every seat loses (LP-I6).
 SEATS_END = ("Your league's seats last as long as your pass does: if you cancel "
@@ -388,7 +388,7 @@ NEXT_TODAY_THEN = "{day}: your Week {week} report."
 # Where the reports come from, so the first Tuesday one is not filtered. The
 # address is LAUNCH.md's EMAIL_FROM, the one thanks.html names too.
 SENDER_ADDRESS = "reports@beatyourleague.com"
-CONTACTS_LINE = "Add {address} to your contacts so Tuesday's report lands in your inbox."
+CONTACTS_LINE = "Add {address} to your contacts so Wednesday's report lands in your inbox."
 # "The odds on the close calls", never "every": a slot gets odds only when both
 # players are confirmed to play, and a bye-heavy week can have few (PE-11).
 # "About ninety seconds to read" was the game plan, not the report (a Week-6
@@ -506,7 +506,7 @@ def _next_rows(seat: bool, carries_on: bool = False,
              [("Today", today)])
     tuesday = (NEXT_TUESDAY_LIVE if week is not None and not season_over
                and week >= ODDS_EVERYWHERE_FROM else NEXT_TUESDAY)
-    return [*today, ("Every Tuesday", tuesday),
+    return [*today, ("Every Wednesday", tuesday),
             ("Saturday, if needed", NEXT_SATURDAY)]
 
 
@@ -611,7 +611,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     when = None if seat else _purchase_date(purchased_at)
     opener = f"You {verb} {bought}." + (f" Purchased {when}." if when else "")
     roster_line = ("Roster changed? Reply to any report with your updated roster "
-                   "and your report follows it from the next Tuesday."
+                   "and your report follows it from the next Wednesday."
                    if reply_update_works() else "")
     share = _share(plan, seat_link)
     site = _site()

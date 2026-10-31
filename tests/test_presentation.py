@@ -546,9 +546,9 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
     assert page.count(f'href="{url}"') == 2
     assert page.index(url) < page.index("Projections are analysis"), \
         "the ask sits below the fine print"
-    assert "Get next Tuesday&#x27;s report" in page
+    assert "Get next Wednesday&#x27;s report" in page
     text = text_summary(trial)
-    assert f"Get next Tuesday's report: {url}" in text
+    assert f"Get next Wednesday's report: {url}" in text
     assert text.index(url) < text.index("Projections are analysis")
     for doc in (html.unescape(page), text):
         assert "only email we'll send you unless you sign up" in doc

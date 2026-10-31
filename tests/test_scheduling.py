@@ -144,7 +144,7 @@ def test_no_backup_cron_fires_at_the_top_of_the_hour_and_the_watchdog_agrees() -
     tuesday = _crons("weekly.yml")[0].split()
     due = watchdog.tuesday_due_at(datetime(2026, 10, 13).date())
     assert (due.hour, due.minute) == (int(tuesday[1]), int(tuesday[0])), \
-        f"the watchdog says the Tuesday run is due at {due:%H:%M}, the cron {tuesday}"
+        f"the watchdog says the Wednesday run is due at {due:%H:%M}, the cron {tuesday}"
 
 
 @needs_node
@@ -168,8 +168,9 @@ def test_the_worker_dispatches_exactly_what_the_workflows_schedule(tmp_path) -> 
         at += timedelta(minutes=30)
     assert got == expected
     # Spot checks in plain words, so a failure reads as a schedule.
-    assert got["2026-10-13T12:17:00.000Z"] == ["weekly.yml"]     # Tuesday's reports
-    assert got["2026-10-13T16:17:00.000Z"] == ["weekly.yml"]     # ...and the retry
+    assert got["2026-10-14T22:17:00.000Z"] == ["weekly.yml"]     # Wednesday's reports
+    assert got["2026-10-15T00:17:00.000Z"] == ["weekly.yml"]     # ...and the retry
+    assert got["2026-10-14T13:17:00.000Z"] == ["weekly.yml"]     # ...and the morning slot
     assert got["2026-10-17T16:17:00.000Z"] == ["saturday.yml"]
     assert got["2026-10-12T13:17:00.000Z"] == ["monday.yml"]
     assert sum(1 for names in got.values() if "daily.yml" in names) == 7 * 25
@@ -197,7 +198,8 @@ def test_a_dispatch_is_the_documented_github_call(tmp_path) -> None:
         if workflow == "daily.yml":
             assert set(inputs) == {"daily"} and inputs["daily"] in ("true", "false")
         else:
-            assert inputs is None, f"{workflow} would refuse an undeclared input"
+            assert inputs in (None, {"slot": "morning"}), \
+                f"{workflow} would refuse an undeclared input"
 
 
 @needs_node
@@ -546,10 +548,10 @@ def test_a_tuesday_that_never_ran_turns_the_next_day_red(tmp_path, monkeypatch, 
     Tuesday run got as far as sending, and the run says so instead of a
     subscriber."""
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
-    assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00") == 1
+    assert _watch(tmp_path, monkeypatch, "2026-10-15T14:00:00+00:00") == 1
     err = capsys.readouterr().err
-    assert "Tuesday's reports for 2026 week 6" in err and "@" not in err
-    assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00",
+    assert "Wednesday's reports for 2026 week 6" in err and "@" not in err
+    assert _watch(tmp_path, monkeypatch, "2026-10-15T14:00:00+00:00",
                   ["run-tuesday-2026-w06"]) == 0
     # Before the first kickoff the fix is a by-hand run; after it, re-running
     # would publish calls on a game already played, so the alarm says not to.
@@ -558,12 +560,12 @@ def test_a_tuesday_that_never_ran_turns_the_next_day_red(tmp_path, monkeypatch, 
     late = capsys.readouterr().err
     assert "do NOT re-run" in late and "by hand" not in late
     # Not due on the Tuesday itself: the 16:00 retry is still to come.
-    assert _watch(tmp_path, monkeypatch, "2026-10-13T14:00:00+00:00") == 0
+    assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00") == 0
     # Another week's marker, or any send at all, is not this Tuesday's run.
     slug = _slug(tmp_path)
     for wrong in (f"2026-w05-{slug}", f"2026-w06-final-{slug}", "run-tuesday-2026-w05",
                   "run-saturday-2026-w06"):
-        assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00", [wrong]) == 1, wrong
+        assert _watch(tmp_path, monkeypatch, "2026-10-15T14:00:00+00:00", [wrong]) == 1, wrong
 
 
 def test_a_new_buyers_first_email_is_not_proof_that_tuesday_ran(
@@ -579,9 +581,9 @@ def test_a_new_buyers_first_email_is_not_proof_that_tuesday_ran(
     monkeypatch.delenv("STRIPE_API_KEY", raising=False)
     slug = _slug(tmp_path)
     for evidence in (f"2026-w06-{slug}", f"2026-w06-final-{slug}"):
-        assert _watch(tmp_path, monkeypatch, "2026-10-14T14:00:00+00:00",
-                      [evidence]) == 1, f"{evidence} was taken as Tuesday's run"
-    assert "Tuesday's reports for 2026 week 6" in capsys.readouterr().err
+        assert _watch(tmp_path, monkeypatch, "2026-10-15T14:00:00+00:00",
+                      [evidence]) == 1, f"{evidence} was taken as Wednesday's run"
+    assert "Wednesday's reports for 2026 week 6" in capsys.readouterr().err
 
 
 def test_nobody_is_owed_a_run_that_was_due_before_they_bought(
@@ -602,7 +604,7 @@ def test_nobody_is_owed_a_run_that_was_due_before_they_bought(
     assert out.count("nobody was owed it") == 2 and "everything due has run" not in out
     # Bought on the Tuesday, AFTER the 12:00 send: not owed Tuesday, but owed
     # the final check (Tuesday's buyers get the week's report at purchase).
-    afternoon = "2026-10-13T15:00:00+00:00"
+    afternoon = "2026-10-14T23:00:00+00:00"
     assert _watch(tmp_path, monkeypatch, sunday, ["run-saturday-2026-w06"],
                   bought=afternoon) == 0
     assert _watch(tmp_path, monkeypatch, sunday, ["run-tuesday-2026-w06"],
@@ -723,9 +725,12 @@ def test_the_send_tuesday_follows_the_schedule_not_an_assumed_thursday(tmp_path)
     Thursday-only fixture could not tell the two rules apart)."""
     cache = _calendar(tmp_path)
     assert watchdog.week_calendar(cache, SEASON, 6)[:2] == (
-        datetime(2026, 10, 13).date(), datetime(2026, 10, 17).date())
+        datetime(2026, 10, 14).date(), datetime(2026, 10, 17).date())
+    # Its reports go that same Wednesday, in the morning slot.
     assert watchdog.week_calendar(cache, SEASON, 8)[:2] == (
-        datetime(2026, 10, 27).date(), datetime(2026, 10, 31).date())
+        datetime(2026, 10, 28).date(), datetime(2026, 10, 31).date())
+    assert watchdog.tuesday_due_at(datetime(2026, 10, 28).date(), morning=True) == datetime(
+        2026, 10, 28, 13, 17, tzinfo=timezone.utc)
     # Thursday 20:15 in New York is Friday 00:15 UTC.
     assert watchdog.week_calendar(cache, SEASON, 6).first_kickoff == datetime(
         2026, 10, 16, 0, 15, tzinfo=timezone.utc)

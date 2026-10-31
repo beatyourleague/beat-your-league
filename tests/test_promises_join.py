@@ -67,7 +67,7 @@ def test_an_update_from_a_report_names_its_subscription() -> None:
 
 PHASE = "\n".join(_js_function(JOIN, f) for f in
                   ("firstReportTiming", "etDayEnd", "seasonClosed", "trialTiming"))
-WEEK = {"week": 6, "last_week": 18, "lands_on": "2026-10-20",
+WEEK = {"week": 6, "last_week": 18, "lands_on": "2026-10-21",
         "first_kickoff": "2026-10-16T00:15:00Z"}
 
 
@@ -92,17 +92,17 @@ def test_the_season_closes_when_no_weekly_report_is_left() -> None:
     week's lands_on (ET) all close; preseason is open for checkout and closed
     for the free report, which is never mailed for a request before the
     season's first game (run/trials.py)."""
-    last = {**WEEK, "week": 18, "lands_on": "2027-01-12", "first_kickoff": "2027-01-09T21:30:00Z"}
+    last = {**WEEK, "week": 18, "lands_on": "2027-01-13", "first_kickoff": "2027-01-09T21:30:00Z"}
     no_kick = {k: v for k, v in last.items() if k != "first_kickoff"}
     pre = {"phase": "preseason", "season": "2027", "week": 1, "last_week": 18,
-           "lands_on": "2027-09-07", "first_kickoff": "2027-09-10T00:20:00Z"}
-    wk1 = {**WEEK, "week": 1, "lands_on": "2026-09-15", "first_kickoff": "2026-09-11T00:20:00Z"}
+           "lands_on": "2027-09-08", "first_kickoff": "2027-09-10T00:20:00Z"}
+    wk1 = {**WEEK, "week": 1, "lands_on": "2026-09-16", "first_kickoff": "2026-09-11T00:20:00Z"}
     got = _phase([
         [{**WEEK, "phase": "over"}, "2026-10-15T12:00:00Z"],
         [last, "2027-01-09T20:00:00Z"],
         [last, "2027-01-09T21:31:00Z"],
-        [no_kick, "2027-01-13T04:59:00Z"],          # 11:59 PM ET on lands_on
-        [no_kick, "2027-01-13T05:01:00Z"],          # the next ET day
+        [no_kick, "2027-01-14T04:59:00Z"],          # 11:59 PM ET on lands_on
+        [no_kick, "2027-01-14T05:01:00Z"],          # the next ET day
         [pre, "2027-08-20T12:00:00Z"],
         [wk1, "2026-09-10T12:00:00Z"],
         [wk1, "2026-09-11T01:00:00Z"],
@@ -135,7 +135,7 @@ def test_the_free_report_names_the_report_it_will_send() -> None:
     with no clock "your next weekly report" — and a request is "in", not on
     its way, because the intake decides."""
     draw = _js_function(JOIN, "drawTrial")
-    for words in ("this week's report", "next week's report, on ", "your next weekly report"):
+    for words in ("this week's report", "next week's report, by ", "your next weekly report"):
         assert words in draw
     assert "Your free report is on its way" not in JOIN
     assert '"Your request is in."' in _js_function(JOIN, "submitTrial")

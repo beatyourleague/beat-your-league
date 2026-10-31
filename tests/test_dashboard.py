@@ -182,10 +182,10 @@ def rich_sources(now: datetime = NOW, root: Path = dash.REPO_ROOT) -> dict[str, 
                  "status": "completed", "conclusion": "failure" if i in fail_at else "success",
                  "event": "schedule", "url": f"https://github.com/{dash.GITHUB_REPO}/actions/runs/{1000 + i}"}
                 for i in range(n)]
-    tue = now - timedelta(days=(now.weekday() - 1) % 7)
-    tue_run = tue.replace(hour=12, minute=31)
+    tue = now - timedelta(days=(now.weekday() - 2) % 7)
+    tue_run = tue.replace(hour=13, minute=31)     # the Wednesday morning slot
     github = {
-        "weekly.yml": {"label": "Tuesday reports", "runs": [
+        "weekly.yml": {"label": "Wednesday reports", "runs": [
             {"created_at": (tue_run - timedelta(days=7 * k)).strftime("%Y-%m-%dT%H:%M:%SZ"),
              "status": "completed", "conclusion": "success", "event": "workflow_dispatch",
              "url": f"https://github.com/{dash.GITHUB_REPO}/actions/runs/2{k}"} for k in range(6)]},
@@ -556,7 +556,7 @@ def test_a_failed_cron_and_a_missed_slot_become_issues() -> None:
     assert weekly["missing"]
     m = dash.metrics_for(S, "7d", NOW)
     titles = [i.title for i in dash.build_issues(S, NOW, health, dash.ledger_view(S["ledger"], NOW), m)]
-    assert any("Tuesday reports didn't run" in t for t in titles)
+    assert any("Wednesday reports didn't run" in t for t in titles)
     assert any("The last tests run failed" in t for t in titles)
 
 

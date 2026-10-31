@@ -549,12 +549,12 @@ def test_a_late_tuesday_run_warns_and_a_dispatch_on_time_passes() -> None:
     from datetime import datetime, timezone
     now = datetime(2026, 10, 16, tzinfo=timezone.utc)
     hourly = [_run(f"2026-10-{d:02d}T{h:02d}:48:00Z") for d in range(9, 16) for h in range(24)]
-    late = {"weekly.yml": [_run("2026-10-13T17:40:00Z"), _run("2026-10-06T18:02:00Z")],
+    late = {"weekly.yml": [_run("2026-10-14T18:40:00Z"), _run("2026-10-07T19:02:00Z")],
             "saturday.yml": [_run("2026-10-10T16:20:00Z")], "daily.yml": hourly}
     found = lc.audit_cron_runs(late, now)
     assert any("weekly.yml" in line for line in found["late"]), found
-    on_time = {**late, "weekly.yml": late["weekly.yml"] + [_run("2026-10-13T12:18:00Z"),
-                                                           _run("2026-10-06T12:19:00Z")]}
+    on_time = {**late, "weekly.yml": late["weekly.yml"] + [_run("2026-10-14T13:18:00Z"),
+                                                           _run("2026-10-07T13:19:00Z")]}
     found = lc.audit_cron_runs(on_time, now)
     assert not found["late"], found
     sparse = {**on_time, "daily.yml": hourly[:40]}
@@ -668,7 +668,7 @@ def test_the_pass_welcome_carries_the_seat_link() -> None:
 # Recheck (Oct 17 2026): the live sample's odds, the record, every email
 # --------------------------------------------------------------------- #
 
-_WEEK = {"season": "2026", "week": 6, "lands_on": "2026-10-20",
+_WEEK = {"season": "2026", "week": 6, "lands_on": "2026-10-21",
          "built_at": "2026-10-14T12:00:00+00:00", "first_kickoff": "2026-10-16T00:15:00Z"}
 
 

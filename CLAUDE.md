@@ -1381,6 +1381,38 @@ claims first recorded here). A price can be cut later; raising one is harder. Ru
 - **Before next preseason:** `MONTHLY_PAUSED` closes Monthly while `week.json` says preseason, and
   no other plan is on sale then, so the 2027 season pass needs its link before August.
 
+**The report moved to Wednesday evening (owner decision, Oct 31 2026).** Tuesday was inherited
+from the product that gave waiver advice; that section went in August and the day stayed. The
+report now goes after waivers. Each time has one plain reason, and the site says it:
+- **Wednesday evening** (`17 22 * * 3` UTC, about 5:17 PM ET from November, 6:17 PM before;
+  retry `17 0 * * 4`): waivers clear about 3–5 AM ET Wednesday, so a manager has the day to update
+  the roster, and a day is left before Thursday's game. **We read no league, so no page may say the
+  report knows the post-waiver roster by itself** (`tests/test_wednesday.py`). Confirm a roster
+  change by Wednesday afternoon (ET) and that evening's report uses it.
+- **Wednesday morning** (`17 13 * * 3`), only in a week with a game ON Wednesday (2026's Weeks 1
+  and 12, a Christmas Wednesday). The cron fires every week and the `due` job
+  (`run/report_slot.py`, stdlib, nothing installed, no secret) lets it through only when a regular
+  season game is on today's schedule. Evening slots always run.
+- **Saturday**: teams' final injury reports are in.
+- Everything lands on a Wednesday: `next_report_day`, `last_send`, `last_charge_send` (Week 16:
+  Dec 23), the watchdog (due `TUESDAY_SEND_HOUR` 22:17, `morning=True` for a Wednesday game),
+  `WEEK_ONE_LEAD` 7 days (9 would have mailed Week 1 a week early). The landing, `week.json`, the
+  Worker's `SCHEDULE` and the workflow's crons agree by test.
+- **Names kept on purpose:** `run/tuesday.py`, `TUESDAY_*`, `tuesday_due_at`, and the run key
+  `run-tuesday-…`, which is on the committed send log. Comments written before Oct 31 say "Tuesday"
+  for the weekly run. Odds are unchanged in method: the gate still reads week W−1's injury report,
+  and Wednesday's market lines are closer to the closing lines the backtest read.
+- **The early look.** A buyer from Monday night until Wednesday's run would have been sent the
+  week's report under the week's send key, so Wednesday's report skipped them. They now get it at
+  once, marked "Your early look", under `{season}-wNN-early-{slug}`, then Wednesday's report with
+  everyone else (`run.tuesday.early_look_key`, `run_subscriber(early_look=True)`). It follows the
+  free report's rule: nothing recorded and no plan, because Wednesday's is the report of record and
+  a Tuesday number recorded first would stand in for the one everyone else was mailed. A buyer
+  after that run and before kickoff gets the report of record, as before.
+- **A buyer after kickoff still gets the roster report**, on purpose: a lineup for a week underway
+  could be played and then refunded on the result (the hole closed on Oct 30), and its odds would
+  be about games already started.
+
 **The sell review (owner decision, Oct 31 2026).** "Direct, fewer words, a lot better." The story
 held; the words and choices at the moments of deciding were too many. Landing 1,229 → 1,187 words
 (830 by hand), buy page 1,018 → 917, League Pass 1,127 → 1,071, thanks 685 → 559. Rules it left:

@@ -24,43 +24,48 @@ name: weekly-report
 
 on:
   schedule:
-    # Tuesdays 12:17 UTC — 08:17 ET on daylight time, 07:17 ET from Nov 1
-    # 2026. Cron has no timezone, so the hour drifts by one across the season;
-    # The 12 UTC hour was chosen over 11 so BOTH halves land at a civilised morning
-    # hour instead of 06:00 ET in November. Minute :17, never :00 (OPS-01,
-    # Oct 2026): the top of the hour is when GitHub's scheduler is busiest and
-    # starts runs latest, and the Worker fires at the same minute.
+    # Wednesdays 22:17 UTC — 18:17 ET on daylight time, 17:17 ET from Nov 1
+    # 2026. Cron has no timezone, so the hour drifts by one across the season.
+    # Why then, in one line each (owner decision, Oct 31 2026):
+    # - after waivers: ESPN, Yahoo and Sleeper defaults clear about 3-5 AM ET
+    #   Wednesday, and we read no league, so a manager needs the day to update
+    #   the roster and press the confirmation;
+    # - a day before Thursday's game.
+    # Minute :17, never :00 (OPS-01): the top of the hour is when GitHub's
+    # scheduler is busiest and starts runs latest, and the Worker fires at the
+    # same minute. run/solo.py's assert_week_is_complete still refuses a week
+    # whose box scores are short, so a late publish is a loud failure.
+    - cron: "17 22 * * 3"
+    # THE SAME JOB AGAIN, two hours later (Wednesday evening ET; Thursday in
+    # UTC, hence the 4). Not a second workflow: one definition means the retry
+    # cannot drift from the thing it is retrying.
     #
-    # The floor is not taste, it is nflverse: Monday night's box scores have to
-    # be published before a week-W report can project from a complete week W-1.
-    # Their stats_player release was observed stamped 03:35 ET, so 08:00 gives
-    # roughly four hours of margin after an overnight publish — and the ceiling
-    # is that subscribers need the file with a full day before Wednesday waiver
-    # processing. run/solo.py's assert_week_is_complete now refuses outright if
-    # the week really is short, so a late publish is a loud failure and a
-    # retry, never a quietly worse report.
-    - cron: "17 12 * * 2"
-    # THE SAME JOB AGAIN, four hours later. Not a second workflow: one
-    # definition means the retry cannot drift from the thing it is retrying.
-    #
-    # If the 12:17 run worked, this costs nothing — every message carries an
+    # If the first run worked, this costs nothing — every message carries an
     # idempotency key of (season, week, subscriber) checked against
     # data/processed/sent.jsonl, so it finds everyone already sent, reports
-    # them as skipped, and exits clean. If the 12:17 run FAILED, subscribers
-    # get their file the same morning instead of whenever the failure is
-    # noticed, which for a solo operator could be Thursday.
+    # them as skipped, and exits clean. If it FAILED, subscribers get their
+    # report the same evening instead of whenever the failure is noticed.
     #
     # A missed week is far more likely and far more damaging than a duplicate
     # email, which is why this errs toward running twice. The one window it
     # cannot cover is a run that sent successfully and then failed to commit
     # sent.jsonl — the send log is uploaded as an artifact for exactly that
     # case, and recovering from it is deliberately manual.
-    - cron: "17 16 * * 2"
-  # The form Worker (infra/form-worker.js) also dispatches this at 12:17 and
-  # 16:17 UTC on Tuesdays: GitHub's scheduler started these runs 5-7 hours
-  # late on Oct 6 and Oct 13 2026. The crons above stay as the backup, and a
-  # double trigger is safe — see the checkout step below.
-  workflow_dispatch: {}
+    - cron: "17 0 * * 4"
+    # The morning slot, Wednesdays 13:17 UTC (about 9 AM ET). It does anything
+    # only in a week with a game ON Wednesday, whose report goes that morning:
+    # after waivers, before the game (the `due` job, run/report_slot.py).
+    - cron: "17 13 * * 3"
+  # The form Worker (infra/form-worker.js) also dispatches these on time:
+  # GitHub's scheduler started the old Tuesday runs 5-7 hours late on Oct 6 and
+  # Oct 13 2026. The crons above stay as the backup, and a double trigger is
+  # safe — see the checkout step below.
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: "morning runs only in a week with a Wednesday game"
+        required: false
+        default: ""
 
 # One run at a time: two runs reading the same committed send log can mail the
 # same message twice (the 14:17 UTC daily run fires from BOTH its crons at
@@ -86,6 +91,8 @@ permissions: {}
 # from, and pushes it. `file-issue` raises the failure issue for the first two.
 jobs:
   week:
+    needs: due
+    if: needs.due.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -629,7 +636,7 @@ jobs:
   # redeploys when this workflow completes, commit-card included.
   share-card:
     needs: [week, commit-record]
-    if: always() && needs.week.result != 'cancelled' && needs.commit-record.result != 'cancelled'
+    if: always() && needs.week.result != 'skipped' && needs.week.result != 'cancelled' && needs.commit-record.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -785,3 +792,23 @@ jobs:
           git commit -m "Weekly run: this week's share card"
           git pull --rebase --autostash origin "$GITHUB_REF_NAME"
           git push
+
+  # Whether this slot is a real one: always, except the Wednesday morning slot
+  # in a week with no game that day. Nothing installed, no secret in the job.
+  due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read    # the checkout, for the script
+    outputs:
+      run: ${{ steps.slot.outputs.run }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_name }}
+          persist-credentials: false
+      - name: Is the weekly run due in this slot?
+        id: slot
+        env:
+          MORNING_SLOT: ${{ github.event.schedule == '17 13 * * 3' || inputs.slot == 'morning' }}
+        run: python3 -I -S run/report_slot.py

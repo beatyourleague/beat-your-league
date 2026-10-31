@@ -627,7 +627,7 @@ def test_the_tuesday_intake_writes_the_registry_and_mails_nobody(
     sent = _capture_sends(monkeypatch, tmp_path)
     stripe["sessions"] = [_session(REF)]
     assert _run(tmp_path, "--no-mail") == 0
-    assert sent == [], "the Tuesday intake mailed somebody"
+    assert sent == [], "the Wednesday intake mailed somebody"
     assert [s.email for s in load_rosters(tmp_path / intake.REGISTRY_NAME)] == \
         ["fan@example.com"], "--no-mail stopped writing the registry"
     assert "--no-mail" in capsys.readouterr().out
@@ -898,7 +898,7 @@ def test_the_intake_runs_hourly_so_a_purchase_is_not_held_overnight() -> None:
     # each reading the send log from its own checkout — the same purchase could
     # be welcomed or mailed twice.
     assert all(c.split()[0] != "0" for c in hourly), \
-        f"the hourly intake fires on the hour, alongside the Tuesday runs: {hourly}"
+        f"the hourly intake fires on the hour, alongside the Wednesday runs: {hourly}"
     gate = re.search(r"github\.event\.schedule != '([^']+)'", text)
     assert gate and gate.group(1) in hourly, \
         "the once-a-day steps' schedule gate no longer names the hourly cron"
@@ -1172,8 +1172,8 @@ def test_a_code_is_bound_to_the_address_the_subscription_and_the_roster() -> Non
 # --------------------------------------------------------------------- #
 
 def _first_email_env(tmp_path, monkeypatch, provider):
-    """The fixture week, before its kickoff, with ``provider`` doing the
-    sending and a send log of the test's own."""
+    """The fixture week after Wednesday's run and before its kickoff, with
+    ``provider`` doing the sending and a send log of the test's own."""
     import run.delivery as delivery
     from test_solo_run import OFFLINE, SEASON as FIXTURE_SEASON, WEEK, _cache
     data = intake.load_week_data(_cache(tmp_path), FIXTURE_SEASON, WEEK,
@@ -1183,6 +1183,9 @@ def _first_email_env(tmp_path, monkeypatch, provider):
     monkeypatch.setattr(delivery, "SENT_LOG", tmp_path / "sent.jsonl")
     monkeypatch.setenv("EMAIL_PROVIDER", "resend")
     monkeypatch.setattr(intake, "build_provider", lambda *a, **k: provider)
+    (tmp_path / "sent.jsonl").write_text(
+        json.dumps({"key": f"run-tuesday-{FIXTURE_SEASON}-w{WEEK:02d}"}) + "\n",
+        encoding="utf-8")
     return data, FIXTURE_SEASON, WEEK
 
 

@@ -215,7 +215,7 @@ def test_the_launch_email_carries_a_sender_address_and_an_opt_out(
     assert "Beat Your League · PO Box 1, Somewhere · hello@beatyourleague.com" in message.text
     assert 'reply "unsubscribe"' in message.text
     assert message.unsubscribe == "mailto:hello@beatyourleague.com?subject=unsubscribe"
-    assert "every Tuesday" in message.text and "every tuesday" not in message.text
+    assert "every Wednesday" in message.text and "every tuesday" not in message.text
 
 
 def test_an_empty_list_refuses_rather_than_reporting_success(

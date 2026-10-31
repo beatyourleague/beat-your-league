@@ -253,7 +253,7 @@ def test_the_gate_reads_last_weeks_report_never_this_weeks(tmp_path) -> None:
     _write(path, [dict(listed, week=WEEK)], columns)
     data = solo.load_week_data(cache, SEASON, WEEK, session=OFFLINE)
     assert not data.availability.has_snapshot, \
-        "the live gate read week W's report — lookahead relative to the Tuesday send"
+        "the live gate read week W's report — lookahead relative to the Wednesday send"
 
 
 def test_a_player_with_no_season_row_is_unknown_not_active(tmp_path) -> None:

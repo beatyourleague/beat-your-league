@@ -365,7 +365,7 @@ def test_the_rankings_objection_is_answered_with_facts_only() -> None:
         assert brand not in text, brand
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     assert "How is this different from free rankings?" not in faq
-    assert "Tuesday" in _flat(BODY) and "Saturday" in _flat(BODY)
+    assert "Wednesday" in _flat(BODY) and "Saturday" in _flat(BODY)
 
 
 # --------------------------------------------------------------------- #
@@ -394,7 +394,7 @@ def test_section_heads_follow_one_rule() -> None:
     are upright too (italic survives only in the hero slab and the lockup).
     The kicker fits one line at a phone's width (13px, .08em: measured at 320
     and 390), so no dot strands at a line's end."""
-    slogans = {"Take it through your title game.", "Your lineup, decided every Tuesday."}
+    slogans = {"Take it through your title game.", "Your lineup, decided every Wednesday."}
     for attrs, text in re.findall(r"<h2([^>]*)>(.*?)</h2>", BODY, re.S):
         words = _flat(text).strip()
         assert "slant" not in attrs, f"a slanted head is back: {words}"
@@ -556,7 +556,7 @@ def test_the_share_preview_is_a_short_benefit_line_not_the_entity_sentence() -> 
     for banned in (r"\bodds\b", r"\$", r"\bfile\b", r"calibrat|proven|accurate|tested",
                    r"\bbet", r"\bwin more\b"):
         assert not re.search(banned, og, re.I), banned
-    for promise in ("Tuesday", "exact roster", "no login"):
+    for promise in ("Wednesday", "exact roster", "no login"):
         assert promise in og, promise
 
 

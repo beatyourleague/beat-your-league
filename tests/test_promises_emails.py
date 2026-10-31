@@ -190,9 +190,9 @@ def _end(**meta):
 def test_a_free_report_is_never_promised_a_tuesday_report() -> None:
     """EMAILS-58."""
     [line] = _end(week=17, trial=True)
-    assert "next Tuesday" not in line and "subscribers get a report" in line
+    assert "next Wednesday" not in line and "subscribers get a report" in line
     [paid] = _end(week=17, plan="season")
-    assert "next Tuesday's report covers it" in paid
+    assert "next Wednesday's report covers it" in paid
 
 
 def test_the_last_report_asks_for_next_seasons_roster_where_it_can() -> None:

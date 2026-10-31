@@ -242,13 +242,13 @@ def test_the_welcome_wears_the_weekly_emails_masthead_and_a_preview_line() -> No
             html.split("You&#x27;re in.")[0], plan
         assert "&#847;&zwnj;&nbsp;" in html and "mso-hide:all" in html, plan
         # What happens next, row by row, as the thanks page lists it.
-        assert "Every Tuesday" in html and "Saturday, if needed" in html, plan
+        assert "Every Wednesday" in html and "Saturday, if needed" in html, plan
     # A matched seat gets its first email the day it is claimed, by the same
     # rules as a purchase (run/intake.py, LP-I4), so it has a "today" too and
     # its subject says the report is on its way, not "Tuesday morning".
     assert ">Today<" in _msg("season").html and ">Today<" in _msg("seat").html
     assert "on its way" in _msg("seat").subject
-    assert "Tuesday" not in _msg("seat").subject
+    assert "Wednesday" not in _msg("seat").subject
 
 
 def test_the_welcome_names_the_plan_the_purchase_date_and_the_terms(monkeypatch) -> None:

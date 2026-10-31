@@ -185,7 +185,7 @@ def test_the_notification_and_the_mail_row_are_the_emails() -> None:
     report = _sample()
     screen = phone_screen_markup()
     row = screen.split('<div class="mailrow">')[1].split("</div>")[0]
-    assert _squash(row) == _squash(f"B Beat Your League {subject_for(report)} 9:41 AM")
+    assert _squash(row) == _squash(f"B Beat Your League {subject_for(report)} 6:41 PM")
     assert '<span class="av">B</span>' in row and "<svg" not in row
     note = screen.split('<div class="lnote">')[1].split('<div class="lk-tools">')[0]
     assert html.unescape(re.search(r'<span class="lsub">(.*?)</span>', note).group(1)) \
@@ -244,7 +244,7 @@ def test_the_faq_answers_in_the_order_a_buyer_asks_and_its_twin_follows() -> Non
     data lists the same questions in the same order, with the same answers,
     so a search snippet and the page never disagree."""
     order = ["Does it work with my league?", "Is it worth joining mid-season?",
-             "What if news breaks after Tuesday?", "What if my roster changes mid-season?",
+             "Why Wednesday evening? What about late news?", "What if my roster changes mid-season?",
              "Can I check how it decides?"]
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     asked = [html.unescape(q) for q in re.findall(r"<summary>(.*?)</summary>", faq)]
@@ -296,15 +296,15 @@ def test_the_landing_stays_inside_its_word_budget() -> None:
     # Lowered Oct 30 2026 from 1,250: the mid-season narrative pass took it to
     # 1,241 while adding the value line, and the page may only get shorter:
     # 1229 once the founding line came off (Oct 31 2026), 1187 after the
-    # owner's sell review the same day.
-    assert words <= 1187, f"the landing is {words} words"
+    # owner's sell review the same day, 1186 with the move to Wednesday.
+    assert words <= 1186, f"the landing is {words} words"
     # The words somebody wrote by hand, without the generated report text
     # and without comments: 952 before the rebuild, 781 after it. 859 before
     # the owner's Oct 30 2026 League Pass strip and nav link, which added 33
     # words because a price carries its terms; the total cap did not move.
     hand = re.sub(r"<!-- (phone|shot):start -->.*?<!-- \1:end -->", "", LANDING, flags=re.S)
     hand = count(re.sub(r"<!--.*?-->", "", hand, flags=re.S))
-    assert hand <= 830, f"the landing's own copy is {hand} words"
+    assert hand <= 829, f"the landing's own copy is {hand} words"
 
 
 # --------------------------------------------------------------------- #

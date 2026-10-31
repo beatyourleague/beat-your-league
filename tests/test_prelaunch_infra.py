@@ -405,8 +405,9 @@ def test_checkout_never_leaves_the_push_token_behind() -> None:
             assert helper in run, name
             assert run.index("credential.helper") < run.index("pull --rebase"), name
     # Every pusher is a commit job with a checkout of its own (SEC-1): seven,
-    # beside the checkout of each job they follow (weekly.yml has two pairs).
-    assert checkouts == len(_docs()) + 1 + len(COMMIT_JOBS) and pushers == len(COMMIT_JOBS) == 7
+    # beside the checkout of each job they follow (weekly.yml has two pairs, and
+    # the `due` job's own).
+    assert checkouts == len(_docs()) + 2 + len(COMMIT_JOBS) and pushers == len(COMMIT_JOBS) == 7
 
 
 GIT_WRAPPER = ('git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false '
@@ -1347,7 +1348,7 @@ def test_the_weeks_left_and_the_hours_come_from_the_opening_date() -> None:
     assert econ.WEEKS_LEFT == econ.weeks_left() == 9
     assert econ.owner_hours() == 48.8
     assert econ.owner_hours(date(2026, 10, 26)) > econ.owner_hours()
-    assert econ.report_tuesday(18) == date(2027, 1, 5)
+    assert econ.report_wednesday(18) == date(2027, 1, 6)
 
 
 def test_a_2026_buyer_is_a_re_buy_never_a_renewal() -> None:

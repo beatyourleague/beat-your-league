@@ -42,7 +42,7 @@ LEDGER_DIR = REPO_ROOT / "data" / "processed" / "ledger"
 # Each off-limits tree, with why — the failure names the one that was touched.
 OFF_LIMITS = {
     REGISTRY_DIR: ("holds subscriber emails and decides who gets mailed on "
-                   "Tuesday", "Build a registry under tmp_path and pass the "
+                   "Wednesday", "Build a registry under tmp_path and pass the "
                    "path explicitly instead."),
     LEDGER_DIR: ("is the public record — append-only, and a graded row can "
                  "never be taken back", "Pass a processed/ledger directory "

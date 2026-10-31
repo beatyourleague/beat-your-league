@@ -63,14 +63,18 @@ from typing import Iterable, NamedTuple
 TUESDAY = "tuesday"
 SATURDAY = "saturday"
 MARKER_PROVIDER = "marker"
-# The time (UTC) the Tuesday run is due on its send Tuesday — weekly.yml's
-# first cron, to the minute (tests/test_scheduling.py reads the two from one
-# another). A purchase after it was never owed that Tuesday's report. The
-# minute is :17, not :00 (OPS-01): the top of the hour is when GitHub's
-# scheduler is most loaded and most often late, and the Worker that starts the
-# runs on time fires at the same minute.
-TUESDAY_SEND_HOUR = 12
+# The time (UTC) the weekly run is due on its send Wednesday — weekly.yml's
+# evening cron, to the minute (tests/test_scheduling.py reads the two from one
+# another): after waivers clear, a day before Thursday's game. A week with a
+# Wednesday game is due that morning instead (REPORT_MORNING_HOUR). A purchase
+# after it was never owed that week's report. The names and the run key still
+# say "tuesday", the send day until Oct 31 2026: the key is on the committed
+# send log. The minute is :17, not :00 (OPS-01): the top of the hour is when
+# GitHub's scheduler is most loaded and most often late, and the Worker that
+# starts the runs on time fires at the same minute.
+TUESDAY_SEND_HOUR = 22
 TUESDAY_SEND_MINUTE = 17
+REPORT_MORNING_HOUR = 13
 
 
 class WatchdogError(RuntimeError):
@@ -166,7 +170,7 @@ def tuesday_finished(keys: set[str], season: str, week: int) -> bool:
 # --------------------------------------------------------------------- #
 
 class WeekCalendar(NamedTuple):
-    tuesday: date               # the send Tuesday (NFL time)
+    tuesday: date               # the send Wednesday (NFL time)
     saturday: date              # the final check's Saturday
     first_kickoff: datetime     # UTC
 
@@ -174,7 +178,7 @@ class WeekCalendar(NamedTuple):
 def week_calendar(cache_dir: Path, season: str, week: int) -> WeekCalendar:
     """When a week's runs are due, as NFL-time dates, and when it starts.
 
-    The send Tuesday is the Tuesday on or before the week's first kickoff — read
+    The send day is the Wednesday on or before the week's first kickoff — read
     off the schedule, never assumed, because the first game is not always a
     Thursday (a Wednesday opener, a Christmas Wednesday, a Friday in Brazil)."""
     from zoneinfo import ZoneInfo
@@ -188,14 +192,16 @@ def week_calendar(cache_dir: Path, season: str, week: int) -> WeekCalendar:
         raise WatchdogError(f"the schedule has no {season} week {week} games")
     kickoff = min(starts.values())
     first = kickoff.astimezone(ZoneInfo(NFL_TIME)).date()
-    tuesday = first - timedelta(days=(first.weekday() - 1) % 7)
-    return WeekCalendar(tuesday, tuesday + timedelta(days=4), kickoff)
+    tuesday = first - timedelta(days=(first.weekday() - 2) % 7)
+    return WeekCalendar(tuesday, tuesday + timedelta(days=3), kickoff)
 
 
-def tuesday_due_at(tuesday: date) -> datetime:
-    """When the send Tuesday's run is due: a purchase after this was never
-    owed that week's Tuesday report (it gets the first email intake sends)."""
-    return datetime.combine(tuesday, time(TUESDAY_SEND_HOUR, TUESDAY_SEND_MINUTE),
+def tuesday_due_at(tuesday: date, *, morning: bool = False) -> datetime:
+    """When the send Wednesday's run is due: a purchase after this was never
+    owed that week's report (it gets the first email intake sends).
+    ``morning`` for a week whose first game is that Wednesday."""
+    hour = REPORT_MORNING_HOUR if morning else TUESDAY_SEND_HOUR
+    return datetime.combine(tuesday, time(hour, TUESDAY_SEND_MINUTE),
                             tzinfo=timezone.utc)
 
 
@@ -257,14 +263,14 @@ def missing_runs(keys: set[str], season: str, week: int, today: date,
             fix = ("This week's first game has kicked off, so do NOT re-run it "
                    "now: a report built after kickoff publishes calls on a game "
                    "already played. Subscribers missed this week; find out why "
-                   "before next Tuesday."
+                   "before next Wednesday."
                    if kicked_off else
                    "Run the weekly-report workflow by hand before the first "
                    "kickoff: every send is keyed, so nobody already mailed is "
                    "mailed twice.")
             missing.append(
-                f"Tuesday's reports for {season} week {week} (due "
-                f"{tuesday:%a %b %d}): no Tuesday run for that week got as far "
+                f"Wednesday's reports for {season} week {week} (due "
+                f"{tuesday:%a %b %d}): no Wednesday run for that week got as far "
                 f"as sending. {fix}")
     if today > saturday and owed_saturday:
         if run_key(SATURDAY, season, week) not in keys:
@@ -363,17 +369,20 @@ def main(argv: list[str] | None = None) -> int:
         bought = purchase_times(subscribers, load_log(log))
     except (OSError, ValueError, TypeError):
         bought = [None] * len(subscribers)
-    owed_tuesday = owed(bought, tuesday_due_at(tuesday))
+    from zoneinfo import ZoneInfo
+    from run.saturday import NFL_TIME
+    wednesday_game = first_kickoff.astimezone(ZoneInfo(NFL_TIME)).date() == tuesday
+    owed_tuesday = owed(bought, tuesday_due_at(tuesday, morning=wednesday_game))
     owed_saturday = owed(bought, first_kickoff)
 
     missing = missing_runs(load_sent(), season, week, today, tuesday, saturday,
                            kicked_off=now >= first_kickoff,
                            owed_tuesday=owed_tuesday, owed_saturday=owed_saturday)
     print(f"Watchdog — {season} week {week} · as of {now:%a %Y-%m-%d %H:%M} UTC "
-          f"(send Tuesday {tuesday:%b %d}, final check {saturday:%b %d})")
+          f"(send Wednesday {tuesday:%b %d}, final check {saturday:%b %d})")
     if not missing:
         due = [(name, was_owed) for name, day, was_owed in (
-                   ("Tuesday's reports", tuesday, owed_tuesday),
+                   ("Wednesday's reports", tuesday, owed_tuesday),
                    ("the Saturday check", saturday, owed_saturday))
                if today > day]
         ran = [name for name, was_owed in due if was_owed]

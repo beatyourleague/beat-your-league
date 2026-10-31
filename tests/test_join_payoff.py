@@ -328,14 +328,14 @@ def test_the_locked_preview_decides_nothing(tmp_path) -> None:
 @needs_node
 def test_the_first_week_ahead_is_the_landings_clock(tmp_path) -> None:
     now = "2026-10-30T15:00:00Z"
-    season = {"week": 8, "last_week": 18, "phase": "season", "lands_on": "2026-11-03",
+    season = {"week": 8, "last_week": 18, "phase": "season", "lands_on": "2026-11-04",
               "first_kickoff": "2026-10-30T00:15:00Z"}
     before = dict(season, first_kickoff="2026-11-01T17:00:00Z")
     cases = [
         [season, True], [season, False], [before, True], [before, False],
-        [dict(season, lands_on="2026-10-20"), False],             # a missed build
+        [dict(season, lands_on="2026-10-21"), False],             # a missed build
         [dict(season, lands_on="2026-11-20"), False],             # too far off to trust
-        [dict(season, week=17, lands_on="2026-11-03"), False],    # past Week 17
+        [dict(season, week=17, lands_on="2026-11-04"), False],    # past Week 17
         [dict(season, phase="over"), False], [None, False],
         [dict(season, phase="preseason", week=1), False],
     ]
@@ -371,7 +371,7 @@ def test_the_panel_says_facts_and_nothing_more() -> None:
                    r"\bproven\b", r"\baccurate\b", r"\bsportsbook\b", r"\bbet\b", r"\bwager",
                    r"\brival\b", r"\bopponent\b", r"\bwaiver"):
         assert not re.search(banned, strings, re.I), banned
-    assert "Your Tuesday report decides these for your team, every week." in strings
+    assert "Your Wednesday report decides these for your team, every week." in strings
     assert "Everyone who can play starts" in strings
 
 

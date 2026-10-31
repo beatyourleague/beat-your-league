@@ -1,6 +1,6 @@
 # LAUNCH.md — opening mid-season
 
-Every owner action left before a stranger's payment becomes a Tuesday email, in order, with
+Every owner action left before a stranger's payment becomes a Wednesday email, in order, with
 the exact strings. The code is done and tested; nothing here is engineering. Updated Oct 31
 2026: 2026 sells **monthly plans** ($14.99 Monthly, $34.99 League Pass for the whole league),
 each ending by itself so that it won't renew after Week 16's report goes out, and every
@@ -36,7 +36,7 @@ section with the exact strings and clicks.
    days to verify.
 7. **The two Stripe keys** (~5 min) — [step 3](#3-stripe-keys-and-github-secrets-15-min): add
    Payment Intents, Charges and Disputes **Read** to `github-actions-crons` (without them
-   Tuesday's send mails nobody), and create the read-only `owner-stats` key for the launch
+   Wednesday's send mails nobody), and create the read-only `owner-stats` key for the launch
    check and `make stats`.
 8. **GitHub secrets** (~10 min) — [step 3](#3-stripe-keys-and-github-secrets-15-min): the rest
    of the table, the old-cache check, then **run daily-intake once by hand** and wait for green
@@ -291,10 +291,10 @@ still open one. Make three new links and switch the old ones off.
    it in the GitHub secret `SENDER_POSTAL_ADDRESS` (step 3). Every email prints it; the launch
    announcement refuses to send without it.
 
-The free tier sends 100 a day, which one Tuesday outgrows at about 85 recipients. Until then
+The free tier sends 100 a day, which one Wednesday outgrows at about 85 recipients. Until then
 the crons stop the optional mail (free reports and League Pass seat notes) for the day once
 the day's sends reach **60**, so the rest is kept for what buyers paid for. Move to the
-$20/month plan the week a Tuesday nears 85 (PLAN §2), then:
+$20/month plan the week a Wednesday nears 85 (PLAN §2), then:
 - GitHub → repo Settings → Secrets and variables → Actions → **Variables** → New repository
   variable `EMAIL_DAILY_HEADROOM` = `1500` (Pro sends 50,000 a month; this keeps the 60-a-day
   hold from applying to a plan that doesn't need it).
@@ -307,7 +307,7 @@ $20/month plan the week a Tuesday nears 85 (PLAN §2), then:
    Edit** → add **Payment Intents: Read**, **Charges: Read** and **Disputes: Read** → **Save**.
    The key's value doesn't change, so nothing else does. It was made Sep 29 with three
    permissions; without these three the hourly run goes red with **STRIPE KEY IS MISSING A
-   PERMISSION**, and Tuesday's send couldn't read who has paid and would mail nobody. When you're done it holds exactly:
+   PERMISSION**, and Wednesday's send couldn't read who has paid and would mail nobody. When you're done it holds exactly:
    Checkout Sessions **Read**, Payment Intents **Read** and Charges **Read** (a refund is
    read off the charge), Disputes **Read** (a lost chargeback ends a
    purchase like a refund; without it a disputed payment shows as "status unknown" and the
@@ -354,7 +354,7 @@ note or a file.
 
 **Then run it once, by hand:** Actions → **daily-intake** → **Run workflow** (leave the boxes
 unticked), and wait for it to go green before anything else runs. That writes the first
-sealed subscriber list, so the Saturday check, Tuesday's send and the missed-run watchdog
+sealed subscriber list, so the Saturday check, Wednesday's send and the missed-run watchdog
 find one rather than going red on a list that doesn't exist yet.
 
 **Tell me when they're all in.** With step 5's Worker live too, I put the new links on the
@@ -375,17 +375,18 @@ Nobody else's money moves until you've watched your own go all the way through.
      16's report, reports through the season's last week),
      refunds until your first weekly report's week kicks off, and how to cancel (the billing
      page).
-   - **Bought Tuesday to Thursday before kickoff:** this week's report, too.
+   - **Bought after Wednesday's send, before kickoff:** this week's report, too.
+   - **Bought Monday night to Wednesday's send:** an early look at the week's report (nothing recorded), then Wednesday's report with everyone else.
      **Bought Thursday night to Monday (a Saturday purchase):** the roster report that day,
-     and the week's report the next Tuesday morning.
+     and the week's report the next Wednesday evening.
    - Open each in Gmail (phone in dark mode, and web), Apple Mail and Outlook if you have
      them. Look for a header that lost its navy, vanished tick boxes, a cluttered preview
      line, or "View entire message". Tell me what you see.
 4. **Tell me they arrived.** I turn on `CHECKOUT_CAN_COMPLETE` (step 6). After a Saturday
    purchase that is the welcome plus the roster report; the weekly path is proven by
-   Tuesday's send (item 5), which carries your own row first.
-5. **Tuesday:** the new week's report by about 8:30am ET (7:30 from Nov 1), weekly-report
-   green in Actions. The one case nothing has rehearsed is a Tuesday-to-Thursday buyer's
+   Wednesday's send (item 5), which carries your own row first.
+5. **Wednesday:** the new week's report by about 5:30pm ET (6:30 before Nov 1), weekly-report
+   green in Actions. The one case nothing has rehearsed is a Wednesday-to-Thursday buyer's
    same-day weekly report; if one fails, the hourly run retries it.
 6. **Keep the pass** (section 10, "Keep your own pass"). If you refund it instead, it's the
    refund steps in section 8, and Stripe keeps its fee: about $1.18 on a $14.99 charge from a
@@ -573,7 +574,7 @@ sends Global Privacy Control or Do Not Track. Privacy §3 already says exactly t
      reach **60** the crons hold free reports and seat notes until the next day (step 2), so
      the rest is kept for buyers. The day is UTC's, which turns over at 8:00 PM ET (7:00 PM
      from Nov 1). Add the two preview counts and about two per buyer you expect that day (a
-     welcome and a first report each). Keep that under 60 on a day that is not a Tuesday or
+     welcome and a first report each). Keep that under 60 on a day that is not a Wednesday or
      Saturday: if it would pass 60, send the waitlist after the day turns that evening, or the
      next morning. A list too big for that can't be split (the send refuses when more are
      waiting than `MAX`), so it needs a month of Resend Pro and `EMAIL_DAILY_HEADROOM=1500`.
@@ -631,7 +632,7 @@ The order is PLAN §5.1's — subscribers per hour of your time.
    only, no links, no self-promotion. r/Fantasy_Football and r/FFCommish: read each one's
    rules and ask the mods first. At most one post saying you built this every 2–3 weeks, and
    only where the rules allow it (r/FFCommish: framed as the League Pass for commissioners).
-8. **The weekly drafts.** Tuesday's cron writes `content/this-week.md` from the live sample —
+8. **The weekly drafts.** Wednesday's cron writes `content/this-week.md` from the live sample —
    the odds in it are only ones already on the public record. `make content` drafts the
    Monday and Friday posts from the record, one call at a time.
 
@@ -645,7 +646,7 @@ win-loss totals, nothing about betting.
 
 | When (ET until Nov 1) | What runs | What you do |
 |---|---|---|
-| Tuesday 8:17am, retry 12:17pm | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
+| Wednesday about 5:17pm ET, retry about 7:17pm (9:17am in a week with a Wednesday game) | **weekly-report:** new signups, every subscriber's report, this week's live sample (its odds are recorded before kickoff) | Open your own report |
 | Daily 10:17am, plus every hour at :47 | **daily-intake:** purchases, welcomes, first reports, end-of-season dates on monthly plans, renewal notices | Nothing, unless it goes red |
 | Saturday 12:17pm | **saturday-final-check:** Friday's injury report against each lineup sent; mails only those who must change something | Nothing, unless it goes red |
 | Monday 9:17am | **monday-receipts:** grades last week's calls, republishes the record | Nothing, unless it goes red |
@@ -659,9 +660,9 @@ open issue instead, so close each once it's fixed.
 
 **"A scheduled run did not happen"** names the run and the week. Before that week's first
 kickoff, run that workflow by hand from Actions (nobody is mailed twice). After kickoff,
-don't: the Tuesday run refuses a week already underway.
+don't: the Wednesday run refuses a week already underway.
 
-**A red Tuesday run saying "box scores are not all in"** names a game. Usually Monday night
+**A red Wednesday run saying "box scores are not all in"** names a game. Usually Monday night
 just isn't published yet and the 12:17pm retry builds: do nothing. If that game was
 **postponed or suspended** (the news says so — BUF@CIN in 2022 is the precedent), the report
 would wait for a score that isn't coming, and so would first reports and free reports. Then:
@@ -670,7 +671,7 @@ would wait for a score that isn't coming, and so would first reports and free re
    (several: comma-separated).
 2. Actions → **weekly-report** → **Run workflow** (before the week's first kickoff, like any
    hand run). The report says the game is postponed and counts it as a bye for both teams.
-3. **Delete the variable** after the next Tuesday's run is green.
+3. **Delete the variable** after the next Wednesday's run is green.
 
 **A red hourly run with `PAID-UNATTRIBUTED`:** a payment the run can't tie to a roster or a
 plan — most often a payment link missing from `STRIPE_PAYMENT_LINKS` (step 3), or a payment
@@ -683,7 +684,7 @@ only when each one the log lists is dealt with.
 **Rebuilding the live sample by hand:** `make live-sample` before the week's first kickoff
 records its odds on the public record — commit the ledger file with the page.
 `make live-sample ARGS=--no-record` previews. After the first kickoff it refuses: leave the
-page as it stands until Tuesday. A forced rebuild (`--force`) records nothing, so don't publish
+page as it stands until Wednesday. A forced rebuild (`--force`) records nothing, so don't publish
 one — Week 6's page was rebuilt that way on Oct 16 and printed odds that are on no record.
 
 **If the sealed registry is lost** (an issue saying the send log shows sends to customers but
@@ -952,7 +953,7 @@ a claim counts only once its own inbox confirms it — and a claim past the cap 
 email. Stated on the League Pass page and in the terms (§1, dated 17 October 2026).
 
 **The League Pass refund window.** It closes when the payer's first weekly report's week kicks
-off, but seats start the Tuesday after they claim — leaguemates may have seen one report or none
+off, but seats start the Wednesday after they claim — leaguemates may have seen one report or none
 when the commissioner loses the refund on the league's money. *Recommend:* count a pass's
 window from the first seat's first weekly report. Terms §5 and the pass welcome change
 together.
@@ -1278,7 +1279,7 @@ mode**, with test keys in your shell:
    one; Stripe's would call a paid pass a free trial.
 3. **Edit `github-actions-crons`:** add **Invoices: Read**. A refund on a moved pass can only be
    seen on its paid invoice; without this the hourly run goes red naming `rak_invoice_read` and
-   Tuesday's send can't read who has paid. Add it to `owner-stats` too, for `make stats`.
+   Wednesday's send can't read who has paid. Add it to `owner-stats` too, for `make stats`.
 
 ### Step 5: the live link
 

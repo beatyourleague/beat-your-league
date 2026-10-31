@@ -212,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"paid check against {paid.source}.", file=sys.stderr)
             print("  If that is genuinely everyone cancelling, re-run with "
                   "--no-paid-check to confirm. Otherwise the entitlement source is "
-                  "wrong or stale — check it before next Tuesday.", file=sys.stderr)
+                  "wrong or stale — check it before next Wednesday.", file=sys.stderr)
             return 1
 
     leagues = sorted({s.league_id for s in subscribers})

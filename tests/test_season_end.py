@@ -93,7 +93,7 @@ def _report(tmp_path, last_week: int, plan: str = "season"):
 
 def test_championship_week_says_whether_another_report_comes(tmp_path) -> None:
     result = _report(tmp_path, last_week=WEEK + 1)
-    note = f"If your league plays Week {WEEK + 1}, next Tuesday's report covers it"
+    note = f"If your league plays Week {WEEK + 1}, next Wednesday's report covers it"
     assert note in result.message.text
     assert note in html.unescape(result.message.html)
     assert "season's last report" not in result.message.text

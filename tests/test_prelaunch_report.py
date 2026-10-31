@@ -546,7 +546,7 @@ def test_the_free_report_states_the_price_and_refund_terms_up_top(monkeypatch) -
     report = _solo()
     report["meta"]["trial"] = True
     line = trial_price_line(report["meta"])
-    assert line == ("Every Tuesday through your title game: $14.99 a month, and it stops "
+    assert line == ("Every Wednesday through your title game: $14.99 a month, and it stops "
                     "on its own. Full refund before your first weekly report's first "
                     "game. One per person.")
     # Above the report's first card (contract C1: the lineup leads now, and a

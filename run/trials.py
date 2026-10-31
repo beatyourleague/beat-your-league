@@ -106,7 +106,7 @@ TRIAL_MAX_AGE = timedelta(days=14)
 # this hour, whichever comes first. The retry runs at 16:17 and is done well
 # before 20:00, so the fallback only fires when Tuesday failed outright — and
 # then the watchdog says so separately.
-TUESDAY_RELEASE_HOUR = 20
+TUESDAY_RELEASE_HOUR = 2       # UTC, Thursday: past the Wednesday evening retry
 # The same on a Saturday (UTC) for the final check (saturday.yml, 16:17 UTC),
 # which mails only subscribers who must change something: free reports and
 # seat notes are unpaid, and must not spend the day's allowance before it.
@@ -208,12 +208,18 @@ def week_underway_from(cache_dir: Path, season: str, week: int) -> datetime | No
     return min(starts.values()) if starts else None
 
 
+# From the Wednesday morning slot (weekly.yml), so a week with a Wednesday game
+# is covered; a normal week's run marker arrives that evening.
+REPORT_HOLD_FROM = 12
+
+
 def held_for_tuesday(now: datetime, sent: set[str], season: str, week: int) -> bool:
     """True while today's subscriber reports may still be going out."""
     from run.watchdog import tuesday_finished
     now = now.astimezone(timezone.utc)
-    return (now.weekday() == 1 and now.hour < TUESDAY_RELEASE_HOUR
-            and not tuesday_finished(sent, season, week))
+    sending = (now.weekday() == 2 and now.hour >= REPORT_HOLD_FROM
+               or now.weekday() == 3 and now.hour < TUESDAY_RELEASE_HOUR)
+    return sending and not tuesday_finished(sent, season, week)
 
 
 def held_for_subscribers(now: datetime, sent: set[str], season: str, week: int) -> bool:
@@ -389,7 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     # Before launch there are no subscriber reports to go first.
     if not prelaunch and held_for_subscribers(now, sent, season, week):
-        which = ("Tuesday reports go" if now.astimezone(timezone.utc).weekday() == 1
+        which = ("Wednesday reports go" if now.astimezone(timezone.utc).weekday() in (2, 3)
                  else "Saturday check goes")
         print(f"Free reports: {len(todo)} waiting — subscribers' {which} out "
               f"first (until that run finishes, or {TUESDAY_RELEASE_HOUR}:00 UTC).")

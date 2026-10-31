@@ -51,7 +51,7 @@ def _assert_gate_reports(season: str, injury_dir: Path) -> None:
         if report is None or not report.teams:
             raise BacktestError(
                 f"{season}: no week-{graded - 1} injury report — week {graded} "
-                f"cannot be graded on the Tuesday information set")
+                f"cannot be graded on the Wednesday information set")
 
 
 def arm_calls(season: str, raw_dir: Path, injury_dir: Path, rule,

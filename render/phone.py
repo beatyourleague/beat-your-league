@@ -47,9 +47,9 @@ FIXTURE = REPO_ROOT / "tests" / "fixtures" / "sample-report-w10.json"
 
 # The lock screen and the mail row are the phone's own chrome: the day, the
 # time and the sender are the illustration, never a figure from the report.
-LOCK_DAY = "Tuesday"
-LOCK_TIME = "9:41"
-MAIL_TIME = "9:41 AM"
+LOCK_DAY = "Wednesday"
+LOCK_TIME = "6:41"
+MAIL_TIME = "6:41 PM"
 SENDER = "Beat Your League"
 # A replayed report's stamp ("Rebuilt Oct 30, 2026 from the 2024 season archive")
 # is right on the sample's own page and reads like a build log in a phone's

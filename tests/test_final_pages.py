@@ -436,8 +436,8 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     faqs = next(n for n in graph if n["@type"] == "FAQPage")["mainEntity"]
     ld = next(q for q in faqs if q["name"] == "Is it worth joining mid-season?")
     assert ld["acceptedAnswer"]["text"] == answer
-    assert answer.startswith("Yes. It's built for the playoff push.")
-    assert "Every report checks the byes ahead" in answer
+    assert answer.startswith("Yes. It's built for the playoff push:")
+    assert "every report checks the byes ahead" in answer
     assert "Subscribers alone pay for it" not in LANDING
 
 
@@ -502,7 +502,7 @@ setTimeout(() => console.log(JSON.stringify({ closed,
   clock: els["season-clock"].textContent, open: els["open-line"] ? els["open-line"].textContent : null,
   hero: els["hero-open"].textContent, closer: els["closer-cta"].textContent })), 50);
 """
-    start = {"season-clock": "Checkout is open." if open_ else "A new report every Tuesday of the season.",
+    start = {"season-clock": "Checkout is open." if open_ else "A new report every Wednesday of the season.",
              "hero-open": "Get my lineups" if open_ else "Check my team free",
              "closer-cta": "Get my lineups" if open_ else "Check my team free",
              "sticky-cta": "Get my lineups" if open_ else "Check my team free",
@@ -514,7 +514,7 @@ setTimeout(() => console.log(JSON.stringify({ closed,
                            "iife": iife})
 
 
-WEEK7 = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-27",
+WEEK7 = {"season": "2026", "week": 7, "last_week": 18, "lands_on": "2026-10-28",
          "built_at": "2026-10-20T17:15:45+00:00", "odds": 3, "closest_call": True, "cards": True,
          "first_kickoff": "2026-10-23T00:15:00Z", "recorded": True}
 
@@ -531,13 +531,13 @@ def test_mid_week_the_clock_and_the_button_name_the_week_a_buyer_gets() -> None:
     "Get my lineups" (the price card adds its price), so the week lives in
     the clock alone. Mutation: count from w.week + 1 always and the first
     case fails."""
-    mid = {**WEEK7, "week": 8, "lands_on": "2026-11-03", "first_kickoff": "2026-10-30T00:15:00Z"}
-    got = _clock(mid, "2026-10-28T16:00:00Z", open_=True)
+    mid = {**WEEK7, "week": 8, "lands_on": "2026-11-04", "first_kickoff": "2026-10-30T00:15:00Z"}
+    got = _clock(mid, "2026-10-29T16:00:00Z", open_=True)
     assert got["clock"] == "Week 8's report lands today."
     assert got["open"] == " Set up now and your first report lands today."
     assert got["hero"] == got["closer"] == "Get my lineups"
-    closed = _clock(mid, "2026-10-28T16:00:00Z", open_=False)
-    assert closed["clock"] == "Week 9's report lands Tuesday."
+    closed = _clock(mid, "2026-10-29T16:00:00Z", open_=False)
+    assert closed["clock"] == "Week 9's report lands Wednesday."
     assert closed["hero"] == closed["closer"] == "Check my team free"
 
 
@@ -550,10 +550,10 @@ def test_after_kickoff_the_open_line_names_only_what_the_clock_cannot() -> None:
     has never heard of): it says the one thing true at every hour — "Set up
     now and your first report lands today." — and the clock names the week."""
     got = _clock(WEEK7, "2026-10-24T16:00:00Z", open_=True)
-    assert got["clock"] == "Week 8's report lands Tuesday."
+    assert got["clock"] == "Week 8's report lands Wednesday."
     assert got["open"] == " Set up now and your first report lands today."
     assert got["hero"] == "Get my lineups"
-    tuesday = _clock(WEEK7, "2026-10-27T11:00:00Z", open_=True)
+    tuesday = _clock(WEEK7, "2026-10-28T11:00:00Z", open_=True)
     assert tuesday["clock"].startswith("Week 8's report lands today.")
     assert tuesday["open"] == " Set up now and your first report lands today."
 

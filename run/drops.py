@@ -217,7 +217,7 @@ def _pivot_post(report: Mapping[str, Any]) -> str | None:
     action = str(plan["action"]).strip().rstrip(".")
     action = action[:1].lower() + action[1:]
     return (f"If {plan['condition']}: {action}. That's the if/then we set on "
-            f"Tuesday for our sample roster, so Sunday isn't a scramble.")
+            f"Wednesday for our sample roster, so Sunday isn't a scramble.")
 
 
 # A row's game as render prints it: "vs NE · Thu 8:15 PM ET".
@@ -246,10 +246,10 @@ def _thursday_post(report: Mapping[str, Any]) -> tuple[str, str] | None:
         if plan is not None:
             action = str(plan["action"]).strip().rstrip(".")
             action = action[:1].lower() + action[1:]
-            tries.append((f"{head} The if/then we set on Tuesday for our sample "
+            tries.append((f"{head} The if/then we set on Wednesday for our sample "
                           f"roster: if {plan['condition']}, {action}.",
                           "If/Then for Gameday"))
-        tries.append((f"{head} Our sample roster's Tuesday report flags it: check "
+        tries.append((f"{head} Our sample roster's Wednesday report flags it: check "
                       f"his status before then.", CARDS["Thursday night"]))
         return next(((t, c) for t, c in tries if len(t) <= LIMIT), None)
     return None
@@ -412,7 +412,7 @@ WHEN = {"Thursday night": "Thursday, before his kickoff",
 
 def reply_text(url: str) -> str:
     """The first reply under every post: where the whole report is."""
-    return f"The whole report, rebuilt every Tuesday for our sample roster: {url}"
+    return f"The whole report, rebuilt every Wednesday for our sample roster: {url}"
 
 
 def _fits(draft: Mapping[str, str]) -> bool:

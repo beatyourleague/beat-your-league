@@ -65,7 +65,7 @@ OPENER_UNDER_WAY = ("Week 1 is under way, but one week isn't a record, so this "
 # it is the roster report a Week-1 buyer keeps all season.
 WEEK_ONE_WINDOW = timedelta(days=7)
 
-WEEKLY_PROMISE = ("From your first Tuesday you get the weekly report: your lineup "
+WEEKLY_PROMISE = ("From your first Wednesday you get the weekly report: your lineup "
                   "set slot by slot, and the odds on every call we'll stand "
                   "behind — each one recorded before kickoff and graded in "
                   "public afterwards.")

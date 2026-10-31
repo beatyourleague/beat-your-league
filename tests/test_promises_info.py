@@ -76,7 +76,7 @@ def test_each_sample_banner_says_what_its_week_was_built_from() -> None:
 def test_a_rebuild_after_kickoff_says_it_reads_tuesdays_information() -> None:
     tuesday = _banner({"live_demo": True, "week": 6})
     assert "exactly the way yours is built" in tuesday
-    assert "Rebuilt every Tuesday of the season" in tuesday
+    assert "Rebuilt every Wednesday of the season" in tuesday
     rebuilt = _banner({"live_demo": True, "week": 6, "rebuilt_after_kickoff": True})
     assert "exactly the way yours is built" not in rebuilt
     assert "the week 5 injury report" in rebuilt and "later" in rebuilt
@@ -93,7 +93,7 @@ def test_a_rebuild_after_kickoff_says_it_reads_tuesdays_information() -> None:
 def test_the_join_promise_names_the_three_scoring_settings() -> None:
     assert "full PPR, half PPR or standard" in rr.JOIN_PROMISE
     assert "league's way" not in rr.JOIN_PROMISE
-    assert "every Tuesday of the season" in rr.BRAND_LINE
+    assert "every Wednesday of the season" in rr.BRAND_LINE
 
 
 # --------------------------------------------------------------------- #
@@ -121,16 +121,20 @@ def test_an_absence_names_the_reserve_list_before_the_bye() -> None:
 # --------------------------------------------------------------------- #
 
 def test_week_one_lands_on_the_first_tuesday_send_it_is_due() -> None:
-    # Thursday-night opener, 8:20 PM ET = Fri 00:20 UTC: due Wed Sep 1, 00:20
-    # UTC, so the Tuesday before (Aug 31) is too early and Sep 7 sends it.
+    # Thursday-night opener, 8:20 PM ET = Fri 00:20 UTC: due Fri Sep 3, so
+    # the Wednesday of kickoff week sends it, the day before the game.
     assert live.week_one_lands_on(datetime(2027, 9, 10, 0, 20, tzinfo=timezone.utc)) \
-        == "2027-09-07"
-    # Due that very Tuesday morning, before the last send: that Tuesday.
-    assert live.week_one_lands_on(datetime(2027, 9, 16, 10, 0, tzinfo=timezone.utc)) \
-        == "2027-09-07"
-    # Due that Tuesday after the last send (16:17 UTC): a week later.
-    assert live.week_one_lands_on(datetime(2027, 9, 16, 17, 0, tzinfo=timezone.utc)) \
-        == "2027-09-14"
+        == "2027-09-08"
+    # A Wednesday night opener: due just after the Wednesday before, so that
+    # same Wednesday (the morning slot), never a week ahead of it.
+    assert live.week_one_lands_on(datetime(2027, 9, 9, 0, 20, tzinfo=timezone.utc)) \
+        == "2027-09-08"
+    # Due that Wednesday before the evening send (22:17 UTC): that Wednesday.
+    assert live.week_one_lands_on(datetime(2027, 9, 15, 10, 0, tzinfo=timezone.utc)) \
+        == "2027-09-08"
+    # Due that Wednesday after it: a week later.
+    assert live.week_one_lands_on(datetime(2027, 9, 15, 23, 0, tzinfo=timezone.utc)) \
+        == "2027-09-15"
 
 
 def test_the_preseason_clock_is_written_only_before_week_one_is_due(monkeypatch) -> None:
@@ -143,7 +147,7 @@ def test_the_preseason_clock_is_written_only_before_week_one_is_due(monkeypatch)
     now = datetime(2027, 5, 18, 13, 0, tzinfo=timezone.utc)
     clock = live.preseason_clock(Path("x"), "2027", now)
     assert clock == {**clock, "season": "2027", "week": 1, "last_week": 18,
-                     "lands_on": "2027-09-07", "odds": 0, "closest_call": False,
+                     "lands_on": "2027-09-08", "odds": 0, "closest_call": False,
                      "first_kickoff": "2027-09-10T00:20:00Z", "phase": "preseason"}
     monkeypatch.setattr(solo, "week_one_due", lambda *a, **k: True)
     assert live.preseason_clock(Path("x"), "2027", now) is None
@@ -195,7 +199,7 @@ def test_a_derived_week_one_not_yet_due_is_never_published(
         report = week()
         report["meta"]["week"] = 1
         return report
-    clock = {"season": "2027", "week": 1, "last_week": 18, "lands_on": "2027-09-07",
+    clock = {"season": "2027", "week": 1, "last_week": 18, "lands_on": "2027-09-08",
              "built_at": None, "odds": 0, "closest_call": False,
              "first_kickoff": "2027-09-10T00:20:00Z", "phase": "preseason"}
     monkeypatch.setattr(live, "build", week_one)
@@ -260,14 +264,14 @@ def test_the_readers_link_this_week_only_while_the_clock_is_current(page) -> Non
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 def test_how_it_works_closes_the_ask_from_the_last_weeks_first_kickoff() -> None:
     cases = {
-        "last": {"week": 18, "last_week": 18, "lands_on": "2999-01-01",
+        "last": {"week": 18, "last_week": 18, "lands_on": "2999-01-02",
                  "first_kickoff": "2000-01-01T00:00:00Z"},
-        "notyet": {"week": 18, "last_week": 18, "lands_on": "2999-01-01",
+        "notyet": {"week": 18, "last_week": 18, "lands_on": "2999-01-02",
                    "first_kickoff": "2999-01-01T00:00:00Z"},
-        "mid": {"week": 6, "last_week": 18, "lands_on": "2999-01-01",
+        "mid": {"week": 6, "last_week": 18, "lands_on": "2999-01-02",
                 "first_kickoff": "2000-01-01T00:00:00Z"},
-        "over": {"week": 18, "last_week": 18, "lands_on": "2999-01-01", "phase": "over"},
-        "pre": {"week": 1, "last_week": 18, "lands_on": "2999-01-01",
+        "over": {"week": 18, "last_week": 18, "lands_on": "2999-01-02", "phase": "over"},
+        "pre": {"week": 1, "last_week": 18, "lands_on": "2999-01-02",
                 "phase": "preseason", "first_kickoff": "2000-01-01T00:00:00Z"},
     }
     script = (_phase_js(HOW) + "\nconst cases = " + json.dumps(cases) + ";\n"

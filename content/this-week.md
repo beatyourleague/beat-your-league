@@ -10,15 +10,15 @@ Start Shakir or Odunze at FLEX this week? Shakir projects 10.5 points this week,
 
 Attach: a screenshot of the "The Week's Closest Call" card.
 
-First reply: The whole report, rebuilt every Tuesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
+First reply: The whole report, rebuilt every Wednesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
 
 ## 2. The if/then (237/280)
 
-If Tyjae Spears (RB) is ruled out: move Devin Neal into RB (no games this season yet). Devin Neal is on the practice squad: check he's been elevated. That's the if/then we set on Tuesday for our sample roster, so Sunday isn't a scramble.
+If Tyjae Spears (RB) is ruled out: move Devin Neal into RB (no games this season yet). Devin Neal is on the practice squad: check he's been elevated. That's the if/then we set on Wednesday for our sample roster, so Sunday isn't a scramble.
 
 Attach: a screenshot of the "If/Then for Gameday" card.
 
-First reply: The whole report, rebuilt every Tuesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
+First reply: The whole report, rebuilt every Wednesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
 
 ## 3. Rising roles (232/280)
 
@@ -26,7 +26,7 @@ Getting more of the ball lately (Week 8): Bam Knight (ARI RB) 14.5 targets + car
 
 Attach: a screenshot of the "Rising Roles" card.
 
-First reply: The whole report, rebuilt every Tuesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
+First reply: The whole report, rebuilt every Wednesday for our sample roster: https://beatyourleague.com/this-week.html?w=8
 
 ## 4. NFL byes left (278/280)
 

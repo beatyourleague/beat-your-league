@@ -141,7 +141,7 @@ def test_the_join_page_speaks_to_a_buyer() -> None:
     report"; the page says plan, never subscriber."""
     buyer = _flat(_markup(JOIN)) + _flat(_code(JOIN))
     assert "roster report" not in buyer.lower()
-    assert "Your first report today" in buyer and "your Tuesday report" in buyer
+    assert "Your first report today" in buyer and "your Wednesday report" in buyer
     visible = re.sub(r"<!--.*?-->", "", _flat(_markup(JOIN)), flags=re.S)
     assert not re.search(r"\bsubscriber", visible, re.I)
     assert "doesn't already have a plan" in visible

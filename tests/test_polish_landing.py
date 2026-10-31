@@ -137,12 +137,13 @@ def test_the_status_bar_time_is_after_the_tuesday_send() -> None:
     workflow's own earliest Tuesday cron, in both EDT and EST, and the lock
     screen says the same time as the status bar."""
     workflow = (SITE.parent / ".github" / "workflows" / "weekly.yml").read_text(encoding="utf-8")
-    sends = [(int(h), int(m)) for m, h in re.findall(r'cron: "(\d+) (\d+) \* \* 2"', workflow)]
-    assert sends, "no Tuesday cron found in weekly.yml"
-    hour, minute = min(sends)
+    sends = [(int(h), int(m)) for m, h in re.findall(r'cron: "(\d+) (\d+) \* \* 3"', workflow)]
+    assert sends, "no Wednesday cron found in weekly.yml"
+    hour, minute = max(sends)                   # the evening send
     shown = re.search(r'<div class="statusbar"[^>]*><span>(\d+):(\d\d)</span>',
                       HERO).groups()
-    phone = int(shown[0]) * 60 + int(shown[1])
+    phone = (int(shown[0]) + 12) * 60 + int(shown[1])      # evening: the mail row says PM
+    assert '<time>6:41 PM</time>' in HERO
     for offset in (4, 5):                       # EDT, EST
         local = ((hour - offset) % 24) * 60 + minute
         assert phone > local, f"the phone's {shown} is before the {offset}h-offset send"
@@ -164,7 +165,7 @@ def test_every_word_and_figure_on_the_phone_is_already_on_the_record() -> None:
     from render.email import preheader_for, subject_for
     sample = json.loads(FIXTURE.read_text(encoding="utf-8"))
     words = _flat(LOCK)
-    assert words == (f"Tuesday 9:41 Beat Your League {subject_for(sample)} "
+    assert words == (f"Wednesday 6:41 Beat Your League {subject_for(sample)} "
                      f"{preheader_for(sample)} now"), words
     flat_sample = _flat(SAMPLE_REPORT)
     for figure in set(re.findall(r"\d+\.\d+|\d+%", _flat(SCREEN))):
@@ -677,10 +678,10 @@ def test_the_landing_reads_in_impulse_buyer_order() -> None:
     report annotated, rankings against the report, the price, the FAQ and
     the closer."""
     heads = [_flat(h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", BODY, re.S)]
-    assert heads == ["Paste once, then play", "Everything Sunday needs, by Tuesday",
+    assert heads == ["Paste once, then play", "Everything Sunday needs, by Wednesday",
                      "Rankings rank. Your report decides",
                      "Take it through your title game.",
-                     "Before you ask the group chat", "Your lineup, decided every Tuesday."], heads
+                     "Before you ask the group chat", "Your lineup, decided every Wednesday."], heads
     # Six page sections; the report's own cards are <section class="card">.
     assert len(re.findall(r'<section\b(?! class="card")', BODY)) == 7   # with the scene
 
@@ -695,7 +696,7 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
     # their own app, and "sets your lineup" read as automation.
     # Oct 30 2026: it opens on what a wrong call costs, then what the email does.
-    assert sub == ("One wrong call can cost you the week. Every Tuesday, one email decides "
+    assert sub == ("One wrong call can cost you the week. Every Wednesday, one email decides "
                    "your lineup, through your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     # The comparison contrasts a rankings list with the report (Oct 25
