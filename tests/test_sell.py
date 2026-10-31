@@ -2,19 +2,17 @@
 deal in five seconds, and every value line on it literally true.
 
 What these hold:
-- the per-lineup figure is the price on offer ÷ the lineups left, in cents, and
-  it goes when no lineups are left; the count is the one a buyer really gets;
+- the count on the card is the one a buyer really gets, and it goes when no
+  lineups are left;
 - the $39 2027 Season Pass is built switched off: no word of it renders while
   the flag is false, and with the flag on its renewal terms sit under the price;
-- the narrowed money rule: a per-lineup figure on the price card and the join
-  page's step 3, never the hero;
+- the money rule: a price is stated, never broken down, on any page;
 - no hype on a selling page (the owner's "don't be cheesy", as a sweep).
 """
 
 from __future__ import annotations
 
 import json
-import math
 import os
 import re
 import shutil
@@ -61,27 +59,10 @@ def _flat(text: str) -> str:
 # --------------------------------------------------------------------- #
 
 @needs_node
-@pytest.mark.parametrize("price,lineups,figure", [
-    (29, 9, "$3.22 a lineup"), (29, 8, "$3.63 a lineup"), (29, 7, "$4.14 a lineup"),
-    (29, 5, "$5.80 a lineup"), (29, 2, "$14.50 a lineup"), (29, 1, "$29.00 a lineup"),
-    (19, 5, "$3.80 a lineup"), (19, 4, "$4.75 a lineup"), (19, 3, "$6.33 a lineup"),
-])
-def test_the_per_lineup_figure_is_the_price_over_the_lineups(price, lineups, figure) -> None:
-    assert figure == "$%.2f a lineup" % (math.floor(price * 100 / lineups + 0.5) / 100)
-    got = _node(_fn(LANDING, "perLineup") + f"\nconsole.log(JSON.stringify(perLineup({price}, {lineups})));")
-    assert got == figure
-
-
-@needs_node
-def test_no_figure_without_a_count() -> None:
-    got = _node(_fn(LANDING, "perLineup") + _fn(LANDING, "lineupsLeft") + """
-console.log(JSON.stringify([perLineup(29, 0), perLineup(29, -1), perLineup(29, null),
-                            perLineup(0, 9), lineupsLeft(18, 0), lineupsLeft(17, null)]));""")
-    assert got == ["", "", "", "", "", ""]
-
-
-def test_the_two_pages_divide_the_same_way() -> None:
-    assert _fn(LANDING, "perLineup") == _fn(JOIN, "perLineup")
+def test_no_count_when_no_lineups_are_left() -> None:
+    got = _node(_fn(LANDING, "lineupsLeft") + """
+console.log(JSON.stringify([lineupsLeft(18, 0), lineupsLeft(17, null)]));""")
+    assert got == ["", ""]
 
 
 @needs_node
@@ -97,7 +78,7 @@ console.log(JSON.stringify([lineupsLeft(9, 9), lineupsLeft(16, 2), lineupsLeft(1
                    "1 lineup left to a Week 17 title game."]
 
 
-def _clock(week: dict, now: str, open_: bool, amount: int = 29) -> dict:
+def _clock(week: dict, now: str, open_: bool) -> dict:
     iife = LANDING.split("// The season clock.")[1]
     iife = iife[iife.index("(function () {"):iife.index("})();") + 5]
     start = {"season-clock": "A new report every Tuesday of the season.",
@@ -123,7 +104,6 @@ globalThis.document = { getElementById: (id) => els[id] || null, querySelectorAl
 const W = %(week)s;
 window.fetch = globalThis.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(W) });
 const CHECKOUT_OPEN = %(open)s, PLAYOFF_PASS_READY = false, PLAYOFF_FROM_WEEK = 13;
-var PASS_AMOUNT = %(amount)s;
 let closed = null;
 function closeForSeason(line) { closed = line; }
 function showPlayoffPass() {}
@@ -132,8 +112,8 @@ function showPlayoffPass() {}
 setTimeout(() => console.log(JSON.stringify({ closed, line: els["pass-clock"].textContent,
   hidden: els["pass-clock"].hidden })), 50);
 """ % {"now": json.dumps(now), "start": json.dumps(start), "week": json.dumps(week),
-       "open": "true" if open_ else "false", "amount": amount, "iife": iife,
-       "helpers": _fn(LANDING, "perLineup") + _fn(LANDING, "lineupsLeft")}
+       "open": "true" if open_ else "false", "iife": iife,
+       "helpers": _fn(LANDING, "lineupsLeft")}
     return _node(script)
 
 
@@ -146,34 +126,32 @@ W8 = {"season": "2026", "week": 8, "last_week": 18, "lands_on": "2026-11-03",
 @pytest.mark.parametrize("week,lands,kickoff,now,open_,words", [
     # After Week 8 kicked off, a buyer's first week is 9, open or closed.
     (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", False,
-     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
     (8, "2026-11-03", "2026-10-30T00:15:00Z", "2026-10-30T20:00:00Z", True,
-     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
     # Tuesday, Week 9's report out, its games not started: open, it still counts.
     (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", True,
-     "$3.22 a lineup. 9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
+     "9 lineups left to a Week 17 title game. After Week 9 kicks off, 8."),
     # Closed, the clock's own calendar: the next report to go out.
     (9, "2026-11-10", "2026-11-06T01:15:00Z", "2026-11-03T20:00:00Z", False,
-     "$3.63 a lineup. 8 lineups left to a Week 17 title game. After Week 10 kicks off, 7."),
+     "8 lineups left to a Week 17 title game. After Week 10 kicks off, 7."),
     (15, "2026-12-29", "2026-12-25T18:00:00Z", "2026-12-26T20:00:00Z", True,
-     "$14.50 a lineup. 2 lineups left to a Week 17 title game. After Week 16 kicks off, 1."),
+     "2 lineups left to a Week 17 title game. After Week 16 kicks off, 1."),
     (16, "2027-01-05", "2026-12-31T18:00:00Z", "2027-01-01T20:00:00Z", True,
-     "$29.00 a lineup. 1 lineup left to a Week 17 title game."),
+     "1 lineup left to a Week 17 title game."),
 ])
-def test_the_card_divides_the_price_by_what_a_buyer_gets(week, lands, kickoff, now, open_, words) -> None:
+def test_the_card_counts_what_a_buyer_gets(week, lands, kickoff, now, open_, words) -> None:
     got = _clock({**W8, "week": week, "lands_on": lands, "first_kickoff": kickoff}, now, open_)
     assert got["line"] == words and not got["hidden"]
 
 
 @needs_node
-def test_the_playoff_pass_divides_its_own_price() -> None:
+def test_the_playoff_pass_counts_the_lineups_it_buys() -> None:
     got = _clock({**W8, "week": 13, "lands_on": "2026-12-08",
-                  "first_kickoff": "2026-12-04T01:15:00Z"}, "2026-12-01T20:00:00Z", True, amount=19)
-    assert got["line"].startswith("$3.80 a lineup. 5 lineups left")
-    # And the swap really sets that price, before the clock divides by it.
+                  "first_kickoff": "2026-12-04T01:15:00Z"}, "2026-12-01T20:00:00Z", True)
+    assert got["line"].startswith("5 lineups left") and "$" not in got["line"]
+    # The 2027 card's step up reads this price.
     assert "PASS_AMOUNT = 19;" in _fn(LANDING, "showPlayoffPass")
-    clock = LANDING.split("// The season clock.")[1]
-    assert clock.index("showPlayoffPass(firstWeek)") < clock.index("perLineup(PASS_AMOUNT, lineups)")
 
 
 @needs_node
@@ -208,9 +186,9 @@ def test_the_cards_generic_line_ships_in_the_markup() -> None:
 
 @needs_node
 def test_step_three_carries_the_count_and_the_price_the_button_charges() -> None:
-    """Join's value line, with its real lineupsAhead: the Playoff Pass divides 19,
+    """Join's value line, with its real lineupsAhead: the Playoff Pass says $19,
     and an unknown clock says the sentence that is true either way."""
-    fns = ('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n' + _fn(JOIN, "perLineup")
+    fns = ('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n'
            + _fn(JOIN, "lineupsAhead") + _fn(JOIN, "valueWords"))
     got = _node(fns + """
 const RealDate = Date;
@@ -238,11 +216,11 @@ out.push(valueWords());
 WANTS_PASS = false; chose2027 = true;
 out.push(valueWords());
 console.log(JSON.stringify(out));""")
-    assert got[0] == "9 lineups left to a Week 17 title game. $29, one payment: $3.22 a lineup."
+    assert got[0] == "9 lineups left to a Week 17 title game. $29, one payment."
     assert got[2] == "Every lineup from now to your title game. $19, one payment."
     assert got[3] == "Every lineup from now to your title game. $29, one payment."
     assert got[4] == "Your whole league, every lineup from now to the title game. $69, one payment."
-    assert "a lineup" not in got[5] and "nothing more until August 15, 2028" in got[5]
+    assert "lineup left" not in got[5] and "nothing more until August 15, 2028" in got[5]
 
 
 def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
@@ -250,31 +228,30 @@ def test_step_three_is_redrawn_once_the_clock_has_read() -> None:
 
 
 # --------------------------------------------------------------------- #
-# the money rule, narrowed (owner decision, Oct 30 2026)
+# the money rule (owner decision, Oct 30 2026)
 # --------------------------------------------------------------------- #
 
-def test_the_per_lineup_figure_is_never_in_the_hero() -> None:
-    """The Aug 15 rule still holds everywhere but two places: the figure is
-    written only to the price card's line, and the hero carries no price, no
-    figure and no "a lineup" in any state."""
+def test_the_hero_carries_no_price() -> None:
     hero = LANDING.split('<header class="hero">')[1].split("</header>")[0]
     hero = re.sub(r"<!-- phone:start -->.*?<!-- phone:end -->", "", hero, flags=re.S)
-    assert "$" not in _flat(_markup(hero)) and "a lineup" not in _flat(_markup(hero))
-    open_state = LANDING.split("if (CHECKOUT_OPEN) {")[1].split("// Checkout closes with the season")[0]
-    assert "perLineup(" not in open_state
-    assert LANDING.count("perLineup(") == 2, "one definition, one use: the card's line"
-    clock = LANDING.split("// The season clock.")[1]
-    use = clock[:clock.index("perLineup(")]
-    assert 'getElementById("pass-clock")' in use[use.rindex("const passClock"):]
-    assert JOIN.count("perLineup(") == 2, "one definition, one use: step 3"
-    assert "perLineup(" in _fn(JOIN, "valueWords")
+    assert "$" not in _flat(_markup(hero))
 
 
-@pytest.mark.parametrize("name", ["league-pass.html", "thanks.html", "how-it-works.html",
-                                  "byes/index.html", "espn/index.html", "sample-report.html"])
-def test_the_figure_appears_nowhere_else(name: str) -> None:
-    page = (SITE / name).read_text(encoding="utf-8")
-    assert not re.search(r"\$\d+\.\d\d a lineup", page), name
+def test_no_page_breaks_a_price_down_for_the_buyer() -> None:
+    """The owner tried "$3.22 a lineup" on the price card and took it out the
+    same day: a per-unit figure makes a buyer calculate and think about the money
+    instead of what they get. "Saved: $29 against buying both" went for the same
+    reason. A price is stated, never worked out. The League Pass's "$5.75 a
+    manager" stays: a commissioner collects from the group, and "a manager" is
+    outside this sweep on purpose."""
+    pages = sorted(SITE.rglob("*.html"))
+    assert len(pages) > 15
+    per_unit = re.compile(r"\$\d+(\.\d\d)? ?(a|per|/) ?(lineup|week|report|game)\b", re.I)
+    for path in pages:
+        page = path.read_text(encoding="utf-8")
+        assert not per_unit.search(page), path.name
+        for built_by_script in ('a lineup"', "perLineup", "against buying both"):
+            assert built_by_script not in page, (path.name, built_by_script)
 
 
 def test_no_former_price_is_ever_struck_or_compared() -> None:
@@ -289,7 +266,7 @@ def test_no_former_price_is_ever_struck_or_compared() -> None:
 # --------------------------------------------------------------------- #
 
 OFFER_WORDS = ("2027 Season Pass", "then each August", "Nothing more until", "more gets you",
-               "against buying both", "this season included", "This season included")
+               "gets you all of next season", "this season included", "This season included")
 
 
 def test_the_switch_is_off_on_both_pages() -> None:
@@ -361,7 +338,7 @@ plans.appendChild = (card) => {
 @needs_node
 @pytest.mark.parametrize("open_", [True, False])
 def test_with_the_switch_on_the_renewal_sits_beside_the_price(open_: bool) -> None:
-    fns = (_fn(LANDING, "season2027Words") + _fn(LANDING, "season2027Lines")
+    fns = (_fn(LANDING, "season2027More") + _fn(LANDING, "season2027Lines")
            + _fn(LANDING, "season2027Card"))
     got = _node(_Dom.SCRIPT + f"""
 const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 39;
@@ -395,15 +372,14 @@ def test_the_plain_css_keeps_the_renewal_at_full_size() -> None:
 
 
 @needs_node
-@pytest.mark.parametrize("price,more,saved", [
-    (29, "$10 more gets you all of next season.", "Saved: $29 against buying both."),
-    (19, "$20 more gets you all of next season.", "Saved: $19 against buying both."),
+@pytest.mark.parametrize("price,more", [
+    (29, "$10 more gets you all of next season."),
+    (19, "$20 more gets you all of next season."),
 ])
-def test_the_step_up_and_the_saving_are_worked_out_from_the_price_on_offer(price, more, saved) -> None:
-    """$29 + $39 is $68 against $39; with the Playoff Pass on offer it is $58."""
-    got = _node("const SEASON_2027_PRICE = 39;\n" + _fn(LANDING, "season2027Words")
-                + f"\nconsole.log(JSON.stringify(season2027Words({price})));")
-    assert got == {"more": more, "saved": saved}
+def test_the_step_up_is_worked_out_from_the_price_on_offer(price, more) -> None:
+    got = _node("const SEASON_2027_PRICE = 39;\n" + _fn(LANDING, "season2027More")
+                + f"\nconsole.log(JSON.stringify(season2027More({price})));")
+    assert got == more
 
 
 def test_the_cheaper_cards_button_never_lands_on_the_dearer_plan() -> None:

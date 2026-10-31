@@ -1610,11 +1610,9 @@ Closed step 3 is "Save your team" with the value line first; the button's words 
 **The sell pass (Oct 30 2026) — the owner's brief: direct, simple, a good deal, not cheesy.**
 Tests in `tests/test_sell.py`, including a sweep for hype on every selling page. Rules it left:
 - **The price card leads with the value:** "$29 / rest of season", "Every lineup through your
-  title game.", then the line the season clock writes, `$3.22 a lineup. 9 lineups left to a
-  Week 17 title game. After Week 9 kicks off, 8.` The figure is the price ON OFFER (`PASS_AMOUNT`:
-  the Playoff Pass divides 19) over the count a buyer gets (`lineupsLeft`, `perLineup`, the
-  latter character for character on join). In a live season week only: a stale or missing file
-  leaves "A new lineup decided every Tuesday.", and with no lineup left the line goes.
+  title game.", then the line the season clock writes, `9 lineups left to a Week 17 title game.
+  After Week 9 kicks off, 8.` (`lineupsLeft`). In a live season week only: a stale or missing
+  file leaves "A new lineup decided every Tuesday.", and with no lineup left the line goes.
 - **The count drops at the buyer's first week's kickoff, never on a Tuesday.** The brief's
   "Next Tuesday, 8" was a day or two early: run/intake.py still sends that week's report until
   its first kickoff, so a Tuesday buyer gets all nine. An urgency line must be true on the day
@@ -1625,8 +1623,8 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
   `STRIPE_LINK_2027` on join, which must agree. Off, no word of it renders: the card and join's
   radio are built by script (`season2027Card`, the `PLAN_CHOICE` block), so all that ships is the
   founding-rate line. On: two cards, the $39 one holding the one gold button, renewal terms
-  directly under its price at full size, "$10 more gets you all of next season." and "Saved: $29
-  against buying both.", both worked out from the price on offer. Join starts on it unless the
+  directly under its price at full size, and "$10 more gets you all of next season.", worked out
+  from the price on offer (`PASS_AMOUNT`: $20 from the Playoff Pass). Join starts on it unless the
   link said `?plan=season`, so a click on $29 never lands on $39; both write an `s` ref (the plan
   comes from the link that took the money), so `keepInAddress` carries the choice in `?plan=`.
   Every "nothing renews" line follows the choice or the flag (terms line, sidebar, confirmation,
@@ -2576,13 +2574,15 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   Price-justification math ("under $2 a week", "about $40 across a season", "the cheaper
   road") primes analytical thinking, and analytical buyers defer. So: prices appear plainly
   at decision points and in the legally required disclosures (renewal amounts, refund
-  terms). **Narrowed by the owner, Oct 30 2026:** a per-lineup figure and plain value lines
-  are allowed on the price card and the buy page's step 3 only, never in the hero and never
-  as a comparison to a fabricated or former price. Everywhere else a price is not argued,
-  itemized per-unit, or compared. The League Pass page keeps its own exception: a commissioner
-  justifying spend to eleven leaguemates is a genuinely deliberative buyer, and the
-  $348-vs-$69 arithmetic is their language. Emotional value is
-  sold through specific scenarios in the buyer's own life (Tuesday morning, the group chat,
+  terms), and are never argued, itemized per-unit, or compared. **Tested by the owner, Oct 30
+  2026:** "$3.22 a lineup" went on the price card and came off the same day, because it makes
+  a buyer calculate and think about the money, not the value. Saying what's left to get is
+  fine ("9 lineups left") and so is one line between two prices on the same card ("$10 more
+  gets you all of next season."); working a price out for the buyer is not, and
+  `test_no_page_breaks_a_price_down_for_the_buyer` sweeps every page. The League Pass page
+  keeps its own exception: a commissioner justifying spend to eleven leaguemates is a
+  genuinely deliberative buyer, and the $348-vs-$69 arithmetic is their language. Emotional
+  value is sold through specific scenarios in the buyer's own life (Tuesday morning, the group chat,
   the call you would have regretted), never through adjectives — and never through invented
   behavior claims ("most people..."), because there are no customers to cite yet.
 - **Buyer copy and operator copy are different languages.** Version numbers ("v0.3"), file

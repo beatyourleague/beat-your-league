@@ -1648,13 +1648,6 @@ var PASS_LABEL = "Get my lineups — $29";
 // The price on offer right now, in dollars: the first card's, the Playoff
 // Pass's once it swaps in. Everything worked out from a price starts here.
 var PASS_AMOUNT = 29;
-// What a pass comes to per lineup, in whole cents. Used on the price card and
-// the join page's step 3 only (owner decision, Oct 30 2026): never the hero.
-// The join page's perLineup is this function, character for character.
-function perLineup(price, lineups) {
-  if (!Number.isInteger(lineups) || lineups < 1 || !(price > 0)) return "";
-  return "$" + (Math.round(price * 100 / lineups) / 100).toFixed(2) + " a lineup";
-}
 // The count a buyer gets, and when it drops. It drops when the buyer's first
 // week kicks off: until then they still get that week's report, so "next
 // Tuesday" would be two days early (a report that goes out on Tuesday can
@@ -1699,21 +1692,17 @@ function showPlayoffPass(week) {
   } catch (e) { /* unreadable structured data: the visible page is still right */ }
   if (document.getElementById("pass-2027")) season2027Lines();
 }
-// The offer as two facts about the price on the card beside it, worked out
-// from that price: what the step up costs, and what it saves against buying
-// the pass now and the 2027 pass after (the pass's own price, whichever is on
-// offer: $29 + $39 is $68, $19 + $39 is $58).
-function season2027Words(price) {
-  return { more: "$" + (SEASON_2027_PRICE - price) + " more gets you all of next season.",
-           saved: "Saved: $" + price + " against buying both." };
+// The step up from the price on the card beside it. Two prices the buyer is
+// already looking at, and the one money sentence the offer carries.
+function season2027More(price) {
+  return "$" + (SEASON_2027_PRICE - price) + " more gets you all of next season.";
 }
 function season2027Lines() {
   const line = document.getElementById("pass-2027-more");
   if (!line) return;
-  const words = season2027Words(PASS_AMOUNT);
   const more = document.createElement("b");
-  more.textContent = words.more;
-  line.replaceChildren(more, document.createTextNode(" " + words.saved));
+  more.textContent = season2027More(PASS_AMOUNT);
+  line.replaceChildren(more);
 }
 // Two cards, the 2027 pass the preferred one. Text nodes only, and the renewal
 // terms directly under the price at full size. Its button carries ?plan=2027
@@ -2538,22 +2527,16 @@ if (progress && !reduced && !(window.CSS && CSS.supports && CSS.supports("animat
           }
         }
         if (!shows) return;
-        // The price card's value line (owner decision, Oct 30 2026), in a live
-        // season week only: the count to a Week 17 title game and the price on
-        // offer divided by it. Past Week 17's kickoff there is no count to
+        // The price card's value line, in a live season week only: the count
+        // to a Week 17 title game. Past Week 17's kickoff there is no count to
         // give, so the line goes; a stale or missing file leaves the card's
         // generic sentence.
         const passClock = document.getElementById("pass-clock");
         if (passClock && phase === "season") {
           const lineups = 17 - next + 1;
           const count = lineupsLeft(next, lineups);
-          if (count) {
-            const figure = document.createElement("b");
-            figure.textContent = perLineup(PASS_AMOUNT, lineups) + ".";
-            passClock.replaceChildren(figure, document.createTextNode(" " + count));
-          } else {
-            passClock.hidden = true;
-          }
+          if (count) passClock.textContent = count;
+          else passClock.hidden = true;
         }
         // On a Tuesday after that day's report went out, the next one is a
         // week away: "lands Tuesday" would read as today.

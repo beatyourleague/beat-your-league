@@ -2678,16 +2678,9 @@ function closedLabel(action) {
   }
   return closedChipText();
 }
-// What a pass comes to per lineup, in whole cents: the landing's function,
-// character for character (tests/test_sell.py). On the price card and this
-// step only (owner decision, Oct 30 2026).
-function perLineup(price, lineups) {
-  if (!Number.isInteger(lineups) || lineups < 1 || !(price > 0)) return "";
-  return "$" + (Math.round(price * 100 / lineups) / 100).toFixed(2) + " a lineup";
-}
-// The line over the step: what the price buys, with the count and the figure
-// once week.json can say them. The price is the one this button charges, so
-// the Playoff Pass divides 19. The landing's season clock counts the same way.
+// The line over the step: what the price buys, with the count once week.json
+// can say it. The price is the one this button charges. The landing's season
+// clock counts the same way.
 function valueWords() {
   if (WANTS_PASS) {
     return "Your whole league, every lineup from now to the title game. $69, one payment.";
@@ -2698,10 +2691,9 @@ function valueWords() {
   }
   const price = PLAYOFF_ACTIVE ? 19 : 29;
   const ahead = lineupsAhead(state.week, new Date(), canStartToday());
-  const each = ahead ? perLineup(price, ahead.left) : "";
-  if (!each) return "Every lineup from now to your title game. $" + price + ", one payment.";
+  if (!ahead) return "Every lineup from now to your title game. $" + price + ", one payment.";
   return ahead.left + (ahead.left === 1 ? " lineup" : " lineups") + " left to a Week 17 " +
-    "title game. $" + price + ", one payment: " + each + ".";
+    "title game. $" + price + ", one payment.";
 }
 // Step 3 leads with what they get, and while checkout is closed it is a next
 // step, not a refusal: "Save your team". ``step3Action`` is closedAction's for

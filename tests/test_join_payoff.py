@@ -484,8 +484,8 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     # Only where pressing can save anything: a closed League Pass whose own
     # team's plan is open has nothing to keep, so it stays what it was.
     assert 'step3Action === "list" || step3Action === "mail"' in step
-    # The line itself is valueWords now: the count and the per-lineup figure
-    # when the clock can say them, this sentence when it can't.
+    # The line itself is valueWords now: the count when the clock can say it,
+    # this sentence when it can't.
     assert "value.textContent = valueWords();" in step
     words = re.sub(r'"\s*\+\s*"', "", _function("valueWords"))
     assert "Every lineup from now to your title game. $" in words
