@@ -1672,7 +1672,7 @@ def test_landing_states_the_weekly_ritual_not_just_the_contents() -> None:
     # decides every slot, Sunday you play ("tick off the game plan" went
     # with the week strip it belonged to).
     assert re.search(r"one email decides every slot", LANDING_PROSE, re.I)
-    assert re.search(r"Sunday, you're set|Sunday, you&#x27;re set", LANDING_PROSE)
+    assert re.search(r"Sunday, you're ready|Sunday, you&#x27;re ready", LANDING_PROSE)
 
 
 def test_the_funnel_never_promises_what_the_product_cannot_see() -> None:

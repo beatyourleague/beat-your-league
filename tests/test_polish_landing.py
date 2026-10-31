@@ -678,7 +678,7 @@ def test_the_landing_reads_in_impulse_buyer_order() -> None:
     report annotated, rankings against the report, the price, the FAQ and
     the closer."""
     heads = [_flat(h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", BODY, re.S)]
-    assert heads == ["Paste once, then play", "Everything Sunday needs, by Wednesday",
+    assert heads == ["Paste your roster, then play", "Everything you need for Sunday, by Wednesday",
                      "Rankings rank. Your report decides",
                      "Take it through your title game.",
                      "Before you ask the group chat", "Your lineup, decided every Wednesday."], heads
@@ -696,8 +696,8 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
     # "decides", not "sets" (review BUYER-6): the buyer makes the moves in
     # their own app, and "sets your lineup" read as automation.
     # Oct 30 2026: it opens on what a wrong call costs, then what the email does.
-    assert sub == ("One wrong call can cost you the week. Every Wednesday, one email decides "
-                   "your lineup, through your title game.")
+    assert sub == ("Paste your roster. Every Wednesday, one email decides your lineup, "
+                   "through your title game.")
     assert "decided by the numbers" not in LANDING and "$" not in _flat(HERO)
     # The comparison contrasts a rankings list with the report (Oct 25
     # 2026: the weakest answer was "why pay when rankings are free"), now
@@ -715,7 +715,7 @@ def test_the_word_neutral_copy_says_the_same_thing_in_fewer_words() -> None:
             for q in next(n for n in block["@graph"] if n["@type"] == "FAQPage")["mainEntity"]}
     for question in ("Does it work with my league?", "Is it worth joining mid-season?"):
         assert qa[question] == twin[question], question
-    assert "Sample visuals above are real output, labeled where shown." in _flat(BODY)
+    assert "Samples shown are real reports." in _flat(BODY)
 
 
 # --------------------------------------------------------------------- #

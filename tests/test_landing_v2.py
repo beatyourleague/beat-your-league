@@ -202,7 +202,7 @@ def test_the_close_up_is_the_generated_report_with_numbered_pins() -> None:
                      r'<div aria-hidden="true">', LANDING)
     # The connector from the phone's cards to these two: static, drawn.
     cue = BODY.split('<div class="scrollcue" aria-hidden="true">')[1].split("</div>")[0]
-    assert "<svg" in cue and "Further down the same email" in _flat(cue)
+    assert "<svg" in cue and "Later in the same email" in _flat(cue)
     assert "animation" not in re.search(r"\n  \.scrollcue\{([^}]*)\}", CSS).group(1)
 
 

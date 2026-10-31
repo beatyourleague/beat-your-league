@@ -117,7 +117,7 @@ def test_the_roster_check_is_the_main_action_with_checkout_closed() -> None:
     assert re.search(r'id="season-cta" href="#watch-form"[^>]*>Tell me when it opens</a>', card)
     assert "Check my team" not in card, "two decisions on the price card"
     # The closer says what the button does; "free" on the button says the rest.
-    assert '<p id="closer-note">Paste your roster. See the calls on your team in seconds.</p>' \
+    assert '<p id="closer-note">See the calls your team faces, free.</p>' \
         in static
     # Open, every one of them turns into the buy label on the same page.
     opened = LANDING.split("if (CHECKOUT_OPEN) {", 1)[1].split("if (CHECKOUT_CAN_COMPLETE)")[0]

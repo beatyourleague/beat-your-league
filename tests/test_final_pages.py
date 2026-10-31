@@ -358,7 +358,7 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     # Owner review, Oct 31 2026: the definition stays and the where-it-prints
     # clause leaves the callout (38 words), since every row without odds says why.
     assert ("The chance your starter outscores your best bench player at that spot. "
-            "Rows without odds say why.") in step
+            "Where we can't put a number on it, the report says why.") in step
     assert "odds" not in _flat(JOIN.split("<script")[0]).lower().replace("the odds " + GATE_CLAUSE, "")
     for name in ("index.html", "join/index.html", "how-it-works.html", "thanks.html",
                  "league-pass.html"):
@@ -406,7 +406,11 @@ def test_the_sunday_scene_sits_directly_under_the_hero() -> None:
                       after, re.S)
     assert punch, "the Sunday scene does not follow the hero"
     words = re.sub(r"<[^>]+>", "", punch.group(1))  # each sentence wraps as a unit
-    assert "He was on your bench. He went for 30. You lost by four." in _flat(words)
+    assert "You benched him. He went for 30. You lost by four." in _flat(words)
+    # Owner review, Oct 31 2026: the answer sells not deciding alone, and never
+    # hints the report would have started the 30-point player.
+    assert "Don't make that call alone." in _flat(words)
+    assert "makes that call" not in LANDING
     assert 'class="proof"' not in LANDING and 'class="credsec"' not in LANDING
 
 
@@ -436,8 +440,8 @@ def test_the_mid_season_answer_is_the_stronger_one_in_both_places() -> None:
     faqs = next(n for n in graph if n["@type"] == "FAQPage")["mainEntity"]
     ld = next(q for q in faqs if q["name"] == "Is it worth joining mid-season?")
     assert ld["acceptedAnswer"]["text"] == answer
-    assert answer.startswith("Yes. It's built for the playoff push:")
-    assert "every report checks the byes ahead" in answer
+    assert answer.startswith("Yes. Playoff weeks are where one bad call ends a season.")
+    assert "usually lands within the hour" in answer
     assert "Subscribers alone pay for it" not in LANDING
 
 

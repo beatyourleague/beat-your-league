@@ -244,7 +244,7 @@ def test_the_faq_answers_in_the_order_a_buyer_asks_and_its_twin_follows() -> Non
     data lists the same questions in the same order, with the same answers,
     so a search snippet and the page never disagree."""
     order = ["Does it work with my league?", "Is it worth joining mid-season?",
-             "Why Wednesday evening? What about late news?", "What if my roster changes mid-season?",
+             "Why Wednesday, and what if news breaks later?", "What if my roster changes mid-season?",
              "Can I check how it decides?"]
     faq = BODY.split('<section id="faq">')[1].split("</section>")[0]
     asked = [html.unescape(q) for q in re.findall(r"<summary>(.*?)</summary>", faq)]
@@ -296,7 +296,7 @@ def test_the_landing_stays_inside_its_word_budget() -> None:
     # Lowered Oct 30 2026 from 1,250: the mid-season narrative pass took it to
     # 1,241 while adding the value line, and the page may only get shorter:
     # 1229 once the founding line came off (Oct 31 2026), 1187 after the
-    # owner's sell review the same day, 1186 with the move to Wednesday.
+    # owner's sell review the same day, 1186 after the move to Wednesday and the plain-words pass.
     assert words <= 1186, f"the landing is {words} words"
     # The words somebody wrote by hand, without the generated report text
     # and without comments: 952 before the rebuild, 781 after it. 859 before

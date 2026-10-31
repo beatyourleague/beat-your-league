@@ -149,7 +149,7 @@ def test_the_card_names_the_season_and_week_it_shows() -> None:
     page = og.build_html(LANDING)
     assert f"{year} sample report · Week {int(week)}" in page and "Real output" not in page
     # The landing's own caption under the phone says it the same way.
-    assert f'<b>{year} sample report</b> · <span class="nw">Week {int(week)}, replayed' in LANDING
+    assert f'<b>{year} sample report</b> · <span class="nw">a real Week {int(week)}' in LANDING
     with pytest.raises(og.OgError):
         og.real_label(LANDING.replace("data-real=", "data-x="))
 

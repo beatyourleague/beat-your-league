@@ -623,7 +623,7 @@
     mask:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);}
   .punch{display:grid;gap:clamp(18px,2.4vw,28px);}
   .punch b{display:grid;font-family:var(--display);font-weight:800;
-    font-size:clamp(28px,9.4vw,104px);line-height:1;text-transform:uppercase;
+    font-size:clamp(32px,11.2vw,104px);line-height:1;text-transform:uppercase;
     letter-spacing:.005em;color:#fff;}
   .punch b i{display:block;font-style:normal;white-space:nowrap;}
   .punch b i:last-child{color:var(--flag);}
@@ -1186,8 +1186,8 @@
     <h1>Know who <em><span>to start.</span></em></h1>
     <!-- Says the scoring it supports and where odds print, rather than "your
          league's way" and odds on every call (launch review PC-10, PE-11). -->
-    <p class="sub">One wrong call can cost you the week. Every Wednesday, one email decides your
-    lineup, through your title game.</p>
+    <p class="sub">Paste your roster. Every Wednesday, one email decides your lineup, through
+    your title game.</p>
     <ul class="creds" aria-label="Works with">
       <li><span><a href="espn/">ESPN</a>, <a href="yahoo/">Yahoo</a>, <a href="sleeper/">Sleeper</a>,
       <a href="cbs/">CBS</a>: paste your roster, no login</span></li>
@@ -1236,7 +1236,7 @@
          sample is the hero's "See a real report"; the toggle stops and
          restarts the phone's storyline (WCAG 2.2.2) and shows once that plays. -->
     <div class="realrow">
-    <p class="realtag"><b>2024 sample report</b><span class="sep"> · </span><span class="nw">Week 10, replayed</span></p>
+    <p class="realtag"><b>2024 sample report</b><span class="sep"> · </span><span class="nw">a real Week 10</span></p>
     <button type="button" class="storytoggle" id="story-toggle" aria-pressed="false" aria-label="Pause the phone animation"><svg class="pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1.5" width="2.8" height="9" rx=".8"/><rect x="7.2" y="1.5" width="2.8" height="9" rx=".8"/></svg><svg class="play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.6v8.8L10.4 6z"/></svg></button>
     </div>
   </div>
@@ -1245,8 +1245,8 @@
 <!-- The page's sharpest line gets the page to itself, straight under the hero
      (owner review, Oct 31 2026: it sat in a thin strip). -->
 <section class="scene" aria-label="The call that costs you the week">
-  <p class="punch" id="punch"><b><i>He was on your bench.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
-  <span>Your Wednesday report makes that call.</span></p>
+  <p class="punch" id="punch"><b><i>You benched him.</i> <i>He went for 30.</i> <i>You lost by four.</i></b>
+  <span>Don't make that call alone.</span></p>
 </section>
 
 <!-- How it works, as three real things: the paste the roster box reads, the
@@ -1257,7 +1257,7 @@
      screen, never under reduced motion; the static page is the finished
      picture. -->
 <section class="how" id="how" aria-labelledby="how-head">
-  <h2 id="how-head">Paste once, then play</h2>
+  <h2 id="how-head">Paste your roster, then play</h2>
   <ol class="steps">
     <li class="step">
       <span class="sn">01</span>
@@ -1285,7 +1285,7 @@
     </li>
     <li class="step">
       <span class="sn">03</span>
-      <h3>Sunday, you're set</h3>
+      <h3>Sunday, you're ready</h3>
       <p>You set it in about a minute.</p>
       <div class="taskrow" aria-hidden="true">
         <span class="tbox"></span>
@@ -1302,10 +1302,10 @@
      the number the report itself prints on that card, so a callout's number
      and the card's own badge always agree. -->
 <section class="inside" id="inside" aria-labelledby="inside-head">
-  <h2 id="inside-head">Everything Sunday needs, by Wednesday</h2>
+  <h2 id="inside-head">Everything you need for Sunday, by Wednesday</h2>
   <div class="anat">
     <figure class="shotwrap">
-      <div class="scrollcue" aria-hidden="true"><svg viewBox="0 0 12 64" focusable="false"><circle cx="6" cy="5" r="4" fill="#F2C230"/><path d="M6 11v42" stroke="#F2C230" stroke-width="1.5" stroke-linecap="round"/><path d="M2 54l4 5 4-5" fill="none" stroke="#F2C230" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Further down the same email</span></div>
+      <div class="scrollcue" aria-hidden="true"><svg viewBox="0 0 12 64" focusable="false"><circle cx="6" cy="5" r="4" fill="#F2C230"/><path d="M6 11v42" stroke="#F2C230" stroke-width="1.5" stroke-linecap="round"/><path d="M2 54l4 5 4-5" fill="none" stroke="#F2C230" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Later in the same email</span></div>
       <div class="shot screen" role="img" aria-label="Cards 03 and 04 of the 2024 Week 10 sample report: the week's game plan, and an if/then for a questionable starter">
         <div aria-hidden="true">
 <!-- shot:start -->
@@ -1313,14 +1313,14 @@
 <!-- shot:end -->
         </div>
       </div>
-      <figcaption class="shotcap"><b>2024 sample report</b> · <span class="nw">Week 10, replayed</span> ·
+      <figcaption class="shotcap"><b>2024 sample report</b> · <span class="nw">a real Week 10</span> ·
       <a href="sample-report.html">read it all</a></figcaption>
     </figure>
     <ol class="callouts">
       <li class="on-phone" data-pin="01"><h3>Your lineup, decided</h3><p>Every spot, QB to
         DEF, under your scoring.</p></li>
       <li class="on-phone" data-pin="02"><h3>The week's closest call</h3><p>The chance your starter
-        outscores your best bench player at that spot. Rows without odds say why.</p></li>
+        outscores your best bench player at that spot. Where we can't put a number on it, the report says why.</p></li>
       <li data-pin="03"><h3>Your game plan</h3><p>What to change, and by when.</p></li>
       <li data-pin="04"><h3>If/then for gameday</h3><p>A plan for every questionable starter.</p></li>
       <li class="off-pic"><h3>Byes ahead</h3><p>Any week a bye empties a starting
@@ -1377,7 +1377,7 @@
   <p class="lpline"><svg class="lpicon" viewBox="0 0 26 26" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="9" r="4"/><path d="M5.5 22c.6-4.4 3.5-6.8 7.5-6.8s6.9 2.4 7.5 6.8"/><path d="M19.3 5.5a3.6 3.6 0 0 1 0 7M24 19.5c-.5-2.7-1.9-4.5-4.2-5.3M6.7 5.5a3.6 3.6 0 0 0 0 7M2 19.5c.5-2.7 1.9-4.5 4.2-5.3"/></g></svg><span class="lpbody"><b>Run the league?</b> The League Pass covers every manager, each with their own report, up to 14 teams.
   <span class="lpterms">$34.99 a month for the whole league. Stops on its own. Full refund before your first weekly report's first game. One per league.</span></span>
   <a href="league-pass.html">See the League Pass →</a></p>
-  <p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a> checks your roster.</p>
+  <p class="freetool" data-planner>Free: the <a href="byes/">bye planner</a>.</p>
 </section>
 
 <section id="faq">
@@ -1392,15 +1392,15 @@
       </details>
       <details>
         <summary>Is it worth joining mid-season?</summary>
-        <div class="a">Yes. It's built for the playoff push: every report checks the byes ahead.</div>
+        <div class="a">Yes. Playoff weeks are where one bad call ends a season. Your first report usually lands within the hour.</div>
       </details>
       <details>
-        <summary>Why Wednesday evening? What about late news?</summary>
+        <summary>Why Wednesday, and what if news breaks later?</summary>
         <div class="a">Waivers have cleared, so you can update your roster first, and you still have a day before Thursday's game. Every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap.</div>
       </details>
       <details>
         <summary>What if my roster changes mid-season?</summary>
-        <div class="a">Update it from the link in any report, or reply with it. Confirm by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night (ET) for Saturday's check. Your roster is used only to build your report and is never sold.</div>
+        <div class="a">Update it from the link in any report, or reply with it. Confirm by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night (ET) for Saturday's check. Your roster is only used for your report and is never sold.</div>
       </details>
       <details>
         <summary>Can I check how it decides?</summary>
@@ -1412,7 +1412,7 @@
 
 <section class="closer">
   <h2 id="closer-head">Your lineup, decided every Wednesday.</h2>
-  <p id="closer-note">Paste your roster. See the calls on your team in seconds.</p>
+  <p id="closer-note">See the calls your team faces, free.</p>
   <div class="cta-row">
     <a class="btn gold" id="closer-cta" href="join/index.html">Check my team free</a>
     <a class="textlink onlysm" href="#pricing">See pricing</a>
@@ -1435,7 +1435,7 @@
 <footer>
   <nav class="footmap" aria-label="Site map"><div><p>Product</p><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="this-week.html" data-live-week hidden>This week&#x27;s report</a><a href="league-pass.html">League Pass</a></div><div><p>Free tools</p><a href="join/index.html">Check my team</a><a href="byes/">Bye planner</a></div><div><p>Your app</p><a href="espn/">ESPN</a><a href="yahoo/">Yahoo</a><a href="sleeper/">Sleeper</a><a href="cbs/">CBS</a></div><div><p>About</p><a href="terms.html">Terms &amp; refunds</a><a href="privacy.html">Privacy</a><a href="mailto:hello@beatyourleague.com">Contact</a></div></nav><script src="/footer.js?v=38abf56935" defer></script>
   <b style="color:var(--dusk2)">Beat Your League</b> — analysis, not betting picks.<br>
-  Sample visuals above are real output, labeled where shown.
+  Samples shown are real reports.
   NFL data: nflverse (nflverse-data), CC-BY-4.0. Projections are analysis, not guarantees.
   Must be 18+ to buy. Not affiliated with the NFL.
 </footer>
@@ -1471,9 +1471,9 @@
       "@type": "FAQPage",
       "mainEntity": [
         {"@type": "Question", "name": "Does it work with my league?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. ESPN, Yahoo, Sleeper, CBS or any app: paste your roster, no login. Full PPR, half PPR or standard scoring (4-point passing touchdowns); 8, 10, 12 or 14 teams; standard (ESPN's and Yahoo's default), two FLEX (Sleeper's default), three WR or superflex lineups, with or without a K and DEF."}},
-        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It's built for the playoff push: every report checks the byes ahead."}},
-        {"@type": "Question", "name": "Why Wednesday evening? What about late news?", "acceptedAnswer": {"@type": "Answer", "text": "Waivers have cleared, so you can update your roster first, and you still have a day before Thursday's game. Every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap."}},
-        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. Confirm by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night (ET) for Saturday's check. Your roster is used only to build your report and is never sold."}},
+        {"@type": "Question", "name": "Is it worth joining mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Playoff weeks are where one bad call ends a season. Your first report usually lands within the hour."}},
+        {"@type": "Question", "name": "Why Wednesday, and what if news breaks later?", "acceptedAnswer": {"@type": "Answer", "text": "Waivers have cleared, so you can update your roster first, and you still have a day before Thursday's game. Every questionable starter gets an if/then. If Friday's injury report changes your lineup, the Saturday check tells you the swap."}},
+        {"@type": "Question", "name": "What if my roster changes mid-season?", "acceptedAnswer": {"@type": "Answer", "text": "Update it from the link in any report, or reply with it. Confirm by Wednesday afternoon (ET) and that evening's report uses it, or by Friday night (ET) for Saturday's check. Your roster is only used for your report and is never sold."}},
         {"@type": "Question", "name": "Can I check how it decides?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Every call shows the projection and the player's recent games. Each report after your first lists the calls with odds from the one before it, and how each finished. How it works has the detail."}}
       ]
     }

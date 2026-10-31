@@ -297,9 +297,13 @@ def write_stack_entry(entry: Mapping[str, str], path: Path | None = None) -> Non
 
 
 def _stamp(stamp: str) -> str:
-    """A live report keeps its build stamp; a replayed one is a sample."""
+    """A replayed report is a sample. A live one keeps its build date without
+    the weekday: reports built before Oct 31 2026 say Tue, beside a page that
+    says every Wednesday."""
     replay = re.search(r"from the (\d{4}) season archive", stamp)
-    return SAMPLE_STAMP.format(season=replay.group(1)) if replay else stamp
+    if replay:
+        return SAMPLE_STAMP.format(season=replay.group(1))
+    return re.sub(r"^Built [A-Z][a-z]{2} ", "Built ", stamp)
 
 
 def pass_stack(entries: list[Mapping[str, str]]) -> str:
