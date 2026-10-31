@@ -302,6 +302,10 @@ jobs:
         id: billing
         env:
           STRIPE_API_KEY: ${{ secrets.STRIPE_API_KEY }}
+          # Names the 2027 Season Pass link (y:). Without it the step never
+          # moves a pass's first renewal, and the buyer is charged again on
+          # their anniversary, mid-2027, for a season the $39 already covers.
+          STRIPE_PAYMENT_LINKS: ${{ secrets.STRIPE_PAYMENT_LINKS }}
         run: |
           set +e
           .venv/bin/python -m run.billing --send
@@ -430,7 +434,9 @@ jobs:
         if: always() && steps.billing.outputs.code == '1'
         run: |
           echo "::error::A monthly subscription is billing with no end-of-season"
-          echo "::error::stop date. See the 'Stop monthly billing' step above."
+          echo "::error::stop date, or a 2027 Season Pass needs a person (its first"
+          echo "::error::renewal unmoved, or refunded and still set to bill). See the"
+          echo "::error::'Stop monthly billing' step above."
           exit 1
 
       - name: Fail the run if a renewal notice could not be sent

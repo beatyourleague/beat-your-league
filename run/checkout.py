@@ -27,6 +27,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from typing import Iterable
 
 from run.refs import _PREFIX_TO_PLAN
@@ -106,7 +107,26 @@ def customer_id(session: dict) -> str | None:
 # browser, and the JS<->Python ref contract stays as it is. "m" stays legal
 # for 2027's monthly plan.
 PLAYOFF_LINK_PREFIX = "o"
-LINK_PREFIX_TO_PLAN = {**_PREFIX_TO_PLAN, PLAYOFF_LINK_PREFIX: _PREFIX_TO_PLAN["s"]}
+# The $39 2027 Season Pass (owner decision, Oct 30 2026; off until the lawyer
+# has seen it, LAUNCH.md "Turning on the 2027 Season Pass"). Like "o", a SEASON
+# row told apart by the link that took the money, and deliberately not a ref
+# prefix: the join page's ref stays "s" and roster.js does not change. With no
+# y: entry in STRIPE_PAYMENT_LINKS none of this exists for anybody.
+SEASON_2027_LINK_PREFIX = "y"
+LINK_PREFIX_TO_PLAN = {**_PREFIX_TO_PLAN, PLAYOFF_LINK_PREFIX: _PREFIX_TO_PLAN["s"],
+                       SEASON_2027_LINK_PREFIX: _PREFIX_TO_PLAN["s"]}
+# When a 2027 Season Pass first bills again, in ONE place: run/billing.py writes
+# it to Stripe, the welcome and the Pay-button text print it, and the terms
+# state it (LAUNCH.md). Noon Eastern, so the date a buyer reads and the date
+# Stripe bills are one date (render/renewal.renewal_day, EMAILS-112).
+#
+# FIXED, not derived from the 2028 schedule. A buyer consents to this date at
+# checkout, and the pass is sold long before that schedule can exist (spring
+# 2028), so a derived date could only ever move a date somebody already agreed
+# to. The launch check holds it against the schedule the day one exists: a date
+# that stopped being true is an alarm for a human, never a silent move.
+SEASON_2027_FIRST_RENEWAL = datetime(2028, 8, 15, 16, 0, tzinfo=timezone.utc)
+SEASON_2027_PRICE_CENTS = 3900
 # The join page's PLAYOFF_FROM_WEEK (and run/economics.py's): the $19 pass is
 # sold once a buyer's first weekly report would be this week or later — that
 # is, from the first kickoff of the week BEFORE it (tests pin all three).
@@ -127,7 +147,9 @@ def parse_link_prefixes(raw: str) -> dict[str, str]:
         if link:
             if prefix.strip() in LINK_PREFIX_TO_PLAN:
                 out[link.strip()] = prefix.strip()
-        else:
+        elif prefix.strip() != SEASON_2027_LINK_PREFIX:
+            # "y:" naming no link is a half-finished setup, not a filter on a
+            # payment link called "y" (link_map_problems says so).
             out[prefix] = ""          # filter only, plan unknown
     return out
 
@@ -151,6 +173,13 @@ def playoff_links(raw: str) -> frozenset[str]:
                      if prefix == PLAYOFF_LINK_PREFIX)
 
 
+def season_2027_links(raw: str) -> frozenset[str]:
+    """The link id(s) under ``y:`` — the $39 2027 Season Pass. Empty means the
+    offer is off, and every path that asks behaves exactly as it did."""
+    return frozenset(link for link, prefix in parse_link_prefixes(raw).items()
+                     if prefix == SEASON_2027_LINK_PREFIX)
+
+
 def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
     """What is wrong with a STRIPE_PAYMENT_LINKS value, in words. Empty means
     it is the 2026 shape: ``s:plink_…,o:plink_…,p:plink_…`` — the $29
@@ -170,6 +199,9 @@ def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
         if not item:
             continue
         prefix, _, link = (part.strip() for part in item.partition(":"))
+        if prefix == SEASON_2027_LINK_PREFIX and not link:
+            problems.append(f"{SEASON_2027_LINK_PREFIX}: names no payment link")
+            continue
         if not link:
             problems.append(f"{item[:24]!r} has no plan prefix (s:, o:, p:)")
             continue
@@ -190,6 +222,10 @@ def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
             problems.append(f"no {prefix}: link")
         elif count > 1 and prefix != "s":
             problems.append(f"{count} {prefix}: links — one each")
+    # Optional, unlike the three above: an absent y: is today's production map.
+    if prefixes.count(SEASON_2027_LINK_PREFIX) > 1:
+        problems.append(f"{prefixes.count(SEASON_2027_LINK_PREFIX)} "
+                        f"{SEASON_2027_LINK_PREFIX}: links — one each")
     if prefixes.count("s") > 1:
         problems.append(f"{prefixes.count('s')} s: links — the $19 Playoff Pass "
                         f"goes under o:, so the intake can tell it from the $29 pass")

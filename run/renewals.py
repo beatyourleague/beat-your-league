@@ -20,6 +20,9 @@ What this refuses to do, deliberately:
   statement about their money.
 - **It skips anything that is not a yearly term.** The monthly plan stops on
   its own at season's end and the statute does not reach it.
+- **A subscription in a trial charges when the trial ends.** That is the 2027
+  Season Pass, whose first renewal run/billing.py moves to August 2028; it is
+  ``trialing`` until then, and ``charge_date`` reads its ``trial_end``.
 - With no ``STRIPE_API_KEY`` it exits 2 — the expected state before checkout
   opens, and the same not-configured contract the intake uses, so a daily
   cron does not file a bug every morning for a shop that has not opened.
@@ -97,13 +100,13 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                 interval = (recurring or {}).get("interval")
                 if interval != YEARLY:
                     continue
-                period_end = subscription.get("current_period_end")
-                if not isinstance(period_end, int):
+                charged_at = charge_date(subscription)
+                if not isinstance(charged_at, int):
                     problems.append("a yearly subscription has no readable "
                                     "renewal date — no notice sent")
                     continue
                 # The buyer's clock (ET), never the UTC date (EMAILS-112-117).
-                renews_on = renewal_day(period_end)
+                renews_on = renewal_day(charged_at)
                 customer = subscription.get("customer")
                 email = ""
                 customer_id = None
@@ -133,6 +136,16 @@ def upcoming(api_key: str, today: date) -> tuple[list[Renewal], list[str]]:
                    f"&starting_after={urllib.parse.quote(str(last))}")
     renewals.sort(key=lambda r: (r.renews_on, r.slug))
     return renewals, problems
+
+
+def charge_date(subscription: dict) -> object:
+    """When this subscription will next charge. For a ``trialing`` one that is
+    its ``trial_end``, and only that: a 2027 Season Pass sits in a trial until
+    its first August renewal (run/billing.py), and a trial with no readable
+    end is a date we do not know, never one to fall back from."""
+    if subscription.get("status") == "trialing":
+        return subscription.get("trial_end")
+    return subscription.get("current_period_end")
 
 
 def renewing_plan(metadata) -> str | None:

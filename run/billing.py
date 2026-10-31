@@ -73,6 +73,51 @@ or one we set: each already ends the billing, and none is overwritten.
 Dry by default like every other sender here (`run/renewals.py --send`): this is
 the first money-mutating call in the repo, and a misconfigured cron must not
 cancel real subscriptions by accident.
+
+**The 2027 Season Pass: the first renewal, moved (owner decision, Oct 30 2026).**
+$39 today covers the rest of 2026 and all of 2027, and the pass renews each
+August from 2028. A yearly subscription's own anniversary would bill in late
+2027, mid-season, for a period the $39 already paid for, so a second, separate
+step moves it. Only a ``y:`` entry in STRIPE_PAYMENT_LINKS switches it on; with
+none, this file does exactly what it did.
+
+The primitive is Stripe's documented one, "Change the billing period using a
+trial period" (billing/subscriptions/billing-cycle): one update setting
+`trial_end` with `proration_behavior=none`, which charges nothing, makes the
+subscription `trialing`, issues a 0 USD invoice, and moves the billing cycle
+anchor to `trial_end`, so every later renewal falls on that August date. Without
+`proration_behavior=none` starting a trial prorates, and the buyer would be
+credited the unused part of a year we owe them in full. Stripe caps `trial_end`
+at two years from the anchor (730 days), which every sale after Aug 15 2026 is
+inside; `needs_deferral` checks rather than assumes.
+
+Not a Subscription Schedule, which looks like the natural tool: "Customers can't
+update or cancel subscriptions that currently have an update scheduled with a
+subscription schedule" (customer-management), and self-serve cancellation is the
+promise. Trial Offers need flexible billing and a newer API than this repo pins,
+and prebilling needs flexible billing and API 2026-05-27 or later.
+
+The trial has three side effects that had to be handled, each documented:
+- The 0 USD invoice becomes `latest_invoice`, which blinded RULE E1 to a refund
+  or a lost chargeback (run/subscriptions.purchase_view).
+- "Customer modifications to a `trialing` subscription end the free trial and
+  create an invoice for immediate payment" (customer-management), so the billing
+  page must offer no plan switching, or must set `continue_trial`. Cancelling is
+  not a modification; the launch check reads the setting.
+- `cancel_at_period_end` on a trial ends it at `trial_end`: reports run through
+  2027 and nothing bills. That is the behaviour this rests on, and Stripe says it
+  of billing periods in general, not of this shape; the first test-mode run has
+  to watch it happen (LAUNCH.md).
+
+RULE D1 — A PURCHASE THROUGH THE LINK, AT A YEARLY PRICE. The population is the
+sessions the ``y:`` link took money through, and RULE B2 still governs: a
+subscription's own price must be yearly and $39, or it is reported and left
+alone. A $39 yearly pass sold through any other link is never touched.
+
+RULE D2 — A RUN THAT CANNOT SAY WHAT IT WOULD DO DOES NOTHING. Refunded, disputed,
+already cancelled, on a schedule, past due, in some other trial, past the date,
+over Stripe's two years: each is reported and left alone. Nothing here cancels,
+deletes or refunds, and a re-run after success writes nothing.
 """
 
 from __future__ import annotations
@@ -81,14 +126,18 @@ import argparse
 import os
 import sys
 import urllib.parse
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from ingest.nflverse import NflverseError
-from run.checkout import post as _stripe_post
+from run.checkout import (SEASON_2027_FIRST_RENEWAL, SEASON_2027_PRICE_CENTS, is_paid,
+                          post as _stripe_post, season_2027_links, sweep_sessions)
+from run.redact import redact
 from run.solo import SoloError, current_week, season_ends
-from run.subscriptions import SubscriptionError, _stripe_get
+from run.subscriptions import (DISPUTE_LOST, DisputeLookup, SubscriptionError, _stripe_get,
+                               dispute_state, fully_refunded, purchase_view)
 
 SUBSCRIPTIONS_API = "https://api.stripe.com/v1/subscriptions"
 
@@ -108,6 +157,18 @@ ROSTER_METADATA_KEY = "byl_roster_ref"
 # Stamped alongside the stop so a later reader can tell OUR end-of-season stop
 # from a cancellation the customer made: the period end it stops at.
 STOP_METADATA_KEY = "byl_offseason_stop"
+
+# Stamped when a 2027 Season Pass's first renewal is moved, so a human reading
+# the subscription in the Dashboard can see why a paid pass says "trialing".
+DEFER_METADATA_KEY = "byl_first_renewal"
+
+# Stripe: `trial_end` "can be at most two years from `billing_cycle_anchor`",
+# and "the trial period must be 730 days (2 years) or less".
+MAX_TRIAL_DAYS = 730
+
+# A subscription in one of these is over or never began; there is nothing to
+# say about it.
+ENDED = ("canceled", "incomplete_expired", "incomplete")
 
 # Yearly plans renew. Everything else is the monthly-shaped tier this stops.
 YEARLY = "year"
@@ -252,15 +313,19 @@ def _is_ours(subscription: Mapping[str, Any]) -> bool:
     return bool(isinstance(metadata, dict) and metadata.get(ROSTER_METADATA_KEY))
 
 
-def load_subscriptions(api_key: str) -> list[dict]:
+def load_subscriptions(api_key: str, *, charges: bool = False) -> list[dict]:
     """Every subscription on the account, customers expanded.
 
     Expanded because RULE B4 needs the customer's metadata to tell our
     subscribers from anything else the account ever sells, and an id string
-    cannot answer that.
+    cannot answer that. ``charges`` also expands each latest invoice's charge,
+    for the 2027 Season Pass step, which must not move a refunded pass.
     """
     out: list[dict] = []
-    query = {"limit": "100", "status": "all", "expand[]": "data.customer"}
+    query: Any = {"limit": "100", "status": "all", "expand[]": "data.customer"}
+    if charges:
+        query = [("limit", "100"), ("status", "all"), ("expand[]", "data.customer"),
+                 ("expand[]", "data.latest_invoice.charge")]
     url = f"{SUBSCRIPTIONS_API}?{urllib.parse.urlencode(query)}"
     while True:
         page = _stripe_get(url, api_key)
@@ -352,6 +417,220 @@ def apply_stop(api_key: str, subscription: Mapping[str, Any]) -> None:
 
 
 # --------------------------------------------------------------------- #
+# the 2027 Season Pass: moving the first renewal to August 2028
+# --------------------------------------------------------------------- #
+
+@dataclass
+class DeferralPlan:
+    """``needs_deferral``'s answer: what to write, how many are already right,
+    and everything left alone, each with its reason."""
+
+    due: list[dict] = field(default_factory=list)
+    done: int = 0
+    notes: list[str] = field(default_factory=list)
+
+
+def _unit_amount(subscription: Mapping[str, Any]) -> int | None:
+    items = ((subscription.get("items") or {}).get("data") or [])
+    first = items[0] if items and isinstance(items[0], dict) else {}
+    amount = (first.get("price") or {}).get("unit_amount")
+    return amount if isinstance(amount, int) else None
+
+
+def money_returned(subscription: Mapping[str, Any], api_key: str,
+                   lookup: "DisputeLookup | None" = None) -> str | None:
+    """Has the purchase behind this subscription gone back? "refunded" (in
+    full), "lost" (a chargeback), "disputed" (one still open), or None. Reads
+    the purchase, not the 0 USD invoice a deferral leaves on top of it."""
+    bought = purchase_view(subscription, api_key)
+    invoice = bought.get("latest_invoice")
+    charge = invoice.get("charge") if isinstance(invoice, dict) else None
+    state = dispute_state(charge, lookup if lookup is not None else DisputeLookup(api_key))
+    if fully_refunded(bought):
+        return "refunded"
+    if state == DISPUTE_LOST:
+        return "lost"
+    return "disputed" if state is not None else None
+
+
+def needs_deferral(subscriptions: Iterable[Mapping[str, Any]], sold: Iterable[str],
+                   at: datetime = SEASON_2027_FIRST_RENEWAL, now: datetime | None = None,
+                   returned: Callable[[Mapping[str, Any]], str | None] = lambda _s: None,
+                   ) -> DeferralPlan:
+    """Which of the subscriptions the ``y:`` link ``sold`` to move to ``at``.
+
+    Pure, like ``needs_stop``. RULE D1 decides who is even considered and RULE
+    D2 what becomes of the rest; ``returned`` is ``money_returned`` bound to a
+    key, and it is asked only about subscriptions that could still bill.
+    """
+    now = now or datetime.now(timezone.utc)
+    target = int(at.timestamp())
+    sold = set(sold)
+    plan = DeferralPlan()
+    listed: set[str] = set()
+    for subscription in subscriptions:
+        label = str(subscription.get("id"))
+        if label not in sold:
+            continue
+        listed.add(label)
+        status = subscription.get("status")
+        if status in ENDED:
+            continue
+        if not _is_ours(subscription):                       # RULE B4
+            plan.notes.append(f"subscription {label} came through the 2027 Season Pass "
+                              f"link but its customer carries no roster stamp — left "
+                              f"alone until the intake has stamped it")
+            continue
+        interval, amount = _interval(subscription), _unit_amount(subscription)
+        if interval != YEARLY or amount != SEASON_2027_PRICE_CENTS:  # RULE B2
+            plan.notes.append(f"subscription {label} came through the 2027 Season Pass "
+                              f"link at {amount} cents every {interval}, not the yearly "
+                              f"$39 price — left alone; check the link's price")
+            continue
+        back = returned(subscription)
+        if back in ("refunded", "lost"):
+            if not _already_stopping(subscription):
+                plan.notes.append(
+                    f"REFUNDED-STILL-LIVE subscription {label}: its $39 went back "
+                    f"({back}) but the subscription is still set to bill. Reports have "
+                    f"stopped; cancel it in the Stripe Dashboard, Immediately "
+                    f"(LAUNCH.md section 8)")
+            continue
+        if back == "disputed":
+            plan.notes.append(f"subscription {label} has an open dispute — left alone "
+                              f"until it is decided")
+            continue
+        if subscription.get("schedule"):
+            plan.notes.append(f"subscription {label} is on a subscription schedule, whose "
+                              f"phases overwrite a direct update — left alone")
+            continue
+        if status == "trialing":
+            if subscription.get("trial_end") == target:
+                plan.done += 1
+            else:
+                plan.notes.append(f"subscription {label} is in a trial ending at "
+                                  f"{subscription.get('trial_end')}, not the stated first "
+                                  f"renewal — left alone; this needs a human")
+            continue
+        if status != "active":
+            plan.notes.append(f"subscription {label} is {status} — left alone; its first "
+                              f"renewal has not been moved")
+            continue
+        if _already_stopping(subscription):                  # RULE B5
+            plan.notes.append(
+                f"subscription {label} was cancelled before its first renewal was "
+                f"moved, so it ends on its own anniversary, inside the 2027 season it "
+                f"paid for. Left alone: look it up, and remove the cancel if they "
+                f"are owed the season (LAUNCH.md section 8)")
+            continue
+        if now >= at:
+            plan.notes.append(f"subscription {label} is still active after the stated "
+                              f"first renewal date — left alone; this needs a human")
+            continue
+        anchor = subscription.get("billing_cycle_anchor")
+        if not isinstance(anchor, int):
+            plan.notes.append(f"subscription {label} has no readable billing anchor — "
+                              f"left alone rather than guessed at")
+            continue
+        if target - anchor > MAX_TRIAL_DAYS * 86400:
+            plan.notes.append(f"subscription {label} is further than Stripe's two years "
+                              f"from the stated first renewal — left alone; this "
+                              f"needs a human")
+            continue
+        plan.due.append(dict(subscription))
+    for label in sorted(sold - listed):
+        plan.notes.append(f"subscription {label} came through the 2027 Season Pass link "
+                          f"but Stripe does not list it — left alone")
+    return plan
+
+
+def apply_deferral(api_key: str, subscription: Mapping[str, Any],
+                   at: datetime = SEASON_2027_FIRST_RENEWAL) -> None:
+    """One write: no charge until ``at``. ``proration_behavior=none`` is what
+    keeps this from crediting the unused year (module docstring).
+
+    The answer is read back rather than trusted: a 200 says Stripe took the
+    request, not that the subscription now says what the welcome told the
+    buyer. Raises SubscriptionError when it does not."""
+    target = int(at.timestamp())
+    label = urllib.parse.quote(str(subscription.get("id")))
+    back = _stripe_post(
+        f"{SUBSCRIPTIONS_API}/{label}", api_key,
+        {"trial_end": str(target), "proration_behavior": "none",
+         f"metadata[{DEFER_METADATA_KEY}]": at.date().isoformat()},
+        what="moving a 2027 Season Pass's first renewal to August 2028",
+        needs="WRITE access to Subscriptions")
+    if back.get("status") != "trialing" or back.get("trial_end") != target:
+        raise SubscriptionError(
+            f"Stripe answered status {back.get('status')} and trial end "
+            f"{back.get('trial_end')} after moving the first renewal")
+
+
+def season_2027_sold(api_key: str, links: Iterable[str]) -> set[str]:
+    """The subscriptions the ``y:`` link took money for, from Stripe's own
+    sessions: the link that took the money, never a ref or a field of ours."""
+    links = set(links)
+    sessions, _newest = sweep_sessions(api_key, None, sorted(links))
+    sold: set[str] = set()
+    for session in sessions:
+        subscription = session.get("subscription")
+        subscription = (subscription.get("id") if isinstance(subscription, dict)
+                        else subscription)
+        if (session.get("payment_link") in links and is_paid(session)
+                and isinstance(subscription, str) and subscription.startswith("sub_")):
+            sold.add(subscription)
+    return sold
+
+
+def defer_season_2027(api_key: str, links: Iterable[str], *, send: bool,
+                      now: datetime | None = None) -> int:
+    """The step, report and all. -> 0, or 1 when anything needs a person."""
+    line = "=" * 62
+    print(f"\n{line}\n2027 SEASON PASS: FIRST RENEWAL"
+          f"{'' if send else ' (dry run)'}\n{line}")
+    lookup = DisputeLookup(api_key)
+    try:
+        subscriptions = load_subscriptions(api_key, charges=True)
+        # Stripe documents no retention for old Checkout Sessions, and a pass
+        # lives for years: the stamp keeps a moved pass in view, so a refund
+        # still raises its alarm after its session has aged out of the list.
+        sold = season_2027_sold(api_key, links) | {
+            str(s.get("id")) for s in subscriptions
+            if (s.get("metadata") or {}).get(DEFER_METADATA_KEY)}
+        plan = needs_deferral(subscriptions, sold, now=now,
+                              returned=lambda s: money_returned(s, api_key, lookup))
+    except SubscriptionError as exc:
+        print(f"could not read Stripe: {redact(exc)}", file=sys.stderr)
+        print(line)
+        return 1
+    print(f"First renewal: {SEASON_2027_FIRST_RENEWAL:%Y-%m-%d %H:%M} UTC. "
+          f"{len(sold)} sold, {plan.done} already moved, {len(plan.due)} to move")
+    failures: list[str] = []
+    for subscription in plan.due:
+        label = str(subscription.get("id"))
+        if not send:
+            print(f"  [would move] {label}")
+            continue
+        try:
+            apply_deferral(api_key, subscription)
+            print(f"  [moved] {label}")
+        except SubscriptionError as exc:
+            failures.append(f"{label}: {redact(exc)}")
+    for note in plan.notes:
+        print(f"  ! {note}", file=sys.stderr)
+    for failure in failures:
+        print(f"  FAILED {failure}", file=sys.stderr)
+    if not send and plan.due:
+        print(f"(dry run — nothing written. Pass --send to move {len(plan.due)} "
+              f"subscription(s).)")
+    if failures:
+        print(f"{len(failures)} first renewal(s) could not be moved. Each bills on its "
+              f"own anniversary, mid-2027, unless a later run succeeds.", file=sys.stderr)
+    print(line)
+    return 1 if (failures or plan.notes) else 0
+
+
+# --------------------------------------------------------------------- #
 # the run
 # --------------------------------------------------------------------- #
 
@@ -359,7 +638,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=CACHE_DIR)
     parser.add_argument("--send", action="store_true",
-                        help="actually end final-period subscriptions in Stripe")
+                        help="actually end final-period subscriptions in Stripe, and "
+                             "move each 2027 Season Pass's first renewal")
     parser.add_argument("--today", type=date.fromisoformat, default=None,
                         help="pretend it is this date (testing)")
     args = parser.parse_args(argv)
@@ -373,6 +653,20 @@ def main(argv: list[str] | None = None) -> int:
               "expected until checkout opens.", file=sys.stderr)
         return NOT_CONFIGURED
 
+    stopped = _monthly_stop(args, api_key)
+    # A separate step with its own exit, ahead of nothing: the monthly stop has
+    # early returns for the offseason, which is exactly when a pass bought in
+    # January still needs moving. No y: link, and it never reads a thing.
+    links = season_2027_links(os.environ.get("STRIPE_PAYMENT_LINKS", ""))
+    if not links:
+        return stopped
+    now = (datetime(args.today.year, args.today.month, args.today.day,
+                    tzinfo=timezone.utc) if args.today else None)
+    return defer_season_2027(api_key, links, send=args.send, now=now) or stopped
+
+
+def _monthly_stop(args: argparse.Namespace, api_key: str) -> int:
+    """The end-of-season stop (D1, RULES B1-B5)."""
     at, season = final_send(Path(args.cache), args.today, live=args.today is None)
 
     line = "=" * 62

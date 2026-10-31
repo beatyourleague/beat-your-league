@@ -42,6 +42,9 @@ SEASON_PRICE = "$29"
 PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
 PASS_PRICE = "$69"
+# The 2027 Season Pass (owner decision, Oct 30 2026): off until the lawyer has
+# seen it, and a test ties this figure to run/checkout.SEASON_2027_PRICE_CENTS.
+SEASON_2027_PRICE = "$39"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
@@ -120,15 +123,73 @@ SEAT_RESET_NOTE = ("If whoever paid for your league's pass resets its seats, "
                    "share.")
 
 
-def _plan_terms(plan: str, one_time: bool = False,
-                playoff: bool = False) -> tuple[str, list[str]]:
+def first_renewal_words() -> str:
+    """The 2027 Season Pass's first renewal, as a buyer reads it: the date
+    run/billing.py writes to Stripe, on the buyer's clock, from the one
+    constant. ('August 15, 2028'.)"""
+    from zoneinfo import ZoneInfo
+
+    from run.checkout import SEASON_2027_FIRST_RENEWAL
+    day = SEASON_2027_FIRST_RENEWAL.astimezone(ZoneInfo("America/New_York"))
+    return f"{day:%B} {day.day}, {day.year}"
+
+
+# The two sentences a purchase of one roster owes when a 2027 Season Pass is in
+# the pair (LP2-D1). The stock lines are both false here: "both were one
+# payment" of a pass that renews, "it keeps billing" of one that never bills.
+SEASON_2027_TWICE = ("This address already holds a pass for this same roster, so "
+                     "you get one report a week, not two. Your 2027 Season Pass "
+                     "covers everything the older pass does. If the older one was "
+                     "a one-time pass, it was one payment and nothing more is "
+                     "charged for it: to be refunded for it, reply while its "
+                     "refund window is open. If it renews, it keeps doing so until "
+                     "you cancel it: your billing page shows only your newest "
+                     "purchase, so reply to this email and we'll do it for you.")
+ONCE_BESIDE_2027 = ("This address also holds a 2027 Season Pass for this same "
+                    "roster, so you get one report a week, not two. This purchase "
+                    "was one payment and nothing more is charged for it; to be "
+                    "refunded for it, reply while its refund window is open. Your "
+                    "2027 Season Pass keeps its own terms: it still covers 2027 and "
+                    "still renews as your welcome for it says, until you cancel it.")
+
+
+def _season_2027_terms() -> tuple[str, list[str]]:
+    """(what you bought, its disclosures): the retainable notice California's
+    ARL requires for this purchase. Everything it states comes from the
+    constants the charge and the renewal are made from."""
+    price, when = SEASON_2027_PRICE, first_renewal_words()
+    return (f"the 2027 Season Pass — {price} USD for the rest of the 2026 season "
+            "and all of the 2027 season",
+            [f"You paid {price} USD today. That covers every weekly report for the "
+             "rest of the 2026 season and all of the 2027 season, and nothing more "
+             f"is charged before {when}.",
+             f"It renews at {price} USD on {when}, before the 2028 season, and each "
+             "August after that, until you cancel. We email you 15 to 45 days before "
+             "each renewal, with the date and the amount.",
+             "Cancelling takes about a minute from the link at the bottom of any "
+             "report. It stops the renewal and doesn't end the pass early: your "
+             "reports continue through the 2027 season, then stop.",
+             f"Your billing page may call the time until {when} a trial, because "
+             "that is how Stripe holds the date. It isn't one: you've paid.",
+             REFUND_TERMS])
+
+
+def _plan_terms(plan: str, one_time: bool = False, playoff: bool = False,
+                season_2027: bool = False) -> tuple[str, list[str]]:
     """(what you bought, the disclosures that purchase legally requires).
 
     ``playoff``: bought through the $19 Playoff Pass link (contract C4: the
     ``o:`` entry in STRIPE_PAYMENT_LINKS, a season row in the registry). The
     retainable copy must name the product the buyer paid for — "You bought
     the Rest-of-Season Pass" on a $19 purchase named one they did not (final
-    review COPY-4). Always one payment, so it implies ``one_time``."""
+    review COPY-4). Always one payment, so it implies ``one_time``.
+
+    ``season_2027``: bought through the ``y:`` link. A season row with a
+    subscription, so without it the purchase falls through to the bottom of
+    this function: "$29, renews on the anniversary", two false statements in
+    the disclosure the law requires."""
+    if season_2027 and plan not in ("monthly", "seat", *PAYER_PLANS):
+        return _season_2027_terms()
     if one_time and plan in PAYER_PLANS:
         return ("the League Pass for the rest of this season — one payment for "
                 "your whole league",
@@ -186,7 +247,8 @@ def _site() -> str:
 
 # What each plan is called in a sentence about it (LP2-D1).
 _PLAN_NAME = {"season": "season pass", "monthly": "monthly plan",
-              "league_pass": "League Pass", "pass": "League Pass"}
+              "league_pass": "League Pass", "pass": "League Pass",
+              "season_2027": "2027 Season Pass"}
 TWICE_HEAD = "One report for this roster"
 TWICE_SUBJECT = "You're in. One report a week for this roster, not two"
 
@@ -491,7 +553,8 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
                     duplicate: str | None = None,
                     season_over: bool = False, one_time: bool = False,
                     playoff: bool = False, week: int | None = None,
-                    now: datetime | None = None) -> Message:
+                    now: datetime | None = None,
+                    season_2027: bool = False) -> Message:
     """Build the acknowledgment. ``plan`` is season|monthly|league_pass|seat
     (``pass`` is the League Pass payer too). ``seat_link`` is the payer's own
     league seat link (C4), or None to fall back to the generic seat page.
@@ -503,10 +566,12 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
     it is one payment, so it implies ``one_time``. ``week``: the week the
     purchase fell in (``week_at`` reads it from the schedule when omitted),
     which decides whether "odds from Week 4" is still news. ``now``: the
-    run's clock, which decides the "Today" row (``today_text``)."""
+    run's clock, which decides the "Today" row (``today_text``).
+    ``season_2027``: bought through the 2027 Season Pass link, a subscription
+    that renews each August, so the email states both seasons and the date."""
     if playoff and plan not in ("monthly", "seat", *PAYER_PLANS):
         one_time = True
-    bought, terms = _plan_terms(plan, one_time, playoff)
+    bought, terms = _plan_terms(plan, one_time, playoff, season_2027)
     if week is None and not season_over:
         week = week_at(season, purchased_at)
     today = NEXT_TODAY if season_over else today_text(season, now)
@@ -559,7 +624,9 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         # Both purchases were single payments: nothing keeps billing, so the
         # subscription wording (and its cancel link) would describe a charge
         # that never comes.
-        twice = ONCE_TWICE
+        twice = ONCE_BESIDE_2027 if duplicate == "season_2027" else ONCE_TWICE
+    elif twice and season_2027:
+        twice = SEASON_2027_TWICE
 
     # ---------------------------------------------------------------- html
     para = f'<p style="{BASE}font-size:15px;margin:0 0 10px 0;">'
@@ -579,7 +646,7 @@ def welcome_message(email: str, plan: str, slug: str, season: str,
         # route is its own sentence — a bare lowercase link label trailing
         # "your billing page." read as a fragment.
         href, label = _cancel_destination()
-        if one_time or not this_is_the_spare(plan, duplicate):
+        if one_time or season_2027 or not this_is_the_spare(plan, duplicate):
             href = ""  # the older purchase cancels by reply (D3), not there
         link_html = (f' Where to cancel: <a href="{esc(href)}" style="color:{NAVY};">'
                      f'{esc(label)}</a>.' if href else "")

@@ -61,6 +61,13 @@ PLANS = (SEASON, MONTHLY, LEAGUE_PASS)
 # pays nothing and carries no billing at all.
 PASS_BILLING = "pass"
 BILLINGS = (SEASON, MONTHLY, PASS_BILLING)
+# What a report calls a row bought through the 2027 Season Pass link (``y:``):
+# never a `plan` or `billing` value, only ``report_plan``'s word. The row is an
+# ordinary season row everywhere else; but "season" prints "your season pass
+# renews once a year, on the day you bought it" at the season's end, which is
+# false of a pass that renews on a stated August date. A word the report has
+# no sentence for prints no sentence, which is the safe way round.
+SEASON_2027 = "season_2027"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # A league smaller than four cannot fill a bench and one larger than 32 cannot
@@ -119,6 +126,8 @@ class RosterSubscriber:
     # Empty on a seat (it lives on its pass, RULE E2) and on rows written
     # before the field, which fall back to the customer or the address.
     subscription_ids: tuple[str, ...] = ()
+    # Bought through the 2027 Season Pass link (``y:``; run/checkout.py).
+    season_2027: bool = False
 
     @property
     def is_league_seat(self) -> bool:
@@ -153,9 +162,11 @@ class RosterSubscriber:
     def report_plan(self) -> str:
         """What a report's meta["plan"] says (one vocabulary for every
         renderer): season | monthly | pass (the League Pass PAYER) |
-        league_pass (a SEAT, render.report.SEAT_PLAN)."""
+        league_pass (a SEAT, render.report.SEAT_PLAN) | season_2027."""
         if self.is_league_seat:
             return LEAGUE_PASS
+        if self.season_2027 and (self.billing or self.plan) == SEASON:
+            return SEASON_2027
         return self.billing or self.plan
 
     @property
@@ -263,7 +274,7 @@ def _parse_entry(raw: dict, index: int) -> RosterSubscriber:
         league_size=size, label=label, plan=plan, covered_by=covered_by,
         stripe_customer_id=stripe_customer_id, origin=origin, billing=billing,
         roster_as_of=roster_as_of, pass_id=pass_id, pass_customer=pass_customer,
-        subscription_ids=subscription_ids)
+        subscription_ids=subscription_ids, season_2027=raw.get("season_2027") is True)
     try:
         # RosterSpec carries the roster's own invariants (no duplicate player,
         # enough players to fill the lineup). Running it here means a row that
@@ -379,6 +390,8 @@ def to_json(subscribers: list[RosterSubscriber]) -> list[dict]:
                 row[name] = getattr(sub, name)
         if sub.subscription_ids:
             row["subscription_ids"] = list(sub.subscription_ids)
+        if sub.season_2027:
+            row["season_2027"] = True
         rows.append(row)
     return rows
 

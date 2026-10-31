@@ -1891,6 +1891,172 @@ def check_link_map() -> list[Gate]:
     return gates
 
 
+def site_constant(page: str, name: str) -> str | None:
+    """A page's constant, wherever it keeps it, or None when it has none.
+
+    Not ``js_constants``, whose `[A-Z_]+` cannot match a name with a digit in
+    it, so SEASON_2027_READY would read as absent for ever and this gate would
+    skip with the offer on sale. Takes const, let, var, window.NAME, an object
+    key, any indent, either quote; skips comment lines, which name these
+    constants without setting them."""
+    pattern = re.compile(rf"\b{re.escape(name)}\b[\"']?\s*[:=]\s*"
+                         r"(\"[^\"]*\"|'[^']*'|true|false)")
+    for line in page.splitlines():
+        if line.strip().startswith(("//", "*", "/*", "<!--")):
+            continue
+        found = pattern.search(line)
+        if found:
+            return found.group(1).strip("\"'")
+    return None
+
+
+def _join_sources() -> str:
+    """The join page and the scripts beside it, as one text to search."""
+    join = SITE / "join"
+    return "\n".join(path.read_text(encoding="utf-8")
+                     for path in [join / "index.html", *sorted(join.glob("*.js"))])
+
+
+def check_season_2027() -> list[Gate]:
+    """The 2027 Season Pass is sold from three switches held in different
+    places: the landing's and join page's SEASON_2027_READY, the join page's
+    STRIPE_LINK_2027, and ``y:`` in STRIPE_PAYMENT_LINKS. Any two disagreeing
+    sells a checkout that cannot complete, or takes money nothing attributes.
+    Nothing may be on sale while the operative terms don't describe it.
+
+    SKIPS, saying so, until the site's constants exist: the pages are a
+    separate piece of work and the offer is off until the lawyer has seen it."""
+    from render.welcome import first_renewal_words
+    from run.checkout import (SEASON_2027_FIRST_RENEWAL, SEASON_2027_LINK_PREFIX,
+                              link_map_problems, season_2027_links)
+    name = "The 2027 Season Pass switches agree"
+    landing = (SITE / "index.html").read_text(encoding="utf-8")
+    join = _join_sources()
+    ready_on_landing = site_constant(landing, "SEASON_2027_READY")
+    ready_on_join = site_constant(join, "SEASON_2027_READY")
+    link = site_constant(join, "STRIPE_LINK_2027")
+    if ready_on_landing is None or link is None:
+        missing = [label for label, value in (("the landing's SEASON_2027_READY", ready_on_landing),
+                                              ("the join page's STRIPE_LINK_2027", link))
+                   if value is None]
+        return [Gate("Funnel", name, "SKIP", f"{' and '.join(missing)} not on the page yet, "
+                     f"so there is nothing to compare; the offer is off")]
+    ready = ready_on_landing == "true"
+    gates = [_gate("Funnel", name, ready == bool(link),
+                   f"landing SEASON_2027_READY={ready_on_landing} but the join page's "
+                   f"STRIPE_LINK_2027 is {'set' if link else 'empty'}",
+                   "off on both" if not ready else "on, and the join page can charge it")]
+    if ready_on_join is not None:
+        gates.append(_gate("Funnel", "Landing and join page agree on the 2027 Season Pass",
+                           ready_on_join == ready_on_landing,
+                           f"landing {ready_on_landing}, join {ready_on_join}"))
+    raw = os.environ.get("STRIPE_PAYMENT_LINKS", "").strip()
+    named = any(item.strip().startswith(f"{SEASON_2027_LINK_PREFIX}:") for item in raw.split(","))
+    if raw:
+        unlinked = [p for p in link_map_problems(raw) if p.startswith(f"{SEASON_2027_LINK_PREFIX}:")]
+        linked = bool(season_2027_links(raw))
+        gates.append(_gate(
+            "Funnel", "The payment-link map and the join page agree on the 2027 Season Pass",
+            not unlinked and linked == bool(link),
+            "; ".join(unlinked) if unlinked else
+            (f"{SEASON_2027_LINK_PREFIX}: is in STRIPE_PAYMENT_LINKS but the join page's "
+             f"STRIPE_LINK_2027 is empty" if named else
+             f"STRIPE_LINK_2027 is set but STRIPE_PAYMENT_LINKS has no "
+             f"{SEASON_2027_LINK_PREFIX}: entry, so every purchase is PAID-UNATTRIBUTED")))
+    elif ready:
+        gates.append(Gate("Owner", "The payment-link map names the 2027 Season Pass", "OWNER",
+                          f"STRIPE_PAYMENT_LINKS isn't in this shell — check the GitHub secret "
+                          f"has {SEASON_2027_LINK_PREFIX}:plink_… (LAUNCH.md, "
+                          f"\"Turning on the 2027 Season Pass\")"))
+    if ready:
+        terms = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ",
+                                           (SITE / "terms.html").read_text(encoding="utf-8")))
+        when = first_renewal_words()
+        gates.append(_gate("Funnel", "The terms describe the 2027 Season Pass before it is sold",
+                           "2027 Season Pass" in terms and when in terms,
+                           f"SEASON_2027_READY is on but terms.html doesn't name the 2027 Season "
+                           f"Pass and its first renewal ({when}): a buyer would tick a box "
+                           f"agreeing to terms that don't describe what they bought"))
+    gates.extend(_renewal_date_gates(SEASON_2027_FIRST_RENEWAL))
+    return gates
+
+
+def _renewal_date_gates(renewal: datetime) -> list[Gate]:
+    """The stated first renewal against the 2028 schedule, the day one exists.
+    Buyers agreed to that date, so nothing moves it: a date that has stopped
+    being true before the opener is an alarm for a person."""
+    from run.solo import CACHE_DIR, season_ends, week_first_kickoff
+    name = "The 2027 Season Pass renews before the 2028 season"
+    try:
+        known = str(renewal.year) in season_ends(CACHE_DIR, live=False)
+        opener = week_first_kickoff(CACHE_DIR, str(renewal.year), 1) if known else None
+    except Exception:  # noqa: BLE001 — no cached schedule: nothing to compare yet
+        return []
+    if opener is None:
+        return []
+    return [_gate("Funnel", name, renewal < opener,
+                  f"the stated renewal {renewal:%Y-%m-%d} falls after the opener "
+                  f"{opener:%Y-%m-%d}: buyers agreed to that date, so a person must decide")]
+
+
+def audit_portal_for_trials(config: dict) -> list[str]:
+    """What a pass sitting in a trial needs from the billing page: "customer
+    modifications to a `trialing` subscription end the free trial and create an
+    invoice for immediate payment" unless told otherwise (Stripe, customer
+    portal limitations) — a $39 charge in 2026 on a buyer who already paid."""
+    update = (config.get("features") or {}).get("subscription_update") or {}
+    if update.get("enabled") and update.get("trial_update_behavior") != "continue_trial":
+        return ["the billing page lets a customer change their plan, which would end a "
+                "2027 Season Pass's trial and charge them at once — turn plan changes off"]
+    return []
+
+
+def check_season_2027_stripe() -> list[Gate]:
+    """What Stripe itself must say before the pass is sold: the ``y:`` link is
+    live and sells the yearly $39 price, the billing page can't end a trial,
+    and this key can read invoices (without which RULE E1 cannot see a refund
+    on a deferred pass and the entitlement read fails). Read only; asked only
+    when a ``y:`` link is in this shell."""
+    from run.checkout import SEASON_2027_PRICE_CENTS, season_2027_links
+    links = sorted(season_2027_links(os.environ.get("STRIPE_PAYMENT_LINKS", "")))
+    key = os.environ.get("STRIPE_API_KEY", "")
+    if not links:
+        return []
+    name = "The 2027 Season Pass link sells the yearly $39 price"
+    if not key:
+        return [Gate("Owner", name, "OWNER", "STRIPE_API_KEY is not in this shell — check the "
+                     "link in the Dashboard (LAUNCH.md, \"Turning on the 2027 Season Pass\")")]
+    gates = []
+    for link in links:
+        status, body = _get_json(f"{STRIPE}/payment_links/{link}/line_items?limit=5", key)
+        data = (body or {}).get("data") if isinstance(body, dict) else None
+        if status != 200 or not data:
+            gates.append(Gate("Owner", name, "SKIP", f"Stripe answered HTTP {status} — this key "
+                              f"can't read payment links; check {link[:12]}… by hand"))
+            continue
+        price = (data[0].get("price") or {}) if isinstance(data[0], dict) else {}
+        interval = (price.get("recurring") or {}).get("interval")
+        gates.append(_gate("Owner", name, interval == "year"
+                           and price.get("unit_amount") == SEASON_2027_PRICE_CENTS,
+                           f"{link[:12]}… sells {price.get('unit_amount')} cents every {interval}",
+                           fail="FAIL"))
+    status, body = _get_json(f"{STRIPE}/billing_portal/configurations?is_default=true&limit=1", key)
+    data = (body or {}).get("data") if isinstance(body, dict) else None
+    if status == 200 and data:
+        problems = audit_portal_for_trials(data[0])
+        gates.append(_gate("Owner", "Stripe's billing page cannot end a 2027 Season Pass's trial",
+                           not problems, "; ".join(problems), fail="FAIL"))
+    else:
+        gates.append(Gate("Owner", "Stripe's billing page cannot end a 2027 Season Pass's trial",
+                          "SKIP", f"Stripe answered HTTP {status}; check that plan changes are "
+                                  f"off in Settings → Billing → Customer portal"))
+    status, _body = _get_json(f"{STRIPE}/invoices?limit=1", key)
+    gates.append(_gate("Owner", "This key can read invoices, which a deferred pass's refund needs",
+                       status == 200, f"Stripe answered HTTP {status} — give the key Invoices: "
+                                      f"Read (LAUNCH.md, \"Turning on the 2027 Season Pass\")"))
+    return gates
+
+
 def log_secret_gate(names: set[str] | None) -> list[Gate]:
     """D4: once checkout is open, no LOG_SECRET is a FAIL, not owner setup —
     every real send refuses without it (welcomes, reports, renewal notices),
@@ -2077,6 +2243,9 @@ def other_email_samples(season: str) -> list[tuple[str, str, str | None]]:
     msg = welcome_message("a@example.com", "league_pass", "abcdef0123", season,
                           purchased_at=bought, seat_link=SAMPLE_SEAT_LINK, duplicate="season")
     out.append(("welcome (League Pass over a season pass)", msg.html, msg.unsubscribe))
+    msg = welcome_message("a@example.com", "season", "abcdef0123", season, purchased_at=bought,
+                          season_2027=True)
+    out.append(("welcome (2027 Season Pass)", msg.html, msg.unsubscribe))
     msg = renewal_message(Renewal("a@example.com", "$39.00 USD", date.today() + timedelta(days=30),
                                   "year", plan="season"))
     out.append(("renewal notice", msg.html, msg.unsubscribe))
@@ -2647,6 +2816,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
         ("compliance text", check_compliance), ("every email's sender and way out",
                                                 check_email_senders),
         ("owner secrets", check_secrets), ("payment-link map", check_link_map),
+        ("2027 Season Pass", check_season_2027),
         ("bounce check key", check_resend_read_key),
         ("economics", check_economics),
         ("security.txt", check_security_txt),
@@ -2657,6 +2827,7 @@ def run_all(fast: bool, offline: bool, progress: Callable[[str], None]) -> list[
                   ("Resend domain", check_resend_domain), ("Stripe public details",
                                                            check_stripe_account),
                   ("Stripe billing page", check_billing_portal),
+                  ("2027 Season Pass in Stripe", check_season_2027_stripe),
                   ("refunds and disputes", check_refund_rates), ("email volume and tax",
                                                                  check_volume),
                   ("cron timing", check_cron_timing), ("fork pull requests", check_fork_approval),

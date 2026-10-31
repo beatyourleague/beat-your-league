@@ -46,7 +46,7 @@ import os
 import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -246,10 +246,71 @@ def _paid_by_channel_line(sessions: list[dict]) -> str:
             + ", ".join(f"{tag} {n}" for tag, n in ranked))
 
 
+def season_2027_end() -> "date | None":
+    """The 2027 season's last game, from the cached schedule; None until there
+    is one, which reads as not delivered."""
+    from run.solo import CACHE_DIR, season_ends
+    try:
+        end = season_ends(CACHE_DIR, live=False).get("2027")
+    except Exception:  # noqa: BLE001 — no cached schedule: still owed
+        return None
+    return date.fromisoformat(end) if end else None
+
+
+def season_2027_summary(sessions: Iterable[Mapping], links: Iterable[str], today: date,
+                        ended: "date | None" = None, lookup=None) -> dict:
+    """The obligation the 2027 Season Pass creates: money in hand for a season
+    not yet played. Counts and dollars only, from paid sessions through the
+    ``y:`` link, read with ``data.invoice.charge`` because a subscription's
+    session has no payment intent to read a refund off. A pass refunded in
+    full or lost to a chargeback owes nothing; a partial refund owes what is
+    left. Everything collected stays deferred until the 2027 season's last
+    game has been played (``ended``)."""
+    from run.checkout import is_paid
+    from run.refs import is_roster_ref
+    from run.subscriptions import DISPUTE_LOST, _charge_refunded, dispute_state
+    links = set(links)
+    held = refunded = other_currency = 0
+    collected = 0
+    for session in sessions:
+        ref = session.get("client_reference_id")
+        if (session.get("payment_link") not in links or session.get("status") != "complete"
+                or not is_paid(session) or not isinstance(ref, str) or not is_roster_ref(ref)):
+            continue
+        invoice = session.get("invoice")
+        charge = invoice.get("charge") if isinstance(invoice, Mapping) else None
+        if _charge_refunded(charge) or dispute_state(charge, lookup) == DISPUTE_LOST:
+            refunded += 1
+            continue
+        held += 1
+        amount = session.get("amount_total")
+        if str(session.get("currency") or "usd").lower() != "usd" or not isinstance(amount, int):
+            other_currency += 1
+            continue
+        collected += amount - int((charge or {}).get("amount_refunded") or 0)
+    delivered = ended is not None and today > ended
+    return {"held": held, "refunded": refunded, "other_currency": other_currency,
+            "collected": collected / 100, "deferred": 0.0 if delivered else collected / 100,
+            "delivered": delivered}
+
+
+def season_2027_line(summary: Mapping) -> str:
+    """The owner's one line on what the 2027 Season Pass has them owing."""
+    if not summary["held"] and not summary["refunded"]:
+        return "  2027 Season Passes: none yet"
+    owed = ("the 2027 season is delivered, nothing deferred" if summary["delivered"] else
+            f"${summary['deferred']:,.2f} collected for 2027 seasons not yet delivered")
+    other = (f" ({summary['other_currency']} paid in another currency, left out)"
+             if summary["other_currency"] else "")
+    return (f"  2027 Season Passes: {summary['held']} held, {summary['refunded']} refunded — "
+            f"{owed}{other}. Outside the pass totals above.")
+
+
 def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = None,
                    link_plans: Mapping[str, str] | None = None,
                    season_label: str = "ever", since: int | None = None,
-                   one_time: bool | None = None) -> list[str]:
+                   one_time: bool | None = None,
+                   season_2027: Iterable[str] = ()) -> list[str]:
     """The payments half. Each read is independent — a key without Refunds
     access still shows subscriptions and checkouts — and a part that cannot
     be read says so instead of printing a zero it never counted.
@@ -283,6 +344,14 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
         # Every session ever, not the week: a channel's worth is its total.
         ("paid signups by channel", "checkout/sessions", [], _paid_by_channel_line),
     )
+    links = frozenset(season_2027)
+    if links:
+        from run.subscriptions import DisputeLookup
+        lookup = DisputeLookup(api_key)
+        parts += (("2027 Season Passes", "checkout/sessions",
+                   [("expand[]", "data.invoice.charge")],
+                   lambda sessions: season_2027_line(season_2027_summary(
+                       sessions, links, now.date(), season_2027_end(), lookup))),)
     lines: list[str] = []
     for what, path, params, summarise in parts:
         try:
@@ -687,7 +756,8 @@ def render(form: dict | None, form_note: str, sends: dict, season: str,
         # By what each row is billed as (LP-D3): a League Pass buyer used to
         # count as "season", which hid how many passes there are.
         names = {"season": "season", "monthly": "monthly",
-                 "pass": "League Pass buyer", "league_pass": "League Pass seat"}
+                 "pass": "League Pass buyer", "league_pass": "League Pass seat",
+                 "season_2027": "2027 Season Pass"}
         plans = Counter(names.get(s.report_plan, s.report_plan) for s in registry)
         setups = Counter(f"{s.scoring}/{s.league_size}" for s in registry)
         lines.append(f"  {len(registry)} on the registry: " + ", ".join(
@@ -848,12 +918,14 @@ def main(argv: list[str] | None = None, cf: Mapping[str, str] | None = None) -> 
     api_key = os.environ.get("STRIPE_API_KEY", "")
     payments = None
     if api_key:
-        from run.checkout import parse_link_plans
+        from run.checkout import parse_link_plans, season_2027_links
         since = _season_start(season)
+        raw_links = os.environ.get("STRIPE_PAYMENT_LINKS", "")
         payments = stripe_summary(
             api_key, now, rows=rows,
-            link_plans=parse_link_plans(os.environ.get("STRIPE_PAYMENT_LINKS", "")),
-            season_label=f"{season} season" if since is not None else "ever", since=since)
+            link_plans=parse_link_plans(raw_links),
+            season_label=f"{season} season" if since is not None else "ever", since=since,
+            season_2027=season_2027_links(raw_links))
     # The same rule for traffic: one line says why it is missing, the exit
     # code is the rest of the page's.
     # Credentials arrive only through ``cf`` (the command line's), never read

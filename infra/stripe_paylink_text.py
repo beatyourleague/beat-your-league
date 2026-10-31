@@ -35,9 +35,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE,  # noqa: E402
-                            TERMS_VERSION)
-from run.checkout import link_map_problems, parse_link_plans  # noqa: E402
+from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_2027_PRICE,  # noqa: E402
+                            SEASON_PRICE, TERMS_VERSION, first_renewal_words)
+from run.checkout import (SEASON_2027_LINK_PREFIX, link_map_problems,  # noqa: E402
+                          parse_link_plans, parse_link_prefixes)
 
 API = "https://api.stripe.com/v1/payment_links"
 
@@ -73,6 +74,16 @@ MESSAGES = {
                     f"nothing more is ever charged. {ONE_TIME_COVERS}, for every manager "
                     f"in your league who claims a seat. {REFUND} — one per league."),
 }
+# The 2027 Season Pass (``y:``) is the one link in the map that renews, so its
+# words name the renewal, its date and its amount. Beside MESSAGES, not in it:
+# that dict is the 2026 plans, and ``plan`` here is a link's wording, not a
+# registry plan. The date is the one run/billing.py writes to Stripe.
+SEASON_2027_PLAN = "season_2027"
+SEASON_2027 = (f"{SEASON_2027_PRICE} USD today covers every weekly report for the rest "
+               f"of the 2026 season and all of the 2027 season. It renews at "
+               f"{SEASON_2027_PRICE} USD on {first_renewal_words()}, and each August after "
+               f"that, until you cancel. We email you 15 to 45 days before each renewal, "
+               f"and {CANCEL}. {REFUND} — one per person.")
 # Stripe's limit on both custom_text messages (Payment Links API).
 STRIPE_TEXT_LIMIT = 1200
 
@@ -93,6 +104,12 @@ TOS_MESSAGES = {
                     f"League Pass is one payment that does not renew, and I am 18 "
                     f"or older."),
 }
+# The box the law wants ticked for a renewal: the amount, the date, the cycle.
+SEASON_2027_TOS = (f"I agree to the [Terms]({TERMS_URL}), including that this pass "
+                   f"renews at {SEASON_2027_PRICE} USD on {first_renewal_words()} and "
+                   f"each August after that until I cancel, and I am 18 or older.")
+SUBMIT_TEXT = {**MESSAGES, SEASON_2027_PLAN: SEASON_2027}
+TOS_TEXT = {**TOS_MESSAGES, SEASON_2027_PLAN: SEASON_2027_TOS}
 
 
 def fields(plan: str) -> dict[str, str]:
@@ -101,9 +118,9 @@ def fields(plan: str) -> dict[str, str]:
     return {**({"customer_creation": "always"} if one_time else {}),
             # A one-time payment makes no Customer unless told to, and the
             # intake keeps the consent record and roster on the Customer.
-            "custom_text[submit][message]": MESSAGES[plan],
+            "custom_text[submit][message]": SUBMIT_TEXT[plan],
             "consent_collection[terms_of_service]": "required",
-            "custom_text[terms_of_service_acceptance][message]": TOS_MESSAGES[plan]}
+            "custom_text[terms_of_service_acceptance][message]": TOS_TEXT[plan]}
 
 
 def _call(url: str, key: str, form: dict | None = None) -> dict:
@@ -135,7 +152,11 @@ def targets(raw: str) -> list[tuple[str, str]]:
     (final review OPS-1). Refuses (SystemExit, before any key is asked for)
     unless the map is the 2026 shape (``SHAPE``; ``m:`` optional, for a
     monthly plan). The check is run/checkout.link_map_problems, the same one
-    the launch check reads."""
+    the launch check reads.
+
+    A ``y:`` link is the season PLAN but never the season WORDS: read off the
+    plan alone, this script would write "One payment. Nothing renews" onto
+    the one link that renews, and over the renewal text a buyer must see."""
     problems = link_map_problems(raw)
     if problems:
         raise SystemExit(
@@ -143,8 +164,9 @@ def targets(raw: str) -> list[tuple[str, str]]:
             + "\n  - ".join(problems)
             + f"\nExpected {SHAPE} (the $29, $19 and $69 links; add m:plink_… only "
               f"for a monthly plan). Nothing was changed.")
-    return [(link, plan) for link, plan in parse_link_plans(raw).items()
-            if plan in MESSAGES]
+    prefixes = parse_link_prefixes(raw)
+    return [(link, SEASON_2027_PLAN if prefixes.get(link) == SEASON_2027_LINK_PREFIX else plan)
+            for link, plan in parse_link_plans(raw).items() if plan in MESSAGES]
 
 
 def main() -> int:
@@ -192,7 +214,7 @@ def main() -> int:
         got = (custom.get("submit") or {}).get("message")
         tos = (custom.get("terms_of_service_acceptance") or {}).get("message")
         consent = (back.get("consent_collection") or {}).get("terms_of_service")
-        ok = got == MESSAGES[plan] and tos == TOS_MESSAGES[plan] and consent == "required"
+        ok = got == SUBMIT_TEXT[plan] and tos == TOS_TEXT[plan] and consent == "required"
         print(f"  [{'ok ' if ok else 'FAIL'}] {plan:12} {link}")
         print(f"         {(got or 'MISSING')[:96]}")
         if not ok:
