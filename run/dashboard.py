@@ -312,10 +312,12 @@ def collect_stripe(ctx: Context) -> Source:
     from run.checkout import parse_link_plans
     from run.intake import split_via
     from run.refs import is_roster_ref
-    from run.subscriptions import DisputeLookup, _charge_refunded, dispute_state
+    from run.subscriptions import (DisputeLookup, SubscriptionError, _charge_refunded,
+                                   dispute_state)
     plans = parse_link_plans(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
     raw = stats._stripe_list("checkout/sessions",
-                             [("expand[]", "data.payment_intent.latest_charge")], key)
+                             [("expand[]", "data.payment_intent.latest_charge"),
+                              ("expand[]", "data.invoice.charge")], key)
     lookup = DisputeLookup(key)
     paid_ids = {id(s) for s in stats._paid_pass_sessions(raw, None)}
     sessions = []
@@ -335,6 +337,7 @@ def collect_stripe(ctx: Context) -> Source:
             entry.update({
                 "pass": stats._pass_type(s, plans),
                 "amount": s["amount_total"] / 100 if usd else None,
+                "one_time": s.get("mode") == "payment",
                 "refunded": int(charge.get("amount_refunded") or 0) / 100,
                 "full_refund": _charge_refunded(charge),
                 "dispute": dispute_state(charge, lookup),
@@ -344,7 +347,14 @@ def collect_stripe(ctx: Context) -> Source:
                            or s.get("customer_email")),
             })
         sessions.append(entry)
-    data = {"sessions": sessions, "link_map": bool(plans),
+    # Monthly charges after the first have no checkout session. A key that
+    # can't read invoices costs this line, never the rest of the section.
+    try:
+        renewals = [{"created": i.get("created"), "amount": i["amount_paid"] / 100}
+                    for i in stats.renewals(stats._stripe_list("invoices", [("status", "paid")], key))]
+    except SubscriptionError:
+        renewals = []
+    data = {"sessions": sessions, "renewals": renewals, "link_map": bool(plans),
             "dispute_errors": len(lookup.errors)}
     from run.checkout import season_2027_links
     links = season_2027_links(ctx.env.get("STRIPE_PAYMENT_LINKS", ""))
@@ -768,6 +778,9 @@ def money_metrics(src: Source, period: str, now: datetime) -> dict | None:
     if not src.ok:
         return None
     from run.economics import stripe_fee
+
+    def fee(s: Mapping) -> float:
+        return stripe_fee(s["amount"], one_time=s.get("one_time", True))
     days = period_days(period)
     sessions = src.data["sessions"]
     paid_all = [s for s in sessions if s.get("paid")]
@@ -776,29 +789,34 @@ def money_metrics(src: Source, period: str, now: datetime) -> dict | None:
         return [s for s in paid_all if _in(_ts(s.get("created")), now, days, offset)]
     paid, prev = window(0), (window(1) if days else None)
 
-    def money(group: list[dict]) -> dict:
+    def renewed(offset: int) -> list[dict]:
+        return [r for r in src.data.get("renewals", [])
+                if _in(_ts(r.get("created")), now, days, offset)]
+
+    def money(group: list[dict], later: list[dict]) -> dict:
         usd = [s for s in group if isinstance(s.get("amount"), (int, float))]
-        gross = sum(s["amount"] for s in usd)
+        gross = sum(s["amount"] for s in usd) + sum(r["amount"] for r in later)
         refunded = sum(s.get("refunded") or 0 for s in usd)
-        fees = sum(stripe_fee(s["amount"], one_time=True) for s in usd)
+        fees = sum(fee(s) for s in usd) + sum(stripe_fee(r["amount"]) for r in later)
         full = sum(bool(s.get("full_refund")) for s in group)
         return {"count": len(group), "gross": gross, "refunded": refunded, "fees": fees,
                 "net": gross - refunded - fees, "full_refunds": full,
                 "refund_rate": full / len(group) if group else None,
                 "other_currency": len(group) - len(usd)}
-    cur = money(paid)
+    cur = money(paid, renewed(0))
     out = dict(cur)
+    out["renewals"] = len(renewed(0))
     out["types"] = Counter(s.get("pass") or "unknown" for s in paid)
     out["by_channel"] = Counter(s.get("via") or stats.NO_VIA for s in paid)
     net_by_via: Counter = Counter()
     for s in paid:
         if isinstance(s.get("amount"), (int, float)):
             net_by_via[s.get("via") or stats.NO_VIA] += (s["amount"] - (s.get("refunded") or 0)
-                                                         - stripe_fee(s["amount"], one_time=True))
+                                                         - fee(s))
     out["net_by_via"] = net_by_via
     out["disputes"] = [s for s in paid_all if s.get("dispute")]
     if prev is not None:
-        p = money(prev)
+        p = money(prev, renewed(1))
         out["count_delta"] = delta(cur["count"], p["count"])
         out["net_delta"] = delta(cur["net"], p["net"])
         out["refund_delta"] = (None if cur["refund_rate"] is None or p["refund_rate"] is None
@@ -817,7 +835,7 @@ def money_metrics(src: Source, period: str, now: datetime) -> dict | None:
         stamp = _ts(s.get("created"))
         if stamp and isinstance(s.get("amount"), (int, float)):
             net_day[stamp.date().isoformat()] += (s["amount"] - (s.get("refunded") or 0)
-                                                  - stripe_fee(s["amount"], one_time=True))
+                                                  - fee(s))
     out["spark_net"] = [round(net_day.get(d, 0), 2) for d in spark_days]
     out["chart_days"] = day_range(now, span)
     out["chart"] = [by_day.get(d, 0) for d in out["chart_days"]]
@@ -948,12 +966,10 @@ def post_rows(traffic: dict | None, money: dict | None, books: Source,
     return rows
 
 
-NET_PER_PASS_PRICE = 29.00      # the pass a break-even is counted in
-
-
-def net_per_pass() -> float:
-    from run.economics import stripe_fee
-    return NET_PER_PASS_PRICE - stripe_fee(NET_PER_PASS_PRICE, one_time=True)
+def net_per_charge() -> float:
+    """What a break-even is counted in: one monthly charge after Stripe."""
+    from run.economics import MONTHLY, stripe_fee
+    return MONTHLY - stripe_fee(MONTHLY)
 
 
 def profit_metrics(books: Source, money: dict | None, period: str, now: datetime) -> dict | None:
@@ -1444,10 +1460,10 @@ def build_insights(sources: Mapping[str, Source], m: Metrics, now: datetime,
     pr = m.profit
     if pr is not None and pr["profit"] is not None and m.period == "all" and pr["costs"]:
         if pr["profit"] < 0:
-            need = math.ceil(-pr["profit"] / net_per_pass())
+            need = math.ceil(-pr["profit"] / net_per_charge())
             out.append(Insight("warn" if money and money["count"] >= MIN_REFUND_SAMPLE else "info",
                                f"Still {money_fmt(-pr['profit'], True)} short of covering costs: "
-                               f"{need} more $29 pass{'es' if need != 1 else ''} breaks even.",
+                               f"{need} more monthly charge{'s' if need != 1 else ''} breaks even.",
                                "Hold off new costs until sales cover the ones you have.",
                                "Stripe net revenue and data/costs.csv"))
         else:
@@ -2110,7 +2126,7 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
     all_m = M["all"]
     costs_all = spent(b.costs, None, today)
     net_all = all_m.money["net"] if all_m.money is not None else None
-    per_pass = net_per_pass()
+    per_pass = net_per_charge()
     if net_all is None:
         be = (f'<p class="be-line">Costs so far: <b>{money_fmt(costs_all, True)}</b>. Connect Stripe to '
               f'see how far revenue has come against them.</p>')
@@ -2119,7 +2135,7 @@ def profit_block(S: Mapping[str, Source], M: Mapping[str, Metrics], now: datetim
         fill = 100 if costs_all <= 0 else min(100, max(0, net_all / costs_all * 100))
         if gap > 0:
             need = math.ceil(gap / per_pass)
-            line = (f'<b>{need} more $29 pass{"es" if need != 1 else ""}</b> to break even '
+            line = (f'<b>{need} more monthly charge{"s" if need != 1 else ""}</b> to break even '
                     f'({money_fmt(gap, True)} to go at {money_fmt(per_pass, True)} each after Stripe).')
         else:
             line = f'<b>Broken even</b>, {money_fmt(-gap, True)} ahead of every cost so far.'

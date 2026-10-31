@@ -1,10 +1,11 @@
 # LAUNCH.md — opening mid-season
 
 Every owner action left before a stranger's payment becomes a Tuesday email, in order, with
-the exact strings. The code is done and tested; nothing here is engineering. Updated Oct 24
-2026, in Week 7 of 18: 2026 sells **one-time passes** ($29 Rest-of-Season, $19 Playoff, $69
-League Pass — one payment each, nothing renews), and every step below is written for them.
-The subscription steps that come back in 2027 are kept under their own "2027" headings.
+the exact strings. The code is done and tested; nothing here is engineering. Updated Oct 31
+2026: 2026 sells **monthly plans** ($14.99 Monthly, $34.99 League Pass for the whole league),
+each ending by itself so that nothing is charged after Week 17's report goes out, and every
+step below is written for them. The yearly steps that come back in 2027 keep their own
+"2027" headings.
 
 ## This weekend, in order
 
@@ -25,10 +26,10 @@ section with the exact strings and clicks.
 4. **The page counter** (~10 min) — [step 5b](#5b-the-page-counter-10-min-right-after-step-5):
    the `COUNTS` binding, Workers Logs and the injected scripts off, a read token in `.env`.
    Tell me "counter on".
-5. **Payment links** (~25 min) — [step 1](#1-fresh-payment-links-25-min): switch the three old
-   links off; make the $29, $19 and $69 one-payment links; set the text above Stripe's Pay
-   button; **then switch the $19 link off until Wed Nov 25**; public details, the
-   card-statement name and branding; delete the setup key; add the USD payout account.
+5. **Payment links** (~40 min) — [step 1](#1-fresh-payment-links-25-min): switch the three old
+   links off; make the $14.99 and $34.99 monthly links; set the text above Stripe's Pay
+   button; check the billing page in test mode; public details, the card-statement name and
+   branding; delete the setup key; add the USD payout account.
 6. **Resend** (~20 min, plus up to an hour for DNS) — [step 2](#2-resend--the-sender-20-min):
    the domain, the sending key, the optional bounce key. **Start renting the mailbox today**
    (step 2.6): reports go out without it, but the waitlist email can't, and a mailbox can take
@@ -44,25 +45,20 @@ section with the exact strings and clicks.
    `gh` logged in and `RESEND_API_KEY` and the `owner-stats` key in the shell
    ([Where things stand](#where-things-stand)).
 10. **Your own purchase** (~1 hour, Saturday or Sunday) —
-    [step 4](#4-the-proving-run-1-hour): the $29 pass on your own card, every email read in
+    [step 4](#4-the-proving-run-1-hour): the Monthly plan on your own card, every email read in
     your mail apps.
-11. **Opening** (~20 min, Sun Oct 25 or Mon Oct 26) — [step 6](#6-opening-morning): I switch
+11. **Opening** (~20 min, the day after your purchase checks out) — [step 6](#6-opening-morning): I switch
     checkout fully on; the waitlist gets its one email if the sender address exists and the
     count fits the day.
 12. **Before the first launch post** (~30 min) —
     [section 11, A1](#a1-before-the-first-launch-post): the site moves to Cloudflare Pages,
     and `www` redirects to the bare domain.
 
-**Later, on a date:** **Wed Nov 25, from 8:00 PM ET** (Week 12's first kickoff), switch the
-$19 link back on and send me its URL ([section 8](#8-every-week-from-here), "The Playoff
-Pass").
-
-**Can wait — none of these blocks the Week 8 send:** the Customer-portal settings and the
-monthly test-mode check (both 2027 only); Gmail's "Send mail as" (step 2.5); a CAA record
+**Can wait — none of these blocks a send:** Gmail's "Send mail as" (step 2.5); a CAA record
 (step 0); Do Not Track on your own browsers (step 5b.8); Google Search Console (step 7.1); the
 decisions in section 10; and making the repo private (section 11, A2). **One choice you make
-now:** section 12's lawyer questions come before the first $69 League Pass sale. Either send
-the $69 link only if you accept section 12's risk for now, or hold it back (Claude leaves
+now:** section 12's lawyer questions come before the first League Pass sale. Either send the
+$34.99 link only if you accept section 12's risk for now, or hold it back (Claude leaves
 `STRIPE_LINK_PASS` empty, so the League Pass page says it opens soon) until the consult.
 
 ---
@@ -96,10 +92,9 @@ Done:
 - `beatyourleague.com` on GitHub Pages (moving: section 11);
   `hello@beatyourleague.com` forwards to your inbox.
 - Terms (Ontario law) and privacy pages.
-- Three Stripe products from August — $39 season pass, $14.99 monthly, $99 League Pass. They
-  are 2027's; 2026's one-time prices are step 1.
-- The Stripe customer portal is on; its login link is in the terms. It matters again in 2027:
-  a one-time pass has nothing in it to cancel.
+- Three Stripe products from August — $39 season pass, $14.99 monthly, $99 League Pass. The
+  $14.99 price is what 2026 sells; the League Pass needs a new $34.99 monthly price (step 1).
+- The Stripe customer portal is on; its login link is in the terms. Buyers cancel there.
 - The restricted key `github-actions-crons` exists, made Sep 29 with three permissions. Step 3
   adds the three it now needs.
 
@@ -196,13 +191,9 @@ still open one. Make three new links and switch the old ones off.
 
 1. https://dashboard.stripe.com/payment-links in **live** mode. Open each of the three old
    links (made Aug 27) → **Deactivate**.
-2. **+ New** — 2026 sells **one-time passes** (decision Oct 18 2026), so make three links,
-   each a **one-time price** (Product → Add price → **One-off**, not Recurring): the
-   **$29 Rest-of-Season Pass**, the **$69 League Pass (rest of season)**, and the **$19
-   Playoff Pass**. The $19 link is made now, with the other two, and then switched off
-   (item 6) until Week 12's first kickoff, **Wed Nov 25 2026, 8:00 PM ET**: from then on a
-   new buyer's first weekly report is Week 13, and the join page offers it in place of the
-   $29 pass. No monthly link this season. Each set like this:
+2. **+ New** — 2026 sells **monthly plans** (decision Oct 31 2026), so make two links, each
+   on a **Recurring, Monthly** price: **Monthly, $14.99** (August's price is fine) and
+   **League Pass, $34.99** (a new price on the League Pass product). Each set like this:
 
    | Setting | Should be | Why |
    |---|---|---|
@@ -214,7 +205,6 @@ still open one. Make three new links and switch the old ones off.
    | Let customers adjust quantity | Off | A quantity of 2 charges twice for one report |
    | Include a free trial | Off | The refund window is the trial |
    | Limit the number of payments | Off | |
-   | Create customers (one-off payments) | Always | The intake keeps the consent record and roster on the Customer; `infra/stripe_paylink_text.py` sets it too |
    | Promotion codes | Off | The founding rate is the discount |
    | After payment | Redirect to `https://beatyourleague.com/thanks.html` — **League Pass link only:** `https://beatyourleague.com/thanks.html?plan=pass` | |
 
@@ -225,14 +215,13 @@ still open one. Make three new links and switch the old ones off.
      amount and refund on our pages is in USD; a buyer shown euros or pounds would be charged
      an amount no disclosure names, and renew at whatever the rate is next year.
 
-3. Copy each new link's URL and its `plink_` id. **Send me the $29 and $69 URLs** (not
-   secret). Keep the $19 one with the ids for now: it goes on the join page on Nov 25.
+3. Copy each new link's URL and its `plink_` id. **Send me both URLs** (not secret).
 4. **Settings → Business → Public details:** Terms of service URL
    `https://beatyourleague.com/terms.html`, Privacy policy URL
    `https://beatyourleague.com/privacy.html`. Public business name **Beat Your League**,
    support email **hello@beatyourleague.com**, **no phone number and no personal address** —
-   these print on receipts, so they decide whether you stay anonymous. (Before the first $69
-   sale, section 12's Ontario question may change that for the League Pass.)
+   these print on receipts, so they decide whether you stay anonymous. (Before the first League
+   Pass sale, section 12's Ontario question may change that for the League Pass.)
 
    **The card-statement name (2 min):** same page → **Statement descriptor**
    `BEATYOURLEAGUE.COM`, **shortened descriptor** `BYL`. It is what a buyer sees on their card
@@ -242,39 +231,37 @@ still open one. Make three new links and switch the old ones off.
    fantasy and forecasting only *with a prize*; terms §2 rules prizes out, and this sentence
    says so to whoever reviews the account.)
 
-   **Settings → Billing → Customer portal (2027; leave it as it is):** **Cancel
+   **Settings → Billing → Customer portal (this is where buyers cancel):** **Cancel
    subscriptions** allowed, **Cancellation mode: At end of billing period**, proration
    **none**, **Cancellation reason: Off** (the thanks page promises we don't ask why), and no
    retention coupon. `make launch-check` reads these back once `STRIPE_API_KEY` can read the
-   portal settings. A 2026 one-time buyer has nothing in it; their way out is a stop request
-   (section 8).
+   portal settings.
 
    **Settings → Business → Branding:** icon `site/brand/icon.png`, logo
    `site/brand/logo.png`, brand color `#101E33`, accent `#B3402F` (not the gold: unreadable
    on white).
-5. **The one-payment text above Stripe's Pay button** (API only). Replace the three `plink_…`
-   placeholders with the NEW ids — `s:` the $29 pass, `o:` the $19 Playoff Pass, `p:` the
-   $69 League Pass, the same map as step 3's `STRIPE_PAYMENT_LINKS` — then paste the whole
+5. **The billing text above Stripe's Pay button** (API only). Replace the two `plink_…`
+   placeholders with the NEW ids — `m:` the Monthly plan, `p:` the League Pass, the same map
+   as step 3's `STRIPE_PAYMENT_LINKS` — then paste the whole
    line in Terminal from the repo folder:
    ```bash
-   STRIPE_PAYMENT_LINKS='s:plink_NEW_29,o:plink_NEW_19,p:plink_NEW_69' .venv/bin/python infra/stripe_paylink_text.py
+   STRIPE_PAYMENT_LINKS='m:plink_NEW_MONTHLY,p:plink_NEW_LEAGUE' .venv/bin/python infra/stripe_paylink_text.py
    ```
    At the prompt, paste the `setup-payment-link-text` key (it starts `rk_live_`; nothing
    shows as you paste — normal; never your Mac password).
-   - Success: an `[ok ]` line for each of the three links, then a line saying they are all
+   - Success: an `[ok ]` line for each of the two links, then a line saying they are all
      set and verified.
    - `You cannot use custom_text with Managed Payments`: that link still has it on.
    - `HTTP 401`: the key was cut off. `HTTP 403`: it lacks Payment Links **Write**.
    - No key to reveal? Make a restricted key with Payment Links **Write**, everything else None.
-6. **Switch the $19 link off until Nov 25:** open it → **Deactivate**. Its text is set; a
-   switched-off link takes no payment, and the URL is safe to keep. On Wed Nov 25, after
-   8:00 PM ET, section 8's "The Playoff Pass" switches it back on.
+6. **Check the billing page in test mode** (15 min): [the monthly billing page](#the-monthly-billing-page-in-test-mode-15-min).
+   Nothing monthly has ever run on real Stripe, so this comes before your own purchase.
 7. **Delete the `setup-payment-link-text` key.** A key that edits payment links can change
    what buyers pay.
 8. **Payouts in US dollars (5 min; decided Oct 24).** Stripe → **Settings → Payouts** → add a
    **USD bank account** (a US-dollar account at your Canadian bank works; check its fees) and
    make it the payout account for USD. Every sale is in USD, so this keeps the 2% conversion
-   ($0.58 of each $29 pass, kept by Stripe even on a refund). Then run the launch check with
+   ($0.30 of each $14.99 charge, kept by Stripe even on a refund). Then run the launch check with
    `STRIPE_PAYOUT_CURRENCY=usd` in your shell so it stops asking.
 
 **Tell me** what Terminal printed (it never shows the key).
@@ -320,15 +307,15 @@ $20/month plan the week a Tuesday nears 85 (PLAN §2), then:
    The key's value doesn't change, so nothing else does. It was made Sep 29 with three
    permissions; without these three the hourly run goes red with **STRIPE KEY IS MISSING A
    PERMISSION**, and Tuesday's send couldn't read who has paid and would mail nobody. When you're done it holds exactly:
-   Checkout Sessions **Read**, Payment Intents **Read** and Charges **Read** (a one-time pass
-   is entitled while its payment isn't refunded), Disputes **Read** (a lost chargeback ends a
+   Checkout Sessions **Read**, Payment Intents **Read** and Charges **Read** (a refund is
+   read off the charge), Disputes **Read** (a lost chargeback ends a
    purchase like a refund; without it a disputed payment shows as "status unknown" and the
    run goes red until you look), Customers **Write**, Subscriptions **Write**, everything
-   else None. Subscriptions must be Write: `run/billing.py` ends each monthly subscription
-   when its final paid period ends (the month the season's last weekly report falls in).
+   else None. Subscriptions must be Write: `run/billing.py` ends each monthly plan so that
+   nothing is charged after Week 17's report, and ends a refunded plan so it can't bill again.
 2. **Make your own read-only key.** Same page → **Create restricted key** → name
-   `owner-stats` → **Read** on Checkout Sessions, Payment Intents, Charges, Refunds and
-   Subscriptions, everything else None → **Create**. Keep it in your password manager. It is
+   `owner-stats` → **Read** on Checkout Sessions, Payment Intents, Charges, Refunds, Invoices
+   and Subscriptions, everything else None → **Create**. Keep it in your password manager. It is
    only ever pasted into your own Terminal (`read -s STRIPE_API_KEY && export STRIPE_API_KEY`)
    for `make launch-check` and `make stats` — never a GitHub secret (the cron key can't read
    refunds; this one can't change anything). The launch check's public-details and
@@ -341,7 +328,7 @@ secret**, once per row, names exactly as written:
 | Name | Value |
 |---|---|
 | `STRIPE_API_KEY` | the `github-actions-crons` key (Reveal live key) |
-| `STRIPE_PAYMENT_LINKS` | `s:<$29 plink id>,o:<$19 Playoff Pass plink id>,p:<$69 League Pass plink id>` — `o:` marks the Playoff Pass, whose buyer is served exactly like a $29 buyer. Include it now, while its link is switched off |
+| `STRIPE_PAYMENT_LINKS` | `m:<Monthly plink id>,p:<League Pass plink id>` |
 | `EMAIL_PROVIDER` | `resend` |
 | `EMAIL_FROM` | `Beat Your League <reports@beatyourleague.com>` |
 | `EMAIL_REPLY_TO` | `hello@beatyourleague.com` (optional: unset means hello@ anyway) |
@@ -377,15 +364,15 @@ join page and switch the pricing buttons on; it's live on the next push.
 Nobody else's money moves until you've watched your own go all the way through.
 
 1. **Saturday Oct 24** (or any day; when matters only for which emails come — below), buy the
-   **$29 Rest-of-Season Pass** at https://beatyourleague.com/join/ with your own email, a real
-   card and your real roster. Stripe's page must show one payment of $29, the terms box, and
-   no "renews" or "subscription" anywhere.
+   **Monthly plan** at https://beatyourleague.com/join/ with your own email, a real card and
+   your real roster. Stripe's page must show $14.99 a month, the terms box, and the text
+   saying billing stops on its own.
 2. **Actions → daily-intake → Run workflow**, or wait up to an hour. It should go green, and
    its log should say the sealed registry was saved (the "Seal the registry" step).
 3. **The emails:**
-   - **The welcome:** $29, **one payment, nothing renews**, refunds until your first weekly
-     report's week kicks off, and how to stop (reply "stop" to hello@; there is nothing to
-     cancel).
+   - **The welcome:** $14.99 a month, **billing stops on its own after your title game**,
+     refunds until your first weekly report's week kicks off, and how to cancel (the billing
+     page).
    - **Bought Tuesday to Thursday before kickoff:** this week's report, too.
      **Bought Thursday night to Monday (a Saturday purchase):** the roster report that day,
      and the week's report the next Tuesday morning.
@@ -399,17 +386,16 @@ Nobody else's money moves until you've watched your own go all the way through.
    green in Actions. The one case nothing has rehearsed is a Tuesday-to-Thursday buyer's
    same-day weekly report; if one fails, the hourly run retries it.
 6. **Keep the pass** (section 10, "Keep your own pass"). If you refund it instead, it's the
-   refund steps in section 8, and Stripe keeps its fee: about $1.87 on a $29 pass from a
-   Canadian account, or about $1.29 with a USD payout account.
+   refund steps in section 8, and Stripe keeps its fee: about $1.18 on a $14.99 charge from a
+   Canadian account, or about $0.88 with a USD payout account.
 
-### 2027 only: the monthly billing page, in test mode (15 min)
+### The monthly billing page, in test mode (15 min)
 
-Not for 2026 — nothing monthly is sold. Before monthly comes back: in Stripe **test** mode,
-buy the monthly link with a test card (4242 4242 4242 4242), then open the test billing
-page. It must show **Cancel plan** — not "Cancels on…" and Reactivate. Then, with the test
-key in your shell, `.venv/bin/python -m run.billing --today 2027-12-20` (dry): it lists the
-subscription as in its final paid period only when that period ends after the season's last
-weekly report. Press Cancel on the test page and confirm "no further charges".
+In Stripe **test** mode, make a $14.99 monthly link and buy it with a test card (4242 4242 4242
+4242), then open the test billing page. It must show **Cancel plan** — not "Cancels on…" and
+Reactivate. Then, with the test key in your shell, `.venv/bin/python -m run.billing --today
+2026-12-20` (dry): it lists the subscription as in its final paid period only when that period
+ends after Week 17's report. Press Cancel on the test page and confirm "no further charges".
 
 ## 5. The form Worker (~25 min) — do this first
 
@@ -682,23 +668,13 @@ would wait for a score that isn't coming, and so would first reports and free re
    hand run). The report says the game is postponed and counts it as a bye for both teams.
 3. **Delete the variable** after the next Tuesday's run is green.
 
-**A red hourly run with `PLAYOFF-EARLY`** (it names a Checkout Session): somebody paid through
-the $19 link before Week 12's first kickoff, so they bought every report through Week 18 for
-$10 less than the $29 pass. They are served like any pass holder; the run stays red until you
-decide.
-1. Stripe → **Payment links** → the $19 link. Before Wed Nov 25, 8:00 PM ET it must be
-   switched off: if it's on, **Deactivate** it.
-2. Decide: keep serving them (*recommended* — keeping the link closed was ours to do), or
-   refund in full and tell them why (the next hourly run stops their reports).
-3. Actions → **daily-intake** → **Run workflow** → tick **Forget the payments already dealt
-   with** → Run. It clears every remembered alarm at once, so tick it only when each one the
-   log lists is dealt with.
-
 **A red hourly run with `PAID-UNATTRIBUTED`:** a payment the run can't tie to a roster or a
 plan — most often a payment link missing from `STRIPE_PAYMENT_LINKS` (step 3), or a payment
 made without the join page. Find it in Stripe (the session id is in the log) and tell me: a
 missing link is fixed in the secret and I make sure the buyer is served; anything else is a
-full refund and an apology. Then clear it the same way (item 3 above).
+full refund and an apology. Then Actions → **daily-intake** → **Run workflow** → tick **Forget
+the payments already dealt with** → Run. It clears every remembered alarm at once, so tick it
+only when each one the log lists is dealt with.
 
 **Rebuilding the live sample by hand:** `make live-sample` before the week's first kickoff
 records its odds on the public record — commit the ledger file with the page.
@@ -725,11 +701,12 @@ It needs `UPDATE_SECRET`, `FORM_ENDPOINT` and `FORM_API_KEY` in the shell (the W
 a post from outside the site only with the read key). `ARGS=--dry-run` resolves the names and
 posts nothing. The next hourly intake applies it.
 
-**When someone asks to stop** (mail to hello@ saying stop or unsubscribe; every 2026 report's
-unsubscribe button arrives with the subject "stop"). Everyone in 2026 — a pass buyer, a
-League Pass seat, a free-report reader — stops the same way, because a one-time pass has no
-billing to cancel: run this (with `LOG_SECRET` in your shell — the list holds keyed codes),
-then commit and push within 10 business days, as terms §4 promises:
+**When someone asks to stop** (mail to hello@ saying stop or unsubscribe). A buyer on a plan
+cancels from their own billing page, and a report's unsubscribe link goes there; if one writes
+to you instead, cancel it for them: Stripe → **Subscriptions** → theirs → **Cancel subscription →
+At the end of the period**. A League Pass seat or a free-report reader has no billing, so run
+this (with `LOG_SECRET` in your shell — the list holds keyed codes), then commit and push
+within 10 business days, as terms §4 promises:
 ```bash
 .venv/bin/python -m run.suppress their@example.com
 ```
@@ -816,7 +793,7 @@ costs, and shows which post sold once each post has its own link. All of it is k
 small files in the `data/` folder, which is never committed:
 - `make cost ITEM="Domain" AMOUNT=12 REPEATS=yearly` records a cost (`once`, `monthly` or
   `yearly`; add `DATE=2026-08-01` for a past one). A recurring cost counts on each day it's
-  charged. The Money section shows profit, how many $29 passes until you break even, what's due
+  charged. The Money section shows profit, how many monthly charges until you break even, what's due
   in the next 30 days, and, if you log your time with `make hours H=1.5`, what you earn per hour.
 - `make link TAG=reddit-oct28 WHERE="r/fantasyfootball"` prints the link to use in a post (add
   `PAGE=byes/` to send people to another page) and logs it. Start the tag with the channel:
@@ -833,17 +810,6 @@ stats and deletes the copy, so no subscriber list stays on your Mac. It needs `g
 and the step 3 `CACHE_KEY` in the shell (`read -s CACHE_KEY && export CACHE_KEY`) beside
 everything `make stats` needs.
 
-**The Playoff Pass, from Wed Nov 25.** Not before **8:00 PM ET** that evening (Week 12's
-first kickoff; from then on a new buyer's first weekly report is Week 13):
-1. Stripe → **Payment links** → the $19 link → **Activate**.
-2. Send me its URL. I put it on the join page and switch on the homepage's Playoff Pass card
-   in the same push (the launch check fails if the two disagree). From then on a buyer whose
-   first report would be Week 13 or later is offered the $19 pass in place of the $29 one.
-
-Until then the link stays switched off and off the pages: its address in the page source
-would sell the whole rest of the season for $19. A purchase through it before that kickoff
-turns the hourly run red with `PLAYOFF-EARLY` (above).
-
 **The season's end.** Week 17's report says it's championship week on the big platforms'
 defaults and a Week 18 report follows; Week 18's says it's the last and what the plan does
 next. After the last game every weekly job exits quietly until the next schedule is out.
@@ -859,11 +825,11 @@ next. After the last game every weekly job exits quietly until the next schedule
 2. **Their first refund?** Search their email under **Customers**. One per person (one per
    league for a League Pass).
 3. **Issue it:** **Payments** → their payment → **Refund** → the full amount. That is all: a
-   one-time pass is entitled only while its payment is not refunded in full, so the next
-   hourly run drops them and the reports stop by themselves (a League Pass refund ends its
-   seats the same way). Reply saying it's refunded and that cards take 5–10 days to show it.
-   Stripe keeps its fee (about $1.87 on a $29 pass). *2027:* a subscription is cancelled
-   (**Immediately**) and every paid invoice on it refunded. A **2027 Season Pass**, if that
+   plan is entitled only while its payment is not refunded in full, so the next hourly run
+   drops them and the reports stop by themselves (a League Pass refund ends its seats the
+   same way), and the next daily run ends the plan so Stripe can't bill it again. Reply
+   saying it's refunded and that cards take 5–10 days to show it. Stripe keeps its fee (about
+   $1.18 on a $14.99 charge). A **2027 Season Pass**, if that
    offer is on, is a subscription, so it takes both clicks: **Refund**, then **Subscriptions**
    → theirs → **Cancel subscription → Immediately**. The refund alone stops the reports by
    itself, but the subscription would still bill in August 2028; the daily run goes red with
@@ -904,7 +870,7 @@ Answer before Stripe's deadline (about a week; unanswered, it is lost):
      Checkout Session's "terms of service accepted".
    - **What they were told before paying:** the terms page as of that version
      (`https://beatyourleague.com/terms.html`), and the join page's line beside the price
-     (one payment, nothing renews, the refund window).
+     (the monthly price, when billing stops, the refund window).
    - **What was delivered, and when:** their send-log lines, the welcome's included — each
      key carries the week and the purchase's code (never an address), with the time it was
      sent and Resend's message id; Resend → **Emails** → search the id shows it delivered.
@@ -958,8 +924,8 @@ in August 2027. *Recommend:* one unticked box — "Email me when the 2027 season
 free-report form, the waitlist, the last report and your cancel replies, stored as its own
 form row and held to the waitlist's one-email rule. Build it before the last report (Jan 5).
 
-**2027: the renewal date, and next season's roster.** Moot for 2026 — a one-time pass renews
-nothing. For the subscriptions 2027 brings back: a pass renews on its purchase anniversary, so
+**2027: the renewal date, and next season's roster.** Moot for 2026 — a monthly plan stops
+with the season. For the subscriptions 2027 brings back: a pass renews on its purchase anniversary, so
 an October buyer would renew mid-season still holding the old roster (rosters don't roll to a
 new season yet). *Recommend:* anchor every 2027 pass to one late-August renewal date, stated
 on the card and in the terms, and build the roster roll — hold reports until a post-draft
@@ -968,7 +934,7 @@ roster is confirmed — before July 2027.
 **The founding price, and how 2026 buyers hear about 2027.** The site promises a 2026 buyer
 "your 2027 season pass is $39", but nothing says how long that price lasts, what a
 2026 League Pass buyer gets, or that we may email them when 2027 opens — the privacy page
-lists no such email, and a one-time buyer gets no renewal notice. *Recommend:* section 12's
+lists no such email, and a monthly buyer gets no renewal notice. *Recommend:* section 12's
 proposed sentences, before the first sale. Stripe already holds every 2026 buyer, so the
 2027 link can honour the price without new code now.
 
@@ -1045,7 +1011,7 @@ a real roster's calls to the record, graded every Monday.
 commercial email; every email now prints it, and the launch announcement refuses to send
 without it. *Recommend:* rent a virtual mailbox or PO box before step 3, never a home address.
 Whether that mailbox is enough for Ontario's online-sale rules is section 12's first
-question, and it comes before the first $69 sale, not "before scale".
+question, and it comes before the first League Pass sale, not "before scale".
 
 ## 11. The repo and the host — private, or a rewritten history
 
@@ -1136,13 +1102,14 @@ public.
 
 ## 12. Questions for a lawyer, and the wording waiting on them
 
-Book one Ontario consumer-law consult **before the first $69 sale** (not legal advice; these
-are the questions, not answers). *Recommend in the meantime:* sell the $29 and $19 passes
-(both under C$50; the $19 from Nov 25) and hold the League Pass link back, or accept that a League Pass buyer may
+Book one Ontario consumer-law consult **before the first League Pass sale** (not legal advice;
+these are the questions, not answers). *Recommend in the meantime:* sell the Monthly plan (about
+C$21 a charge) and hold the League Pass link back, or accept that a League Pass buyer may
 have a statutory cancellation right on top of our refund.
 
-1. **Ontario internet agreements over C$50 (CPA 2002 s.38, O.Reg 17/05).** The $69 League Pass
-   is about C$95, and 2027's $39 pass about C$53. Before purchase the seller must disclose its
+1. **Ontario internet agreements over C$50 (CPA 2002 s.38, O.Reg 17/05).** The League Pass is
+   about C$48 a charge and about C$96 across two, so does the line read a charge or the whole
+   agreement? 2027's $39 pass is about C$53. Before purchase the seller must disclose its
    name (and trading name), telephone, business address and the currency. (a) Does a numbered
    Ontario corporation trading as Beat Your League satisfy "name" without your own name on
    the site or receipts (its director records are public)? (b) Is the rented sender mailbox
@@ -1241,9 +1208,8 @@ nothing here is published. This is the wording for the lawyer to mark up.
   on August 15, 2028, before the 2028 season, and on August 15 of each year after that, until
   you cancel. Nothing is charged between your purchase and August 15, 2028. We email you
   between 15 and 45 days before each renewal, telling you the date and the amount."
-- **§3, the first line under "From 2027":** "None of this applies to a 2026 one-time pass. It
+- **§3, the first line under "From 2027":** "None of this applies to a 2026 monthly plan. It
   does not set the renewal date of a 2027 Season Pass, which is stated above."
-- **§4, the first sentence becomes:** "A one-time 2026 pass has nothing to cancel."
 - **§4, a new paragraph after the seat paragraph:** "**A 2027 Season Pass** is cancelled the
   same way as the yearly plans below. Cancelling stops the renewal. It does not end the pass
   early and it does not refund it: your reports continue through the 2027 season, then stop,
@@ -1315,7 +1281,7 @@ mode**, with test keys in your shell:
 
 1. Make the same two Prices and Payment Link in **live** mode. Keep it unpublished until step 7.
 2. Set **After payment** to redirect to `https://beatyourleague.com/thanks.html?plan=2027`. The
-   plain thanks page says nothing renews, which is false of this pass.
+   plain thanks page says the plan stops on its own, which is false of this pass.
 3. Run `infra/stripe_paylink_text.py`. It writes the words above the Pay button and on the
    tick-box from `render/welcome.py` and `run/checkout.py`; a `y:` link gets the renewal, its
    date and its amount, and never the one-payment text.
@@ -1336,8 +1302,7 @@ report and the next day's move, and refund it the way section 8 says.
 
 **Once it's on:** `make stats` and the dashboard's Money section show passes held and the
 dollars collected for a 2027 season not yet delivered. That figure is yours to deliver on, so
-leave it in the bank until the 2027 season is played. A $29 buyer who wants the upgrade pays
-$49 on top today; if that's a problem, a refund of the $29 inside its window and a fresh $49
-purchase is the clean route, and there's no upgrade link. `run/economics.py` models the trade:
-the prepaid pass earns more if under about half of buyers would have bought again in 2027
-(about a quarter at $39, which is why it's $49), against the model's 30–70% re-buy rates.
+leave it in the bank until the 2027 season is played. A Monthly buyer who wants the pass pays
+$49 and cancels their plan, and there's no upgrade link. `run/economics.py` models the trade:
+the prepaid pass earns more than a monthly buyer plus a $39 re-buy if under about 72% of buyers
+would have bought again in 2027, against the model's 30–70% re-buy rates.

@@ -136,8 +136,9 @@ from ingest.nflverse import NflverseError
 from run.checkout import (SEASON_2027_FIRST_RENEWAL, SEASON_2027_PRICE_CENTS, is_paid,
                           post as _stripe_post, season_2027_links, sweep_sessions)
 from run.redact import redact
-from run.solo import SoloError, current_week, season_ends
-from run.subscriptions import (DISPUTE_LOST, DisputeLookup, SubscriptionError, _stripe_get,
+from run.solo import SoloError, _schedule, _weeks, current_week, season_ends
+from run.subscriptions import (DISPUTE_LOST, SEASON_STOP_KEY, DisputeLookup, SubscriptionError,
+                               _stripe_get,
                                dispute_state, fully_refunded, purchase_view)
 
 SUBSCRIPTIONS_API = "https://api.stripe.com/v1/subscriptions"
@@ -157,7 +158,7 @@ ROSTER_METADATA_KEY = "byl_roster_ref"
 
 # Stamped alongside the stop so a later reader can tell OUR end-of-season stop
 # from a cancellation the customer made: the period end it stops at.
-STOP_METADATA_KEY = "byl_offseason_stop"
+STOP_METADATA_KEY = SEASON_STOP_KEY
 
 # Stamped when a 2027 Season Pass's first renewal is moved, so a human reading
 # the subscription in the Dashboard can see why a paid pass says "trialing".
@@ -232,18 +233,38 @@ def last_send(cache_dir: Path, season: str, *,
     return None
 
 
+# The week a title game is played under ESPN's, Yahoo's and Sleeper's default
+# playoffs. Billing ends with that week's report (owner decision, Oct 31 2026):
+# a renewal after it would take $14.99 on title-game weekend for the one report
+# left, which most leagues don't play. Reports still run to the season's last:
+# run/subscriptions keeps a plan we stopped entitled for SEASON_STOP_GRACE_DAYS.
+TITLE_WEEK = 17
+
+
+def title_send(cache_dir: Path, season: str, *, live: bool = False) -> date | None:
+    """The Tuesday TITLE_WEEK's report goes out, or the season's last report in
+    a season too short to reach it. None when the schedule cannot say."""
+    send = last_send(cache_dir, season, live=live)
+    if send is None:
+        return None
+    games = _weeks(_schedule(cache_dir, live=live), str(season))
+    if TITLE_WEEK not in games or max(games) <= TITLE_WEEK:
+        return send
+    return send - timedelta(weeks=max(games) - TITLE_WEEK)
+
+
 def final_send(cache_dir: Path, today: date | None = None, *,
                live: bool = False) -> tuple[datetime | None, str | None]:
-    """(the instant the season's LAST weekly report is due, that season).
+    """(the instant the last report a charge may pay for is due, that season).
 
     The season is the earliest one whose last game has NOT been played — a
     season still to be served. RULE B1: when there is no such season the answer
     is (None, None), which the caller reports and acts on in no way whatsoever.
     Reaching for `current_season` here would answer the season that just ended.
 
-    The instant may already be past (the days between the last report and the
-    last game): every monthly subscription's current period then ends after
-    it, which is exactly right — none of them may renew again.
+    That report is TITLE_WEEK's. The instant may already be past: every monthly
+    subscription's current period then ends after it, which is exactly right —
+    none of them may renew again.
 
     Fails closed on every data problem. `_schedule` reaches `ingest.nflverse`,
     whose `NflverseError` is NOT a subclass of `SoloError` — verified — so an
@@ -261,7 +282,7 @@ def final_send(cache_dir: Path, today: date | None = None, *,
         return None, None
     season = upcoming[0]
     try:
-        send = last_send(cache_dir, season, live=live)
+        send = title_send(cache_dir, season, live=live)
     except (NflverseError, SoloError, OSError, ValueError):
         return None, None
     if send is None:
@@ -345,14 +366,20 @@ def load_subscriptions(api_key: str, *, charges: bool = False) -> list[dict]:
 # --------------------------------------------------------------------- #
 
 def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
+               returned: Callable[[Mapping[str, Any]], str | None] = lambda _s: None,
                ) -> tuple[list[dict], list[str]]:
     """(the subscriptions in their final paid period, things worth saying out
-    loud), against ``final`` — the instant the season's last report is due.
+    loud), against ``final`` — the instant TITLE_WEEK's report is due.
 
     Everything the filter drops is dropped for a stated reason, and the two
     live-but-untouched statuses are REPORTED rather than skipped in silence: a
     paused subscription starts billing again by itself, so a stop it never
     received is a charge nobody is expecting.
+
+    ``returned`` is ``money_returned`` bound to a key. A refund ends a monthly
+    plan (terms §5), and a refund alone leaves Stripe billing it next month for
+    reports that have stopped, so a refunded plan gets its stop whatever the
+    calendar says. The owner presses Refund and nothing else.
     """
     cutoff = int(final.timestamp())
     due: list[dict] = []
@@ -384,14 +411,17 @@ def needs_stop(subscriptions: Iterable[Mapping[str, Any]], final: datetime,
             continue
         if _already_stopping(subscription):
             continue                             # RULE B5: already ending
+        if returned(subscription) in ("refunded", "lost"):
+            due.append(dict(subscription))
+            continue
         period_end = _period_end(subscription)
         if period_end is None:
             notes.append(f"subscription {subscription.get('id')} has no readable "
                          f"period end — left alone rather than guessed at")
             continue
-        # RULE B3. Ends before the last report is due: the next renewal starts
-        # the period that report falls in, which is owed. Ends after it: this
-        # is the final paid period, and the next renewal would have no report.
+        # RULE B3. Ends before TITLE_WEEK's report is due: the next renewal
+        # starts the period that report falls in, which is owed. Ends after it:
+        # this is the final paid period, and no renewal comes after it.
         if period_end > cutoff:
             due.append(dict(subscription))
     return due, notes
@@ -675,7 +705,7 @@ def _monthly_stop(args: argparse.Namespace, api_key: str) -> int:
           f"{'' if args.send else ' (dry run)'}\n{line}")
 
     try:
-        subscriptions = load_subscriptions(api_key)
+        subscriptions = load_subscriptions(api_key, charges=True)
     except SubscriptionError as exc:
         print(f"could not read Stripe: {exc}", file=sys.stderr)
         return 1
@@ -713,7 +743,9 @@ def _monthly_stop(args: argparse.Namespace, api_key: str) -> int:
         print(line)
         return 0
 
-    due, notes = needs_stop(subscriptions, at)
+    lookup = DisputeLookup(api_key)
+    due, notes = needs_stop(subscriptions, at,
+                            lambda sub: money_returned(sub, api_key, lookup))
     print(f"Season {season}: the last weekly report is due {at:%Y-%m-%d %H:%M} "
           f"UTC; a monthly period ending after it is the final one")
     print(f"Subscriptions: {len(ours)} ours, {len(monthly)} monthly, "

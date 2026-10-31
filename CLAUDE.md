@@ -1346,7 +1346,42 @@ schedule, no projection, no %, nothing recorded; never on a replayed week (the p
 are unchanged). "Performance" means decisions, never results: no "win more", "make the
 playoffs" or outcome claims. A rest-of-season price is an owner decision, not built.
 
-**2026 pricing: one-time passes (owner decision, Oct 18 2026).** For the mid-season launch the
+**Monthly pricing (owner decision, Oct 31 2026) — replaces the one-time passes below, none of
+which ever sold.** The owner's reason: a fixed $29 buys fewer lineups every week, so the pass
+grows harder to sell and needs a price drop, while a monthly price stays fair in any week and
+never needs new words. The site sells the **$14.99 Monthly plan** and the **$34.99 League Pass**
+(a month, up to 14 teams), both Stripe Payment Links in subscription mode:
+`STRIPE_PAYMENT_LINKS` is `m:<$14.99>,p:<$34.99>` (`y:` beside them once the 2027 pass is on).
+No price drop at Week 13 and no Playoff Pass; the pages carry no `o:` or `s:` path. $14.99 was
+kept over $9.99 deliberately: at about 1.4 charges a buyer $9.99 needs about 50% more buyers to
+match it, $14.99 sits with paid products (FootClan $11.99, FantasyPros up to $22.99) rather than
+the $4.99–$9.99 AI tools, and it keeps the $39 season pass and the $49 offer reading as deals. A
+price can be cut later; raising one is harder. Rules it left:
+- **Billing ends with Week 17's report** (`run/billing.TITLE_WEEK`, `title_send`; `final_send`
+  and `stop_for` now answer that date): a renewal after it would take $14.99 on title-game
+  weekend for the one report left. `needs_stop` gives a plan `cancel_at_period_end` once its
+  period ends after that instant, so no renewal follows it. "Stops on its own after your title
+  game" is the line on every surface; terms §3 says nothing is charged after Week 17's report.
+- **A plan WE stopped still gets the season's last report** (`run/subscriptions`,
+  `stopped_for_season`, `SEASON_STOP_GRACE_DAYS`): its paid period can end before Week 18's
+  report. It carries `SEASON_STOP_KEY`; a plan its buyer cancelled does not, and ends when it ends.
+- **A refund ends the plan, in one click.** Refunded alone, a subscription keeps billing for
+  reports that have stopped, so `needs_stop` gives a refunded or lost plan its stop too
+  (`returned`, `money_returned`). The owner presses Refund and nothing else; seats end with it.
+- **Plan words:** the join page's static markup IS the Monthly plan (`monthlyPlan()` restores it);
+  `PLAN_CHOICE` is Monthly against the 2027 pass only; a seat, an update and a free report still
+  write an `s` ref (`buyingMonthly`). `SELLING_ONE_TIME` is False, so samples show a
+  subscription's way out. The one-time backend (`pi_` rows, `ONCE_*`, `o:` in the intake) stays
+  dormant: nothing sold through it, and removing it buys nothing.
+- **Money:** `run/stats` and the dashboard count subscription sessions and read renewals from
+  paid invoices, which have no checkout session (`owner-stats` needs Invoices Read).
+  `run/economics` models it: `LEAVE_AFTER_FIRST` 30% (stated, not measured), `expected_charges`
+  about 1.4, `net_per_buyer` about $17.74 and $41.89, base case about $574 for about 49 hours
+  from a Nov 9 opening. A League Pass's seats end if its buyer cancels or a payment fails.
+- **Before next preseason:** `MONTHLY_PAUSED` closes Monthly while `week.json` says preseason, and
+  no other plan is on sale then, so the 2027 season pass needs its link before August.
+
+**2026 pricing: one-time passes (owner decision, Oct 18 2026; replaced Oct 31, above).** For the mid-season launch the
 site sells a **$29 Rest-of-Season Pass**, a **$19 Playoff Pass** (automatic once a buyer's first
 weekly report would be Week 13+: the landing's `PLAYOFF_PASS_READY` must equal "join's
 `STRIPE_LINK_PLAYOFF` is set", a launch gate) and a **$69 League Pass for the rest of the
@@ -1608,11 +1643,11 @@ Closed step 3 is "Save your team" with the value line first; the button's words 
 
 **The sell pass (Oct 30 2026) — the owner's brief: direct, simple, a good deal, not cheesy.**
 Tests in `tests/test_sell.py`, including a sweep for hype on every selling page. Rules it left:
-- **The price card never changes (owner decision, Oct 31 2026):** "$29 / rest of season", "Every
+- **The price card never changes (owner decision, Oct 31 2026):** "$14.99 / month", "Every
   lineup through your title game.", "A new lineup decided every Tuesday." No page counts the
   weeks or lineups left: a falling count makes a buyer do the math and wait for the price to
   fall with it. The hero line says only "Week 9's report lands Tuesday."; the buy page says
-  "Every lineup from now to your title game. $29, one payment."
+  "Every lineup from now to your title game. $14.99 a month, and it stops on its own."
   `test_no_page_counts_the_season_down` sweeps every page, script-built text included.
 - **"Read your first weekly report before its games", with "weekly".** A buyer after a week's
   first game gets the roster report first, which has no games; terms §5 is about the weekly one.
@@ -1620,9 +1655,8 @@ Tests in `tests/test_sell.py`, including a sweep for hype on every selling page.
   `STRIPE_LINK_2027` on join, which must agree. Off, no word of it renders: the card and join's
   radio are built by script (`season2027Card`, the `PLAN_CHOICE` block), so all that ships is the
   founding-rate line. On: two cards, the $49 one ("$49 / this season and next") holding the one
-  gold button, renewal terms directly under its price at full size, and "$20 more gets you all of
-  next season.", worked out from the price on offer (`PASS_AMOUNT`: $30 from the Playoff Pass).
-  Join starts on it unless the link said `?plan=season`, so a click on $29 never lands on $49; both write an `s` ref (the plan
+  gold button, renewal terms directly under its price at full size.
+  Join starts on it unless the link said `?plan=monthly`, so a click on $14.99 never lands on $49; both write an `s` ref (the plan
   comes from the link that took the money), so `keepInAddress` carries the choice in `?plan=`.
   Every "nothing renews" line follows the choice or the flag (terms line, sidebar, confirmation,
   hero risk line, finance note), and thanks.html reads `?plan=2027`. **Terms and the Playoff
@@ -1666,8 +1700,8 @@ Stripe documents that mix for Checkout; a Payment Link taking it is LAUNCH §13 
   all a portal Cancel on a trialing subscription, which the pass rests on. The word "trial" can
   reach buyers (billing page, 0 USD invoice, `* TRIAL OVER` on a 2028 statement); the welcome
   explains it and it's a lawyer question.
-- **The money case.** $49 beats $29 plus a $39 re-buy if under about 51% of buyers would have come
-  back anyway (`run/economics.py`; about 26% at $39), and PLAN's re-buy range is 30–70%.
+- **The money case.** $49 beats a monthly buyer plus a $39 re-buy if under about 72% of buyers
+  would have come back anyway (`run/economics.py`), near the top of PLAN's 30–70%.
 
 **The owner's dashboard (Oct 28 2026) — `make dashboard`, `make dashboard-live`.** One private,
 self-contained page (`run/dashboard.py` → `data/dashboard.html`, gitignored), built on the owner's
@@ -2578,11 +2612,10 @@ Funnel additions (Aug 14 2026), built from a buyer-archetype review of the whole
   2026:** "$3.22 a lineup" went on the price card and came off the same day, because it makes
   a buyer calculate and think about the money, not the value. "9 lineups left" came off the
   next day for the same reason (Oct 31): pricing stays simple and the words stay the same all
-  season. One line between two prices on the same card is fine ("$20 more gets you all of next
-  season."); working a price out for the buyer is not, and
+  season. Working a price out for the buyer is banned, and
   `test_no_page_breaks_a_price_down_for_the_buyer` sweeps every page. The League Pass page
   keeps its own exception: a commissioner justifying spend to eleven leaguemates is a
-  genuinely deliberative buyer, and the $348-vs-$69 arithmetic is their language. Emotional
+  genuinely deliberative buyer, and "$179.88 a month against $34.99" is their language. Emotional
   value is sold through specific scenarios in the buyer's own life (Tuesday morning, the group chat,
   the call you would have regretted), never through adjectives — and never through invented
   behavior claims ("most people..."), because there are no customers to cite yet.

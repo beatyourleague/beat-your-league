@@ -80,10 +80,11 @@ def test_the_tuesday_row_says_what_a_report_is() -> None:
 
 
 def test_the_monthly_terms_match_the_stop() -> None:
-    """EMAILS-94 / D1: the last charge is the month the last report is in."""
+    """EMAILS-94 / D1: no charge after Week 17's report, reports to the last."""
     text = welcome_message("a@example.com", "monthly", "abc123def0", "2026").text
-    assert "billing stops on its own after the season's last weekly report" in text
-    assert "your last charge is for the month that report falls in" in text
+    assert "billing stops on its own after your title game" in text
+    assert "nothing is charged after Week 17's report goes out" in text
+    assert "your reports run through the season's last week" in text
     assert "when the season ends" not in text
 
 
@@ -197,11 +198,12 @@ def test_a_free_report_is_never_promised_a_tuesday_report() -> None:
 def test_the_last_report_asks_for_next_seasons_roster_where_it_can() -> None:
     """EMAILS-62 / D8: Week 1 is built from the roster on file."""
     url = "https://example.com/join/?update=1"
-    for plan in ("season", rr.PASS_PLAN):
-        assert rr.NEW_ROSTER in " ".join(_end(plan=plan, update_url=url)), plan
-        assert rr.NEW_ROSTER not in " ".join(_end(plan=plan)), plan
-    monthly = " ".join(_end(plan="monthly", update_url=url))
-    assert "last paid month" in monthly and rr.NEW_ROSTER not in monthly
+    assert rr.NEW_ROSTER in " ".join(_end(plan="season", update_url=url))
+    assert rr.NEW_ROSTER not in " ".join(_end(plan="season"))
+    # A monthly plan or League Pass has stopped: nothing is built next season.
+    for plan in ("monthly", rr.PASS_PLAN):
+        words = " ".join(_end(plan=plan, update_url=url))
+        assert "stopped billing on its own" in words and rr.NEW_ROSTER not in words, plan
 
 
 def test_the_seeded_line_does_not_say_last_season_stops_counting_at_week_4() -> None:

@@ -68,6 +68,6 @@ Use those. They're the real report, and they fit a post.
 ## 6. A commissioner, once the League Pass is open
 
 > Running a league? The League Pass gives every manager their own lineup report every Tuesday
-> through the title game. $69 for the league, one payment, nothing renews.
+> through the title game. $34.99 a month for the league, and it stops on its own.
 >
 > [link to the League Pass page]

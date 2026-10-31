@@ -273,12 +273,12 @@ def test_the_comparison_is_a_short_table_with_hidden_marks() -> None:
 # --------------------------------------------------------------------- #
 
 def test_the_price_card_carries_its_risk_reversal_and_a_way_to_look_first() -> None:
-    """Beside the $29: one payment, nothing renews, the refund in the terms'
+    """Beside the price: when billing stops, the refund in the terms'
     own words, and "See a real report first" — then the League Pass as one
     line, after the card, never a second card or button."""
     card = BODY.split('id="pass-card"')[1].split('<p class="finance"')[0]
     text = _flat(card)
-    assert "$29" in text and "One payment. Nothing renews" in text
+    assert "$14.99" in text and "Stops on its own after your title game" in text
     assert ("Full refund, no questions, until your first weekly report's week kicks off. "
             "One per person") in text
     assert re.search(r'<a class="cardlink" href="sample-report.html">See a real report first</a>',

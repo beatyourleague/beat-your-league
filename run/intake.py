@@ -665,7 +665,7 @@ def _subscription_id(session: dict) -> str | None:
 # (render/welcome.py) while it is the newest. When the terms move, APPEND the
 # new date here — tests/test_promises_billing.py fails while TERMS_VERSION is
 # missing — and never edit an old one: a recorded consent names one of these.
-TERMS_HISTORY = ("2026-10-15", "2026-10-17", "2026-10-18", "2026-10-30")
+TERMS_HISTORY = ("2026-10-15", "2026-10-17", "2026-10-18", "2026-10-30", "2026-10-31")
 
 
 def terms_version_at(created: int) -> str | None:

@@ -223,7 +223,7 @@ show anyway.
 | Claude Pro (Aug + Sep) | $40 | powers Claude Code build + language layer |
 | GitHub, GitHub Actions, GH Pages, Cloudflare (DNS, email forwarding, the form Worker) | $0 | free tiers. Sleeper is no longer used (§0) |
 | Domain + DNS | $15 | **bought** — `beatyourleague.com`. SPF/DKIM on it is what keeps the send out of spam |
-| Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94. 2026's one-time passes carry no Billing fee: $1.87 on the $29 pass, $1.30 on the $19 and $4.15 on the $69, each kept on a refund. A dispute adds C$15 | no fixed cost |
+| Stripe | about 7% of a $39 pass on this account: 2.9% + C$0.30, +0.8% international card, +2% currency conversion (CAD payout), +0.7% Billing — $2.72 per pass, kept on a refund (corrected Oct 2026; `run/economics.py`). A USD payout account cuts it to about $1.94. 2026's plans bill monthly: $1.18 on a $14.99 charge and $2.46 on a $34.99 one, each kept on a refund. A dispute adds C$15 | no fixed cost |
 | Cloudflare Analytics Engine (the page counter, LAUNCH 5b) | $0 | free: 100,000 lines a day, kept three months. A counter past that drops lines, never bills — the forms do not share it (they are on KV). The risk-item decision is in §7 |
 | Resend | $0 | free tier: 3,000/month **but 100/day, 1 domain** |
 | Resend Pro | $20/mo | **trigger: past about 85 recipients on one day (subscribers + free reports).** A Tuesday batch fires everything at once, so the 100/day ceiling binds on launch morning, not at 3,000. `make launch-check` counts it |
@@ -248,7 +248,7 @@ the plan-level view.
 | Email Sleeper; sample leagues for FAAB use; run the owner's own league | **Dropped** — the product left Sleeper instead (§0), and the waiver market went with it |
 | Project inbox, contact address, jurisdiction | **Done** — `hello@beatyourleague.com`; terms under Ontario law |
 | Domain, DNS, GitHub Pages | **Done** — `beatyourleague.com`. SPF/DKIM arrive with Resend (LAUNCH.md step 2) |
-| Stripe products and payment links | **2027's done; 2026's one-time links are LAUNCH.md step 1.** The keys, the secrets and one real purchase are steps 3–4 |
+| Stripe products and payment links | **2027's done; 2026's monthly links are LAUNCH.md step 1.** The keys, the secrets and one real purchase are steps 3–4 |
 | Send rehearsal | **Not done** — LAUNCH.md step 4, and nobody else's money moves before it |
 | League Pass open to any manager | **Done** |
 | Take the sample to 5+ leagues and close passes | **Not done** — checkout never opened. Now LAUNCH.md section 6 |
@@ -264,7 +264,7 @@ the plan-level view.
    server to break into; the accounts are the way in.
 1. **Deploy the form Worker** — LAUNCH.md step 5, first: without it roster changes, seats and
    the email list have nowhere to go, and checkout does not open before it.
-2. **Open checkout** — LAUNCH.md steps 1–4 and 6, with fresh one-time payment links. Week 7
+2. **Open checkout** — LAUNCH.md steps 1–4 and 6, with fresh monthly payment links. Week 7
    passed closed; the target is a proving purchase Sat Oct 24 and an opening Oct 25–26, so the
    Week 8 send (Oct 27) carries the first buyers. Every week this slips is about a tenth of
    what is left.
@@ -320,15 +320,16 @@ an aged, indexed corpus. Judge 2026 against that, not a revenue number.
 
 ## 4. Offer ladder & monetization rules
 
-**2026 SELLS ONE-TIME PASSES (owner decision, Oct 18 2026; CLAUDE.md "2026 pricing").** For the
-mid-season launch: the **$29 Rest-of-Season Pass**, the **$19 Playoff Pass** (automatic once a
-buyer's first report would be Week 13; its link stays switched off until Week 12's first
-kickoff, Wed Nov 25, 8:00 PM ET — LAUNCH.md section 8) and the **$69 League Pass for the rest
-of the season** (on its own page) — each one payment, nothing renews, monthly not sold. 2026 buyers' 2027
-season pass is the founding $39. Everything below about $39 / $14.99 / $99 subscriptions,
-renewals and the ladder invariant is the **2027** design and stays as written for it. What the
-2026 prices leave, and the base case (about $727 after fixed costs for 30 passes + 2 League
-Passes, opening Oct 26), is `run/economics.py`; a 2026 buyer coming back in 2027 is a
+**2026 SELLS MONTHLY PLANS (owner decision, Oct 31 2026; CLAUDE.md "Monthly pricing").** The
+**$14.99 Monthly plan** and the **$34.99 League Pass** (a month, for the whole league, on its
+own page). Each stops on its own: nothing is charged after Week 17's report goes out, and
+reports run through the season's last. They replace the one-time passes of Oct 18 ($29, $19,
+$69), which never sold: a fixed price buys less every week, so the pass grew harder to sell and
+needed a price drop at Week 13. 2026 buyers' 2027 season pass is the founding $39. Everything
+below about $39 / $99 subscriptions, renewals and the ladder invariant is the **2027** design
+and stays as written for it. What the 2026 prices leave, and the base case (about $574 after
+fixed costs for 30 Monthly buyers + 2 League Passes, opening Nov 9, with 30% leaving before a
+second charge), is `run/economics.py`; a 2026 buyer coming back in 2027 is a
 **re-buy**, never a renewal, and the model counts it that way.
 
 **REVISED Aug 17 2026 — the price rises and a free door opens.** The Aug 13 decision was "charge
@@ -355,12 +356,12 @@ and no gradeable record until October, is the sharpest self-inflicted disadvanta
 seen it, LAUNCH.md section 13).** $49 today covers the rest of 2026 and all of 2027, as a
 subscription that first renews on August 15, 2028 and each August after that at the $39
 founding rate (raised from $39 today on Oct 31 2026). Once switched on, a **two-card offer
-replaces "one decision at checkout"**: $29 this season, or $49 for this season and next. Forget-to-cancel stays banned: the renewal is stated at the point of
+replaces "one decision at checkout"**: $14.99 a month, or $49 for this season and next. Forget-to-cancel stays banned: the renewal is stated at the point of
 sale, a notice goes out 15 to 45 days before every charge, and cancelling is self-serve. Monthly
 is not sold in 2026. This takes 2027 money now, so `make stats` and the dashboard show what is
-held for a season not yet delivered. `run/economics.py`'s honest view: the prepaid pass earns more per buyer than $29 plus a $39
-2027 re-buy only below a re-buy rate of about 51% (about 26% at $39), inside the model's own 30–70%,
-so it stops being a pure bet on buyers who would not otherwise return; watch it against that.
+held for a season not yet delivered. `run/economics.py`'s honest view: the prepaid pass earns more per buyer than a monthly buyer plus
+a $39 2027 re-buy below a re-buy rate of about 72%, near the top of the model's own 30–70%; watch
+it against that.
 
 **At checkout, still exactly one decision:** Founding Season Pass **$39** shown beside **$14.99/mo**.
 Refunds no-questions until the buyer's first weekly report's week kicks off (the second report's
@@ -569,8 +570,7 @@ every Tuesday with no human step anywhere. Mechanics in CLAUDE.md; the operator-
   Subscriptions (`run/billing.py`), and read on the rest it uses; the exact list is LAUNCH.md
   step 3.
 - **`STRIPE_PAYMENT_LINKS` is a launch blocker, not an optimisation.** Set it to
-  `s:<$29 link id>,o:<$19 Playoff Pass link id>,p:<$69 League Pass link id>` in 2026 (`m:` is
-  the monthly link, back in 2027). It is what makes the purchased plan a fact about the
+  `m:<Monthly link id>,p:<League Pass link id>` in 2026. It is what makes the purchased plan a fact about the
   payment instead of a claim in the buyer's URL — without it, no purchase can grant League
   Pass coverage (deliberate: fail closed). Adversarial review found that trusting the
   URL let anyone buy the $99 pass for $9.99, for any league; see CLAUDE.md for the three rules
@@ -965,9 +965,9 @@ impressions, likes, follower count.
 three League Passes is $297; infra ~$15. **A realistic good outcome is $1,500–$3,000 for the
 season, essentially all of it from channels that are people, not pages.**
 
-**Revised again Oct 23 2026, for what 2026 actually sells.** At the one-time prices, opening in
-Week 8, the base case — 20 Rest-of-Season Passes, 10 Playoff Passes and 2 League Passes — leaves
-about $727 after Stripe, refunds, disputes and fixed costs, for about 59 owner-hours
+**Revised again Oct 31 2026, for what 2026 actually sells.** At the monthly prices, opening in
+Week 10, the base case — 30 Monthly buyers and 2 League Passes, 1.4 charges a buyer — leaves
+about $574 after Stripe, refunds, disputes and fixed costs, for about 49 owner-hours
 (`run/economics.py`; the launch check fails if `reports/launch-readiness.md` stops agreeing).
 2026 is a proof season worth a few hundred dollars; whether this is profitable is a 2027
 question, decided by the four open items in IDEAS.md (2027 price and founder link, a second

@@ -79,11 +79,10 @@ def _published_sample(week: int = 10) -> dict:
 # --------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("plan, says, never", [
-    ("monthly", "stops billing on its own", "renews once a year"),
+    ("monthly", "stopped billing on its own", "renews once a year"),
     ("season", "Your season pass renews once a year", "League Pass"),
-    ("pass", "Your League Pass renews once a year", "season pass"),
-    ("league_pass", "claim your seat again next season with your new roster",
-     "renews once a year"),
+    ("pass", "Your League Pass has stopped billing on its own", "season pass"),
+    ("league_pass", "claim your seat again with your new roster", "renews once a year"),
 ])
 def test_the_last_report_states_each_plans_own_promise(plan, says, never) -> None:
     """Reproduction (LP-D3): run/intake.to_rows wrote plan "season" for every
@@ -109,8 +108,8 @@ def test_the_seat_and_the_payer_say_the_same_thing_about_next_season() -> None:
     payer = rr.SEASON_END_BILLING[rr.PASS_PLAN]
     assert "end here" not in seat and "ends here" not in seat
     assert "follows your league's pass" in seat
-    assert "claim your seat again next season with your new roster" in seat
-    assert "claims theirs again next season, with their new roster" in payer
+    assert "claim your seat again with your new roster" in seat
+    assert "claims their seat again with their new roster" in payer
 
 
 def test_a_seat_is_never_told_its_reports_simply_start_again() -> None:
@@ -123,13 +122,13 @@ def test_a_seat_is_never_told_its_reports_simply_start_again() -> None:
         lines = " ".join(rr.season_end_lines(
             {"solo": True, "week": 18, "last_week": 18, "plan": plan}))
         assert not re.search(r"start again", lines), plan
-        assert re.search(r"claims? (your seat|theirs) again next season", lines), plan
+        assert re.search(r"claims? (your|their) seat again", lines), plan
         assert "new roster" in lines, plan
 
 
 def test_the_season_end_line_reaches_every_surface_for_the_new_plans() -> None:
     report = _subscriber(week=18, last_week=18)
-    for plan, words in (("pass", "Your League Pass renews"),
+    for plan, words in (("pass", "Your League Pass has stopped billing"),
                         ("league_pass", "claim your seat again")):
         for name, doc in _surfaces(_as(report, plan=plan)).items():
             assert words in doc, (plan, name)
@@ -553,12 +552,11 @@ def test_the_free_report_asks_with_a_button_above_the_footer(monkeypatch) -> Non
     assert text.index(url) < text.index("Projections are analysis")
     for doc in (html.unescape(page), text):
         assert "only email we'll send you unless you sign up" in doc
-        # M5: the price is named once, near the top, with its one-payment and
+        # M5: the price is named once, near the top, with when it stops and
         # refund terms beside it — and nowhere else.
-        assert re.findall(r"\$\d+", doc) == ["$29"]
-        assert ("the $29 Rest-of-Season Pass, one payment, nothing renews. Full "
-                "refund, no questions, until your first weekly report's week "
-                "kicks off. One per person." in doc)
+        assert re.findall(r"\$\d+", doc) == ["$14"]
+        assert ("$14.99 a month, and it stops on its own. Full refund, no questions, "
+                "until your first weekly report's week kicks off. One per person." in doc)
     # No site, no button.
     monkeypatch.delenv("SITE_URL")
     assert "via=trial" not in render_email(trial) + text_summary(trial)

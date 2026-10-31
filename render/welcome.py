@@ -36,12 +36,13 @@ from render.sender import CONTACT, sender_line
 from run.delivery import Message
 
 # One test asserts these equal the landing page's own numbers.
-# 2026 prices (owner decision, Oct 18 2026): one-time passes. The Playoff
-# Pass ($19, from Week 13) is the season plan bought through its own link.
-SEASON_PRICE = "$29"
+# 2026 prices (owner decision, Oct 31 2026): monthly plans that stop on their
+# own. The one-time passes are retired; PLAYOFF_PRICE words a purchase that was
+# never made. SEASON_PRICE is the founding full-season pass, from 2027.
+SEASON_PRICE = "$39"
 PLAYOFF_PRICE = "$19"
 MONTHLY_PRICE = "$14.99"
-PASS_PRICE = "$69"
+PASS_PRICE = "$34.99"
 # The 2027 Season Pass (owner decision, Oct 30 2026): off until the lawyer has
 # seen it, and a test ties these to run/checkout's two cents figures. It renews
 # at the founding rate every other 2026 buyer has.
@@ -50,7 +51,7 @@ SEASON_2027_RENEWAL = "$39"
 # The terms a buyer ticks at checkout. Equal to the "Last updated" date on
 # site/terms.html (tested), and stamped on every Customer with their consent
 # (run/intake._consent) so a renewal can always be tied to the words agreed to.
-TERMS_VERSION = "2026-10-30"
+TERMS_VERSION = "2026-10-31"
 
 # The distinction every commercial email must carry (and the reports do).
 UNSUB_LINE = ("Unsubscribing from emails alone does not stop a subscription — "
@@ -80,8 +81,7 @@ _REFUND_WINDOW = ("Refunds are no-questions until your first weekly report's "
                   "the window closes a week after it arrives; if the season ends "
                   "before one reaches you, a week after the season's last game.")
 # "A second purchase", never "a re-subscription" (contract C5, final review
-# COPY-9): every 2026 pass is one payment, and the retainable copy of the
-# terms should not describe a subscription the buyer never had.
+# COPY-9): one rule for every plan, whichever a buyer holds.
 REFUND_TERMS = (_REFUND_WINDOW + " One per person, and a second purchase after "
                 "a refund is final.")
 REFUND_TERMS_LEAGUE = _REFUND_WINDOW + " One per league."
@@ -102,7 +102,8 @@ SHARE_MESSAGE = ("I got us the League Pass from Beat Your League: everyone gets 
                  "roster. Nothing to pay. Claim your seat here: {link}")
 # Seats ride the pass: what the payer ends, every seat loses (LP-I6).
 SEATS_END = ("Your league's seats last as long as your pass does: if you cancel "
-             "it or take a refund, every seat's reports stop too.")
+             "it, a payment fails or you take a refund, every seat's reports stop "
+             "too.")
 
 
 # The 2026 rest-of-season passes (owner decision, Oct 18 2026) are ONE
@@ -123,6 +124,12 @@ SEATS_END_ONCE = ("Your league's seats last through this season with your pass; 
 SEAT_RESET_NOTE = ("If whoever paid for your league's pass resets its seats, "
                    "yours is released; claim it again with the new link they "
                    "share.")
+
+
+# What stops a monthly plan, and why it isn't a surprise (run/billing, TITLE_WEEK).
+BILLING_STOPS = ("billing stops on its own after your title game: nothing is "
+                 "charged after Week 17's report goes out, and your reports run "
+                 "through the season's last week.")
 
 
 def first_renewal_words() -> str:
@@ -208,20 +215,14 @@ def _plan_terms(plan: str, one_time: bool = False, playoff: bool = False,
         return (
             f"the monthly plan — {MONTHLY_PRICE} USD a month",
             [f"It bills {MONTHLY_PRICE} USD each month until you cancel, and "
-             "billing stops on its own after the season's last weekly report: "
-             "your last charge is for the month that report falls in, and "
-             "nothing is charged after it.",
+             f"{BILLING_STOPS}",
              REFUND_TERMS],
         )
     if plan in PAYER_PLANS:
         return (
-            f"the League Pass — {PASS_PRICE} USD for your whole league's season",
-            # terms.html §3: the renewal falls on the purchase anniversary. This
-            # used to say "before the season it covers", which nothing in Stripe
-            # enforces — a wrong date in the acknowledgment the law requires.
-            [f"It renews once a year at {PASS_PRICE} USD unless you cancel, on "
-             "the anniversary of the day you bought it. We email you before it "
-             "bills.",
+            f"the League Pass — {PASS_PRICE} USD a month for your whole league",
+            [f"It bills {PASS_PRICE} USD each month until you cancel, and "
+             f"{BILLING_STOPS}",
              REFUND_TERMS_LEAGUE,
              SEATS_END],
         )

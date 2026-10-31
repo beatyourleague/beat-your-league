@@ -33,6 +33,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -168,6 +169,14 @@ class PaidList:
 # succeeds. Sending during that window is giving away the product on a card
 # that bounced.
 _ENTITLED_STATUSES = ("active", "trialing")
+# A plan WE ended for the season (run/billing, SEASON_STOP_KEY) stops billing
+# with Week 17's report, and its paid period can end before Week 18's report
+# goes out. Those days are owed: "stops on its own" must not cost a subscriber
+# the last report. Two weeks from the day it ended covers Week 18's Tuesday and
+# Saturday from the earliest possible end, and lapses by itself. A plan its
+# buyer cancelled carries no key, so it ends when it ends.
+SEASON_STOP_KEY = "byl_offseason_stop"
+SEASON_STOP_GRACE_DAYS = 14
 
 # RULE E1 — A REFUND ENDS ENTITLEMENT, EVEN WHILE THE SUBSCRIPTION IS ACTIVE.
 #
@@ -476,6 +485,18 @@ def _one_time_purchases(key: str, now: "datetime | None" = None,
     return ids, emails, refunded
 
 
+def stopped_for_season(subscription: Mapping[str, Any], now: datetime) -> bool:
+    """A cancelled subscription still owed the season's last report: we ended
+    it for the season (not its buyer), within SEASON_STOP_GRACE_DAYS."""
+    metadata = subscription.get("metadata")
+    ended = subscription.get("ended_at")
+    if subscription.get("status") != "canceled" or not isinstance(ended, int):
+        return False
+    if not isinstance(metadata, dict) or not metadata.get(SEASON_STOP_KEY):
+        return False
+    return now.timestamp() <= ended + SEASON_STOP_GRACE_DAYS * 86400
+
+
 def load_paid_from_stripe(api_key: str | None = None,
                           statuses: Iterable[str] = _ENTITLED_STATUSES) -> PaidList:
     """Every email currently entitled to a report, straight from Stripe.
@@ -496,7 +517,8 @@ def load_paid_from_stripe(api_key: str | None = None,
     refunded: list[str] = []
     disputes: list[tuple[str, str]] = []
     lookup = DisputeLookup(key)
-    for status in statuses:
+    now = datetime.now(timezone.utc)
+    for status in (*statuses, "canceled"):
         # A LIST of pairs, not a dict: `expand[]` has to repeat, and a dict can
         # only carry it once. RULE E1's expansion is the second one, answered in
         # the same request rather than one extra call per subscriber every week.
@@ -512,6 +534,8 @@ def load_paid_from_stripe(api_key: str | None = None,
                 # Stripe's response is external input like every other feed:
                 # anything unexpected is skipped, never assumed.
                 if not isinstance(subscription, dict):
+                    continue
+                if status == "canceled" and not stopped_for_season(subscription, now):
                     continue
                 customer = subscription.get("customer")
                 if not isinstance(customer, dict) or customer.get("deleted"):

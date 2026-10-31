@@ -135,7 +135,7 @@ PLAYOFF_FROM_WEEK = 13
 
 
 def parse_link_prefixes(raw: str) -> dict[str, str]:
-    """``s:plink_A,o:plink_B,p:plink_C`` -> {link_id: prefix} for every item
+    """``m:plink_A,p:plink_B`` -> {link_id: prefix} for every item
     whose prefix the map knows (``LINK_PREFIX_TO_PLAN``); a bare ``plink_X``
     maps to "" (a filter, plan unknown). An unknown prefix is left out, so a
     purchase through that link is reported as unattributable, never guessed."""
@@ -156,7 +156,7 @@ def parse_link_prefixes(raw: str) -> dict[str, str]:
 
 
 def parse_link_plans(raw: str) -> dict[str, str]:
-    """``s:plink_A,o:plink_B,p:plink_C`` -> {link_id: plan}.
+    """``m:plink_A,p:plink_B`` -> {link_id: plan}.
 
     This map is what makes the plan an authenticated fact instead of a claim.
     A bare ``plink_X`` with no prefix is accepted as a filter with an unknown
@@ -181,18 +181,17 @@ def season_2027_links(raw: str) -> frozenset[str]:
                      if prefix == SEASON_2027_LINK_PREFIX)
 
 
-def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
+def link_map_problems(raw: str) -> list[str]:
     """What is wrong with a STRIPE_PAYMENT_LINKS value, in words. Empty means
-    it is the 2026 shape: ``s:plink_…,o:plink_…,p:plink_…`` — the $29
-    Rest-of-Season Pass, the $19 Playoff Pass and the $69 League Pass, each
-    under its own prefix, each link once (``m:plink_…`` optional, for a
-    monthly plan). ``playoff=False`` when no Playoff Pass is sold.
+    it is the 2026 shape: ``m:plink_…,p:plink_…`` — the $14.99 Monthly plan and
+    the $34.99 League Pass, each under its own prefix, each link once. ``s:``
+    and ``o:`` are not sold any more and stay legal for a purchase already in
+    Stripe; ``y:`` is the 2027 Season Pass.
 
     The map is the whole of "which plan did this payment buy", and a mistake
     in it fails quietly: an unknown prefix drops its link (every purchase
-    through it unattributable), one link under two prefixes keeps only the
-    last, and a $19 link filed under ``s:`` sells every report through Week 18
-    for $10 less with nothing reported (final review SEC-3 / OPS-1)."""
+    through it unattributable), and one link under two prefixes keeps only the
+    last (final review SEC-3 / OPS-1)."""
     problems: list[str] = []
     seen: dict[str, str] = {}
     for item in (raw or "").split(","):
@@ -204,7 +203,7 @@ def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
             problems.append(f"{SEASON_2027_LINK_PREFIX}: names no payment link")
             continue
         if not link:
-            problems.append(f"{item[:24]!r} has no plan prefix (s:, o:, p:)")
+            problems.append(f"{item[:24]!r} has no plan prefix (m:, p:)")
             continue
         if prefix not in LINK_PREFIX_TO_PLAN:
             problems.append(f"unknown prefix {prefix[:4]!r}: in {item[:24]!r} — "
@@ -216,20 +215,16 @@ def link_map_problems(raw: str, *, playoff: bool = True) -> list[str]:
             problems.append(f"{link[:16]} is listed as both {seen[link]}: and {prefix}:")
         seen[link] = prefix
     prefixes = list(seen.values())
-    wanted = ["s", "p"] + ([PLAYOFF_LINK_PREFIX] if playoff else [])
-    for prefix in wanted:
+    for prefix in ("m", "p"):
         count = prefixes.count(prefix)
         if count == 0:
             problems.append(f"no {prefix}: link")
-        elif count > 1 and prefix != "s":
+        elif count > 1:
             problems.append(f"{count} {prefix}: links — one each")
     # Optional, unlike the three above: an absent y: is today's production map.
     if prefixes.count(SEASON_2027_LINK_PREFIX) > 1:
         problems.append(f"{prefixes.count(SEASON_2027_LINK_PREFIX)} "
                         f"{SEASON_2027_LINK_PREFIX}: links — one each")
-    if prefixes.count("s") > 1:
-        problems.append(f"{prefixes.count('s')} s: links — the $19 Playoff Pass "
-                        f"goes under o:, so the intake can tell it from the $29 pass")
     return problems
 
 

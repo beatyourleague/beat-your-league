@@ -110,7 +110,7 @@ def test_the_page_builds_its_ref_through_the_tested_twin() -> None:
     import re as _re
     from run import refs
     emitted = set(_re.findall(
-        r'WANTS_PASS \? "(\w+)" : \(monthlyChosen \? "(\w+)" : "(\w+)"\),',
+        r'WANTS_PASS \? "(\w+)" : \(buyingMonthly\(\) \? "(\w+)" : "(\w+)"\),',
         join)[0])
     assert emitted == set(refs._PLAN_TO_PREFIX), (
         f"the page emits plans {sorted(emitted)} but run/refs.py knows "

@@ -65,9 +65,8 @@ def test_monthly_billing_words_match_the_billing_rule() -> None:
     """LANDING-60, D1: no part-month after the season, and no offseason claim a
     pre-season monthly purchase would break."""
     assert "we don't charge through the offseason" not in TEXT
-    # 2026 (Oct 18): monthly isn't sold, so the landing states no monthly
-    # terms at all; the pass it sells is one payment.
-    assert "/ month" not in LANDING and "One payment" in LANDING
+    # 2026 (Oct 31): a monthly plan, with when it stops on its card.
+    assert "/ month" in LANDING and "Stops on its own after your title game" in LANDING
 
 
 def test_lineups_sizes_and_tagline() -> None:

@@ -1318,51 +1318,43 @@ def test_no_page_uses_an_inline_handler_or_a_javascript_url() -> None:
 # --------------------------------------------------------------------- #
 
 def test_the_2026_base_case_is_priced_as_2026_sells(monkeypatch) -> None:
-    """Reproduced (BIZ-03): base_case_net() priced 30 purchases at the retired
-    $39 subscription and 2 at $99 (Billing fee included) — "$1,113.76 after
-    fixed costs, about $17.40 an hour" — while 2026 sells $29 / $19 / $69
-    one-time passes. Now the base case is those passes, split 20 / 10 by the
-    stated playoff rule, and moving the 2027 prices moves nothing in it."""
+    """The base case is what 2026 sells: 30 Monthly buyers and 2 League Passes at
+    the calendar's charges a buyer, and moving the 2027 prices moves nothing in it."""
     import run.economics as econ
-    assert econ.base_case_mix() == {"Rest-of-Season Pass": 20, "Playoff Pass": 10,
-                                    "League Pass (rest of season)": 2}
-    expected = (20 * econ.net_per_sale(29, one_time=True) + 10 * econ.net_per_sale(19, one_time=True)
-                + 2 * econ.net_per_sale(69, one_time=True) - sum(econ.FIXED_SEASON_COSTS.values()))
+    assert econ.base_case_mix() == {"Monthly": 30, "League Pass": 2}
+    expected = (30 * econ.net_per_buyer(14.99) + 2 * econ.net_per_buyer(34.99)
+                - sum(econ.FIXED_SEASON_COSTS.values()))
     assert econ.base_case_net() == round(expected, 2)
-    assert 700 < econ.base_case_net() < 760
+    assert 540 < econ.base_case_net() < 610
     before = econ.base_case_net()
     monkeypatch.setattr(econ, "SEASON", 1000.0)
     monkeypatch.setattr(econ, "LEAGUE_PASS", 1000.0)
     assert econ.base_case_net() == before
-    assert econ.league_pass_per_manager() == "$5.75"
+    assert econ.league_pass_per_manager() == "$2.92"
 
 
 def test_the_weeks_left_and_the_hours_come_from_the_opening_date() -> None:
     """WEEKS_LEFT was a constant 12, "opening Oct 20" — a date that passed
-    with checkout closed. It is derived from OPENS now: a Monday Oct 26
-    opening sells Week 8 on (11 weekly reports, about 59 owner-hours); an
-    opening on the Thursday of a kickoff sells the next week; an opening in
-    Week 13 sells only Playoff Passes."""
+    with checkout closed. It is derived from OPENS now: a Monday Nov 9 opening
+    sells Week 10 on (9 weekly reports, about 49 owner-hours), and an opening on
+    the Thursday of a kickoff sells the next week."""
     from datetime import date
     import run.economics as econ
-    assert econ.OPENS == date(2026, 10, 26)
+    assert econ.OPENS == date(2026, 11, 9)
     assert econ.first_week_sold(date(2026, 10, 26)) == 8
     assert econ.first_week_sold(date(2026, 10, 28)) == 8
     assert econ.first_week_sold(date(2026, 10, 29)) == 9
-    assert econ.WEEKS_LEFT == econ.weeks_left() == 11
-    assert econ.owner_hours() == 58.9
-    assert econ.owner_hours(date(2026, 11, 9)) < econ.owner_hours()
-    assert econ.playoff_share(date(2026, 12, 1)) == 1.0
+    assert econ.WEEKS_LEFT == econ.weeks_left() == 9
+    assert econ.owner_hours() == 48.8
+    assert econ.owner_hours(date(2026, 10, 26)) > econ.owner_hours()
     assert econ.report_tuesday(18) == date(2027, 1, 5)
 
 
 def test_a_2026_buyer_is_a_re_buy_never_a_renewal() -> None:
-    """A one-time pass renews nothing: the two-season view for a 2026 buyer is
-    their pass plus a stated chance of BUYING again at $39 — about $34.43 at
-    30%, not the $42.81 a $39 renewal implied."""
+    """A monthly plan stops with the season: the two-season view for a 2026 buyer
+    is their season plus a stated chance of BUYING again at $39."""
     import run.economics as econ
-    assert econ.rebuy_value(29, 39, 0.3) == round(
-        econ.net_per_sale(29, one_time=True) + 0.3 * econ.net_per_sale(39), 2)
+    assert econ.rebuy_value(17.74, 39, 0.3) == round(17.74 + 0.3 * econ.net_per_sale(39), 2)
     lines = "\n".join(econ.customer_lines(calendar=None))
     assert "re-buy" in lines and "renew:" not in lines
 

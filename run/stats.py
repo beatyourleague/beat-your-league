@@ -334,8 +334,10 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
     label = SUBSCRIPTIONS_LABEL_ONE_TIME if one_time else SUBSCRIPTIONS_LABEL
     parts = (
         # The charge rides along so a refund is read off the purchase itself.
-        ("passes sold", "checkout/sessions",
-         [("expand[]", "data.payment_intent.latest_charge")], passes),
+        ("plans sold", "checkout/sessions",
+         [("expand[]", "data.payment_intent.latest_charge"),
+          ("expand[]", "data.invoice.charge")], passes),
+        ("monthly renewals", "invoices", [("status", "paid")], _renewals_line),
         ("subscriptions", "subscriptions", [("status", "active")],
          lambda subs: _subscriptions_line(subs, label)),
         ("checkout sessions", "checkout/sessions",
@@ -373,17 +375,20 @@ def stripe_summary(api_key: str, now: datetime, rows: list[Mapping] | None = Non
 # ("s", LAUNCH.md step 3), so those two are told apart by their price before
 # any discount. Prices are run/economics.ONE_TIME's, which tests tie to the
 # welcome email and the live pages.
-PASS_NAMES = (("Rest-of-Season Pass", "Rest-of-Season"), ("Playoff Pass", "Playoff"),
-              ("League Pass (rest of season)", "League Pass"))
+PASS_NAMES = (("Monthly", "Monthly"), ("League Pass", "League Pass"),
+              ("Rest-of-Season Pass", "Rest-of-Season"), ("Playoff Pass", "Playoff"))
 FREE_TO_PAID_DAYS = 14
 
 
 def _pass_type(session: Mapping, link_plans: Mapping[str, str]) -> str:
     from run.economics import ONE_TIME
-    from run.refs import LEAGUE_PASS
+    from run.refs import LEAGUE_PASS, MONTHLY
     short = dict(PASS_NAMES)
-    if link_plans.get(str(session.get("payment_link") or "")) == LEAGUE_PASS:
-        return short["League Pass (rest of season)"]
+    plan = link_plans.get(str(session.get("payment_link") or ""))
+    if plan == LEAGUE_PASS:
+        return short["League Pass"]
+    if plan == MONTHLY:
+        return short["Monthly"]
     price = session.get("amount_subtotal")
     price = price if isinstance(price, int) else session.get("amount_total")
     for name, dollars in ONE_TIME.items():
@@ -393,15 +398,16 @@ def _pass_type(session: Mapping, link_plans: Mapping[str, str]) -> str:
 
 
 def _paid_pass_sessions(sessions: Iterable[Mapping], since: int | None) -> list[Mapping]:
-    """This product's paid one-time purchases: payment mode, complete, paid,
-    a roster reference (a Sleeper-era or foreign session is not one), and —
+    """This product's paid purchases: complete, paid, a roster reference (a
+    Sleeper-era or foreign session is not one), and —
     when the season's start is known — bought after the last season ended."""
     from run.refs import is_roster_ref
     out = []
     for session in sessions:
         ref = session.get("client_reference_id")
         created = session.get("created")
-        if (session.get("mode") != "payment" or session.get("status") != "complete"
+        if (session.get("mode") not in ("payment", "subscription")
+                or session.get("status") != "complete"
                 or session.get("payment_status") != "paid"
                 or not isinstance(ref, str) or not is_roster_ref(ref)):
             continue
@@ -414,21 +420,42 @@ def _paid_pass_sessions(sessions: Iterable[Mapping], since: int | None) -> list[
 def _charge(session: Mapping) -> Mapping:
     intent = session.get("payment_intent")
     charge = intent.get("latest_charge") if isinstance(intent, Mapping) else None
+    if not isinstance(charge, Mapping):
+        # A subscription's first charge sits on its invoice.
+        invoice = session.get("invoice")
+        charge = invoice.get("charge") if isinstance(invoice, Mapping) else None
     return charge if isinstance(charge, Mapping) else {}
+
+
+def renewals(invoices: Iterable[Mapping]) -> list[Mapping]:
+    """Monthly charges after the first: they come with no checkout session, so
+    the sales lines would otherwise never count them."""
+    return [i for i in invoices
+            if i.get("billing_reason") == "subscription_cycle"
+            and str(i.get("currency") or "usd").lower() == "usd"
+            and isinstance(i.get("amount_paid"), int) and i["amount_paid"] > 0]
+
+
+def _renewals_line(invoices: list[dict]) -> str:
+    from run.economics import stripe_fee
+    paid = renewals(invoices)
+    gross = sum(i["amount_paid"] for i in paid) / 100
+    fees = sum(stripe_fee(i["amount_paid"] / 100) for i in paid)
+    return f"  Monthly renewals paid: {len(paid)}, ${gross:,.2f} gross, ${gross - fees:,.2f} net"
 
 
 def passes_lines(sessions: Iterable[Mapping], link_plans: Mapping[str, str],
                  label: str, since: int | None) -> list[str]:
-    """Passes sold by type, the money, and the refund rate. Gross is what the
-    buyers paid; refunded is what Stripe returned (a partial refund counts its
-    amount, and only a FULL refund counts toward the rate — RULE E1's line);
-    net also takes off Stripe's fee as run/economics models it for a one-time
-    payment, which Stripe keeps when it refunds."""
+    """Plans sold by type, the money, and the refund rate. Gross is what the
+    buyers paid at checkout; refunded is what Stripe returned (a partial refund
+    counts its amount, and only a FULL refund counts toward the rate — RULE E1's
+    line); net also takes off Stripe's fee as run/economics models it, which
+    Stripe keeps when it refunds. Renewals have their own line."""
     from run.economics import stripe_fee
     from run.subscriptions import _charge_refunded
     paid = _paid_pass_sessions(sessions, since)
     if not paid:
-        return [f"  Passes sold, {label}: none yet"]
+        return [f"  Plans sold, {label}: none yet"]
     kinds = Counter(_pass_type(s, link_plans) for s in paid)
     order = [short for _name, short in PASS_NAMES]
     detail = ", ".join(f"{k} {kinds[k]}" for k in order + sorted(set(kinds) - set(order))
@@ -437,9 +464,10 @@ def passes_lines(sessions: Iterable[Mapping], link_plans: Mapping[str, str],
            and isinstance(s.get("amount_total"), int)]
     gross = sum(s["amount_total"] for s in usd) / 100
     refunded = sum(int(_charge(s).get("amount_refunded") or 0) for s in usd) / 100
-    fees = sum(stripe_fee(s["amount_total"] / 100, one_time=True) for s in usd)
+    fees = sum(stripe_fee(s["amount_total"] / 100, one_time=s.get("mode") == "payment")
+               for s in usd)
     full = sum(_charge_refunded(_charge(s)) for s in paid)
-    lines = [f"  Passes sold, {label}: {len(paid)} — {detail}",
+    lines = [f"  Plans sold, {label}: {len(paid)} — {detail}",
              f"  Money: ${gross:,.2f} gross, ${refunded:,.2f} refunded, "
              f"${gross - refunded - fees:,.2f} net of Stripe's fee (modelled)",
              f"  Refund rate: {full / len(paid):.0%} ({full} of {len(paid)} refunded in full)"]

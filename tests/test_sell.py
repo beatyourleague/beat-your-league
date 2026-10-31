@@ -158,21 +158,20 @@ def test_the_cards_generic_line_ships_in_the_markup() -> None:
 
 @needs_node
 def test_step_three_states_the_price_the_button_charges() -> None:
-    """Join's value line says the same words whatever the week: the Playoff Pass
-    says $19, and no plan counts anything."""
+    """Join's value line says the same words whatever the week, and no plan
+    counts anything."""
     got = _node('const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";\n' + _fn(JOIN, "valueWords") + """
-var WANTS_PASS = false, chose2027 = false, PLAYOFF_ACTIVE = false;
+var WANTS_PASS = false, chose2027 = false;
 const out = [valueWords()];
-PLAYOFF_ACTIVE = true;
-out.push(valueWords());
-PLAYOFF_ACTIVE = false; WANTS_PASS = true;
+WANTS_PASS = true;
 out.push(valueWords());
 WANTS_PASS = false; chose2027 = true;
 out.push(valueWords());
 console.log(JSON.stringify(out));""")
-    assert got == ["Every lineup from now to your title game. $29, one payment.",
-                   "Every lineup from now to your title game. $19, one payment.",
-                   "Your whole league, every lineup from now to the title game. $69, one payment.",
+    assert got == ["Every lineup from now to your title game. $14.99 a month, and it stops "
+                   "on its own.",
+                   "Your whole league, every lineup from now to the title game. $34.99 a "
+                   "month, and it stops on its own.",
                    "All of 2027, with the rest of this season included. $49 today, nothing "
                    "more until August 15, 2028."]
 
@@ -239,7 +238,7 @@ def test_with_the_switch_off_no_offer_text_ships_in_the_page(name: str, page: st
                     .group(1)) if name == "landing" else None
     if ld:
         offers = next(n for n in ld["@graph"] if n["@type"] == "Product")["offers"]
-        assert [o["price"] for o in offers] == ["29"]
+        assert [o["price"] for o in offers] == ["14.99"]
 
 
 def test_the_only_rendered_39_is_the_founding_line() -> None:
@@ -256,8 +255,8 @@ def test_every_offer_word_is_behind_the_switch() -> None:
     assert LANDING.count("season2027Card();") == 1, "one call"
     assert "const PLAN_CHOICE = SEASON_2027_READY &&" in JOIN
     assert "let chose2027 = PLAN_CHOICE &&" in JOIN
-    block = JOIN[JOIN.index("if ((MONTHLY_OFFERED || PLAN_CHOICE)"):]
-    assert block.index("if (PLAN_CHOICE) {") < block.index('"2027 Season Pass · $49"')
+    block = JOIN[JOIN.index("if (PLAN_CHOICE && !UPDATE_MODE && !TRY_MODE) {"):]
+    assert '"2027 Season Pass · $49"' in block
 
 
 class _Dom:
@@ -274,7 +273,7 @@ class El {
 }
 const plans = new El("div"); plans.classes.add("one");
 const first = new El("div"); first.id = "pass-card"; first.classes.add("founder"); first.parentNode = plans;
-const ldEl = { textContent: JSON.stringify({ "@graph": [{ "@type": "Product", offers: [{ price: "29" }] }] }) };
+const ldEl = { textContent: JSON.stringify({ "@graph": [{ "@type": "Product", offers: [{ price: "14.99" }] }] }) };
 const found = {};
 globalThis.document = {
   createElement: (t) => new El(t),
@@ -293,12 +292,10 @@ plans.appendChild = (card) => {
 @needs_node
 @pytest.mark.parametrize("open_", [True, False])
 def test_with_the_switch_on_the_renewal_sits_beside_the_price(open_: bool) -> None:
-    fns = (_fn(LANDING, "season2027More") + _fn(LANDING, "season2027Lines")
-           + _fn(LANDING, "season2027Card"))
+    fns = _fn(LANDING, "season2027Card")
     got = _node(_Dom.SCRIPT + f"""
 const CHECKOUT_OPEN = {'true' if open_ else 'false'}, SEASON_2027_PRICE = 49, SEASON_2027_RENEWAL = 39;
 const SEASON_2027_FIRST_RENEWAL = "August 15, 2028";
-var PASS_AMOUNT = 29;
 """ + fns + """
 season2027Card();
 const card = plans.children[0];
@@ -315,7 +312,7 @@ console.log(JSON.stringify({ parts, id: card.id, firstFounder: first.classes.has
     assert "All of 2027, with the rest of this season included." in dict(got["parts"])["passlead"]
     assert dict(got["parts"])["price"] == "$49 / this season and next"
     assert got["firstFounder"] is False and got["gridOne"] is False, "the $49 card is the preferred one"
-    assert [o["price"] for o in got["offers"]] == ["29", "49"]
+    assert [o["price"] for o in got["offers"]] == ["14.99", "49"]
     assert "renews at $39, then each August" in got["offers"][1]["description"]
     if open_:
         assert got["buy"] == "join/index.html?plan=2027" and got["label"] == "Get my lineups — $49"
@@ -327,28 +324,16 @@ def test_the_plain_css_keeps_the_renewal_at_full_size() -> None:
     assert re.search(r"\.plan \.passterms\{[^}]*font-size:15px", LANDING), "the card's own size"
 
 
-@needs_node
-@pytest.mark.parametrize("price,more", [
-    (29, "$20 more gets you all of next season."),
-    (19, "$30 more gets you all of next season."),
-])
-def test_the_step_up_is_worked_out_from_the_price_on_offer(price, more) -> None:
-    got = _node("const SEASON_2027_PRICE = 49;\n" + _fn(LANDING, "season2027More")
-                + f"\nconsole.log(JSON.stringify(season2027More({price})));")
-    assert got == more
-
-
 def test_the_cheaper_cards_button_never_lands_on_the_dearer_plan() -> None:
-    assert 'link.href = "join/index.html?plan=season";' in LANDING
+    assert 'link.href = "join/index.html?plan=monthly";' in LANDING
     assert '!QUERY.has("update") && QUERY.get("try") !== "1";' in JOIN
-    assert 'let chose2027 = PLAN_CHOICE && QUERY.get("plan") !== "season";' in JOIN
-    # Both passes write an "s" ref, so the choice is the one thing the address
-    # has to carry across a reload.
-    assert 'if (PLAN_CHOICE) params.set("plan", chose2027 ? "2027" : "season");' in JOIN
+    assert 'let chose2027 = PLAN_CHOICE && PLAN_PARAM !== "monthly";' in JOIN
+    # The choice is the one thing the address has to carry across a reload.
+    assert 'if (PLAN_CHOICE) params.set("plan", chose2027 ? "2027" : "monthly");' in JOIN
 
 
 def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
-    """A buyer on the renewing plan must never read "nothing renews": the
+    """A buyer on the renewing plan must never read "stops on its own": the
     button's terms, the sidebar, the confirmation, the hero's risk line and the
     finance note all change with the flag or the choice."""
     fn = _fn(JOIN, "draw2027Plan")
@@ -357,15 +342,13 @@ def test_the_2027_plan_replaces_every_nothing_renews_line() -> None:
         assert target in fn, target
     assert 'textContent = "Unlock my lineups — $49";' in fn
     assert "We email you before it bills" in re.sub(r'"\s*\+\s*"', "", fn)
-    assert 'SEASON_2027_READY ? "" : " One payment, nothing renews."' in re.sub(
-        r'"\s*\+\s*\n?\s*"', "", LANDING)
-    assert "(SEASON_2027_READY ? \"\" : \" One payment, nothing renews.\")" in LANDING
+    assert LANDING.count('(SEASON_2027_READY ? "" : " Stops on its own after your title game.")') == 2
 
 
 def test_the_ref_prefix_stays_s() -> None:
     """The plan comes from the link that took the money, never the ref."""
     fn = _fn(JOIN, "checkoutRef")
-    assert 'WANTS_PASS ? "league_pass" : (monthlyChosen ? "monthly" : "season")' in fn
+    assert 'WANTS_PASS ? "league_pass" : (buyingMonthly() ? "monthly" : "season")' in fn
     assert "2027" not in fn
 
 
@@ -375,10 +358,9 @@ def test_the_ref_prefix_stays_s() -> None:
 
 def test_the_read_back_names_what_the_next_press_costs() -> None:
     fn = _fn(JOIN, "checkoutWords")
-    for price in ("$29", "$19", "$49", "$69", "$14.99/mo"):
+    for price in ("$14.99/mo", "$34.99/mo", "$49"):
         assert f"Continue to checkout — {price}" in fn
     assert '$("check-yes").textContent = go ? checkoutWords()' in JOIN
-    assert 'textContent = "Unlock my lineups — $19";' in _fn(JOIN, "drawPlayoffPass")
 
 
 def test_the_closed_state_keeps_its_honest_lines() -> None:

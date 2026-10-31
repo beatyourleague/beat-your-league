@@ -102,7 +102,7 @@ def test_launch_opens_with_the_weekend_checklist() -> None:
     for permission in ("Payment Intents", "Charges", "Disputes"):
         assert permission in flat
     assert "run daily-intake once by hand" in flat
-    assert "Can wait" in flat and "Wed Nov 25, from 8:00 PM ET" in flat
+    assert "Can wait" in flat
 
 
 def test_every_anchor_in_launch_resolves() -> None:
@@ -371,48 +371,34 @@ def _link_maps(text: str) -> list[str]:
     row = [line for line in _section(text, "3.").splitlines()
            if line.startswith("| `STRIPE_PAYMENT_LINKS` |")]
     assert command and row
-    return command + re.findall(r"`(s:[^`]+)`", row[0])
+    return command + re.findall(r"`(m:[^`]+)`", row[0])
 
 
-def test_the_link_map_is_s_o_p_in_both_places() -> None:
-    """Contract C4: STRIPE_PAYMENT_LINKS is "s:<$29>,o:<$19>,p:<$69>" — in the
-    secret AND in the payment-link text command, which takes the same map.
-    Reproduced (OPS-1): the command used 's:…,s:…,p:…', which the script
-    collapses to one season link. Once the intake reads 'o:', every id in the
-    command maps to a plan."""
+def test_the_link_map_is_m_p_in_both_places() -> None:
+    """STRIPE_PAYMENT_LINKS is "m:<$14.99>,p:<$34.99>" (owner decision, Oct 31
+    2026) — in the secret AND in the payment-link text command, which takes the
+    same map, and every id in the command maps to a plan."""
     maps = _link_maps(_launch())
     for raw in maps:
         prefixes = [item.split(":", 1)[0] for item in raw.split(",")]
-        assert prefixes == ["s", "o", "p"], raw
+        assert prefixes == ["m", "p"], raw
     from run.checkout import parse_link_plans
-    command = maps[0]
-    plans = parse_link_plans(command)
-    if len(plans) < 3:
-        pytest.skip("contract C4's o: prefix lands with the intake's branch; "
-                    f"today parse_link_plans reads {sorted(plans.values())}")
-    assert len(plans) == 3 and all(plans.values()), plans
+    plans = parse_link_plans(maps[0])
+    assert len(plans) == 2 and all(plans.values()), plans
 
 
-def test_the_playoff_link_opens_at_week_12s_first_kickoff() -> None:
-    """Contract C4: the $19 link is made now, switched off, and switched on at
-    Week 12's first kickoff — the moment the join page's firstWeek >= 13 rule
-    starts offering it. LAUNCH's date is read against the schedule the product
-    reads, as is every row of the kickoff table the refund checks use."""
+def test_the_kickoff_table_is_the_schedules() -> None:
+    """Every row of the kickoff table the refund checks use is read against the
+    schedule the product reads."""
     from zoneinfo import ZoneInfo
 
     from run.solo import CACHE_DIR
     from run.trials import week_underway_from
     text = _launch()
-    flat = _flat(text)
-    assert "Wed Nov 25 2026, 8:00 PM ET" in flat
-    assert "**Switch the $19 link off until Nov 25:**" in flat
-    assert "The Playoff Pass, from Wed Nov 25." in flat and "`PLAYOFF-EARLY`" in flat
     eastern = ZoneInfo("America/New_York")
     kick = week_underway_from(CACHE_DIR, "2026", 12)
     if kick is None:
         pytest.skip("no 2026 schedule cached (data/ is gitignored)")
-    local = kick.astimezone(eastern)
-    assert (local.strftime("%a %b"), local.day, local.strftime("%-I:%M %p")) == ("Wed Nov", 25, "8:00 PM")
     rows = re.findall(r"(?m)^\| (\d+) \| (?:\*\*)?(\w{3})(?:\*\*)? (\w{3}) (\d+), (\d+:\d\d)(am|pm)", text)
     assert len(rows) >= 13
     for week, day, month, date, clock, half in rows:

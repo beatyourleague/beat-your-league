@@ -169,14 +169,8 @@ TRIAL_LAST_BUTTON = "Tell me when it opens"
 
 # The free report's price line, at the TOP (pre-launch review M5): the one ask
 # sat after the whole report with no price, so a reader who stopped at the
-# lineup never learned what it costs. 2026 sells one-time passes, whose terms
-# are short enough to sit beside the price — one payment, nothing renews, the
-# refund window — worded as the landing's price card words them. From the
-# week the join page may sell the $19 Playoff Pass instead (the landing's and
-# join page's PLAYOFF_FROM_WEEK) the line names no price: the email cannot see
-# whether that link is live, and a price the join page doesn't charge is
-# worse than none. Nothing in the season's last week: there is no next one.
-TRIAL_PLAYOFF_FROM_WEEK = 13
+# lineup never learned what it costs. Worded as the landing's price card words
+# it. Nothing in the season's last week: there is no next one.
 TRIAL_REFUND = ("Full refund, no questions, until your first weekly report's "
                 "week kicks off. One per person.")
 
@@ -187,15 +181,9 @@ def trial_price_line(meta: Mapping[str, Any] | None) -> str | None:
     meta = meta or {}
     if _is_final_week(meta):
         return None
-    from render.welcome import SEASON_PRICE
-    week = meta.get("week")
-    if isinstance(week, int) and week + 1 >= TRIAL_PLAYOFF_FROM_WEEK:
-        offer = ("Every Tuesday through your title game: one payment, nothing "
-                 "renews. The join page shows this week's price.")
-    else:
-        offer = (f"Every Tuesday through your title game: the {SEASON_PRICE} "
-                 f"Rest-of-Season Pass, one payment, nothing renews.")
-    return f"{offer} {TRIAL_REFUND}"
+    from render.welcome import MONTHLY_PRICE
+    return (f"Every Tuesday through your title game: {MONTHLY_PRICE} a month, and it "
+            f"stops on its own. {TRIAL_REFUND}")
 
 
 def _is_final_week(meta: Mapping[str, Any] | None) -> bool:

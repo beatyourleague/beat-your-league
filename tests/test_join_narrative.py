@@ -133,12 +133,12 @@ def test_a_missing_player_list_says_so_and_stops_cleanly() -> None:
         assert "innerHTML" not in guard, name
 
 
-def test_the_join_page_speaks_to_a_one_payment_buyer() -> None:
+def test_the_join_page_speaks_to_a_buyer() -> None:
     """The day-one email is "your first report" to a buyer, never "roster
-    report"; the one-payment product has pass holders, not subscribers."""
+    report"; the page says plan, never subscriber."""
     buyer = _flat(_markup(JOIN)) + _flat(_code(JOIN))
     assert "roster report" not in buyer.lower()
     assert "Your first report today" in buyer and "your Tuesday report" in buyer
     visible = re.sub(r"<!--.*?-->", "", _flat(_markup(JOIN)), flags=re.S)
     assert not re.search(r"\bsubscriber", visible, re.I)
-    assert "doesn't belong to a pass holder" in visible
+    assert "doesn't already have a plan" in visible

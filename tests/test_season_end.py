@@ -102,10 +102,10 @@ def test_championship_week_says_whether_another_report_comes(tmp_path) -> None:
 
 
 @pytest.mark.parametrize("plan, says", [
-    ("monthly", "stops billing on its own"),
+    ("monthly", "stopped billing on its own"),
     ("season", "we email you before it does"),
     # A seat: the payer's sentence from the seat's side (COPY:F6).
-    ("league_pass", "Your seat follows your league's pass: if it renews"),
+    ("league_pass", "Your seat follows your league's pass: if your league comes back"),
 ])
 def test_the_last_report_says_so_and_what_happens_to_the_billing(
         tmp_path, plan, says) -> None:

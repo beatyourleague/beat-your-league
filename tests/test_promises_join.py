@@ -173,8 +173,8 @@ def test_a_roster_changed_after_listing_can_be_listed_again() -> None:
 def test_the_join_words_describe_the_product_after_the_decisions() -> None:
     """D1, D10, D13, D16, D18, D19 and the JOIN word items."""
     code = re.sub(r'"\s*\+\s*"', "", _js_code(JOIN))   # concatenated strings, joined
-    assert "billing stops on its own after the season's last weekly report" in prose(code)
-    assert "your last charge is the month that report falls in" in prose(code)
+    assert "billing stops on its own after the title game" in prose(code)
+    assert "nothing is charged after Week 17's report goes out" in prose(code)
     assert "billing stops on its own when the season ends" not in prose(code)
     assert code.count("(or a week after it reaches you, if we send it late)") >= 2
     assert "each manager claims their seat from it once" in prose(code)
@@ -188,7 +188,7 @@ def test_the_join_words_describe_the_product_after_the_decisions() -> None:
     assert "by Friday night (ET)" in prose(CONFIRM) and "by Friday night (ET)" in prose(THANKS)
     thanks = prose(THANKS)
     assert "usually lands within the hour" in thanks and "allow up to an hour" not in thanks
-    assert "We do not ask why" not in thanks and "nothing to cancel" in thanks
+    assert "We do not ask why" not in thanks and "stop on its own" in thanks
     assert "Bought a pass for more than one league?" in thanks
     assert "everyone who claims a seat gets their own lineup report" in thanks
     assert 'fetch("week.json"' in THANKS

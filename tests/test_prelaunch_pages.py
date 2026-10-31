@@ -155,7 +155,7 @@ def test_the_restamp_changes_the_chrome_and_moves_no_number() -> None:
     assert out.count(rr.sample_cta()) == 2
     assert rr.esc(rr.JOIN_PROMISE) in out and "league's way" not in out
     assert rr.cancel_html(rr.stop_route({"anonymized_demo": True}), sample=True) in out
-    assert "billing page" not in out and "to your league&#x27;s settings" not in out
+    assert "to your league&#x27;s settings" not in out
     assert "<title>Beat Your League — sample fantasy football report, 2026 Week 7</title>" in out
     assert "odds on 3" not in out and "every slot decided" in out
     assert live.restamp_chrome(out) == out, "a second restamp changed the page"
@@ -344,7 +344,7 @@ def test_every_closed_league_pass_ask_is_a_real_button_and_the_page_ends_on_one(
     closer = main.rsplit('<div class="closer" data-reveal>', 1)[1]
     assert main.rstrip().endswith("</div>") and "data-lp-cta" in closer
     words = prose(re.sub(r"<[^>]+>", " ", closer))
-    assert "$69" in words and "one payment, nothing renews" in words and "refund" in words
+    assert "$34.99 a month" in words and "stops on its own" in words and "refund" in words
     code = _js_code(LEAGUE_PASS)
     assert 'querySelectorAll("[data-lp-cta]")' in code
     assert code.count('className = "btn gold"') == 2, "an opened ask is not the gold button"
@@ -681,8 +681,8 @@ def test_the_thank_you_page_gives_a_buyer_their_next_steps() -> None:
     assert f"<b>{sender}</b>" in block
     assert 'href="league-pass.html"' in block
     words = prose(re.sub(r"<[^>]+>", " ", block))
-    assert "$69 for the whole league, one payment, nothing renews" in words and "refund" in words
-    assert "reply to any report while your own pass's refund window is open" in words
+    assert "$34.99 a month for the whole league" in words and "refund" in words
+    assert "cancel your Monthly plan, and reply to any report while its refund window is open" in words
     friend = block.split("Know a manager in another league?")[1]
     assert "https://beatyourleague.com/?via=friend" in friend and "your league" not in friend
     code = _js_code(THANKS)

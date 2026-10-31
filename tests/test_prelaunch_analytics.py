@@ -637,12 +637,12 @@ SESSIONS = [
     _session(4, 6900, link="plink_pass"),
     _session(5, 2320, subtotal=2900),                        # a discount: still Rest-of-Season
     _session(6, 2900, refunded=1000),                        # partly refunded
-    _session(7, 3900, mode="subscription"),                  # 2027's plans, not a pass
+    _session(7, 1499, link="plink_month", mode="subscription"),
     _session(8, 2900, paid="unpaid"),
     _session(9, 2900, ref="s-123456-789012-345678"),         # Sleeper era
     _session(10, 2900, created=SEASON_START - 86400),        # last season
 ]
-LINKS = {"plink_season": "season", "plink_pass": "league_pass"}
+LINKS = {"plink_season": "season", "plink_month": "monthly", "plink_pass": "league_pass"}
 
 
 def test_passes_are_counted_by_type_with_the_money_and_the_refund_rate() -> None:
@@ -650,19 +650,21 @@ def test_passes_are_counted_by_type_with_the_money_and_the_refund_rate() -> None
     every 2026 buyer — the passes are payment-mode sessions — and had no
     revenue, pass-type split or refund rate. The $29 and $19 links share the
     season plan, so price before discount tells them apart; the League Pass is
-    the link map's. A subscription, an unpaid or Sleeper-era session, and last
-    season's sale are not this season's passes."""
+    the link map's, and so is Monthly. An unpaid or Sleeper-era session and last
+    season's sale are not this season's."""
     from run.economics import stripe_fee
     lines = stats.passes_lines(SESSIONS, LINKS, "2026 season", SEASON_START)
-    assert lines[0] == "  Passes sold, 2026 season: 6 — Rest-of-Season 4, Playoff 1, League Pass 1"
-    gross = (2900 * 3 + 2320 + 1900 + 6900) / 100
+    assert lines[0] == ("  Plans sold, 2026 season: 7 — Monthly 1, League Pass 1, "
+                        "Rest-of-Season 4, Playoff 1")
+    gross = (2900 * 3 + 2320 + 1900 + 6900 + 1499) / 100
     refunded = (2900 + 1000) / 100
-    fees = sum(stripe_fee(a / 100, one_time=True) for a in (2900, 2900, 1900, 6900, 2320, 2900))
+    fees = (sum(stripe_fee(a / 100, one_time=True) for a in (2900, 2900, 1900, 6900, 2320, 2900))
+            + stripe_fee(14.99))
     assert lines[1] == (f"  Money: ${gross:,.2f} gross, ${refunded:,.2f} refunded, "
                         f"${gross - refunded - fees:,.2f} net of Stripe's fee (modelled)")
-    assert lines[2] == "  Refund rate: 17% (1 of 6 refunded in full)"
+    assert lines[2] == "  Refund rate: 14% (1 of 7 refunded in full)"
     assert stats.passes_lines([], LINKS, "2026 season", None) == [
-        "  Passes sold, 2026 season: none yet"]
+        "  Plans sold, 2026 season: none yet"]
     assert "@" not in "\n".join(lines)
 
 
@@ -732,10 +734,10 @@ def test_the_passes_read_asks_stripe_for_the_charge_and_feeds_free_to_paid(monke
              "received_at": (NOW - timedelta(days=14, hours=2)).isoformat()}]
     lines = stats.stripe_summary("rk_test_x", NOW, rows=rows, link_plans=LINKS,
                                  season_label="2026 season", since=SEASON_START)
-    assert lines[0].startswith("  Passes sold, 2026 season: 6")
+    assert lines[0].startswith("  Plans sold, 2026 season:")
     assert "  Free report → paid within 14 days: 1 of 1" in lines
     expands = [parse_qs(urlsplit(u).query).get("expand[]") for u in fake.urls]
-    assert ["data.payment_intent.latest_charge"] in expands
+    assert any(e and "data.payment_intent.latest_charge" in e for e in expands)
     assert "@" not in "\n".join(lines)
 
 

@@ -41,7 +41,7 @@ from test_intake_sync import (PASS_LINK, PLAYERS, REF, SEASON_LINK, _registry, _
                               _session, directory, stripe)  # noqa: F401 — fixtures
 
 PASS_2027_LINK = "plink_Y"
-MAP_2026 = f"s:{SEASON_LINK},o:plink_O,p:{PASS_LINK}"
+MAP_2026 = f"m:{SEASON_LINK},p:{PASS_LINK}"
 MAP_2027 = f"{MAP_2026},y:{PASS_2027_LINK}"
 BOUGHT = int(datetime(2026, 10, 30, 15, tzinfo=timezone.utc).timestamp())
 TARGET = int(SEASON_2027_FIRST_RENEWAL.timestamp())
@@ -125,9 +125,8 @@ def _pass_session(**over) -> dict:
 def test_the_map_without_y_reads_exactly_as_it_did() -> None:
     """Today's production path. The offer does not exist until it is named."""
     assert season_2027_links(MAP_2026) == frozenset()
-    assert parse_link_plans(MAP_2026) == {SEASON_LINK: "season", "plink_O": "season",
-                                          PASS_LINK: "league_pass"}
-    assert playoff_links(MAP_2026) == {"plink_O"}
+    assert parse_link_plans(MAP_2026) == {SEASON_LINK: "monthly", PASS_LINK: "league_pass"}
+    assert playoff_links(MAP_2026) == frozenset()
     assert link_map_problems(MAP_2026) == []
 
 
@@ -141,7 +140,7 @@ def test_an_existing_purchase_writes_the_same_row_and_log_line(
     assert _run(tmp_path) == 0, capsys.readouterr().err
     assert "season_2027" not in _registry(tmp_path)[0]
     assert "season_2027" not in (tmp_path / intake.SIGNUP_LOG_NAME).read_text(encoding="utf-8")
-    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].report_plan == "season"
+    assert load_rosters(tmp_path / intake.REGISTRY_NAME)[0].report_plan == "monthly"
 
 
 def test_the_welcome_is_byte_identical_without_the_marker() -> None:
@@ -183,7 +182,7 @@ def test_the_billing_run_never_reads_a_thing_more_without_y(monkeypatch, capsys)
     """No sessions walked, no second subscription read, not a line printed."""
     log = _billing_env(monkeypatch, MAP_2026, [bought()])
     assert billing.main(["--send", "--today", "2026-10-31"]) == 0
-    assert log == {"loads": [False], "sweeps": 0, "posts": []}
+    assert log == {"loads": [True], "sweeps": 0, "posts": []}
     assert "SEASON PASS" not in capsys.readouterr().out
 
 
@@ -489,7 +488,7 @@ def test_send_moves_it_and_says_so(monkeypatch, capsys) -> None:
     log = _billing_env(monkeypatch, MAP_2027, [bought()], [_pass_session()])
     assert billing.main(["--send", "--today", "2026-10-31"]) == 0
     assert len(log["posts"]) == 1 and f"[moved] {SUB}" in capsys.readouterr().out
-    assert log["loads"] == [False, True], "the monthly read is unchanged; the pass step adds one"
+    assert log["loads"] == [True, True], "the monthly read, and the pass step adds one"
 
 
 def test_a_second_run_writes_nothing(monkeypatch, capsys) -> None:
@@ -868,7 +867,7 @@ def test_a_y_link_gets_the_renewal_words_never_the_one_payment_words() -> None:
     from infra.stripe_paylink_text import (SEASON_2027_PLAN, SEASON_2027_TOS, MESSAGES,
                                            STRIPE_TEXT_LIMIT, fields, targets)
     links = dict(targets(MAP_2027))
-    assert links[PASS_2027_LINK] == SEASON_2027_PLAN and links[SEASON_LINK] == "season"
+    assert links[PASS_2027_LINK] == SEASON_2027_PLAN and links[SEASON_LINK] == "monthly"
     form = fields(links[PASS_2027_LINK])
     words = form["custom_text[submit][message]"]
     assert words != MESSAGES["season"] and "Nothing renews" not in words
@@ -889,8 +888,7 @@ def test_a_subscription_link_is_not_sent_a_payment_mode_field() -> None:
 
 def test_the_map_without_y_targets_what_it_did() -> None:
     from infra.stripe_paylink_text import targets
-    assert targets(MAP_2026) == [(SEASON_LINK, "season"), ("plink_O", "season"),
-                                 (PASS_LINK, "league_pass")]
+    assert targets(MAP_2026) == [(SEASON_LINK, "monthly"), (PASS_LINK, "league_pass")]
 
 
 def test_the_price_on_every_surface_is_one_figure() -> None:
@@ -1180,7 +1178,6 @@ def test_make_stats_shows_it_only_when_the_offer_is_on(monkeypatch) -> None:
     assert any("$49.00 collected for 2027 seasons" in line for line in lines)
     lines, asked = _summary(monkeypatch, ())
     assert not any("2027 Season Pass" in line for line in lines)
-    assert not any("data.invoice.charge" in url for url in asked)
 
 
 def test_the_dashboard_card_appears_only_with_the_offer() -> None:
@@ -1201,15 +1198,15 @@ def test_the_dashboard_card_appears_only_with_the_offer() -> None:
 def test_the_model_states_the_trade() -> None:
     """Prepaid, the pass adds a little today and gives up a year if the buyer
     would have come back, so the break-even is the number worth keeping."""
-    from run.economics import (REBUY_RATES, REST_OF_SEASON, SEASON, SEASON_2027_PASS, net_per_sale,
-                               rebuy_value, season_2027_prepay, summary_lines)
+    from run.economics import (MONTHLY, REBUY_RATES, SEASON, SEASON_2027_PASS, net_per_buyer,
+                               net_per_sale, rebuy_value, season_2027_prepay, summary_lines)
     prepay = season_2027_prepay()
     assert prepay["net"] == net_per_sale(SEASON_2027_PASS)
-    assert prepay["rest_of_season_net"] == net_per_sale(REST_OF_SEASON, one_time=True)
-    # $49 (Oct 31 2026): inside the model's own re-buy range, where $39 sat below it.
-    assert prepay["extra"] > 0 and min(REBUY_RATES) < prepay["break_even"] < max(REBUY_RATES)
+    assert prepay["monthly_net"] == net_per_buyer(MONTHLY)
+    # $49 beside a monthly buyer: near the top of the model's own re-buy range.
+    assert prepay["extra"] > 0 and min(REBUY_RATES) < prepay["break_even"] < 1
     # At exactly the break-even rate the two are worth the same, to the cent.
-    even = rebuy_value(REST_OF_SEASON, SEASON, prepay["break_even"])
+    even = rebuy_value(prepay["monthly_net"], SEASON, prepay["break_even"])
     assert abs(even - prepay["net"]) < 0.02
     assert any("2027 Season Pass" in gate for gate, _s, _d in summary_lines())
 

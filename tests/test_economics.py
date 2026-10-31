@@ -109,19 +109,19 @@ def test_selling_time_is_plans_own_budget_and_the_audit_agrees(tmp_path, monkeyp
     time?". The model takes PLAN's budget, and the launch check fails when
     the audit's base case stops matching it."""
     assert econ.SELLING_MIN_PER_DAY == 35
-    assert econ.owner_hours() == 58.9          # 11 weeks from an Oct 26 opening (BIZ-03)
-    assert econ.base_case_figures() == ("about $727", "about 59 hours", "about $12 an hour")
+    assert econ.owner_hours() == 48.8          # 9 weeks from a Nov 9 opening
+    assert econ.base_case_figures() == ("about $574", "about 49 hours", "about $12 an hour")
     stale = tmp_path / "launch-readiness.md"
-    stale.write_text("about $727 after fixed costs; about 43 hours, so about $26 an hour",
+    stale.write_text("about $574 after fixed costs; about 43 hours, so about $26 an hour",
                      encoding="utf-8")
     missing = econ.readiness_base_case_mismatches(stale)
-    assert len(missing) == 2 and "about 59 hours" in missing[0], missing
+    assert len(missing) == 2 and "about 49 hours" in missing[0], missing
     # And the launch check's gate goes red on it.
     monkeypatch.setattr(econ, "READINESS", stale)
     [row] = [r for r in econ.summary_lines() if "base-case" in r[0]]
-    assert row[1] == "FAIL" and "about 59 hours" in row[2], row
+    assert row[1] == "FAIL" and "about 49 hours" in row[2], row
     wrapped = tmp_path / "wrapped.md"
-    wrapped.write_text("about $727 after costs. Owner time: about\n59 hours, so about $12\n"
+    wrapped.write_text("about $574 after costs. Owner time: about\n49 hours, so about $12\n"
                        "an hour.", encoding="utf-8")
     assert econ.readiness_base_case_mismatches(wrapped) == []
 
@@ -148,12 +148,11 @@ def test_a_billing_anchor_clamps_to_a_short_month(day, expected) -> None:
     assert econ._add_month(day) == expected
 
 
-def test_the_one_time_prices_are_the_ones_the_site_sells() -> None:
-    """2026 sells one-time passes (Oct 18 2026); the model's figures are the
+def test_the_monthly_prices_are_the_ones_the_site_sells() -> None:
+    """2026 sells monthly plans (Oct 31 2026); the model's figures are the
     welcome email's constants, which another test ties to the pages."""
-    from render.welcome import PASS_PRICE, PLAYOFF_PRICE, SEASON_PRICE
-    assert econ.ONE_TIME == {"Rest-of-Season Pass": float(SEASON_PRICE[1:]),
-                             "Playoff Pass": float(PLAYOFF_PRICE[1:]),
-                             "League Pass (rest of season)": float(PASS_PRICE[1:])}
+    from render.welcome import MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE
+    assert (econ.MONTHLY, econ.LEAGUE_MONTHLY, econ.SEASON) == (
+        float(MONTHLY_PRICE[1:]), float(PASS_PRICE[1:]), float(SEASON_PRICE[1:]))
     # No Stripe Billing fee on a one-time payment.
     assert econ.stripe_fee(29, one_time=True) < econ.stripe_fee(29)

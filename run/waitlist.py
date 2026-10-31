@@ -107,19 +107,13 @@ OPENING_WEEK = "You asked to hear when this opened. It's open, in time for Week 
 # email and the checkout state one offer in one set of words.
 _REFUND = ("Refunds are no-questions until your first weekly report's week "
            "kicks off. One per person.")
-OFFER = ("The Rest-of-Season Pass is {price}, one payment: nothing renews and "
-         "nothing more is charged. " + _REFUND)
-OFFER_PLAYOFF = ("The Playoff Pass is {price}, one payment: nothing renews and "
-                 "nothing more is charged. " + _REFUND)
-# The join page's switch (PLAYOFF_FROM_WEEK): the $19 pass replaces the $29
-# one once a buyer's first weekly report would be this week or later — and
-# only while its payment link is on the page.
-PLAYOFF_FROM_WEEK = 13
+OFFER = ("The Monthly plan is {price} a month, and it stops on its own after your "
+         "title game. Cancel any time. " + _REFUND)
 # One line for a commissioner (G4), between the offer and the link — only when
 # the join page can sell the League Pass (its seats need the form Worker), and
 # never a second email. It names no price, so it owes no price disclosure; the
 # page it links carries the pass's own terms beside its price.
-LEAGUE_PASS_LINE = ("Running the league? One payment covers every manager's own report "
+LEAGUE_PASS_LINE = ("Running the league? One plan covers every manager's own report "
                     "for the rest of the season: {url}")
 
 # What the body must NOT promise, and why — this list is a test, not a comment:
@@ -285,18 +279,6 @@ def launch_frame(clock: dict | None, now=None) -> tuple[int, bool, str] | None:
     return first, not kicked, day
 
 
-def _playoff_link_live() -> bool:
-    """Is the $19 Playoff Pass link on the join page? The email may offer
-    only what the checkout it links to sells."""
-    page = REPO_ROOT / "site" / "join" / "index.html"
-    try:
-        found = re.search(r'const STRIPE_LINK_PLAYOFF = "([^"]*)"',
-                          page.read_text(encoding="utf-8"))
-    except OSError:
-        return False
-    return bool(found and found.group(1).strip())
-
-
 def _league_pass_live() -> bool:
     """Can the League Pass be bought from the page the line links? The join
     page's seat backend (FORM_ENDPOINT) and payment link (STRIPE_LINK_PASS)
@@ -334,11 +316,9 @@ def _clock() -> dict:
 def compose(url: str, sender: str, clock: dict | None = None,
             now=None) -> tuple[str, str, str]:
     """(subject, plain-text body, inbox preview) for one launch email."""
-    from render.welcome import PLAYOFF_PRICE, SEASON_PRICE
+    from render.welcome import MONTHLY_PRICE
     frame = launch_frame(clock, now)
-    playoff = bool(frame and frame[0] >= PLAYOFF_FROM_WEEK and _playoff_link_live())
-    offer = (OFFER_PLAYOFF.format(price=PLAYOFF_PRICE) if playoff
-             else OFFER.format(price=SEASON_PRICE))
+    offer = OFFER.format(price=MONTHLY_PRICE)
     if frame is None:
         subject, opening = SUBJECT, OPENING
         preview = "Signups are open. Your first report usually lands within the hour."

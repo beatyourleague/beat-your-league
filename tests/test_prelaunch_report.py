@@ -540,25 +540,24 @@ def test_a_starter_tuesday_called_a_possible_zero_is_mailed_when_cleared() -> No
 def test_the_free_report_states_the_price_and_refund_terms_up_top(monkeypatch) -> None:
     """Reproduction (pre-launch review M5): the one ask sat after the whole
     report, with no price. The offer now sits under the free-report header,
-    with one payment, nothing renews and the refund window beside the price."""
+    with when billing stops and the refund window beside the price."""
     from render.email import render_email, text_summary, trial_price_line
     monkeypatch.setenv("SITE_URL", "https://example.com")
     report = _solo()
     report["meta"]["trial"] = True
     line = trial_price_line(report["meta"])
-    assert line == ("Every Tuesday through your title game: the $29 Rest-of-Season "
-                    "Pass, one payment, nothing renews. Full refund, no questions, "
-                    "until your first weekly report's week kicks off. One per person.")
+    assert line == ("Every Tuesday through your title game: $14.99 a month, and it stops "
+                    "on its own. Full refund, no questions, until your first weekly "
+                    "report's week kicks off. One per person.")
     # Above the report's first card (contract C1: the lineup leads now, and a
     # free report whose only task is setting the lineup carries no plan card).
     page = render_email(report).replace("&#x27;", "'")
-    assert page.index("one payment, nothing renews") < page.index("Your Lineup, Decided")
+    assert page.index("it stops on its own") < page.index("Your Lineup, Decided")
     text = text_summary(report)
-    assert text.index("$29") < text.index("YOUR LINEUP, DECIDED")
+    assert text.index("$14.99") < text.index("YOUR LINEUP, DECIDED")
     assert "https://example.com/join/?via=trial" in text.split("YOUR LINEUP, DECIDED")[0]
-    # The week before the Playoff Pass may be sold: no price the join page may
-    # not charge. The season's last week: no offer at all.
-    assert "$" not in trial_price_line({"week": 12, "last_week": 18})
+    # The same price every week, and in the season's last week no offer at all.
+    assert "$14.99" in trial_price_line({"week": 12, "last_week": 18})
     assert trial_price_line({"week": 18, "last_week": 18}) is None
 
 

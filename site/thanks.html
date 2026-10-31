@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Beat Your League — You're in</title>
-<meta name="description" content="Your pass is live. Here is what arrives, when, and how to stop it.">
+<meta name="description" content="Your plan is live. Here is what arrives, when, and how to stop it.">
 <meta property="og:title" content="Beat Your League — You're in">
-<meta property="og:description" content="Your pass is live. Here is what arrives, when, and how to stop it.">
+<meta property="og:description" content="Your plan is live. Here is what arrives, when, and how to stop it.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Beat Your League">
 <meta name="twitter:card" content="summary_large_image">
@@ -236,7 +236,7 @@
     <div class="sitebar"><a class="brand" href="index.html"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><clipPath id="bylnClip"><path d="M-28.37 0A35 35 0 0 1 28.37 0A35 35 0 0 1-28.37 0Z" transform="translate(32 32) rotate(-45)"/></clipPath></defs><path d="M-26.5 0A33.5 33.5 0 0 1 26.5 0A33.5 33.5 0 0 1-26.5 0Z" transform="translate(32 32) rotate(-45)" fill="#F0B62A" stroke="#F0B62A" stroke-width="3" stroke-linejoin="round"/><g clip-path="url(#bylnClip)" fill="#101E33"><rect x="-19.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/><rect x="15.5" y="-20" width="4" height="40" transform="translate(32 32) rotate(-45)"/></g><path d="M24.3 31.7l5.5 5.5 10.7-11.2" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" stroke="#101E33"/></svg><span>Beat Your <span class="lg">League</span></span></a><nav class="sitenav" aria-label="Site"><a class="hidemd" href="how-it-works.html">How it works</a><a class="hidexs" href="sample-report.html">Sample report</a><a class="hidesm" href="byes/">Bye planner</a><a class="hidemd" href="league-pass.html">League Pass</a><details class="sitemenu"><summary class="sitemenu-open">Menu</summary><div class="sitemenu-list"><a class="go" href="join/index.html">Check my team</a><a href="how-it-works.html">How it works</a><a href="sample-report.html">Sample report</a><a href="byes/">Bye planner</a><a href="league-pass.html">League Pass</a></div></details></nav></div>
     <div class="done"><svg class="check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
     <h1>You&#x27;re in.</h1></div>
-    <p>Payment went through and your pass is live. Here's what happens next.</p>
+    <p>Payment went through and your plan is live. Here's what happens next.</p>
   </div>
 </header>
 <main>
@@ -284,10 +284,11 @@
         Tuesday's report lands in your inbox.</p></div>
       <div class="nextcard"><b>Run this league?</b>
         <p>The <a href="league-pass.html">League Pass</a> gives every manager their own weekly
-        report: $69 for the whole league, one payment, nothing renews, with a no-questions
-        refund until your first weekly report's week kicks off (one per league).</p>
-        <p>Buy it with this same email and reply to any report while your own pass's refund
-        window is open: we'll refund your pass, so you haven't paid twice.</p></div>
+        report: $34.99 a month for the whole league, stopping on its own after the title
+        game, with a no-questions refund until your first weekly report's week kicks off
+        (one per league).</p>
+        <p>Buy it with this same email, cancel your Monthly plan, and reply to any report while
+        its refund window is open: we'll refund it, so you haven't paid twice.</p></div>
       <div class="nextcard"><b>Know a manager in another league?</b>
         <p id="friend-line">One email every Tuesday decides your lineup for your own roster:
         https://beatyourleague.com/?via=friend</p>
@@ -303,7 +304,7 @@
       your lineup, the Saturday check tells you the swap. If a starting spot still
       has nobody to fill it, it says so. Nothing to change, no email.</li>
       <li><b>A separate email, usually within the hour:</b> a short receipt from us with
-      your terms, to keep. <span id="thanks-renew">Your pass was one payment: nothing renews.</span></li>
+      your terms, to keep. <span id="thanks-renew">Your plan bills each month until you cancel, and stops on its own after your title game.</span></li>
     </ol>
 
     <h2><span class="n">02</span>If your roster changes</h2>
@@ -315,9 +316,9 @@
     <p>Full refund, no questions, any time until your first weekly report's week kicks off
     (or a week after it reaches you, if we send it late):
     <span id="refund-limit">one per person</span> (<a href="terms.html#refunds">the exact terms</a>).
-    Reply to any of our emails to ask. <span id="thanks-end">There is
-    nothing to cancel: your pass was one payment and ends on its own after the season's
-    last report. To stop the emails before then, reply &quot;stop&quot;</span>
+    Reply to any of our emails to ask. <span id="thanks-end">Cancel any time from the
+    link at the bottom of any report, or let your plan stop on its own after your title
+    game</span>
     (<a href="terms.html#cancel">details</a>).</p>
 
     <h2><span class="n">04</span>Anything else</h2>
@@ -343,8 +344,8 @@ if (new URLSearchParams(location.search).get("plan") === "pass") {
 if (new URLSearchParams(location.search).get("plan") === "pass") {
   document.getElementById("next-steps").hidden = true;
 }
-// The 2027 Season Pass renews, so "nothing renews" and "nothing to cancel" are
-// the pass's words, not its. The payment link's success URL carries ?plan=2027.
+// The 2027 Season Pass renews, so "stops on its own" is the plan's line, not its.
+// The payment link's success URL carries ?plan=2027.
 if (new URLSearchParams(location.search).get("plan") === "2027") {
   document.getElementById("step-founding").hidden = true;
   document.getElementById("thanks-renew").textContent =

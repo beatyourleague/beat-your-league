@@ -355,24 +355,19 @@ def test_the_link_map_carries_the_playoff_pass_under_o() -> None:
     assert playoff_links(LINKS_2026) == {PLAYOFF_LINK}
     assert playoff_links(f"s:{SEASON_LINK},p:{PASS_LINK}") == frozenset()
     assert parse_link_plans("s:plink_A,m:plink_B,p:plink_C")["plink_B"] == "monthly"
-    good = "s:plink_A,o:plink_B,p:plink_C"
+    good = "m:plink_A,p:plink_C"
     assert link_map_problems(good) == []
-    assert link_map_problems(good + ",m:plink_D") == []
-    assert any("o:" in p for p in link_map_problems("s:plink_A,s:plink_B,p:plink_C"))
-    assert any("no o: link" in p for p in link_map_problems("s:plink_A,p:plink_C"))
-    assert link_map_problems("s:plink_A,p:plink_C", playoff=False) == []
+    assert link_map_problems(good + ",o:plink_D") == [], "a retired prefix stays readable"
+    assert any("no m: link" in p for p in link_map_problems("s:plink_A,p:plink_C"))
     assert any("unknown prefix" in p for p in link_map_problems(good + ",x:plink_E"))
-    assert any("both" in p for p in link_map_problems("s:plink_A,o:plink_A,p:plink_C"))
-    assert any("no p: link" in p for p in link_map_problems("s:plink_A,o:plink_B"))
+    assert any("both" in p for p in link_map_problems("m:plink_A,p:plink_A"))
+    assert any("no p: link" in p for p in link_map_problems("m:plink_A"))
 
 
 def test_the_playoff_week_is_one_number_everywhere() -> None:
-    """The intake's switch is the join page's rule (firstWeek >= 13) and the
-    economics model's; three copies, held equal."""
+    """The intake's week and the economics model's, held equal."""
     from run.economics import PLAYOFF_FROM_WEEK as modelled
-    page = (ROOT / "site" / "join" / "index.html").read_text(encoding="utf-8")
-    found = re.search(r"const PLAYOFF_FROM_WEEK = (\d+);", page)
-    assert found and int(found.group(1)) == PLAYOFF_FROM_WEEK == modelled
+    assert PLAYOFF_FROM_WEEK == modelled
 
 
 def test_the_playoff_switch_is_read_from_the_schedule() -> None:
@@ -521,22 +516,21 @@ def test_the_pay_button_script_writes_every_2026_link(monkeypatch) -> None:
                 "consent_collection": {"terms_of_service": "required"}}
     monkeypatch.setattr(module, "_call", fake_call)
     monkeypatch.setattr(module.getpass, "getpass", lambda prompt: "rk_test_" + "A1b2C3d4E5" * 3)
-    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_NEW_29,o:plink_NEW_19,p:plink_NEW_69")
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "m:plink_NEW_M,p:plink_NEW_L")
     assert module.main() == 0
-    assert writes == ["plink_NEW_29", "plink_NEW_19", "plink_NEW_69"]
-    assert stored["plink_NEW_19"]["custom_text[submit][message]"] == module.ONE_TIME
-    assert stored["plink_NEW_69"]["custom_text[submit][message]"] == module.MESSAGES["league_pass"]
-    assert all(stored[link]["customer_creation"] == "always" for link in writes)
+    assert writes == ["plink_NEW_M", "plink_NEW_L"]
+    assert stored["plink_NEW_M"]["custom_text[submit][message]"] == module.MESSAGES["monthly"]
+    assert stored["plink_NEW_L"]["custom_text[submit][message]"] == module.MESSAGES["league_pass"]
+    # Stripe refuses customer_creation on a subscription link.
+    assert not any("customer_creation" in stored[link] for link in writes)
 
     asked = []
     monkeypatch.setattr(module.getpass, "getpass", lambda prompt: asked.append(prompt) or "")
-    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_NEW_29,s:plink_NEW_19,p:plink_NEW_69")
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_NEW_29,o:plink_NEW_19,p:plink_NEW_69")
     with pytest.raises(SystemExit) as refused:
         module.main()
-    assert "o:" in str(refused.value) and "monthly" not in str(refused.value).split("Expected")[0]
+    assert "no m: link" in str(refused.value)
     assert not asked, "the key was asked for before the map was checked"
-    with_monthly = module.targets("s:plink_A,o:plink_B,p:plink_C,m:plink_D")
-    assert [plan for _link, plan in with_monthly] == ["season", "season", "league_pass", "monthly"]
 
 
 def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
@@ -547,9 +541,9 @@ def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
     refund = ("Full refund, no questions, until your first weekly report's week kicks off "
               "(or a week after it reaches you, if we send it late)")
     assert module.REFUND == refund
-    assert module.ONE_TIME.endswith(refund + " — one per person.")
+    assert module.MESSAGES["monthly"].endswith(refund + " — one per person.")
     assert module.MESSAGES["league_pass"].endswith(refund + " — one per league.")
-    assert "for every manager in your league who claims a seat" in module.MESSAGES["league_pass"]
+    assert "for your whole league" in module.MESSAGES["league_pass"]
     for plan in module.MESSAGES:
         assert len(module.MESSAGES[plan]) <= module.STRIPE_TEXT_LIMIT == 1200
         assert len(module.TOS_MESSAGES[plan]) <= module.STRIPE_TEXT_LIMIT
@@ -558,16 +552,16 @@ def test_the_one_payment_text_carries_the_refund_term_and_fits() -> None:
 
 
 def test_the_launch_check_reads_the_link_map(monkeypatch) -> None:
-    """The launch check holds the map to the same shape (SEC-3 / OPS-1): the
-    old s:,s:,p: is an OWNER line naming o:, the 2026 shape passes, and with
-    no map in the shell it says what to check by hand."""
+    """The launch check holds the map to the same shape (SEC-3 / OPS-1): a map
+    with no m: is an OWNER line naming it, the 2026 shape passes, and with no
+    map in the shell it says what to check by hand."""
     import run.launch_check as lc
-    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_A,s:plink_B,p:plink_C")
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_A,o:plink_B,p:plink_C")
     gates = {g.name: g for g in lc.check_link_map()}
     words = gates["The payment-link map names each pass under its own prefix"]
-    assert words.status == "OWNER" and "o:" in words.detail
+    assert words.status == "OWNER" and "no m: link" in words.detail
     assert gates["The words above Stripe's Pay button fit and carry the refund term"].status == "PASS"
-    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "s:plink_A,o:plink_B,p:plink_C")
+    monkeypatch.setenv("STRIPE_PAYMENT_LINKS", "m:plink_A,p:plink_C")
     assert all(g.status == "PASS" for g in lc.check_link_map())
     monkeypatch.delenv("STRIPE_PAYMENT_LINKS")
     [_, unset] = lc.check_link_map()

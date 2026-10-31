@@ -298,8 +298,7 @@ def test_a_one_time_buyers_roster_report_has_nothing_to_cancel(monkeypatch) -> N
 
     monkeypatch.setenv("BILLING_PORTAL_URL", "https://billing.stripe.com/p/test")
     report = _roster_report()
-    for message in (preseason_message("fan@example.com", "abcdef0123", report),
-                    preseason_message("fan@example.com", "abcdef0123", report,
+    for message in (preseason_message("fan@example.com", "abcdef0123", report,
                                       one_time=True),
                     preseason_message("fan@example.com", "abcdef0123", report,
                                       seat=rr.ONCE)):
@@ -482,7 +481,7 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
     assert subject == "It's open: your Week 8 lineup lands Tuesday"
     assert "in time for Week 8" in body and "Week 8" in preview
     flat = " ".join(body.split())
-    for term in ("$29, one payment", "nothing renews",
+    for term in ("$14.99 a month", "stops on its own after your title game",
                  "Refunds are no-questions until your first weekly report's week kicks off",
                  "every slot decided, every close call explained", "if/then",
                  "only email you'll get", 'reply "unsubscribe"'):
@@ -500,15 +499,6 @@ def test_the_launch_email_names_the_week_and_states_its_terms(monkeypatch) -> No
     stale = datetime(2026, 11, 5, tzinfo=timezone.utc)
     assert wl.compose("u", "S", CLOCK, stale)[0] == wl.SUBJECT
     assert wl.compose("u", "S", {**CLOCK, "phase": "over"}, sunday)[0] == wl.SUBJECT
-    # From Week 13, with the $19 link on the join page, the offer is the Playoff Pass.
-    late = {**CLOCK, "week": 13, "lands_on": "2026-12-08",
-            "first_kickoff": "2026-12-11T01:15:00Z"}
-    monkeypatch.setattr(wl, "_playoff_link_live", lambda: True)
-    assert "The Playoff Pass is $19" in wl.compose("u", "S", late,
-                                                   datetime(2026, 12, 2, tzinfo=timezone.utc))[1]
-    monkeypatch.setattr(wl, "_playoff_link_live", lambda: False)
-    assert "Rest-of-Season Pass is $29" in wl.compose(
-        "u", "S", late, datetime(2026, 12, 2, tzinfo=timezone.utc))[1]
 
 
 def test_the_launch_email_keeps_the_saved_roster_line(monkeypatch) -> None:
@@ -540,62 +530,6 @@ def _node(script: str):
     done = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout)
-
-
-def test_the_league_pass_comparison_leaves_with_the_29_dollar_pass() -> None:
-    """Reproduction (final review COPY-4): league-pass.html argued "Twelve
-    Rest-of-Season Passes would cost $348" with no week logic, so from Week 13
-    — when the only individual pass on sale can be $19 — it compared against a
-    price that isn't offered. The sentence goes from Week 13 (the landing's
-    first-weekly-report rule); the $69 sentence after it is true at any price."""
-    page = (SITE / "league-pass.html").read_text(encoding="utf-8")
-    assert '<span id="lp-compare">Twelve Rest-of-Season Passes would cost $348' in page
-    start = page.index("if (window.fetch) {\n  fetch(\"week.json\"")
-    snippet = page[start:page.index("// AFTER every href", start)]
-
-    def removed(clock: dict, now: str) -> bool:
-        return _node(f"""
-let gone = false;
-const document = {{ getElementById: () => ({{ remove() {{ gone = true; }} }}) }};
-const RealDate = Date;
-globalThis.Date = class extends RealDate {{
-  constructor(...a) {{ super(...(a.length ? a : ["{now}"])); }} }};
-const window = {{ fetch: true }};
-const fetch = () => Promise.resolve({{ ok: true, json: () => ({json.dumps(clock)}) }});
-{snippet}
-setTimeout(() => console.log(JSON.stringify(gone)), 20);
-""")
-    week7 = {"week": 7, "first_kickoff": "2026-10-23T00:15:00Z", "phase": "season"}
-    assert removed(week7, "2026-10-24T12:00:00Z") is False
-    week12 = {"week": 12, "first_kickoff": "2026-11-26T01:20:00Z"}
-    assert removed(week12, "2026-11-25T12:00:00Z") is False     # first report: Week 12
-    assert removed(week12, "2026-11-27T12:00:00Z") is True      # first report: Week 13
-    assert removed({**week12, "phase": "over"}, "2026-11-27T12:00:00Z") is False
-
-
-def test_the_landing_offer_in_structured_data_follows_the_playoff_switch() -> None:
-    """Reproduction (final review COPY-4): showPlayoffPass relabelled the card
-    to $19 and left the JSON-LD Offer at price "29" for every crawler that
-    runs the page's script."""
-    page = (SITE / "index.html").read_text(encoding="utf-8")
-    start = page.index("function showPlayoffPass(")
-    fn = page[start:page.index("\n}\n", start) + 2]
-    ld = re.search(r'<script type="application/ld\+json">(.*?)</script>', page, re.S).group(1)
-    out = _node(f"""
-let PASS_LABEL = "";
-const block = {{ textContent: {json.dumps(ld)} }};
-const document = {{
-  getElementById: () => null,
-  querySelector: (sel) => (sel.includes("ld+json") ? block : null),
-  createTextNode: () => ({{}}), createElement: () => ({{}}),
-}};
-{fn}
-showPlayoffPass(13);
-const data = JSON.parse(block.textContent);
-console.log(JSON.stringify(data["@graph"].flatMap((n) => n.offers || [])));
-""")
-    assert [o["price"] for o in out] == ["19"]
-    assert "Playoff Pass" in out[0]["description"] and "Week 13" in out[0]["description"]
 
 
 def test_the_report_pages_lose_the_sheet_frame_on_a_phone() -> None:

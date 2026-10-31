@@ -36,8 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from render.welcome import (MONTHLY_PRICE, PASS_PRICE, SEASON_2027_PRICE,  # noqa: E402
-                            SEASON_2027_RENEWAL, SEASON_PRICE, TERMS_VERSION,
-                            first_renewal_words)
+                            SEASON_2027_RENEWAL, TERMS_VERSION, first_renewal_words)
 from run.checkout import (SEASON_2027_LINK_PREFIX, link_map_problems,  # noqa: E402
                           parse_link_plans, parse_link_prefixes)
 
@@ -58,6 +57,10 @@ CANCEL = ("you can cancel any time from your billing page")
 # the amount beside them) and promise only what is true of all three: one
 # payment, and the refund window terms.html §5 gives every plan (OPS-1: the
 # refund term sits beside every price, the Pay button included).
+# 2026 sells monthly plans now (owner decision, Oct 31 2026): the one-payment
+# words above stand only for a one-time link, and none is sold.
+STOPS = ("Billing stops on its own after your title game: nothing is charged after "
+         "Week 17's report goes out.")
 ONE_TIME_COVERS = ("It covers every weekly report from today through the "
                    "season's last")
 REFUND = ("Full refund, no questions, until your first weekly report's week "
@@ -67,13 +70,11 @@ ONE_TIME = ("One payment — no subscription, nothing to cancel. Nothing renews 
 MESSAGES = {
     "season": ONE_TIME,
     "monthly": (
-        f"Bills {MONTHLY_PRICE} USD monthly until you cancel. Billing stops on "
-        f"its own after the season's last weekly report: your last charge is "
-        f"the month that report falls in, and nothing is charged after it. "
-        f"{CANCEL[0].upper()}{CANCEL[1:]}."),
-    "league_pass": ("One payment — no subscription, nothing to cancel. Nothing renews and "
-                    f"nothing more is ever charged. {ONE_TIME_COVERS}, for every manager "
-                    f"in your league who claims a seat. {REFUND} — one per league."),
+        f"Bills {MONTHLY_PRICE} USD a month until you cancel. {STOPS} "
+        f"{CANCEL[0].upper()}{CANCEL[1:]}. {REFUND} — one per person."),
+    "league_pass": (
+        f"Bills {PASS_PRICE} USD a month for your whole league until you cancel. {STOPS} "
+        f"{CANCEL[0].upper()}{CANCEL[1:]}. {REFUND} — one per league."),
 }
 # The 2027 Season Pass (``y:``) is the one link in the map that renews, so its
 # words name the renewal, its date and its amount. Beside MESSAGES, not in it:
@@ -99,11 +100,11 @@ TOS_MESSAGES = {
                f"is one payment that does not renew, and I am 18 or older."),
     "monthly": (f"I agree to the [Terms]({TERMS_URL}), including that this plan "
                 f"bills {MONTHLY_PRICE} USD every month until I cancel or it stops "
-                f"on its own after the season's last weekly report, and I am 18 or "
-                f"older."),
+                f"on its own after Week 17's report, and I am 18 or older."),
     "league_pass": (f"I agree to the [Terms]({TERMS_URL}), including that this "
-                    f"League Pass is one payment that does not renew, and I am 18 "
-                    f"or older."),
+                    f"League Pass bills {PASS_PRICE} USD every month until I cancel "
+                    f"or it stops on its own after Week 17's report, and I am 18 or "
+                    f"older."),
 }
 # The box the law wants ticked for a renewal: the amount, the date, the cycle.
 SEASON_2027_TOS = (f"I agree to the [Terms]({TERMS_URL}), including that this pass "
@@ -115,7 +116,7 @@ TOS_TEXT = {**TOS_MESSAGES, SEASON_2027_PLAN: SEASON_2027_TOS}
 
 def fields(plan: str) -> dict[str, str]:
     """Everything this script writes onto one payment link."""
-    one_time = plan in ("season", "league_pass")
+    one_time = plan == "season"
     return {**({"customer_creation": "always"} if one_time else {}),
             # A one-time payment makes no Customer unless told to, and the
             # intake keeps the consent record and roster on the Customer.
@@ -142,17 +143,16 @@ def _call(url: str, key: str, form: dict | None = None) -> dict:
             f"  Response: {detail}\n")
 
 
-SHAPE = "s:plink_…,o:plink_…,p:plink_…"
+SHAPE = "m:plink_…,p:plink_…"
 
 
 def targets(raw: str) -> list[tuple[str, str]]:
     """(link, plan) for every link this script writes, in the map's order —
-    one entry per LINK, never per plan: the $29 and $19 passes are both the
-    season plan, and inverting the map to {plan: link} kept only one of them,
-    so the other never got its one-payment text, refund term or 18+ box
-    (final review OPS-1). Refuses (SystemExit, before any key is asked for)
-    unless the map is the 2026 shape (``SHAPE``; ``m:`` optional, for a
-    monthly plan). The check is run/checkout.link_map_problems, the same one
+    one entry per LINK, never per plan: two links can share a plan, and
+    inverting the map to {plan: link} kept only one of them, so the other never
+    got its text, refund term or 18+ box (final review OPS-1). Refuses
+    (SystemExit, before any key is asked for) unless the map is the 2026 shape
+    (``SHAPE``). The check is run/checkout.link_map_problems, the same one
     the launch check reads.
 
     A ``y:`` link is the season PLAN but never the season WORDS: read off the
@@ -163,8 +163,8 @@ def targets(raw: str) -> list[tuple[str, str]]:
         raise SystemExit(
             "STRIPE_PAYMENT_LINKS is not the shape this script writes:\n  - "
             + "\n  - ".join(problems)
-            + f"\nExpected {SHAPE} (the $29, $19 and $69 links; add m:plink_… only "
-              f"for a monthly plan). Nothing was changed.")
+            + f"\nExpected {SHAPE} (the Monthly and League Pass links, and y:plink_… "
+              f"once the 2027 Season Pass is on). Nothing was changed.")
     prefixes = parse_link_prefixes(raw)
     return [(link, SEASON_2027_PLAN if prefixes.get(link) == SEASON_2027_LINK_PREFIX else plan)
             for link, plan in parse_link_plans(raw).items() if plan in MESSAGES]
@@ -179,7 +179,7 @@ def main() -> int:
 
     links = targets(raw)
 
-    print(f"\nThis writes the one-payment and refund text onto {len(links)} Stripe "
+    print(f"\nThis writes the billing and refund text onto {len(links)} Stripe "
           f"payment links.")
     print("Use the throwaway `setup-payment-link-text` key, not the cron key.")
     print()

@@ -74,12 +74,10 @@ def _price(pattern: str) -> str:
     return match.group(1)
 
 
-# 2026 sells one-time passes (owner decision, Oct 18 2026): the pass card's
-# price is "/ rest of season". Monthly is off the landing this season; its
-# price is still read, off the join page's (hidden) plan option.
-SEASON_PRICE = _price(r'id="pass-price">\$(\d+) <small>/ rest of season')
-MONTHLY_PRICE = re.search(r"Monthly · \$(\d+\.\d\d)", (SITE / "join" / "index.html")
-                          .read_text(encoding="utf-8")).group(1)
+# 2026 sells a monthly plan (owner decision, Oct 31 2026). The season pass is the
+# founding rate's, from 2027.
+MONTHLY_PRICE = _price(r'id="pass-price">\$(\d+\.\d\d) <small>/ month')
+SEASON_PRICE = _price(r"your 2027 season pass is \$(\d+)")
 
 
 # --------------------------------------------------------------------- #
@@ -402,9 +400,7 @@ def test_cancellation_is_promised_and_never_obstructed() -> None:
     JS string join, now that the header chip that also said it is gone.)"""
     assert re.search(r"cancel yourself any time|cancel any time", JOIN_PROSE, re.I), \
         "join page must tell subscribers they can cancel themselves"
-    assert re.search(r"nothing to cancel", JOIN_PROSE, re.I), "the one-payment pass says so"
-    # 2026's one-time passes have nothing to cancel, and the card says so.
-    assert re.search(r"cancel any time|nothing to cancel", LANDING, re.I)
+    assert re.search(r"cancel any time", LANDING, re.I)
     # No copy anywhere that gates leaving behind contacting us.
     for page in (LANDING, JOIN):
         assert not re.search(r"contact us to cancel|email us to cancel|call to cancel",
@@ -457,13 +453,13 @@ def test_paid_from_day_one_is_stated_not_hidden() -> None:
     # in the pricing section (plainly, with currency and renewal terms) and on
     # the join page. What may never come back: a page that hides that it
     # charges until after someone invests effort.
-    assert 'id="pass-price">$' + SEASON_PRICE in markup_only(LANDING), \
-        "the pricing section must state the season price plainly"
+    assert 'id="pass-price">$' + MONTHLY_PRICE in markup_only(LANDING), \
+        "the pricing section must state the price plainly"
     # The join page states the price in its opening line, before a single
     # roster name is typed (the phrase "a paid product from day one" went Sep
     # 29 2026 as internal-sounding; the price itself is the disclosure).
     pitch = re.search(r'<p id="header-pitch">(.*?)</p>', JOIN, re.S).group(1)
-    assert f"{SEASON_PRICE} for the rest of the season" in pitch
+    assert f"${MONTHLY_PRICE} a month" in pitch
     # And no free-tier implication anywhere: the only free thing is the
     # waitlist email, which says exactly what it is.
     assert not re.search(r"\bfree trial\b|\bfor free\b", LANDING_PROSE, re.I)
@@ -476,13 +472,12 @@ def test_price_appears_only_at_decision_points_and_renewal_terms() -> None:
     evaluation ahead of value — the owner's Aug 24 revision moved the price
     out of the hero entirely for exactly that reason. (A further mention lives
     in the checkout script, which only ever replaces the button's own text.)"""
-    # 2026 (owner decision, Oct 18 2026): one-time passes, so the disclosure
-    # beside the price is "one payment", not a renewal amount — ONE rendered
-    # pass price, on its card, with "One payment" on that card.
+    # 2026 (owner decision, Oct 31 2026): a monthly plan, so the disclosure
+    # beside the price is when billing stops. ONE rendered plan price, on its card.
     rendered = markup_only(LANDING)
-    assert rendered.count(f"${SEASON_PRICE}") == 1, "landing page price mentions drifted"
+    assert rendered.count(f"${MONTHLY_PRICE}") == 1, "landing page price mentions drifted"
     card = rendered.split('id="pass-card"')[1].split('<div class="plan">')[0]
-    assert "One payment" in card, "the pass card must say it is one payment"
+    assert "Stops on its own" in card, "the card must say when billing stops"
 
 
 # --------------------------------------------------------------------- #
@@ -514,7 +509,7 @@ def test_checkout_is_a_single_constant_away_on_both_pages() -> None:
     safe is tested below rather than here."""
     assert re.search(r"const CHECKOUT_OPEN = (true|false);", LANDING), \
         "landing page lost its checkout wiring slot"
-    for const in ("STRIPE_LINK_SEASON", "STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS"):
+    for const in ("STRIPE_LINK_MONTHLY", "STRIPE_LINK_PASS"):
         assert re.search(rf"const {const} = ", JOIN), \
             f"join page lost its {const} wiring slot"
 
@@ -671,10 +666,8 @@ def test_join_collects_only_the_stated_minimum() -> None:
 def test_pass_states_its_renewal_terms() -> None:
     """A recurring charge must say so where it is sold (PLAN §4, ROSCA)."""
     for page, name in ((LANDING_PROSE, "landing"), (JOIN_PROSE, "join")):
-        assert re.search(r"renews once a year|no renewal|one payment", page, re.I), \
-            f"{name} page sells the season pass without stating renewal terms"
-    # One-time passes (2026): the selling page says nothing renews.
-    assert re.search(r"nothing renews", LANDING_PROSE, re.I)
+        assert re.search(r"stops on its own", page, re.I), \
+            f"{name} page sells the plan without saying when billing stops"
 
 
 def test_free_list_never_routes_to_paid_checkout() -> None:
@@ -1394,12 +1387,9 @@ def test_every_report_carries_a_way_out() -> None:
 def test_monthly_billing_never_outlives_the_product() -> None:
     """Monthly stops at season end, and run/billing.py is what makes it true."""
     legal = prose((SITE / "terms.html").read_text(encoding="utf-8"))
-    assert re.search(r"Month to month billing ends with the season", legal, re.I)
-    assert re.search(r"stops on its own after the season's last weekly report", legal, re.I)
-    assert re.search(r"nothing is charged after it", legal, re.I)
-    # Monthly isn't sold in 2026 (owner decision, Oct 18 2026): the landing
-    # carries no monthly price at all rather than terms for a plan it can't sell.
-    assert "/ month" not in markup_only(LANDING)
+    assert re.search(r"Billing stops on its own after your title game", legal, re.I)
+    assert re.search(r"nothing is charged after Week 17's report goes out", legal, re.I)
+    assert re.search(r"Your reports still run through the season's last weekly report", legal, re.I)
 
 
 def test_the_contract_does_not_promise_a_renewal_date_stripe_will_not_honour() -> None:
@@ -1519,14 +1509,13 @@ def test_renewal_terms_are_in_sight_of_the_checkout_button() -> None:
     assert form.index('id="terms-line"') < form.index('id="submit"'), \
         "the terms must come before the button, not after it"
     text = prose(terms.group(1))
-    assert re.search(rf"\${SEASON_PRICE}, one payment", text, re.I)
-    assert re.search(r"nothing renews", text, re.I)
+    assert f"${MONTHLY_PRICE} USD a month until you cancel" in text
+    assert re.search(r"billing stops on its own", text, re.I)
     assert re.search(r"one per person", text, re.I)
     script = prose(JOIN)
     # Plan-aware rewrites, each naming its own amount.
-    assert re.search(r'\$\("terms-line"\)\.textContent = monthlyTerms', script)
     assert re.search(r'\$\("terms-line"\)\.textContent = passTerms', script)
-    assert re.search(r"League Pass is \$69, one payment", script)
+    assert re.search(r"League Pass is \$34\.99 USD a month", script)
     assert re.search(r'\$\("terms-line"\)\.style\.display = "none"', script), \
         "a seat holder must not be shown billing terms"
 
@@ -1612,15 +1601,13 @@ def test_the_contract_and_the_comparison_state_the_price_the_buyer_is_charged() 
     ours = re.search(r'<tr class="us">.*?</tr>', compare, re.S)
     assert ours, "the comparison table no longer marks our own row"
 
+    assert f"${season.group(1)}" in legal, "terms.html lost the founding season price"
     for page, name in ((legal, "terms.html"), (ours.group(0), "compare, our row")):
-        # Monthly isn't sold in 2026: the comparison row quotes only what is.
-        assert name == "compare, our row" or f"${monthly.group(1)}" in page, (
+        assert f"${monthly.group(1)}" in page, (
             f"{name} does not state the monthly price the landing charges "
             f"(${monthly.group(1)})")
-        assert f"${season.group(1)}" in page, (
-            f"{name} does not state the season price the landing charges")
         others = {p for p in re.findall(r"\$\d+\.\d\d", page)
-                  if p != f"${monthly.group(1)}"}
+                  if p not in (f"${monthly.group(1)}", "$34.99")}
         assert not others, (
             f"{name} carries another decimal price {sorted(others)} — one of "
             f"them is stale, and terms.html is the operative contract")
@@ -1657,7 +1644,7 @@ def test_league_pass_never_competes_with_the_single_checkout_decision() -> None:
 
 def test_league_pass_states_its_own_terms() -> None:
     prose_page = prose(LEAGUE_PASS)
-    for required in (r"\$69", r"one payment", r"nothing renews",
+    for required in (r"\$34\.99", r"a month", r"stops on its own",
                      r"no-questions refund", r"18\+", r"not affiliated"):
         assert re.search(required, prose_page, re.I), f"league pass missing: {required}"
     # It must not promise a report to managers who never signed up.
@@ -1874,10 +1861,10 @@ def test_the_picker_uses_every_setting_it_asks_for() -> None:
     for group in ("template", "kicker", "defense"):
         assert f'radio("{group}")' in choice, f"the {group} answer never reaches the ref"
     assert "R.shapeSlots(s.base, s.kicker, s.defense)" in _js_function(JOIN, "template")
-    # The plan switch (Oct 9 2026) reaches the ref through monthlyChosen,
-    # which the switch's change listener sets from radio("plan").
-    assert "monthlyChosen" in args
-    assert re.search(r'monthlyChosen = radio\("plan"\) === "monthly"', JOIN)
+    # The plan reaches the ref through buyingMonthly(), and the page's choice
+    # (Monthly or the 2027 pass) through chose2027, set from radio("plan").
+    assert "buyingMonthly()" in args
+    assert re.search(r'chose2027 = radio\("plan"\) === "2027"', JOIN)
     assert re.search(r'function leagueSize\(\)[^}]*radio\("size"\)', JOIN), \
         "leagueSize() stopped reading the size radio"
 
@@ -1945,8 +1932,8 @@ def test_structured_data_parses_and_matches_the_page() -> None:
     graph = data["@graph"]
     product = next(node for node in graph if node["@type"] == "Product")
     prices = {offer["price"] for offer in product["offers"]}
-    assert prices == {SEASON_PRICE}, (
-        f"structured-data prices {prices} drifted from the page's {{{SEASON_PRICE}}}")
+    assert prices == {MONTHLY_PRICE}, (
+        f"structured-data prices {prices} drifted from the page's {{{MONTHLY_PRICE}}}")
     faq = next(node for node in graph if node["@type"] == "FAQPage")
     page_text = prose(LANDING)
     for question in faq["mainEntity"]:
@@ -2344,12 +2331,11 @@ def test_seat_and_pass_modes_rewrite_the_ask() -> None:
     the pitch were removed in the truth pass: the pitch carries the price with
     its terms, and the button says what is open.)"""
     assert 'id="header-pitch"' in JOIN and 'id="header-chips"' not in JOIN
-    seat = prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1].split("} else if (WANTS_MONTHLY)")[0])
+    seat = prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1].split("} else if (WANTS_PASS)")[0])
     assert "Nothing to pay." in seat and not re.search(r"\$\d", seat), "a seat reads a price"
-    assert "already paid" not in prose(_js_code(JOIN).split("} else if (SEAT_MODE)")[1]
-                                       .split("} else if (WANTS_MONTHLY)")[0])
+    assert "already paid" not in seat
     assert "every manager in your league" in prose(JOIN) and "claims their seat" in prose(JOIN)
-    assert f"${MONTHLY_PRICE} a month" in prose(_js_function(JOIN, "monthlyPlan"))
+    assert f"${MONTHLY_PRICE} a month" in prose(JOIN)
     # The pass buyer is told, on the way to Stripe, where the seat link will
     # come from: the welcome email, which carries a link naming THIS pass
     # (contract C4). The page itself no longer hands out the generic ?pass=1
@@ -2749,16 +2735,16 @@ def test_the_league_pass_arithmetic_matches_the_actual_season_price() -> None:
     obligation — the multiple has to be true. It said "twelve individual passes
     would cost $348" for as long as the season pass was $29, and a stale
     comparison on our own page is a false claim about our own prices."""
-    match = re.search(r"Twelve Rest-of-Season Passes would cost \$(\d+)", LEAGUE_PASS)
+    match = re.search(r"Twelve Monthly plans would cost \$([\d.]+) a month", LEAGUE_PASS)
     assert match, "the League Pass page lost its comparison"
-    assert int(match.group(1)) == 12 * int(SEASON_PRICE), (
-        f"the page compares against ${match.group(1)} but twelve season passes "
-        f"at ${SEASON_PRICE} is ${12 * int(SEASON_PRICE)}")
+    assert float(match.group(1)) == round(12 * float(MONTHLY_PRICE), 2), (
+        f"the page compares against ${match.group(1)} but twelve Monthly plans "
+        f"at ${MONTHLY_PRICE} is ${12 * float(MONTHLY_PRICE):.2f}")
     # The ten-team figure (Oct 9 2026: most leagues are not twelve) carries
     # the same obligation.
-    ten = re.search(r"ten would cost \$(\d+)", LEAGUE_PASS)
-    assert ten and int(ten.group(1)) == 10 * int(SEASON_PRICE), \
-        "the ten-team comparison is missing or no longer matches the season price"
+    ten = re.search(r"ten would cost \$([\d.]+)", LEAGUE_PASS)
+    assert ten and float(ten.group(1).rstrip(".")) == round(10 * float(MONTHLY_PRICE), 2), \
+        "the ten-team comparison is missing or no longer matches the monthly price"
 
 
 def test_the_league_pass_is_not_commissioner_only() -> None:
@@ -3091,39 +3077,14 @@ def test_each_purchase_mode_prices_its_own_header() -> None:
     Pass — $99" button. Every price a mode shows must be the price that mode
     charges."""
     pass_branch = JOIN.split("else if (WANTS_PASS)")[1]
-    assert "header-pitch" in pass_branch and "$69" in pass_branch
+    assert "header-pitch" in pass_branch and "$34.99" in pass_branch
     # The header chips are gone (truth pass): the price lives in the pitch,
     # beside its terms, so no stale chip can name another mode's price.
     assert "setChips" not in JOIN and 'id="header-chips"' not in JOIN
-    assert "$69 for your whole league, rest of season: one payment" in prose(pass_branch)
-    # Monthly is a function since Oct 9 2026, because the buyer can now switch
-    # to it on the page as well as arrive with ?plan=monthly.
-    monthly_branch = JOIN.split("else if (WANTS_MONTHLY)")[1] \
-                         .split("else if (WANTS_PASS)")[0]
-    assert "monthlyPlan()" in monthly_branch
-    monthly = JOIN.split("function monthlyPlan()")[1].split("\nfunction ")[0]
-    assert "header-pitch" in monthly and "14.99" in monthly
-    assert '$("terms-line").textContent = monthlyTerms' in monthly
-    season = JOIN.split("function seasonPlan()")[1].split("\n}")[0]
-    assert "SEASON_STATE" in season and "SEASON_SUBMIT" in season, \
-        "switching back to the season pass must restore its own terms and price"
-
-
-def test_the_buyer_can_switch_plans_without_losing_their_roster() -> None:
-    """Personas, Oct 9 2026: a mid-season buyer from the hero CTA saw only the
-    $39 season pass, and would buy monthly or not at all. The switch rewrites
-    the page in place (a reload would drop the pasted roster), is never shown
-    to a seat holder, an update, a free report or a League Pass buyer, and the
-    submit handler charges the plan on screen, never the one in the URL."""
-    switch = JOIN.split("// Season ⇄ monthly, on the page.")[1].split("</script>")[0]
-    assert "!SEAT_MODE && !UPDATE_MODE && !TRY_MODE && !WANTS_PASS" in switch
-    assert "location" not in switch, "switching plans must not reload the page"
-    handler = JOIN.split('$("form-email").addEventListener')[1].split("\n});")[0]
-    assert "monthlyChosen ? monthlyLink() : seasonLink()" in handler
-    assert "WANTS_MONTHLY" not in handler, "the handler reads the URL, not the choice"
-    # Both prices on the switch are the prices the plans charge.
-    assert f"Rest-of-Season Pass · ${SEASON_PRICE}" in JOIN
-    assert f"Monthly · ${MONTHLY_PRICE}" in JOIN
+    assert "$34.99 a month for your whole league" in prose(pass_branch)
+    monthly = JOIN.split("function monthlyPlan()")[1].split("\n}")[0]
+    assert "MONTHLY_STATE" in monthly and "MONTHLY_SUBMIT" in monthly, \
+        "switching back to Monthly must restore its own terms and price"
 
 
 def test_seat_mode_carries_no_billing_promises_and_warns_up_front() -> None:
@@ -3333,9 +3294,8 @@ def test_a_configured_tier_can_take_money_while_the_others_cannot() -> None:
     Only the tiers still missing a link say checkout is closed."""
     live = re.findall(r'const (STRIPE_LINK_\w+) = "(https://buy\.stripe\.com/[^"]+)"', JOIN)
     empty = re.findall(r'const (STRIPE_LINK_\w+) = ""', JOIN)
-    # Season, monthly, League Pass, (Oct 18 2026) the $19 Playoff Pass and
-    # (Oct 30 2026) the 2027 Season Pass, built switched off.
-    assert len(live) + len(empty) == 5, "a payment-link constant went missing"
+    # Monthly, League Pass and (Oct 30 2026) the 2027 Season Pass, built switched off.
+    assert len(live) + len(empty) == 3, "a payment-link constant went missing"
     for _name, url in live:
         assert "?" not in url, (
             f"{url} carries a query string; the picker appends "
@@ -3377,29 +3337,24 @@ def test_the_pay_button_disclosure_quotes_the_price_the_page_charges() -> None:
     import sys
     sys.path.insert(0, str(SITE.parent))
     from infra.stripe_paylink_text import MESSAGES
-    from render.welcome import MONTHLY_PRICE, PASS_PRICE, SEASON_PRICE
+    from render.welcome import MONTHLY_PRICE, PASS_PRICE
 
     assert set(MESSAGES) == {"season", "monthly", "league_pass"}
-    # 2026's one-time passes (Oct 18 2026): the season and League Pass words
-    # carry no price (the $19 Playoff Pass link shares the season text, and
-    # Stripe prints the amount beside it) and say what is true of all of them.
     assert MONTHLY_PRICE in MESSAGES["monthly"]
-    assert "Nothing renews" in MESSAGES["season"] and "monthly" not in MESSAGES["season"]
-    assert "Nothing renews" in MESSAGES["league_pass"]
+    assert PASS_PRICE in MESSAGES["league_pass"]
     assert not any("each season" in m for m in MESSAGES.values())
     from infra.stripe_paylink_text import TOS_MESSAGES, fields
     for plan in MESSAGES:
         assert "18 or older" in TOS_MESSAGES[plan] and "[Terms](" in TOS_MESSAGES[plan]
         assert fields(plan)["consent_collection[terms_of_service]"] == "required"
-    assert "does not renew" in TOS_MESSAGES["season"]
-    assert "does not renew" in TOS_MESSAGES["league_pass"]
+    assert f"bills {PASS_PRICE} USD every month" in TOS_MESSAGES["league_pass"]
     from render.welcome import TERMS_VERSION
     import datetime as _dt
     terms = (SITE / "terms.html").read_text(encoding="utf-8")
     stamp = _dt.date.fromisoformat(TERMS_VERSION)
     assert f"Last updated {stamp.day} {stamp:%B %Y}" in terms, \
         "terms.html's Last updated date must equal TERMS_VERSION, the version consent is recorded against"
-    assert "after the season's last weekly report" in MESSAGES["monthly"], (
+    assert "Billing stops on its own after your title game" in MESSAGES["monthly"], (
         "the monthly disclosure omits the season-end stop, which is the one "
         "promise a monthly buyer most needs at the moment of paying")
     for plan, text in MESSAGES.items():
@@ -3644,11 +3599,11 @@ def test_the_plan_on_screen_is_the_plan_charged_after_back() -> None:
     from whatever is checked on every pageshow; a stale "isn't open" error is
     cleared on every switch."""
     plan_inputs = re.findall(r'<input type="radio" name="plan"[^>]*>', JOIN)
-    assert len(plan_inputs) == 2
+    assert len(plan_inputs) == 1
     assert all('autocomplete="off"' in tag for tag in plan_inputs)
-    switch = JOIN.split("// Season ⇄ monthly, on the page.")[1].split("</script>")[0]
+    switch = JOIN.split("// Monthly ⇄ the 2027 pass, on the page.")[1].split("</script>")[0]
     assert 'window.addEventListener("pageshow", applyPlan)' in switch
-    assert 'monthlyChosen = radio("plan") === "monthly"' in switch
+    assert 'chose2027 = radio("plan") === "2027"' in switch
     assert 'showError("err-email", "")' in switch
 
 
@@ -3957,10 +3912,10 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     pass removed the chips)."""
     fns = (_js_function(JOIN, "closedAction") + _js_function(JOIN, "closedLabel")
            + _js_function(JOIN, "closedChipText"))
-    # contact inbox, notify, pass, own plan open, monthly chosen, other plan's link
+    # contact inbox, notify, pass, own plan open, 2027 chosen, other plan's link
     states = [
-        ("h@x", "https://f", False, "", False, "https://buy.stripe.com/m"),
-        ("h@x", "", False, "", True, "https://buy.stripe.com/s"),
+        ("h@x", "https://f", False, "", False, "https://buy.stripe.com/y"),
+        ("h@x", "", False, "", True, "https://buy.stripe.com/m"),
         ("h@x", "https://f", False, "", False, ""),
         ("h@x", "", False, "", False, ""),     # today: no list, so the mail app
         ("", "", False, "", False, ""),        # no inbox either: switched off
@@ -3972,18 +3927,18 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     ]
     import json as _json
     got = _node(
-        "let CONTACT_EMAIL, NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, monthlyChosen;\n"
-        "const FIRST = null, SEAT_MODE = false, chose2027 = false;\n" + fns +
+        "let CONTACT_EMAIL, NOTIFY_LIST_ENDPOINT, WANTS_PASS, OWN_PLAN_HREF, chose2027;\n"
+        "const FIRST = null, SEAT_MODE = false;\n" + fns +
         "\nconsole.log(JSON.stringify(" + _json.dumps(states) +
         ".map(([c, n, p, o, m, other]) => {"
         " CONTACT_EMAIL = c; NOTIFY_LIST_ENDPOINT = n; WANTS_PASS = p; OWN_PLAN_HREF = o;"
-        " monthlyChosen = m; const a = closedAction(other); return [a, closedLabel(a)]; })));")
+        " chose2027 = m; const a = closedAction(other); return [a, closedLabel(a)]; })));")
     assert got == [
+        ["switch", "Switch to the 2027 Season Pass — open now"],
         ["switch", "Switch to monthly — open now"],
-        ["switch", "Switch to the season pass — open now"],
         ["list", "Save my team and tell me when it opens"],
         ["mail", "Save my team by email"],
-        ["none", "Rest-of-Season Pass opens soon"],
+        ["none", "Monthly opens soon"],
         ["none", "League Pass opens soon"],     # own team's plan is open: no launch list
         ["none", "League Pass opens soon"],
         ["list", "Save my team and tell me when it opens"],
@@ -3994,7 +3949,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     handler = code.split('$("form-email").addEventListener')[1].split("\n});")[0]
     # The press does what the label says: the same decision drives both.
     assert "if (switchesPlan()) {\n    switchPlan();" in handler
-    assert 'closedAction(other) === "switch"' in _js_function(JOIN, "switchesPlan")
+    assert 'closedAction(otherPlanLink()) === "switch"' in _js_function(JOIN, "switchesPlan")
     assert 'closedAction(otherLink) === "list"' in handler
     assert 'closedAction(otherLink) === "mail"' in handler
     mail = handler.split('closedAction(otherLink) === "mail"')[1].split("return;\n    }")[0]
@@ -4005,7 +3960,7 @@ def test_a_closed_plans_button_says_what_pressing_it_does() -> None:
     # The first paint knows the other plan too (it used to pass none).
     first = code.split("if (!SEAT_MODE && !UPDATE_MODE && !TRY_MODE) {\n  noteClosedFor(")[1] \
                 .split(");")[0]
-    assert "seasonLink() : monthlyLink()" in first
+    assert "otherPlanLink()" in first
     # F6: a kept email is a done message, once, and the note says "below".
     listed = handler.split('closedAction(otherLink) === "list"')[1].split(".catch(")[0]
     assert "if (state.listed) return;" in listed
@@ -4204,8 +4159,7 @@ def test_no_join_copy_promises_odds_on_every_close_call() -> None:
     so the promise is the true one — odds wherever both players are confirmed."""
     assert not re.search(r"odds on (?:every|each) close call", JOIN_PROSE, re.I)
     # Oct 21 2026 (fewer words): the default pitch and sidebar no longer
-    # promise odds at all; where the page still does, the gate is stated.
-    assert JOIN_PROSE.count(GATE_CLAUSE) >= 1
+    # promise odds at all.
 
 
 def test_a_table_copys_eleven_defenses_never_read_as_looks_right() -> None:
@@ -4338,32 +4292,28 @@ def test_a_closed_checkout_names_no_delivery_date() -> None:
     assert re.search(r"\ndrawShapeNote\(\);\nfillRenewalDates\(\);\ndrawFirst\(\);\n", JOIN)
     src = "\n".join(_js_function(JOIN, f) for f in
                     ("canStartToday", "closedChipText", "renewalDate",
-                     "renewsOn", "monthlyLink", "seasonLink")) + (
-        "\nvar MONTHLY_PAUSED = false; var MONTHLY_OFFERED = true;"
-        " var PLAYOFF_ACTIVE = false; var STRIPE_LINK_PLAYOFF = \"\";"
+                     "renewsOn", "monthlyLink", "planLink")) + (
+        "\nvar MONTHLY_PAUSED = false;"
         " var chose2027 = false; var STRIPE_LINK_2027 = \"\";")
-    cases = [  # seat, pass, monthly, season link, monthly link, pass link, form
-        [False, False, False, "", "", "", ""],
-        [False, False, True, "x", "", "", ""],
-        [False, True, False, "x", "x", "", ""],
-        [True, False, False, "", "", "", ""],
-        [False, False, False, "x", "", "", ""],
-        [True, False, False, "", "", "", "https://forms.example"],
+    cases = [  # seat, pass, monthly link, pass link, form
+        [False, False, "", "", ""],
+        [False, True, "x", "", ""],
+        [True, False, "", "", ""],
+        [False, False, "x", "", ""],
+        [True, False, "", "", "https://forms.example"],
     ]
     got = _node(
         src + "\nconst FIRST = {when: 'after', tuesday: 'Tue, Oct 20'};\n"
         "const out = [];\n"
         f"for (const c of {json.dumps(cases)}) {{\n"
         "  globalThis.SEAT_MODE = c[0]; globalThis.WANTS_PASS = c[1];\n"
-        "  globalThis.monthlyChosen = c[2]; globalThis.STRIPE_LINK_SEASON = c[3];\n"
-        "  globalThis.STRIPE_LINK_MONTHLY = c[4]; globalThis.PASS_LINK = c[5];\n"
-        "  globalThis.FORM_ENDPOINT = c[6];\n"
+        "  globalThis.STRIPE_LINK_MONTHLY = c[2]; globalThis.PASS_LINK = c[3];\n"
+        "  globalThis.FORM_ENDPOINT = c[4];\n"
         "  out.push([canStartToday() ? 'open' : closedChipText(),"
         " renewalDate() ? 'dated' : '']);\n}\n"
         "console.log(JSON.stringify(out));")
-    assert got == [["Rest-of-Season Pass opens soon", ""], ["Monthly opens soon", ""],
-                   ["League Pass opens soon", ""], ["Seats open soon", ""],
-                   ["open", "dated"], ["open", "dated"]]
+    assert got == [["Monthly opens soon", ""], ["League Pass opens soon", ""],
+                   ["Seats open soon", ""], ["open", "dated"], ["open", "dated"]]
 
 
 def test_today_is_said_only_before_the_weeks_first_kickoff() -> None:
@@ -5095,12 +5045,11 @@ def test_league_pass_answers_the_commissioners_questions_twice_alike() -> None:
     assert {i["name"]: i["acceptedAnswer"]["text"] for i in faq["mainEntity"]} == visible
     asked = " ".join(visible)
     for topic in ("join late", "leaves or is replaced", "co-manage", "two leagues",
-                  "emails used for", "take a refund", "How many seats",
+                  "emails used for", "if I cancel", "How many seats",
                   "switch to the League Pass"):
         assert topic in asked, topic
-    # 2026's one-time pass: nothing to cancel, a refund ends the seats.
-    assert "if you take a refund, every seat's reports stop too" in \
-        visible["What happens to the seats if I take a refund?"]
+    assert "If you cancel, a payment fails or you take a refund, every seat's reports stop too" \
+        in visible["What happens to the seats if I cancel?"]
     assert 'href="league-pass.html"' in HOW
 
 
@@ -5127,7 +5076,7 @@ def test_the_seat_cap_is_stated_where_a_buyer_and_a_leaguemate_read_it() -> None
             "spare for a co-manager. Seats go to the managers who confirm first") in lp
     assert "and each gets the report, while your league's seats last." in lp
     assert ("Your League Pass covers your own team, so you still get one report a week, not "
-            "two. Both are one payment, so nothing keeps billing") in lp
+            "two. Your Monthly plan keeps billing until you cancel it") in lp
     for page in (lp, prose(THANKS)):
         assert "the day they confirm their seat (we email them a button)" in page
         assert "the day they claim their seat" not in page

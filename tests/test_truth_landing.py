@@ -256,7 +256,7 @@ def test_the_league_pass_teaser_has_no_price_and_no_chat_bubble() -> None:
     price card — no button, no chat bubble (league-pass.html keeps that copy)
     — and it is a link, not a second card. Owner decision, Oct 30 2026: the
     single line could not be found, so the strip carries a group icon and the
-    price, $69, with the one-payment and refund terms beside it like every
+    price with when it stops and the refund terms beside it like every
     other price. The price sits in a smaller note, never the card's numeral."""
     line = re.search(r'<p class="lpline">(.*?)</p>', BODY, re.S)
     assert line, "the League Pass line is gone"
@@ -265,9 +265,9 @@ def test_the_league_pass_teaser_has_no_price_and_no_chat_bubble() -> None:
     assert "chatmock" not in LANDING and 'class="leaguepass"' not in LANDING
     assert 'href="league-pass.html"' in text
     terms = re.sub(r"\s+", " ", re.search(r'class="lpterms">(.*?)</span>', text, re.S).group(1))
-    assert terms == ("$69 for the whole league: one payment, nothing renews, full refund "
+    assert terms == ("$34.99 a month for the whole league. Stops on its own. Full refund "
                      "until your first weekly report's week kicks off. One per league.")
-    assert re.findall(r"\$\d+", text) == ["$69"]
+    assert re.findall(r"\$\d+", text) == ["$34"]
     pricing = BODY.split('<section id="pricing">')[1].split("</section>")[0]
     assert '<p class="lpline">' in pricing and pricing.count('class="plan ') == 1
 

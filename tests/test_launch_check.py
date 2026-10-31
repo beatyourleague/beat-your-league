@@ -67,7 +67,7 @@ def test_a_one_click_cancel_claim_in_the_terms_fails(site) -> None:
     pages, so the retired claim survived in the operative contract."""
     page = site / "terms.html"
     text = page.read_text(encoding="utf-8")
-    fixed = "you can cancel\n      yourself from your billing page in about a minute (section 4)."
+    fixed = "you can cancel yourself from\n      your billing page in about a minute (section 4)."
     assert fixed in text
     page.write_text(text.replace(
         fixed, "cancelling takes one\n      click from your billing page."))
@@ -100,7 +100,7 @@ def test_a_broken_link_and_a_bad_anchor_fail(site) -> None:
 
 def test_a_price_that_disagrees_with_the_welcome_email_fails(site) -> None:
     page = site / "league-pass.html"
-    page.write_text(page.read_text().replace('class="amt">$69', 'class="amt">$89'))
+    page.write_text(page.read_text().replace('class="amt">$34.99', 'class="amt">$89'))
     assert lc.check_prices()[0].status == "FAIL"
 
 
@@ -282,12 +282,12 @@ BASE = "http://127.0.0.1:9"
 ROSTER = {"00-0037834", "DEF-KC"}
 
 
-def _ref(plan: str = "season") -> str:
+def _ref(plan: str = "monthly") -> str:
     from run.refs import encode_roster
     return encode_roster(plan, "ppr", ("QB", "DEF"), tuple(sorted(ROSTER)), 12)
 
 
-def _handoff(ref: str, email: str = lc.FLOW_EMAIL, plan_path: str = "season",
+def _handoff(ref: str, email: str = lc.FLOW_EMAIL, plan_path: str = "monthly",
              extra: str = "") -> dict:
     import urllib.parse
     return {"handoff": f"{BASE}/__stripe/{plan_path}?client_reference_id="
@@ -296,9 +296,9 @@ def _handoff(ref: str, email: str = lc.FLOW_EMAIL, plan_path: str = "season",
 
 
 def test_a_well_formed_hand_off_passes() -> None:
-    assert lc.audit_flow("season", "checkout", "season", "", _handoff(_ref()), ROSTER, BASE) == []
+    assert lc.audit_flow("monthly", "checkout", "monthly", "", _handoff(_ref()), ROSTER, BASE) == []
     tagged = _ref() + "_via-launch-check"
-    assert lc.audit_flow("season", "checkout", "season", "?via=launch-check",
+    assert lc.audit_flow("monthly", "checkout", "monthly", "?via=launch-check",
                          _handoff(tagged), ROSTER, BASE) == []
 
 
@@ -311,16 +311,16 @@ def test_every_way_a_hand_off_goes_wrong_is_named() -> None:
         "long": _handoff(_ref() + "x" * 200),
         "unsafe": _handoff(_ref() + "!"),
         "wrong email": _handoff(_ref(), email="someone.else@example.com"),
-        "wrong plan": _handoff(_ref("monthly")),
-        "wrong link": _handoff(_ref(), plan_path="monthly"),
+        "wrong plan": _handoff(_ref("season")),
+        "wrong link": _handoff(_ref(), plan_path="pass"),
         "extra param": _handoff(_ref(), extra="&prefilled_promo_code=X"),
         "foreign tag": _handoff(_ref() + "_via-somebody"),
     }
     for name, result in bad.items():
-        assert lc.audit_flow("season", "checkout", "season", "", result, ROSTER, BASE), name
+        assert lc.audit_flow("monthly", "checkout", "monthly", "", result, ROSTER, BASE), name
     other = {"00-0037834", "DEF-BUF"}
-    assert lc.audit_flow("season", "checkout", "season", "", _handoff(_ref()), other, BASE)
-    assert lc.audit_flow("season", "checkout", "season", "", {"handoff": None}, ROSTER, BASE)
+    assert lc.audit_flow("monthly", "checkout", "monthly", "", _handoff(_ref()), other, BASE)
+    assert lc.audit_flow("monthly", "checkout", "monthly", "", {"handoff": None}, ROSTER, BASE)
 
 
 def test_a_posted_row_is_checked_as_the_intake_reads_it() -> None:
@@ -414,16 +414,6 @@ def test_a_report_update_link_must_post_the_settings_it_carried() -> None:
         wrong = {**good, "ref": encode_roster("season", scoring, shape, ids, size)}
         assert lc.audit_flow("update", "update_request", None, query,
                              {"posted": [json.dumps(wrong)]}, set(ids), BASE), (scoring, size)
-
-
-def test_the_plan_switch_must_rewrite_the_button_and_the_terms() -> None:
-    season = {"button": "Continue to checkout — $29", "terms": "$29, one payment"}
-    monthly = {"button": "Continue to checkout — $14.99/mo", "terms": "Monthly is $14.99"}
-    assert lc.audit_plan_switch({"before": season, "after": monthly, "back": season}) == []
-    stale = {"button": "Continue to checkout — $14.99/mo", "terms": "$29, one payment"}
-    assert lc.audit_plan_switch({"before": season, "after": stale, "back": season})
-    assert lc.audit_plan_switch({"before": season, "after": monthly, "back": monthly})
-    assert lc.audit_plan_switch(None)
 
 
 def _needs_browser() -> None:

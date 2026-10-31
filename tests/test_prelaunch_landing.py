@@ -340,7 +340,7 @@ def test_the_card_uses_the_sites_check_bullets() -> None:
 
 
 def test_the_pass_card_promises_a_first_report_not_a_first_weekly_one() -> None:
-    """QA-03, reproduced in code: the card, the Playoff swap and the JSON-LD
+    """QA-03, reproduced in code: the card and the JSON-LD
     said "every weekly report … the first usually within the hour of joining",
     but run/intake._first_file sends that week's report only before its first
     kickoff — from Thursday night to Tuesday (about 4.5 days in 7) the first
@@ -351,38 +351,11 @@ def test_the_pass_card_promises_a_first_report_not_a_first_weekly_one() -> None:
         if n["@type"] == "Product")
     surfaces = {
         "card": _flat(BODY.split('id="pass-card"')[1].split("</ul>")[0]),
-        "playoff swap": prose(_js_function(LANDING, "showPlayoffPass")),
         "JSON-LD": product["offers"][0]["description"],
     }
     for name, text in surfaces.items():
         assert "the first usually within the hour" not in text, name
         assert "Your first report usually lands within the hour" in text, name
-
-
-def test_the_playoff_swap_never_relabels_the_closed_button() -> None:
-    """The closed card's control is a link now (D4), and showPlayoffPass used
-    to relabel #season-cta whenever it was an <a> — which would have put "Get
-    the Playoff Pass — $19" on a button that only opens the email capture.
-    Only the BUY link the open state builds (marked data-buy) takes the price.
-    Run under node against both elements."""
-    fn = _js_function(LANDING, "showPlayoffPass")
-    assert 'link.setAttribute("data-buy", "")' in LANDING.split("if (CHECKOUT_OPEN)")[1]
-    harness = r"""
-let PASS_LABEL = "Get my lineups — $29";
-function check(buy) {
-  const cta = { tagName: "A", textContent: "Tell me when it opens",
-                hasAttribute: (n) => buy && n === "data-buy" };
-  global.document = { getElementById: (id) => id === "season-cta" ? cta : null,
-                      createTextNode: () => ({}), createElement: () => ({}) };
-  FN
-  showPlayoffPass(13);
-  return cta.textContent;
-}
-console.log(JSON.stringify([check(false), check(true)]));
-""".replace("FN", fn)
-    closed, open_ = _node(harness)
-    assert closed == "Tell me when it opens"
-    assert open_ == "Get my lineups — $19"
 
 
 # --------------------------------------------------------------------- #

@@ -55,7 +55,7 @@ def test_the_monthly_welcome_never_claims_an_annual_renewal() -> None:
         assert f"{MONTHLY_PRICE} USD" in doc
         assert SEASON_PRICE + " USD" not in doc
         assert not re.search(r"renews once a year", doc, re.I)
-        assert re.search(r"billing stops on its own after the season(?:'|&#x27;)s last weekly report", doc, re.I)
+        assert re.search(r"billing stops on its own after your title game", doc, re.I)
 
 
 def test_the_pass_payer_is_welcomed_at_the_price_they_paid() -> None:
@@ -151,7 +151,7 @@ def test_welcome_prices_match_the_pages_that_sold_them() -> None:
     The email's constants must equal the landing page's own numbers and the
     league-pass page's own number."""
     landing = (SITE / "index.html").read_text(encoding="utf-8")
-    assert f'id="pass-price">{SEASON_PRICE} <small>/ rest of season' in landing
+    assert f'id="pass-price">{MONTHLY_PRICE} <small>/ month' in landing
     join = (SITE / "join" / "index.html").read_text(encoding="utf-8")
     assert f"Monthly · {MONTHLY_PRICE}" in join
     league = (SITE / "league-pass.html").read_text(encoding="utf-8")

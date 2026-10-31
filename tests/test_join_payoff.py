@@ -490,8 +490,8 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     assert "value.textContent = valueWords();" in step
     words = re.sub(r'"\s*\+\s*"', "", _function("valueWords"))
     assert "Every lineup from now to your title game. $" in words
-    assert "(PLAYOFF_ACTIVE ? 19 : 29)" in words and '", one payment' in words
-    assert "$69, one payment." in words
+    assert "$14.99 a month, and it stops on its own." in words
+    assert "$34.99 a month, and it stops on its own." in words
     label = _function("closedLabel")
     assert '"Save my team and tell me when it opens"' in label
     assert '"Save my team by email"' in label, "the mail route saves nothing until it's sent"
@@ -508,15 +508,16 @@ def test_closed_step_three_is_a_next_step_with_the_mechanics_true() -> None:
     assert '$("see-real").hidden = step3Action === "open";' in step
     # Terms and refund stay beside any price the step shows.
     markup = JOIN.split('id="value-line"')[1].split("</form>")[0]
-    assert 'id="terms-line"' in markup and "no-questions" in markup and "one\n      payment" in markup
+    assert 'id="terms-line"' in markup and "no-questions" in markup
+    assert "billing stops on its own" in markup
 
 
 def test_an_open_checkout_keeps_the_button_the_purchase() -> None:
     # "Unlock" once they have built something (owner brief, Oct 30 2026); the
     # read-back's button is the one that says it leaves for checkout.
-    assert '<button id="submit" type="submit">Unlock my lineups — $29</button>' in JOIN
-    assert '<button type="button" id="check-yes">Continue to checkout — $29</button>' in JOIN
-    assert "const SEASON_SUBMIT = $(\"submit\").textContent;" in JOIN
+    assert '<button id="submit" type="submit">Unlock my lineups — $14.99/mo</button>' in JOIN
+    assert '<button type="button" id="check-yes">Continue to checkout — $14.99/mo</button>' in JOIN
+    assert "const MONTHLY_SUBMIT = $(\"submit\").textContent;" in JOIN
     # The open path through the handler is untouched by the panel.
     handler = JOIN.split('$("form-email").addEventListener')[1].split("\n});")[0]
     assert "leaveForCheckout(link, tagged, email);" in handler

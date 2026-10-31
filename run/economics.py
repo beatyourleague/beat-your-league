@@ -39,20 +39,20 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Subscription prices — the renewing plans 2027 brings back, and the figures
-# PLAN.md, LAUNCH.md and launch-readiness.md quote (checked below).
+# What 2026 sells (owner decision, Oct 31 2026): monthly plans that stop on
+# their own after Week 17's report. render/welcome.py's MONTHLY_PRICE and
+# PASS_PRICE are these (tests/test_economics.py ties them). SEASON is the
+# founding full-season pass from 2027, and LEAGUE_PASS the figure PLAN.md
+# records for a yearly League Pass.
+MONTHLY = 14.99
+LEAGUE_MONTHLY = 34.99
 SEASON = 39.00
 SEASON_2027_PASS = 49.00    # this season and next, then renewing at SEASON
-MONTHLY = 14.99
 LEAGUE_PASS = 99.00
-# What 2026 sells (owner decision, Oct 18 2026): ONE-TIME passes, no renewal.
-# render/welcome.py's SEASON_PRICE / PLAYOFF_PRICE / PASS_PRICE are these
-# (tests/test_economics.py ties them).
+# Retired Oct 31 2026, before anything was sold. A one-time link has no Billing
+# fee; run/stats reads these so a price from one still gets a name.
 ONE_TIME = {"Rest-of-Season Pass": 29.00, "Playoff Pass": 19.00,
             "League Pass (rest of season)": 69.00}
-REST_OF_SEASON = ONE_TIME["Rest-of-Season Pass"]
-PLAYOFF_PASS = ONE_TIME["Playoff Pass"]
-LEAGUE_PASS_2026 = ONE_TIME["League Pass (rest of season)"]
 
 # Stripe Canada, card in USD from a US cardholder, paid out in CAD (Stripe's
 # published Canadian pricing, checked by the audit Oct 2026): 2.9% + C$0.30,
@@ -88,24 +88,24 @@ SUBSTACK_CUT = 0.10
 # founding $39), so these are re-buy rates, never renewal rates.
 REBUY_RATES = (0.30, 0.50, 0.70)      # share of 2026 buyers who buy again in 2027
 RENEWAL_RATES = REBUY_RATES           # the name older callers use
-# The launch audit's base case for 2026: about 30 individual purchases and 2
-# League Passes. How the 30 split between the two individual passes is
-# derived below, not typed in.
+# The launch audit's base case for 2026: about 30 individual buyers and 2
+# League Passes. What each is worth comes from the calendar below.
 BASE_PURCHASES = 30
 BASE_LEAGUE_PASSES = 2
+# The share of buyers who cancel before a second charge: a manager knocked out
+# in Weeks 10-12 goes. Stated, not measured. Nobody has paid yet.
+LEAVE_AFTER_FIRST = 0.30
 
 # The calendar the model counts from. OPENS is the day checkout opens — an
 # ASSUMPTION until it happens (LAUNCH.md's target); move it when it slips and
 # every hour and dollar below moves with it. Weekly reports go out on
 # consecutive Tuesdays from Sep 8 2026 (Week 1) to Jan 5 2027 (Week 18).
-OPENS = date(2026, 10, 26)
+OPENS = date(2026, 11, 9)
 WEEK1_REPORT = date(2026, 9, 8)
 LAST_WEEK = 18
-# The Playoff Pass replaces the Rest-of-Season Pass once a buyer's first
-# report would be Week 13 (site/index.html PLAYOFF_PASS_READY). It is assumed
-# to sell through Week 17 (the title game under the platforms' defaults) to
-# the half of a league still alive in its playoffs — so a playoff week sells
-# about half what a regular week does. Stated, not measured.
+# From Week 13 only about half a league is still alive, so a playoff week sells
+# about half what a regular week does, through Week 17 (the title game under the
+# platforms' defaults, and run/billing's TITLE_WEEK). Stated, not measured.
 PLAYOFF_FROM_WEEK = 13
 LAST_SELLING_WEEK = 17
 PLAYOFF_DEMAND = 0.5
@@ -130,20 +130,38 @@ def weeks_left(opens: date = None) -> int:
     return max(0, LAST_WEEK - first_week_sold(opens) + 1)
 
 
-def playoff_share(opens: date = None) -> float:
-    """The share of individual purchases that are Playoff Passes, from the
-    selling weeks either side of Week 13 and PLAYOFF_DEMAND."""
-    first = first_week_sold(opens)
-    regular = max(0, min(PLAYOFF_FROM_WEEK, LAST_SELLING_WEEK + 1) - first)
-    playoff = max(0, LAST_SELLING_WEEK - max(first, PLAYOFF_FROM_WEEK) + 1) * PLAYOFF_DEMAND
-    return playoff / (regular + playoff) if regular + playoff else 0.0
+def selling_weeks(opens: date = None) -> dict[int, float]:
+    """{week a buyer's first weekly report covers: how much that week sells}."""
+    return {week: PLAYOFF_DEMAND if week >= PLAYOFF_FROM_WEEK else 1.0
+            for week in range(first_week_sold(opens), LAST_SELLING_WEEK + 1)}
 
 
-def base_case_mix(opens: date = None) -> dict[str, int]:
-    """{pass: purchases} of the 2026 base case."""
-    playoff = round(BASE_PURCHASES * playoff_share(opens))
-    return {"Rest-of-Season Pass": BASE_PURCHASES - playoff, "Playoff Pass": playoff,
-            "League Pass (rest of season)": BASE_LEAGUE_PASSES}
+def expected_charges(opens: date = None) -> float:
+    """Charges an average buyer pays: the calendar's count for the week they
+    join, less those who leave before a second."""
+    weeks = selling_weeks(opens)
+    if not weeks:
+        return 1.0
+    stop = report_tuesday(LAST_SELLING_WEEK)
+    paid = sum(share * (1 + (1 - LEAVE_AFTER_FIRST)
+                        * (monthly_charges(report_tuesday(week), stop)[0] - 1))
+               for week, share in weeks.items())
+    return round(paid / sum(weeks.values()), 3)
+
+
+def net_per_buyer(price: float, opens: date = None) -> float:
+    """A buyer's season after Stripe. Refunds and disputes fall on the first
+    charge: the refund window closes before any second one."""
+    return round(net_per_sale(price)
+                 + (expected_charges(opens) - 1) * (price - stripe_fee(price)), 2)
+
+
+BASE_PLANS = {"Monthly": MONTHLY, "League Pass": LEAGUE_MONTHLY}
+
+
+def base_case_mix() -> dict[str, int]:
+    """{plan: buyers} of the 2026 base case."""
+    return {"Monthly": BASE_PURCHASES, "League Pass": BASE_LEAGUE_PASSES}
 
 
 # Selling is PLAN §5's own time budget, "~30–40 min/day in season (replies +
@@ -188,9 +206,9 @@ def net_per_sale(amount: float, one_time: bool = False) -> float:
 
 
 def break_even_purchases() -> int:
-    """Rest-of-Season Passes that cover this season's fixed costs."""
+    """Monthly buyers who cover this season's fixed costs."""
     fixed = sum(FIXED_SEASON_COSTS.values())
-    per = net_per_sale(REST_OF_SEASON, one_time=True)
+    per = net_per_buyer(MONTHLY)
     return int(-(-fixed // per))          # ceiling
 
 
@@ -212,11 +230,11 @@ def _add_month(day: date) -> date:
 
 def monthly_charges(joined: date, stop: date) -> tuple[int, float]:
     """(monthly charges, 0.0) for a monthly buyer who joins on ``joined`` when
-    the season's last weekly report is due on ``stop``. The first month is
-    charged at signup; Stripe then bills in advance on each anniversary, and
-    run/billing.py ends the subscription at the close of the period that
-    contains the last report (cancel_at_period_end), so an anniversary renews
-    only while it falls on or before ``stop``. No part-month exists any more;
+    Week 17's report is due on ``stop``. The first month is charged at signup;
+    Stripe then bills in advance on each anniversary, and run/billing.py ends
+    the subscription at the close of the period that contains that report
+    (cancel_at_period_end), so an anniversary renews only while it falls on or
+    before ``stop``. No part-month exists any more;
     the second element is kept so callers' shape doesn't move."""
     full, start = 1, _add_month(joined)
     while start <= stop:
@@ -250,7 +268,7 @@ def season_calendar(cache_dir: Path | None = None, today: date | None = None
 def monthly_by_join_week(calendar: tuple[dict[int, date], date]) -> list[dict]:
     """For each week a monthly buyer could join (on that week's report
     Tuesday): the charges they pay, the total, and the weekly reports they
-    get — beside the $39 pass, which is disclosure here, never argument."""
+    get."""
     tuesdays, stop = calendar
     last = max(tuesdays)
     rows = []
@@ -273,17 +291,16 @@ def ltv(price: float, renewal: float) -> float:
 
 
 def rebuy_value(first: float, then: float, rate: float) -> float:
-    """Net over two seasons for a 2026 one-time buyer: the pass they bought
-    (no Billing fee), plus — at re-buy rate ``rate`` — the 2027 plan ``then``
-    bought again at the founding price. Nothing renews, so this is a second
-    purchase, never a renewal."""
-    return round(net_per_sale(first, one_time=True) + rate * net_per_sale(then), 2)
+    """Net over two seasons for a 2026 buyer: the plan they bought
+    (``first``, its net this season), plus — at re-buy rate ``rate`` — the 2027
+    plan ``then`` bought again at the founding price. A monthly plan stops with
+    the season, so this is a second purchase, never a renewal."""
+    return round(first + rate * net_per_sale(then), 2)
 
 
 def season_2027_prepay() -> dict[str, float]:
     """The 2027 Season Pass ($49 now, off until the lawyer has seen it) against
-    selling the same buyer the $29 pass and hoping they come back. It is a
-    subscription charge, so it pays the Billing fee a one-time pass does not.
+    selling the same buyer the monthly plan and hoping they come back.
 
     ``extra`` is what it adds today. ``break_even`` is the 2027 re-buy rate at
     which the two are worth the same: below it the prepaid pass earns more,
@@ -292,8 +309,8 @@ def season_2027_prepay() -> dict[str, float]:
     prepaid buyer is owed all of 2027 whether or not sales do what this says,
     which is the obligation `make stats` keeps in view."""
     pass_net = net_per_sale(SEASON_2027_PASS)
-    today_net = net_per_sale(REST_OF_SEASON, one_time=True)
-    return {"net": pass_net, "rest_of_season_net": today_net,
+    today_net = net_per_buyer(MONTHLY)
+    return {"net": pass_net, "monthly_net": today_net,
             "extra": round(pass_net - today_net, 2),
             "break_even": round((pass_net - today_net) / net_per_sale(SEASON), 3)}
 
@@ -305,9 +322,9 @@ def owner_hours(opens: date = None) -> float:
 
 def base_case_net(opens: date = None) -> float:
     """This season's net on the audit's base case, priced as 2026 sells —
-    one-time passes, no Billing fee — after fixed costs."""
-    gross = sum(count * net_per_sale(ONE_TIME[name], one_time=True)
-                for name, count in base_case_mix(opens).items())
+    monthly plans — after fixed costs."""
+    gross = sum(count * net_per_buyer(BASE_PLANS[name], opens)
+                for name, count in base_case_mix().items())
     return round(gross - sum(FIXED_SEASON_COSTS.values()), 2)
 
 
@@ -318,22 +335,22 @@ def customer_lines(calendar=None) -> list[str]:
     if cal is None:
         lines.append("  Monthly by join week: the schedule can't say (offseason or cold cache).")
     else:
-        lines.append(f"  2027 monthly (not sold in 2026), by the week they join (the last "
-                     f"report is {cal[1]:%b %-d}; joins on the report Tuesday):")
+        lines.append(f"  Monthly, by the week they join (no charge after Week 17's "
+                     f"report, {cal[1]:%b %-d}; joins on the report Tuesday):")
         for row in monthly_by_join_week(cal):
             plural = lambda n, word: f"{n} {word}{'' if n == 1 else 's'}"  # noqa: E731
             lines.append(f"    Week {row['week']:>2}: {plural(row['charges'], 'charge')}, "
                          f"${row['paid']:6.2f} · "
                          f"{plural(row['reports'], 'weekly report')}")
-        lines.append(f"    (the season pass is ${SEASON:.0f} whichever week they join)")
     lines.append("")
     lines.append("  A 2026 buyer over two seasons, net of Stripe, refunds and disputes, at a "
-                 "stated RE-BUY rate (nothing renews: 2027 is a new purchase at $39 / $99):")
+                 "stated RE-BUY rate (a monthly plan stops with the season: 2027 is a new "
+                 "purchase at $39 / $99):")
     for rate in REBUY_RATES:
-        lines.append(f"    {rate:.0%} re-buy: ${REST_OF_SEASON:.0f} pass "
-                     f"${rebuy_value(REST_OF_SEASON, SEASON, rate):6.2f} · "
-                     f"${LEAGUE_PASS_2026:.0f} League Pass "
-                     f"${rebuy_value(LEAGUE_PASS_2026, LEAGUE_PASS, rate):6.2f}")
+        lines.append(f"    {rate:.0%} re-buy: ${MONTHLY} Monthly "
+                     f"${rebuy_value(net_per_buyer(MONTHLY), SEASON, rate):6.2f} · "
+                     f"${LEAGUE_MONTHLY} League Pass "
+                     f"${rebuy_value(net_per_buyer(LEAGUE_MONTHLY), LEAGUE_PASS, rate):6.2f}")
     lines.append("")
     hours, net = owner_hours(), base_case_net()
     mix = base_case_mix()
@@ -341,10 +358,10 @@ def customer_lines(calendar=None) -> list[str]:
                  f"weekly report Week {first_week_sold()}, {WEEKS_LEFT} weeks left")
     lines.append(f"  Owner time this season: about {hours:.0f} h "
                  + "(" + "; ".join(f"{k} {v:.0f} h" for k, v in OWNER_HOURS.items()) + ")")
-    lines.append("  Base case (" + " + ".join(f"{n} × {name} ${ONE_TIME[name]:.0f}"
+    lines.append("  Base case (" + " + ".join(f"{n} × {name} ${BASE_PLANS[name]}"
                                               for name, n in mix.items())
-                 + f"; Playoff Passes are {playoff_share():.0%} of the individual purchases, "
-                 f"Weeks {PLAYOFF_FROM_WEEK}–{LAST_SELLING_WEEK} selling at "
+                 + f"; {expected_charges():.1f} charges a buyer, {LEAVE_AFTER_FIRST:.0%} leaving "
+                 f"before a second, Weeks {PLAYOFF_FROM_WEEK}–{LAST_SELLING_WEEK} selling at "
                  f"{PLAYOFF_DEMAND:.0%} of a regular week): ${net:,.2f} after fixed costs — "
                  f"about ${net / hours:.2f} an hour ({HOURLY_NOTE})")
     return lines
@@ -360,6 +377,7 @@ def model_figures() -> dict[str, dict[str, float]]:
     Substack's cut."""
     fees = {}
     for name, price in (("season pass", SEASON), ("monthly charge", MONTHLY),
+                        ("League Pass monthly charge", LEAGUE_MONTHLY),
                         ("League Pass", LEAGUE_PASS)):
         fees[f"{name} fee"] = stripe_fee(price)
         fees[f"{name} fee, USD payout"] = stripe_fee(price, usd_payout=True)
@@ -392,7 +410,7 @@ TOLERANCE = 0.25
 # Below this a dollar figure in a fee sentence is a fee; at or above it, it is
 # a price or a total (prices are excluded by name too).
 FEE_CEILING = 8.0
-_PRICES = {SEASON, MONTHLY, LEAGUE_PASS, *ONE_TIME.values(), 12.99, 9.99}
+_PRICES = {SEASON, MONTHLY, LEAGUE_MONTHLY, LEAGUE_PASS, *ONE_TIME.values(), 12.99, 9.99}
 _AMOUNT = re.compile(r"(?<![A-Z])\$(\d+(?:\.\d+)?)(?:\s*[–-]\s*\$?(\d+(?:\.\d+)?))?")
 
 
@@ -459,17 +477,17 @@ def base_case_figures() -> tuple[str, str, str]:
 
 def extra_refund_cost(rate: float, purchases: int = 50, price: float = None) -> int:
     """What a refund rate above the base case's costs, per ``purchases`` sales
-    of ``price`` (default the $29 pass): each extra refund returns the price
+    of ``price`` (default a monthly charge): each extra refund returns the price
     and Stripe keeps its fee, so the sale's whole net-of-fee is gone."""
-    price = REST_OF_SEASON if price is None else price
+    price = MONTHLY if price is None else price
     lost = price - stripe_fee(price, one_time=price in ONE_TIME.values())
     return round((rate - REFUND_RATE) * purchases * lost)
 
 
 def league_pass_per_manager(teams: int = 12) -> str:
-    """The $69 League Pass split across a league — the commissioner's own
-    arithmetic, the one place a price may be divided (PLAN §4)."""
-    return f"${LEAGUE_PASS_2026 / teams:.2f}"
+    """The League Pass's monthly price split across a league — the
+    commissioner's own arithmetic, the one place a price may be divided (PLAN §4)."""
+    return f"${LEAGUE_MONTHLY / teams:.2f}"
 
 
 def readiness_base_case_mismatches(path: Path | None = None) -> list[str]:
@@ -495,12 +513,12 @@ def summary_lines() -> list[tuple[str, str, str]]:
     rows.append(("2027: three monthly charges cost more than the season pass",
                  "PASS" if 3 * MONTHLY > SEASON else "FAIL",
                  f"3 × ${MONTHLY} = ${3 * MONTHLY:.2f} vs ${SEASON:.0f}"))
-    once = " · ".join(
-        f"{name} ${price:.0f}: Stripe ${stripe_fee(price, one_time=True):.2f}, "
-        f"net ${net_per_sale(price, one_time=True):.2f}"
-        for name, price in ONE_TIME.items())
-    rows.append(("2026's one-time passes: what each sale leaves after Stripe, refunds and "
-                 "disputes", "PASS", once))
+    plans = " · ".join(
+        f"{name} ${price}: Stripe ${stripe_fee(price):.2f} a charge, "
+        f"${net_per_buyer(price):.2f} a buyer"
+        for name, price in BASE_PLANS.items())
+    rows.append(("2026's monthly plans: what a buyer leaves after Stripe, refunds and "
+                 "disputes", "PASS", f"{plans} ({expected_charges():.1f} charges a buyer)"))
     fee = stripe_fee(SEASON)
     rows.append(("2027: net per season pass after Stripe, refunds and disputes", "PASS",
                  f"${net_per_sale(SEASON):.2f} of ${SEASON:.0f} (Stripe ${fee:.2f}, "
@@ -508,20 +526,19 @@ def summary_lines() -> list[tuple[str, str, str]]:
                  f"with a USD payout account)"))
     prepay = season_2027_prepay()
     rows.append(("The 2027 Season Pass, if it opens: prepaid money against a 2027 re-buy", "PASS",
-                 f"${prepay['net']:.2f} of ${SEASON_2027_PASS:.0f} today, ${prepay['extra']:.2f} more than "
-                 f"a ${REST_OF_SEASON:.0f} pass; earns more only if under "
+                 f"${prepay['net']:.2f} of ${SEASON_2027_PASS:.0f} today, ${prepay['extra']:.2f} more "
+                 f"than a monthly buyer; earns more only if under "
                  f"{prepay['break_even']:.0%} of those buyers would have bought again, and "
                  f"all of 2027 is owed either way"))
     rows.append(("Break-even on this season's fixed costs", "PASS",
-                 f"{break_even_purchases()} Rest-of-Season Passes cover "
+                 f"{break_even_purchases()} Monthly buyers cover "
                  f"${sum(FIXED_SEASON_COSTS.values()):.0f}; Resend Pro "
                  f"(${RESEND_PRO_MONTHLY:.0f}/mo) only past ~{RESEND_FREE_RECIPIENTS} "
                  f"recipients. Opening {OPENS:%b %-d} (Week {first_week_sold()} on), the "
                  f"owner's ~{owner_hours():.0f} h earn about "
                  f"${base_case_net() / owner_hours():.0f} an hour on the base case"))
     saving = round(stripe_fee(SEASON) - stripe_fee(SEASON, usd_payout=True), 2)
-    saving_now = round(stripe_fee(REST_OF_SEASON, one_time=True)
-                       - stripe_fee(REST_OF_SEASON, usd_payout=True, one_time=True), 2)
+    saving_now = round(stripe_fee(MONTHLY) - stripe_fee(MONTHLY, usd_payout=True), 2)
     usd = os.environ.get("STRIPE_PAYOUT_CURRENCY", "").lower() == "usd"
     # Decided Oct 24 2026 (owner): payouts in USD. Until the account exists
     # (STRIPE_PAYOUT_CURRENCY=usd in the shell says it does) the
@@ -530,7 +547,7 @@ def summary_lines() -> list[tuple[str, str, str]]:
                  "PASS" if usd else "WARN",
                  "USD payout account in use" if usd else
                  f"paid out in CAD until the USD account exists: ${saving_now:.2f} of every "
-                 f"$29 pass goes to conversion (${saving:.2f} of a 2027 $39 pass), kept on "
+                 f"${MONTHLY} charge goes to conversion (${saving:.2f} of a 2027 $39 pass), kept on "
                  f"every refund — add it (LAUNCH.md step 1.8), then set "
                  f"STRIPE_PAYOUT_CURRENCY=usd in your shell"))
     try:
@@ -554,13 +571,12 @@ def summary_lines() -> list[tuple[str, str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     print("UNIT ECONOMICS (assumptions at the top of run/economics.py)\n")
-    print("PER SALE — 2026 (one-time passes, no Billing fee)")
-    for plan, price in ONE_TIME.items():
-        print(f"  {plan:29} ${price:>6.2f}  Stripe ${stripe_fee(price, one_time=True):5.2f}  "
-              f"net ${net_per_sale(price, one_time=True):6.2f}")
-    print("PER SALE — 2027 (the renewing plans)")
-    for plan, price in (("Season pass", SEASON), ("Monthly charge", MONTHLY),
-                        ("League Pass", LEAGUE_PASS)):
+    print(f"PER BUYER — 2026 (monthly plans, {expected_charges():.1f} charges a buyer)")
+    for plan, price in BASE_PLANS.items():
+        print(f"  {plan:29} ${price:>6.2f}  Stripe ${stripe_fee(price):5.2f} a charge  "
+              f"net ${net_per_buyer(price):6.2f} a buyer")
+    print("PER SALE — from 2027 (the yearly plans)")
+    for plan, price in (("Season pass", SEASON), ("League Pass", LEAGUE_PASS)):
         print(f"  {plan:29} ${price:>6.2f}  Stripe ${stripe_fee(price):5.2f}  "
               f"net ${net_per_sale(price):6.2f}")
     print()

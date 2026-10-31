@@ -384,9 +384,10 @@ ONCE_STOP_BODY = ("Nothing renews and nothing more is charged: your pass covers 
                   "then, reply \"stop\" to any of our emails, or use your mail "
                   "app's unsubscribe — you're off within 10 business days.")
 ONCE = "once"
-# What the site sells this season (owner decision, Oct 18 2026): one-time
-# passes. Flip with the payment links when subscriptions return (2027).
-SELLING_ONE_TIME = True
+# What the site sells (owner decision, Oct 31 2026): monthly plans, so the
+# samples show a subscription's way out. The one-time words stay for a purchase
+# through a one-time link; none is sold.
+SELLING_ONE_TIME = False
 
 
 def is_seat(meta: Mapping[str, Any]) -> bool:
@@ -2242,10 +2243,11 @@ SEASON_END_HEAD = "The season's end"
 # season's roster — so a seat is never told its reports simply start again
 # (panel review LP-D3, LP-D5).
 SEASON_END_BILLING = {
-    # D1: the monthly plan's final paid month is the one the season's last
-    # weekly report falls in — this report's — and nothing bills after it.
-    "monthly": "Your monthly plan stops billing on its own: this report falls "
-               "in your last paid month, so there's nothing to cancel.",
+    # D1: billing has already stopped (run/billing, TITLE_WEEK), so this report
+    # is the last and nothing bills after it.
+    "monthly": "Your monthly plan has stopped billing on its own, so there's "
+               "nothing to cancel. You have the founding rate. Your 2027 season "
+               "pass is $39.",
     # D8: a derived Week 1 is never built before run.solo.week_one_due (9 days
     # before its first kickoff), so Week 1 arrives in kickoff week, September.
     "season": "Your season pass renews once a year, on the day you bought it, "
@@ -2256,18 +2258,17 @@ SEASON_END_BILLING = {
     PASS_2027_PLAN: "Unless you cancel, your pass renews each August 15, starting "
                     "in 2028, and we email you before it does. Reports start again "
                     "with Week 1 next September.",
-    PASS_PLAN: "Your League Pass renews once a year, on the day you bought it, "
-               "and we email you before it does. Your league's seats come back "
-               "with it: each manager claims theirs again next season, with "
-               "their new roster.",
+    PASS_PLAN: "Your League Pass has stopped billing on its own, so there's "
+               "nothing to cancel. If your league comes back next season, each "
+               "manager claims their seat again with their new roster.",
     # The payer's sentence, from the seat's side (COPY:F6). "Reports for this
     # seat end here" was a promise nothing kept: a claim lives as a form row
     # for 400 days and the intake honours it while the payer holds a pass, so
     # a renewed pass carried this season's roster into next season's reports.
     # Both lines now say the same thing — the seat follows the pass, and the
     # claim with a new roster is made again — which is true either way.
-    SEAT_PLAN: "Your seat follows your league's pass: if it renews, claim your "
-               "seat again next season with your new roster.",
+    SEAT_PLAN: "Your seat follows your league's pass: if your league comes back "
+               "next season, claim your seat again with your new roster.",
 }
 
 
@@ -2320,8 +2321,9 @@ def season_end_lines(meta: Mapping[str, Any]) -> list[str]:
         billing = (ONCE_SEAT_END if is_seat(meta) else ONCE_END)
     if billing:
         # Renewing plans start again next season from the roster on file
-        # (EMAILS-62): the update link is how a new one reaches us.
-        if (meta.get("plan") in ("season", PASS_2027_PLAN, PASS_PLAN)
+        # (EMAILS-62): the update link is how a new one reaches us. A monthly
+        # plan or League Pass has stopped, so nothing is built next season.
+        if (meta.get("plan") in ("season", PASS_2027_PLAN)
                 and meta.get("update_url")
                 and not meta.get("one_time")):
             billing += " " + NEW_ROSTER

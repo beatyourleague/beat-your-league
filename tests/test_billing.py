@@ -29,8 +29,9 @@ needs_schedule = pytest.mark.skipif(
     reason="no cached nflverse schedule (data/ is gitignored); "
            "run `python -m ingest.pull` to populate it")
 
-# The instant the 2026 season's last weekly report is due (Tue Jan 5 2027).
-FINAL = datetime(2027, 1, 5, 12, 17, tzinfo=timezone.utc)
+# The instant the last report a charge may pay for is due: Week 17's, Tue Dec 29
+# 2026 (owner decision, Oct 31 2026; Week 18's goes out a week later, unbilled).
+FINAL = datetime(2026, 12, 29, 12, 17, tzinfo=timezone.utc)
 AFTER = int(FINAL.timestamp()) + 6 * 86400       # a period ending after it
 BEFORE = int(FINAL.timestamp()) - 3600            # a period ending before it
 
@@ -224,7 +225,7 @@ def test_a_paused_subscription_is_not_silent_in_the_offseason_gap(
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
     monkeypatch.setattr(billing, "final_send", lambda *a, **k: (None, None))
     monkeypatch.setattr(billing, "load_subscriptions",
-                        lambda key: [sub(status="paused")])
+                        lambda key, **_: [sub(status="paused")])
     assert billing.main(["--send"]) == 1
     assert "NO SEASON TO SERVE" in capsys.readouterr().err
 
@@ -236,15 +237,15 @@ def test_the_gap_alarm_ignores_subscriptions_already_ending(monkeypatch, capsys)
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
     monkeypatch.setattr(billing, "final_send", lambda *a, **k: (None, None))
     monkeypatch.setattr(billing, "load_subscriptions",
-                        lambda key: [sub(cancel_at_period_end=True)])
+                        lambda key, **_: [sub(cancel_at_period_end=True)])
     assert billing.main(["--send"]) == 0, capsys.readouterr().err
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key, **_: [sub()])
     assert billing.main(["--send"]) == 1
 
 
 def test_dry_run_is_the_default(monkeypatch, capsys) -> None:
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key, **_: [sub()])
     monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
     written: list = []
     monkeypatch.setattr(billing, "apply_stop", lambda *a, **k: written.append(a))
@@ -256,7 +257,7 @@ def test_dry_run_is_the_default(monkeypatch, capsys) -> None:
 def test_send_writes_only_final_periods(monkeypatch) -> None:
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
     monkeypatch.setattr(billing, "load_subscriptions",
-                        lambda key: [sub(id="sub_last"), sub(id="sub_more", period_end=BEFORE)])
+                        lambda key, **_: [sub(id="sub_last"), sub(id="sub_more", period_end=BEFORE)])
     monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
     written: list = []
     monkeypatch.setattr(billing, "apply_stop", lambda key, s: written.append(s["id"]))
@@ -268,7 +269,7 @@ def test_a_failed_write_exits_non_zero(monkeypatch, capsys) -> None:
     from run.subscriptions import SubscriptionError
 
     monkeypatch.setenv("STRIPE_API_KEY", "sk_test")
-    monkeypatch.setattr(billing, "load_subscriptions", lambda key: [sub()])
+    monkeypatch.setattr(billing, "load_subscriptions", lambda key, **_: [sub()])
     monkeypatch.setattr(billing, "final_send", lambda *a, **k: (FINAL, "2026"))
 
     def boom(*a, **k):
@@ -309,7 +310,7 @@ def test_the_last_send_is_the_first_tuesday_that_mails_the_last_week() -> None:
 @needs_schedule
 def test_the_cutoff_is_the_tuesday_runs_due_minute() -> None:
     at, season = final_send(CACHE, date(2026, 10, 18), live=False)
-    assert at == tuesday_due_at(last_send(CACHE, season, live=False))
+    assert at == tuesday_due_at(billing.title_send(CACHE, season, live=False))
 
 
 @needs_schedule

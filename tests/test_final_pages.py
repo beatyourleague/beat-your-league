@@ -137,11 +137,10 @@ def test_every_price_on_the_join_page_has_the_refund_beside_it() -> None:
     sat ~2,000px below it (step 3 hidden until a roster is checked). The pitch
     carries the refund in the season, League Pass and Playoff variants."""
     static = _flat(re.search(r'<p id="header-pitch">(.*?)</p>', JOIN, re.S).group(1))
-    assert "$29 for the rest of the season" in static and REFUND_BESIDE_PRICE in static
+    assert "$14.99 a month" in static and REFUND_BESIDE_PRICE in static
     flat = _flat(JOIN)
-    for price in ("$69 for your whole league, rest of season", "$19 for the Playoff Pass"):
-        at = flat.index(price)
-        assert REFUND_BESIDE_PRICE in flat[at:at + 220], price
+    at = flat.index("$34.99 a month for your whole league")
+    assert REFUND_BESIDE_PRICE in flat[at:at + 220]
 
 
 def test_the_one_time_offer_carries_no_subscription_leftovers() -> None:
@@ -156,7 +155,7 @@ def test_the_one_time_offer_carries_no_subscription_leftovers() -> None:
         assert not re.search(r"re-?subscri", text, re.I), name
     # Twice for the pass, once for the 2027 pass's own terms (built switched off).
     assert _flat(JOIN).count("a second purchase after a refund is final") == 3
-    assert '"Rest-of-Season Pass opens soon"' in _js_function(JOIN, "closedChipText")
+    assert '"Monthly opens soon"' in _js_function(JOIN, "closedChipText")
     assert "Season pass opens soon" not in JOIN
     assert "yearly plan" not in HOW
 
@@ -358,7 +357,7 @@ def test_the_gate_clause_is_one_string_on_every_surface() -> None:
     # landing's only readable definition of its one number.
     assert ("The % is the chance your starter outscores your best bench player at that "
             "spot, printed " + GATE_CLAUSE + ".") in step
-    assert "the odds " + GATE_CLAUSE in _flat(_js_function(JOIN, "monthlyPlan"))
+    assert "odds" not in _flat(JOIN.split("<script")[0]).lower().replace("the odds " + GATE_CLAUSE, "")
     for name in ("index.html", "join/index.html", "how-it-works.html", "thanks.html",
                  "league-pass.html"):
         text = _flat((SITE / name).read_text(encoding="utf-8"))
@@ -450,8 +449,6 @@ def test_the_price_cards_first_line_is_the_outcome() -> None:
     lead = _flat(card.split('id="pass-lead">')[1].split("</p>")[0])
     assert lead == "Every lineup through your title game."
     assert card.index('id="pass-lead"') < card.index("<ul>"), "the lead comes before the list"
-    assert '"Every lineup from Week " + week + " through your title game."' in _js_function(
-        LANDING, "showPlayoffPass")
 
 
 def test_the_pricing_band_is_not_half_empty_at_1440() -> None:

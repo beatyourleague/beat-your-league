@@ -683,12 +683,12 @@ def test_break_even_counts_passes_at_their_net_after_stripe() -> None:
     S["stripe"] = dash._source("stripe", data={"sessions": stripe_sessions()[:1], "link_map": True,
                                                "dispute_errors": 0}, read_at=NOW)
     page = dash.render_page(S, NOW, fonts=False)
-    per = dash.net_per_pass()
-    assert 25 < per < 29
+    per = dash.net_per_charge()
+    assert 13 < per < 14.99
     m = dash.metrics_for(S, "all", NOW)
     gap = 71.98 - m.money["net"]
     need = math.ceil(gap / per)
-    assert f"{need} more $29 pass" in page
+    assert f"{need} more monthly charge" in page
 
 
 def test_without_costs_the_profit_card_says_how_to_add_them() -> None:
